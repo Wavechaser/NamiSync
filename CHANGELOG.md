@@ -193,13 +193,14 @@ explicit, reviewable and regression-backed.
   Observe current execution facts without repainting retained Plan rows; coalesce
   renewed demand and bound conflict recovery, with actionable Reload on failure.
   The production release/pane regression and both installed execution sizes pass.
-- Prepare shared Plan/Verify server range highlighting and browser navigation
-  in the preserved delivery candidate. Verify
+- Share Plan/Verify server range highlighting and browser navigation. Verify
   header, folder and highlighted-range checkboxes select search/filter matches
   across collapsed and unloaded rows; starts retain the complete selection,
   including hidden files. Preserve live scroll and checkbox focus after selection,
-  and defer live-result refresh behind newer foreground interaction.
-- The candidate indexes bounded manual/ordinary result windows once while retaining detail
+  and defer live-result refresh behind newer foreground interaction. Re-check
+  rejected reads too: independently invalidated demand rereads once after both
+  window/detail reads settle; a read error alone does not start polling.
+- Index bounded manual/ordinary result windows once while retaining detail
   generation and operation binding. Remove repeated window self-validation
   without changing result ownership or adding a timing threshold.
 - The approved Refresh warning and final read-only ablation study remain pending;
@@ -211,11 +212,10 @@ explicit, reviewable and regression-backed.
 - Investigate the third async browser-read reconciliation instance before fixing
   D2 copied-file readiness. M1_PLAN records owners, consequences, common policy,
   approved finite scope and the scratch reproducer's producer-path limits.
-- Resume on the user's approval with bounded harness repair and readiness
-  reconciliation, before Refresh confirmation. Rebuild the table candidate and
-  re-check its overlay correction against the shared rule. Preserve recovery
-  `codex/wip-20261015-1621-verify-table`; no table delivery or final ablation
-  conclusion is claimed. M1_PLAN and HANDOFF record the active work and open gates.
+- Rebuild and independently review the table candidate after harness/readiness
+  correction. All affected installed Inventory, execution, shell and gallery
+  cases pass, alongside 6,070 ordinary tests and 12 import contracts. Retain
+  failed receipts and the recovery branch; Refresh and final ablation remain open.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-13)
 

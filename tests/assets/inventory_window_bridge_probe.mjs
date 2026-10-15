@@ -56,6 +56,13 @@ for (const patch of [{selected_file_count: true}, {selected_file_count: 999},
 }
 response = fixture.window;
 assert.deepEqual(await bridge.getInventoryWindow(task, 0, 0, 256), fixture.window);
+response = fixture.zero_scope.summary;
+assert.equal((await bridge.openInventoryView(task)).scope_selectable_file_count, 0);
+response = fixture.zero_scope.window;
+const zeroScopeWindow = await bridge.getInventoryWindow(task, 0, 0, 256);
+assert.equal(zeroScopeWindow.rows.length, 1, "an unverified directory remains visible above verified files");
+assert.equal(zeroScopeWindow.rows[0].rollup.file_count, 1);
+assert.equal(zeroScopeWindow.rows[0].selectable, false, "a visible folder with no matching files has an inert checkbox");
 assert.equal(fixture.window.rows.find(row => row.row_id === "1").recorded_checksum, fixture.detail.detail.attestation.content.digest);
 response = fixture.detail;
 const node = fixture.detail.node_id;

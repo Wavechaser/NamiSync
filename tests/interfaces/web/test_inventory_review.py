@@ -45,14 +45,14 @@ def _select(view, node_id=None, selected=True, **changes):
     return view.set_selection(**values)
 
 
-def test_selection_full_scope_hidden_counts_and_single_revision():
+def test_selection_matching_scope_hidden_counts_and_single_revision():
     view = _view()
     assert view.summary()["selected_file_count"] == 0
     folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
     _update(view, search_query="b.txt", collapse_node_id=folder.node_id, collapsed=True)
     summary = _select(view, folder.node_id)
-    assert (summary["selected_file_count"], summary["hidden_selected_file_count"], summary["selection"]) == (2, 1, "partial")
-    assert view.selected_row_ids == frozenset({"1", "2"})
+    assert (summary["selected_file_count"], summary["hidden_selected_file_count"], summary["selection"]) == (1, 0, "all")
+    assert view.selected_row_ids == frozenset({"2"})
     assert summary["view_revision"] == 2
     assert view.window(expected_revision=1, offset=0, limit=256)["disposition"] == "conflict"
     assert view.window(expected_revision=2, offset=0, limit=256)["rows"][0]["selection"] == "all"
@@ -60,13 +60,18 @@ def test_selection_full_scope_hidden_counts_and_single_revision():
     assert _select(view, selected=False, expected_revision=1)["disposition"] == "conflict"
     assert _select(view, selected=False, request_id="f" * 32)["disposition"] == "conflict"
     summary = _select(view)
-    assert (summary["selected_file_count"], summary["hidden_selected_file_count"], summary["selection"]) == (3, 2, "all")
+    assert (summary["selected_file_count"], summary["hidden_selected_file_count"], summary["selection"]) == (1, 0, "all")
     _update(view, search_query="", filters=frozenset({"acknowledged"}))
-    assert view.summary()["hidden_selected_file_count"] == 2
-    assert view.selected_row_ids == frozenset({"1", "2", "3"})
+    assert view.summary()["hidden_selected_file_count"] == 1
+    assert view.selected_row_ids == frozenset({"2"})
+    assert view.summary()["selection"] == "none"
+    _select(view)
+    assert view.selected_row_ids == frozenset({"2", "3"})
     warning = next(node for node in view.projection.nodes if node.warning)
     with pytest.raises(ValueError, match="warnings"):
         _select(view, warning.node_id)
+    assert _select(view, selected=False)["selected_file_count"] == 1
+    _update(view, search_query="", filters=frozenset())
     assert _select(view, selected=False)["selected_file_count"] == 0
 
 
@@ -85,6 +90,60 @@ def test_selection_replacement_retains_exact_files_and_invalidates_old_gestures(
     assert _select(replaced, request_id=view.request_id)["disposition"] == "conflict"
     directory = projection.node_id_by_row_id["3"]
     assert _select(replaced, directory)["disposition"] == "noop"
+
+
+def test_inventory_highlight_ranges_cross_windows_and_keep_checkbox_membership_separate():
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (_row(str(i), rf"folder\{i:03}.txt") for i in range(300))),
+        r"C:\root", True, 300, 0)
+    first = view.window(expected_revision=0, offset=0, limit=256)["rows"][1]
+    last = view.window(expected_revision=0, offset=280, limit=256)["rows"][-1]
+    def highlight(gesture, node_id=None, **changes):
+        values = dict(expected_view_revision=view.view_revision,
+            expected_highlight_revision=view.highlight_revision, gesture=gesture, node_id=node_id)
+        return view.mutate_highlight(**(values | changes))
+    highlight("replace", first["node_id"])
+    highlight("extend", last["node_id"])
+    assert view.summary()["highlighted_count"] == 300
+    assert view.summary()["selected_file_count"] == 0
+    assert all(row["highlighted"] for row in view.window(expected_revision=0, offset=280, limit=256)["rows"])
+    stale = view.set_highlighted_selection(request_id=view.request_id, expected_revision=0,
+        expected_highlight_revision=1, selected=True)
+    assert stale["disposition"] == "conflict" and not view.selected_row_ids
+    selected = view.set_highlighted_selection(request_id=view.request_id, expected_revision=0,
+        expected_highlight_revision=2, selected=True)
+    assert selected["selected_file_count"] == 300 and selected["highlighted_count"] == 300
+    assert highlight("toggle", first["node_id"], expected_view_revision=0)["disposition"] == "conflict"
+    highlight("toggle", first["node_id"])
+    assert view.summary()["highlighted_count"] == 299
+    highlight("add-range", first["node_id"])
+    assert view.summary()["highlighted_count"] == 300
+    highlight("move_up_extend")
+    assert view.summary()["highlight_focus_visible_index"] == 0
+    _update(view, sort_column=PlanSortColumn.FILENAME, sort_direction=SortDirection.DESCENDING)
+    assert view.summary()["highlighted_count"] == 2
+    _update(view, search_query="299.txt")
+    assert view.summary()["highlighted_count"] == 0
+    assert view.summary()["hidden_selected_file_count"] == 299
+    assert _select(view, selected=False)["selected_file_count"] == 299
+
+
+def test_inventory_highlighted_overlapping_folders_match_files_even_when_collapsed():
+    view = _view()
+    folder = view.projection.nodes[1]
+    leaf = view.projection.node_for_id(view.projection.node_id_by_row_id["2"])
+    for node in (folder, leaf):
+        view.mutate_highlight(expected_view_revision=0, expected_highlight_revision=view.highlight_revision,
+            gesture="replace" if node is folder else "toggle", node_id=node.node_id)
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    assert view.summary()["highlighted_count"] == 2
+    result = view.set_highlighted_selection(request_id=view.request_id, expected_revision=1,
+        expected_highlight_revision=2, selected=True)
+    assert result["selected_file_count"] == 2 and view.selected_row_ids == frozenset({"1", "2"})
+    replaced = view.replacement("f" * 32, view.projection, view.root_path, True, 2, 0,
+        scan_scope=("location", None))
+    assert replaced.summary()["highlighted_count"] == 0
+    assert replaced.selected_row_ids == view.selected_row_ids
 
 
 def test_ledger_publication_preserves_absent_scan_provenance_through_gestures_and_replacement():
@@ -249,10 +308,10 @@ def test_complete_inventory_256_row_envelope_has_margin_under_response_wall():
     assert set(row) == {"node_id", "display", "depth", "is_container", "visible_index",
         "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
         "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum",
-        "acknowledged", "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection"}
+        "acknowledged", "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection", "highlighted"}
     assert set(row["rollup"]) == {"domain_count", "file_count", "present", "unverified", "verified", "modified",
         "reappeared", "unsupported", "missing", "mismatched", "acknowledged", "size", "size_overflow", "size_partial"}
-    assert set(actual) == {"disposition", "view_revision", "offset", "total", "rows"}
+    assert set(actual) == {"disposition", "view_revision", "highlight_revision", "offset", "total", "rows"}
     assert set(actual["rows"][0]["warning"]) == {"code", "detail"}
     row.update(display="\x01" * 300, row_id="9" * 19, recorded_checksum="f" * 32,
                size="9" * 19, mtime_ns="9" * 19, presence="unsupported",

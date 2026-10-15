@@ -267,6 +267,10 @@ class TaskAuthority(Protocol):
 
     def set_inventory_selection(self, *args, **kwargs) -> dict[str, object]: ...
 
+    def mutate_inventory_highlight(self, *args, **kwargs) -> dict[str, object]: ...
+
+    def set_inventory_highlighted_selection(self, *args, **kwargs) -> dict[str, object]: ...
+
     def get_inventory_window(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_inventory_detail(self, *args, **kwargs) -> dict[str, object]: ...
@@ -539,6 +543,15 @@ class _InventorySelectionPayload:
     request_id: str
     expected_revision: int
     node_id: str | None
+    selected: bool
+
+
+@dataclass(frozen=True, slots=True)
+class _InventoryHighlightedSelectionPayload:
+    task_id: str
+    request_id: str
+    expected_revision: int
+    expected_highlight_revision: int
     selected: bool
 
 
@@ -1117,6 +1130,21 @@ def production_command_specs(
             expected_revision=payload.expected_revision, node_id=payload.node_id,
             selected=payload.selected)
 
+    def mutate_inventory_highlight(payload: object) -> object:
+        if type(payload) is not _MutatePlanHighlightPayload:
+            raise TypeError("mutate_inventory_highlight received an unvalidated payload")
+        return registry.mutate_inventory_highlight(payload.task_id,
+            expected_view_revision=payload.expected_view_revision,
+            expected_highlight_revision=payload.expected_highlight_revision,
+            gesture=payload.gesture, node_id=payload.node_id)
+
+    def set_inventory_highlighted_selection(payload: object) -> object:
+        if type(payload) is not _InventoryHighlightedSelectionPayload:
+            raise TypeError("set_inventory_highlighted_selection received an unvalidated payload")
+        return registry.set_inventory_highlighted_selection(payload.task_id, payload.request_id,
+            expected_revision=payload.expected_revision,
+            expected_highlight_revision=payload.expected_highlight_revision, selected=payload.selected)
+
     def get_inventory_window(payload: object) -> object:
         if type(payload) is not _PlanWindowPayload:
             raise TypeError("get_inventory_window received an unvalidated payload")
@@ -1586,6 +1614,18 @@ def production_command_specs(
             ),
             "set_inventory_selection": CommandSpec(
                 validate_payload=_validate_inventory_selection, handler=set_inventory_selection,
+                access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
+                retry=CommandRetry.NONE,
+            ),
+            "mutate_inventory_highlight": CommandSpec(
+                validate_payload=_validate_mutate_plan_highlight, handler=mutate_inventory_highlight,
+                access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
+                retry=CommandRetry.NONE,
+            ),
+            "set_inventory_highlighted_selection": CommandSpec(
+                validate_payload=_validate_inventory_highlighted_selection, handler=set_inventory_highlighted_selection,
                 access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
@@ -2077,6 +2117,20 @@ def _validate_inventory_selection(value: object) -> _InventorySelectionPayload:
                 or re.fullmatch(r"node-[0-9a-f]{32}", node_id) is None))):
         raise CommandPayloadError("set_inventory_selection payload is invalid")
     return _InventorySelectionPayload(task_id, request_id, revision, node_id, selected)
+
+
+def _validate_inventory_highlighted_selection(value: object) -> _InventoryHighlightedSelectionPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id", "request_id", "expected_revision", "expected_highlight_revision", "selected",
+    }:
+        raise CommandPayloadError("set_inventory_highlighted_selection payload is invalid")
+    revision = value["expected_highlight_revision"]
+    if not _is_javascript_safe_integer(revision) or revision < 0:
+        raise CommandPayloadError("set_inventory_highlighted_selection payload is invalid")
+    selection = _validate_inventory_selection({key: item for key, item in value.items()
+        if key != "expected_highlight_revision"} | {"node_id": None})
+    return _InventoryHighlightedSelectionPayload(selection.task_id, selection.request_id,
+        selection.expected_revision, revision, selection.selected)
 
 
 def _validate_inventory_refresh(value: object) -> _InventoryRefreshPayload:

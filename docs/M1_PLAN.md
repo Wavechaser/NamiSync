@@ -87,12 +87,12 @@ close execution acceptance: default stopped at a foreground guard; larger
 timed out at initial readiness with no recorder failure and no Refresh admission.
 The subsequent review identifies a D2 readiness-reconciliation defect; native
 timeouts do not establish its exact response ordering. Twelve import contracts
-pass. All failed receipts remain under the evidence root. Fresh table review
-withholds approval. The earlier shell-gate adjudication was based on a mistaken
+pass. All failed receipts remain under the evidence root. At preservation,
+table review withheld approval. The earlier shell-gate adjudication was based on a mistaken
 failure-state interpretation and is retracted below; no gate waiver is needed
 for a product Plan-again defect that these receipts do not show. Those incomplete
 attempts still do not satisfy the current shell gate. The approved recurrence
-scope and resumption order are recorded below; current gates remain open.
+scope, resumption order and current acceptance are recorded below.
 
 The saved table candidate uses the existing `VisibleSequence` through one shared
 server highlight owner, keeping Plan operation/dependency policy and Inventory
@@ -130,7 +130,7 @@ demand, not a shared backend or transport failure.
 | Instance / consequence | Owner and present disposition | Common boundary |
 | --- | --- | --- |
 | Plan reload crosses newer foreground interaction; applied highlight/detail can disappear. | `loadPlanReview`; corrected in `b52f8ddf`. | Capture foreground ownership, preserve the incumbent review and retain dirty reconciliation at its offset. |
-| Inventory live overlay crosses newer scroll/highlight; an old window can replace current rows or discard the final needed update. | `refreshInventoryOverlay`; saved candidate correction must be revalidated during rebuild. | Same foreground read boundary, current revision/offset checks and deferred dirty replay. |
+| Inventory live overlay crosses newer scroll/highlight; an old window can replace current rows or discard the final needed update. | `refreshInventoryOverlay`; rebuilt and revalidated, including a rejected window/detail batch after foreground settlement. | Same foreground read boundary, current revision/offset checks and deferred dirty replay; failure alone does not create demand. |
 | Copied-file readiness crosses an execution revision or returns conflict; the action can remain unavailable until another load. | `loadManualReadiness`, `originalExecution` and execution-window adoption; pre-existing D2 defect corrected in the rebuild. | Named execution observation owner plus coalesced demand and bounded conflict reconciliation, separate from Plan painting. |
 
 The scratch A/B/C orderings and no-crossing control reproduce consumer behavior
@@ -209,6 +209,18 @@ retained without a product-failure claim.
 Raw native01 receipts and `table-shell-budget-investigation-20261016-01.md`
 retain the exact failure mapping. This is an introduced harness regression,
 not a product Plan-again failure or a new async product-read instance.
+
+Table alignment is rebuilt and independently approved after harness correction
+`c6dc0a0`. The 34-path product/consumer freeze preserves readiness `b891285` and
+replaces the saved overlay rejection gap with a shared settlement check. The
+new witness fails before correction; focused gates pass 357 cases plus 10
+composition cases. Current acceptance: native01 Inventory/four gallery cases,
+execution02 both sizes, shell04 default and shell05 larger; ordinary01 has
+6,070 passes/four skips, with the later isolated harness change covered by its
+38 owning cases; all 12 import contracts hold. These receipts use the
+`table-rebuild-` prefix under the evidence root. `table-rebuild-review-20261016-01.md`
+records source/install identities and final approval. Refresh confirmation and
+the read-only ablation study are next; recovery refs remain until full accounting.
 
 ### M1-10 delivered register — 2026-10-13–14
 

@@ -2993,6 +2993,9 @@ def test_inventory_selection_requires_current_settled_publication(blocked):
     with pytest.raises(TaskUnavailableError):
         registry.set_inventory_selection(start.task_id, start.request_id,
             expected_revision=0, node_id=None, selected=True)
+    with pytest.raises(TaskUnavailableError):
+        registry.set_inventory_highlighted_selection(start.task_id, start.request_id,
+            expected_revision=0, expected_highlight_revision=0, selected=True)
     assert registry._inventory_views[start.task_id].selected_row_ids == frozenset()
 
 
@@ -3032,6 +3035,18 @@ def test_inventory_selection_real_scan_release_view_and_close(tmp_path):
         assert all(row["selection"] == "all" for row in rows)
         assert registry.set_inventory_selection(start.task_id, start.request_id,
             expected_revision=0, node_id=None, selected=False)["disposition"] == "conflict"
+        folder = next(row for row in rows if row["is_container"])
+        highlighted = registry.mutate_inventory_highlight(start.task_id,
+            expected_view_revision=1, expected_highlight_revision=0,
+            gesture="replace", node_id=folder["node_id"])
+        assert highlighted["highlighted_count"] == 1 and highlighted["selected_file_count"] == 2
+        assert registry.set_inventory_highlighted_selection(start.task_id, start.request_id,
+            expected_revision=1, expected_highlight_revision=0, selected=False)["disposition"] == "conflict"
+        selected = registry.set_inventory_highlighted_selection(start.task_id, start.request_id,
+            expected_revision=1, expected_highlight_revision=1, selected=False)
+        assert selected["selected_file_count"] == 1 and selected["highlighted_count"] == 1
+        assert registry.get_inventory_window(start.task_id,
+            expected_revision=2, offset=0, limit=256)["rows"][0]["highlighted"]
         registry.close_task(start.task_id, start.session_id)
         assert registry._inventory_views == {}
     finally:

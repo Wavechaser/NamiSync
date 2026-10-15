@@ -223,10 +223,11 @@ const renderUrl = dataModuleUrl(renderSource);
 const treeSource = await readFile(treePath, "utf8");
 const renderSpecifier = '"./render.js"';
 assert.equal(treeSource.split(renderSpecifier).length - 1, 1);
+const highlightUrl = dataModuleUrl(await readFile(new URL("row_highlight.js", `file:///${treePath.replaceAll("\\", "/")}`), "utf8"));
 const linkedTreeSource = treeSource.replace(
   renderSpecifier,
   JSON.stringify(renderUrl),
-);
+).replace("./row_highlight.js", highlightUrl);
 const {ROW_H, createTree} = await import(dataModuleUrl(linkedTreeSource));
 
 assert.equal(ROW_H, 28);

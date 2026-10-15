@@ -1961,12 +1961,18 @@ generic tree controller's keyboard, scroll and stale-generation behavior with
 an explicit 24 px row height; other tree consumers retain the 28 px default.
 Its columns are Selection, Filename, Presence, Checksum, Size, Modified and Notes.
 The Selection header has an accessible name and no visible text. Header and row
-checkboxes display server-owned none/partial/all state. The header selects all
-files in the location; a folder selects all its files, including filtered,
-collapsed and unloaded descendants. Accessible labels disclose that complete
-scope, while selected and hidden-by-filter counts make hidden membership visible.
-Warnings and empty folders are inert. A selection reply replaces authoritative
-summary/window state; stale or uncertain gestures reload instead of replaying.
+checkboxes display server-owned none/partial/all state for matching files. Header
+and folder gestures respect the current search/filters, including collapsed and
+unloaded matches. Accessible labels disclose that scope, while selected and
+hidden-by-filter counts expose the complete retained selection used by starts.
+Warnings and folders with no matching files are inert. Ctrl/Shift clicks and
+Shift+arrows use Plan's server-owned highlight/range mechanics; clicking a
+highlighted checkbox applies to matching files in that range. Search/filter
+changes and a new publication clear highlights; sort/collapse and checkbox
+changes preserve them. A selection reply replaces authoritative summary/window
+state while preserving the live outer scroll position and checkbox focus.
+Passive result refresh cannot reveal a different active row or overwrite a newer
+foreground window. Stale or uncertain gestures reload instead of replaying.
 Checksum shows eight characters of recorded baseline evidence, with the full
 stored digest in its tooltip; no evidence shows an em dash. Missing, modified or
 reappeared rows retain their stored checksum. A scan does not verify current bytes.

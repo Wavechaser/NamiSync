@@ -1520,7 +1520,8 @@ body {
   background: var(--color-neutral-surface-selected);
 }
 
-.nami-file-list__body > .nami-file-row.nami-file-row--highlighted {
+.nami-file-list__body > .nami-file-row.nami-file-row--highlighted,
+.nami-inventory-review__rows > .nami-inventory-row[data-highlighted="true"] {
   background: var(--color-selection-highlight);
   box-shadow: inset 3px 0 var(--color-accent-fill);
 }
@@ -1781,12 +1782,15 @@ body {
 }
 
 @media (forced-colors: active) {
-  .nami-inventory-review__rows > .nami-inventory-row[data-active="true"] {
+  .nami-inventory-review__rows > .nami-inventory-row[data-active="true"],
+  .nami-inventory-review__rows > .nami-inventory-row[data-highlighted="true"] {
     color: var(--color-accent-fill-foreground);
   }
 
   .nami-inventory-review__rows > .nami-inventory-row[data-active="true"] > .nami-file-row__cell,
-  .nami-inventory-review__rows > .nami-inventory-row[data-active="true"] .nami-file-state-label {
+  .nami-inventory-review__rows > .nami-inventory-row[data-active="true"] .nami-file-state-label,
+  .nami-inventory-review__rows > .nami-inventory-row[data-highlighted="true"] > .nami-file-row__cell,
+  .nami-inventory-review__rows > .nami-inventory-row[data-highlighted="true"] .nami-file-state-label {
     color: inherit;
   }
 

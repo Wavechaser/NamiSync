@@ -57,6 +57,7 @@ INITIAL_ASSETS = {
     "tokens.css",
     "theme.js",
     "tree.js",
+    "row_highlight.js",
 }
 
 

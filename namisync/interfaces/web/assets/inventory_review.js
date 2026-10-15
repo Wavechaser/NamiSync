@@ -4,6 +4,7 @@ import { createFilterMenu } from "./filter_menu.js";
 import { createRowMenu } from "./row_menu.js";
 import { createIcon } from "./icons.js";
 import { createTree } from "./tree.js";
+import { pointerHighlightGesture } from "./row_highlight.js";
 import { createIntegrityCell } from "./integrity.js";
 import { formatByteCount, formatFilesystemPath, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
 
@@ -46,17 +47,32 @@ export function createInventoryReviewPanel(callbacks) {
   const pane = element("section", "nami-inventory-review");
   pane.ariaLabel = "Inventory review";
   for (const name of ["pointerdown", "wheel", "touchstart", "input", "contextmenu"]) {
-    pane.addEventListener(name, () => tree?.cancelNavigation(), { capture: true, passive: true });
+    pane.addEventListener(name, () => {
+      selectionFocus = null;
+      tree?.cancelNavigation();
+      if (current !== null) callbacks.onInterrupt?.(current);
+    }, { capture: true, passive: true });
   }
   for (const name of ["pointerdown", "wheel", "touchstart", "input", "contextmenu", "keydown"]) {
     document.addEventListener(name, (event) => {
-      if (!pane.contains(event.target)) tree?.cancelNavigation();
+      if (!pane.contains(event.target)) {
+        selectionFocus = null;
+        tree?.cancelNavigation();
+        if (current !== null) callbacks.onInterrupt?.(current);
+      }
     }, { capture: true, passive: true });
   }
   pane.addEventListener("keydown", (event) => {
+    selectionFocus = null;
     if (event.altKey || event.ctrlKey || event.metaKey
-        || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)
-        || event.target !== rows) tree?.cancelNavigation();
+        || !["ArrowUp", "ArrowDown"].includes(event.key)
+        || event.target !== rows) {
+      tree?.cancelNavigation();
+      if (current !== null) callbacks.onInterrupt?.(current);
+    }
+  }, true);
+  document.addEventListener("focusin", (event) => {
+    if (selectionFocus !== null && event.target !== selectionFocus.control) selectionFocus = null;
   }, true);
   const header = element("div", "nami-card nami-plan-review__plan nami-inventory-review__header");
   const switcher = element("div", "nami-segmented nami-plan-review__view-switcher");
@@ -171,7 +187,7 @@ export function createInventoryReviewPanel(callbacks) {
       checkbox.checked = false;
       checkbox.indeterminate = false;
       checkbox.dataset.action = "inventory-select-location";
-      checkbox.ariaLabel = "Select all files in this location, including hidden and off-window files";
+      checkbox.ariaLabel = "Select all matching files in this location, including collapsed and off-window files";
       for (const eventName of ["pointerdown", "click", "change"]) {
         checkbox.addEventListener(eventName, (event) => event.stopPropagation());
       }
@@ -248,10 +264,19 @@ export function createInventoryReviewPanel(callbacks) {
   let tree = null;
   let committedWindow = null;
   let activeNodeId = null;
+  let manualGeneration = null;
+  let manualItems = new Map();
+  let rowManualItems = new Map();
+  let rowOrdinaryItems = new Map();
+  let rowOrdinaryMode = null;
   const selectionControls = new Map();
+  let selectionFocus = null;
   let searchTimer = null;
   let searchDraft = false;
   const rowMenu = createRowMenu(pane);
+  list.addEventListener("scroll", () => {
+    if (current !== null) current.scrollTop = list.scrollTop;
+  }, {passive: true});
 
   function blocked() { return task?.closePending || task?.inventoryLoading || current?.pending
     || task?.inventoryAction?.pending || task?.inventoryAction?.accepted; }
@@ -262,17 +287,20 @@ export function createInventoryReviewPanel(callbacks) {
       ? result : null;
   }
   function currentIntegrity() { return matchingIntegrity(current?.window?.integrity); }
-  function matchingManual(candidate) {
+  function matchingManual(candidate, generation = current?.window?.manual_verification ?? null) {
     const result = candidate ?? null;
-    const generation = current?.window?.manual_verification ?? null;
+    if (manualGeneration !== generation) {
+      manualGeneration = generation;
+      manualItems = new Map((generation?.items ?? []).map((item) => [item.row_id, item]));
+    }
     return result !== null && generation !== null && current !== null
       && task?.taskKind === "sync-plan"
       && result.execution_session_id === task.executionSessionId
       && result.execution_session_id === generation.execution_session_id
       && result.request_id === generation.request_id && result.session_id === generation.session_id
       && result.location_id === generation.location_id && result.revision === generation.revision
-      && result.items.every((item) => generation.items.some((owned) => owned.row_id === item.row_id
-        && owned.operation_id === item.operation_id))
+      && (result === generation || result.items.every((item) =>
+        manualItems.get(item.row_id)?.operation_id === item.operation_id))
       && result.location_id === current.summary.location_id
       ? result : null;
   }
@@ -293,7 +321,7 @@ export function createInventoryReviewPanel(callbacks) {
     if (headerSelection !== null) {
       headerSelection.checked = current?.summary.selection === "all";
       headerSelection.indeterminate = current?.summary.selection === "partial";
-      headerSelection.disabled = current === null || current.summary.selectable_file_count === 0
+      headerSelection.disabled = current === null || current.summary.scope_selectable_file_count === 0
         || selectionBlocked();
     }
     for (const row of current?.window.rows ?? []) {
@@ -402,13 +430,16 @@ export function createInventoryReviewPanel(callbacks) {
     checkbox.indeterminate = row.selection === "partial";
     checkbox.disabled = !row.selectable || selectionBlocked();
     checkbox.ariaLabel = row.is_container
-      ? `Select folder ${row.display}, including hidden, collapsed, and off-window files`
+      ? `Select matching files in folder ${row.display}, including collapsed and off-window files`
       : `Select file ${row.display}`;
     for (const eventName of ["pointerdown", "click", "change"]) {
       checkbox.addEventListener(eventName, (event) => event.stopPropagation());
     }
     checkbox.addEventListener("change", () => {
-      if (current !== null && !checkbox.disabled) callbacks.onSelect?.(current, row.node_id, checkbox.checked);
+      if (current !== null && !checkbox.disabled) {
+        if (row.highlighted && callbacks.onHighlightedSelect !== undefined) callbacks.onHighlightedSelect(current, checkbox.checked);
+        else callbacks.onSelect?.(current, row.node_id, checkbox.checked);
+      }
     });
     selectionControls.set(row.node_id, checkbox);
     selection.append(checkbox);
@@ -441,11 +472,12 @@ export function createInventoryReviewPanel(callbacks) {
       .filter(Boolean).join(" · ");
     const notes = element("div", "nami-file-row__cell nami-file-row__notes", notesText);
     notes.title = notesText;
-    const manualItem = currentManual()?.items.find((item) => item.row_id === row.row_id) ?? null;
-    const ordinary = currentIntegrity();
-    const ordinaryItem = ordinary?.items.find((item) => item.row_id === row.row_id) ?? null;
+    rowElement.dataset.highlighted = String(row.highlighted === true);
+    rowElement.ariaSelected = String(row.highlighted === true);
+    const manualItem = rowManualItems.get(row.row_id) ?? null;
+    const ordinaryItem = rowOrdinaryItems.get(row.row_id) ?? null;
     const ordinaryOwner = ({baseline: "Baseline", verify: "Verification",
-      rebaseline: "Rebaseline"})[ordinary?.mode] ?? "Integrity";
+      rebaseline: "Rebaseline"})[rowOrdinaryMode] ?? "Integrity";
     for (const [owner, result] of [["Manual verification", manualItem], [ordinaryOwner, ordinaryItem]]) {
       if (result === null) continue;
       const resultCell = createIntegrityCell(document, "nami-inventory-row__result", "result",
@@ -516,7 +548,14 @@ export function createInventoryReviewPanel(callbacks) {
           collapseNodeId: nodeId, collapsed: !expanded,
         });
       },
-      activate: (nodeId) => { if (current !== null && !blocked()) callbacks.onDetail(current, nodeId); },
+      highlight: typeof callbacks.onHighlight !== "function" ? undefined : (gesture, nodeId) => {
+        if (current !== null && !blocked()) callbacks.onHighlight(current, gesture, nodeId);
+      },
+      activate: (nodeId, event) => {
+        if (current === null || blocked()) return;
+        if (event !== undefined) callbacks.onHighlight?.(current, pointerHighlightGesture(event), nodeId);
+        callbacks.onDetail(current, nodeId);
+      },
       requestIndex: async (index, generation, offset) => {
         const owner = current;
         const controller = tree;
@@ -530,13 +569,22 @@ export function createInventoryReviewPanel(callbacks) {
           controller.finishWindowRequest(generation);
           return;
         }
-        if (controller.commitWindow(generation, window)) {
+        if (commitTreeWindow(controller, generation, window)) {
           owner.window = window;
           committedWindow = window;
           updateRefreshSelected();
         }
       },
     }, 24, list, 24);
+  }
+
+  function commitTreeWindow(controller, generation, window, preferredNodeId = null, reveal = true) {
+    const manual = matchingManual(window.manual_verification, window.manual_verification ?? null);
+    rowManualItems = manual === null ? new Map() : manualItems;
+    const ordinary = matchingIntegrity(window.integrity);
+    rowOrdinaryItems = new Map((ordinary?.items ?? []).map((item) => [item.row_id, item]));
+    rowOrdinaryMode = ordinary?.mode ?? null;
+    return controller.commitWindow(generation, window, preferredNodeId, reveal);
   }
 
   function appendDetail(key, value, filesystem = false) {
@@ -630,6 +678,8 @@ export function createInventoryReviewPanel(callbacks) {
   }
 
   function dispose() {
+    selectionFocus = null;
+    if (current !== null) callbacks.onInterrupt?.(current);
     rowMenu.dispose();
     filterMenu.dispose();
     columns.dispose();
@@ -644,6 +694,10 @@ export function createInventoryReviewPanel(callbacks) {
     tree = null;
     committedWindow = null;
     activeNodeId = null;
+    manualGeneration = null;
+    manualItems.clear();
+    rowManualItems.clear();
+    rowOrdinaryItems.clear();
     selectionControls.clear();
     current = null;
     task = null;
@@ -841,15 +895,40 @@ export function createInventoryReviewPanel(callbacks) {
     }
     empty.hidden = review.window.total !== 0;
     ensureTree();
-    if (committedWindow !== review.window) {
+    if (review.pending === "selection" && selectionFocus === null) {
+      if (document.activeElement === headerSelection) selectionFocus = {nodeId:null, control:headerSelection};
+      else {
+        const focused = [...selectionControls].find(([, control]) => control === document.activeElement);
+        if (focused !== undefined) selectionFocus = {nodeId:focused[0], control:focused[1]};
+      }
+    }
+    if (committedWindow !== review.window || review.keyboardRevealWindow === review.window) {
+      const focusedCheckbox = [...selectionControls].find(([, control]) => control === document.activeElement)?.[0];
+      const scrollTop = review.scrollTop ?? list.scrollTop;
+      const keyboard = review.keyboardRevealWindow === review.window;
       selectionControls.clear();
+      list.scrollTop = scrollTop;
       const generation = tree.beginWindowRequest();
-      tree.commitWindow(generation, review.window);
+      commitTreeWindow(tree, generation, review.window,
+        keyboard ? review.summary.highlight_focus_node_id : null, keyboard);
       committedWindow = review.window;
-      list.scrollTop = review.scrollTop ?? 0;
+      if (!keyboard) list.scrollTop = scrollTop;
+      if (focusedCheckbox !== undefined && review.pending !== "selection") {
+        selectionControls.get(focusedCheckbox)?.focus?.({preventScroll: true});
+      }
+      review.keyboardRevealWindow = null;
     }
     updateRefreshSelected();
     updateSelectionControls();
+    if (selectionFocus !== null && review.pending !== "selection") {
+      const retained = selectionFocus;
+      selectionFocus = null;
+      const control = retained.nodeId === null ? headerSelection : selectionControls.get(retained.nodeId);
+      if (!selectionBlocked() && control !== undefined && !control.disabled
+          && (document.activeElement === document.body || document.activeElement === retained.control)) {
+        control.focus({preventScroll:true});
+      }
+    }
     columns.freeze();
     columns.refresh();
     renderDetails();

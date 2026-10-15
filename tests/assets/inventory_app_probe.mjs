@@ -51,6 +51,8 @@ globalThis.inventoryHarness = {
     calls.push(["plan-window", taskId, revision, offset, limit]);
     return Promise.resolve(planWindowResponse);
   },
+  mutateInventoryHighlight() { throw new Error("unexpected inventory highlight"); },
+  setInventoryHighlightedSelection() { throw new Error("unexpected highlighted selection"); },
   openInventoryView(taskId) { calls.push(["open", taskId]); return delayedOpen?.promise ?? Promise.resolve({
     ...summary(), task_id:taskId, request_id:inventoryOpenRequests.get(taskId) ?? summary().request_id,
   }); },
@@ -194,7 +196,7 @@ const replacements = {
 globalThis.inventoryRenders = renders;
 globalThis.inventoryConfirmations = [];
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
-source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, startManualVerificationAction, loadManualReadiness, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks };";
+source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, startManualVerificationAction, loadManualReadiness, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks, queueRowHighlight, interruptPlanHighlight, refreshInventoryOverlay };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
@@ -1134,4 +1136,217 @@ for (const [index, retire] of [
     assert.equal(owner.originalExecutionFact, fact, "auxiliary association preserves original execution facts");
   }
 }
+// The real Inventory app queue shares mutation custody and read admission with scrolling.
+const alignedId = "task-0123456789abcdef0123456789abcdef";
+const alignedTask = app.adoptTask({task_id:alignedId, session_id:"0".repeat(32),
+  session_state:"completed", session_released:true, task_kind:"inventory",
+  request_id:fixture.views.maximum.summary.request_id, plan_request_id:null, session_kind:"inventory"});
+app.selectTask(alignedId); await tick();
+const completeRows = [...new Map([...fixture.views.maximum.window.rows, ...fixture.views.middle.window.rows]
+  .map(row => [row.visible_index, row])).values()];
+const endpoint = index => completeRows.find(row => row.visible_index === index).node_id;
+let authoritativeHighlight = {...fixture.views.maximum.summary, task_id:alignedId,
+  highlight_anchor_node_id:endpoint(250), highlight_focus_node_id:endpoint(250),
+  highlight_focus_visible_index:250, highlighted_count:1};
+const alignedWindow = (offset, summary = authoritativeHighlight) => ({...fixture.views.maximum.window,
+  highlight_revision:summary.highlight_revision, offset,
+  rows:completeRows.filter(row => row.visible_index >= offset && row.visible_index < offset + 256)
+    .map(row => ({...row, highlighted:row.node_id === summary.highlight_focus_node_id}))});
+const alignedReview = {summary:authoritativeHighlight, window:alignedWindow(0), pending:null, message:null,
+  queuedSearchQuery:null, actionRevision:0, windowRequestRevision:0, detailRevision:0, detail:null,
+  scrollTop:250*24, highlightQueue:Promise.resolve()};
+alignedTask.inventoryReview = alignedReview;
+assert.equal(alignedTask.inventoryLoading, false, "the highlight fixture starts with a released published view");
+const rowMutations = [], rowReads = [], rangeSelections = [];
+let heldHighlight = null, heldOverlay = null;
+globalThis.inventoryHarness.openInventoryView = () => Promise.resolve(authoritativeHighlight);
+globalThis.inventoryHarness.getInventoryWindow = (taskId, revision, offset, limit) => {
+  rowReads.push({taskId, revision, offset, limit});
+  if (heldOverlay !== null) {
+    const held = heldOverlay;
+    heldOverlay = null;
+    return held.promise;
+  }
+  return Promise.resolve(alignedWindow(offset));
+};
+globalThis.inventoryHarness.mutateInventoryHighlight = (taskId, view, highlight, gesture, nodeId, delayed) => {
+  rowMutations.push({taskId, view, highlight, gesture, nodeId, delayed});
+  const index = gesture.startsWith("move_")
+    ? authoritativeHighlight.highlight_focus_visible_index + (gesture.startsWith("move_down") ? 1 : -1)
+    : completeRows.find(row => row.node_id === nodeId).visible_index;
+  authoritativeHighlight = {...authoritativeHighlight, highlight_revision:highlight+1,
+    highlight_focus_node_id:endpoint(index), highlight_focus_visible_index:index,
+    highlight_anchor_node_id:gesture === "replace" ? endpoint(index) : authoritativeHighlight.highlight_anchor_node_id};
+  if (heldHighlight !== null) {
+    heldHighlight.receipt = authoritativeHighlight;
+    return heldHighlight.promise;
+  }
+  return Promise.resolve(authoritativeHighlight);
+};
+globalThis.inventoryHarness.setInventoryHighlightedSelection = (taskId, requestId, revision, highlight, selected) => {
+  rangeSelections.push({taskId, requestId, revision, highlight, selected});
+  return Promise.resolve({...authoritativeHighlight, disposition:highlight === authoritativeHighlight.highlight_revision
+    ? "current" : "conflict"});
+};
+heldHighlight = defer();
+let highlightWork = app.queueRowHighlight(alignedReview, "move_down", null, true);
+await tick();
+assert.equal(rowMutations.length, 1);
+for (let i=0; i<20; i+=1) app.queueRowHighlight(alignedReview, "move_down", null, true);
+const firstReceipt = heldHighlight.receipt;
+heldHighlight.resolve(firstReceipt); heldHighlight = null;
+await highlightWork;
+assert.equal(rowMutations.length, 2, "held repeated arrows submit only the final endpoint after the admitted step");
+assert.equal(rowMutations[1].gesture, "replace");
+assert.equal(rowMutations[1].nodeId, endpoint(271));
+assert.equal(alignedReview.summary.highlight_focus_visible_index, 271);
+assert.equal(alignedReview.window.offset, 239, "off-window highlight retains 32 leading rows");
+assert.ok(rowReads.every(read => read.limit === 256));
+
+heldHighlight = defer();
+highlightWork = app.queueRowHighlight(alignedReview, "move_down", null, true);
+await tick();
+globalThis.inventoryCallbacks.onInterrupt(alignedReview); // The renderer's Tab boundary.
+const interruptedReceipt = heldHighlight.receipt;
+heldHighlight.resolve(interruptedReceipt); heldHighlight = null;
+await highlightWork;
+assert.equal(alignedReview.summary.highlight_revision, 2, "retired keyboard receipt cannot paint");
+assert.equal(alignedReview.highlightReceipt.highlight_revision, 3, "admitted mutation retains custody");
+assert.equal(alignedReview.keyboardRevealWindow, null);
+const reconciled = await app.loadInventoryWindow(alignedReview, 239);
+alignedReview.window = reconciled;
+assert.equal(alignedReview.summary.highlight_revision, 3, "fresh scroll reconciles the retained receipt");
+assert.equal(alignedReview.keyboardRevealWindow, null, "receipt reconciliation cannot reclaim keyboard focus");
+
+heldHighlight = defer();
+highlightWork = app.queueRowHighlight(alignedReview, "move_down", null, true);
+await tick();
+const selectedAt = alignedReview.summary.highlight_revision;
+const rangeWork = app.changeInventorySelection(alignedReview, null, true, true);
+heldHighlight.resolve(heldHighlight.receipt); heldHighlight = null;
+await highlightWork; await rangeWork;
+assert.equal(rangeSelections.at(-1).highlight, selectedAt, "range checkbox retains its displayed highlight revision");
+assert.equal(alignedReview.summary.selected_file_count, 0);
+assert.match(alignedReview.message, /Review the current highlight, then select again/);
+
+alignedTask.sessionKind = "verify";
+alignedTask.sessionState = "active";
+alignedTask.sessionReleased = false;
+const staleOverlay = alignedWindow(239);
+heldOverlay = defer();
+const overlayReceipt = heldOverlay;
+const overlayWork = app.refreshInventoryOverlay(alignedTask);
+await tick();
+await app.queueRowHighlight(alignedReview, "replace", endpoint(279), true);
+overlayReceipt.resolve(staleOverlay);
+await overlayWork;
+assert.equal(alignedReview.window.highlight_revision, authoritativeHighlight.highlight_revision,
+  "a held live-overlay response cannot overwrite newer highlight flags");
+assert.equal(alignedReview.window.rows.find(row => row.node_id === endpoint(279)).highlighted, true);
+assert.equal(alignedReview.keyboardRevealWindow, null);
+alignedReview.window = alignedWindow(0);
+heldOverlay = defer();
+const oldOffsetReceipt = heldOverlay;
+const oldOffsetWork = app.refreshInventoryOverlay(alignedTask);
+await tick();
+alignedReview.window = await app.loadInventoryWindow(alignedReview, 239);
+oldOffsetReceipt.resolve(alignedWindow(0));
+await oldOffsetWork;
+assert.equal(alignedReview.window.offset, 239, "a held overlay cannot roll the foreground viewport back");
+assert.equal(rowReads.at(-1).offset, 239, "the only dirty update is reread at the current foreground offset");
+
+heldOverlay = defer();
+const finalOverlayReceipt = heldOverlay;
+const finalOverlaySnapshot = alignedWindow(239);
+const finalOverlayWork = app.refreshInventoryOverlay(alignedTask);
+await tick();
+heldHighlight = defer();
+highlightWork = app.queueRowHighlight(alignedReview, "move_down", null, true);
+await tick();
+globalThis.inventoryCallbacks.onInterrupt(alignedReview);
+finalOverlayReceipt.resolve(finalOverlaySnapshot);
+await finalOverlayWork;
+const readsWhileHeld = rowReads.length;
+heldHighlight.resolve(heldHighlight.receipt); heldHighlight = null;
+await highlightWork; await tick();
+assert.ok(rowReads.length > readsWhileHeld, "a final dirty overlay waits for admitted foreground mutation settlement");
+assert.equal(alignedReview.window.highlight_revision, authoritativeHighlight.highlight_revision);
+assert.equal(alignedReview.keyboardRevealWindow, null, "deferred live refresh cannot revive interrupted keyboard reveal");
+
+// An independently invalidated result read remains needed even when its window
+// or detail rejects after the foreground reader has already settled.
+let overlayFactRevision = 0;
+const overlayFacts = () => ({request_id:alignedTask.requestId, session_id:alignedTask.sessionId,
+  mode:"verify", location_id:alignedReview.summary.location_id, revision:overlayFactRevision,
+  complete:true, gap:false, items:[]});
+const resultWindow = offset => ({...alignedWindow(offset), integrity:overlayFacts()});
+let rejectedWindow = null, rejectedDetail = null, failNextWindow = false;
+globalThis.inventoryHarness.getInventoryWindow = (taskId, revision, offset, limit) => {
+  rowReads.push({taskId, revision, offset, limit});
+  if (rejectedWindow !== null) {
+    const held = rejectedWindow; rejectedWindow = null; return held.promise;
+  }
+  if (failNextWindow) {
+    failNextWindow = false; return Promise.reject(new Error("result read unavailable"));
+  }
+  return Promise.resolve(resultWindow(offset));
+};
+globalThis.inventoryHarness.getInventoryDetail = (taskId, revision, nodeId) => {
+  if (rejectedDetail !== null) {
+    const held = rejectedDetail; rejectedDetail = null; return held.promise;
+  }
+  return Promise.resolve({...fixture.detail, node_id:nodeId, view_revision:revision, integrity:overlayFacts()});
+};
+for (const [kind, failReread] of [["window", false], ["detail", false], ["window", true]]) {
+  const failedRead = defer();
+  if (kind === "window") rejectedWindow = failedRead;
+  else {
+    rejectedDetail = failedRead;
+    alignedReview.detail = {row:alignedReview.window.rows.find(row => row.row_id !== null),
+      state:"current", response:fixture.detail};
+  }
+  const rejectedWork = app.refreshInventoryOverlay(alignedTask);
+  await tick();
+  alignedReview.window = await app.loadInventoryWindow(alignedReview, 239);
+  const settledReads = rowReads.length;
+  overlayFactRevision += 1;
+  failNextWindow = failReread;
+  failedRead.reject(new Error(`${kind} overlay unavailable`));
+  await rejectedWork; await tick();
+  assert.equal(rowReads.length, settledReads + 1,
+    `${kind}: rejected overlay retains exactly one independently invalidated result demand`);
+  assert.equal(alignedReview.window.offset, 239);
+  if (!failReread) {
+    assert.equal(alignedReview.window.integrity.revision, overlayFactRevision,
+      `${kind}: the final result is reread without another drain update`);
+    if (kind === "detail") assert.equal(alignedReview.detail.response.integrity.revision, overlayFactRevision);
+  }
+  assert.equal(alignedTask.inventoryOverlayRunning, false);
+  assert.equal(alignedReview.keyboardRevealWindow, null);
+  await tick();
+  assert.equal(rowReads.length, settledReads + 1, "failure of the fresh reread cannot start error polling");
+  alignedReview.detail = null;
+}
+
+rejectedWindow = defer();
+const uninvalidatedRead = rejectedWindow;
+const uninvalidatedWork = app.refreshInventoryOverlay(alignedTask);
+await tick();
+const uninvalidatedReads = rowReads.length;
+uninvalidatedRead.reject(new Error("uninvalidated overlay unavailable"));
+await uninvalidatedWork; await tick();
+assert.equal(rowReads.length, uninvalidatedReads, "transport failure alone admits no automatic reread");
+
+rejectedWindow = defer();
+const retiredOverlayRead = rejectedWindow;
+const retiredOverlayWork = app.refreshInventoryOverlay(alignedTask);
+await tick();
+alignedReview.window = await app.loadInventoryWindow(alignedReview, 239);
+const retiredOverlayReads = rowReads.length;
+const retiredOverlayRevision = alignedReview.window.integrity.revision;
+app.showSettings();
+retiredOverlayRead.reject(new Error("retired overlay unavailable"));
+await retiredOverlayWork; await tick();
+assert.equal(rowReads.length, retiredOverlayReads, "retired navigation cannot resurrect invalidated overlay demand");
+assert.equal(alignedReview.window.integrity.revision, retiredOverlayRevision);
 process.stdout.write("ok\n");

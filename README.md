@@ -63,7 +63,8 @@ controls; phase progress, observed throughput and ETA share the inline status
 card with folded global and operation Details.
 Inventory tasks have their own bounded review with search, facets, sibling
 sorting, current evidence Details, same-task Refresh and missing-row
-acknowledge/restore visibility, complete file selection and standalone
+acknowledge/restore visibility, shared Ctrl/Shift row highlighting,
+filter-scoped file selection and standalone
 Baseline/Verify/Rebaseline with live controls and separate results. Execution
 tasks retain Plan review alongside a Verify pane for the first exact post-copy
 verification or an explicitly selected ordinary fallback. Final lifecycle
@@ -322,7 +323,8 @@ recording facts. Advanced Color flyouts suppress the reproduced dark shadow
 halo; the compositor behavior remains deferred. A fixed local Fluent icon
 vocabulary, accessible presentation and persisted cosmetic theme support the
 headed shell. Inventory review adds bounded browsing, current evidence,
-same-task Refresh, conditional missing-row visibility, complete file selection
+same-task Refresh, conditional missing-row visibility, shared row highlighting
+and filter-scoped file selection
 and standalone integrity controls/results. Plan/Verify navigation keeps original
 execution review separate from manual post-copy and ordinary current-state
 verification. Final lifecycle acceptance and beta packaging remain open.

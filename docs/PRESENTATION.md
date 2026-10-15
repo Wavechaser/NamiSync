@@ -173,7 +173,7 @@ selection refresh validates its own operation using the direct contribution
 (rollup minus immediate-child rollups), never the subtree total. Descendant
 eligibility cannot authorize an unavailable parent operation.
 
-Row highlighting is separate from execution selection. Plain clicks replace the
+Plan and Inventory share row highlighting, separate from checkbox selection. Plain clicks replace the
 highlighted set; Ctrl-click toggles; Shift-click extends from the retained
 anchor; Ctrl+Shift-click adds a range. Arrow keys move focus, Shift+arrows
 extend, and Escape clears. An initial arrow sends `node_id: null`, which the
@@ -183,8 +183,9 @@ the existing `replace` or `extend` gesture with a server-supplied node identity.
 An off-window endpoint is resolved through a revisioned window read. This is
 not a deselection gesture, and Python continues to own range membership.
 The browser sends only a compact gesture endpoint with expected view/highlight revisions. Python
-resolves ranges against the full ordered view, including off-window rows and
-collapsed descendants; when a target is outside the retained window, the
+resolves ranges against the full ordered visible view, including off-window rows;
+highlighted folders supply their matching descendants to checkbox gestures.
+When a target is outside the retained window, the
 browser requests that window before painting the returned focus/highlight flags.
 An off-window moving highlight requests up to 32 leading rows before the
 authoritative focus index, clamped at zero, within the unchanged 256-row limit.
@@ -193,13 +194,15 @@ in-window and pointer highlight reads retain the displayed window offset.
 Window rows carry highlight flags; scrolling, sorting and collapse preserve them,
 while search/filter changes clear them. Pointer highlighting does not request a
 keyboard focus ring; `:focus-visible` remains the keyboard-only ring. Checkboxes
-change execution selection without changing highlighting, and a checkbox inside
+change membership without changing highlighting, and a checkbox inside
 a highlighted range applies to that range. Highlight-driven selection also
-carries the execution-selection revision and is rejected as stale before one
-atomic workflow mutation.
+carries Plan's execution-selection revision before one atomic workflow mutation.
+Inventory instead fences its file membership with the publication/view and
+highlight revisions; it creates no workflow operation. Inventory Home/End resolve
+the first/last visible row through the same bounded read and highlight queue.
 
 Plan and Inventory navigation retain at most one read in flight and one latest
-pending target. Plan scrolling, endpoint lookup and highlight refresh share
+pending target. Each surface's scrolling, endpoint lookup and highlight refresh share
 read admission. Pointer replacement likewise supersedes unsubmitted navigation;
 toggle, add-range and other scope-dependent gestures retain individual mutation
 admission with captured revisions. Later pointer, wheel, touch, non-navigation
@@ -218,7 +221,7 @@ scroll read; viewport coverage and travel direction still decide its adoption.
 Loaded-row gestures and explicit navigation retain their replacement authority,
 and view, task and lifecycle changes retain their existing ownership fences.
 
-Scoped highlighted selection retains a finite under-10-second cost gate on the
+Plan scoped highlighted selection retains a finite under-10-second cost gate on the
 supported Windows host, with exact matched count and post-mutation scope and
 selection assertions. [PERFORMANCE](PERFORMANCE.md#selected-plan-and-execution-ui-observations)
 owns the fixture, measured interval, rerun triggers and historical observation.
@@ -303,13 +306,22 @@ windows keep their independent action ordering and may overlap a retired
 viewport read while it drains; that read cannot adopt or dispatch obsolete
 queued work. Keyboard targets retain precedence until a newer user scroll or
 loaded-row gesture replaces them. The browser retains one 256-row window.
-Inventory checkboxes use the server selection API, which starts empty and retains exact file row
-IDs independently of the active/detail row. A folder gesture covers all its files;
-the header's null-node gesture covers the complete location. Search, facets,
-collapse and paging never narrow that membership or change selection. Warnings
-are informational; directories provide membership only. Labels must disclose
-"Select all files in this location" or "Select all files in this folder", with
-selected/hidden-by-filter counts. Plan's query-matched scope remains distinct.
+Inventory checkboxes start empty and retain exact file row IDs independently of
+row highlights and the active/detail row. Folder and header gestures apply to
+files matching the current search/facets in their complete server-owned scope,
+including collapsed and off-window matches. A checkbox in a highlighted range
+applies to matching files covered by that range. Changing the view alone does
+not change membership; selected totals still include hidden files. Warnings are
+informational and directories provide membership only. Labels disclose matching
+scope; selected/hidden-by-filter counts disclose retained hidden membership.
+Refresh and missing-row visibility continue to use complete explicit scope.
+Passive selection/result replacement retains the live outer viewport and the
+focused checkbox without scrolling it into view. Only accepted keyboard
+navigation reveals its new focus. Live result reads defer to newer foreground
+reads/highlights and replay a dirty refresh at the retained offset after they settle.
+Window and detail reads settle together before that ownership check. A newer
+foreground read retains one needed refresh even if either background read fails;
+failure alone admits no retry, and a retired owner cannot be revived.
 
 Ordinary integrity starts freeze this complete nonempty selection against the
 current released publication. Inventory task/session generations fence live
@@ -336,7 +348,10 @@ follow or replace its terminal result.
 
 Manual verification has a separate frozen operation-to-row membership and
 result generation. Inventory window/detail exposes only matching returned-row
-manual facts, alongside ordinary facts and current ledger evidence. Terminal
+manual facts, alongside ordinary facts and current ledger evidence. The renderer
+indexes each bounded result window once; a detail still requires matching
+generation and row/operation identity. It does not repeatedly validate the
+window's own result membership for each rendered row. Terminal
 normalization repairs a live Gap and retains outcomes completed before pause.
 Manual hashing preserves actual prior scan provenance; subsequent ordinary
 scanning supplies its own scan identity. The desktop's same-task Plan/Verify
@@ -365,9 +380,9 @@ One existing view revision fences selection, windows and details. A stale reques
 or revision changes nothing; selection changes advance the revision. Selection
 requires a current released, clean publication and cannot race admission or a
 pending visibility effect. Replacements retain only surviving exact file row IDs,
-leave new rows unselected, and invalidate prior gestures. A retained prefix of
-selected membership and projection-owned file totals provide constant-time
-per-row tri-state; hidden counts are computed at selection/view changes, not on
+leave new rows unselected, clear highlights and invalidate prior gestures.
+Compact prefixes of complete selected membership and matching selectable/selected
+files provide constant-time per-row tri-state; hidden counts are computed at selection/view changes, not on
 each window read. Mode eligibility remains workflow-owned and no integrity
 operation starts through this selection API.
 Repeated windows

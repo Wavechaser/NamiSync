@@ -262,17 +262,18 @@ def test_modules_use_only_local_explicit_js_imports(
         "panels.js": ["./render.js", "./setup.js", "./plan_review.js", "./inventory_review.js"],
         "filter_menu.js": ["./icons.js", "./render.js"],
         "row_menu.js": ["./render.js"],
-        "inventory_review.js": ["./table_columns.js", "./task_status.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./tree.js", "./integrity.js", "./render.js"],
+        "inventory_review.js": ["./table_columns.js", "./task_status.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./tree.js", "./row_highlight.js", "./integrity.js", "./render.js"],
         "plan.js": ["./file_row.js", "./render.js"],
         "table_columns.js": [],
-        "plan_review.js": ["./table_columns.js", "./plan.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./render.js", "./task_status.js"],
+        "plan_review.js": ["./row_highlight.js", "./table_columns.js", "./plan.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./render.js", "./task_status.js"],
         "rail.js": ["./icons.js", "./render.js", "./task_status.js"],
         "task_status.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
         "setup.js": ["./icons.js", "./render.js"],
         "theme.js": ["./bridge.js", "./render.js"],
-        "tree.js": ["./render.js"],
+        "tree.js": ["./render.js", "./row_highlight.js"],
+        "row_highlight.js": [],
     }
     assert all(
         value.startswith("./") and value.endswith(".js")
@@ -490,6 +491,7 @@ def test_inventory_visibility_bridge_admits_bounded_actual_results_and_observes_
 
 
 def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_path: Path) -> None:
+    from dataclasses import replace
     from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
     from namisync.db.repositories import InventoryPresence, InventorySnapshot
     from namisync.interfaces.web.inventory_review import InventoryReviewState
@@ -510,9 +512,18 @@ def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_pa
     detail = {"disposition": "current", "view_revision": 0,
               "node_id": projection.node_id_by_row_id["1"], "snapshot": {"path": row.rel_path, "warning": None},
               "detail": inventory_current_detail(row)}
+    folder = replace(row, row_id="2", rel_path="folder", rel_path_key="FOLDER",
+        entry_kind=EntryKind.DIRECTORY, observed=replace(stat, kind=EntryKind.DIRECTORY),
+        attestation=None, last_verified_at=None)
+    child = replace(row, rel_path=r"folder\subject.txt", rel_path_key=r"FOLDER\SUBJECT.TXT")
+    zero_scope = InventoryReviewState(view.task_id, view.request_id,
+        build_inventory_projection(1, (folder, child)), view.root_path, True, 2, 0,
+        scan_request_id=view.request_id, filters=frozenset({"unverified"}))
     fixture = tmp_path / "inventory-window.json"
     fixture.write_text(json.dumps({"summary": view.summary(),
-        "window": view.window(expected_revision=0, offset=0, limit=256), "detail": detail}), encoding="utf-8")
+        "window": view.window(expected_revision=0, offset=0, limit=256), "detail": detail,
+        "zero_scope": {"summary": zero_scope.summary(),
+            "window": zero_scope.window(expected_revision=0, offset=0, limit=256)}}), encoding="utf-8")
     completed = run_node_probe([str(node), str(PROJECT_ROOT / "tests/assets/inventory_window_bridge_probe.mjs"),
         str(Path(ASSET_ROOT) / "bridge.js"), str(fixture)], timeout=10)
     assert completed.returncode == 0, completed.stdout + completed.stderr

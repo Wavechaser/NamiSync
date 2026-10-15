@@ -49,14 +49,17 @@ foreground refusals in native01. The shell's page acknowledgement expired
 before the new foreground deadline; its two native waits are corrected, with
 38 owning ordinary passes and installed shell default04/larger05 passes.
 The extra Alt key-up and foreground-refused attempts remain retained.
-The table is not yet committed. Root owns the subject/delivery docs; Refresh remains dependent on
-table acceptance. The prior user handoff and both recovery refs remain preserved.
+The harness correction is committed as `c6dc0a0`. Fresh table review approves
+the frozen implementation and behavior docs; all named table gates are closed.
+Root is committing this atomic outcome, then releasing Refresh implementation
+from `refresh-design-20261016.md` after revalidating its recorded seams. Root
+owns subject/delivery docs. The prior handoff and both recovery refs remain preserved.
 
 Prior Inventory/gallery/ordinary evidence remains recorded in M1_PLAN and must
 be reused only where all producer, checker and driver dependencies remain
 unchanged. Announce native-input runs; retain foreground/focus/hit guards. No gate
-waiver is authorized. The final ordinary gate, table/Refresh verification and
-ablation study remain outstanding.
+waiver is authorized. Refresh verification, final integration and the ablation
+study remain outstanding; the table's ordinary gate is complete.
 
 Root owns delivery docs and integration; builders must not overlap shared files
 or commit before independent review. M1-12, release, DOC-2, push/PR and backend

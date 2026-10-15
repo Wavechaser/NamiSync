@@ -525,11 +525,15 @@ Refresh carries a recursive subtree root so it can discover new descendants,
 while integrity freezes the indexed subtree to exact paths before admission.
 Path-based CLI calls retain their existing full/exact behavior.
 The desktop Inventory view separately owns an initially empty file selection.
-Its bounded node gesture resolves complete server-side membership, requires the
+Its bounded node gesture resolves matching files across complete server-side scope, requires the
 current released publication and advances the existing view revision. It does
 not call the location service, claim a session, or decide baseline/verify/
-rebaseline eligibility. Full-folder and full-location counts include hidden
-files; replacement retains only surviving exact file row IDs. Inventory tasks also admit ordinary baseline, verify and confirmed rebaseline
+rebaseline eligibility. Folder/header/highlighted-range gestures respect current
+search/facets, including collapsed and off-window matches. Total selection still
+includes hidden files; starts freeze that complete selection. Independent
+revisioned highlights reuse Plan's range reducer, without its operation policy.
+Replacement retains only surviving exact file row IDs and clears highlights.
+Inventory tasks also admit ordinary baseline, verify and confirmed rebaseline
 sessions after exact prior release. They retain task kind `inventory` and have no
 Plan token. `task-integrity` associations can be followed by another ordinary
 operation or Refresh; original start receipts remain recoverable until Close.

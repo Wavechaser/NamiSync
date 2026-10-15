@@ -1,4 +1,5 @@
 import { renderFilesystemText } from "./render.js";
+import { keyboardHighlightGesture } from "./row_highlight.js";
 
 export const ROW_H = 28;
 
@@ -26,6 +27,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   const activeChanged = optionalCallback(callbacks, "activeChanged");
   const decorateRow = optionalCallback(callbacks, "decorateRow");
   const context = optionalCallback(callbacks, "context");
+  const highlight = optionalCallback(callbacks, "highlight");
   const requestFrame = document.defaultView.requestAnimationFrame.bind(
     document.defaultView,
   );
@@ -35,6 +37,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   root.classList.add("nami-tree");
   root.style.setProperty("--row-h", `${rowHeight}px`);
   root.setAttribute("role", "tree");
+  if (callbacks.highlight !== undefined) root.ariaMultiSelectable = "true";
   root.tabIndex = 0;
 
   const topSpacer = createSpacer(document);
@@ -115,7 +118,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     return true;
   }
 
-  function commitWindow(generation, window, preferredNodeId = null) {
+  function commitWindow(generation, window, preferredNodeId = null, reveal = true) {
     if (disposed || generation !== currentGeneration) {
       return false;
     }
@@ -156,10 +159,10 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       });
       decorateRow(element, sourceRow);
       entry = Object.freeze({element, row});
-      element.addEventListener("click", () => {
-        acceptRenderedIntent(entry);
+      element.addEventListener("click", (event) => {
+        acceptRenderedIntent(entry, callbacks.highlight === undefined);
         root.focus({preventScroll: true});
-        activate(row.node_id);
+        activate(row.node_id, event);
       });
       element.addEventListener("contextmenu", (event) => {
         acceptRenderedIntent(entry, false);
@@ -187,7 +190,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     currentOffset = leadingRows;
     currentEnd = leadingRows + entries.length;
     renderedByIndex = nextByIndex;
-    if (requestKind === "scroll") {
+    if (requestKind === "scroll" || !reveal) {
       setProgrammaticScrollTop(preservedScrollTop, false);
     }
     if (pendingRequest?.generation === generation) {
@@ -223,7 +226,8 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     if (target === null) {
       clearActive(requestKind === "scroll");
     } else {
-      setActive(target, requestKind !== "scroll");
+      setActive(target, reveal && requestKind !== "scroll");
+      if (requestKind === "keyboard" && callbacks.highlight !== undefined) highlight("replace", target.row.node_id);
     }
     const scrollViewportUnchanged = requestKind === "scroll" &&
       viewport.scrollTop === admittedRequest.scrollTop &&
@@ -295,6 +299,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     const rendered = renderedByIndex.get(visibleIndex);
     if (rendered !== undefined) {
       acceptRenderedIntent(rendered);
+      if (callbacks.highlight !== undefined) highlight("replace", rendered.row.node_id);
       return;
     }
     requestWindow(visibleIndex, "keyboard");
@@ -502,6 +507,13 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   }
 
   function onKeyDown(event) {
+    const gesture = keyboardHighlightGesture(event);
+    if (!event.defaultPrevented && callbacks.highlight !== undefined && gesture !== null) {
+      event.preventDefault();
+      invalidateInternalRequest();
+      highlight(gesture, null);
+      return;
+    }
     if (event.altKey || event.ctrlKey || event.metaKey
         || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) invalidateInternalRequest();
     if (

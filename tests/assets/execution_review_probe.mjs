@@ -18,7 +18,9 @@ const filterUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "filt
 const rowMenuUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "row_menu.js"), "utf8"))
   .replace("./render.js", renderUrl));
 const tableColumnsUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "table_columns.js"), "utf8"));
+const highlightUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "row_highlight.js"), "utf8"));
 const source = (await readFile(process.argv[2], "utf8"))
+  .replace("./row_highlight.js", highlightUrl)
   .replace("./table_columns.js", tableColumnsUrl)
   .replace("./filter_menu.js", filterUrl)
   .replace("./row_menu.js", rowMenuUrl)

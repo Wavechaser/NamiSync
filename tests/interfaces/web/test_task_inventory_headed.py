@@ -19,6 +19,7 @@ from conftest import HeadedInstalledWheel
 
 _CHILD = Path(__file__).with_name("_task_inventory_headed_child.py")
 _INTEGRITY_INPUT = {name: True for name in (
+    "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear",
     "select-folder", "select-location-clear", "select-location", "baseline", "verify", "pause", "resume",
     "verify-cancel", "cancel", "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm",
 )}
@@ -55,6 +56,22 @@ def test_inventory_confirmation_exit_diagnostic_is_exact_and_bounded() -> None:
     assert child._bounded_confirmation_exit_diagnostic(
         {"last_close": None, "timeout": None},
     ) == {"last_close": None, "timeout": None}
+
+
+def test_inventory_custody_failure_diagnostic_excludes_dom_and_unbounded_values() -> None:
+    facts = {"checkbox_custody": True, "range_custody": False,
+        "cancel_preserved_result": True, "scan_selected": True,
+        "range_scroll_before": 7000, "range_scroll_after": 7000,
+        "range_checkbox_focused": False, "range_checkbox_connected": True,
+        "range_checkbox_disabled": False, "range_active_category": "body"}
+    assert child._bounded_integrity_custody_diagnostic(facts) == facts
+    for invalid in ({**facts, "path": r"C:\private"},
+                    {**facts, "range_active_category": r"C:\private"},
+                    {**facts, "range_checkbox_focused": 0},
+                    {**facts, "range_scroll_after": float("inf")},
+                    {**facts, "range_scroll_after": -1}):
+        assert child._bounded_integrity_custody_diagnostic(invalid) is None
+    assert child._bounded_integrity_custody_diagnostic(None) is None
 
 
 @pytest.mark.headed
@@ -144,15 +161,21 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         table = initial["report"]["table_appearance"]
         assert table["headers"] == ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"]
         assert table["row_height"] == pytest.approx(24, abs=0.5)
-        assert table["row_count"] == initial["report"]["fixture"]["domain_count"] == 4
+        assert initial["report"]["fixture"]["domain_count"] == 304
+        assert table["row_count"] == 256
         assert table["header_control_count"] == 1
         assert len(table["row_checkboxes"]) == table["row_count"]
         assert all(item["control_count"] == 1 for item in table["row_checkboxes"])
         checkboxes = [table["header_checkbox"],
                       *(item["appearance"] for item in table["row_checkboxes"])]
         assert all(checkbox is not None for checkbox in checkboxes)
+        enabled_nodes = {initial["report"]["fixture"][key]
+                         for key in ("folder_node_id", "first_node_id", "missing_node_id")}
+        assert not table["header_checkbox"]["disabled"]
+        for row in table["row_checkboxes"]:
+            assert row["appearance"]["disabled"] is (row["node_id"] not in enabled_nodes)
         for checkbox in checkboxes:
-            assert not checkbox["disabled"] and not checkbox["checked"] and not checkbox["mixed"]
+            assert not checkbox["checked"] and not checkbox["mixed"]
             assert [checkbox["width"], checkbox["height"]] == pytest.approx([16, 16], abs=0.5)
         for header_left, header_right, row_left, row_right in table["column_edges"]:
             assert [row_left, row_right] == pytest.approx([header_left, header_right], abs=1)
@@ -182,8 +205,9 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert len({item["command_id"] for item in starts}) == 4
         assert [item["request_id"] for item in starts[1:]] == [item["next_request_id"] for item in starts[:-1]]
         assert [item["selected"] for item in commands["selections"]] == [True, False, True]
-        assert [item["result"]["selected_file_count"] for item in commands["selections"]] == [3, 0, 3]
-        assert [item["result"]["hidden_selected_file_count"] for item in commands["selections"]] == [0, 0, 2]
+        assert [item["result"]["selected_file_count"] for item in commands["selections"]] == [3, 2, 3]
+        assert [item["result"]["hidden_selected_file_count"] for item in commands["selections"]] == [0, 2, 2]
+        assert [item["result"]["selected_file_count"] for item in commands["highlighted_selections"]] == [3, 0]
         assert commands["selections"][0]["node_id"] == initial["report"]["fixture"]["folder_node_id"]
         assert commands["selections"][1]["node_id"] is commands["selections"][2]["node_id"] is None
         assert [item["action"] for item in commands["controls"]] == ["pause", "resume", "cancel"]
@@ -191,7 +215,8 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert [item["session_id"] for item in commands["controls"]] == [starts[1]["session_id"], starts[1]["session_id"], starts[2]["session_id"]]
         assert all(item["result"]["accepted"] for item in commands["controls"])
         journey = initial["report"]["integrity_journey"]
-        assert journey["checkbox_custody"] and journey["cancel_preserved_result"] and journey["scan_selected"]
+        assert journey["checkbox_custody"] and journey["range_custody"] and journey["cancel_preserved_result"] and journey["scan_selected"]
+        assert journey["range_scroll"] > 256 * 24
         assert journey["cancel_confirmation_restored"] == {
             "closed": True, "app_active": True, "theme_active": True,
             "scroll_restored": True, "focus_required": True, "focus_restored": True,

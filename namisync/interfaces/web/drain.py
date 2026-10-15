@@ -1114,7 +1114,7 @@ class TaskRegistry:
 
     def set_inventory_selection(self, task_id: str, request_id: str, *,
                                 expected_revision: int, node_id: str | None,
-                                selected: bool) -> dict[str, object]:
+                                selected: bool, expected_highlight_revision: int | None = None) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
         with task.condition:
             self._require_inventory_read_task_locked(task)
@@ -1123,8 +1123,28 @@ class TaskRegistry:
                     or not task.session_released or task.delivered_terminal_record is None
                     or task.request_id != view.request_id):
                 raise TaskUnavailableError("inventory selection requires the current released view")
+            if expected_highlight_revision is not None:
+                return view.set_highlighted_selection(request_id=request_id, expected_revision=expected_revision,
+                    expected_highlight_revision=expected_highlight_revision, selected=selected)
             return view.set_selection(request_id=request_id, expected_revision=expected_revision,
                                       node_id=node_id, selected=selected)
+
+    def mutate_inventory_highlight(self, task_id: str, *, expected_view_revision: int,
+                                   expected_highlight_revision: int, gesture: str,
+                                   node_id: str | None) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if self._inventory_views.get(task_id) is not view:
+                raise TaskUnavailableError("inventory view is unavailable")
+            return view.mutate_highlight(expected_view_revision=expected_view_revision,
+                expected_highlight_revision=expected_highlight_revision, gesture=gesture, node_id=node_id)
+
+    def set_inventory_highlighted_selection(self, task_id: str, request_id: str, *,
+                                            expected_revision: int, expected_highlight_revision: int,
+                                            selected: bool) -> dict[str, object]:
+        return self.set_inventory_selection(task_id, request_id, expected_revision=expected_revision,
+            expected_highlight_revision=expected_highlight_revision, node_id=None, selected=selected)
 
     def refresh_inventory(
         self, task_id: str, request_id: str, *, expected_revision: int,

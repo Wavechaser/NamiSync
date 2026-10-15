@@ -47,6 +47,7 @@ def _fixture() -> dict[str, object]:
     maximum = InventoryReviewState(view.task_id, view.request_id, build_inventory_projection(1, many),
         r"C:\root", True, 300, 0, scan_request_id=view.request_id)
     views["maximum"] = {"summary": maximum.summary(), "window": maximum.window(expected_revision=0, offset=0, limit=256)}
+    views["middle"] = {"summary": maximum.summary(), "window": maximum.window(expected_revision=0, offset=240, limit=256)}
     invalidated = replace(row, invalidation=VerificationInvalidation(NOW, VerificationInvalidationReason.HASH_MISMATCH))
     missing_folder = replace(row, row_id="3", rel_path="missing_folder",
         rel_path_key=normalize_relative_path("missing_folder"), entry_kind=EntryKind.DIRECTORY,

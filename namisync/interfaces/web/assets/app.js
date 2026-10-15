@@ -41,6 +41,8 @@ import {
   startPlan,
   startTaskDrain,
   setInventorySelection,
+  setInventoryHighlightedSelection,
+  mutateInventoryHighlight,
   TaskCreateUncertainError,
   TaskCloseUncertainError,
   TerminalPresentationError,
@@ -275,6 +277,9 @@ const panel = createWorkPanel({
   onRefresh: (review, nodeId) => { void runInventoryAction(review, "refresh", nodeId); },
   onVisibility: (review, action, nodeId) => { void runInventoryAction(review, action, nodeId); },
   onSelect: (review, nodeId, selected) => { void changeInventorySelection(review, nodeId, selected); },
+  onHighlightedSelect: (review, selected) => { void changeInventorySelection(review, null, selected, true); },
+  onHighlight: (review, gesture, nodeId) => { void queueRowHighlight(review, gesture, nodeId, true); },
+  onInterrupt: interruptPlanHighlight,
   onStart: (review, mode, returnFocus) => { void startInventoryIntegrityAction(review, mode, returnFocus); },
   onManualStart: (review) => { void startManualVerificationAction(review); },
   onControl: (review, action) => { void controlInventoryIntegrity(review, action); },
@@ -700,6 +705,7 @@ function adoptTask(summary) {
       inventoryWindowIntent: null,
       inventoryOverlayRevision: 0,
       inventoryOverlayRunning: false,
+      inventoryOverlayDirty: false,
       inventoryError: null,
       inventoryAction: null,
       inventoryViewUnconfirmed: false,
@@ -1502,13 +1508,18 @@ async function replaceInventoryPublication(task, review, summary, action, sessio
   return true;
 }
 
-async function changeInventorySelection(review, nodeId, selected) {
+async function changeInventorySelection(review, nodeId, selected, highlightedScope = false) {
+  const clickedViewRevision = review.summary.view_revision;
+  const clickedHighlightRevision = review.summary.highlight_revision;
+  interruptPlanHighlight(review);
+  cancelInventoryWindow(review);
+  await (review.highlightQueue ?? Promise.resolve()).catch(() => {});
   const task = currentInventoryTask(review);
   if (task === null || task.inventoryLoading || task.inventoryAction?.pending
       || task.inventoryAction?.accepted
       || review.pending !== null || !task.sessionReleased || task.sessionState === "active"
       || task.inventoryViewUnconfirmed || review.summary.request_id !== task.requestId
-      || typeof selected !== "boolean") return;
+      || typeof selected !== "boolean" || review.summary.view_revision !== clickedViewRevision) return;
   const action = ++review.actionRevision;
   const sessionId = task.sessionId;
   const publication = review.summary.request_id;
@@ -1518,12 +1529,15 @@ async function changeInventorySelection(review, nodeId, selected) {
   review.message = "Updating selected files…";
   renderTasks();
   try {
-    const summary = await setInventorySelection(task.taskId, publication, revision, nodeId, selected);
+    const summary = highlightedScope
+      ? await setInventoryHighlightedSelection(task.taskId, publication, revision, clickedHighlightRevision, selected)
+      : await setInventorySelection(task.taskId, publication, revision, nodeId, selected);
     if (currentInventoryTask(review) !== task || review.actionRevision !== action
         || task.sessionId !== sessionId || review.summary.request_id !== publication) return;
     const replaced = await replaceInventoryPublication(task, review, summary, action, sessionId, publication, navigation);
     if (replaced) review.message = summary.disposition === "conflict"
-      ? "Selection changed elsewhere. Current selection shown." : null;
+      ? highlightedScope ? "Highlight changed. Review the current highlight, then select again."
+        : "Selection changed elsewhere. Current selection shown." : null;
     else review.message = "Selection changed. Reload the inventory view to continue.";
   } catch (_error) {
     if (currentInventoryTask(review) === task && review.actionRevision === action) {
@@ -1908,7 +1922,9 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
       || !["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)) return;
   task.inventoryOverlayRevision += 1;
-  if (task.inventoryOverlayRunning) return;
+  task.inventoryOverlayDirty = true;
+  if (task.inventoryOverlayRunning || task.inventoryWindowRunning
+      || (task.inventoryReview?.foregroundWindowReaders ?? 0) > 0) return;
   task.inventoryOverlayRunning = true;
   let attemptedRevision = task.inventoryOverlayRevision;
   try {
@@ -1918,29 +1934,51 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
       const review = task.inventoryReview;
       if (review === null || selectedTaskId !== task.taskId || settingsVisible || task.closePending
           || (task.taskKind === "sync-plan" && task.workPane !== "verify")) break;
+      if (review.foregroundWindowReaders > 0 || task.inventoryWindowRunning) break;
+      task.inventoryOverlayDirty = false;
       const action = review.actionRevision;
       const navigation = navigationRevision;
       const publication = review.summary.request_id;
       const revision = review.summary.view_revision;
+      const highlightRevision = review.summary.highlight_revision;
+      const offset = review.window.offset;
+      const foreground = review.foregroundWindowEpoch;
+      const highlightGeneration = review.highlightGeneration;
+      const windowRequest = review.windowRequestRevision;
       const detail = review.detail?.state === "current" ? review.detail : null;
-      const [window, detailResponse] = await Promise.all([
-        getInventoryWindow(task.taskId, revision, review.window.offset, 256),
+      const [windowRead, detailRead] = await Promise.allSettled([
+        getInventoryWindow(task.taskId, revision, offset, 256),
         detail === null ? Promise.resolve(null)
           : getInventoryDetail(task.taskId, revision, detail.row.node_id),
       ]);
+      const window = windowRead.status === "fulfilled" && detailRead.status === "fulfilled"
+        ? windowRead.value : null;
+      const detailResponse = detailRead.status === "fulfilled" ? detailRead.value : null;
       const stillCurrent = tasks.get(task.taskId) === task && task.sessionId === sessionId
         && task.inventoryOverlayRevision === request && task.inventoryReview === review
         && review.actionRevision === action && review.summary.request_id === publication
         && review.summary.view_revision === revision && selectedTaskId === task.taskId
         && navigationRevision === navigation && !settingsVisible && !task.closePending
         && (task.taskKind === "inventory" || task.workPane === "verify");
-      if (stillCurrent && window.disposition === "current" && window.view_revision === revision) {
+      const foregroundCurrent = review.foregroundWindowEpoch === foreground
+        && review.highlightGeneration === highlightGeneration && review.windowRequestRevision === windowRequest
+        && review.window.offset === offset && (review.foregroundWindowReaders ?? 0) === 0;
+      const highlightSummary = window === null ? null : inventoryWindowSummary(review, window, revision);
+      if (stillCurrent && foregroundCurrent && window?.disposition === "current" && window.view_revision === revision
+          && highlightSummary !== null
+          && review.summary.highlight_revision === highlightRevision) {
+        review.summary = highlightSummary;
         review.window = window;
         if (detailResponse !== null && detailResponse.disposition === "current"
             && detailResponse.view_revision === revision && review.detail === detail) {
           detail.response = detailResponse;
         }
         renderTasks();
+      } else if (stillCurrent && (!foregroundCurrent || review.summary.highlight_revision !== highlightRevision)) {
+        // Independent foreground invalidation retains demand even when a read failed.
+        task.inventoryOverlayDirty = true;
+        if ((review.foregroundWindowReaders ?? 0) > 0 || task.inventoryWindowRunning) break;
+        if (task.inventoryOverlayRevision === request) task.inventoryOverlayRevision += 1;
       }
       if (task.inventoryOverlayRevision === request) break;
     }
@@ -1995,6 +2033,8 @@ async function loadInventoryReview(task, force = false) {
     task.inventoryReview = {
       summary, window, pending: null, message: null, queuedSearchQuery: null,
       actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop: 0,
+      highlightQueue: Promise.resolve(),
+      foregroundWindowEpoch: 0, foregroundWindowReaders: 0,
     };
     task.inventoryViewUnconfirmed = false;
   } catch (error) {
@@ -2094,6 +2134,13 @@ function inventoryWindowReady(task, review) {
     && !checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery);
 }
 
+function inventoryWindowSummary(review, window, revision) {
+  const receipt = review.highlightReceipt;
+  return window.highlight_revision === review.summary.highlight_revision ? review.summary
+    : receipt?.request_id === review.summary.request_id && receipt.view_revision === revision
+      && receipt.highlight_revision === window.highlight_revision ? receipt : null;
+}
+
 async function loadInventoryWindow(review, offset) {
   const task = currentInventoryTask(review);
   if (!inventoryWindowReady(task, review)) return null;
@@ -2121,11 +2168,16 @@ async function drainInventoryWindows(task) {
       const intent = task.inventoryWindowIntent;
       task.inventoryWindowIntent = null;
       let window = null;
+      beginForegroundWindowRead(intent.review);
       try {
         if (intent.stillCurrent()) {
           const response = await getInventoryWindow(task.taskId, intent.revision, intent.offset, 256);
           if (intent.stillCurrent()) {
-            if (response.disposition === "current") window = response;
+            const summary = inventoryWindowSummary(intent.review, response, intent.revision);
+            if (response.disposition === "current" && summary !== null) {
+              intent.review.summary = summary;
+              window = response;
+            }
             else {
               intent.review.message = "Inventory changed. Reload the inventory view to continue.";
               renderTasks();
@@ -2138,10 +2190,14 @@ async function drainInventoryWindows(task) {
           renderTasks();
         }
       }
-      intent.resolve(window);
+      finally {
+        intent.resolve(window);
+        endForegroundWindowRead(intent.review, true);
+      }
     }
   } finally {
     task.inventoryWindowRunning = false;
+    retryInventoryOverlay(task);
   }
 }
 
@@ -2208,12 +2264,24 @@ function adoptExecutionWindow(review, window) {
 }
 
 function beginForegroundWindowRead(review) {
-  review.foregroundWindowEpoch += 1;
-  review.foregroundWindowReaders += 1;
+  review.foregroundWindowEpoch = (review.foregroundWindowEpoch ?? 0) + 1;
+  review.foregroundWindowReaders = (review.foregroundWindowReaders ?? 0) + 1;
 }
 
-function endForegroundWindowRead(review) {
+function retryInventoryOverlay(task) {
+  if (tasks.get(task.taskId) === task && task.inventoryOverlayDirty && !task.inventoryOverlayRunning
+      && !task.inventoryWindowRunning && task.inventoryReview !== null
+      && (task.inventoryReview.foregroundWindowReaders ?? 0) === 0
+      && currentInventoryTask(task.inventoryReview) === task) void refreshInventoryOverlay(task);
+}
+
+function endForegroundWindowRead(review, inventory = false) {
   review.foregroundWindowReaders -= 1;
+  if (inventory) {
+    const task = tasks.get(review.summary.task_id);
+    if (task?.inventoryReview === review) retryInventoryOverlay(task);
+    return;
+  }
   const task = retainedReviewTask(review);
   if (
     task !== null && task.executionWindowDirty && review.foregroundWindowReaders === 0
@@ -2911,6 +2979,13 @@ async function readPlanNavigationWindow(review, current, ...args) {
   finally { if (review.navigationRead === read) review.navigationRead = null; }
 }
 
+async function readInventoryNavigationWindow(review, current, taskId, revision, offset, limit) {
+  // Inventory's task-owned pump also serializes reads from retired pane instances.
+  if (!current()) return null;
+  const window = await loadInventoryWindow(review, offset);
+  return current() ? window : null;
+}
+
 function interruptPlanHighlight(review) {
   review.highlightGeneration = (review.highlightGeneration ?? 0) + 1;
   review.highlightNavigation = null;
@@ -2928,24 +3003,40 @@ function interruptPlanNavigation(review) {
 }
 
 function queuePlanHighlight(review, gesture, nodeId) {
-  const moving = gesture.startsWith("move_");
+  return queueRowHighlight(review, gesture, nodeId);
+}
+
+function queueRowHighlight(review, gesture, nodeId, inventory = false) {
+  const currentOwner = inventory ? currentInventoryTask : currentReviewTask;
+  const retainedOwner = inventory ? (value) => {
+    const owner = tasks.get(value.summary.task_id);
+    return owner?.inventoryReview === value ? owner : null;
+  } : retainedReviewTask;
+  const readWindow = inventory ? readInventoryNavigationWindow : readPlanNavigationWindow;
+  review.highlightQueue ??= Promise.resolve();
+  const boundary = gesture === "first" || gesture === "last";
+  const moving = gesture.startsWith("move_") || boundary;
   const extending = gesture.endsWith("_extend");
   const previous = review.highlightNavigation;
-  if (moving && previous?.extending === extending && previous.current()) {
+  if (moving && !boundary && previous?.extending === extending && previous.current()) {
     previous.target = Math.max(0, Math.min(review.window.total - 1,
       previous.target + (gesture.startsWith("move_down") ? 1 : -1)));
     previous.version += 1;
     return review.highlightQueue;
   }
-  interruptPlanNavigation(review);
+  if (inventory) {
+    interruptPlanHighlight(review);
+    cancelInventoryWindow(review);
+  } else interruptPlanNavigation(review);
   const generation = review.highlightGeneration;
-  const task = currentReviewTask(review);
+  const task = currentOwner(review);
   const viewRevision = review.summary.view_revision;
   const action = review.actionRevision;
   const navigation = navigationRevision;
   const publication = review.summary.request_id;
   const session = task?.sessionId;
-  const owned = () => currentReviewTask(review) === task && task !== null
+  const owned = () => currentOwner(review) === task && task !== null
+    && (!inventory || inventoryWindowReady(task, review))
     && task.sessionId === session && !settingsVisible && navigationRevision === navigation
     && review.summary.request_id === publication && review.summary.view_revision === viewRevision
     && review.actionRevision === action;
@@ -2955,24 +3046,25 @@ function queuePlanHighlight(review, gesture, nodeId) {
   const down = gesture.startsWith("move_down");
   const intent = { current, extending, version: 0,
     target: Math.max(0, Math.min(review.window.total - 1,
-      Number.isSafeInteger(focus) ? focus + (down ? 1 : -1) : down ? 0 : review.window.total - 1)) };
+      boundary ? gesture === "first" ? 0 : review.window.total - 1
+        : Number.isSafeInteger(focus) ? focus + (down ? 1 : -1) : down ? 0 : review.window.total - 1)) };
   if (moving) review.highlightNavigation = intent;
   const run = async () => {
-    if (!(moving ? current() : owned()) || review.pending !== null || task.executionAttempt !== null) return;
+    if (!(moving ? current() : owned()) || review.pending !== null || (!inventory && task.executionAttempt !== null)) return;
     beginForegroundWindowRead(review);
     let summary = captured;
     let first = true;
     try {
       do {
-        const version = moving && first ? 0 : intent.version;
+        const version = moving && first && !boundary ? 0 : intent.version;
         const target = intent.target;
         const latest = () => current() && (!moving || intent.version === version);
         let command = gesture;
         let endpoint = nodeId;
-        if (moving && !first) {
+        if (moving && (!first || boundary)) {
           let row = review.window.rows.find((value) => value.visible_index === target);
           if (row === undefined) {
-            const lookup = await readPlanNavigationWindow(review, latest,
+            const lookup = await readWindow(review, latest,
               task.taskId, viewRevision, Math.max(0, target - 32), 256);
             if (!current()) return;
             if (!latest()) continue;
@@ -2985,18 +3077,20 @@ function queuePlanHighlight(review, gesture, nodeId) {
         }
         // Only unconditional replacement/clear may follow a retired mutation's receipt.
         const receipt = review.highlightReceipt;
-        const revision = !moving && ["replace", "clear"].includes(command)
+        const revision = (!moving || boundary) && ["replace", "clear"].includes(command)
           && receipt?.request_id === publication && receipt.view_revision === viewRevision
           ? receipt.highlight_revision : summary.highlight_revision;
-        summary = await mutatePlanHighlight(task.taskId, viewRevision, revision, command, endpoint, () => {
+        summary = await (inventory ? mutateInventoryHighlight : mutatePlanHighlight)(task.taskId, viewRevision, revision, command, endpoint, () => {
           if (latest()) {
             review.refreshAvailable = true;
-            review.message = "Highlight is still pending. Select Refresh review to read the current highlight.";
+            review.message = inventory
+              ? "Highlight is still pending. Reload the inventory view to read the current highlight."
+              : "Highlight is still pending. Select Refresh review to read the current highlight.";
             renderTasks();
           }
         });
         // A retired reply retains mutation custody but has no presentation authority.
-        if (retainedReviewTask(review) === task && task.sessionId === session
+        if (retainedOwner(review) === task && task.sessionId === session
             && review.summary.request_id === publication && review.summary.view_revision === viewRevision) {
           review.highlightReceipt = summary;
         }
@@ -3006,7 +3100,7 @@ function queuePlanHighlight(review, gesture, nodeId) {
         const focusIndex = summary.highlight_focus_visible_index;
         const outside = moving && Number.isSafeInteger(focusIndex)
           && (focusIndex < review.window.offset || focusIndex >= review.window.offset + review.window.rows.length);
-        const window = await readPlanNavigationWindow(review, latest, task.taskId, summary.view_revision,
+        const window = await readWindow(review, latest, task.taskId, summary.view_revision,
           outside ? Math.max(0, focusIndex - 32) : review.window.offset, 256);
         if (!current()) return;
         if (!latest()) continue;
@@ -3014,13 +3108,14 @@ function queuePlanHighlight(review, gesture, nodeId) {
             || window.highlight_revision !== summary.highlight_revision) return;
         review.summary = summary;
         review.keyboardRevealWindow = moving && summary.disposition !== "conflict" ? window : null;
-        adoptExecutionWindow(review, window);
+        if (inventory) review.window = window;
+        else adoptExecutionWindow(review, window);
         review.refreshAvailable = false;
         review.message = summary.disposition === "conflict"
           ? "Highlight changed while navigation finished. Review the current highlight, then try again." : null;
         const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);
-        if (focusedRow !== undefined && review.planDetail?.state === "error") void readPlanDetail(review, focusedRow);
-        if (focusedRow?.operation_id === review.executionDetail?.operationId
+        if (!inventory && focusedRow !== undefined && review.planDetail?.state === "error") void readPlanDetail(review, focusedRow);
+        if (!inventory && focusedRow?.operation_id === review.executionDetail?.operationId
             && review.executionDetail?.state === "error") void readExecutionDetail(review, focusedRow);
         renderTasks();
         return;
@@ -3028,12 +3123,14 @@ function queuePlanHighlight(review, gesture, nodeId) {
     } catch (_error) {
       if (current()) {
         review.refreshAvailable = true;
-        review.message = "Highlight response unavailable. Select Refresh review to read the current highlight.";
+        review.message = inventory
+          ? "Highlight response unavailable. Reload the inventory view to read the current highlight."
+          : "Highlight response unavailable. Select Refresh review to read the current highlight.";
         renderTasks();
       }
     } finally {
       if (review.highlightNavigation === intent) review.highlightNavigation = null;
-      endForegroundWindowRead(review);
+      endForegroundWindowRead(review, inventory);
     }
   };
   if (moving || gesture === "replace") {

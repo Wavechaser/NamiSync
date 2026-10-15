@@ -458,6 +458,8 @@ const bridgeUrl = moduleUrl(`
   export const getPlanWindow = (...args) => globalThis.taskHarness.getPlanWindow(...args);
   export const getExecutionDetail = (...args) => globalThis.taskHarness.getExecutionDetail(...args);
   export const getPlanDetail = (...args) => globalThis.taskHarness.getPlanDetail(...args);
+  export const mutateInventoryHighlight = () => Promise.reject(new Error("unused inventory highlight"));
+  export const setInventoryHighlightedSelection = () => Promise.reject(new Error("unused inventory selection"));
   export const openInventoryView = () => Promise.reject(new Error("unused inventory read"));
   export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));

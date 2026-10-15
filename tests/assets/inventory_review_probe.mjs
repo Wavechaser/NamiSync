@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { assertSameNode } from "./fake_dom_assertions.mjs";
 
 process.env.TZ = "UTC";
 
@@ -13,7 +14,7 @@ class Style {
 class ElementFake {
   constructor(tag, ownerDocument) {
     this.tagName = tag.toUpperCase(); this.ownerDocument = ownerDocument;
-    this.children = []; this.parentElement = null; this.listeners = new Map();
+    this.children = []; this.parentElement = null; this.listeners = new Map(); this.captureListeners = new Map();
     this.dataset = {}; this.attributes = new Map(); this.style = new Style();
     this.className = ""; this.value = ""; this.textContent = "";
     this.hidden = false; this.disabled = false; this.scrollTop = 0; this.clientHeight = 280;
@@ -47,16 +48,33 @@ class ElementFake {
     if (this.parentElement !== null) this.parentElement.children = this.parentElement.children.filter((value) => value !== this);
     this.parentElement = null;
   }
-  addEventListener(key, value) { this.listeners.set(key, [...(this.listeners.get(key) ?? []), value]); }
-  removeEventListener(key, value) { this.listeners.set(key, (this.listeners.get(key) ?? []).filter((item) => item !== value)); }
+  addEventListener(key, value, options) {
+    const listeners = options === true || options?.capture ? this.captureListeners : this.listeners;
+    listeners.set(key, [...(listeners.get(key) ?? []), value]);
+  }
+  removeEventListener(key, value, options) {
+    const listeners = options === true || options?.capture ? this.captureListeners : this.listeners;
+    listeners.set(key, (listeners.get(key) ?? []).filter(item => item !== value));
+  }
   setAttribute(key, value) { this.attributes.set(key, String(value)); }
   getAttribute(key) { return this.attributes.get(key) ?? null; }
   removeAttribute(key) { this.attributes.delete(key); }
-  focus() { document.activeElement = this; this.dispatch("focus"); }
+  focus() {
+    document.activeElement = this; this.dispatch("focus");
+    for (const callback of documentListeners.get("focusin") ?? []) callback({target:this});
+  }
   dispatch(key, fields = {}) {
     const event = { type: key, target: this, preventDefault() {}, stopPropagation() { this.stopped = true; }, ...fields };
-    for (const callback of this.listeners.get(key) ?? []) callback(event);
-    if (!event.stopped && this.parentElement !== null) this.parentElement.dispatch(key, event);
+    const path = [];
+    for (let node=this; node !== null; node=node.parentElement) path.push(node);
+    for (const node of [...path].reverse()) {
+      for (const callback of node.captureListeners.get(key) ?? []) callback(event);
+      if (event.stopped) return;
+    }
+    for (const node of path) {
+      for (const callback of node.listeners.get(key) ?? []) callback(event);
+      if (event.stopped) return;
+    }
   }
   click() { if (!this.disabled) this.dispatch("click"); }
 }
@@ -82,6 +100,7 @@ globalThis.document = {
   },
 };
 globalThis.window = document.defaultView;
+document.body = new ElementFake("body", document);
 globalThis.getComputedStyle = () => ({fontSize: "16px"});
 globalThis.Element = ElementFake;
 globalThis.HTMLElement = ElementFake;
@@ -92,7 +111,8 @@ globalThis.clearTimeout = (id) => { timers.delete(id); };
 const moduleUrl = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const assetRoot = process.argv[2];
 const renderUrl = moduleUrl(await readFile(join(assetRoot, "render.js"), "utf8"));
-const treeUrl = moduleUrl((await readFile(join(assetRoot, "tree.js"), "utf8")).replace("./render.js", renderUrl));
+const highlightUrl = moduleUrl(await readFile(join(assetRoot, "row_highlight.js"), "utf8"));
+const treeUrl = moduleUrl((await readFile(join(assetRoot, "tree.js"), "utf8")).replace("./render.js", renderUrl).replace("./row_highlight.js", highlightUrl));
 const fileRowUrl = moduleUrl((await readFile(join(assetRoot, "file_row.js"), "utf8")).replace("./render.js", renderUrl));
 const integrityUrl = moduleUrl((await readFile(join(assetRoot, "integrity.js"), "utf8"))
   .replace("./file_row.js", fileRowUrl).replace("./render.js", renderUrl));
@@ -104,6 +124,7 @@ const rowMenuUrl = moduleUrl((await readFile(join(assetRoot, "row_menu.js"), "ut
 const tableColumnsUrl = moduleUrl(await readFile(join(assetRoot, "table_columns.js"), "utf8"));
 const inventoryTaskStatusUrl = moduleUrl((await readFile(join(assetRoot, "task_status.js"), "utf8")).replace("./render.js", renderUrl));
 const source = (await readFile(join(assetRoot, "inventory_review.js"), "utf8"))
+  .replace("./row_highlight.js", highlightUrl)
   .replace("./task_status.js", inventoryTaskStatusUrl)
   .replace("./table_columns.js", tableColumnsUrl)
   .replace("./filter_menu.js", filterUrl)
@@ -204,8 +225,8 @@ selectableCheckbox.dispatch("change");
 assert.deepEqual(selections.at(-1), [review, selectableRow.node_id, false]);
 assert.equal(details.length, detailCount, "checkbox change cannot activate the tree row");
 assert.deepEqual([viewChanges.length, details.length, refreshes.length, visibility.length], beforeSelectionClick);
-assert.match(action("inventory-select-location").ariaLabel, /including hidden and off-window/i);
-assert.match(selectableCheckbox.ariaLabel, /including hidden, collapsed, and off-window|Select file/);
+assert.match(action("inventory-select-location").ariaLabel, /matching files.*collapsed and off-window/i);
+assert.match(selectableCheckbox.ariaLabel, /matching files.*collapsed and off-window|Select file/);
 assert.match(find((value) => Object.hasOwn(value.dataset, "inventorySelectionSummary")).textContent,
   new RegExp(`^${review.summary.selected_file_count} of ${review.summary.selectable_file_count} files selected`));
 assert.equal(action("inventory-baseline").disabled, review.summary.selected_file_count === 0);
@@ -547,8 +568,14 @@ document.body = document.createElement("body");
 document.documentElement = document.createElement("html");
 globalThis.window = { ...document.defaultView, chrome: { webview: {} }, addEventListener() {} };
 let viewportReply = null;
+let liveReview = null;
 const viewportCalls = [];
 const viewportPromises = [];
+const assertProjectedWindow = (actual, expected, message) => {
+  assert.equal(actual.offset, expected.offset, message);
+  assert.equal(actual.total, expected.total, message);
+  assert.deepEqual(actual.rows, expected.rows, message);
+};
 globalThis.inventoryViewportPromises = viewportPromises;
 const liveDetails = [], liveRefreshes = [];
 let admitInitial, startInitial, initialStarts = 0;
@@ -558,7 +585,27 @@ globalThis.inventoryViewportHarness = {
   openInventoryView: () => Promise.resolve(fixture.views.maximum.summary),
   getInventoryWindow: (...args) => {
     viewportCalls.push(args);
-    return viewportReply?.promise ?? Promise.resolve(fixture.views.maximum.window);
+    const capturedHighlight = liveReview?.highlightReceipt?.highlight_revision
+      ?? liveReview?.summary.highlight_revision ?? 0;
+    return (viewportReply?.promise ?? Promise.resolve(args[2] >= 240 ? fixture.tail : liveReview?.window ?? fixture.views.maximum.window))
+      .then(window => {
+        return {...window, highlight_revision:capturedHighlight};
+      });
+  },
+  mutateInventoryHighlight: (taskId, view, revision, gesture, nodeId) => {
+    const rows = [...fixture.views.maximum.window.rows, ...fixture.views.middle.window.rows,
+      ...fixture.views.default.window.rows];
+    const focus = liveReview.summary.highlight_focus_visible_index;
+    const index = gesture.startsWith("move_")
+      ? focus === null ? gesture.startsWith("move_down") ? 0 : liveReview.window.total-1
+        : Math.max(0, Math.min(liveReview.window.total-1, focus+(gesture.startsWith("move_down") ? 1 : -1)))
+      : rows.find(row => row.node_id === nodeId).visible_index;
+    const row = rows.find(row => row.visible_index === index && (liveReview.window.total > 100
+      ? fixture.views.maximum.window.rows.includes(row) || fixture.views.middle.window.rows.includes(row)
+      : fixture.views.default.window.rows.includes(row)));
+    return Promise.resolve({...liveReview.summary, highlight_revision:revision+1,
+      highlight_anchor_node_id:row.node_id, highlight_focus_node_id:row.node_id,
+      highlight_focus_visible_index:index, highlighted_count:1});
   },
   getInventoryDetail: (...args) => {
     liveDetails.push(args);
@@ -575,6 +622,9 @@ appSource = appSource.replace("onWindow: loadInventoryWindow,", `onWindow: (revi
   globalThis.inventoryViewportPromises.push(promise);
   return promise;
 },`);
+appSource = appSource.replace("const window = await loadInventoryWindow(review, offset);", `const promise = loadInventoryWindow(review, offset);
+  globalThis.inventoryViewportPromises.push(promise);
+  const window = await promise;`);
 const bridgeNames = appSource.match(/import \{([\s\S]*?)\} from "\.\/bridge\.js";/)[1]
   .split(",").map((value) => value.trim()).filter(Boolean);
 const bridgeFunctions = {
@@ -629,9 +679,9 @@ const liveTask = app.adoptTask({ task_id: fixture.views.maximum.summary.task_id,
   session_id: "3".repeat(32), session_state: "completed", session_released: true,
   task_kind: "inventory", request_id: fixture.views.maximum.summary.request_id,
   plan_request_id: null, session_kind: "inventory" });
-const settle = async () => { for (let count = 0; count < 8; count += 1) await Promise.resolve(); };
+const settle = async () => { for (let count = 0; count < 24; count += 1) await Promise.resolve(); };
 app.selectTask(liveTask.taskId); await settle();
-const liveReview = liveTask.inventoryReview;
+liveReview = liveTask.inventoryReview;
 const treeRoot = walk(app.panel.element).find((value) => value.getAttribute("role") === "tree");
 const treeViewport = walk(app.panel.element).find((value) => value.classList.contains("nami-inventory-review__list"));
 treeViewport.clientHeight += 24;
@@ -679,8 +729,8 @@ assert.equal(viewportPromises.length, burstPromises + 1);
 assert.equal(liveReview.pending, null, "viewport reads do not enter action-pending state");
 assert.equal(liveTask.inventoryAction, null);
 burstRead.resolve(fixture.tail); await settle();
-assert.equal(await viewportPromises[burstPromises], fixture.tail);
-assert.equal(liveReview.window, fixture.tail);
+assertProjectedWindow(await viewportPromises[burstPromises], fixture.tail);
+assertProjectedWindow(liveReview.window, fixture.tail);
 assert.equal(treeViewport.scrollTop, 288 * 24);
 assert.equal(viewportCalls.length, burstCalls + 1, "the first covering reply needs no replacement RPC");
 assert.equal(treeRoot.children.filter((value) => value.getAttribute("role") === "treeitem").length,
@@ -710,14 +760,14 @@ for (const failure of ["error", "conflict"]) {
   while (frames.length) frames.shift()();
   assert.equal(viewportCalls.length, callsBefore + 2, "changed scrolling retries the failed read");
   viewportReply.resolve(fixture.tail); await settle();
-  assert.equal(liveReview.window, fixture.tail);
+  assertProjectedWindow(liveReview.window, fixture.tail);
   Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0, message: null });
   app.panel.render(liveTask);
   while (frames.length) frames.shift()();
 }
 
-// Keyboard replacement owns the queued callback and its reveal; old scroll
-// callbacks never receive the keyboard result.
+// Keyboard replacement shares the app read pump: an old scroll cannot receive
+// its result, and only the authoritative endpoint may reveal keyboard focus.
 viewportReply = delayedViewport();
 const beforeKeyboard = viewportReply;
 const keyboardCalls = viewportCalls.length;
@@ -726,81 +776,86 @@ while (frames.length) frames.shift()();
 treeViewport.scrollTop = 280 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 const queuedScroll = viewportPromises.at(-1);
-treeRoot.dispatch("keydown", {key: "End"});
-while (frames.length) frames.shift()();
-assert.equal(viewportCalls.length, keyboardCalls + 1);
+treeRoot.dispatch("keydown", {key:"End"}); await settle();
+assert.equal(viewportCalls.length, keyboardCalls+1);
 viewportReply = delayedViewport();
 beforeKeyboard.resolve(fixture.tail); await settle();
 assert.equal(await queuedScroll, null, "keyboard intent retires the held scroll response");
-while (frames.length) frames.shift()();
-assert.equal(viewportCalls.length, keyboardCalls + 2,
-  "settling the stale null cannot retire or duplicate the newer keyboard read");
-viewportReply.resolve(fixture.tail); await settle();
+assert.equal(viewportCalls.length, keyboardCalls+2, "only the latest keyboard lookup follows the retired scroll");
+const keyboardLookup = viewportReply;
+viewportReply = null;
+keyboardLookup.resolve(fixture.tail);
+await liveReview.highlightQueue;
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), treeRoot.children.at(-2).id);
-assert.equal(treeViewport.scrollTop, 301 * 24 - (treeViewport.clientHeight - 24));
-Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
-app.panel.render(liveTask);
-while (frames.length) frames.shift()();
+assert.equal(treeViewport.scrollTop, 301*24-(treeViewport.clientHeight-24));
 
-// Selecting an already-active loaded row cancels work even without an active
-// identity change. Disposal also retires a queued callback before settlement.
-for (const [input, fail] of [["pointerdown", false], ["wheel", false],
-    ["touchstart", false], ["keydown", true]]) {
+const resetNavigation = () => {
+  Object.assign(liveReview, fixture.views.maximum, {scrollTop:0, message:null, highlightReceipt:null});
+  app.panel.render(liveTask);
+  while (frames.length) frames.shift()();
+};
+resetNavigation();
+// Outside input retires the held absolute endpoint. Reentry follows the server's
+// retained focus, even when the tree's viewport-active row differs after scrolling.
+for (const [input, fail] of [["pointerdown",false], ["wheel",false], ["touchstart",false], ["keydown",true]]) {
+  const row = liveReview.window.rows[10];
+  liveReview.summary = {...liveReview.summary, highlight_focus_node_id:row.node_id,
+    highlight_anchor_node_id:row.node_id, highlight_focus_visible_index:10, highlighted_count:1};
   viewportReply = delayedViewport();
   const interrupted = viewportReply;
-  const beforeOutsideFocus = treeRoot.getAttribute("aria-activedescendant");
-  const nextOutsideIndex = Number(beforeOutsideFocus.match(/row-(\d+)$/)[1]) + 1;
-  treeRoot.dispatch("keydown", {key: "End"});
+  treeRoot.dispatch("keydown", {key:"End"}); await settle();
   for (const callback of documentListeners.get(input) ?? []) {
-    callback({ target: document.createElement("button"), key: "ArrowDown" });
+    callback({target:document.createElement("button"), key:"ArrowDown"});
   }
-  treeRoot.dispatch("keydown", {key: "ArrowDown"});
-  assert.equal(treeRoot.getAttribute("aria-activedescendant"), beforeOutsideFocus.replace(/row-\d+$/, `row-${nextOutsideIndex}`),
-    "outside input clears the pending endpoint before keyboard reentry");
-  if (fail) interrupted.resolve(Promise.reject(new Error("retired outside-input failure")));
-  else interrupted.resolve(fixture.tail);
-  await settle();
-  assert.equal(liveReview.window, initialWindow);
-  Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
-  app.panel.render(liveTask);
+  treeRoot.dispatch("keydown", {key:"ArrowDown"});
+  assert.notEqual(treeRoot.getAttribute("aria-activedescendant"), firstLiveRow().id.replace(/row-\d+$/, "row-300"));
+  viewportReply = null;
+  interrupted.resolve(fail ? Promise.reject(new Error("retired outside-input failure")) : fixture.tail);
+  await liveReview.highlightQueue;
+  assert.equal(liveReview.summary.highlight_focus_visible_index, 11,
+    "outside input clears the held endpoint before authoritative keyboard reentry");
+  assert.equal(treeRoot.getAttribute("aria-activedescendant"), firstLiveRow().id.replace(/row-\d+$/, "row-11"));
+  resetNavigation();
 }
 
 viewportReply = delayedViewport();
 const heldNavigation = viewportReply;
 const heldNavigationCalls = viewportCalls.length;
-treeRoot.dispatch("keydown", {key: "End"});
-for (let index = 0; index < 25; index += 1) treeRoot.dispatch("keydown", {key: "ArrowDown"});
-for (let index = 0; index < 5; index += 1) treeRoot.dispatch("keydown", {key: "ArrowUp"});
-assert.equal(viewportCalls.length, heldNavigationCalls + 1, "held keys share one admitted read");
+treeRoot.dispatch("keydown", {key:"End"}); await settle();
+for (let index=0; index<25; index+=1) treeRoot.dispatch("keydown", {key:"ArrowDown"});
+for (let index=0; index<5; index+=1) treeRoot.dispatch("keydown", {key:"ArrowUp"});
+assert.equal(viewportCalls.length, heldNavigationCalls+1, "held keys share one admitted endpoint lookup");
 viewportReply = delayedViewport();
 heldNavigation.resolve(fixture.tail); await settle();
-assert.equal(viewportCalls.length, heldNavigationCalls + 2, "only the latest pending target survives");
-viewportReply.resolve(fixture.tail); await settle();
-assert.equal(treeRoot.getAttribute("aria-activedescendant"),
-  firstLiveRow().id.replace(/row-\d+$/, `row-${fixture.tail.total - 6}`),
+assert.equal(viewportCalls.length, heldNavigationCalls+2, "only the latest pending endpoint survives");
+const finalLookup = viewportReply;
+viewportReply = null;
+finalLookup.resolve(fixture.tail);
+await liveReview.highlightQueue;
+assert.equal(liveReview.summary.highlight_focus_visible_index, fixture.tail.total-6,
   "edge repeats clamp each event before reversing five rows");
-Object.assign(liveReview, fixture.views.maximum, { scrollTop: 0 });
-app.panel.render(liveTask);
-while (frames.length) frames.shift()();
+assert.equal(treeRoot.getAttribute("aria-activedescendant"), firstLiveRow().id.replace(/row-\d+$/, `row-${fixture.tail.total-6}`));
+resetNavigation();
 
 for (const cancel of [() => firstLiveRow().click(),
-  ...["wheel", "pointerdown", "touchstart"].map((input) => () => treeRoot.dispatch(input)),
-  ...["ctrlKey", "altKey", "metaKey"].map((modifier) =>
-    () => treeRoot.dispatch("keydown", {key: "ArrowDown", [modifier]: true})),
+  ...["wheel","pointerdown","touchstart"].map(input => () => treeRoot.dispatch(input)),
+  ...["ctrlKey","altKey","metaKey"].map(modifier =>
+    () => treeRoot.dispatch("keydown", {key:"ArrowDown", [modifier]:true})),
   () => app.panel.renderSettings()]) {
   viewportReply = delayedViewport();
   const held = viewportReply;
+  const retainedWindow = liveReview.window;
   const callsBefore = viewportCalls.length;
-  treeRoot.dispatch("keydown", {key: "End"});
-  treeRoot.dispatch("keydown", {key: "End"});
-  const queued = viewportPromises.at(-1);
+  treeRoot.dispatch("keydown", {key:"End"}); await settle();
+  treeRoot.dispatch("keydown", {key:"End"});
   cancel();
-  assert.equal(await queued, null);
-  held.resolve(Promise.reject(new Error("retired viewport failure"))); await settle();
-  assert.equal(viewportCalls.length, callsBefore + 1);
-  assert.equal(liveReview.window, initialWindow);
-  assert.equal(liveReview.message, null);
-  treeViewport.scrollTop = 0;
+  assert.equal(viewportCalls.length, callsBefore+1, "replacement and cancellation cannot overlap reads");
+  viewportReply = null;
+  held.resolve(Promise.reject(new Error("retired viewport failure")));
+  await liveReview.highlightQueue;
+  assertProjectedWindow(liveReview.window, retainedWindow, "a canceled endpoint cannot replace the retained row scope");
+  assert.equal(liveReview.message, null, "retired lookup errors are silent");
+  resetNavigation();
 }
 app.panel.render(liveTask);
 const restoredTree = walk(app.panel.element).find((value) => value.getAttribute("role") === "tree");
@@ -810,7 +865,7 @@ viewportReply = delayedViewport();
 treeViewport.scrollTop = 300 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 viewportReply.resolve(fixture.tail); await settle();
-assert.equal(liveReview.window === fixture.tail, true, "accepted viewport reply becomes the retained window");
+assertProjectedWindow(liveReview.window, fixture.tail, "accepted viewport reply becomes the retained window");
 assert.equal(firstLiveRow().dataset.nodeId, fixture.tail.rows[0].node_id);
 assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
   false, "accepted viewport adopts eligibility after its window enters the page owner");
@@ -818,6 +873,7 @@ const acceptedScroll = treeViewport.scrollTop;
 app.panel.render(liveTask);
 assert.equal(treeViewport.scrollTop, acceptedScroll, "rendering the accepted window preserves scrolling");
 assert.equal(firstLiveRow().dataset.nodeId, fixture.tail.rows[0].node_id);
+viewportReply = null;
 Object.assign(liveReview, fixture.views.default, { scrollTop: 0 });
 app.panel.render(liveTask);
 const liveFolder = fixture.views.default.window.rows.find((row) => row.row_kind === "folder");
@@ -832,6 +888,7 @@ const liveDiagnostics = walk(app.panel.element).find((value) => value.classList.
 assert.equal(liveDiagnostics.hidden, true);
 const beforeArrowDetails = liveDetails.length;
 treeRoot.dispatch("keydown", {key: "ArrowDown"});
+await liveReview.highlightQueue;
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), liveRow(liveFile.node_id).id);
 assert.equal(liveReview.detail === cardSelection, true, "arrows preserve the card's displayed item");
 assert.equal(liveDetails.length, beforeArrowDetails, "highlight navigation does not read details");
@@ -1158,4 +1215,98 @@ assert.equal(presentationAction("inventory-verify").textContent, "Verify current
 assert.equal(presentationAction("inventory-baseline").hidden, true);
 assert.equal(presentationAction("inventory-rebaseline").hidden, true);
 presentationPane.dispose();
+
+// A passive selection receipt keeps the live outer viewport and focused checkbox.
+const highlightCalls = [], highlightedSelections = [];
+const alignedReview = {...fixture.views.maximum, pending:null, message:null, detail:null,
+  queuedSearchQuery:null, scrollTop:0};
+const alignedTask = {...task, taskKind:"inventory", requestId:alignedReview.summary.request_id,
+  sessionState:"completed", sessionReleased:true, inventoryReview:alignedReview,
+  closePending:false, inventoryLoading:false, inventoryAction:null};
+const alignedPane = createInventoryReviewPanel({
+  onHighlight:(...args) => highlightCalls.push(args),
+  onHighlightedSelect:(...args) => highlightedSelections.push(args),
+  onDetail() {}, onWindow:async () => fixture.tail,
+});
+alignedPane.render(alignedTask);
+const alignedTree = alignedPane.element.querySelector(".nami-inventory-review__rows");
+const alignedViewport = alignedPane.element.querySelector(".nami-inventory-review__list");
+const alignedRows = () => alignedTree.children.filter(value => value.dataset.nodeId !== undefined);
+for (const [properties, gesture] of [[{}, "replace"], [{ctrlKey:true}, "toggle"],
+  [{shiftKey:true}, "extend"], [{ctrlKey:true, shiftKey:true}, "add-range"]]) {
+  alignedRows()[1].dispatch("click", properties);
+  assert.deepEqual(highlightCalls.at(-1), [alignedReview, gesture, alignedReview.window.rows[1].node_id]);
+}
+alignedTree.dispatch("keydown", {key:"ArrowDown", shiftKey:true});
+assert.deepEqual(highlightCalls.at(-1), [alignedReview, "move_down_extend", null]);
+alignedTree.dispatch("keydown", {key:"Escape"});
+assert.deepEqual(highlightCalls.at(-1), [alignedReview, "clear", null]);
+alignedViewport.scrollTop = 280 * 24;
+alignedViewport.dispatch("scroll");
+alignedReview.window = {...fixture.tail, rows:fixture.tail.rows.map(row => ({...row, highlighted:true}))};
+alignedPane.render(alignedTask);
+const alignedCheckbox = alignedRows()[5].querySelector(".nami-checkbox");
+alignedCheckbox.focus();
+alignedCheckbox.checked = true;
+alignedCheckbox.dispatch("change");
+assert.deepEqual(highlightedSelections.at(-1), [alignedReview, true]);
+const retainedTop = alignedViewport.scrollTop;
+alignedViewport.dispatch("scroll");
+alignedReview.pending = "selection";
+alignedPane.render(alignedTask);
+assert.equal(Boolean(alignedCheckbox.disabled), true);
+// Chromium blurs a focused checkbox when the pending render disables it.
+document.activeElement = document.body;
+alignedReview.window = {...alignedReview.window, rows:alignedReview.window.rows.map(row => ({...row, selection:"all"}))};
+alignedPane.render(alignedTask);
+alignedReview.pending = null;
+alignedPane.render(alignedTask);
+assert.equal(alignedViewport.scrollTop, retainedTop, "selection replacement preserves nonzero outer viewport");
+assertSameNode(document.activeElement, alignedRows()[5].querySelector(".nami-checkbox"),
+  "selection replacement restores the checked row's checkbox focus");
+
+for (const interruption of ["focus", "input", "outside", "dispose"]) {
+  alignedRows()[5].querySelector(".nami-checkbox").focus();
+  alignedReview.pending = "selection";
+  alignedPane.render(alignedTask);
+  document.activeElement = document.body;
+  if (interruption === "focus") {
+    walk(alignedPane.element).find(value => value.dataset.action === "inventory-search").focus();
+    document.activeElement = document.body;
+  } else if (interruption === "input") alignedViewport.dispatch("pointerdown");
+  else if (interruption === "outside") {
+    for (const callback of documentListeners.get("keydown") ?? []) callback({target:document.body, key:"Tab"});
+  } else alignedPane.dispose();
+  alignedReview.window = {...alignedReview.window, rows:[...alignedReview.window.rows]};
+  alignedPane.render(alignedTask);
+  alignedReview.pending = null;
+  alignedPane.render(alignedTask);
+  assertSameNode(document.activeElement, document.body,
+    `settled selection cannot restore checkbox focus after newer ${interruption}`);
+}
+const alignedHeader = walk(alignedPane.element).find(value => value.dataset.action === "inventory-select-location");
+alignedHeader.focus();
+alignedReview.pending = "selection";
+alignedPane.render(alignedTask);
+assert.equal(Boolean(alignedHeader.disabled), true);
+document.activeElement = document.body;
+alignedReview.pending = null;
+alignedPane.render(alignedTask);
+assertSameNode(document.activeElement, alignedHeader, "settled selection restores the matching-scope header checkbox");
+
+// The window's own bounded manual generation renders every admitted file result.
+const maximumRows = fixture.views.maximum.window.rows;
+const costItems = maximumRows.filter(row => row.row_id !== null).map(row => ({
+  ...manualItem, row_id:row.row_id,
+}));
+alignedTask.taskKind = "sync-plan";
+alignedTask.executionStarted = true;
+alignedTask.executionSessionId = manualOverlay.execution_session_id;
+alignedTask.workPane = "verify";
+alignedReview.window = {...fixture.views.maximum.window,
+  manual_verification:{...manualOverlay, location_id:alignedReview.summary.location_id, items:costItems}};
+alignedPane.render(alignedTask);
+assert.equal(walk(alignedPane.element).filter(value => Object.hasOwn(value.dataset, "manualVerificationState")).length,
+  costItems.length);
+alignedPane.dispose();
 process.stdout.write("ok\n");

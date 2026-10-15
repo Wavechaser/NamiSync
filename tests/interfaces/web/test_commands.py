@@ -317,6 +317,14 @@ class _Service:
         self.calls.append(("inventory-selection", task_id, request_id, kwargs))
         return {"disposition": "current", "task_id": task_id}
 
+    def mutate_inventory_highlight(self, task_id, **kwargs):
+        self.calls.append(("inventory-highlight", task_id, kwargs))
+        return {"disposition": "current"}
+
+    def set_inventory_highlighted_selection(self, task_id, request_id, **kwargs):
+        self.calls.append(("inventory-highlighted-selection", task_id, request_id, kwargs))
+        return {"disposition": "current"}
+
     def get_inventory_window(self, task_id, **kwargs):
         self.calls.append(("get-inventory-window", task_id, kwargs))
         return {"disposition": "current", "rows": []}
@@ -592,6 +600,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "restore_inventory",
         "update_inventory_view",
         "set_inventory_selection",
+        "mutate_inventory_highlight",
+        "set_inventory_highlighted_selection",
         "get_inventory_window",
         "get_inventory_detail",
         "update_plan_view",
@@ -648,6 +658,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     } == {
         "admit_location", "update_plan_view", "mutate_plan_highlight", "reveal_plan_move",
         "replace_cosmetic_section", "update_inventory_view", "set_inventory_selection",
+        "mutate_inventory_highlight", "set_inventory_highlighted_selection",
     }
     # Each group shares one policy; the browser mirror is checked separately.
     groups = (
@@ -666,7 +677,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         (("get_inventory_window", "get_inventory_detail", "get_manual_verification_readiness"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
-        (("update_inventory_view", "set_inventory_selection"), CommandAccess.READ_ONLY,
+        (("update_inventory_view", "set_inventory_selection", "mutate_inventory_highlight", "set_inventory_highlighted_selection"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
         (("refresh_inventory", "start_inventory_integrity", "start_manual_verification", "acknowledge_inventory", "restore_inventory"), CommandAccess.MUTATING,
@@ -787,6 +798,26 @@ def test_inventory_selection_command_validates_complete_gesture_before_authority
         with pytest.raises(CommandPayloadError):
             _invoke(spec, {**payload, **patch})
     assert len(authority.calls) == 1
+
+
+def test_inventory_highlight_commands_admit_only_compact_revisioned_gestures():
+    commands, _, authority = _commands()
+    highlight = {"task_id": TASK_ID, "expected_view_revision": 4,
+        "expected_highlight_revision": 2, "gesture": "extend", "node_id": "node-" + "9" * 32}
+    _invoke(commands["mutate_inventory_highlight"], highlight)
+    assert authority.calls[-1] == ("inventory-highlight", TASK_ID,
+        {key: value for key, value in highlight.items() if key != "task_id"})
+    selected = {"task_id": TASK_ID, "request_id": "8" * 32, "expected_revision": 4,
+        "expected_highlight_revision": 2, "selected": True}
+    _invoke(commands["set_inventory_highlighted_selection"], selected)
+    assert authority.calls[-1] == ("inventory-highlighted-selection", TASK_ID, "8" * 32,
+        {key: value for key, value in selected.items() if key not in {"task_id", "request_id"}})
+    for patch in ({"expected_highlight_revision": True}, {"expected_highlight_revision": -1},
+                  {"expected_highlight_revision": 1 << 53}, {"selected": 1}, {"node_ids": []},
+                  {"command_id": COMMAND_ID}, {"request_id": "foreign"}):
+        with pytest.raises(CommandPayloadError):
+            _invoke(commands["set_inventory_highlighted_selection"], selected | patch)
+    assert len(authority.calls) == 2
 
 
 @pytest.mark.parametrize("command,action", [("acknowledge_inventory", "acknowledge"), ("restore_inventory", "restore")])

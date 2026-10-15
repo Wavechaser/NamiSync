@@ -1,3 +1,4 @@
+import { pointerHighlightGesture, keyboardHighlightGesture } from "./row_highlight.js";
 import { createTableColumns } from "./table_columns.js";
 import { renderPlanRow } from "./plan.js";
 import { createFilterMenu } from "./filter_menu.js";
@@ -1077,9 +1078,7 @@ export function createPlanReviewPanel(callbacks) {
       });
       element.addEventListener("click", (event) => {
         if (eventInControl(event, element)) return;
-        const modified = event.ctrlKey || event.metaKey;
-        const gesture = event.shiftKey ? (modified ? "add-range" : "extend")
-          : modified ? "toggle" : "replace";
+        const gesture = pointerHighlightGesture(event);
         callbacks.onHighlight(review, gesture, row.node_id);
         element.focus?.();
         element.dataset.namiFocusOrigin = "pointer";
@@ -1102,8 +1101,7 @@ export function createPlanReviewPanel(callbacks) {
           event.preventDefault();
           element.focus?.();
           delete element.dataset.namiFocusOrigin;
-          const direction = event.key === "ArrowUp" ? "move_up" : "move_down";
-          const gesture = event.shiftKey ? `${direction}_extend` : direction;
+          const gesture = keyboardHighlightGesture(event);
           callbacks.onHighlight(review, gesture, null);
         }
       });

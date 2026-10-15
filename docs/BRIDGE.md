@@ -389,6 +389,7 @@ guards and lifecycle settlement remain with their existing owners.
 ### Current-state command recovery
 
 `update_plan_view`, `update_inventory_view`, `set_inventory_selection`,
+`set_inventory_highlighted_selection`, `mutate_inventory_highlight`,
 `mutate_plan_highlight`, `replace_cosmetic_section`,
 `admit_location` and `pick_folder` do not retain or observe original responses.
 Their submitted promises have no elapsed-time effect deadline. All except the picker
@@ -484,7 +485,9 @@ BOOTSTRAP rows, commands require OPEN.
 | `acknowledge_inventory`, `restore_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `InventoryVisibilityResult` | observed original result; 5 s feedback; no mutation replay |
 | `update_inventory_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[InventoryFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `set_inventory_selection` | `{task_id:TaskId,request_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId,selected:boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no automatic retry or mutation replay |
-| `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}` | 5 s; one identical-payload retry |
+| `mutate_inventory_highlight` | Same compact gesture and expected view/highlight revision fields as `mutate_plan_highlight` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
+| `set_inventory_highlighted_selection` | `{task_id:TaskId,request_id:HexId,expected_revision:SafeInt,expected_highlight_revision:SafeInt,selected:boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
+| `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,highlight_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}` | 5 s; one identical-payload retry |
 | `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,snapshot:null\|InventorySnapshotDetail,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
@@ -513,25 +516,37 @@ conflicts. Lifecycle release/close uses exact owner identity and idempotent
 recovery, not invented command receipts.
 
 Inventory selection is a process-live presentation gesture on the current
-released publication. A null node selects/deselects every file in the location;
-a folder resolves every file in its complete subtree, including filtered,
-collapsed and off-window subjects. Warnings are inert and directories supply
+released publication. A null node selects/deselects matching files in the location;
+a folder resolves matching files in its complete subtree, including collapsed
+and off-window subjects. Current search/facets constrain the gesture, not the
+complete selection later frozen by an integrity start. Warnings are inert and directories supply
 membership rather than becoming selected files. Exact request and view revisions
 fence the gesture; conflict changes nothing, and an unchanged assignment is a
 no-op. Selection advances the existing view revision. There is no new receipt,
 session, filesystem effect or mode-eligibility decision.
 
 `InventoryViewSummary` additionally supplies `selected_file_count`,
-`selectable_file_count`, `hidden_selected_file_count` and `selection`
+`selectable_file_count`, `hidden_selected_file_count`, matching-scope
+`scope_selectable_file_count`, `scope_selected_file_count` and `selection`
 (`none`, `partial`, `all`). Hidden counts mean search/facet exclusion, not collapsed
 or unloaded rows. Each window row supplies `selectable` and the same tri-state
-`selection`; notices and empty folders are nonselectable with `none`. Counts and
+`selection`; notices and folders without matching files are nonselectable with `none`,
+even when a folder's complete rollup contains files. Counts and
 states derive from server membership, never browser row enumeration. Request,
 response and row limits remain unchanged. Standalone desktop checkboxes consume
 these authoritative states. Stale or uncertain selection gestures refresh the
 publication without resending the gesture. Integrity starts use the existing
 original-command observation path; rebaseline confirmation is bound to the exact
 request and view revision, rather than reusable acceptance for a later selection.
+
+Inventory summaries also carry the independent highlight revision, anchor,
+focus, visible focus index and count; windows carry the matching revision and
+Boolean row flags. The shared server reducer resolves compact gestures over
+the ordered visible sequence. Highlighted selection requires the displayed
+view and highlight revisions and resolves matching file membership server-side.
+A stale gesture changes nothing. Search/facets and new publication clear
+highlights; sorting, collapse and checkbox selection preserve them. Exact shapes
+remain owned by `inventory_review.py`, `commands.py` and `bridge.js`.
 
 Initial inventory publication requires exact terminal delivery and successful
 session release. A prior complete view remains readable during a new scan or a

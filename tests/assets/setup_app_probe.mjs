@@ -214,6 +214,8 @@ async function loadScenario({
     export const echoReadiness = () => Promise.resolve({ acknowledged: true });
     export const listTasks = () => harness.listTasks();
     export const getExecutionDetail = () => Promise.reject(new Error("unused"));
+    export const mutateInventoryHighlight = () => Promise.reject(new Error("unused inventory highlight"));
+    export const setInventoryHighlightedSelection = () => Promise.reject(new Error("unused inventory selection"));
     export const openInventoryView = () => Promise.reject(new Error("unused inventory read"));
     export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
     export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));

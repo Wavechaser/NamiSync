@@ -479,6 +479,9 @@ SYSTEM_COLOR = (
 SYSTEM_COLOR_LITERAL = re.compile(
     rf'(["\'`]){SYSTEM_COLOR}\1', re.IGNORECASE
 )
+CALLBACK_PROPERTY_NAME = re.compile(
+    r'''\boptionalCallback\(\s*callbacks,\s*(?P<name>(["'`])\w+\2)\s*\)'''
+)
 SYSTEM_COLOR_TOKEN = re.compile(rf"(?<![-\w]){SYSTEM_COLOR}(?![-\w])", re.IGNORECASE)
 BACKGROUND_IMAGE = re.compile(
     r"(?is)(?:^|[;{])\s*background-image\s*:\s*([^;}]+)"
@@ -592,7 +595,10 @@ def _has_raw_color(source: str) -> bool:
             for layer in value.split(",")
         )
 
-    if RAW_COLOR.search(source) is not None or SYSTEM_COLOR_LITERAL.search(source) is not None:
+    callback_names = {match.span("name") for match in CALLBACK_PROPERTY_NAME.finditer(source)}
+    if RAW_COLOR.search(source) is not None or any(
+        match.span() not in callback_names for match in SYSTEM_COLOR_LITERAL.finditer(source)
+    ):
         return True
     if any(
         not allowed_color_value(match.group(1))
@@ -1025,6 +1031,8 @@ def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> No
         '.x { color: Highlight; }',
         'const color = "Highlight";',
         'const color = `Highlight`;',
+        'node.style.color = "Highlight";',
+        'const callback = optionalCallback(callbacks, "highlight"); node.style.color = "Highlight";',
         '.x { background-image: linear-gradient(var(--safe), Highlight); }',
     ):
         assert _has_raw_color(mutation), mutation
@@ -1037,6 +1045,7 @@ def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> No
         ".x { box-shadow: 0 0 0 1px var(--color-focus-inner), "
         "0 0 0 3px var(--color-focus-ring); }",
         'const message = "Highlight an item to see details";',
+        'const callback = optionalCallback(callbacks, "highlight");',
         '.x { background-image: url("./Highlight.png"); }',
     ):
         assert not _has_raw_color(allowed), allowed

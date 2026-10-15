@@ -21,6 +21,7 @@ from namisync.workflows import (
     sort_plan_projection,
 )
 
+from .row_highlight import apply_row_highlight, highlight_visible_index
 from .visible_sequence import (
     VisibleSequence,
     VisibleSequenceParameters,
@@ -389,84 +390,9 @@ class PlanReviewState:
                 or expected_highlight_revision != self.highlight_revision
             ):
                 return self._summary(disposition="conflict")
-            if gesture not in {
-                "clear", "replace", "toggle", "extend", "add-range",
-                "move_up", "move_down", "move_up_extend", "move_down_extend",
-            }:
-                raise ValueError("highlight gesture is unknown")
-            if gesture == "clear":
-                if not self.highlighted_node_ids and self.highlight_anchor_node_id is None and self.highlight_focus_node_id is None:
-                    return self._summary(disposition="noop")
-                self.highlighted_node_ids = frozenset()
-                self.highlight_anchor_node_id = None
-                self.highlight_focus_node_id = None
-                self.highlight_revision = _next_revision(self.highlight_revision)
-                return self._summary(disposition="applied")
-            move_gesture = gesture in {"move_up", "move_down", "move_up_extend", "move_down_extend"}
-            if move_gesture:
-                current = self.highlight_focus_node_id
-                had_focus = current is not None
-                if current is None:
-                    assert self._visible is not None
-                    visible_count = len(self._visible.visible_source_positions) - 1
-                    if visible_count == 0:
-                        return self._summary(disposition="noop")
-                    next_index = 0 if gesture in {"move_down", "move_down_extend"} else visible_count - 1
-                else:
-                    current_index = self._highlight_visible_index(current)
-                    if current_index is None:
-                        return self._summary(disposition="noop")
-                    next_index = current_index + (1 if gesture in {"move_down", "move_down_extend"} else -1)
-                assert self._visible is not None
-                visible_count = len(self._visible.visible_source_positions) - 1
-                if next_index < 0 or next_index >= visible_count:
-                    return self._summary(disposition="noop")
-                node_id = self.projection.nodes[self._visible.visible_source_positions[next_index + 1]].node_id
-                gesture = "extend" if had_focus and gesture.endswith("_extend") else "replace"
-            if node_id is None or self._highlight_visible_index(node_id) is None:
-                raise ValueError("highlight node must be a visible plan row")
-            if gesture == "replace":
-                highlighted = frozenset((node_id,))
-                anchor = focus = node_id
-            elif gesture == "toggle":
-                highlighted = frozenset(
-                    self.highlighted_node_ids - {node_id}
-                    if node_id in self.highlighted_node_ids
-                    else self.highlighted_node_ids | {node_id}
-                )
-                anchor = self.highlight_anchor_node_id or node_id
-                focus = node_id
-            else:
-                anchor = self.highlight_anchor_node_id
-                anchor_index = self._highlight_visible_index(anchor)
-                focus_index = self._highlight_visible_index(node_id)
-                if anchor_index is None or focus_index is None:
-                    return self._summary(disposition="noop")
-                start, end = sorted((anchor_index, focus_index))
-                assert self._visible is not None
-                positions = self._visible.visible_source_positions
-                selected_range = frozenset(
-                    self.projection.nodes[positions[index + 1]].node_id
-                    for index in range(start, end + 1)
-                )
-                highlighted = (
-                    selected_range
-                    if gesture == "extend"
-                    else self.highlighted_node_ids | selected_range
-                )
-                focus = node_id
-            changed = (
-                highlighted != self.highlighted_node_ids
-                or anchor != self.highlight_anchor_node_id
-                or focus != self.highlight_focus_node_id
-            )
-            if not changed:
-                return self._summary(disposition="noop")
-            self.highlighted_node_ids = frozenset(highlighted)
-            self.highlight_anchor_node_id = anchor
-            self.highlight_focus_node_id = focus
-            self.highlight_revision = _next_revision(self.highlight_revision)
-            return self._summary(disposition="applied")
+            assert self._visible is not None
+            disposition = apply_row_highlight(self, self._visible, gesture, node_id)
+            return self._summary(disposition=disposition)
 
     def replace_selection(
         self,
@@ -567,15 +493,9 @@ class PlanReviewState:
             }
 
     def _highlight_visible_index(self, node_id: str | None) -> int | None:
-        if node_id is None or self._visible is None:
+        if self._visible is None:
             return None
-        position = self.projection.position_by_node_id.get(node_id)
-        if position is None:
-            return None
-        index = self._visible.visible_index_by_source_position[position]
-        if index == 0 or index >= len(self.projection.nodes):
-            return None
-        return index - 1
+        return highlight_visible_index(self._visible, node_id)
 
     def _highlight_focus_visible_index(self) -> int | None:
         return self._highlight_visible_index(self.highlight_focus_node_id)
