@@ -41,7 +41,7 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
-### Verify table hardening — 2026-10-15
+### Verify table hardening — 2026-10-15–16
 
 Approved after the M1-10 GUI recap, starting at `d6770c7`. This is a separate
 hardening batch, not activation of M1-12. Root owns delivery documents; evidence
@@ -53,7 +53,7 @@ and the final ablation report live under `build/verify-ux-20261015/`.
 | Verify table alignment | Inventory/Plan web presentation state, shared highlight/visible-sequence helpers, task presentation/port/lifecycle bridge adapters, `app.js`, `bridge.js`, Inventory/Plan/tree/row assets as directly needed; their existing Python, browser probes, installed Inventory/execution/shell/gallery consumers. PRESENTATION, DESKTOP_UI, BRIDGE and FEATURES own changed contracts. | Shared server range gestures, Ctrl/Shift and keyboard behavior, highlighted checkbox scope, query-matched folder/header membership including off-window/collapsed matches, authoritative stale/conflict rejection, live viewport/focus continuity, separate result identities. Existing interfaces tests plus affected installed Inventory/execution, shell and gallery gates; imports and broader ordinary coverage for shared contract changes. |
 | Bounded overlay cost | `inventory_review.js` and its existing probe: avoid repeated self-membership validation for a window's own manual result. | Preserve mismatch/detail rejection and row result labels; demonstrate removal of repeated quadratic membership work without a new timing threshold. May accompany the renderer alignment where dependencies overlap. |
 | Refresh consequence UX | `inventory_review.js`, `app.js`, existing confirmation component and their browser/installed execution consumers; DESKTOP_UI/PRESENTATION/FEATURES. Make exact Verify primary; warn before a scan can forfeit it; truthful supersession message. | Cancel has no scan effect; explicit confirmation retains normal revision/scope/admission checks; whole, selected and context Refresh routes; no unnecessary prompt after the exact option is consumed/unavailable; installed command journey. |
-| Evidence correction and ablation | M1_PLAN/HANDOFF/CHANGELOG and retained D1/D2 receipts; study the D delivery diff and final table changes. | Record unresolved Plan-again intermittency without treating a later pass as explanation. Assess removals/reuse by lost behavior, logic, test/environment complexity and maintenance costs, with source/evidence pointers. Report only; no study-driven simplification. |
+| Evidence correction and ablation | M1_PLAN/HANDOFF/CHANGELOG and retained D1/D2 receipts; study the D delivery diff and final table changes. | Correct the shell failures to foreground refusals and trace self-failure, retaining raw receipts. Assess removals/reuse by lost behavior, logic, test/environment complexity and maintenance costs, with source/evidence pointers. Report only; no study-driven simplification. |
 
 Preserve workflow safety and execution-evidence token ownership, complete
 operation selection for starts (including hidden selections), separate row
@@ -68,7 +68,33 @@ Each outcome requires fresh independent review before commit. Repository
 recurrence and always-stop rules apply; the named findings are declared inputs,
 not newly discovered defects. Finish with the requested study and recap.
 
-Table implementation uses the existing `VisibleSequence` through one shared
+The scope/evidence correction is committed as `aca87d4`; catalog coverage is
+delivered in independently reviewed `47a4bcae`. Its host interfaces gate passed
+2,024 cases (`catalog-interfaces-02.log/xml` in the evidence root). The earlier
+sandbox run encountered native/path and package-build access failures and is
+retained without an acceptance claim. The user stopped work on 2026-10-15
+for separate shell review and approved resumption on 2026-10-16. The table candidate is preserved on disposable
+recovery branch `codex/wip-20261015-1621-verify-table`, based on `47a4bcae`;
+it is not a mergeable delivery. Refresh implementation and the final ablation
+study remain pending. Rebuild reviewed work into coherent verified commits;
+never merge or cherry-pick the recovery commit as-is.
+
+Current evidence: Inventory native08 and four gallery cases native09 pass;
+ordinary01 has 6,062 passes/four skips and three test-consumer failures corrected
+by the 74-pass owning-module migration28 run. The later execution-helper
+correction passes its 22 ordinary cases (execution30), but native12 does not
+close execution acceptance: default stopped at a foreground guard; larger
+timed out at initial readiness with no recorder failure and no Refresh admission.
+The subsequent review identifies a D2 readiness-reconciliation defect; native
+timeouts do not establish its exact response ordering. Twelve import contracts
+pass. All failed receipts remain under the evidence root. Fresh table review
+withholds approval. The earlier shell-gate adjudication was based on a mistaken
+failure-state interpretation and is retracted below; no gate waiver is needed
+for a product Plan-again defect that these receipts do not show. Those incomplete
+attempts still do not satisfy the current shell gate. The approved recurrence
+scope and resumption order are recorded below; current gates remain open.
+
+The saved table candidate uses the existing `VisibleSequence` through one shared
 server highlight owner, keeping Plan operation/dependency policy and Inventory
 file membership separate. Inventory gains compact revisioned highlight and
 highlighted-selection commands; direct command-catalog consumers in host,
@@ -82,16 +108,83 @@ while retaining surviving checkbox selections. Extend the existing Inventory
 native witness to inspect the actual outer viewport at nonzero scroll, including
 an off-window range, rather than the non-scrolling rows element.
 
-**Open intermittent observation:** `d2-shared-native-20261014-02.log` lines
-142/244 and both raw shell `failure.json` files show a fresh Task 53 row while
-Task 52 remains selected and `review_pending` remains `plan-again`. The same
-signature is retained in shared01. Later foreground03 shell passes do not
-explain or close this failure. Earlier D1/AB observations have differing symptoms
-and do not establish a common cause. Gallery acceptance is limited to the four
-passing gallery cases; its reuse never constitutes shell acceptance. Preserve
-the existing diagnostics and investigate raw evidence if it recurs. Causation
-is unresolved, so this observation is recorded here rather than assigned a
-speculative BUGS mechanism.
+**Corrected shell evidence (2026-10-15):** all eight untraced cases in D2
+shared01/shared02 and table native09/native10 stopped at the foreground guard
+before the first Shift+F10 input. Their `plan_again` checkpoint is reached only
+after Task 53 selection and changed-row rendering. The reported Task 52/pending
+snapshot is taken earlier on every run, not at failure. These are incomplete
+native-input attempts under TESTS, not evidence of intermittent Plan-again failure.
+Native11 failed its own trace: normal pending eligibility entries overflow the
+bounded trace, which the handler saves permissively then rejects strictly.
+Retain all receipts; gallery acceptance remains separate. The corrected audit
+and scripts are in `shell-review-01/` and `recurrence-evidence-audit-01.md` under
+the evidence root. This correction does not resolve unrelated older D1/AB observations.
+
+**Async-read recurrence — implementation approved 2026-10-16.**
+The finite corpus is the three read families below, their Plan execution-window
+adopters, and direct viewport/detail/navigation/start consumers in `app.js`,
+their bridge/renderer contracts and existing browser/native probes. The common
+mechanism is incomplete coordination of read ownership, invalidation and renewed
+demand, not a shared backend or transport failure.
+
+| Instance / consequence | Owner and present disposition | Common boundary |
+| --- | --- | --- |
+| Plan reload crosses newer foreground interaction; applied highlight/detail can disappear. | `loadPlanReview`; corrected in `b52f8ddf`. | Capture foreground ownership, preserve the incumbent review and retain dirty reconciliation at its offset. |
+| Inventory live overlay crosses newer scroll/highlight; an old window can replace current rows or discard the final needed update. | `refreshInventoryOverlay`; saved candidate correction must be revalidated during rebuild. | Same foreground read boundary, current revision/offset checks and deferred dirty replay. |
+| Copied-file readiness crosses an execution revision or returns conflict; the action can remain unavailable until another load. | `loadManualReadiness`, `originalExecution` and execution-window adoption; pre-existing D2 defect, OPEN. | Loading drops demand, stale rejection retains no follow-up, conflict is stored without reconciliation. The old Plan window is also the readiness revision source. |
+
+The scratch A/B/C orderings and no-crossing control reproduce consumer behavior
+on `47a4bcae` and `d1c3b325`; their direct window assignment is not proof that a
+full Plan reload adopts while Verify is visible. Production fences that reload;
+retained view completions can still adopt. Selection has similar retained-owner
+code but reviewing-state admission limits its post-execution relevance. Thus
+retrying the unchanged old revision alone is insufficient. Full census and source limits are in
+`recurrence-census-01.md`.
+
+Approved reorganization: give original-execution identity/revision
+one named observation/adoption owner, separate from permission to repaint Plan;
+feed it from matching authoritative reads. Apply one read-reconciliation rule
+to the three families: preserve latest demand while a read runs, reject obsolete
+paint, and reconcile still-owned demand after an authoritative revision or
+foreground owner advances. A conflict is a revision hint, never verification
+eligibility. Keep one in-flight readiness read and coalesced demand; bound conflict
+reconciliation to one round per admitted demand, with actionable Reload if it
+cannot settle. Execution facts must not roll back within the same execution and
+must reset when the original execution changes. No retry loop against an unchanged
+conflicting revision, transport-error polling or mutation replay.
+Reuse existing foreground helpers and explicit domain adopters; no generic
+request framework or merged result authority is proposed.
+
+During implementation, revalidate the finite adoption sites against this mechanism
+table. The separate bounded frontend fix covers production release/pane
+ordering plus A/B/C/control, coalescing, repeated unchanged conflict, terminal
+update and task/session/pane/Close retirement. Preserve existing Plan/overlay
+witnesses and backend exact-start checks. The harness correction is a separate
+test-only outcome: shared deadline-bounded foreground waiting for shell/execution,
+truthful refusal facts and trace-overflow handling, preserving every input guard.
+The user approved both bounded outcomes on 2026-10-16 and resumed the hardening
+batch. Rebuild on `codex/verify-ux-rebuild` from `47a4bcae`, retaining recovery
+`d1c3b325`/`fb2253e2`; never integrate their WIP ancestry. Root owns delivery
+documents and integration. Atomic order: harness correction, readiness fix,
+revalidated table alignment, Refresh consequence UX, then read-only ablation.
+Readiness must land before or with Refresh confirmation. Re-check the saved
+overlay fix against the common rule during rebuild, including obsolete rejection
+and retained final demand; do not merely restore its earlier approval.
+
+Readiness production scope is `app.js` execution-fact adoption and its existing
+read/start consumers; existing Inventory app/Plan shell probes own realistic
+release/pane ordering, currentness, bounded coalescing, conflict/error termination
+and retained Plan state. Harness scope is `_headed_native.py`, shell/execution
+drivers, trace handling and their existing ordinary/native tests; enumerate shared
+helper consumers before editing. Preserve foreground/focus/hit checks and bounded
+waits, with no input after refusal. Existing installed execution and shell cases
+run early after focused tests; owning interfaces, ordinary/import and affected
+Inventory/gallery gates remain required by dependency. Subject docs accompany
+each behavioral commit, and each outcome gets fresh adversarial review. The
+already declared defects are approved inputs, not new recurrence instances.
+Other scope exclusions and mandatory stops remain unchanged. HANDOFF returns to
+latest-session operational context; the exact prior user text remains in ignored
+`recurrence-input-handoff-01.md`.
 
 ### M1-10 delivered register — 2026-10-13–14
 

@@ -1,33 +1,41 @@
-# Latest session — Verify UX hardening
+# Latest session — Verify hardening rebuild
 
-2026-10-15. The user activated a post-M1-10 GUI-hardening batch at `d6770c7`
-and approved its formal scope in M1_PLAN. M1-10 remains delivered; M1-12,
-release, DOC-2, push/PR and unrelated optimization remain inactive.
+2026-10-16. The user approved the async-read recurrence proposal and resumed
+implementation, including bounded shell/execution foreground handling. Readiness
+must land before or together with Refresh confirmation. Revalidate the saved
+Inventory overlay correction against the same ownership/re-read rule during the
+table rebuild. M1_PLAN owns scope, verification and commit boundaries.
 
-The accepted work aligns Verify with Plan/execution row highlighting,
-filter-aware checkbox membership and viewport continuity; removes repeated
-manual-overlay self-validation; derives kind-mirror test cases from the Python
-catalog; and warns before Refresh can forfeit first copied-file verification.
-Execution-evidence scope tokens and conditional recording remain unchanged.
-After implementation, report a read-only ablation study of D's product/test
-logic and maintenance costs. No study-driven simplification is authorized.
+## Checkout and preservation
 
-Current work and decisions are in `M1_PLAN.md`, with source/test/consumer gates.
-New raw evidence belongs in `build/verify-ux-20261015/`; retain all failures.
-The kind-catalog focused test passes, with independent review; department
-verification is in progress. Table implementation has not started while that
-baseline runs. Scope/record review is in progress. No delivery claim yet.
+Working branch: `codex/verify-ux-rebuild`, based on `milestone1` at `47a4bcae`.
+Recovery branch `codex/wip-20261015-1621-verify-table` retains table candidate
+`d1c3b325` and investigation `fb2253e2`. Never merge/cherry-pick these WIPs as-is.
+Rebuild their useful changes into independently reviewed, verified commits.
+The five pre-existing stashes and all raw receipts remain untouched.
 
-The earlier M1-10 summary omitted both shell failures in
-`build/m1-10-20261013/d2-shared-native-20261014-02.log`: a fresh row appeared,
-but Task 52 remained selected and Plan again stayed pending. Shared01 retains
-the same signature. These remain open intermittent observations; later shell
-passes do not explain them. The four gallery passes are separate acceptance.
-Existing Plan-again diagnostics stay in place; no speculative shell fix.
+The prior user handoff is preserved byte-for-byte at
+`build/verify-ux-20261015/recurrence-input-handoff-01.md`. Investigation census,
+evidence audit, independent review and recovery manifests share that evidence
+root. The shell diagnosis is corrected: eight untraced cases refused foreground
+after Plan again succeeded; native11 rejected its own trace overflow. Existing
+failed receipts are incomplete checks, not product Plan-again failures.
 
-M1-10 raw evidence and all four recovery histories remain preserved under
-`build/m1-10-20261013/`, including the verified recovery bundle. Do not remove
-that evidence or the five pre-existing stashes. Announce native input, retain
-foreground/focus/hit guards, and use a unique native base per attempt. Ordinary
-and tools runs require an external basetemp. Keep package writers settled before
-acceptance, and track reuse by all producer/checker/driver dependencies.
+## Immediate work and verification
+
+Rebuild in atomic outcomes: harness correction; readiness reconciliation; table
+alignment with overlay revalidation; Refresh warning; final ablation study.
+Readiness tests must use real production release/pane/adoption paths: prior
+scratch probes directly assign the Plan window and prove only consumer behavior.
+Separate execution-fact observation from permission to repaint Plan. Keep
+coalesced demand bounded, exact Start singular, and conflict/error recovery
+actionable without mutation replay.
+
+No new implementation gates have run yet. Prior Inventory/gallery/ordinary
+evidence remains recorded in M1_PLAN and must be reused only where all producer,
+checker and driver dependencies remain unchanged. Announce native-input runs;
+retain foreground/focus/hit guards. No gate waiver is authorized.
+
+Root owns delivery docs and integration; builders must not overlap shared files
+or commit before independent review. M1-12, release, DOC-2, push/PR and backend
+eligibility preservation through Refresh remain inactive.

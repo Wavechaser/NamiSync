@@ -177,19 +177,34 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Align Verify table interaction and action consequences (2026-10-15)
+#### Align Verify table interaction and action consequences (2026-10-15 – 2026-10-16)
 
 - Generate browser session-kind and pause-capability mirror cases from the
   Python task-port catalog, preserving independent invalid/coercive verdicts.
   New Python kinds now enter those checks without a second handwritten list.
-- Record the approved follow-up: shared range highlighting, filter-aware bulk
-  selection and viewport continuity; explicit warning before Refresh forfeits
-  copied-file verification; bounded overlay rendering and catalog-driven kind
-  coverage. Keep the execution-evidence contract unchanged and finish with a
-  read-only ablation study.
-- Correct M1-10 evidence accounting: shared01/shared02 include unresolved
-  Plan-again shell failures. Later shell passes do not explain those failures;
-  the four passing gallery cases remain separate evidence.
+- Prepare shared Plan/Verify server range highlighting and browser navigation
+  in the preserved delivery candidate. Verify
+  header, folder and highlighted-range checkboxes select search/filter matches
+  across collapsed and unloaded rows; starts retain the complete selection,
+  including hidden files. Preserve live scroll and checkbox focus after selection,
+  and defer live-result refresh behind newer foreground interaction.
+- The candidate indexes bounded manual/ordinary result windows once while retaining detail
+  generation and operation binding. Remove repeated window self-validation
+  without changing result ownership or adding a timing threshold.
+- The approved Refresh warning and final read-only ablation study remain pending;
+  the execution-evidence contract stays unchanged.
+- Correct the earlier shell diagnosis: all eight untraced D2 shared01/shared02
+  and hardening native09/native10 failures are foreground refusals after Plan
+  again succeeded. The Task 52 snapshot preceded Task 53 selection; native11
+  rejected its own overflowing trace. Keep failed receipts and separate gallery evidence.
+- Investigate the third async browser-read reconciliation instance before fixing
+  D2 copied-file readiness. M1_PLAN records owners, consequences, common policy,
+  approved finite scope and the scratch reproducer's producer-path limits.
+- Resume on the user's approval with bounded harness repair and readiness
+  reconciliation, before Refresh confirmation. Rebuild the table candidate and
+  re-check its overlay correction against the shared rule. Preserve recovery
+  `codex/wip-20261015-1621-verify-table`; no table delivery or final ablation
+  conclusion is claimed. M1_PLAN and HANDOFF record the active work and open gates.
 
 #### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-13)
 
