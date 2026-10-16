@@ -21,7 +21,8 @@ do not establish acceptance for changed dependencies.
 
 M1-10 is complete as of 2026-10-14, including the requested integrated A–C
 review before D and final cross-component review. The authorized GUI-hardening
-follow-up below is also complete. M1-12, release and DOC-2 remain inactive. Backend
+follow-up below is also complete. The user activated the review consolidation
+batch below on 2026-10-16. M1-12, release and DOC-2 remain inactive. Backend
 optimization is closed.
 Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
@@ -40,6 +41,37 @@ the old tip and opens a draft PR from `milestone1-anthony`. Before any action,
 freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
+
+### Review consolidation — approved 2026-10-16
+
+Starts from clean `milestone1` at `7508f815`. The user approved the reconciled
+S1–S4/test/documentation recommendations, explicitly choosing shared infrastructure
+with separate Plan and Inventory panels (Inventory is not a Plan mode), Inventory
+Follow/autoscroll/Go, and ordinary verification of copied files instead of exact
+manual verification. Later inventory operations may supersede execution-relative
+evidence. This supersedes the earlier exact/manual one-shot product requirement;
+it does not change linked automatic verification or original execution outcomes.
+Evidence: `build/review-consolidation-20261016/`. Root owns docs/integration.
+
+| Row / atomic outcome | Owners and finite consumer population | Gate / dependency |
+| --- | --- | --- |
+| RV0 — rules and delivery boundary | AGENTS, TESTS, PERFORMANCE, M1_PLAN and latest HANDOFF; session/checkpoint documentation, delta review, equivalent test relocation and accounted evidence retention. | Independent document/contract review and local-link/diff check before changing practice. Active. |
+| RV1 — ordinary Verify copied files | Manual workflow/runtime/repository reader and interface service/lifecycle/task-port/drain/command/bridge/app/renderer owners; their existing owning workflow/database/interface/browser/catalog/tool/installed execution tests. Retire exact-only state/commands/results/warning; keep ordinary current-state outcomes and original-command custody. | Finalize direct-consumer census before edits. Real execution→ordinary scan/verify composition first; stale/duplicate/rollback/missing/changed/partial scope, ordinary and linked regression coverage; affected departments, imports, installed execution/Inventory/shell/gallery. Depends RV0. |
+| RV2 — common review infrastructure | Plan/Inventory server view state, visible-sequence/highlight helpers; separate browser panels above a shared controller; app read/navigation consumers, production probes, gallery, installed table cases and direct performance helper imports. | Reuse current range/selection/viewport/focus/read-settlement witnesses for both consumers; shared geometry/navigation is implemented once. Preserve row roles unless a separate accessibility change is justified. Depends RV1; split coherent server/browser commits after census. |
+| RV3 — Inventory Follow and Go | Common browser follow/reveal/controller, Inventory active-row/ancestor resolution in view/drain/command/bridge and current ordinary session observation; owning probes/composition/installed Inventory. | Off-window/collapsed/filtered/missing target, canonical-only automatic follow, user override, one-shot Go, session/pane/Close retirement; no selection or focus mutation. Depends RV2. |
+| RV4 — narrow follow-up sharing | Drain delivery snapshot construction/restore and existing browser start/control attempt consumers. Share remaining repeated mechanics after exact-manual retirement; retain domain admission, outcome/identity and original-command rules. | Existing success/refusal/rollback/late delivery/uncertain recovery/zero-result/replacement tests plus affected composition/native paths. No generic effect machine or speculative full-slot pipeline. Depends RV1 and reconciles RV2/3 app changes. |
+| RV5 — catalogs and test consumers | Existing command catalog tests/native helpers/benchmark helper; shared fixture support for Inventory/Plan gallery specimens; existing long Inventory/execution/shell journeys. Gallery-only integrity row helper moves to tests if still unused by product. | One independent golden exposure catalog; unknown/missing/policy mismatch controls. Each relocated assertion names its equivalent probe/composition witness; installed input/effect, focus/scroll and package guards remain. Serialize with owning product migration; optional performance timing stays non-gating. |
+| RV6 — closure and evidence reduction | Integrated RV1–5, matching subject docs/CHANGELOG, condensed current register and session HANDOFF; inventory task-owned regenerable evidence before cleanup. | Ordinary suite, imports, affected installed cases, final independent cross-outcome review, source/producer/checker provenance and recovery accounting. Preserve unexplained failures, original handoff, recovery refs and unrelated stashes. Stop for recap; no M1-12/release/push/PR. |
+
+Each pending product row gets its finite paths and current-revision design before
+implementation; this is elaboration of approved outcomes, not another approval
+gate. Use smallest coherent reviewed commits. Scope is structural reuse and the
+explicit behavior substitutions above, not a generic UI framework, backend
+optimization, new timing target, automatic mutation replay, weaker ingress,
+recording or native guards. Server-owned scope, revision fences, bounded 256-row
+windows, highlight/checkbox separation, truthful zero/partial results, conditional
+recording and exact Close remain. Repository recurrence and mandatory stops apply;
+declared consumer migrations are one finite mechanism population.
 
 ### Verify table hardening — 2026-10-15–16
 

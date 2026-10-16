@@ -214,6 +214,13 @@ recurrence and recovery rules below always apply.
 - One coherent checkpoint per mergeable commit, including its tests and matching
   documentation. Review relevant docs, obsolete material, and AGENTS for updates
   before committing; stale behavior documentation blocks readiness.
+- Update M1_PLAN when scope, decisions or checkpoint status changes, and at
+  session/stop boundaries; it is not a per-commit transcript. Replace HANDOFF at
+  session/stop boundaries. Atomic commits still carry matching subject docs;
+  CHANGELOG records task delivery. Keep command chronology in evidence.
+- Review each atomic outcome independently. After corrections, review the changed
+  delta and affected dependencies against the prior review; do not repeat
+  unchanged reviews or gates without a dependency reason.
 - Use `<category>(<optional-scope>): <imperative summary>` with the narrowest of
   `feat`, `fix`, `perf`, `test`, `docs`, `refactor`, `build`, `chore`; scope is a
   lowercase owning component, omitted for cross-cutting work. `wip` is recovery-

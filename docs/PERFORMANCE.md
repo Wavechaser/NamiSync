@@ -10,6 +10,19 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Evidence retention
+
+After acceptance and recovery accounting, keep raw results, manifests, exact
+source/producer/checker identities, runtime/profile facts, review decisions and
+bounded failed-run diagnostics. Regenerable pytest fixture trees and installed
+environments may be removed after their required receipts/captures have been
+preserved and checked. Inventory exact task-owned paths before cleanup; retain
+inputs needed to investigate unexplained failures and anything whose provenance
+cannot otherwise be reconstructed. No unresolved recovery work or user data is
+eligible. Historical observations remain bound to their measured dependencies.
+Methods and current result summaries belong here; detailed investigation
+chronology belongs in the named evidence root or archived historical material.
+
 ## Initial planning observation — LS1 (2026-10-12)
 
 The LS1 display-sequence candidate based on `42aa079` was measured without

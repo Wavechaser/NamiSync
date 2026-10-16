@@ -350,6 +350,21 @@ classify its observable guarantee before changing or deleting it. Passing tests
 alone do not establish that no guarantee was lost. Review the affected producer,
 consumer and failure seams as well as the retained tests.
 
+Keep deterministic state/population/race coverage in owning module probes or
+composition tests when native input is not part of the guarantee. Installed
+journeys retain the input-to-handler-to-effect seam, focus/scroll/accessibility,
+packaging and native-only checks. Relocate assertions only with an explicit
+equivalent witness; shortening a journey cannot silently retire coverage.
+Gallery panels may share fixture producers with probes, while their visual and
+behavioral assertions remain independent. Shared fixture code belongs in
+underscore-prefixed support modules, never imported collected tests.
+Keep one independently specified expected command catalog for exposure/policy
+checks; consumers reuse it or derive operational lists from production specs.
+Derivation must not make unintended command exposure self-accepting.
+Optional measurement runs are not automatic gates. Known direct consumer breaks
+still need migration or an explicit disposition. Evidence retention follows
+[PERFORMANCE](PERFORMANCE.md#evidence-retention).
+
 ## Departments
 
 | Department | Primary ownership |
