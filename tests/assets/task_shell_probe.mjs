@@ -389,7 +389,7 @@ const setupUrl = moduleUrl(`
 const planReviewUrl = moduleUrl(`
   export function createPlanReviewPanel(callbacks) {
     globalThis.planReviewHarness.callbacks = {...callbacks,
-      onWindow(review, offset, overlaps = (window) => window.offset === review.windowRequestOffset, settled) {
+      onWindow(review, offset, overlaps = (window) => window.offset === offset, settled) {
         callbacks.onWindow(review, offset, overlaps, settled);
       },
     };
@@ -848,6 +848,9 @@ planWindows[1].resolve(planWindow(refusedReview));
 await until(() => reviewRenders.at(-1)?.review?.summary === refusedReview);
 assertSameNode(byText("Plan review test surface"), firstLoadingSurface,
   "loaded review remains attached after the delayed window arrives");
+function readsFor(review) {
+  return [...reviewRenders].reverse().find((task) => task.taskId === review.summary.task_id).planReads;
+}
 const firstReview = reviewRenders.at(-1).review;
 assert.match(firstReview.message, /Plan failed review/, "actionable warnings remain");
 assert.equal(reviewRenders.at(-1).error, null, "a successful selection retry clears the rail error");
@@ -874,7 +877,7 @@ const priorRenderCount = reviewRenders.length;
 globalThis.planReviewHarness.callbacks.onWindow(firstReview, 256);
 globalThis.planReviewHarness.callbacks.onWindow(firstReview, 512);
 assert.equal(planWindows.length, 3, "scroll reads have at most one transport in flight");
-assert.equal(firstReview.foregroundWindowReaders, 1, "the whole scroll pump owns one foreground reader");
+assert.equal(readsFor(firstReview).foregroundReaders, 1, "the whole scroll pump owns one foreground reader");
 assert.equal(firstReview.pending, null, "window reads do not disable review actions");
 assert.equal(reviewRenders.length, priorRenderCount, "fetch start does not remount the review");
 planWindows[2].resolve(planWindow(refusedReview, 256));
@@ -883,18 +886,18 @@ assert.equal(firstReview.window, originalWindow, "superseded offset cannot publi
 assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, 0, 512, 256]);
 const latestWindow = planWindow(refusedReview, 512);
 planWindows[3].resolve(latestWindow);
-await until(() => !firstReview.windowRequestRunning);
+await until(() => firstReview.viewportRead == null);
 assert.equal(firstReview.window, latestWindow);
-assert.equal(firstReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(firstReview).foregroundReaders, 0);
 assert.equal(reviewRenders.length, priorRenderCount + 1, "one current receipt renders once");
 globalThis.planReviewHarness.callbacks.onWindow(firstReview, 768);
 globalThis.planReviewHarness.callbacks.onWindow(firstReview, null);
 planWindows[4].resolve(planWindow(refusedReview, 768));
-await until(() => !firstReview.windowRequestRunning);
+await until(() => firstReview.viewportRead == null);
 assert.equal(firstReview.window, latestWindow, "return to covered rows invalidates the read");
 globalThis.planReviewHarness.callbacks.onWindow(firstReview, 0);
 planWindows[5].resolve(originalWindow);
-await until(() => !firstReview.windowRequestRunning);
+await until(() => firstReview.viewportRead == null);
 assert.equal(firstReview.window, originalWindow);
 // Current viewport overlap, not the latest requested offset, decides whether
 // a scroll reply may publish. Keyboard/highlight calls use their separate path.
@@ -914,7 +917,7 @@ overlappingWindow.rows = Array.from({length: 256}, (_, index) => ({
   ...originalWindow.rows[0], visible_index: 256 + index,
 }));
 planWindows.at(-1).resolve(overlappingWindow);
-await until(() => !firstReview.windowRequestRunning);
+await until(() => firstReview.viewportRead == null);
 assert.equal(firstReview.window, overlappingWindow);
 assert.equal(planWindows.length, overlapCallBase + 1, "newer covered scroll demand does not discard the response");
 firstReview.window = originalWindow;
@@ -926,7 +929,7 @@ for (const reason of ["settings", "zero-height", "disjoint", "failure"]) {
   if (reason === "settings") settingsButton().click();
   if (reason === "failure") planWindows[base].reject(new Error("read unavailable"));
   else planWindows[base].resolve(planWindow(refusedReview, 768));
-  await until(() => !firstReview.windowRequestRunning);
+  await until(() => firstReview.viewportRead == null);
   assert.deepEqual(settlements, [reason === "settings" ? "retired" : undefined],
     `${reason} releases the exact renderer request`);
   assert.equal(planWindows.length, base + 1, "settlement does not automatically retry the read");
@@ -949,7 +952,7 @@ for (const failed of [false, true]) {
   await until(() => planWindows.length === callsBefore + 2);
   const returnedWindow = planWindow(refusedReview, 768);
   planWindows.at(-1).resolve(returnedWindow);
-  await until(() => !firstReview.windowRequestRunning);
+  await until(() => firstReview.viewportRead == null);
   assert.equal(firstReview.window, returnedWindow);
 }
 firstReview.window = originalWindow;
@@ -958,9 +961,9 @@ planWindows.splice(2); // Keep the following independent gesture receipt ordinal
 globalThis.planReviewHarness.callbacks.onWindow(firstReview, 768);
 globalThis.planReviewHarness.callbacks.onViewChange(firstReview, { sortColumn: "size" });
 assert.equal(firstReview.pending, "view", "view feedback is published before its receipt");
-assert.equal(firstReview.foregroundWindowReaders, 2, "scroll and full view work have distinct reader evidence");
+assert.equal(readsFor(firstReview).foregroundReaders, 2, "scroll and full view work have distinct reader evidence");
 planWindows[2].resolve(planWindow(refusedReview, 768));
-await until(() => !firstReview.windowRequestRunning);
+await until(() => firstReview.viewportRead == null);
 assert.equal(firstReview.window, originalWindow, "a newer view action invalidates old window data");
 planWindows.pop();
 taskButton("Task 6").click();
@@ -972,7 +975,7 @@ planViewUpdates[0].resolve(sortedReview);
 await until(() => planWindows.length === 3);
 planWindows[2].resolve(planWindow(sortedReview));
 await until(() => firstReview.pending === null);
-assert.equal(firstReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(firstReview).foregroundReaders, 0);
 taskButton("Task 7").click();
 assert.equal(firstReview.summary.sort_column, "size");
 assert.equal(firstReview.message, null, "successful view refresh adds no footer noise");
@@ -1028,7 +1031,7 @@ globalThis.planReviewHarness.callbacks.onHighlight(
   null,
 );
 await until(() => planWindows.length === 4);
-assert.equal(firstReview.foregroundWindowReaders, 1, "highlight mutation and window share one reader span");
+assert.equal(readsFor(firstReview).foregroundReaders, 1, "highlight mutation and window share one reader span");
 assert.equal(
   calls.at(-1)[0],
   "plan-window",
@@ -1052,7 +1055,7 @@ assert.equal(firstKeyboardRender, true,
   "the first adopted-window render, including planned-detail loading, owns keyboard reveal");
 delete globalThis.planReviewHarness.onRender;
 assert.equal(firstReview.window.offset, retainedHighlightOffset + 256 - 32);
-assert.equal(firstReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(firstReview).foregroundReaders, 0);
 assert.equal(executionDetails.length, 3, "planned-row highlight needs no execution-detail read");
 assert.equal(planDetails.length, plannedReadsBeforeHighlight + 1,
   "highlight reads only the focused node's planned paths");
@@ -1107,7 +1110,7 @@ globalThis.planReviewHarness.callbacks.onSelect(
   false,
 );
 await until(() => firstReview.pending === "selection");
-assert.equal(firstReview.foregroundWindowReaders, 1, "selection mutation, anchor, and window share one reader span");
+assert.equal(readsFor(firstReview).foregroundReaders, 1, "selection mutation, anchor, and window share one reader span");
 const selectedReview = planSummary({
   disposition: "conflict", view_revision: 2, selection_revision: 1,
   selected_operation_count: 1,
@@ -1116,7 +1119,7 @@ planSelections[0].resolve(selectedReview);
 await until(() => planWindows.length === 6);
 planWindows[5].resolve(planWindow(selectedReview));
 await until(() => firstReview.pending === null);
-assert.equal(firstReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(firstReview).foregroundReaders, 0);
 navigationPlannedRead.resolve(plannedReply);
 await turns();
 assert.equal(firstReview.planDetail, null, "a newer view discards the navigation detail reply");
@@ -1310,7 +1313,7 @@ assert.equal(reviewRenders.at(-1).executionAttempt, null);
 globalThis.planReviewHarness.callbacks.onSelect(
   retainedAdmissionReview, retainedAdmissionReview.window.rows[0], false,
 );
-await until(() => retainedAdmissionReview.foregroundWindowReaders === 1);
+await until(() => readsFor(retainedAdmissionReview).foregroundReaders === 1);
 planWindows[selectionWindowBase].resolve(planWindow(unchangedSelection));
 await until(() => !reviewRenders.at(-1).executionWindowRefreshRunning);
 assert.equal(retainedAdmissionReview.window, unchangedAdmissionWindow, "selection supersedes background publication");
@@ -1318,7 +1321,7 @@ assert.equal(reviewRenders.at(-1).executionWindowDirty, true);
 planSelections[1].reject(new Error("task is unavailable: execution custody is unreleased"));
 await until(() => planOpens.length === admissionOpenBase + 2);
 const selectionRecoveryReload = planOpens.at(-1);
-assert.equal(retainedAdmissionReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(retainedAdmissionReview).foregroundReaders, 0);
 assert.equal(retainedAdmissionReview.summary, unchangedSelection, "rejected selection has no mutation effect");
 
 // A second explicit gesture can race the pending reload. Its rejected receipt
@@ -1326,17 +1329,20 @@ assert.equal(retainedAdmissionReview.summary, unchangedSelection, "rejected sele
 globalThis.planReviewHarness.callbacks.onSelect(
   retainedAdmissionReview, retainedAdmissionReview.window.rows[0], false,
 );
-await until(() => retainedAdmissionReview.foregroundWindowReaders === 1);
+await until(() => readsFor(retainedAdmissionReview).foregroundReaders === 1);
 executionDrain.acceptUpdate(stateUpdate("paused"),
   pageSnapshot(TASK_G, executionSession, { control_state: "paused" }));
+const selectionFeedbackDuringReload = retainedAdmissionReview.message;
 selectionRecoveryReload.reject(new Error("selection recovery reload failed"));
 await until(() => !reviewRenders.at(-1).reviewLoading);
+assert.equal(retainedAdmissionReview.message, selectionFeedbackDuringReload,
+  "a foreground-invalidated reload rejection cannot overwrite incumbent action feedback");
 await turns();
 assert.equal(planWindows.length, selectionWindowBase + 1, "dirty replay waits for selection cleanup");
 planSelections[2].reject(new Error("task is unavailable: execution custody is unreleased"));
 await until(() => planOpens.length === admissionOpenBase + 3);
 const committedReload = planOpens.at(-1);
-assert.equal(retainedAdmissionReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(retainedAdmissionReview).foregroundReaders, 0);
 assert.equal(retainedAdmissionReview.summary, unchangedSelection);
 assert.equal(reviewRenders.at(-1).executionWindowDirty, true);
 
@@ -1367,7 +1373,7 @@ assert.equal(
   "paused",
   "Plan review refresh preserves the observed live control state",
 );
-assert.equal(liveTask.review.foregroundWindowReaders, 0);
+assert.equal(readsFor(liveTask.review).foregroundReaders, 0);
 assert.equal(liveTask.reviewLoading, false);
 assert.equal(liveTask.executionWindowRefreshRunning, false);
 assert.equal(liveTask.sessionKind, "sync-execution");
@@ -1381,7 +1387,7 @@ const conflictWindow = (reviewSummary) => ({
 });
 const executionDirtyUpdate = { update_type: "event", event: { body_type: "Progress", body: {} } };
 const conflictOpenBase = planOpens.length;
-const conflictWindowBase = planWindows.length;
+let conflictWindowBase = planWindows.length;
 executionDrain.acceptUpdate(executionDirtyUpdate);
 await until(() => planWindows.length === conflictWindowBase + 1);
 planWindows.at(-1).resolve(conflictWindow(committedReview));
@@ -1403,6 +1409,11 @@ await until(() => planWindows.length === conflictWindowBase + 3);
 executionDrain.acceptUpdate(executionDirtyUpdate);
 assert.equal(planWindows.length, conflictWindowBase + 3, "a newer live event cannot open a parallel window read");
 planWindows.at(-1).resolve(conflictWindow(committedReview));
+await until(() => planWindows.length === conflictWindowBase + 4);
+assert.equal(planOpens.length, conflictOpenBase + 1,
+  "a newer dirty demand rereads before interpreting a stale conflict receipt");
+planWindows.at(-1).resolve(conflictWindow(committedReview));
+conflictWindowBase += 1;
 await until(() => planOpens.length === conflictOpenBase + 2);
 const secondConflictReload = planOpens.at(-1);
 secondConflictReload.resolve(committedReview);
@@ -1482,7 +1493,7 @@ await until(() => planWindows.length === arbitrationWindowBase + 7);
 assert.equal(liveReview.window.execution.execution_revision, 4);
 planWindows[arbitrationWindowBase + 6].resolve(executionWindow(committedReview, 512, 4));
 await until(() => !liveTask.executionWindowRefreshRunning);
-assert.equal(liveReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(liveReview).foregroundReaders, 0);
 
 executionDrain.acceptUpdate(executionDirtyUpdate);
 await until(() => planWindows.length === arbitrationWindowBase + 8);
@@ -1509,7 +1520,7 @@ await until(() => !liveTask.executionWindowRefreshRunning);
 executionDrain.acceptUpdate(executionDirtyUpdate);
 await until(() => planWindows.length === arbitrationWindowBase + 14);
 globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1280);
-assert.equal(liveReview.foregroundWindowReaders, 1);
+assert.equal(readsFor(liveReview).foregroundReaders, 1);
 planWindows[arbitrationWindowBase + 13].reject(new Error("superseded refresh failed"));
 planWindows[arbitrationWindowBase + 14].resolve(executionWindow(committedReview, 1280, 6));
 await until(() => planWindows.length === arbitrationWindowBase + 16);
@@ -1517,7 +1528,7 @@ assert.doesNotMatch(liveReview.message ?? "", /refresh delayed/, "a stale reject
 planWindows[arbitrationWindowBase + 15].resolve(executionWindow(committedReview, 1280, 6));
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveReview.window.offset, 1280);
-assert.equal(liveReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(liveReview).foregroundReaders, 0);
 planWindows.splice(arbitrationWindowBase);
 
 const foregroundViewWindowBase = planWindows.length;
@@ -1545,7 +1556,7 @@ await until(() => planWindows.length === foregroundViewWindowBase + 2);
 assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, 4, 1280, 256]);
 planWindows[foregroundViewWindowBase + 1].resolve(executionWindow(liveViewSummary, 1280, 6));
 await until(() => !liveTask.executionWindowRefreshRunning);
-assert.equal(liveReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(liveReview).foregroundReaders, 0);
 assert.equal(liveTask.executionWindowDirty, false);
 planWindows.splice(foregroundViewWindowBase);
 
@@ -1575,7 +1586,7 @@ planWindows[foregroundHighlightWindowBase + 1].resolve(executionWindow(liveRevie
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(executionDetails.length, autoDetailsBefore + 1,
   "unchanged execution revision and focus do not duplicate detail reads");
-assert.equal(liveReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(liveReview).foregroundReaders, 0);
 assert.equal(liveTask.executionWindowDirty, false);
 planWindows.splice(foregroundHighlightWindowBase);
 
@@ -1590,7 +1601,7 @@ planHighlights[1].reject(new Error("highlight request failed"));
 await rejectedHighlight;
 deferHighlight = false;
 await until(() => planWindows.length === failedForegroundBase + 1);
-assert.equal(liveReview.foregroundWindowReaders, 0, "rejected highlight releases its entire span");
+assert.equal(readsFor(liveReview).foregroundReaders, 0, "rejected highlight releases its entire span");
 assert.equal(liveReview.window, windowBeforeErrors);
 planWindows[failedForegroundBase].resolve(executionWindow(liveReview.summary, 1280, 6));
 await until(() => !liveTask.executionWindowRefreshRunning);
@@ -1599,7 +1610,7 @@ globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1536);
 executionDrain.acceptUpdate(executionDirtyUpdate);
 planWindows[failedForegroundBase + 1].reject(new Error("scroll request failed"));
 await until(() => planWindows.length === failedForegroundBase + 3);
-assert.equal(liveReview.foregroundWindowReaders, 0, "rejected scroll cannot strand dirty refresh");
+assert.equal(readsFor(liveReview).foregroundReaders, 0, "rejected scroll cannot strand dirty refresh");
 assert.equal(liveReview.window, windowBeforeScrollError);
 assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, liveReview.summary.view_revision, 1280, 256]);
 planWindows[failedForegroundBase + 2].resolve(executionWindow(liveReview.summary, 1280, 6));
@@ -1647,7 +1658,7 @@ await until(() => liveReview.pending === null);
 assert.equal(liveReview.summary, moveSummary);
 assert.equal(liveReview.follow.enabled, false);
 assert.equal(liveReview.moveScrollOffset, 400);
-assert.equal(liveReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(liveReview).foregroundReaders, 0);
 const moveWindowBeforeStale = liveReview.window;
 globalThis.planReviewHarness.callbacks.onRevealMove(liveReview, `node-${"9".repeat(32)}`);
 await until(() => planViewUpdates.length === moveUpdateBase + 2);
@@ -1672,7 +1683,7 @@ assert.equal(liveReview.window, moveWindowBeforeStale);
 assert.equal(liveReview.summary, moveSummary);
 assert.equal(liveReview.refreshAvailable, false, "obsolete reveal windows do not offer recovery");
 assert.equal(liveReview.message, staleMoveMessage, "obsolete reveal windows remain silent");
-assert.equal(liveReview.foregroundWindowReaders, 0);
+assert.equal(readsFor(liveReview).foregroundReaders, 0);
 taskButton("Task 7").click();
 planViewUpdates.splice(moveUpdateBase);
 planWindows.splice(moveWindowBase);
@@ -1694,8 +1705,53 @@ liveReview.follow.enabled = true;
 liveReview.follow.eligible = true;
 liveReview.follow.hasTarget = true;
 deferAnchor = true;
+// A settled older viewport cannot manufacture a newer intent after Follow.
+const custodyAnchorBase = planAnchors.length;
+globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1792, () => false);
+globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1824, () => false);
 globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, false);
+assert.equal(planAnchors.length, custodyAnchorBase);
+planWindows[followWindowBase].resolve(executionWindow(liveReview.summary, 1792, 6));
+await until(() => planAnchors.length === custodyAnchorBase + 1);
+planAnchors[custodyAnchorBase].resolve({disposition:"current", index:1280});
+await until(() => planWindows.length === followWindowBase + 2);
+planWindows.at(-1).resolve(executionWindow(liveReview.summary, 1280, 6));
+await until(() => liveReview.followRead == null);
+await turns();
+assert.equal(planWindows.length, followWindowBase + 2,
+  "disjoint viewport settlement cannot re-admit its older intent after newer Follow admission");
+assert.equal(liveReview.window.offset, 1280);
+assert.equal(readsFor(liveReview).foregroundReaders, 0);
+liveReview.follow.anchorKey = null;
+liveReview.follow.anchorIndex = null;
+liveReview.follow.scrollOffset = null;
+planAnchors.splice(custodyAnchorBase);
+planWindows.splice(followWindowBase);
+
+// An actual new viewport callback after queued Follow is a newer user intent.
+globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1792, () => false);
+globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1824, () => false);
+globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, false);
+globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1536, () => true);
+planWindows[followWindowBase].resolve(executionWindow(liveReview.summary, 1792, 6));
+await until(() => planWindows.length === followWindowBase + 2);
+assert.equal(planAnchors.length, custodyAnchorBase, "new viewport intent replaces pending Follow before anchor dispatch");
+assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, liveReview.summary.view_revision, 1536, 256]);
+planWindows.at(-1).resolve(executionWindow(liveReview.summary, 1536, 6));
+await until(() => readsFor(liveReview).foregroundReaders === 0);
+assert.equal(liveReview.window.offset, 1536);
+planWindows.splice(followWindowBase);
+
+globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1792, () => false);
+globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, false);
+assert.equal(planAnchors.length, followAnchorBase, "Follow waits behind the task's viewport transport");
+globalThis.planReviewHarness.callbacks.onWindow(liveReview, null);
+planWindows[followWindowBase].reject(new Error("retired viewport unavailable"));
 await until(() => planAnchors.length === followAnchorBase + 1);
+planWindows.splice(followWindowBase);
+assert.equal(liveReview.followRead != null, true,
+  "exact viewport cancellation cannot cancel the same-review queued Follow job");
+assert.doesNotMatch(liveReview.message ?? "", /More rows unavailable/);
 globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, false);
 await turns();
 assert.equal(
@@ -1893,7 +1949,7 @@ assert.equal(liveReview.window, releaseWindowBefore, "reload admission invalidat
 assert.equal(liveTask.snapshot.terminal_result, releaseResultBefore);
 assert.equal(liveTask.reviewLoading, true);
 globalThis.planReviewHarness.callbacks.onViewChange(liveReview, { sortColumn: "path" });
-assert.equal(liveReview.foregroundWindowReaders, 1);
+assert.equal(readsFor(liveReview).foregroundReaders, 1);
 
 // A user detail read can observe the newly retained revision during reload.
 // Its real conflict disposition adds dirty intent after reload admission.
@@ -1921,7 +1977,7 @@ planViewUpdates[retiredViewUpdate].resolve(appliedView);
 await until(() => planWindows.length === controlWindowBase + 3);
 assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, appliedView.view_revision, 0, 256]);
 planWindows.at(-1).resolve(executionWindow(appliedView, 0, 7, failedResult));
-await until(() => liveReview.foregroundWindowReaders === 0);
+await until(() => readsFor(liveReview).foregroundReaders === 0);
 await until(() => planWindows.length === controlWindowBase + 4);
 planWindows.at(-1).resolve(executionWindow(appliedView, 0, 7, failedResult));
 await until(() => !liveTask.executionWindowRefreshRunning);
@@ -1937,7 +1993,7 @@ assert.equal(
 const activeWindowBase = planWindows.length;
 globalThis.planReviewHarness.callbacks.onWindow(postTerminalReview, 256);
 await until(() => planWindows.length === activeWindowBase + 1);
-assert.equal(postTerminalReview.foregroundWindowReaders, 1);
+assert.equal(readsFor(postTerminalReview).foregroundReaders, 1);
 const activeReloadOpenBase = planOpens.length;
 void globalThis.taskHarness.forceReview(liveTask, true);
 await until(() => planOpens.length === activeReloadOpenBase + 1);
@@ -1952,7 +2008,7 @@ assert.equal(liveTask.review, postTerminalReview,
 planWindows[activeWindowBase].resolve(
   executionWindow(postTerminalReview.summary, 256, 7, failedResult),
 );
-await until(() => postTerminalReview.foregroundWindowReaders === 0);
+await until(() => readsFor(postTerminalReview).foregroundReaders === 0);
 await until(() => planWindows.length === activeWindowBase + 3);
 planWindows[activeWindowBase + 2].resolve(
   executionWindow(postTerminalReview.summary, 256, 7, failedResult),
@@ -1960,6 +2016,38 @@ planWindows[activeWindowBase + 2].resolve(
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(postTerminalReview.window.offset, 256,
   "the acquired window remains authoritative through deferred execution reconciliation");
+// A reload rejection is classified after foreground work has fully settled.
+// It retains one current-offset reread, while retired navigation remains silent.
+for (const retired of [false, true]) {
+  const readsBefore = planWindows.length;
+  const opensBefore = planOpens.length;
+  void globalThis.taskHarness.forceReview(liveTask, true);
+  await until(() => planOpens.length === opensBefore + 1);
+  globalThis.planReviewHarness.callbacks.onWindow(postTerminalReview, 512);
+  planWindows[readsBefore].resolve(executionWindow(postTerminalReview.summary, 512, 7, failedResult));
+  await until(() => readsFor(postTerminalReview).foregroundReaders === 0);
+  if (retired) settingsButton().click();
+  const feedback = postTerminalReview.message;
+  const error = liveTask.error;
+  planOpens[opensBefore].reject(new Error("reload failed after foreground settlement"));
+  await until(() => !liveTask.reviewLoading);
+  assert.equal(liveTask.review, postTerminalReview);
+  assert.equal(postTerminalReview.message, feedback);
+  assert.equal(liveTask.error, error, "obsolete reload failure cannot claim task failure");
+  if (retired) {
+    await turns();
+    assert.equal(planWindows.length, readsBefore + 1, "retired reload failure cannot revive captured demand");
+    taskButton("Task 7").click();
+  } else {
+    await until(() => planWindows.length === readsBefore + 2);
+    assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, postTerminalReview.summary.view_revision, 512, 256]);
+    planWindows.at(-1).resolve(executionWindow(postTerminalReview.summary, 512, 7, failedResult));
+    await until(() => !liveTask.executionWindowRefreshRunning);
+    await turns();
+    assert.equal(planWindows.length, readsBefore + 2, "the fresh reread settles without polling");
+  }
+}
+
 globalThis.planReviewHarness.callbacks.onPlanAgain(postTerminalReview);
 await until(() => planAgainStarts.length === 1);
 assert.deepEqual(calls.at(-1), ["plan-again", TASK_G, null, null]);
@@ -2407,7 +2495,7 @@ for (const failure of ["conflict", "view", "highlight", "unavailable"]) {
   assert.equal(revealRecoveryReview.summary, retainedRevealSummary, failure);
   assert.equal(revealRecoveryReview.window, retainedRevealWindow, failure);
   assert.equal(revealRecoveryReview.moveScrollOffset, retainedRevealScroll, failure);
-  assert.equal(revealRecoveryReview.foregroundWindowReaders, 0, failure);
+  assert.equal(readsFor(revealRecoveryReview).foregroundReaders, 0, failure);
   assert.equal(revealRecoveryReview.refreshAvailable, true, failure);
   assert.match(revealRecoveryReview.message, /Refresh to read the current review/, failure);
   assert.doesNotMatch(revealRecoveryReview.message, /Opening/, failure);
@@ -2517,6 +2605,10 @@ const viewCloseBase = closes.length;
 walk(app).find((element) => element.ariaLabel === `Close ${pendingViewTask.label}`).click();
 await until(() => closes.length === viewCloseBase + 1);
 assert.equal(pendingViewTask.closePending, true, "presentation work does not fence Close");
+const closingFollowAnchors = planAnchors.length;
+pendingViewTask.executionPresentation = {activeItem:{item_id:"f".repeat(32), item_type:"operation"}};
+globalThis.planReviewHarness.callbacks.onNavigateCurrent(pendingViewReview, false);
+assert.equal(planAnchors.length, closingFollowAnchors, "Close custody refuses a fresh Follow read");
 planViewUpdates.at(-1).resolve(planSummary({ ...pendingViewReview.summary,
   view_revision: pendingViewReview.summary.view_revision + 1 }));
 await turns();
@@ -2792,14 +2884,14 @@ for (const [gesture, target, expectedOffset] of [
     gesture === "replace" ? placementNode(target) : null);
   await until(() => planWindows.length === windowsBefore + 1);
   assert.deepEqual(calls.at(-1), ["plan-window", placementTaskId, expected.view_revision, expectedOffset, 256], gesture);
-  assert.equal(placementReview.foregroundWindowReaders, 1, gesture);
+  assert.equal(readsFor(placementReview).foregroundReaders, 1, gesture);
   const response = placementWindow(expected, expectedOffset);
   planWindows.at(-1).resolve(response);
   await placementReview.highlightQueue;
   assert.equal(placementReview.summary, expected, gesture);
   assert.equal(placementReview.window, response, gesture);
   assert.equal(placementReview.summary.highlight_focus_visible_index, target, gesture);
-  assert.equal(placementReview.foregroundWindowReaders, 0, gesture);
+  assert.equal(readsFor(placementReview).foregroundReaders, 0, gesture);
 }
 
 // Delayed navigation keeps one admitted operation and only the latest endpoint.
@@ -2978,7 +3070,7 @@ navigationCallbacks.onWindow(placementReview, 400, () => true);
 placementReview.actionRevision += 1;
 planWindows[readBase].resolve(placementWindow(latestNavigation, 96));
 await placementReview.highlightQueue;
-await until(() => !placementReview.windowRequestRunning);
+await until(() => placementReview.viewportRead == null);
 assert.equal(planWindows.length, readBase + 1, "an old queued read never adopts a newer action's authority");
 deferHighlight = false;
 

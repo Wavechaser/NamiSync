@@ -183,7 +183,7 @@ const replacements = {
 globalThis.inventoryRenders = renders;
 globalThis.inventoryConfirmations = [];
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
-source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, readExecutionDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks, queueRowHighlight, interruptPlanHighlight, refreshInventoryOverlay };";
+source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryNavigationWindow, readInventoryDetail, readExecutionDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks, queueRowHighlight, interruptPlanHighlight, refreshInventoryOverlay };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
@@ -282,11 +282,29 @@ assert.notEqual(task.inventoryReview, review);
 review = task.inventoryReview;
 const replacementCalls = calls.filter(([name]) => name === "window").length;
 const replacementWindow = app.loadInventoryWindow(review, 48);
+globalThis.inventoryCallbacks.onWindowCancelled(staleReview);
 assert.equal(calls.filter(([name]) => name === "window").length, replacementCalls);
 priorPublicationRead.resolve(windowResponse(0, 12));
 assert.equal(await priorPublicationWindow, null);
 assert.equal((await replacementWindow).offset, 48);
 assert.equal(calls.filter(([name]) => name === "window").length, replacementCalls + 1);
+
+// Renderer retirement cancels its exact viewport job, not a same-review
+// highlight endpoint queued behind the physical read.
+delayedWindow = defer();
+const viewportRead = delayedWindow;
+const retiredViewport = app.loadInventoryWindow(review, 12);
+const navigationRevision = review.summary.view_revision;
+const endpointRead = app.readInventoryNavigationWindow(review,
+  () => task.inventoryReview === review && review.summary.view_revision === navigationRevision,
+  taskId, navigationRevision, 48, 256);
+const endpointCalls = calls.filter(([name]) => name === "window").length;
+globalThis.inventoryCallbacks.onWindowCancelled(review);
+delayedWindow = null;
+viewportRead.resolve(windowResponse(navigationRevision, 12));
+assert.equal(await retiredViewport, null);
+assert.equal((await endpointRead).offset, 48, "viewport cancellation retains the newer endpoint demand");
+assert.equal(calls.filter(([name]) => name === "window").length, endpointCalls + 1);
 
 // Dispatch rechecks UI eligibility rather than relying on revisions alone.
 for (const [block, unblock] of [
@@ -597,7 +615,7 @@ const executionReview = {summary:{task_id:executionTaskId, request_id:planReques
   selection_state:"reviewing", selection_revision:5,
   requires_destructive_confirmation:false, destructive_operation_count:0,
   view_revision:0, highlight_revision:0},
-  window:{offset:0, rows:[], execution:null}, foregroundWindowEpoch:0,
+  window:{offset:0, rows:[], execution:null},
   actionRevision:0, pending:null, message:null, follow:null};
 executionTask.review = executionReview;
 executionTask.reviewSessionId = planSessionId;
@@ -846,8 +864,7 @@ const cacheOwner = attachReleasedExecutionTask("task-" + "5".repeat(32),
   "6".repeat(32), "7".repeat(32), "8".repeat(32));
 const cacheReview = cacheOwner.review;
 const cacheRow = {node_id:"cached-node", operation_id:"9".repeat(32)};
-Object.assign(cacheReview, {actionRevision:0, detailRevision:0, foregroundWindowReaders:0,
-  foregroundWindowEpoch:0, scrollTop:512 * 24, follow:{enabled:false, sentinel:true},
+Object.assign(cacheReview, {actionRevision:0, detailRevision:0, scrollTop:512 * 24, follow:{enabled:false, sentinel:true},
   planDetail:{nodeId:cacheRow.node_id, actionRevision:0, viewRevision:0}, executionDetail:null});
 Object.assign(cacheReview.summary, {view_revision:0, highlight_revision:0,
   highlight_focus_node_id:cacheRow.node_id, selection_revision:7});

@@ -177,8 +177,13 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16)
+#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-17)
 
+- Share navigation-read admission and foreground freshness between separate Plan
+  and Inventory surfaces. Keep exact request cancellation and latest pending
+  intent across review replacement; an old viewport retry cannot overtake newer
+  navigation. Background failures retain a reread only for independently newer
+  demand, while retired reads stay silent. Plan Follow uses the same reader.
 - Disable Verify copied files with visible guidance when retained original
   execution truth confirms that no selected copy succeeded. A successful
   zero-byte or partial copy still qualifies; unknown truth retains server

@@ -34,9 +34,10 @@ def test_table_loading_restores_after_child_failure(tmp_path):
     assert json.loads((evidence / "manifest.json").read_bytes())["restored"] is True
 
 
-def test_table_loading_anchor_drift_refuses_before_any_write(tmp_path):
+@pytest.mark.parametrize("name", ("app.js", "tree.js"))
+def test_table_loading_anchor_drift_refuses_before_any_write(tmp_path, name):
     root, assets = _installed(tmp_path)
-    (assets / "tree.js").write_text("changed tree source")
+    (assets / name).write_text("changed source")
     originals = {path.name: path.read_bytes() for path in assets.iterdir()}
     with pytest.raises(ValueError, match="anchor drifted"):
         with loading.instrumented_assets(root, tmp_path / "evidence"):

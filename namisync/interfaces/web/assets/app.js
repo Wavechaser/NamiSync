@@ -131,10 +131,6 @@ let recentPairProbeRunning = false;
 let recentPairProbePending = false;
 let pageBatch = null;
 let pickerPending = false;
-let planFollowLookupRunning = false;
-let pendingPlanFollow = null;
-let activePlanFollowKey = null;
-let activePlanFollowGeneration = null;
 
 const ACTIVE_EXECUTION_CONTROL_STATES = new Set([
   "pending",
@@ -480,9 +476,78 @@ function disablePlanFollow(review) {
   renderTasks();
 }
 
+function createTableReadOwner(onIdle) {
+  let running = null;
+  let pending = null;
+  let epoch = 0;
+  let foreground = 0;
+  const busy = () => running !== null || pending !== null || foreground > 0;
+  const idle = () => { if (!busy()) onIdle(); };
+  function beginForeground() {
+    epoch += 1;
+    foreground += 1;
+    return () => { foreground -= 1; idle(); };
+  }
+  async function drain() {
+    if (running !== null) return;
+    while (pending !== null) {
+      const job = pending;
+      pending = null;
+      running = job;
+      const current = () => !job.retired && job.current();
+      try {
+        const value = current() ? await job.read(current) : null;
+        job.resolve(current() ? value : null);
+      } catch (error) {
+        if (current()) job.reject(error);
+        else job.resolve(null);
+      } finally {
+        running = null;
+      }
+    }
+    idle();
+  }
+  return Object.freeze({
+    get busy() { return busy(); },
+    get foregroundReaders() { return foreground; },
+    beginForeground,
+    request(current, read) {
+      const admission = ++epoch;
+      if (pending !== null) { pending.retired = true; pending.resolve(null); }
+      const job = {current, read, retired: false};
+      const promise = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
+      pending = job;
+      void drain();
+      return Object.freeze({promise, get latest() { return !job.retired && admission === epoch; }, cancel() {
+        if (job.retired) return;
+        epoch += 1;
+        job.retired = true;
+        if (pending === job) { pending = null; job.resolve(null); idle(); }
+      }});
+    },
+    captureRefresh(demandRevision) { return {epoch, busy: busy(), demandRevision}; },
+    refreshDisposition(ticket, owned, compatible, demandRevision) {
+      if (!owned) return "retired";
+      return ticket.busy || busy() || ticket.epoch !== epoch
+        || ticket.demandRevision !== demandRevision || !compatible ? "reread" : "current";
+    },
+  });
+}
+
+function tableReadOwner(task, inventory = false) {
+  const key = inventory ? "inventoryReads" : "planReads";
+  task[key] ??= createTableReadOwner(() => {
+    if (tasks.get(task.taskId) !== task) return;
+    if (inventory) retryInventoryOverlay(task);
+    else if (task.executionWindowDirty) void refreshExecutionWindow(task);
+  });
+  return task[key];
+}
+
 function queuePlanFollow(review, enableFollow = false, explicit = false) {
   const task = currentReviewTask(review);
-  if (task === null || task.executionSessionId === null || review.follow == null) return;
+  if (task === null || task.closePending || task.reviewLoading || review.pending !== null
+      || task.executionSessionId === null || review.follow == null) return;
   review.follow.eligible = planFollowEligible(review);
   const operationId = task.executionPresentation?.activeItem?.item_id ?? null;
   review.follow.hasTarget = operationId !== null;
@@ -493,94 +558,67 @@ function queuePlanFollow(review, enableFollow = false, explicit = false) {
     return;
   }
   if (enableFollow) review.follow.enabled = review.follow.eligible;
-  const anchorKey = `${task.executionSessionId}:${review.summary.view_revision}:${operationId}`;
+  const sessionId = task.executionSessionId;
+  const viewRevision = review.summary.view_revision;
+  const actionRevision = review.actionRevision;
+  const followGeneration = review.follow.generation;
+  const navigation = navigationRevision;
+  const anchorKey = `${sessionId}:${viewRevision}:${operationId}`;
   if (review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
       && review.follow.anchorIndex >= review.window.offset
       && review.follow.anchorIndex < review.window.offset + review.window.rows.length) {
-    if (explicit) {
-      review.follow.scrollOffset = review.follow.anchorIndex;
-      renderTasks();
-    }
+    if (explicit) { review.follow.scrollOffset = review.follow.anchorIndex; renderTasks(); }
     return;
   }
-  if (planFollowLookupRunning && activePlanFollowKey === anchorKey
-      && activePlanFollowGeneration === review.follow.generation) return;
-  const request = Object.freeze({
-    task, review, sessionId: task.executionSessionId, operationId,
-    viewRevision: review.summary.view_revision,
-    actionRevision: review.actionRevision,
-    anchorKey,
-    cachedIndex: review.follow.anchorKey === anchorKey ? review.follow.anchorIndex : null,
-    followGeneration: review.follow.generation,
-    navigation: navigationRevision,
-    automatic: enableFollow || review.follow.enabled,
+  if (review.followRead?.key === anchorKey && review.followRead.generation === followGeneration) return;
+  review.followRead?.job.cancel();
+  const owner = tableReadOwner(task);
+  const release = owner.beginForeground();
+  const current = () => currentReviewTask(review) === task
+    && !settingsVisible && !task.closePending && !task.reviewLoading && review.pending === null
+    && navigationRevision === navigation
+    && task.executionSessionId === sessionId && review.summary.view_revision === viewRevision
+    && review.actionRevision === actionRevision && review.follow.generation === followGeneration
+    && task.executionPresentation?.activeItem?.item_id === operationId;
+  const job = owner.request(current, async (stillCurrent) => {
+    const anchor = review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
+      ? {disposition: "current", index: review.follow.anchorIndex}
+      : await getPlanOperationAnchor(task.taskId, sessionId, viewRevision, operationId);
+    if (!stillCurrent()) return null;
+    if (anchor.disposition !== "current" || anchor.index === null) return {anchor, window: null};
+    const window = await getPlanWindow(task.taskId, viewRevision, anchor.index, 256);
+    return {anchor, window};
   });
-  pendingPlanFollow = request;
-  void drainPlanFollow();
-}
-
-async function drainPlanFollow() {
-  if (planFollowLookupRunning) return;
-  planFollowLookupRunning = true;
-  try {
-    while (pendingPlanFollow !== null) {
-      const request = pendingPlanFollow;
-      pendingPlanFollow = null;
-      const {
-        task, review, sessionId, operationId, viewRevision, actionRevision, anchorKey,
-        cachedIndex, followGeneration, navigation,
-      } = request;
-      activePlanFollowKey = anchorKey;
-      activePlanFollowGeneration = followGeneration;
-      const stillCurrent = () => currentReviewTask(review) === task
-        && !settingsVisible && navigationRevision === navigation
-        && task.executionSessionId === sessionId && review.summary.view_revision === viewRevision
-        && review.actionRevision === actionRevision
-        && review.follow.generation === followGeneration
-        && task.executionPresentation?.activeItem?.item_id === operationId;
-      try {
-        const anchor = Number.isSafeInteger(cachedIndex)
-          ? { disposition: "current", index: cachedIndex }
-          : await getPlanOperationAnchor(task.taskId, sessionId, viewRevision, operationId);
-        if (!stillCurrent()) continue;
-        if (anchor.disposition !== "current" || anchor.index === null) {
-          review.follow.message = "The current operation is excluded from this view.";
-          review.message = review.follow.message;
-          renderTasks();
-          continue;
-        }
-        const window = await getPlanWindow(task.taskId, viewRevision, anchor.index, 256);
-        if (!stillCurrent() || window.disposition !== "current"
-            || window.view_revision !== viewRevision
-            || window.highlight_revision !== review.summary.highlight_revision) continue;
-        adoptExecutionWindow(review, window);
-        review.follow.anchorKey = anchorKey;
-        review.follow.anchorIndex = anchor.index;
-        review.follow.scrollOffset = anchor.index;
-        review.follow.message = null;
-        if ([
-          "No operation is active.",
-          "The current operation is excluded from this view.",
-          "Current operation navigation is unavailable. Try again.",
-        ].includes(review.message)) review.message = null;
-        renderTasks();
-      } catch (_error) {
-        if (stillCurrent()) {
-          review.follow.message = "Current operation navigation is unavailable. Try again.";
-          review.message = review.follow.message;
-          renderTasks();
-        }
-      } finally {
-        activePlanFollowKey = null;
-        activePlanFollowGeneration = null;
-      }
+  const request = {key: anchorKey, generation: followGeneration, job};
+  review.followRead = request;
+  void job.promise.then((result) => {
+    if (result === null || !current()) return;
+    const {anchor, window} = result;
+    if (window === null) {
+      review.follow.message = "The current operation is excluded from this view.";
+      review.message = review.follow.message;
+    } else {
+      if (window.disposition !== "current" || window.view_revision !== viewRevision
+          || window.highlight_revision !== review.summary.highlight_revision) return;
+      adoptExecutionWindow(review, window);
+      review.follow.anchorKey = anchorKey;
+      review.follow.anchorIndex = anchor.index;
+      review.follow.scrollOffset = anchor.index;
+      review.follow.message = null;
+      if (["No operation is active.", "The current operation is excluded from this view.",
+        "Current operation navigation is unavailable. Try again."].includes(review.message)) review.message = null;
     }
-  } finally {
-    planFollowLookupRunning = false;
-    activePlanFollowKey = null;
-    activePlanFollowGeneration = null;
-    if (pendingPlanFollow !== null) void drainPlanFollow();
-  }
+    renderTasks();
+  }).catch(() => {
+    if (current()) {
+      review.follow.message = "Current operation navigation is unavailable. Try again.";
+      review.message = review.follow.message;
+      renderTasks();
+    }
+  }).finally(() => {
+    if (review.followRead === request) review.followRead = null;
+    release();
+  });
 }
 
 function selectTask(taskId) {
@@ -660,8 +698,6 @@ function adoptTask(summary) {
       inventoryReview: null,
       inventoryLoading: false,
       inventoryRevision: 0,
-      inventoryWindowRunning: false,
-      inventoryWindowIntent: null,
       inventoryOverlayRevision: 0,
       inventoryOverlayRunning: false,
       inventoryOverlayDirty: false,
@@ -1475,6 +1511,7 @@ async function changeInventorySelection(review, nodeId, selected, highlightedSco
   review.pending = "selection";
   review.message = "Updating selected files…";
   renderTasks();
+  const releaseForeground = tableReadOwner(task, true).beginForeground();
   try {
     const summary = highlightedScope
       ? await setInventoryHighlightedSelection(task.taskId, publication, revision, clickedHighlightRevision, selected)
@@ -1504,6 +1541,7 @@ async function changeInventorySelection(review, nodeId, selected, highlightedSco
       review.pending = null;
       renderTasks();
     }
+    releaseForeground();
   }
 }
 
@@ -1765,8 +1803,8 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
       || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)) return;
   task.inventoryOverlayRevision += 1;
   task.inventoryOverlayDirty = true;
-  if (task.inventoryOverlayRunning || task.inventoryWindowRunning
-      || (task.inventoryReview?.foregroundWindowReaders ?? 0) > 0) return;
+  const reads = tableReadOwner(task, true);
+  if (task.inventoryOverlayRunning || reads.busy) return;
   task.inventoryOverlayRunning = true;
   let attemptedRevision = task.inventoryOverlayRevision;
   try {
@@ -1776,7 +1814,7 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
       const review = task.inventoryReview;
       if (review === null || selectedTaskId !== task.taskId || settingsVisible || task.closePending
           || (task.taskKind === "sync-plan" && task.workPane !== "verify")) break;
-      if (review.foregroundWindowReaders > 0 || task.inventoryWindowRunning) break;
+      if (reads.busy) break;
       task.inventoryOverlayDirty = false;
       const action = review.actionRevision;
       const navigation = navigationRevision;
@@ -1784,7 +1822,7 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
       const revision = review.summary.view_revision;
       const highlightRevision = review.summary.highlight_revision;
       const offset = review.window.offset;
-      const foreground = review.foregroundWindowEpoch;
+      const ticket = reads.captureRefresh(request);
       const highlightGeneration = review.highlightGeneration;
       const windowRequest = review.windowRequestRevision;
       const detail = review.detail?.state === "current" ? review.detail : null;
@@ -1797,16 +1835,17 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
         ? windowRead.value : null;
       const detailResponse = detailRead.status === "fulfilled" ? detailRead.value : null;
       const stillCurrent = tasks.get(task.taskId) === task && task.sessionId === sessionId
-        && task.inventoryOverlayRevision === request && task.inventoryReview === review
-        && review.actionRevision === action && review.summary.request_id === publication
-        && review.summary.view_revision === revision && selectedTaskId === task.taskId
+        && task.inventoryReview === review
+        && review.summary.request_id === publication && selectedTaskId === task.taskId
         && navigationRevision === navigation && !settingsVisible && !task.closePending
         && (task.taskKind === "inventory" || task.workPane === "verify");
-      const foregroundCurrent = review.foregroundWindowEpoch === foreground
+      const disposition = reads.refreshDisposition(ticket, stillCurrent,
+        review.actionRevision === action && review.summary.view_revision === revision
         && review.highlightGeneration === highlightGeneration && review.windowRequestRevision === windowRequest
-        && review.window.offset === offset && (review.foregroundWindowReaders ?? 0) === 0;
+        && review.window.offset === offset && review.summary.highlight_revision === highlightRevision,
+        task.inventoryOverlayRevision);
       const highlightSummary = window === null ? null : inventoryWindowSummary(review, window, revision);
-      if (stillCurrent && foregroundCurrent && window?.disposition === "current" && window.view_revision === revision
+      if (disposition === "current" && window?.disposition === "current" && window.view_revision === revision
           && highlightSummary !== null
           && review.summary.highlight_revision === highlightRevision) {
         review.summary = highlightSummary;
@@ -1816,13 +1855,13 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
           detail.response = detailResponse;
         }
         renderTasks();
-      } else if (stillCurrent && (!foregroundCurrent || review.summary.highlight_revision !== highlightRevision)) {
+      } else if (disposition === "reread") {
         // Independent foreground invalidation retains demand even when a read failed.
         task.inventoryOverlayDirty = true;
-        if ((review.foregroundWindowReaders ?? 0) > 0 || task.inventoryWindowRunning) break;
+        if (reads.busy) break;
         if (task.inventoryOverlayRevision === request) task.inventoryOverlayRevision += 1;
       }
-      if (task.inventoryOverlayRevision === request) break;
+      if (disposition === "retired" || task.inventoryOverlayRevision === request) break;
     }
   } catch (_error) {
     // Live progress remains available from the task drain; the next update or release rereads the overlay.
@@ -1876,7 +1915,6 @@ async function loadInventoryReview(task, force = false) {
       summary, window, pending: null, message: null, queuedSearchQuery: null,
       actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop: 0,
       highlightQueue: Promise.resolve(),
-      foregroundWindowEpoch: 0, foregroundWindowReaders: 0,
     };
     task.inventoryViewUnconfirmed = false;
   } catch (error) {
@@ -1926,6 +1964,7 @@ async function changeInventoryView(review, patch) {
   const stillCurrent = () => currentInventoryTask(review) === task && review.actionRevision === action
     && task.sessionId === sessionId && review.summary.request_id === publication
     && navigationRevision === navigation;
+  const releaseForeground = tableReadOwner(task, true).beginForeground();
   try {
     const summary = await updateInventoryView(task.taskId, review.summary.view_revision, gesture, () => {
       if (stillCurrent()) {
@@ -1955,17 +1994,14 @@ async function changeInventoryView(review, patch) {
       if (currentInventoryTask(review) === task && queued !== null
           && queued !== review.summary.search_query) void changeInventoryView(review, { searchQuery: queued });
     }
+    releaseForeground();
   }
 }
 
 function cancelInventoryWindow(review) {
   review.windowRequestRevision += 1;
-  const task = tasks.get(review.summary.task_id);
-  if (task?.inventoryWindowIntent?.review === review) {
-    const intent = task.inventoryWindowIntent;
-    task.inventoryWindowIntent = null;
-    intent.resolve(null);
-  }
+  review.viewportRead?.cancel();
+  review.viewportRead = null;
 }
 
 function inventoryWindowReady(task, review) {
@@ -1992,54 +2028,34 @@ async function loadInventoryWindow(review, offset) {
   const publication = review.summary.request_id;
   const revision = review.summary.view_revision;
   const navigation = navigationRevision;
-  const stillCurrent = () => inventoryWindowReady(task, review)
+  const current = () => inventoryWindowReady(task, review)
     && review.windowRequestRevision === request && review.actionRevision === action
     && task.sessionId === sessionId && review.summary.request_id === publication
     && review.summary.view_revision === revision && navigationRevision === navigation;
-  return new Promise((resolve) => {
-    task.inventoryWindowIntent = { review, offset, revision, stillCurrent, resolve };
-    if (!task.inventoryWindowRunning) void drainInventoryWindows(task);
-  });
-}
-
-async function drainInventoryWindows(task) {
-  task.inventoryWindowRunning = true;
+  const releaseForeground = tableReadOwner(task, true).beginForeground();
+  const job = tableReadOwner(task, true).request(current,
+    () => getInventoryWindow(task.taskId, revision, offset, 256));
+  review.viewportRead = job;
   try {
-    while (task.inventoryWindowIntent !== null) {
-      const intent = task.inventoryWindowIntent;
-      task.inventoryWindowIntent = null;
-      let window = null;
-      beginForegroundWindowRead(intent.review);
-      try {
-        if (intent.stillCurrent()) {
-          const response = await getInventoryWindow(task.taskId, intent.revision, intent.offset, 256);
-          if (intent.stillCurrent()) {
-            const summary = inventoryWindowSummary(intent.review, response, intent.revision);
-            if (response.disposition === "current" && summary !== null) {
-              intent.review.summary = summary;
-              window = response;
-            }
-            else {
-              intent.review.message = "Inventory changed. Reload the inventory view to continue.";
-              renderTasks();
-            }
-          }
-        }
-      } catch (_error) {
-        if (intent.stillCurrent()) {
-          intent.review.message = "Inventory rows unavailable. Reload the inventory view to retry.";
-          renderTasks();
-        }
-      }
-      finally {
-        intent.resolve(window);
-        endForegroundWindowRead(intent.review, true);
-      }
+    const window = await job.promise;
+    if (window === null || !current()) return null;
+    const summary = inventoryWindowSummary(review, window, revision);
+    if (window.disposition === "current" && summary !== null) {
+      review.summary = summary;
+      return window;
+    }
+    review.message = "Inventory changed. Reload the inventory view to continue.";
+    renderTasks();
+  } catch (_error) {
+    if (current()) {
+      review.message = "Inventory rows unavailable. Reload the inventory view to retry.";
+      renderTasks();
     }
   } finally {
-    task.inventoryWindowRunning = false;
-    retryInventoryOverlay(task);
+    if (review.viewportRead === job) review.viewportRead = null;
+    releaseForeground();
   }
+  return null;
 }
 
 async function readInventoryDetail(review, nodeId) {
@@ -2104,31 +2120,10 @@ function adoptExecutionWindow(review, window) {
   }
 }
 
-function beginForegroundWindowRead(review) {
-  review.foregroundWindowEpoch = (review.foregroundWindowEpoch ?? 0) + 1;
-  review.foregroundWindowReaders = (review.foregroundWindowReaders ?? 0) + 1;
-}
-
 function retryInventoryOverlay(task) {
   if (tasks.get(task.taskId) === task && task.inventoryOverlayDirty && !task.inventoryOverlayRunning
-      && !task.inventoryWindowRunning && task.inventoryReview !== null
-      && (task.inventoryReview.foregroundWindowReaders ?? 0) === 0
+      && !tableReadOwner(task, true).busy && task.inventoryReview !== null
       && currentInventoryTask(task.inventoryReview) === task) void refreshInventoryOverlay(task);
-}
-
-function endForegroundWindowRead(review, inventory = false) {
-  review.foregroundWindowReaders -= 1;
-  if (inventory) {
-    const task = tasks.get(review.summary.task_id);
-    if (task?.inventoryReview === review) retryInventoryOverlay(task);
-    return;
-  }
-  const task = retainedReviewTask(review);
-  if (
-    task !== null && task.executionWindowDirty && review.foregroundWindowReaders === 0
-    && !task.reviewLoading
-    && selectedTaskId === task.taskId && !settingsVisible
-  ) void refreshExecutionWindow(task);
 }
 
 function markExecutionWindowDirty(task) {
@@ -2145,30 +2140,32 @@ async function refreshExecutionWindow(task) {
     tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId || settingsVisible
     || task.workPane === "verify"
     || task.review === null || task.reviewLoading || task.executionWindowRefreshRunning
-    || task.review.foregroundWindowReaders > 0
+    || tableReadOwner(task).busy
   ) return;
   task.executionWindowRefreshRunning = true;
   try {
     while (task.executionWindowDirty) {
       task.executionWindowDirty = false;
       const review = task.review;
-      const foregroundWindowEpoch = review.foregroundWindowEpoch;
+      const reads = tableReadOwner(task);
+      const ticket = reads.captureRefresh(task.executionWindowDirtyRevision);
       const reviewRevision = task.reviewRevision;
       const paneRevision = task.paneRevision;
       const sessionId = task.executionSessionId;
       const requestId = review.summary.request_id;
+      const planRequestId = task.planRequestId;
       const action = review.actionRevision;
       const viewRevision = review.summary.view_revision;
       const offset = review.window.offset;
-      const refreshStillCurrent = () => (
-        tasks.get(task.taskId) === task && selectedTaskId === task.taskId && !settingsVisible
+      const refreshDisposition = () => reads.refreshDisposition(ticket,
+        tasks.get(task.taskId) === task && task.review === review
+        && task.executionSessionId === sessionId && task.planRequestId === planRequestId,
+        selectedTaskId === task.taskId && !settingsVisible
         && task.workPane !== "verify" && task.paneRevision === paneRevision
-        && task.review === review && !task.reviewLoading && task.reviewRevision === reviewRevision
-        && task.executionSessionId === sessionId && review.foregroundWindowReaders === 0
-        && review.foregroundWindowEpoch === foregroundWindowEpoch
+        && !task.reviewLoading && task.reviewRevision === reviewRevision
         && review.summary.request_id === requestId && review.actionRevision === action
-        && review.summary.view_revision === viewRevision && review.window.offset === offset
-      );
+        && review.summary.view_revision === viewRevision && review.window.offset === offset,
+        task.executionWindowDirtyRevision);
       try {
         const window = await getPlanWindow(task.taskId, viewRevision, offset, 256);
         if (tasks.get(task.taskId) === task && task.review === review
@@ -2176,8 +2173,9 @@ async function refreshExecutionWindow(task) {
             && window.disposition === "current") {
           observeOriginalExecution(task, requestId, window.execution);
         }
-        if (!refreshStillCurrent()) {
-          task.executionWindowDirty = true;
+        const disposition = refreshDisposition();
+        if (disposition !== "current") {
+          if (disposition === "reread") task.executionWindowDirty = true;
           return;
         }
         if (
@@ -2191,8 +2189,9 @@ async function refreshExecutionWindow(task) {
         adoptExecutionWindow(review, window);
         renderTasks();
       } catch (_error) {
-        if (!refreshStillCurrent()) {
-          if (tasks.get(task.taskId) === task) task.executionWindowDirty = true;
+        const disposition = refreshDisposition();
+        if (disposition !== "current") {
+          if (disposition === "reread") task.executionWindowDirty = true;
           return;
         }
         if (
@@ -2336,8 +2335,8 @@ async function loadPlanReview(task, force = false) {
   const planRequestId = task.planRequestId;
   const paneRevision = task.paneRevision;
   const reviewOwner = task.review;
-  const foregroundWindowEpoch = reviewOwner?.foregroundWindowEpoch ?? null;
-  const foregroundWindowReaders = reviewOwner?.foregroundWindowReaders ?? 0;
+  const reads = tableReadOwner(task);
+  const ticket = reads.captureRefresh(dirtyRevision);
   task.reviewLoading = true;
   renderTasks();
   try {
@@ -2357,11 +2356,8 @@ async function loadPlanReview(task, force = false) {
       || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId
       || (selectedTaskId === task.taskId && (task.workPane === "verify" || task.paneRevision !== paneRevision))
     ) return;
-    const foregroundInvalidated = reviewOwner !== null && (
-      task.review !== reviewOwner
-      || foregroundWindowReaders > 0
-      || reviewOwner.foregroundWindowEpoch !== foregroundWindowEpoch
-    );
+    const foregroundInvalidated = reviewOwner !== null && reads.refreshDisposition(
+      ticket, true, task.review === reviewOwner, task.executionWindowDirtyRevision) === "reread";
     if (
       window.disposition !== "current" || window.view_revision !== summary.view_revision
       || window.highlight_revision !== summary.highlight_revision
@@ -2441,10 +2437,6 @@ async function loadPlanReview(task, force = false) {
         : controlAttempt?.message ?? message,
       actionRevision: 0,
       windowRequestRevision: 0,
-      windowRequestOffset: null,
-      windowRequestRunning: false,
-      foregroundWindowReaders: 0,
-      foregroundWindowEpoch: 0,
       executionDetail: null,
       detailRevision: 0,
       planDetail: null,
@@ -2470,6 +2462,16 @@ async function loadPlanReview(task, force = false) {
         : null;
     }
   } catch (_error) {
+    const disposition = reads.refreshDisposition(ticket, tasks.get(task.taskId) === task
+        && task.reviewRevision === request && task.executionSessionId === sessionId
+        && task.planRequestId === planRequestId
+        && selectedTaskId === task.taskId && !settingsVisible && task.workPane !== "verify"
+        && task.paneRevision === paneRevision, task.review === reviewOwner,
+        task.executionWindowDirtyRevision);
+    if (disposition !== "current") {
+      if (disposition === "reread") task.executionWindowDirty = true;
+      return;
+    }
     if (
       tasks.get(task.taskId) === task && task.reviewRevision === request
       && task.executionSessionId === sessionId && task.planRequestId === planRequestId
@@ -2521,7 +2523,7 @@ async function revealPlanMoveDestination(review, nodeId) {
   review.follow.generation += 1;
   review.pending = "view";
   review.message = "Opening move destination…";
-  beginForegroundWindowRead(review);
+  const releaseForeground = tableReadOwner(task).beginForeground();
   renderTasks();
   const stillCurrent = () => currentReviewTask(review) === task && !settingsVisible
     && !task.closePending && task.sessionId === sessionId
@@ -2567,7 +2569,7 @@ async function revealPlanMoveDestination(review, nodeId) {
         void changePlanView(review, { searchQuery: queued });
       }
     }
-    endForegroundWindowRead(review);
+    releaseForeground();
   }
 }
 
@@ -2602,7 +2604,7 @@ async function changePlanView(review, patch, queued = false) {
   };
   review.pending = "view";
   review.message = "Updating view…";
-  beginForegroundWindowRead(review);
+  const releaseForeground = tableReadOwner(task).beginForeground();
   renderTasks();
   try {
     const summary = await updatePlanView(
@@ -2655,7 +2657,7 @@ async function changePlanView(review, patch, queued = false) {
         void changePlanView(review, { searchQuery: queuedSearchQuery }, true);
       }
     }
-    endForegroundWindowRead(review);
+    releaseForeground();
   }
 }
 
@@ -2700,136 +2702,92 @@ async function loadPlanWindow(review, offset, overlapsViewport, settled) {
   const task = currentReviewTask(review);
   if (task === null || settingsVisible) { settled?.("retired"); return; }
   if (offset !== null && review.pending !== null) { settled?.(); return; }
-  review.windowRequestSettled?.("retired");
-  review.windowRequestSettled = settled;
-  if (offset === null || !review.windowRequestRunning
-      || review.windowRequestNavigation !== navigationRevision) review.windowRequestRevision += 1;
-  review.windowRequestNavigation = navigationRevision;
-  review.windowRequestOffset = offset;
-  review.windowRequestOverlaps = overlapsViewport;
+  if (offset !== null && review.viewportRead?.update?.(offset, overlapsViewport, settled)) return;
+  review.viewportRead?.cancel();
+  review.viewportRead = null;
+  const request = ++review.windowRequestRevision;
   if (offset === null) {
-    review.foregroundWindowEpoch += 1;
+    const release = tableReadOwner(task).beginForeground();
+    release();
     return;
   }
-  if (review.windowRequestRunning) {
-    review.foregroundWindowEpoch += 1;
-    return;
-  }
-
-  review.windowRequestRunning = true;
-  let settlement = undefined;
-  beginForegroundWindowRead(review);
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const navigation = navigationRevision;
+  const action = review.actionRevision;
+  const viewRevision = review.summary.view_revision;
+  const current = () => currentReviewTask(review) === task && !settingsVisible
+    && review.windowRequestRevision === request && task.sessionId === sessionId
+    && review.summary.request_id === publication && navigationRevision === navigation
+    && review.actionRevision === action && review.summary.view_revision === viewRevision;
+  const releaseForeground = tableReadOwner(task).beginForeground();
+  const job = tableReadOwner(task).request(current,
+    () => getPlanWindow(task.taskId, viewRevision, offset, 256));
+  // A moving viewport may still use this read; only its latest overlap matters.
+  const intent = {offset, overlapsViewport, settled, cancel() {
+    job.cancel();
+    intent.settled?.("retired");
+    intent.settled = null;
+  }, update(nextOffset, overlaps, complete) {
+    if (!current() || !job.latest) return false;
+    intent.settled?.("retired");
+    intent.offset = nextOffset;
+    intent.overlapsViewport = overlaps;
+    intent.settled = complete;
+    return true;
+  }};
+  review.viewportRead = intent;
+  let settlement;
+  let retry = false;
   try {
-    while (review.windowRequestOffset !== null) {
-      const sessionId = task.sessionId;
-      const publication = review.summary.request_id;
-      const navigation = review.windowRequestNavigation;
-      const requestedOffset = review.windowRequestOffset;
-      const request = review.windowRequestRevision;
-      const action = review.actionRevision;
-      const viewRevision = review.summary.view_revision;
-      try {
-        const window = await readPlanNavigationWindow(review, () =>
-          review.windowRequestRevision === request && review.actionRevision === action
-          && currentReviewTask(review) === task && navigationRevision === navigation,
-          task.taskId,
-          viewRevision,
-          requestedOffset,
-          256,
-        );
-        if (window === null) {
-          if (review.windowRequestRevision !== request) continue;
-          settlement = "retired";
-          review.windowRequestOffset = null;
-          return;
-        }
-        if (review.windowRequestRevision !== request) continue;
-        if (currentReviewTask(review) !== task || task.sessionId !== sessionId
-            || review.summary.request_id !== publication || navigationRevision !== navigation) {
-          settlement = "retired";
-          review.windowRequestOffset = null;
-          return;
-        }
-        if (
-          review.actionRevision !== action
-          || review.summary.view_revision !== viewRevision
-        ) {
-          settlement = "retired";
-          review.windowRequestOffset = null;
-          return;
-        }
-        const receipt = review.highlightReceipt;
-        const summary = window.highlight_revision === review.summary.highlight_revision ? review.summary
-          : receipt?.request_id === publication && receipt.view_revision === viewRevision
-            && receipt.highlight_revision === window.highlight_revision ? receipt : null;
-        if (
-          window.disposition !== "current"
-          || window.view_revision !== viewRevision
-          || summary === null
-        ) {
-          review.windowRequestOffset = null;
-          return;
-        }
-        if (!review.windowRequestOverlaps(window)) {
-          if (review.windowRequestOffset === requestedOffset) review.windowRequestOffset = null;
-          continue;
-        }
-        review.windowRequestOffset = null;
-        review.summary = summary;
-        adoptExecutionWindow(review, window);
-        review.message = "";
-        renderTasks();
-      } catch (_error) {
-        if (review.windowRequestRevision !== request) continue;
-        if (currentReviewTask(review) !== task || task.sessionId !== sessionId
-            || review.summary.request_id !== publication || navigationRevision !== navigation
-            || review.actionRevision !== action || review.summary.view_revision !== viewRevision) {
-          settlement = "retired";
-          review.windowRequestOffset = null;
-          return;
-        }
-        if (
-          review.windowRequestRevision === request
-          && review.windowRequestOffset === requestedOffset
-        ) {
-          review.windowRequestOffset = null;
-          review.message = "More rows unavailable. Scroll to retry.";
-          renderTasks();
-        }
-      }
-    }
+    const window = await job.promise;
+    if (window === null || !current()) { settlement = "retired"; return; }
+    const receipt = review.highlightReceipt;
+    const summary = window.highlight_revision === review.summary.highlight_revision ? review.summary
+      : receipt?.request_id === publication && receipt.view_revision === viewRevision
+        && receipt.highlight_revision === window.highlight_revision ? receipt : null;
+    if (window.disposition !== "current" || window.view_revision !== viewRevision || summary === null) return;
+    if (!intent.overlapsViewport(window)) { retry = intent.offset !== offset; return; }
+    review.summary = summary;
+    adoptExecutionWindow(review, window);
+    review.message = "";
+    renderTasks();
+  } catch (_error) {
+    if (!current()) settlement = "retired";
+    else if (intent.offset !== offset) retry = true;
+    else { review.message = "More rows unavailable. Scroll to retry."; renderTasks(); }
   } finally {
-    review.windowRequestRunning = false;
-    const complete = review.windowRequestSettled;
-    review.windowRequestSettled = null;
-    complete?.(settlement === "retired" && !settingsVisible && currentReviewTask(review) === task
+    if (review.viewportRead === intent) review.viewportRead = null;
+    if (retry && current() && job.latest) void loadPlanWindow(review, intent.offset, intent.overlapsViewport, intent.settled);
+    else intent.settled?.(settlement === "retired" && !settingsVisible && currentReviewTask(review) === task
       ? "changed" : settlement);
-    endForegroundWindowRead(review);
+    releaseForeground();
   }
 }
 
 async function readPlanNavigationWindow(review, current, ...args) {
-  while (review.navigationRead != null) {
-    await review.navigationRead.catch(() => {});
-    if (!current()) return null;
-  }
-  if (!current()) return null;
-  const read = getPlanWindow(...args);
-  review.navigationRead = read;
-  try { return await read; }
-  finally { if (review.navigationRead === read) review.navigationRead = null; }
+  const task = retainedReviewTask(review);
+  if (task === null || !current()) return null;
+  return tableReadOwner(task).request(current, () => getPlanWindow(...args)).promise;
 }
 
 async function readInventoryNavigationWindow(review, current, taskId, revision, offset, limit) {
-  // Inventory's task-owned pump also serializes reads from retired pane instances.
-  if (!current()) return null;
-  const window = await loadInventoryWindow(review, offset);
-  return current() ? window : null;
+  const task = tasks.get(taskId);
+  if (task?.inventoryReview !== review || !current()) return null;
+  const window = await tableReadOwner(task, true).request(current,
+    () => getInventoryWindow(taskId, revision, offset, limit)).promise;
+  if (window === null || !current()) return null;
+  const summary = inventoryWindowSummary(review, window, revision);
+  if (window.disposition !== "current" || summary === null) return null;
+  review.summary = summary;
+  return window;
 }
 
 function interruptPlanHighlight(review) {
   review.highlightGeneration = (review.highlightGeneration ?? 0) + 1;
   review.highlightNavigation = null;
+  review.followRead?.job.cancel();
+  review.followRead = null;
   review.keyboardRevealWindow = null;
   if (review.highlightPump != null) review.highlightPump.next = null;
 }
@@ -2837,10 +2795,8 @@ function interruptPlanHighlight(review) {
 function interruptPlanNavigation(review) {
   interruptPlanHighlight(review);
   review.windowRequestRevision += 1;
-  review.windowRequestOffset = null;
-  const settled = review.windowRequestSettled;
-  review.windowRequestSettled = null;
-  settled?.("retired");
+  review.viewportRead?.cancel();
+  review.viewportRead = null;
 }
 
 function queuePlanHighlight(review, gesture, nodeId) {
@@ -2892,7 +2848,7 @@ function queueRowHighlight(review, gesture, nodeId, inventory = false) {
   if (moving) review.highlightNavigation = intent;
   const run = async () => {
     if (!(moving ? current() : owned()) || review.pending !== null || (!inventory && task.executionAttempt !== null)) return;
-    beginForegroundWindowRead(review);
+    const releaseForeground = tableReadOwner(task, inventory).beginForeground();
     let summary = captured;
     let first = true;
     try {
@@ -2971,7 +2927,7 @@ function queueRowHighlight(review, gesture, nodeId, inventory = false) {
       }
     } finally {
       if (review.highlightNavigation === intent) review.highlightNavigation = null;
-      endForegroundWindowRead(review, inventory);
+      releaseForeground();
     }
   };
   if (moving || gesture === "replace") {
@@ -3020,7 +2976,7 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
   const anchorNodeId = review.window.rows[0]?.node_id ?? null;
   review.pending = "selection";
   review.message = "Updating selection…";
-  beginForegroundWindowRead(review);
+  const releaseForeground = tableReadOwner(task).beginForeground();
   renderTasks();
   const onDelayed = (recovery) => {
     if (retainedReviewTask(review) === task && review.actionRevision === action) {
@@ -3085,7 +3041,7 @@ async function changePlanSelection(review, row, selected, highlightedScope = fal
       review.pending = null;
       renderTasks();
     }
-    endForegroundWindowRead(review);
+    releaseForeground();
   }
 }
 

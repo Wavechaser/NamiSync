@@ -628,9 +628,6 @@ appSource = appSource.replace("onWindow: loadInventoryWindow,", `onWindow: (revi
   globalThis.inventoryViewportPromises.push(promise);
   return promise;
 },`);
-appSource = appSource.replace("const window = await loadInventoryWindow(review, offset);", `const promise = loadInventoryWindow(review, offset);
-  globalThis.inventoryViewportPromises.push(promise);
-  const window = await promise;`);
 const bridgeNames = appSource.match(/import \{([\s\S]*?)\} from "\.\/bridge\.js";/)[1]
   .split(",").map((value) => value.trim()).filter(Boolean);
 const bridgeFunctions = {

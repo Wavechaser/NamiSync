@@ -99,17 +99,44 @@ context-escape timeout remains inconclusive; retain its fixture. Package and
 driver provenance is in `rv2b-native-accounting-01.json`; `rv2b-integration.json`
 accounts all 17 saved paths. Recovery `0556322` remains intact and is not ancestry.
 
-Shared app read ownership and Inventory Follow/Go remain dependent outcomes in
+Shared app read ownership and Inventory Follow/Go were elaborated in
 `rv2-rv3-design-01.md`, refreshed by `rv2-rv3-refresh-02.md` and read-only
 `rv2c-design-01.md`. Revalidate against integrated predecessors before release.
 The separate authorized RV1 follow-up disables copied Verify only when an admitted
 original summary explicitly confirms no successful copied subjects; unknown facts
 retain server admission. It adds no readiness read/pump or scope materialization.
+It is integrated as `fd11a5bb`.
 `rv1-empty-candidate01.md` and `rv1-empty-review-01.md` retain its finite six-product/
 ten-test population and review. Its 415 owning tests, 2,997 workflow/interface
 tests, 12 imports and three installed execution/Inventory cases pass; native01
 foreground refusals remain failed receipts. The review's wording suggestion and
 older Node PATH observation remain leads, not additional product scope.
+RV2 Stage C shares app read ownership beneath both surfaces: one running/latest
+navigation worker, exact job retirement and common freshness/reread decision.
+Thin domain adapters preserve silent Plan teardown, independent mutation custody,
+compatible summary adoption and initial/action-read overlap. Its six-file freeze
+and retirement mapping are in `rv2c-candidate-14.json` / `.md`. Four real-app seams,
+103 owning/instrumentation tests, 2,462 interfaces/tools tests (three privilege
+skips), 12 imports and five installed execution/Inventory/task-shell cases pass.
+Native01's foreground refusals remain failed receipts; native02 passed without
+driver changes. `rv2c-native-accounting-01.json` records both package identities.
+Fresh review and integration are recorded in `rv2c-review-01.md` and
+`rv2c-integration.json`; dependent implementation waits for that commit.
+
+RV3 is next, with final-C seam refresh in `rv3-design-01.md`. Its finite product
+population is visible_sequence/plan_review/inventory_review, drain/commands and
+existing app/bridge/tree/Plan/Inventory assets plus shared CSS. Reuse C's read
+owner and B's controller; share Follow decisions while retaining domain target
+identity and separate panels. Add a bounded read-only Inventory anchor admitted
+under the current ordinary session and scope; no ledger read or scope mutation.
+Passive reveal may clear an unrepresentable active row but never retarget focus,
+highlight, checkboxes, detail or Refresh selected. Automatic Follow requires the
+canonical unfiltered view; manual override persists, and Go neither changes the
+view nor enables Follow. Existing server/command/bridge and browser probes,
+complete command catalogs, performance hooks and installed Inventory's real-item
+journey are the declared consumer migration. Run existing composition first,
+then owning/interfaces/tools/import and affected installed gates, with fresh
+review before one atomic commit. No new asset, framework or verification policy.
 `rv5-census-01.md` identifies the independent command catalog, shared specimen
 producers, gallery-only row adapter and equivalent-witness journey reductions;
 execution journey changes belong to RV1 first. These are finite designs, not

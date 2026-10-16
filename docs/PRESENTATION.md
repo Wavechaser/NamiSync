@@ -276,7 +276,15 @@ a different browser-adjusted offset may update travel but cannot disable Follow
 without a manual-input signal.
 Keyboard and programmatic reveals rebase travel direction. Hidden viewports
 retire scroll intent; resize does not invent a travel direction.
-An uncovered viewport coalesces to its latest intent with at most one window read in flight.
+Both surfaces use one app-owned navigation reader per retained task and surface,
+with one running job and only the latest pending job across review replacement.
+Each job owns its settlement; renderer cancellation retires the exact viewport
+job, not another highlight or Follow read belonging to the same review. An old
+viewport's internal retry cannot overtake a newer navigation request. Geometry and
+request generations remain with the shared table controller. Mutation custody
+and initial/view-action reads retain their independent ordering.
+An uncovered viewport coalesces to its latest intent with at most one navigation
+read in flight.
 Same-direction scroll positions retain useful early reads: a response with current task,
 session, publication, action/view and highlight ownership may publish when it
 overlaps the current viewport. The renderer then reconciles coverage and requests
@@ -290,7 +298,7 @@ cannot restore older interactive facts. The retained browser window stays bounde
 at 256 rows. Background execution refresh waits for complete foreground view,
 highlight, selection, and scroll reads. It adopts only while the same review and
 foreground epoch, view, task/session, and displayed offset
-remain current. Invalidated or rejected reads preserve one dirty replay at the
+remain current. Independently invalidated reads preserve one dirty replay at the
 accepted offset and cannot publish result facts or retire exact detail, including
 when the total population is larger.
 
@@ -299,6 +307,12 @@ before or during a user interaction cannot replace the review owning that
 interaction. Compatible authoritative summary facts reconcile in place without
 rolling back newer foreground revisions. Execution window reconciliation remains
 pending until a read can be adopted at the retained offset after the interaction.
+Both background pumps and full Plan reload use the same freshness decision:
+retired ownership is silent; newer foreground work, demand or incompatible
+retained context keeps one reread. This decision precedes transport-success
+handling, so a failed old read cannot erase independently newer demand. A current
+failure alone stops without polling. Paired window/detail observations settle together
+before their ownership decision.
 
 Inventory read views retain one immutable workflow projection, its complete sort
 permutation and its derived `VisibleSequence` at task scope. A released execution
@@ -309,10 +323,8 @@ view/selection gestures preserve it. Its browser tree
 uses an explicit 24 px geometry; the generic tree default remains
 28 px. Spacer, viewport and keyboard calculations share the invocation's height,
 while the same generation and active-node ownership rules remain authoritative.
-Inventory viewport reads retain one running read and only the latest queued
-intent at task scope, including across review replacement. Every callback owns
-its own promise and tree generation; retiring a queued intent resolves it with
-null, never a newer result. Same-direction scroll positions share an in-flight scroll
+Every Inventory callback owns its own promise and tree generation; retiring a
+queued intent resolves it with null, never a newer result. Same-direction scroll positions share an in-flight scroll
 generation instead of creating replacement callbacks. The tree passes the desired
 window offset separately from its navigation target index. A scroll commit must
 overlap the current viewport and chooses its active row from that viewport,
@@ -346,9 +358,6 @@ Passive selection/result replacement retains the live outer viewport and the
 focused checkbox without scrolling it into view. Only accepted keyboard
 navigation reveals its new focus. Live result reads defer to newer foreground
 reads/highlights and replay a dirty refresh at the retained offset after they settle.
-Window and detail reads settle together before that ownership check. A newer
-foreground read retains one needed refresh even if either background read fails;
-failure alone admits no retry, and a retired owner cannot be revived.
 
 Ordinary integrity starts freeze this complete nonempty selection against the
 current released publication. Inventory task/session generations fence live
