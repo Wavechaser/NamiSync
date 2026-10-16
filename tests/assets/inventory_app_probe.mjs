@@ -28,7 +28,6 @@ let taskSnapshot = null, observedChecks = 0, refuseRefresh = false, delayedRefre
 let refuseIntegrityStart = false;
 let delayedIntegrityStart = null, integrityStartChecks = 0;
 let delayedSelection = null, selectionDisposition = "current", selectedFileCount = fixture.views.default.summary.selected_file_count;
-let manualReadinessResponse = null, delayedManualReadiness = null, delayedManualStart = null;
 let executionStartResult = null;
 let planSummaryResponse = null, planWindowResponse = null, delayedPlanOpen = null;
 let viewRevision = 0, query = "";
@@ -52,6 +51,7 @@ globalThis.inventoryHarness = {
     calls.push(["plan-window", taskId, revision, offset, limit]);
     return Promise.resolve(planWindowResponse);
   },
+  getExecutionDetail() { throw new Error("unexpected execution detail"); },
   mutateInventoryHighlight() { throw new Error("unexpected inventory highlight"); },
   setInventoryHighlightedSelection() { throw new Error("unexpected highlighted selection"); },
   openInventoryView(taskId) { calls.push(["open", taskId]); return delayedOpen?.promise ?? Promise.resolve({
@@ -105,8 +105,8 @@ globalThis.inventoryHarness = {
     return Promise.resolve({...summary(), task_id:taskId, request_id:requestId,
       disposition:selectionDisposition});
   },
-  startInventoryIntegrity(taskId, requestId, commandId, revision, mode, accepted, onDelayed) {
-    calls.push(["integrity-start", taskId, requestId, commandId, revision, mode, accepted]);
+  startInventoryIntegrity(taskId, requestId, commandId, revision, mode, accepted, onDelayed, scope) {
+    calls.push(["integrity-start", taskId, requestId, commandId, revision, mode, accepted, scope]);
     if (refuseIntegrityStart) return Promise.reject(new Error("integrity refused"));
     taskSnapshot = {task_id:taskId, session_id:"d".repeat(32), session_state:"active",
       session_released:false, task_kind:taskSnapshot?.task_id === taskId ? taskSnapshot.task_kind : "inventory",
@@ -128,20 +128,6 @@ globalThis.inventoryHarness = {
       before:action === "resume" ? "paused" : "running",
       after:action === "pause" ? "pausing" : action === "cancel" ? "canceling" : "running",
       detail:null});
-  },
-  getManualVerificationReadiness(taskId, sessionId, revision) {
-    calls.push(["manual-readiness", taskId, sessionId, revision]);
-    return delayedManualReadiness?.promise ?? Promise.resolve({...manualReadinessResponse,
-      task_id:taskId, session_id:sessionId, execution_revision:revision});
-  },
-  startManualVerification(taskId, sessionId, commandId, revision) {
-    calls.push(["manual-start", taskId, sessionId, commandId, revision]);
-    taskSnapshot = {task_id:taskId, session_id:"b".repeat(32), session_state:"active",
-      session_released:false, task_kind:"sync-plan", request_id:"c".repeat(32),
-      plan_request_id:taskSnapshot.plan_request_id, session_kind:"manual-verify"};
-    const result = {task_id:taskId, session_id:taskSnapshot.session_id,
-      request_id:taskSnapshot.request_id};
-    return delayedManualStart?.promise ?? Promise.resolve(result);
   },
   startExecution(taskId, requestId, revision, acknowledged) {
     calls.push(["execution-start", taskId, requestId, revision, acknowledged]);
@@ -197,7 +183,7 @@ const replacements = {
 globalThis.inventoryRenders = renders;
 globalThis.inventoryConfirmations = [];
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
-source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, startManualVerificationAction, loadManualReadiness, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks, queueRowHighlight, interruptPlanHighlight, refreshInventoryOverlay };";
+source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryDetail, readExecutionDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks, queueRowHighlight, interruptPlanHighlight, refreshInventoryOverlay };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
@@ -590,7 +576,6 @@ syncTask.inventoryReview = syncReview;
 globalThis.inventoryCallbacks.onPaneChange(syncTask, "verify");
 await tick();
 await app.runInventoryAction(syncReview, "refresh", null, new HTMLElement("button"));
-globalThis.inventoryConfirmations.at(-1).request.onConfirm();
 await tick();
 assert.equal(syncTask.taskKind, "sync-plan", "ordinary auxiliary Refresh keeps the sync task kind");
 assert.equal(syncTask.planRequestId, syncPlanRequestId,
@@ -644,7 +629,6 @@ app.switchTaskPane(executionTask, "verify");
 await tick();
 globalThis.inventoryHarness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
 await app.runInventoryAction(executionTask.inventoryReview, "refresh", null, new HTMLElement("button"));
-globalThis.inventoryConfirmations.at(-1).request.onConfirm();
 await tick();
 assert.deepEqual(calls.findLast(([name]) => name === "refresh").slice(1, 3),
   [executionTaskId, executionRequestId],
@@ -803,344 +787,101 @@ function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId
   return owner;
 }
 
-const exactTaskId = "task-" + "1".repeat(32);
-const exactOriginal = "2".repeat(32);
-const exactAuxiliary = "3".repeat(32);
-const exactRequest = "4".repeat(32);
-const exactTask = attachReleasedExecutionTask(exactTaskId, exactOriginal, exactAuxiliary, exactRequest);
-app.selectTask(exactTaskId);
-manualReadinessResponse = {reason:"ready", applicable_count:1, ready_count:1,
-  already_verified_count:0, attempted:false};
-delayedManualReadiness = defer();
-const readinessBefore = calls.filter(([name]) => name === "manual-readiness").length;
-app.switchTaskPane(exactTask, "verify");
+const copiedTask = attachReleasedExecutionTask("task-" + "1".repeat(32),
+  "2".repeat(32), "3".repeat(32), "4".repeat(32));
+app.selectTask(copiedTask.taskId);
+app.switchTaskPane(copiedTask, "verify"); await tick();
+const copiedReview = copiedTask.inventoryReview;
+copiedReview.summary = {...copiedReview.summary, selected_file_count:0, hidden_selected_file_count:0};
+const retainedOriginal = copiedTask.originalExecutionFact;
+const copiedStartBase = calls.filter(([name]) => name === "integrity-start").length;
+delayedIntegrityStart = defer();
+const copiedStart = app.startInventoryIntegrityAction(copiedReview, "verify", trigger, "copied");
 await tick();
-app.switchTaskPane(exactTask, "plan");
-app.switchTaskPane(exactTask, "verify");
-delayedManualReadiness.resolve({...manualReadinessResponse, task_id:exactTaskId,
-  session_id:exactOriginal, execution_revision:7});
-await tick();
-delayedManualReadiness = null;
-assert.equal(calls.filter(([name]) => name === "manual-readiness").length, readinessBefore + 2,
-  "rapid Verify reentry replaces the pane-retired readiness read");
-assert.equal(exactTask.manualExactEligible, true,
-  "ready exact verification remains available through a released auxiliary association");
-const manualStarts = calls.filter(([name]) => name === "manual-start").length;
-const staleManualSnapshot = {...taskSnapshot};
-const staleManualList = defer();
-let manualListReads = 0;
-globalThis.inventoryHarness.listTasks = () => ++manualListReads === 1
-  ? staleManualList.promise : Promise.resolve({tasks:[taskSnapshot]});
-const heldManualRead = app.refreshTasks();
-delayedManualStart = defer();
-const manualStart = app.startManualVerificationAction(exactTask.inventoryReview);
-await tick();
-app.switchTaskPane(exactTask, "plan");
-delayedManualStart.resolve({task_id:exactTaskId, session_id:"b".repeat(32),
-  request_id:"c".repeat(32)});
-await manualStart;
-delayedManualStart = null;
-const pendingManualRepair = defer();
-globalThis.inventoryHarness.listTasks = () => pendingManualRepair.promise;
-staleManualList.resolve({tasks:[staleManualSnapshot]});
-await heldManualRead;
-await tick();
-assert.equal(calls.filter(([name]) => name === "manual-start").length, manualStarts + 1);
-assert.deepEqual(calls.findLast(([name]) => name === "manual-start").slice(1, 3),
-  [exactTaskId, exactOriginal], "manual start remains bound to the original execution");
-assert.equal(exactTask.sessionKind, "manual-verify");
-assert.equal(exactTask.sessionId, "b".repeat(32),
-  "an accepted manual session remains adopted after switching back to Plan");
-assert.equal(exactTask.requestId, "c".repeat(32),
-  "accepted manual verification keeps its current request after an older task-list reply");
-assert.equal(exactTask.planRequestId, exactRequest);
-assert.equal(drains.at(-1)[1], exactTask.sessionId,
-  "the accepted manual session attaches its drain independently of pane visibility");
-globalThis.inventoryHarness.listTasks = originalListTasks;
-app.switchTaskPane(exactTask, "verify");
-const manualControls = calls.filter(([name]) => name === "manual-control").length;
-await app.controlInventoryIntegrity(exactTask.inventoryReview, "pause");
-assert.equal(calls.filter(([name]) => name === "manual-control").length, manualControls + 1,
-  "manual controls use execution control for the current manual session");
+await app.startInventoryIntegrityAction(copiedReview, "verify", trigger, "copied");
+app.switchTaskPane(copiedTask, "plan");
+delayedIntegrityStart.resolve({task_id:copiedTask.taskId, session_id:"d".repeat(32), request_id:"e".repeat(32)});
+await copiedStart; delayedIntegrityStart = null;
+assert.equal(calls.filter(([name]) => name === "integrity-start").length, copiedStartBase + 1,
+  "a double copied gesture starts one ordinary command");
+assert.deepEqual(calls.findLast(([name]) => name === "integrity-start").slice(5), ["verify", false, "copied"]);
+assert.equal(copiedTask.sessionKind, "verify");
+assert.equal(copiedTask.originalExecutionFact, retainedOriginal);
+assert.equal(drains.at(-1)[1], copiedTask.sessionId,
+  "ordinary copied session is adopted after returning to Plan");
+app.switchTaskPane(copiedTask, "verify");
+const controlsBase = calls.filter(([name]) => name === "integrity-control").length;
+await app.controlInventoryIntegrity(copiedTask.inventoryReview, "pause");
+assert.equal(calls.filter(([name]) => name === "integrity-control").length, controlsBase + 1);
+copiedTask.sessionState = "completed"; copiedTask.sessionReleased = true;
+copiedTask.inventoryAction = null;
+copiedTask.inventoryReview.summary = {...copiedTask.inventoryReview.summary, request_id:copiedTask.requestId};
+const selectedStartBase = calls.filter(([name]) => name === "integrity-start").length;
+await app.startInventoryIntegrityAction(copiedTask.inventoryReview, "verify", trigger);
+assert.equal(calls.filter(([name]) => name === "integrity-start").length, selectedStartBase,
+  "ordinary selected scope still requires selected files");
+copiedTask.inventoryReview.summary = {...copiedTask.inventoryReview.summary, selected_file_count:1};
+await app.startInventoryIntegrityAction(copiedTask.inventoryReview, "verify", trigger);
+assert.equal(calls.findLast(([name]) => name === "integrity-start").at(-1), "selected");
 
-const fallbackTaskId = "task-" + "5".repeat(32);
-const fallbackOriginal = "6".repeat(32);
-const fallbackTask = attachReleasedExecutionTask(fallbackTaskId, fallbackOriginal,
-  "7".repeat(32), "8".repeat(32), "degraded");
-app.selectTask(fallbackTaskId);
-manualReadinessResponse = {reason:"unrecorded", applicable_count:1, ready_count:0,
-  already_verified_count:0, attempted:false};
-app.switchTaskPane(fallbackTask, "verify");
-await tick();
-assert.equal(fallbackTask.manualExactEligible, false);
-assert.equal(fallbackTask.manualFallbackEligible, true,
-  "normally completed recording degradation keeps the explicit current-state fallback");
-const fallbackStarts = calls.filter(([name]) => name === "integrity-start").length;
-await app.startInventoryIntegrityAction(fallbackTask.inventoryReview, "verify", trigger);
-assert.equal(calls.filter(([name]) => name === "integrity-start").length, fallbackStarts + 1);
-assert.equal(calls.findLast(([name]) => name === "integrity-start")[5], "verify");
-
-// Release launches a production Plan reload. Entering Verify retires its paint
-// authority, but the original execution facts must still reconcile readiness.
-const releaseTaskId = "task-" + "9".repeat(32);
-const releaseOriginal = "a".repeat(32);
-const releaseRequest = "f".repeat(32);
-const releaseTask = attachReleasedExecutionTask(releaseTaskId, releaseOriginal,
-  releaseOriginal, releaseRequest);
-releaseTask.sessionKind = "sync-execution";
-releaseTask.sessionReleased = false;
-const retainedPlan = releaseTask.review;
-retainedPlan.window = {...retainedPlan.window, offset:512, rows:[]};
-retainedPlan.summary = {...retainedPlan.summary, view_revision:0, highlight_revision:0,
-  selection_revision:0, selection_state:"committed", search_query:"", filters:[],
-  sort_column:"path", sort_direction:"ascending", execution:retainedPlan.window.execution};
-retainedPlan.executionDetail = {sentinel:"retained-detail"};
-retainedPlan.planDetail = {sentinel:"retained-plan-detail"};
-retainedPlan.foregroundWindowReaders = 0;
-retainedPlan.foregroundWindowEpoch = 0;
-retainedPlan.actionRevision = 0;
-app.selectTask(releaseTaskId);
-await tick();
-planSummaryResponse = {...retainedPlan.summary,
-  execution:{...retainedPlan.window.execution, execution_revision:8}};
-planWindowResponse = {disposition:"current", view_revision:0, highlight_revision:0,
-  offset:0, rows:[], execution:planSummaryResponse.execution};
-delayedPlanOpen = defer();
-delayedManualReadiness = defer();
-const releasedSummary = delayedPlanOpen;
-app.acceptTaskRelease(releaseTask, releaseOriginal);
-app.switchTaskPane(releaseTask, "verify");
-await tick();
-delayedPlanOpen = null;
-releasedSummary.resolve(planSummaryResponse);
-await tick();
-delayedManualReadiness.resolve({task_id:releaseTaskId, session_id:releaseOriginal,
-  execution_revision:8, reason:"conflict", applicable_count:1, ready_count:0,
-  already_verified_count:0, attempted:false});
-delayedManualReadiness = null;
-manualReadinessResponse = {reason:"ready", applicable_count:1, ready_count:1,
-  already_verified_count:0, attempted:false};
-await tick();
-assert.equal(releaseTask.manualExactEligible, true,
-  "release/Verify ordering reconciles original execution readiness without Reload");
-assert.equal(releaseTask.review, retainedPlan, "Verify retains the Plan review owner");
-assert.equal(retainedPlan.window.offset, 512, "execution fact adoption cannot paint Plan rows");
-assert.equal(retainedPlan.executionDetail.sentinel, "retained-detail");
-assert.equal(retainedPlan.planDetail.sentinel, "retained-plan-detail");
-
-const readinessRead = globalThis.inventoryHarness.getManualVerificationReadiness;
-const planOpenRead = globalThis.inventoryHarness.openPlanView;
-const readyResult = (owner, revision, reason = "ready") => ({task_id:owner.taskId,
-  session_id:owner.executionSessionId, execution_revision:revision, reason,
-  applicable_count:1, ready_count:reason === "ready" ? 1 : 0,
-  already_verified_count:0, attempted:false});
-const readinessCalls = (owner) => calls.filter(([name, id]) => name === "manual-readiness" && id === owner.taskId);
-const planOpenCalls = (owner) => calls.filter(([name, id]) => name === "plan-open" && id === owner.taskId);
-async function readinessOwner(index) {
-  planSummaryResponse = null;
-  const id = index.toString(16).padStart(32, "0");
-  const owner = attachReleasedExecutionTask("task-" + id, "ac" + id.slice(2),
-    "ac" + id.slice(2), "bc" + id.slice(2));
+// Auxiliary scans supersede current evidence without changing execution truth.
+const cacheOwner = attachReleasedExecutionTask("task-" + "5".repeat(32),
+  "6".repeat(32), "7".repeat(32), "8".repeat(32));
+const cacheReview = cacheOwner.review;
+const cacheRow = {node_id:"cached-node", operation_id:"9".repeat(32)};
+Object.assign(cacheReview, {actionRevision:0, detailRevision:0, foregroundWindowReaders:0,
+  foregroundWindowEpoch:0, scrollTop:512 * 24, follow:{enabled:false, sentinel:true},
+  planDetail:{nodeId:cacheRow.node_id, actionRevision:0, viewRevision:0}, executionDetail:null});
+Object.assign(cacheReview.summary, {view_revision:0, highlight_revision:0,
+  highlight_focus_node_id:cacheRow.node_id, selection_revision:7});
+Object.assign(cacheReview.window, {offset:512, rows:[cacheRow], disposition:"current",
+  view_revision:0, highlight_revision:0});
+const cacheSummary = cacheReview.summary, cacheFollow = cacheReview.follow;
+const cacheFact = cacheOwner.originalExecutionFact;
+const priorPlanWindow = globalThis.inventoryHarness.getPlanWindow;
+const staleDetail = defer(), freshWindow = defer();
+let evidenceReads = 0;
+globalThis.inventoryHarness.getExecutionDetail = () => ++evidenceReads === 1
+  ? staleDetail.promise : Promise.resolve({disposition:"current", evidence:{state:"superseded", content:null}});
+globalThis.inventoryHarness.getPlanWindow = (...args) => {
+  calls.push(["plan-window", ...args]); return freshWindow.promise;
+};
+app.selectTask(cacheOwner.taskId); await tick();
+const staleDetailWork = app.readExecutionDetail(cacheReview, cacheRow);
+cacheOwner.sessionState = "completed";
+app.acceptTaskRelease(cacheOwner, cacheOwner.sessionId);
+assert.equal(cacheReview.executionDetail, null, "scan release retires pending evidence detail");
+staleDetail.resolve({disposition:"current", evidence:{state:"recorded-copy", content:{digest:"old"}}});
+await staleDetailWork;
+assert.equal(cacheReview.executionDetail, null, "a retired response cannot reinstall the old digest");
+freshWindow.resolve({...cacheReview.window}); await tick();
+assert.equal(cacheReview.executionDetail.response.evidence.state, "superseded");
+assert.equal(calls.findLast(([name]) => name === "plan-window")[3], 512);
+assert.equal(cacheReview.summary, cacheSummary);
+assert.equal(cacheReview.follow, cacheFollow);
+assert.equal(cacheReview.scrollTop, 512 * 24);
+assert.equal(cacheOwner.originalExecutionFact, cacheFact);
+globalThis.inventoryHarness.getPlanWindow = priorPlanWindow;
+planWindowResponse = {...cacheReview.window};
+for (const kind of ["inventory", "verify"]) {
+  app.switchTaskPane(cacheOwner, "verify"); await tick();
+  cacheOwner.sessionKind = kind;
+  const beforeReturnReads = calls.filter(([name]) => name === "plan-window").length;
+  app.acceptTaskRelease(cacheOwner, cacheOwner.sessionId);
+  assert.equal(cacheOwner.executionWindowDirty, true);
+  assert.equal(cacheReview.executionDetail, null);
   await tick();
-  owner.sessionKind = "sync-execution";
-  owner.review.summary = {...retainedPlan.summary, task_id:owner.taskId,
-    request_id:owner.planRequestId, execution:owner.review.window.execution};
-  owner.review.window = {...owner.review.window, offset:768, rows:[]};
-  owner.review.foregroundWindowReaders = 0;
-  owner.review.foregroundWindowEpoch = 0;
-  owner.review.actionRevision = 0;
-  owner.review.pending = null;
-  owner.review.executionDetail = {sentinel:index};
-  owner.review.planDetail = {sentinel:index};
-  inventoryOpenRequests.set(owner.taskId, owner.requestId);
-  app.selectTask(owner.taskId);
-  await tick();
-  planSummaryResponse = owner.review.summary;
-  planWindowResponse = {disposition:"current", view_revision:0, highlight_revision:0,
-    offset:0, rows:[], execution:owner.review.window.execution};
-  return owner;
+  assert.equal(calls.filter(([name]) => name === "plan-window").length, beforeReturnReads,
+    "hidden Plan records dirty demand without background reads");
+  app.switchTaskPane(cacheOwner, "plan"); await tick();
+  assert.equal(cacheOwner.executionWindowDirty, false);
+  assert.equal(cacheReview.executionDetail.response.evidence.state, "superseded");
+  assert.equal(cacheReview.window.offset, 512);
+  assert.equal(cacheReview.summary, cacheSummary);
+  assert.equal(cacheReview.follow, cacheFollow);
+  assert.equal(cacheOwner.originalExecutionFact, cacheFact);
 }
 
-// Conflict is a hint: the existing summary read, rather than the hint itself,
-// supplies revision 8, then one bounded read establishes eligibility.
-const conflictOwner = await readinessOwner(101);
-const conflictPlan = conflictOwner.review;
-const conflictSummary = defer();
-let conflictReads = 0;
-globalThis.inventoryHarness.getManualVerificationReadiness = (id, session, revision) => {
-  calls.push(["manual-readiness", id, session, revision]);
-  return Promise.resolve(readyResult(conflictOwner, ++conflictReads === 1 ? 8 : revision,
-    conflictReads === 1 ? "conflict" : "ready"));
-};
-globalThis.inventoryHarness.openPlanView = (id) => {
-  calls.push(["plan-open", id]); return conflictSummary.promise;
-};
-const conflictWindows = calls.filter(([name]) => name === "plan-window").length;
-app.switchTaskPane(conflictOwner, "verify");
-await tick();
-assert.equal(conflictOwner.manualExactEligible, false, "a conflict revision alone grants no eligibility");
-assert.equal(conflictOwner.originalExecutionFact.execution.execution_revision, 7);
-conflictSummary.resolve({...conflictPlan.summary,
-  execution:{...conflictPlan.window.execution, execution_revision:8}});
-await tick();
-assert.deepEqual(readinessCalls(conflictOwner).map((call) => call[3]), [7, 8]);
-assert.equal(planOpenCalls(conflictOwner).length, 2, "one initial fixture read plus one conflict summary read");
-assert.equal(calls.filter(([name]) => name === "plan-window").length, conflictWindows,
-  "readiness reconciliation never fetches or paints Plan rows");
-assert.equal(conflictOwner.manualExactEligible, true);
-assert.equal(conflictOwner.review, conflictPlan);
-assert.equal(conflictPlan.window.offset, 768);
-assert.equal(conflictPlan.executionDetail.sentinel, 101);
-assert.equal(conflictPlan.planDetail.sentinel, 101);
-globalThis.inventoryHarness.getManualVerificationReadiness = readinessRead;
-globalThis.inventoryHarness.openPlanView = planOpenRead;
-
-taskSnapshot = {task_id:conflictOwner.taskId, session_id:conflictOwner.sessionId,
-  session_state:"completed", session_released:true, task_kind:"sync-plan",
-  request_id:conflictOwner.requestId, plan_request_id:conflictOwner.planRequestId,
-  session_kind:"sync-execution"};
-const latestStartBase = calls.filter(([name]) => name === "manual-start").length;
-const acceptedOriginalFact = conflictOwner.originalExecutionFact;
-delayedManualStart = defer();
-const latestStart = app.startManualVerificationAction(conflictOwner.inventoryReview);
-await tick();
-await app.startManualVerificationAction(conflictOwner.inventoryReview);
-// A late lower Plan read cannot revoke the admitted command's result custody.
-app.observeOriginalExecution(conflictOwner, conflictOwner.planRequestId,
-  {...conflictPlan.window.execution, execution_revision:7});
-delayedManualStart.resolve({task_id:conflictOwner.taskId, session_id:"b".repeat(32),
-  request_id:"c".repeat(32)});
-await latestStart;
-delayedManualStart = null;
-assert.equal(calls.filter(([name]) => name === "manual-start").length, latestStartBase + 1,
-  "double gesture never replays the one manual Start");
-assert.equal(calls.findLast(([name]) => name === "manual-start")[4], 8,
-  "the first manual Start captures the reconciled execution revision");
-assert.equal(conflictOwner.sessionKind, "manual-verify");
-assert.equal(conflictOwner.originalExecutionFact, acceptedOriginalFact,
-  "accepted auxiliary work preserves original execution fact custody");
-
-// The real release summary can advance first while an older readiness reply is
-// running. A burst keeps exactly one latest demand and never rolls facts back.
-const burstOwner = await readinessOwner(102);
-burstOwner.sessionReleased = false;
-delayedPlanOpen = defer();
-const burstSummary = delayedPlanOpen;
-delayedManualReadiness = defer();
-const burstRead = delayedManualReadiness;
-app.acceptTaskRelease(burstOwner, burstOwner.sessionId);
-app.switchTaskPane(burstOwner, "verify");
-await tick();
-const burstBase = readinessCalls(burstOwner).length;
-for (let index = 0; index < 20; index += 1) void app.loadManualReadiness(burstOwner);
-planSummaryResponse = {...burstOwner.review.summary,
-  execution:{...burstOwner.review.window.execution, execution_revision:8}};
-planWindowResponse = {...planWindowResponse, execution:planSummaryResponse.execution};
-delayedPlanOpen = null;
-burstSummary.resolve(planSummaryResponse);
-await tick();
-assert.equal(burstOwner.originalExecutionFact.execution.execution_revision, 8);
-assert.equal(readinessCalls(burstOwner).length, burstBase, "only one readiness read runs through a burst");
-delayedManualReadiness = null;
-burstRead.resolve(readyResult(burstOwner, 7));
-await tick();
-assert.deepEqual(readinessCalls(burstOwner).map((call) => call[3]), [7, 8]);
-assert.equal(burstOwner.manualExactEligible, true, "a crossed read retains the latest demand");
-app.observeOriginalExecution(burstOwner, burstOwner.planRequestId,
-  {...planSummaryResponse.execution, execution_revision:6});
-assert.equal(burstOwner.originalExecutionFact.execution.execution_revision, 8,
-  "a late lower revision cannot roll the same execution back");
-app.observeOriginalExecution(burstOwner, "wrong-plan", {...planSummaryResponse.execution, execution_revision:9});
-app.observeOriginalExecution(burstOwner, burstOwner.planRequestId,
-  {...planSummaryResponse.execution, session_id:"ff".repeat(16), execution_revision:9});
-assert.equal(burstOwner.originalExecutionFact.execution.execution_revision, 8,
-  "unrelated Plan and original-session facts have no adoption authority");
-
-// Repeated conflict and transport failure terminate with actionable Reload.
-const failedOwner = await readinessOwner(103);
-let failedReads = 0;
-globalThis.inventoryHarness.getManualVerificationReadiness = (id, session, revision) => {
-  calls.push(["manual-readiness", id, session, revision]); failedReads += 1;
-  return Promise.resolve(readyResult(failedOwner, revision, "conflict"));
-};
-app.switchTaskPane(failedOwner, "verify");
-await tick();
-assert.equal(failedReads, 2, "unchanged conflict gets one reconciliation round and stops");
-assert.equal(failedOwner.manualReadinessLoading, false);
-assert.equal(failedOwner.manualExactEligible, false);
-assert.match(failedOwner.manualReadinessError, /Reload/);
-await tick();
-assert.equal(failedReads, 2, "conflict does not poll on later turns");
-globalThis.inventoryHarness.getManualVerificationReadiness = (id, session, revision) => {
-  calls.push(["manual-readiness", id, session, revision]); failedReads += 1;
-  return Promise.reject(new Error("transport unavailable"));
-};
-await app.loadManualReadiness(failedOwner);
-assert.equal(failedReads, 3, "an explicit Reload admits one fresh attempt");
-assert.equal(failedOwner.manualReadinessLoading, false);
-assert.match(failedOwner.manualReadinessError, /Reload/);
-globalThis.inventoryHarness.getManualVerificationReadiness = readinessRead;
-
-// Harmless variation: delayed Inventory completion with no execution crossing
-// retains the same ready facts and produces no conflict-summary read.
-const harmlessOwner = await readinessOwner(104);
-delayedOpen = defer();
-const harmlessInventory = delayedOpen;
-const harmlessOpenBase = planOpenCalls(harmlessOwner).length;
-app.switchTaskPane(harmlessOwner, "verify");
-await tick();
-assert.equal(harmlessOwner.manualExactEligible, true);
-delayedOpen = null;
-harmlessInventory.resolve({...summary(), task_id:harmlessOwner.taskId,
-  request_id:harmlessOwner.requestId});
-await tick();
-assert.equal(harmlessOwner.manualExactEligible, true);
-assert.ok(readinessCalls(harmlessOwner).every((call) => call[3] === 7));
-assert.equal(planOpenCalls(harmlessOwner).length, harmlessOpenBase);
-
-// Pane, task, Settings, Close and original-session replacement retire the old
-// demand. Reentry gets a fresh read; an auxiliary session keeps original facts.
-for (const [index, retire] of [
-  [105, (owner) => app.switchTaskPane(owner, "plan")],
-  [106, () => app.selectTask(harmlessOwner.taskId)],
-  [107, () => app.showSettings()],
-  [108, (owner) => app.closeRetainedTask(owner.taskId)],
-  [109, (owner) => app.adoptTask({task_id:owner.taskId, session_id:"dd".repeat(16),
-    session_state:"active", session_released:false, task_kind:"sync-plan",
-    request_id:owner.requestId, plan_request_id:owner.planRequestId, session_kind:"sync-execution"})],
-]) {
-  const owner = await readinessOwner(index);
-  const originalFact = owner.originalExecutionFact;
-  delayedManualReadiness = defer();
-  const retiredRead = delayedManualReadiness;
-  app.switchTaskPane(owner, "verify");
-  await tick();
-  const retiredReply = readyResult(owner, 7);
-  await retire(owner);
-  delayedManualReadiness = null;
-  retiredRead.resolve(retiredReply);
-  await tick();
-  assert.equal(owner.manualReadiness, null, `${index}: retired reply cannot restore eligibility`);
-  assert.equal(readinessCalls(owner).length, 1, `${index}: retirement cannot revive old demand`);
-  assert.equal(owner.manualReadinessLoading, false);
-  if (index === 109) {
-    assert.equal(owner.originalExecutionFact, null, "a new original execution resets its fact");
-    app.observeOriginalExecution(owner, owner.planRequestId,
-      {...originalFact.execution, session_id:owner.executionSessionId, execution_revision:1});
-    assert.equal(owner.originalExecutionFact.execution.execution_revision, 1,
-      "a replacement execution may begin at a lower revision");
-  } else if (index !== 108) {
-    app.selectTask(owner.taskId);
-    if (owner.workPane === "plan") app.switchTaskPane(owner, "verify");
-    await tick();
-    assert.equal(owner.manualExactEligible, true, `${index}: reentry demands current readiness`);
-    const fact = owner.originalExecutionFact;
-    app.adoptTask({task_id:owner.taskId, session_id:"ee".repeat(16),
-      session_state:"completed", session_released:true, task_kind:"sync-plan",
-      request_id:owner.requestId, plan_request_id:owner.planRequestId, session_kind:"inventory"});
-    assert.equal(owner.originalExecutionFact, fact, "auxiliary association preserves original execution facts");
-  }
-}
 // The real Inventory app queue shares mutation custody and read admission with scrolling.
 const alignedId = "task-0123456789abcdef0123456789abcdef";
 const alignedTask = app.adoptTask({task_id:alignedId, session_id:"0".repeat(32),
@@ -1355,95 +1096,15 @@ await retiredOverlayWork; await tick();
 assert.equal(rowReads.length, retiredOverlayReads, "retired navigation cannot resurrect invalidated overlay demand");
 assert.equal(alignedReview.window.integrity.revision, retiredOverlayRevision);
 
-// Refresh disclosure owns one captured scan, without retiring reads on Cancel.
-const refreshOwner = await readinessOwner(201);
-app.switchTaskPane(refreshOwner, "verify"); await tick();
-const refreshReview = refreshOwner.inventoryReview;
-const refreshInvoker = new HTMLElement("button");
-const refreshCount = () => calls.filter(([name]) => name === "refresh").length;
-const refreshDialogs = () => globalThis.inventoryConfirmations.filter(({factory}) => factory[1]?.id === "refresh-confirmation");
-const setRefreshReady = (reason = "ready") => {
-  refreshOwner.manualReadiness = readyResult(refreshOwner,
-    refreshOwner.originalExecutionFact.execution.execution_revision, reason);
-};
-const openRefresh = async (node = null) => {
-  await app.runInventoryAction(refreshReview, "refresh", node, refreshInvoker);
-  return refreshDialogs().at(-1).request;
-};
+// Refresh starts directly; it no longer forfeits a copied-file opportunity.
+const refreshOwner = attachReleasedExecutionTask("task-" + "9".repeat(32),
+  "a".repeat(32), "b".repeat(32), "c".repeat(32));
+app.selectTask(refreshOwner.taskId); app.switchTaskPane(refreshOwner, "verify"); await tick();
+const refreshCount = calls.filter(([name]) => name === "refresh").length;
+const confirmationCount = globalThis.inventoryConfirmations.length;
 refuseRefresh = true;
-setRefreshReady();
-const initialRefreshCount = refreshCount();
-const readCustody = [refreshReview.windowRequestRevision, refreshReview.detailRevision, refreshReview.detail];
-const callsBeforeChoice = calls.length;
-const cancelledRefresh = await openRefresh();
-assertSameNode(cancelledRefresh.returnFocus, refreshInvoker);
-assert.equal(cancelledRefresh.countDetail, "Entire location");
-assert.equal(refreshCount(), initialRefreshCount, "opening disclosure starts no scan");
-cancelledRefresh.onCancel();
-cancelledRefresh.onConfirm(); await tick();
-assert.equal(refreshCount(), initialRefreshCount, "Cancel retires the attempt, including late callbacks");
-assert.equal(calls.length, callsBeforeChoice, "opening and Cancel emit no bridge work");
-assert.deepEqual([refreshReview.windowRequestRevision, refreshReview.detailRevision, refreshReview.detail], readCustody,
-  "opening and Cancel preserve window and detail read custody");
-const capturedNode = refreshReview.window.rows.find(row => row.warning === null).node_id;
-const capturedRequest = refreshOwner.requestId;
-const capturedRevision = refreshReview.summary.view_revision;
-const confirmedRefresh = await openRefresh(capturedNode);
-confirmedRefresh.onConfirm(); confirmedRefresh.onConfirm(); await tick();
-assert.equal(refreshCount(), initialRefreshCount + 1, "Confirm submits once");
-assert.deepEqual(calls.findLast(([name]) => name === "refresh").slice(1, 3), [refreshOwner.taskId, capturedRequest]);
-assert.deepEqual(calls.findLast(([name]) => name === "refresh").slice(4), [capturedRevision, capturedNode]);
-
-for (const unresolved of [null, "busy", "conflict", "future-reason", "stale"]) {
-  setRefreshReady(unresolved === "stale" ? "superseded" : unresolved);
-  if (unresolved === null) refreshOwner.manualReadiness = null;
-  if (unresolved === "stale") refreshOwner.manualReadiness.execution_revision -= 1;
-  const count = refreshDialogs().length;
-  const choice = await openRefresh();
-  assert.equal(refreshDialogs().length, count + 1, `${unresolved}: unresolved readiness warns`);
-  choice.onCancel();
-}
-for (const reason of ["attempted", "linked-execution", "already-verified", "empty",
-  "execution-ineligible", "incomplete", "unrecorded", "superseded", "settlement-diverged"]) {
-  setRefreshReady(reason);
-  refreshOwner.manualReadinessLoading = true;
-  const count = refreshDialogs().length, scans = refreshCount();
-  await app.runInventoryAction(refreshReview, "refresh", null, refreshInvoker);
-  assert.equal(refreshDialogs().length, count, `${reason}: matching conclusive readiness needs no prompt`);
-  assert.equal(refreshCount(), scans + 1);
-}
-refreshOwner.manualReadinessLoading = false;
-setRefreshReady();
-refreshOwner.manualReadiness.attempted = true;
-const consumedDialogs = refreshDialogs().length;
-await app.runInventoryAction(refreshReview, "refresh", null, refreshInvoker);
-assert.equal(refreshDialogs().length, consumedDialogs, "consumed claim suppresses disclosure");
-setRefreshReady();
-for (const [target, key, changed] of [
-  [refreshOwner, "requestId", "changed-request"], [refreshOwner, "sessionId", "changed-session"],
-  [refreshReview.summary, "request_id", "changed-publication"],
-  [refreshReview.summary, "view_revision", refreshReview.summary.view_revision + 1],
-  [refreshOwner, "executionSessionId", "changed-execution"],
-  [refreshOwner.originalExecutionFact.execution, "execution_revision", 100],
-  [refreshOwner, "sessionReleased", false], [refreshOwner, "closePending", true],
-]) {
-  const choice = await openRefresh(), before = refreshCount(), previous = target[key];
-  target[key] = changed; choice.onConfirm(); await tick(); target[key] = previous;
-  assert.equal(refreshCount(), before, `${key}: stale confirmation starts nothing`);
-  assert.equal(refreshOwner.inventoryAction, null);
-}
-const lostNodeChoice = await openRefresh(capturedNode);
-const previousRows = refreshReview.window.rows, previousDetail = refreshReview.detail;
-refreshReview.window.rows = previousRows.filter(row => row.node_id !== capturedNode);
-refreshReview.detail = null;
-const scansBeforeLostNode = refreshCount();
-lostNodeChoice.onConfirm(); await tick();
-assert.equal(refreshCount(), scansBeforeLostNode, "a lost scoped node cannot retarget Refresh");
-refreshReview.window.rows = previousRows; refreshReview.detail = previousDetail;
-const staleNavigation = await openRefresh();
-app.showSettings(); app.selectTask(refreshOwner.taskId); await tick();
-const scansBeforeNavigation = refreshCount();
-staleNavigation.onConfirm(); await tick();
-assert.equal(refreshCount(), scansBeforeNavigation, "leaving and returning retires confirmation");
+await app.runInventoryAction(refreshOwner.inventoryReview, "refresh", null, trigger);
+assert.equal(calls.filter(([name]) => name === "refresh").length, refreshCount + 1);
+assert.equal(globalThis.inventoryConfirmations.length, confirmationCount);
 refuseRefresh = false;
 process.stdout.write("ok\n");

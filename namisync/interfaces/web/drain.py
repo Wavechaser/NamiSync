@@ -48,13 +48,13 @@ from namisync.workflows.views import (
 )
 from namisync.workflows.inventory import LocationCandidate, RememberedLocations
 from namisync.workflows import (
+    CopiedSubjectScope,
     ExecutionEvidenceResult,
     ExecutionEvidenceWindow,
     PlanSortColumn,
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
-    ManualVerificationMembership,
     SortDirection,
 )
 
@@ -191,6 +191,9 @@ class _InventoryIntegrityState:
     complete: bool = False
     gap: bool = False
     items: dict[str, dict[str, object]] = field(default_factory=dict)
+    copied_scope: CopiedSubjectScope | None = None
+    path_rows: dict[str, str] = field(default_factory=dict)
+    row_paths: dict[str, str] = field(default_factory=dict)
 
     def offer(self, update: TaskDeliveryUpdate) -> None:
         if self.complete or type(update) is not SessionEventView:
@@ -204,13 +207,23 @@ class _InventoryIntegrityState:
     def add(self, body: Mapping[str, object]) -> None:
         row_id = str(body["row_id"])
         if (str(body["location_id"]) != str(self.location_id)
-                or body["phase"] != self.mode or row_id not in self.membership):
+                or body["phase"] != self.mode):
             raise ObservationConflictError("ordinary integrity result changed its selected subject")
+        if self.copied_scope is None:
+            if row_id not in self.membership:
+                raise ObservationConflictError("ordinary integrity result changed its selected subject")
+        else:
+            path = self.copied_scope.admit(body["path"], row_id, self.path_rows, self.row_paths)
+            if path is None:
+                raise ObservationConflictError("ordinary integrity result changed its copied subject")
         fact = {key: body[key] for key in ("result", "reason", "recording", "record_disposition", "detail_omitted_count")}
         previous = self.items.get(row_id)
         if previous is not None and previous != fact:
             raise ObservationConflictError("ordinary integrity result changed its outcome")
         if previous is None:
+            if self.copied_scope is not None:
+                self.path_rows[path] = row_id
+                self.row_paths[row_id] = path
             self.items[row_id] = fact
             self.revision += 1
 
@@ -218,58 +231,6 @@ class _InventoryIntegrityState:
         return {"request_id": self.request_id, "session_id": self.session_id,
                 "mode": self.mode, "location_id": str(self.location_id),
                 "revision": self.revision, "complete": self.complete, "gap": self.gap,
-                "items": [{"row_id": row_id, **self.items[row_id]}
-                          for row_id in row_ids if row_id in self.items]}
-
-
-@dataclass(slots=True)
-class _ManualVerificationState:
-    membership: ManualVerificationMembership
-    session_id: str
-    subjects: dict[str, tuple[str, str]] = field(init=False, repr=False)
-    revision: int = 0
-    complete: bool = False
-    gap: bool = False
-    items: dict[str, dict[str, object]] = field(default_factory=dict)
-
-    def __post_init__(self) -> None:
-        self.subjects = {operation_id: (row_id, path)
-                         for operation_id, row_id, path in self.membership.subjects}
-
-    def add(self, body: Mapping[str, object]) -> None:
-        operation_id = str(body["item_id"])
-        expected = self.subjects.get(operation_id)
-        if (expected is None or body["row_id"] != expected[0]
-                or body["path"] != expected[1]
-                or str(body["location_id"]) != str(self.membership.location_id)
-                or body["phase"] != "verify"):
-            raise ObservationConflictError("manual verification changed its frozen subject")
-        fact = {"operation_id": operation_id, **{key: body[key] for key in
-                ("result", "reason", "recording", "record_disposition", "detail_omitted_count")}}
-        previous = self.items.get(expected[0])
-        if previous is not None and previous != fact:
-            raise ObservationConflictError("manual verification changed its outcome")
-        if previous is None:
-            self.items[expected[0]] = fact
-            self.revision += 1
-
-    def offer(self, update: TaskDeliveryUpdate) -> None:
-        if self.complete or type(update) is not SessionEventView:
-            return
-        if update.body_type == "Gap":
-            self.gap = True
-            self.revision += 1
-        elif update.body_type == "IntegrityOutcome":
-            self.add(update.body)
-
-    def wire(self, row_ids: Iterable[str]) -> dict[str, object]:
-        binding = self.membership.execution
-        return {"execution_session_id": binding.session_id,
-                "request_id": self.membership.request_id,
-                "session_id": self.session_id,
-                "location_id": str(self.membership.location_id),
-                "revision": self.revision, "complete": self.complete,
-                "gap": self.gap,
                 "items": [{"row_id": row_id, **self.items[row_id]}
                           for row_id in row_ids if row_id in self.items]}
 
@@ -320,7 +281,6 @@ class _TaskState:
     execution_membership: Mapping[str, str] | None = None
     presentation_state: TaskPresentationState | None = None
     ordinary_integrity: _InventoryIntegrityState | None = None
-    manual_verification: _ManualVerificationState | None = None
     inventory_view_loading: bool = False
     inventory_visibility_pending: bool = False
     inventory_view_dirty: bool = False
@@ -361,9 +321,6 @@ class _TaskState:
                 self._offer_execution_fact(update)
             if self.ordinary_integrity is not None and (self.ordinary_integrity.session_id in (None, update_session)):
                 self.ordinary_integrity.offer(update)
-            if (self.session_kind == "manual-verify" and self.manual_verification is not None
-                    and self.manual_verification.session_id == update_session):
-                self.manual_verification.offer(update)
             if type(update) is SessionRecordView:
                 self.terminal_record = update
                 self.terminal_pending = False
@@ -1156,164 +1113,22 @@ class TaskRegistry:
     def start_inventory_integrity(
         self, task_id: str, request_id: str, *, expected_revision: int,
         mode: str, accept_current_evidence: bool, command_id: str, wire_intent: tuple[object, ...],
+        scope: str = "selected",
     ) -> TaskStartView:
         if mode not in {"baseline", "verify", "rebaseline"}:
             raise ValueError("ordinary integrity mode is invalid")
+        if scope not in {"selected", "copied"} or (scope == "copied" and mode != "verify"):
+            raise ValueError("ordinary integrity scope is invalid")
         if type(accept_current_evidence) is not bool or (mode == "rebaseline" and not accept_current_evidence):
             raise ValueError("rebaseline requires explicit acceptance of current evidence")
         return self._start_inventory_activity(task_id, request_id, expected_revision=expected_revision,
             node_id=None, command_id=command_id, wire_intent=wire_intent,
-            mode=mode, accept_current_evidence=accept_current_evidence)
-
-    def get_manual_verification_readiness(
-        self, task_id: str, session_id: str, *, expected_execution_revision: int,
-    ) -> dict[str, object]:
-        with self._condition:
-            task = self._tasks.get(task_id)
-        if task is None:
-            raise TaskUnavailableError("manual verification task is unavailable")
-        with task.condition:
-            if (task.task_kind != "sync-plan" or task.execution_session_id != session_id
-                    or task.execution_terminal_record is None or task.retiring):
-                raise TaskUnavailableError("manual verification is unavailable")
-            revision = task.execution_revision
-            if revision != expected_execution_revision:
-                reason = "conflict"
-            elif self._lifecycle.task_manual_verification_attempted(task_id):
-                reason = "attempted"
-            elif task.transition or not task.session_released:
-                reason = "busy"
-            else:
-                reason = None
-        if reason is None:
-            readiness = self._lifecycle.read_task_manual_verification_readiness(task_id, session_id)
-            reason = readiness.reason
-            counts = (readiness.applicable_count, readiness.ready_count,
-                      readiness.already_verified_count)
-        else:
-            counts = (0, 0, 0)
-        return {"task_id": task_id, "session_id": session_id,
-                "execution_revision": revision, "reason": reason,
-                "applicable_count": counts[0], "ready_count": counts[1],
-                "already_verified_count": counts[2],
-                "attempted": self._lifecycle.task_manual_verification_attempted(task_id)}
-
-    def start_manual_verification(
-        self, task_id: str, session_id: str, *, command_id: str,
-        expected_execution_revision: int, wire_intent: tuple[object, ...],
-    ) -> TaskStartView:
-        _require_opaque_id(command_id, "manual verification command id")
-        with self._condition:
-            if self._closing:
-                raise TaskUnavailableError("task registry is closing")
-            retained = self._start_responses.get(command_id)
-            if retained is not None:
-                if retained.wire_intent != wire_intent:
-                    raise TaskIntentConflictError("task command intent conflicts")
-                retained.participants += 1
-            else:
-                task = self._tasks.get(task_id)
-                if task is None:
-                    raise TaskUnavailableError("manual verification task is unavailable")
-                with task.condition:
-                    if (task.task_kind != "sync-plan" or task.execution_session_id != session_id
-                            or task.execution_terminal_record is None
-                            or task.execution_revision != expected_execution_revision
-                            or not task.session_released or task.delivered_terminal_record is None
-                            or task.transition or task.retiring or task.inventory_view_loading):
-                        raise TaskUnavailableError("manual verification requires the released execution task")
-                    if len(self._start_responses) >= _START_RESPONSE_CAPACITY:
-                        raise InventoryCommandCapacityError("Task command capacity is full; close a task")
-                    response = _StartResponse(command_id, wire_intent, participants=1, retain_failure=True)
-                    self._start_responses[command_id] = response
-                    task.start_response_ids.add(command_id)
-                    prior_request, prior_start = task.request_id, task.start_command_id
-                    prior_manual = task.manual_verification
-                    task.transition = True
-                    task.condition.notify_all()
-        if retained is not None:
-            try:
-                return self._await_start_response(retained)
-            finally:
-                self._leave_start_response(retained)
-
-        def delivery_factory(delivered_task_id: str):
-            if delivered_task_id != task_id:
-                raise ObservationConflictError("manual lifecycle changed its task")
-            with task.condition:
-                if self._closing or task.retiring or not task.transition:
-                    raise TaskUnavailableError("manual verification task is unavailable")
-                task.prior_session_id = task.session_id
-                task.prior_delivery = (
-                    tuple(task.queue), task.progress_available_at, task.terminal_record,
-                    task.terminal_pending, task.delivered_terminal_event,
-                    task.delivered_terminal_record, task.session_released, task.closing,
-                    task.execution_revision, task.execution_session_id, task.execution_summary,
-                    dict(task.execution_operation_results), dict(task.execution_integrity_results),
-                    task.execution_gap_minimum, task.execution_gap_maximum,
-                    task.execution_membership, task.presentation_state, task.progress_sample_at,
-                    task.session_kind,
-                )
-                task.generation += 1
-                task.session_id = None
-                task.queue.clear()
-                task.progress_available_at = task.progress_sample_at = None
-                task.terminal_record = task.delivered_terminal_record = None
-                task.delivered_terminal_event = None
-                task.terminal_pending = task.session_released = task.closing = False
-                task.active_drain = None
-                task.presentation_state = None
-                task.session_kind = "manual-verify"
-                return task.sink(task.generation)
-
-        result = None
-        failure_code = None
-        try:
-            candidate = self._lifecycle.start_task_manual_verification(
-                task_id, session_id, command_id=command_id,
-                signature=wire_intent, delivery_factory=delivery_factory)
-            if type(candidate) is not TaskStartView or candidate.task_id != task_id:
-                raise RuntimeError("manual lifecycle returned invalid start data")
-            candidate.__post_init__()
-            membership = self._lifecycle.read_task_manual_verification_membership(candidate.request_id)
-            if (membership.execution.task_id != task_id
-                    or membership.execution.session_id != session_id
-                    or membership.request_id != candidate.request_id):
-                raise ObservationConflictError("manual membership changed its execution")
-            with task.condition:
-                if any(update.session_id != candidate.session_id for update in task.queue):
-                    raise ObservationConflictError("manual observation names another session")
-                manual = _ManualVerificationState(membership, candidate.session_id)
-                for update in task.queue:
-                    manual.offer(update)
-                task.manual_verification = manual
-                task.session_id, task.request_id = candidate.session_id, candidate.request_id
-                task.start_command_id = command_id
-                task.prior_session_id = task.prior_delivery = None
-                task.transition = False
-                task.condition.notify_all()
-            result = candidate
-        except BaseException as error:
-            failure_code = _classify_start_failure(error)
-            _retire_exception_graph(error)
-            self._restore_plan_delivery(task)
-            with task.condition:
-                task.request_id, task.start_command_id = prior_request, prior_start
-                task.manual_verification = prior_manual
-                task.transition = False
-                task.condition.notify_all()
-        with self._condition:
-            response.result, response.failure_code, response.complete = result, failure_code, True
-            self._condition.notify_all()
-        try:
-            return self._await_start_response(response)
-        finally:
-            self._leave_start_response(response)
+            mode=mode, accept_current_evidence=accept_current_evidence, scope=scope)
 
     def _start_inventory_activity(
         self, task_id: str, request_id: str, *, expected_revision: int,
         node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
-        mode: str | None = None, accept_current_evidence: bool = False,
+        mode: str | None = None, accept_current_evidence: bool = False, scope: str = "selected",
     ) -> TaskStartView:
         _require_opaque_id(command_id, "task command id")
         with self._condition:
@@ -1343,12 +1158,20 @@ class TaskRegistry:
                     selected_paths = () if node.is_container else (node.rel_path,)
                     subtree_roots = (node.rel_path,) if node.is_container and node.position != 0 else ()
                     membership = None
+                    copied_scope = None
                     if mode is not None:
-                        membership = {row_id: view.projection.row_for_id(row_id).rel_path
-                                      for row_id in sorted(view.selected_row_ids)}
-                        if not membership:
+                        if scope == "copied":
+                            if task.task_kind != "sync-plan" or task.execution_terminal_record is None:
+                                raise TaskUnavailableError("copied-file scope requires a released execution")
+                            selected_paths = self._lifecycle.read_task_copied_paths(task_id)
+                            membership = {}
+                            copied_scope = CopiedSubjectScope(selected_paths)
+                        else:
+                            membership = {row_id: view.projection.row_for_id(row_id).rel_path
+                                          for row_id in sorted(view.selected_row_ids)}
+                            selected_paths = tuple(membership.values())
+                        if not selected_paths:
                             raise ValueError("ordinary integrity requires selected files")
-                        selected_paths = tuple(membership.values())
                     if len(self._start_responses) >= _START_RESPONSE_CAPACITY:
                         raise InventoryCommandCapacityError("Inventory command capacity is full; close a task before refreshing")
                     # Reserve retained original-result capacity before lifecycle claim or effect.
@@ -1395,7 +1218,8 @@ class TaskRegistry:
                 task.presentation_state = None
                 task.session_kind = "inventory" if mode is None else mode
                 if mode is not None:
-                    task.ordinary_integrity = _InventoryIntegrityState(mode, view.projection.location_id, frozenset(membership))
+                    task.ordinary_integrity = _InventoryIntegrityState(mode, view.projection.location_id,
+                        frozenset(membership), copied_scope=copied_scope)
                 return task.sink(task.generation)
 
         result = None
@@ -1526,9 +1350,6 @@ class TaskRegistry:
             if task.ordinary_integrity is not None:
                 result["integrity"] = task.ordinary_integrity.wire(
                     row["row_id"] for row in result["rows"] if row["row_id"] is not None)
-            if task.manual_verification is not None:
-                result["manual_verification"] = task.manual_verification.wire(
-                    row["row_id"] for row in result["rows"] if row["row_id"] is not None)
             return result
 
     def get_inventory_detail(self, task_id: str, *, expected_revision: int, node_id: str) -> dict[str, object]:
@@ -1562,8 +1383,6 @@ class TaskRegistry:
             result = {"disposition": "current", "view_revision": view.view_revision, "node_id": node_id, "snapshot": snapshot, "detail": detail}
             if task.ordinary_integrity is not None:
                 result["integrity"] = task.ordinary_integrity.wire((row_id,))
-            if task.manual_verification is not None:
-                result["manual_verification"] = task.manual_verification.wire((row_id,))
             return result
 
     def open_plan_view(self, task_id: str) -> dict[str, object]:
@@ -2411,10 +2230,8 @@ class TaskRegistry:
     ) -> object:
         task = self._require_task(task_id, session_id)
         with task.condition:
-            if (task.task_kind != "sync-plan" or not (
-                    (task.session_kind == "sync-execution" and task.execution_session_id == session_id)
-                    or (task.session_kind == "manual-verify" and task.manual_verification is not None
-                        and task.manual_verification.session_id == session_id))):
+            if (task.task_kind != "sync-plan" or task.session_kind != "sync-execution"
+                    or task.execution_session_id != session_id):
                 raise TaskUnavailableError("task is unavailable")
         if action == "pause":
             result = self._lifecycle.pause_task_session(task_id, session_id)
@@ -3098,8 +2915,6 @@ class TaskRegistry:
             execution_release = task.execution_session_id == session_id
             ordinary = task.ordinary_integrity
             ordinary_release = ordinary is not None and ordinary.session_id == session_id
-            manual = task.manual_verification
-            manual_release = manual is not None and manual.session_id == session_id
             delivery = self._terminal_delivery_locked(task)
             task.closing = True
             task.generation += 1
@@ -3164,7 +2979,6 @@ class TaskRegistry:
                     "task lifecycle returned invalid retained execution summary"
                 )
         retained_ordinary = self._lifecycle.read_task_inventory_integrity(task_id) if ordinary_release else None
-        retained_manual = self._lifecycle.read_task_manual_verification(task_id) if manual_release else None
         with task.condition:
             stale = (
                 task.session_id != session_id
@@ -3188,21 +3002,13 @@ class TaskRegistry:
                     raise ObservationConflictError("ordinary terminal result changed identity")
                 # Replace the live subset, including the empty terminal population.
                 replacement = _InventoryIntegrityState(ordinary.mode, ordinary.location_id,
-                    ordinary.membership, ordinary.request_id, ordinary.session_id, ordinary.revision + 1)
+                    ordinary.membership, ordinary.request_id, ordinary.session_id, ordinary.revision + 1,
+                    copied_scope=ordinary.copied_scope,
+                    path_rows=dict(ordinary.path_rows), row_paths=dict(ordinary.row_paths))
                 for item in retained_ordinary.items:
                     replacement.add(asdict(item))
                 replacement.complete = True
                 task.ordinary_integrity = replacement
-            if retained_manual is not None:
-                if (retained_manual.session_id != session_id or manual is None
-                        or retained_manual.membership != manual.membership):
-                    raise ObservationConflictError("manual terminal result changed identity")
-                replacement_manual = _ManualVerificationState(manual.membership, session_id,
-                    manual.revision + 1)
-                for item in retained_manual.items:
-                    replacement_manual.add(asdict(item))
-                replacement_manual.complete = True
-                task.manual_verification = replacement_manual
             task.session_released = True
             if task.task_kind == "sync-plan":
                 task.inventory_view_dirty = True

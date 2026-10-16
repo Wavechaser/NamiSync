@@ -14,7 +14,6 @@ from namisync.workflows import (
     EXECUTION_KIND,
     INVENTORY_KIND,
     PLAN_KIND,
-    MANUAL_VERIFY_KIND,
     ExecutionEvidenceWindow,
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
@@ -24,9 +23,6 @@ from namisync.workflows import (
     InventoryPublication,
     InventoryDetails,
     RetainedInventoryIntegrity,
-    ManualVerificationMembership,
-    ManualVerificationReadiness,
-    RetainedManualVerification,
 )
 from namisync.workflows.inventory import LocationCandidate
 from namisync.workflows.views import (
@@ -46,7 +42,6 @@ _TASK_RECORD_PAUSE_SUPPORT = {
     INVENTORY_KIND: False,
     EXECUTION_KIND: True,
     BASELINE_KIND: True, REBASELINE_KIND: True, VERIFY_KIND: True,
-    MANUAL_VERIFY_KIND: True,
 }
 
 TaskDeliveryUpdate = SessionEventView | SessionRecordView
@@ -431,22 +426,7 @@ class TaskLifecyclePort(Protocol):
 
     def read_task_inventory_integrity(self, task_id: str) -> RetainedInventoryIntegrity: ...
 
-    def read_task_manual_verification_readiness(
-        self, task_id: str, execution_session_id: str,
-    ) -> ManualVerificationReadiness: ...
-
-    def task_manual_verification_attempted(self, task_id: str) -> bool: ...
-
-    def start_task_manual_verification(
-        self, task_id: str, execution_session_id: str, *, command_id: str,
-        signature: tuple[object, ...], delivery_factory: TaskDeliveryFactory,
-    ) -> TaskStartView: ...
-
-    def read_task_manual_verification_membership(
-        self, request_id: str,
-    ) -> ManualVerificationMembership: ...
-
-    def read_task_manual_verification(self, task_id: str) -> RetainedManualVerification: ...
+    def read_task_copied_paths(self, task_id: str) -> tuple[str, ...]: ...
 
     def change_task_inventory_visibility(
         self, task_id: str, request_id: str, *, action: str, location_id: int,

@@ -55,8 +55,8 @@ Evidence: `build/review-consolidation-20261016/`. Root owns docs/integration.
 
 | Row / atomic outcome | Owners and finite consumer population | Gate / dependency |
 | --- | --- | --- |
-| RV0 — rules and delivery boundary | AGENTS, TESTS, PERFORMANCE, M1_PLAN and latest HANDOFF; session/checkpoint documentation, delta review, equivalent test relocation and accounted evidence retention. | Independent document/contract review and local-link/diff check before changing practice. Active. |
-| RV1 — ordinary Verify copied files | Manual workflow/runtime/repository reader and interface service/lifecycle/task-port/drain/command/bridge/app/renderer owners; their existing owning workflow/database/interface/browser/catalog/tool/installed execution tests. Retire exact-only state/commands/results/warning; keep ordinary current-state outcomes and original-command custody. | Finalize direct-consumer census before edits. Real execution→ordinary scan/verify composition first; stale/duplicate/rollback/missing/changed/partial scope, ordinary and linked regression coverage; affected departments, imports, installed execution/Inventory/shell/gallery. Depends RV0. |
+| RV0 — rules and delivery boundary | AGENTS, TESTS, PERFORMANCE, M1_PLAN and latest HANDOFF; session/checkpoint documentation, delta review, equivalent test relocation and accounted evidence retention. | Complete in `01089be`; independent document/contract review and local-link/diff checks passed. |
+| RV1 — ordinary Verify copied files | Complete. Successful retained copied paths use ordinary scan/Verify, controls and results. Workflow-owned subject admission preserves scope independently of checkboxes. Exact-only commands, claims, results and warning retired; original execution truth and command custody retained. | Reviewed `rv1-candidate-15.md` plus `rv1-correction-24.md`; 2,978 final workflows/interfaces passes, 12 imports, all 13 installed cases across native03/04. Earlier ordinary run had 6,064 passes and the subsequently corrected interface-boundary failure; unaffected passes retained by dependency. Raw failures and review remain under the evidence root. |
 | RV2 — common review infrastructure | Plan/Inventory server view state, visible-sequence/highlight helpers; separate browser panels above a shared controller; app read/navigation consumers, production probes, gallery, installed table cases and direct performance helper imports. | Reuse current range/selection/viewport/focus/read-settlement witnesses for both consumers; shared geometry/navigation is implemented once. Preserve row roles unless a separate accessibility change is justified. Depends RV1; split coherent server/browser commits after census. |
 | RV3 — Inventory Follow and Go | Common browser follow/reveal/controller, Inventory active-row/ancestor resolution in view/drain/command/bridge and current ordinary session observation; owning probes/composition/installed Inventory. | Off-window/collapsed/filtered/missing target, canonical-only automatic follow, user override, one-shot Go, session/pane/Close retirement; no selection or focus mutation. Depends RV2. |
 | RV4 — narrow follow-up sharing | Drain delivery snapshot construction/restore and existing browser start/control attempt consumers. Share remaining repeated mechanics after exact-manual retirement; retain domain admission, outcome/identity and original-command rules. | Existing success/refusal/rollback/late delivery/uncertain recovery/zero-result/replacement tests plus affected composition/native paths. No generic effect machine or speculative full-slot pipeline. Depends RV1 and reconciles RV2/3 app changes. |
@@ -72,6 +72,25 @@ recording or native guards. Server-owned scope, revision fences, bounded 256-row
 windows, highlight/checkbox separation, truthful zero/partial results, conditional
 recording and exact Close remain. Repository recurrence and mandatory stops apply;
 declared consumer migrations are one finite mechanism population.
+
+RV0 is committed as `01089be`. RV1's closed scope and retirement mapping remain
+in `rv1-design-01.md`, `rv1-candidate-15.md` and `rv1-correction-24.md` under the
+evidence root. [WORKFLOWS](WORKFLOWS.md), [BRIDGE](BRIDGE.md) and
+[PRESENTATION](PRESENTATION.md) own its current behavior: copied Verify includes
+successful partial/linked work, refuses empty scope, admits scan-created rows,
+and preserves ordinary baselined/incomplete/zero-result truth. Linked automatic
+verification remains unchanged. The unexplained native01 larger-window receipt
+and its fixture are retained; later passes do not establish its cause.
+
+The next shared-table stages are elaborated in `rv2-rv3-design-01.md`: common
+server view/cache/scope arithmetic, browser viewport controller, read admission,
+then Inventory Follow/Go. `rv2-rv3-refresh-02.md` reconciles RV1's ordinary scope,
+workflow-owned path admission and current-evidence invalidation; recheck its
+unchanged Stage A owners against the integrated RV1 commit before implementation.
+`rv5-census-01.md` identifies the independent command catalog, shared specimen
+producers, gallery-only row adapter and equivalent-witness journey reductions;
+execution journey changes belong to RV1 first. These are finite designs, not
+acceptance evidence or permission to bypass the dependency gates above.
 
 ### Verify table hardening — 2026-10-15–16
 
@@ -369,9 +388,11 @@ wheel/tilt observations remain for that review, without a claimed fix or visual
 acceptance. M1-12, release, terminal subset retry and unrelated optimization
 remain outside this delivery.
 
-Preserve atomic publication, conditional recording including prior absence,
-root admission, fixed continuation identity and original execution truth.
-Manual exact readiness excludes already-verified members only after proving
+This delivery preserved atomic publication, conditional recording including
+prior absence, root admission, fixed continuation identity and original
+execution truth. Its exact-manual requirement below is superseded by RV1's
+ordinary copied-file decision; the linked automatic guarantees remain.
+Manual exact readiness excluded already-verified members only after proving
 the entire applicable set coherent; an empty set starts nothing. A selected
 byte operation without a successful terminal outcome, current committed
 evidence, or stable settlement blocks the handoff. Unrelated non-byte failure

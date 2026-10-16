@@ -40,24 +40,27 @@ the current live record's opaque checkpoint, and its separate metadata-store
 projection never persists it.
 This is not whole-process reference erasure; the scope and M2 protected
 recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store).
-Manual exact post-copy verification is implemented in `manual_verification.py`.
-It classifies the complete selected byte-producing population, including absent
-outcomes, against one coherent ledger snapshot. Readiness never grants authority:
-prepare classifies again, binds only the target, then reclassifies and freezes
-current evidence in the original execution scope. No inventory scan runs.
-The `manual-verify` registration has its own dispatcher/history identity and
-specific pause checkpoint; it calls the existing post-copy verifier and direct
-conditional recorder without rewriting or finishing the original execution.
-Frozen ledger-derived candidates exist only for this manual session and its
-pause continuation; original operation-time hashes are not retained. Resume
-resolves the frozen target identity, and paused cancel opens no native work.
-Task attachment now retains this session's frozen operation/row/location
-membership and normalized terminal outcomes separately from original execution
-and ordinary integrity results. Dispatcher normalization supplies accumulated
-outcomes across pause/resume/cancel; the workflow adds no second accumulator.
-The first exact action excludes linked execution and remains subject to current
-ledger classification. Interfaces own first-attempt custody and same-task
-association; visible desktop controls remain pending M1-10 consumers.
+Deferred Verify copied files uses the ordinary location-integrity workflow.
+The retained execution supplies target paths for successful selected
+COPY, UPDATE and MOVE_UPDATE outcomes; no-op, failed and absent outcomes add no
+paths. An empty copied population refuses rather than becoming whole-location
+work. Successful work in partial or linked executions can be checked again.
+The scope is server-derived independently of current Inventory checkboxes.
+The workflow deduplicates paths by canonical identity and owns copied-subject
+membership and path-to-row admission. The adapter retains compact display
+outcomes and stages bindings only after accepting the corresponding fact.
+
+Each fresh action admits the target and scans the copied paths, then uses current
+ledger evidence and ordinary verify policy. A missing baseline can be established
+without claiming verification. Missing/unsupported subjects, incomplete scans,
+recording degradation and zero outcomes retain ordinary truth. New commands may
+repeat the operation; observing one original command never repeats its effect.
+There is no exact-manual workflow, first-attempt claim or separate result slot.
+Ordinary results replace the prior ordinary generation, without rewriting the
+original execution or automatic verification. Scans can supersede execution-
+relative ledger evidence. Immediate linked verification still uses transient
+copy attestations and its existing same-session continuation; those hashes are
+not retained for the deferred action.
 
 Installed NamiSync modules are trusted-but-fallible internal (rung 3)
 participants, not adversarial security principals. Their public returns are the
@@ -638,8 +641,8 @@ builds one complete projection. Missing locations are unavailable. This read
 does not create a location, admit a root, scan or hash. Its publication carries
 no scan provenance; execution discovery is not an inventory scan. After a task
 has performed a real Inventory or ordinary integrity scan, its interface
-publication retains those actual scan facts through later manual verification.
-Ordinary integrity's fresh scan advances that provenance to its own request.
+publication retains those actual scan facts through later ledger-only reads.
+Each ordinary integrity scan advances that provenance to its own request.
 
 Inventory, baseline, verify, and rebaseline are location-centric,
 not plan- or mapping-dependent. The workflow resolves or registers one selected
@@ -699,9 +702,9 @@ retains the exact admitted candidate ids plus completed ids/bytes; resume
 freshly inventories and guards those remaining rows without adding a newly
 appeared row. Inventory and plan register pause unsupported and remain
 cooperatively cancelable. The production interface registry includes these
-workflow kinds and same-task manual post-copy verification. The CLI reaches
-standalone and reviewed-sync activities through the shared service; the exact
-manual post-copy action uses the task's retained execution binding.
+workflow kinds. The CLI reaches standalone and reviewed-sync activities through
+the shared service; deferred Verify copied files derives successful target paths
+from the task's retained execution binding and reuses ordinary Verify.
 
 After integrity selection, running cancellation or ordinary failure derives
 terminal item and byte counters from that live checkpoint rather than the

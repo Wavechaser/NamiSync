@@ -89,7 +89,6 @@ from namisync.workflows import (
     BASELINE_KIND,
     EXECUTION_KIND,
     INVENTORY_KIND,
-    MANUAL_VERIFY_KIND,
     PLAN_KIND,
     REBASELINE_KIND,
     VERIFY_KIND,
@@ -593,8 +592,6 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "open_inventory_view",
         "refresh_inventory",
         "start_inventory_integrity",
-        "get_manual_verification_readiness",
-        "start_manual_verification",
         "control_integrity",
         "acknowledge_inventory",
         "restore_inventory",
@@ -626,7 +623,6 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     async_commands = {
         "refresh_inventory",
         "start_inventory_integrity",
-        "start_manual_verification",
         "acknowledge_inventory",
         "restore_inventory",
         "create_task",
@@ -646,7 +642,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         name for name, spec in commands.items()
         if spec.response_policy is CommandResponsePolicy.MUTATION_OBSERVED
     } == {
-        "create_task", "start_plan", "start_inventory", "refresh_inventory", "start_inventory_integrity", "start_manual_verification", "control_integrity",
+        "create_task", "start_plan", "start_inventory", "refresh_inventory", "start_inventory_integrity", "control_integrity",
         "acknowledge_inventory", "restore_inventory",
         "plan_again", "mutate_plan_selection", "mutate_plan_scope",
         "mutate_plan_highlighted_selection", "start_execution",
@@ -674,13 +670,13 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         (("list_tasks", "read_cosmetic_section", "open_inventory_view"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
          CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
-        (("get_inventory_window", "get_inventory_detail", "get_manual_verification_readiness"), CommandAccess.READ_ONLY,
+        (("get_inventory_window", "get_inventory_detail"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
         (("update_inventory_view", "set_inventory_selection", "mutate_inventory_highlight", "set_inventory_highlighted_selection"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
-        (("refresh_inventory", "start_inventory_integrity", "start_manual_verification", "acknowledge_inventory", "restore_inventory"), CommandAccess.MUTATING,
+        (("refresh_inventory", "start_inventory_integrity", "acknowledge_inventory", "restore_inventory"), CommandAccess.MUTATING,
          FieldRequirement.REQUIRED, FieldRequirement.REQUIRED,
          CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
         (("next_events",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
@@ -3238,7 +3234,6 @@ def test_task_summary_accepts_complete_task_and_session_kind_domains() -> None:
         BASELINE_KIND,
         VERIFY_KIND,
         REBASELINE_KIND,
-        MANUAL_VERIFY_KIND,
     ):
         TaskSummaryView(
             TASK_ID,
@@ -3524,17 +3519,23 @@ def test_generic_record_serializer_preserves_result_free_snapshots() -> None:
 def test_ordinary_integrity_commands_bound_complete_intent_before_registry():
     commands, _, authority = _commands()
     payload = {"task_id": TASK_ID, "request_id": "8" * 32, "command_id": COMMAND_ID,
-               "expected_revision": 4, "mode": "rebaseline", "accept_current_evidence": True}
+               "expected_revision": 4, "mode": "rebaseline", "accept_current_evidence": True, "scope": "selected"}
     result = _invoke(commands["start_inventory_integrity"], payload)
     assert result.request_id == "6" * 32
     assert authority.calls[-1][3]["wire_intent"] == (
-        "inventory-integrity", TASK_ID, "8" * 32, 4, "rebaseline", True)
-    for patch in ({"mode": "manual-verify"}, {"mode": []}, {"accept_current_evidence": 1},
+        "inventory-integrity", TASK_ID, "8" * 32, 4, "rebaseline", True, "selected")
+    for patch in ({"scope": "copied"}, {"scope": []}, {"scope": "all"}, {"mode": "manual-verify"}, {"mode": []}, {"accept_current_evidence": 1},
                   {"accept_current_evidence": False}, {"expected_revision": True},
                   {"expected_revision": 2**53}, {"request_id": "x" * 33}, {"selected_paths": []}):
         with pytest.raises(CommandPayloadError):
             _invoke(commands["start_inventory_integrity"], {**payload, **patch})
     assert len(authority.calls) == 1
+    copied = {**payload, "mode": "verify", "accept_current_evidence": False, "scope": "copied"}
+    _invoke(commands["start_inventory_integrity"], copied)
+    assert authority.calls[-1][3]["scope"] == "copied"
+    assert authority.calls[-1][3]["wire_intent"][-1] == "copied"
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["start_inventory_integrity"], {key: value for key, value in copied.items() if key != "scope"})
     for action in ("pause", "resume", "cancel"):
         result = _invoke(commands["control_integrity"], {"task_id": TASK_ID, "session_id": "7" * 32, "action": action})
         assert result.session_id == "7" * 32

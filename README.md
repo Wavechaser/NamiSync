@@ -66,8 +66,10 @@ sorting, current evidence Details, same-task Refresh and missing-row
 acknowledge/restore visibility, shared Ctrl/Shift row highlighting,
 filter-scoped file selection and standalone
 Baseline/Verify/Rebaseline with live controls and separate results. Execution
-tasks retain Plan review alongside a Verify pane for the first exact post-copy
-verification or an explicitly selected ordinary fallback. Final lifecycle
+tasks retain Plan review alongside a Verify pane for repeatable ordinary
+verification of copied files or the current checkbox selection. These actions
+scan current state and may supersede execution-relative evidence; original
+execution and automatic verification results remain unchanged. Final lifecycle
 acceptance, packaging and beta closure remain open, so the window is
 not yet the complete desktop product.
 The [M1 delivery register](docs/M1_PLAN.md) records execution-review acceptance,
@@ -326,8 +328,9 @@ headed shell. Inventory review adds bounded browsing, current evidence,
 same-task Refresh, conditional missing-row visibility, shared row highlighting
 and filter-scoped file selection
 and standalone integrity controls/results. Plan/Verify navigation keeps original
-execution review separate from manual post-copy and ordinary current-state
-verification. Final lifecycle acceptance and beta packaging remain open.
+execution review separate from ordinary current-state verification, including
+repeatable verification of successful copy targets. Final lifecycle acceptance
+and beta packaging remain open.
 
 ### M1 Features
 

@@ -195,7 +195,7 @@ testWindow.pywebview = {
 const modulePath = process.argv[2];
 assert.ok(modulePath, "bridge module path is required");
 const recordKind = process.argv[4] ?? "sync-plan";
-assert.ok(["sync-plan", "manual-verify"].includes(recordKind));
+assert.ok(["sync-plan", "verify"].includes(recordKind));
 const crossBoundaryFixtureArgument = process.argv[3];
 const crossBoundaryFixture = crossBoundaryFixtureArgument === undefined
   ? null
@@ -262,7 +262,7 @@ const terminalRecord = (sessionId, result = operationResult) => ({
     session_id: sessionId,
     kind: recordKind,
     state: "completed",
-    supports_pause: recordKind === "manual-verify",
+    supports_pause: recordKind === "verify",
     created_at: at,
     started_at: at,
     ended_at: at,

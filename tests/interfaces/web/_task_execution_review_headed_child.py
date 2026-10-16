@@ -26,7 +26,6 @@ _COMMANDS = frozenset({
     "start_execution", "release_terminal_session", "get_plan_window",
     "mutate_plan_highlight", "get_execution_detail",
     "open_inventory_view", "get_inventory_window",
-    "get_manual_verification_readiness", "start_manual_verification",
     "control_execution", "refresh_inventory", "start_inventory_integrity",
     "set_inventory_selection", "control_integrity", "close_task",
 })
@@ -36,15 +35,14 @@ _GEOMETRY = frozenset({
     "disclosureVisible", "disclosureHit",
 })
 _RETENTION = frozenset({
-    "sameRenderer", "sameList", "sameRow", "planReturned", "taskRetained",
+    "sameRenderer", "sameList", "planReturned", "taskRetained",
     "rowRetained", "scrollRetained",
     "detailRetained", "selectionRetained", "keyboardRetained", "followRetained",
 })
 _ACTIONS = frozenset({
-    "exactReadinessVisible", "manualResultVisible", "manualRowVisible",
+    "copiedActionVisible", "copiedResultVisible", "copiedRowVisible",
     "fallbackVisible", "ordinaryResultVisible", "ordinaryRowVisible",
-    "resultsSeparated", "closedBoth",
-    "refreshCancelledWithoutScan", "refreshConfirmedOnce", "refreshNativeTrusted",
+    "closedBoth", "refreshSubmittedOnce",
 })
 _WAIT_REVIEW_DIAGNOSTIC = frozenset({
     "stageExecuteReady", "stageCaptureReady", "nativeConfirmed",
@@ -66,12 +64,12 @@ _CAPTURE_READINESS_DIAGNOSTIC = frozenset({
     "originalReleaseObserved", "windowObserved", "originalLifecycleReleased",
     "executionBeforeOriginalRelease", "originalReleaseBeforeWindow",
     "detailObserved", "detailOperationMatches", "detailRevisionMatches",
-    "manualObserved", "manualReleaseObserved", "manualBeforeRelease",
-    "manualLifecycleReleased", "taskPresent", "currentSessionIsManual",
+    "ordinaryObserved", "ordinaryReleaseObserved", "ordinaryBeforeRelease",
+    "ordinaryLifecycleReleased", "taskPresent", "currentSessionIsOrdinary",
     "currentSessionReleased", "captureReady",
 })
 _SELECTION_TIMEOUT_BOOLS = frozenset({
-    "refreshObserved", "refreshReleaseObserved", "supersededReadinessObserved",
+    "refreshObserved", "refreshReleaseObserved", "currentInventoryObserved",
     "phaseFailureObserved", "verifyVisible", "fallbackLabelCurrent",
     "fallbackVisible", "fallbackDisabled", "fixtureRowPresent", "checkboxConnected",
     "checkboxDisabled", "checkboxChecked", "checkboxHittable",
@@ -84,7 +82,6 @@ _SELECTION_TIMEOUT_DOM_BOOLS = frozenset({
 _BLOCKED_STAGES = frozenset({
     "exact-close", "blocked-execution", "blocked-execution-release", "blocked-verify-pane",
     "blocked-initial-readiness", "blocked-refresh", "blocked-handoff",
-    "refresh-cancel-ready", "refresh-confirm-ready",
     "blocked-fallback-control", "blocked-row", "blocked-checkbox", "selection-ready",
 })
 _SCROLL_DIAGNOSTIC_POINTS = frozenset({
@@ -134,8 +131,6 @@ class _ExecutionReviewPhase:
         self.execution_detail_attempt: dict[str, object] | None = None
         self.inventory_open: dict[str, object] | None = None
         self.inventory_window: dict[str, object] | None = None
-        self.readiness: list[dict[str, object]] = []
-        self.manual: dict[str, object] | None = None
         self.refresh: dict[str, object] | None = None
         self.refresh_admissions = 0
         self.selection: dict[str, object] | None = None
@@ -343,7 +338,7 @@ class _ExecutionReviewPhase:
                     "session_id": result.session_id,
                 }
             elif payload.session_id in {
-                value["session_id"] for value in (self.manual, self.refresh, self.ordinary)
+                value["session_id"] for value in (self.refresh, self.ordinary)
                 if value is not None
             }:
                 if not any(item["session_id"] == payload.session_id
@@ -432,62 +427,14 @@ class _ExecutionReviewPhase:
                 return
             if result.get("view_revision") != payload.expected_revision:
                 raise ValueError("inventory window revision changed")
-            manual = result.get("manual_verification")
             integrity = result.get("integrity")
             self.inventory_window = {
                 "admitted": admitted, "completed": completed,
                 "view_revision": result.get("view_revision"),
                 "row_count": len(result.get("rows", [])),
-                "manual_session_id": manual.get("session_id") if type(manual) is dict else None,
-                "manual_complete": manual.get("complete") if type(manual) is dict else None,
-                "manual_item_count": len(manual.get("items", [])) if type(manual) is dict else None,
                 "integrity_session_id": integrity.get("session_id") if type(integrity) is dict else None,
                 "integrity_complete": integrity.get("complete") if type(integrity) is dict else None,
                 "integrity_item_count": len(integrity.get("items", [])) if type(integrity) is dict else None,
-            }
-            return
-        if name == "get_manual_verification_readiness":
-            if (payload.session_id != self.execution["session_id"]
-                    or self.window is None
-                    or type(result) is not dict
-                    or result.get("task_id") != self.plan["task_id"]
-                    or result.get("session_id") != payload.session_id
-                    or type(result.get("execution_revision")) is not int):
-                raise ValueError("manual readiness changed original execution identity")
-            if result.get("reason") == "conflict":
-                return
-            if result["execution_revision"] != payload.expected_execution_revision:
-                raise ValueError("manual readiness changed original execution identity")
-            if payload.expected_execution_revision != self.window["execution_revision"]:
-                return
-            self.readiness.append({
-                "admitted": admitted, "completed": completed,
-                "reason": result.get("reason"),
-                "applicable_count": result.get("applicable_count"),
-                "ready_count": result.get("ready_count"),
-                "already_verified_count": result.get("already_verified_count"),
-                "attempted": result.get("attempted"),
-                "session_id": result.get("session_id"),
-                "execution_revision": result.get("execution_revision"),
-            })
-            return
-        if name == "start_manual_verification":
-            latest = self.readiness[-1] if self.readiness else None
-            if (self.manual is not None or self.branch != "exact"
-                    or payload.session_id != self.execution["session_id"]
-                    or self.window is None
-                    or payload.expected_execution_revision != self.window["execution_revision"]
-                    or latest is None or latest["reason"] != "ready"
-                    or latest.get("execution_revision") != payload.expected_execution_revision
-                    or latest["ready_count"] != len(self.fixture)
-                    or latest["attempted"] is not False
-                    or result.task_id != self.plan["task_id"]):
-                raise ValueError("manual start did not consume current exact readiness")
-            self.manual = {
-                "admitted": admitted, "completed": completed,
-                "request_id": result.request_id, "session_id": result.session_id,
-                "command_id": payload.command_id,
-                "readiness": dict(latest),
             }
             return
         if name == "refresh_inventory":
@@ -522,25 +469,26 @@ class _ExecutionReviewPhase:
             }
             return
         if name == "start_inventory_integrity":
-            latest = self.readiness[-1] if self.readiness else None
-            refresh_released = self._owner_released_locked(self.refresh)
-            if (self.branch != "blocked" or payload.mode != "verify"
-                    or latest is None or latest["reason"] != "superseded"
-                    or not refresh_released or self.selection is None
-                    or self.selection["completed"] >= admitted
-                    or payload.request_id != self.selection["request_id"]
-                    or payload.expected_revision != self.selection["view_revision"]
-                    or self.selection["selected_file_count"] != len(self.fixture)
-                    or result.task_id != self.plan["task_id"]):
-                raise ValueError("ordinary fallback did not follow a blocked exact handoff")
+            scope_owner = self.inventory_open if self.branch == "exact" else self.selection
+            if (self.ordinary is not None or self.inventory_open is None
+                    or scope_owner is None
+                    or payload.mode != "verify" or result.task_id != self.plan["task_id"]
+                    or payload.request_id != scope_owner["request_id"]
+                    or payload.expected_revision != scope_owner["view_revision"]
+                    or payload.scope != ("copied" if self.branch == "exact" else "selected")):
+                raise ValueError("ordinary verification did not consume the current scope")
+            if self.branch == "blocked" and (not self._owner_released_locked(self.refresh)
+                    or self.selection is None or self.selection["completed"] >= admitted
+                    or self.selection["selected_file_count"] != len(self.fixture)):
+                raise ValueError("ordinary selected verification preceded selection")
             self.ordinary = {
                 "admitted": admitted, "completed": completed,
                 "request_id": result.request_id, "session_id": result.session_id,
-                "command_id": payload.command_id,
+                "command_id": payload.command_id, "scope": payload.scope,
             }
             return
         if name in {"control_execution", "control_integrity"}:
-            owner = self.manual if name == "control_execution" else self.ordinary
+            owner = self.ordinary
             if owner is None or payload.session_id != owner["session_id"] or not result.accepted:
                 raise ValueError("auxiliary control changed current session identity")
             self.controls.append({
@@ -552,7 +500,7 @@ class _ExecutionReviewPhase:
                 self.worker_release.set()
             return
         if name == "close_task":
-            owner = self.manual if self.branch == "exact" else self.ordinary
+            owner = self.ordinary
             if (owner is None or payload.session_id != owner["session_id"]
                     or result.task_id != self.plan["task_id"]
                     or result.session_id != payload.session_id):
@@ -626,7 +574,7 @@ class _ExecutionReviewPhase:
             return self._capture_ready_locked()
 
     def _capture_ready_locked(self) -> bool:
-        owner = self.manual
+        owner = self.ordinary
         if not self._detail_ready_locked() or not self._owner_released_locked(owner):
             return False
         task = next((
@@ -644,10 +592,10 @@ class _ExecutionReviewPhase:
             release = self.release
             window = self.window
             detail = self.detail
-            manual = self.manual
-            manual_release = None if manual is None else next((
+            ordinary = self.ordinary
+            ordinary_release = None if ordinary is None else next((
                 item for item in self.auxiliary_releases
-                if item["session_id"] == manual["session_id"]
+                if item["session_id"] == ordinary["session_id"]
             ), None)
             task = None if self.registry is None or self.plan is None else next((
                 item for item in self.registry.list_tasks().tasks
@@ -657,9 +605,9 @@ class _ExecutionReviewPhase:
                 execution is not None
                 and self._session_released_locked(execution["session_id"])
             )
-            manual_lifecycle_released = bool(
-                manual is not None
-                and self._session_released_locked(manual["session_id"])
+            ordinary_lifecycle_released = bool(
+                ordinary is not None
+                and self._session_released_locked(ordinary["session_id"])
             )
             return {
                 "recordingHealthy": self.failure is None,
@@ -685,17 +633,17 @@ class _ExecutionReviewPhase:
                     detail is not None and window is not None
                     and detail["execution_revision"] == window["execution_revision"]
                 ),
-                "manualObserved": manual is not None,
-                "manualReleaseObserved": manual_release is not None,
-                "manualBeforeRelease": bool(
-                    manual is not None and manual_release is not None
-                    and manual["completed"] < manual_release["admitted"]
+                "ordinaryObserved": ordinary is not None,
+                "ordinaryReleaseObserved": ordinary_release is not None,
+                "ordinaryBeforeRelease": bool(
+                    ordinary is not None and ordinary_release is not None
+                    and ordinary["completed"] < ordinary_release["admitted"]
                 ),
-                "manualLifecycleReleased": manual_lifecycle_released,
+                "ordinaryLifecycleReleased": ordinary_lifecycle_released,
                 "taskPresent": task is not None,
-                "currentSessionIsManual": bool(
-                    task is not None and manual is not None
-                    and task.session_id == manual["session_id"]
+                "currentSessionIsOrdinary": bool(
+                    task is not None and ordinary is not None
+                    and task.session_id == ordinary["session_id"]
                 ),
                 "currentSessionReleased": bool(
                     task is not None and task.session_released
@@ -709,17 +657,17 @@ class _ExecutionReviewPhase:
 
     def finished_ready(self) -> bool:
         with self.lock:
-            owner = self.manual if self.branch == "exact" else self.ordinary
+            owner = self.ordinary
             owner_released = self._owner_released_locked(owner)
             actions = [(item["command"], item["action"]) for item in self.controls]
             if self.branch == "exact":
                 overlay_ready = bool(
-                    self.inventory_window is not None and self.manual is not None
-                    and self.inventory_window["manual_session_id"] == self.manual["session_id"]
-                    and self.inventory_window["manual_complete"] is True
-                    and self.inventory_window["manual_item_count"] == len(self.fixture)
+                    self.inventory_window is not None and self.ordinary is not None
+                    and self.inventory_window["integrity_session_id"] == self.ordinary["session_id"]
+                    and self.inventory_window["integrity_complete"] is True
+                    and self.inventory_window["integrity_item_count"] == len(self.fixture)
                 )
-                required = [("control_execution", "pause"), ("control_execution", "resume")]
+                required = [("control_integrity", "pause"), ("control_integrity", "resume")]
                 return bool(
                     self._detail_ready_locked() and owner_released
                     and actions == required and overlay_ready and self.close is not None
@@ -734,9 +682,6 @@ class _ExecutionReviewPhase:
             required = [("control_integrity", "pause"), ("control_integrity", "resume")]
             return bool(
                 self._original_review_receipts_locked() and refresh_released
-                and any(item["reason"] == "ready" and item["ready_count"] == len(self.fixture)
-                        for item in self.readiness)
-                and any(item["reason"] == "superseded" for item in self.readiness)
                 and self.selection is not None
                 and self.selection["selected_file_count"] == len(self.fixture)
                 and self.selection["request_id"] == self.refresh["request_id"]
@@ -823,8 +768,7 @@ class _ExecutionReviewPhase:
                 "execution_detail_attempt": self.execution_detail_attempt,
                 "inventory_open": self.inventory_open,
                 "inventory_window": self.inventory_window,
-                "readiness": self.readiness,
-                "manual": self.manual, "refresh": self.refresh, "selection": self.selection,
+                "refresh": self.refresh, "selection": self.selection,
                 "refresh_admissions": self.refresh_admissions,
                 "current_association": None if task is None else {
                     "task_id": task.task_id, "request_id": task.request_id,
@@ -1172,10 +1116,13 @@ _PAGE = r"""
   observeDisconnection();
   scrollInteractionDiagnostic.afterDetail = interactionFact(adoptedRow);
   const rowActivationFocused = document.activeElement === adoptedRow;
+  const executionFacts = element => [...element.querySelectorAll('dt')]
+    .filter(term => term.textContent !== 'Stored evidence' && !term.textContent.startsWith('Evidence '))
+    .map(term => [term.textContent, term.nextElementSibling?.textContent ?? '']);
   const retained = {
-    review, rows, row: adoptedRow, detail, disclosure,
+    review, rows, detail, disclosure,
     nodeId: focusedNodeId, scrollTop: rows.scrollTop, tabIndex: adoptedRow.tabIndex,
-    detailText: detail.textContent,
+    detailFacts: executionFacts(detail),
     rowText: adoptedRow.querySelector('.nami-file-row__name-text')?.textContent ?? '',
     follow: [...review.querySelectorAll('[data-action="go-current-operation"], [data-action="enable-operation-follow"]')]
       .map((value) => [value.dataset.action, value.hidden, value.disabled, value.textContent]),
@@ -1221,37 +1168,32 @@ _PAGE = r"""
   }, 'Verify pane');
   if (!inactivePane(review)) throw new Error('inactive Plan pane remains visible');
   scrollDiagnostic.hiddenAfterVerify = scrollFact(rows);
-  const exactStart = await until(() => usable(inventory, 'verify-copied-files'), 'exact manual readiness');
-  const readiness = inventory.querySelector('[data-manual-readiness]');
-  const exactReadinessVisible = readiness instanceof HTMLElement
-    && readiness.closest('[hidden]') === null && readiness.textContent.trim() !== '';
-  if (!exactReadinessVisible || !action(inventory, 'inventory-baseline')?.hidden
+  const exactStart = await until(() => usable(inventory, 'verify-copied-files'), 'copied action');
+  const copiedActionVisible = exactStart.isConnected;
+  if (!action(inventory, 'inventory-baseline')?.hidden
       || !action(inventory, 'inventory-rebaseline')?.hidden) {
     throw new Error('sync Verify action presentation is invalid');
   }
   exactStart.click();
-  const manualPause = await until(() => usable(inventory, 'inventory-pause'), 'manual pause');
-  manualPause.click();
-  const manualResume = await until(() => usable(inventory, 'inventory-resume'), 'manual resume');
-  manualResume.click();
+  const copiedPause = await until(() => usable(inventory, 'inventory-pause'), 'ordinary pause');
+  copiedPause.click();
+  const copiedResume = await until(() => usable(inventory, 'inventory-resume'), 'ordinary resume');
+  copiedResume.click();
   await until(async () => {
     const value = (await control()).exact;
-    return value?.manual !== null
-      && value?.auxiliary_releases?.some((item) => item.session_id === value.manual.session_id)
-      && value?.inventory_window?.manual_session_id === value.manual.session_id
-      && value?.inventory_window?.manual_complete === true ? value : null;
-  }, 'manual terminal overlay');
-  const manualResult = await until(() => {
-    const value = inventory.querySelector('[data-manual-verification-result]');
+    return value?.ordinary !== null
+      && value?.auxiliary_releases?.some((item) => item.session_id === value.ordinary.session_id)
+      && value?.inventory_window?.integrity_session_id === value.ordinary.session_id
+      && value?.inventory_window?.integrity_complete === true ? value : null;
+  }, 'ordinary terminal overlay');
+  const copiedResult = await until(() => {
+    const value = inventory.querySelector('[data-integrity-result]');
     return value instanceof HTMLElement && value.closest('[hidden]') === null
       && value.textContent.trim() !== '' ? value : null;
-  }, 'manual result');
-  const manualResultVisible = manualResult.isConnected;
-  const manualRow = visibleFact(inventory, '[data-manual-verification-state]');
-  const manualRowVisible = manualRow !== null && !manualRow.hasAttribute('data-integrity-state');
-  const exactOrdinaryResult = inventory.querySelector('[data-integrity-result]');
-  const exactResultsSeparated = exactOrdinaryResult === null || exactOrdinaryResult.hidden
-    || exactOrdinaryResult.textContent.trim() === '';
+  }, 'ordinary result');
+  const copiedResultVisible = copiedResult.isConnected;
+  const copiedRow = visibleFact(inventory, '[data-integrity-state]');
+  const copiedRowVisible = copiedRow !== null;
 
   const planPane = usable(inventory, 'pane-plan');
   if (planPane === null || planPane.getAttribute('aria-checked') !== 'false') {
@@ -1264,6 +1206,12 @@ _PAGE = r"""
     return value instanceof HTMLElement && value.isConnected && value.closest('[hidden]') === null
       ? value : null;
   }, 'retained Plan pane');
+  await until(() => {
+    const detail = returnedReview.querySelector('.nami-plan-review__detail');
+    const evidence = [...detail.querySelectorAll('dt')].find(term => term.textContent === 'Stored evidence');
+    return evidence?.nextElementSibling?.textContent === 'Superseded'
+      && ![...detail.querySelectorAll('dt')].some(term => term.textContent === 'Evidence digest');
+  }, 'superseded execution evidence');
   if (!inactivePane(inventory)) throw new Error('inactive Verify pane remains visible');
   const returnedRows = returnedReview.querySelector('.nami-plan-review__list');
   const returnedRow = returnedReview.querySelector(`[data-node-id="${retained.nodeId}"]`);
@@ -1273,15 +1221,14 @@ _PAGE = r"""
   const retention = {
     sameRenderer: returnedReview === retained.review,
     sameList: returnedRows === retained.rows,
-    sameRow: returnedRow === retained.row,
     planReturned: action(returnedReview, 'pane-plan')?.getAttribute('aria-checked') === 'true',
     taskRetained: card.getAttribute('aria-current') === 'page',
     rowRetained: returnedRow instanceof HTMLElement
       && returnedRow.querySelector('.nami-file-row__name-text')?.textContent === retained.rowText,
     scrollRetained: returnedRows instanceof HTMLElement
       && Math.abs(returnedRows.scrollTop - retained.scrollTop) <= 1 && retained.scrollTop > 0,
-    detailRetained: returnedDetail instanceof HTMLElement && !returnedDetail.hidden
-      && returnedDetail.textContent === retained.detailText,
+    detailRetained: returnedDetail === retained.detail && !returnedDetail.hidden
+      && JSON.stringify(executionFacts(returnedDetail)) === JSON.stringify(retained.detailFacts),
     selectionRetained: returnedRow?.dataset.highlighted === 'true'
       && returnedRow?.getAttribute('aria-selected') === 'true',
     keyboardRetained: returnedRow?.tabIndex === retained.tabIndex && retained.tabIndex === 0,
@@ -1322,76 +1269,33 @@ _PAGE = r"""
   }, 'blocked initial exact readiness');
   window.__executionReviewBlockedStage = 'blocked-refresh';
   const refresh = await until(() => usable(blockedInventory, 'inventory-refresh'), 'blocked refresh');
-  const beforeRefreshChoice = (await control()).blocked;
-  if (beforeRefreshChoice.refresh_admissions !== 0) throw new Error('Refresh submitted before choice');
-  const refreshInputs = {};
-  const chooseRefresh = async (choice) => {
-    const dialog = await until(() => {
-      const value = document.getElementById('refresh-confirmation');
-      return value?.open === true ? value : null;
-    }, 'Refresh warning');
-    const button = dialog.querySelector(choice === 'cancel' ? '[data-cancel-execution]' : '[data-confirm-execution]');
-    if (!(button instanceof HTMLButtonElement)) throw new Error('Refresh choice missing');
-    if (document.activeElement !== dialog.querySelector('[data-cancel-execution]')) {
-      throw new Error('Refresh warning did not focus Cancel');
-    }
-    const input = {down:false, up:false, click:false};
-    refreshInputs[choice] = input;
-    button.addEventListener('mousedown', event => { input.down ||= event.isTrusted; }, {once:true});
-    button.addEventListener('mouseup', event => { input.up ||= event.isTrusted; }, {once:true});
-    button.addEventListener('click', event => { input.click ||= event.isTrusted; }, {once:true});
-    button.focus();
-    window.__executionReviewRefreshTarget = () => {
-      const bounds = button.getBoundingClientRect();
-      const point = {x:(bounds.left+bounds.right)/2, y:(bounds.top+bounds.bottom)/2};
-      if (!dialog.open || !button.isConnected || button.disabled || !document.hasFocus()
-          || document.activeElement !== button || bounds.width <= 0 || bounds.height <= 0
-          || point.x < 0 || point.y < 0 || point.x >= innerWidth || point.y >= innerHeight
-          || document.elementFromPoint(point.x, point.y) !== button) {
-        throw new Error('Refresh choice target changed');
-      }
-      return point;
-    };
-    window.__executionReviewBlockedStage = `refresh-${choice}-ready`;
-    window.__executionReviewStage = `refresh-${choice}-ready`;
-    await until(() => window.__executionReviewRefreshChoiceAck === choice, 'native Refresh choice');
-    await until(() => input.down && input.up && input.click, 'trusted Refresh choice');
-    await until(() => !dialog.open, 'Refresh warning exit');
-  };
   refresh.click();
-  await chooseRefresh('cancel');
-  const afterRefreshCancel = (await control()).blocked;
-  const refreshCancelledWithoutScan = afterRefreshCancel.refresh_admissions === 0
-    && JSON.stringify(beforeRefreshChoice.current_association) === JSON.stringify(afterRefreshCancel.current_association)
-    && afterRefreshCancel.readiness.at(-1)?.reason === 'ready'
-    && usable(blockedInventory, 'verify-copied-files') !== null
-    && document.activeElement === refresh;
-  if (!refreshCancelledWithoutScan) throw new Error('Refresh Cancel changed the task or exact opportunity');
-  refresh.click();
-  await chooseRefresh('confirm');
   await until(async () => (await control()).blocked.refresh_admissions === 1, 'Refresh admission');
-  const refreshConfirmedOnce = (await control()).blocked.refresh_admissions === 1;
-  const refreshNativeTrusted = Object.values(refreshInputs).every(input => input.down && input.up && input.click);
-  if (!refreshConfirmedOnce) throw new Error('Refresh Confirm did not submit once');
+  const refreshSubmittedOnce = (await control()).blocked.refresh_admissions === 1;
   window.__executionReviewBlockedStage = 'blocked-handoff';
   await until(async () => {
     const value = (await control()).blocked;
     return value?.refresh !== null
       && value?.auxiliary_releases?.some((item) => item.session_id === value.refresh.session_id)
-      && value?.readiness?.some((item) => item.reason === 'superseded') ? value : null;
+      ? value : null;
   }, 'superseded exact handoff');
+  await until(async () => {
+    const value = (await control()).blocked;
+    return value?.inventory_open?.request_id === value?.refresh?.request_id
+      && value?.inventory_open?.scan_request_id === value?.refresh?.request_id;
+  }, 'current refreshed inventory');
   window.__executionReviewBlockedStage = 'blocked-row';
-  const fallbackRow = await until(() => [...blockedInventory.querySelectorAll(
-    '.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id]'
-  )].find((value) => value.querySelector('.nami-file-row__name-text')?.textContent === 'one.txt') ?? null,
-  'blocked inventory row');
+  const {row:fallbackRow, checkbox:fallbackCheckbox} = await until(() => {
+    const row = [...blockedInventory.querySelectorAll(
+      '.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id]'
+    )].find((value) => value.querySelector('.nami-file-row__name-text')?.textContent === 'one.txt');
+    const checkbox = row?.querySelector(
+      ':scope > .nami-file-row__selection > input[data-action="inventory-select-row"]');
+    return row?.isConnected && checkbox instanceof HTMLInputElement
+      && !checkbox.disabled && !checkbox.checked && checkbox.closest('[hidden]') === null
+      ? {row, checkbox} : null;
+  }, 'blocked inventory selection');
   window.__executionReviewBlockedStage = 'blocked-checkbox';
-  const fallbackCheckbox = fallbackRow.querySelector(
-    ':scope > .nami-file-row__selection > input[data-action="inventory-select-row"]');
-  if (!(fallbackCheckbox instanceof HTMLInputElement) || fallbackCheckbox.disabled
-      || fallbackCheckbox.checked || fallbackCheckbox.closest('[hidden]') !== null) {
-    throw new Error('blocked inventory selection unavailable');
-  }
   fallbackCheckbox.focus();
   await new Promise((resolve) => requestAnimationFrame(resolve));
   const checkboxRect = fallbackCheckbox.getBoundingClientRect();
@@ -1440,10 +1344,10 @@ _PAGE = r"""
       && value.closest('[hidden]') === null && !value.disabled
       && value.textContent.trim() === 'Verify current state' ? value : null;
   }, 'ordinary fallback control');
-  const fallbackVisible = action(blockedInventory, 'verify-copied-files')?.hidden === true
+  const fallbackVisible = usable(blockedInventory, 'verify-copied-files') !== null
     && action(blockedInventory, 'inventory-baseline')?.hidden === true
     && action(blockedInventory, 'inventory-rebaseline')?.hidden === true;
-  if (!fallbackVisible) throw new Error('blocked exact action remains available');
+  if (!fallbackVisible) throw new Error('copied action was forfeited by Refresh');
   const fallback = await until(() => usable(blockedInventory, 'inventory-verify'), 'ordinary fallback');
   if (fallback !== fallbackControl) throw new Error('ordinary fallback control changed after selection');
   fallback.click();
@@ -1465,12 +1369,7 @@ _PAGE = r"""
   }, 'ordinary result');
   const ordinaryResultVisible = ordinaryResult.isConnected;
   const ordinaryRow = visibleFact(blockedInventory, '[data-integrity-state]');
-  const ordinaryRowVisible = ordinaryRow !== null
-    && !ordinaryRow.hasAttribute('data-manual-verification-state');
-  const blockedManualResult = blockedInventory.querySelector('[data-manual-verification-result]');
-  const resultsSeparated = exactResultsSeparated && ordinaryResult !== blockedManualResult
-    && (blockedManualResult === null || blockedManualResult.hidden
-      || blockedManualResult.textContent.trim() === '');
+  const ordinaryRowVisible = ordinaryRow !== null;
   const blockedClose = blockedCard.parentElement?.querySelector('.nami-task-rail__close');
   if (!(blockedClose instanceof HTMLButtonElement) || blockedClose.disabled) throw new Error('blocked Close unavailable');
   blockedClose.click();
@@ -1480,10 +1379,8 @@ _PAGE = r"""
     geometry: window.__executionReviewGeometry,
     retention,
     actions: {
-      exactReadinessVisible, manualResultVisible,
-      manualRowVisible, fallbackVisible, ordinaryResultVisible,
-      ordinaryRowVisible, resultsSeparated, closedBoth,
-      refreshCancelledWithoutScan, refreshConfirmedOnce, refreshNativeTrusted,
+      copiedActionVisible, copiedResultVisible, copiedRowVisible, fallbackVisible,
+      ordinaryResultVisible, ordinaryRowVisible, closedBoth, refreshSubmittedOnce,
     },
   };
 })()
@@ -1689,52 +1586,8 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
         if value is not True:
             raise RuntimeError("capture acknowledgement failed")
         phase.acknowledge_capture()
-        wait_refresh_choice("cancel")
+        cdp.evaluate(wait_selection, select_fallback, "wait-selection")
         complete_if_ready()
-
-    def wait_refresh_choice(choice: str) -> None:
-        def ready(value: object) -> None:
-            if value is not True:
-                raise RuntimeError("Refresh native stage did not become ready")
-            owned_handle = int(native.Handle.ToInt64())
-            def refused(facts: dict[str, object]) -> None:
-                recorder.driver.with_name(f"refresh-{choice}-foreground-diagnostic.json").write_text(
-                    json.dumps(facts, sort_keys=True), encoding="utf-8",
-                )
-                fail(RuntimeError("Refresh foreground deadline expired"),
-                     None, f"refresh-{choice}-foreground", "foreground")
-            def dispatch(point: object) -> None:
-                if (type(point) is not dict or set(point) != {"x", "y"}
-                        or foreground_window_handle() != owned_handle):
-                    raise RuntimeError("Refresh native target is unavailable")
-                cdp.call("Input.dispatchMouseEvent", {
-                    "type": "mousePressed", "button": "left", "buttons": 1,
-                    "clickCount": 1, **point,
-                }, lambda _v: cdp.call("Input.dispatchMouseEvent", {
-                    "type": "mouseReleased", "button": "left", "buttons": 0,
-                    "clickCount": 1, **point,
-                }, clicked, f"refresh-{choice}-up"), f"refresh-{choice}-down")
-            wait_for_foreground(
-                owned_handle, activate=native.Activate,
-                ready=lambda: cdp.evaluate("window.__executionReviewRefreshTarget()",
-                                           dispatch, f"refresh-{choice}-target"),
-                refused=refused, retained=retained,
-            )
-        def clicked(_value: object) -> None:
-            def next_choice(_value: object) -> None:
-                if choice == "cancel":
-                    wait_refresh_choice("confirm")
-                else:
-                    cdp.evaluate(wait_selection, select_fallback, "wait-selection")
-            cdp.evaluate(f"window.__executionReviewRefreshChoiceAck='{choice}';true",
-                         next_choice, f"refresh-{choice}-ack")
-        cdp.evaluate(f"""(async () => {{
-          for (let i = 0; i < 1200; i += 1) {{
-            if (window.__executionReviewStage === 'refresh-{choice}-ready') return true;
-            await new Promise(resolve => setTimeout(resolve, 25));
-          }}
-          return false;
-        }})()""", ready, f"wait-refresh-{choice}")
 
     def selection_confirmed(_value: object) -> None:
         cdp.evaluate("window.__executionReviewSelectionConfirmed=true;true", lambda _v: None,
@@ -1760,10 +1613,7 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
                 type(item) is dict and item.get("session_id") == refresh.get("session_id")
                 for item in blocked["auxiliary_releases"]
             ),
-            "supersededReadinessObserved": any(
-                type(item) is dict and item.get("reason") == "superseded"
-                for item in blocked["readiness"]
-            ),
+            "currentInventoryObserved": bool(blocked["inventory_open"] is not None),
             "phaseFailureObserved": phase_failure is not None,
         }
         diagnostic = {
@@ -1980,27 +1830,16 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original = host._configure_window_appearance
     original_commands = host._production_commands
     from namisync.workflows.runtime import LocalWorkflowRuntime
-    original_manual = LocalWorkflowRuntime.open_manual_verification
     original_verify = LocalWorkflowRuntime.open_verify
-
-    def open_manual(runtime: object, checkpoint: object) -> object:
-        invocation = original_manual(runtime, checkpoint)
-        runner = invocation.runner
-        def gated(selection: object, context: object, ledger_recorder: object) -> object:
-            phase.exact.worker_entered.set()
-            if not phase.exact.worker_release.wait(30):
-                raise TimeoutError("manual verification worker gate timed out")
-            context.run.checkpoint()
-            return runner(selection, context, ledger_recorder)
-        invocation.runner = gated
-        return invocation
 
     def open_verify(runtime: object, checkpoint: object) -> object:
         invocation = original_verify(runtime, checkpoint)
         run = invocation.run
+        root = Path(checkpoint.binding.selected_mount) / checkpoint.binding.volume_relative_path
+        owner = phase.exact if root == phase.exact.target else phase.blocked
         def gated(context: object) -> object:
-            phase.blocked.worker_entered.set()
-            if not phase.blocked.worker_release.wait(30):
+            owner.worker_entered.set()
+            if not owner.worker_release.wait(30):
                 raise TimeoutError("ordinary verification worker gate timed out")
             context.checkpoint()
             return run(context)
@@ -2037,7 +1876,6 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         stack.enter_context(patch.object(host, "_production_commands", commands))
         stack.enter_context(headed_command_extension(host, extension))
         stack.enter_context(patch.object(host, "_configure_window_appearance", configure))
-        stack.enter_context(patch.object(LocalWorkflowRuntime, "open_manual_verification", open_manual))
         stack.enter_context(patch.object(LocalWorkflowRuntime, "open_verify", open_verify))
         code = host.run_desktop(AppPaths.from_root(arguments.data_dir), DesktopInstanceIdentity(arguments.mutex, arguments.title), startup_error=lambda _message: recorder.fail("startup", "DesktopStartupError"))
     if not recorder.settled:

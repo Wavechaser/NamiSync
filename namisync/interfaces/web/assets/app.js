@@ -11,7 +11,6 @@ import {
   getExecutionDetail,
   getInventoryDetail,
   getInventoryWindow,
-  getManualVerificationReadiness,
   getPlanAnchor,
   getPlanDetail,
   getPlanOperationAnchor,
@@ -36,7 +35,6 @@ import {
   StartPlanUncertainError,
   startInventory,
   startInventoryIntegrity,
-  startManualVerification,
   startExecution,
   startPlan,
   startTaskDrain,
@@ -272,16 +270,15 @@ const panel = createWorkPanel({
   onDetail: (review, nodeId) => { void readInventoryDetail(review, nodeId); },
   onReload: (task) => {
     void loadInventoryReview(task, true);
-    if (task.taskKind === "sync-plan") void loadManualReadiness(task);
   },
-  onRefresh: (review, nodeId, returnFocus) => { void runInventoryAction(review, "refresh", nodeId, returnFocus); },
+  onRefresh: (review, nodeId) => { void runInventoryAction(review, "refresh", nodeId); },
   onVisibility: (review, action, nodeId) => { void runInventoryAction(review, action, nodeId); },
   onSelect: (review, nodeId, selected) => { void changeInventorySelection(review, nodeId, selected); },
   onHighlightedSelect: (review, selected) => { void changeInventorySelection(review, null, selected, true); },
   onHighlight: (review, gesture, nodeId) => { void queueRowHighlight(review, gesture, nodeId, true); },
   onInterrupt: interruptPlanHighlight,
   onStart: (review, mode, returnFocus) => { void startInventoryIntegrityAction(review, mode, returnFocus); },
-  onManualStart: (review) => { void startManualVerificationAction(review); },
+  onCopiedStart: (review) => { void startInventoryIntegrityAction(review, "verify", null, "copied"); },
   onControl: (review, action) => { void controlInventoryIntegrity(review, action); },
   onCheckOutcome: (task) => { void checkInventoryOutcome(task); },
   onPaneChange: switchTaskPane,
@@ -305,14 +302,6 @@ const rebaselineConfirmation = createExecutionConfirmation([app, themeOptions], 
     + (detail === null ? "" : ` · ${detail}`),
 });
 document.body.append(rebaselineConfirmation.element);
-const refreshConfirmation = createExecutionConfirmation([app, themeOptions], {
-  id: "refresh-confirmation",
-  heading: "Refresh inventory?",
-  consequence: "Rescanning can make Verify copied files unavailable for this execution, even when files are unchanged. Cancel to verify copied files first. You can still select files and verify their current state afterward.",
-  confirm: "Refresh inventory",
-  count: (_value, detail) => detail,
-});
-document.body.append(refreshConfirmation.element);
 
 function taskArray() {
   return Array.from(tasks.values()).reverse();
@@ -375,7 +364,6 @@ function taskCloseBlockReason(task) {
 
 function renderTasks() {
   for (const task of tasks.values()) {
-    updateManualEligibility(task);
     if (task.form !== null) {
       task.form.startRecovery = task.startRecovery;
       task.form.recentPairAvailability = recentPairAvailability;
@@ -421,13 +409,9 @@ function setOriginalExecutionSession(task, sessionId) {
   if (task.executionSessionId === sessionId) return;
   task.executionSessionId = sessionId;
   task.originalExecutionFact = null;
-  task.manualReadiness = null;
-  task.manualReadinessError = null;
-  task.manualReadinessDemand = null;
-  task.manualReadinessRevision += 1;
 }
 
-function observeOriginalExecution(task, planRequestId, execution, demand = true) {
+function observeOriginalExecution(task, planRequestId, execution) {
   if (tasks.get(task.taskId) !== task || task.planRequestId !== planRequestId
       || execution?.session_id == null
       || (task.executionSessionId !== null && task.executionSessionId !== execution.session_id)) return;
@@ -435,39 +419,6 @@ function observeOriginalExecution(task, planRequestId, execution, demand = true)
   const previous = originalExecution(task);
   if (previous !== null && previous.execution_revision >= execution.execution_revision) return;
   task.originalExecutionFact = { planRequestId, execution };
-  task.manualReadiness = null;
-  task.manualReadinessError = null;
-  if (demand) void loadManualReadiness(task);
-}
-
-function normallyCompletedExecution(task) {
-  return originalExecution(task) !== null && task.executionSessionState === "completed";
-}
-
-function currentReadiness(task) {
-  const readiness = task.manualReadiness;
-  const execution = originalExecution(task);
-  return readiness !== null && execution !== null
-    && readiness.task_id === task.taskId
-    && readiness.session_id === task.executionSessionId
-    && readiness.execution_revision === execution.execution_revision
-    ? readiness : null;
-}
-
-function updateManualEligibility(task) {
-  const readiness = currentReadiness(task);
-  const review = task.inventoryReview;
-  const currentPublication = review !== null && review.summary.request_id === task.requestId
-    && !task.inventoryViewUnconfirmed && review.summary.selected_file_count > 0;
-  task.manualExactEligible = task.taskKind === "sync-plan" && task.workPane === "verify"
-    && !task.manualReadinessLoading && task.manualReadinessError === null
-    && readiness?.reason === "ready" && readiness.ready_count > 0 && !readiness.attempted
-    && task.sessionId !== null && task.sessionReleased && task.sessionState !== "active";
-  task.manualFallbackEligible = task.taskKind === "sync-plan" && task.workPane === "verify"
-    && !task.manualReadinessLoading && task.manualReadinessError === null
-    && normallyCompletedExecution(task) && currentPublication && task.sessionReleased
-    && task.sessionState !== "active" && ["incomplete", "unrecorded", "superseded",
-      "settlement-diverged"].includes(readiness?.reason);
 }
 
 function verifyPaneAvailable(task) {
@@ -487,7 +438,6 @@ function switchTaskPane(task, paneName) {
     task.workPane = "verify";
     renderTasks();
     void loadInventoryReview(task);
-    void loadManualReadiness(task);
     return;
   }
   if (task.inventoryReview !== null) {
@@ -496,6 +446,7 @@ function switchTaskPane(task, paneName) {
   }
   task.workPane = "plan";
   renderTasks();
+  if (task.executionWindowDirty) void refreshExecutionWindow(task);
 }
 
 function showSettings() {
@@ -719,13 +670,6 @@ function adoptTask(summary) {
       inventoryViewUnconfirmed: false,
       workPane: "plan",
       paneRevision: 0,
-      manualReadiness: null,
-      manualReadinessLoading: false,
-      manualReadinessError: null,
-      manualReadinessRevision: 0,
-      manualReadinessDemand: null,
-      manualExactEligible: false,
-      manualFallbackEligible: false,
       executionStarted: false,
       executionAttempt: null,
       executionControlState: "running",
@@ -759,11 +703,6 @@ function adoptTask(summary) {
       task.progressPresentation = null;
       task.executionControlState = "running";
       task.executionControlRevision += 1;
-      if (summary.task_kind === "sync-plan") {
-        task.manualReadiness = null;
-        task.manualReadinessError = null;
-        task.manualReadinessRevision += 1;
-      }
     }
     if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
       const controlAttempt = task.executionControlAttempt;
@@ -785,9 +724,6 @@ function adoptTask(summary) {
         task.executionWindowDirty = true;
         task.executionWindowDirtyRevision += 1;
         task.workPane = "plan";
-        task.manualReadiness = null;
-        task.manualReadinessError = null;
-        task.manualReadinessRevision += 1;
       }
     }
     if (task.sessionKind === "sync-execution" && summary.session_kind !== "sync-execution") {
@@ -885,7 +821,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
           task.executionControlAttempt = null;
         }
       }
-      if (["integrity-control", "manual-control"].includes(task.inventoryAction?.kind)
+      if (task.inventoryAction?.kind === "integrity-control"
           && task.inventoryAction.sessionId === sessionId) {
         task.inventoryAction = null;
       }
@@ -896,7 +832,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (task.review?.follow != null && task.sessionKind === "sync-execution") {
       task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
     }
-    if (["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)) {
+    if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
       void refreshInventoryOverlay(task, sessionId);
     }
   }
@@ -913,8 +849,8 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (task.review !== null && controlAttempt !== null
         && task.review.pending === controlAttempt.actionName) task.review.pending = null;
     task.sessionState = snapshot.session_state;
-    if (["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)
-        && ["integrity-control", "manual-control"].includes(task.inventoryAction?.kind)) task.inventoryAction = null;
+    if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+        && task.inventoryAction?.kind === "integrity-control") task.inventoryAction = null;
     if (task.form !== null) task.form.sessionState = task.sessionState;
     if (task.sessionKind === "sync-execution" && task.review !== null) {
       task.review.message = task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`;
@@ -1455,13 +1391,16 @@ function acceptTaskRelease(task, sessionId) {
     if (task.review?.follow != null) task.review.follow.hasTarget = false;
     task.executionWindowDirty = true;
     task.executionWindowDirtyRevision += 1;
+  } else if (task.taskKind === "sync-plan" && task.executionStarted
+      && ["inventory", "baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+    if (task.review !== null) retireExecutionDetail(task.review);
+    markExecutionWindowDirty(task);
   }
   renderTasks();
   if (task.taskKind === "sync-plan" && ["sync-plan", "sync-execution"].includes(task.sessionKind)) {
     void loadPlanReview(task, true);
   }
   if (task.taskKind === "inventory" || task.executionStarted) void loadInventoryReview(task, true);
-  if (task.taskKind === "sync-plan" && task.workPane === "verify") void loadManualReadiness(task);
 }
 
 function acceptTaskReleaseDelay(task, sessionId, recovery) {
@@ -1568,126 +1507,16 @@ async function changeInventorySelection(review, nodeId, selected, highlightedSco
   }
 }
 
-async function loadManualReadiness(task) {
-  if (originalExecution(task) === null || task.taskKind !== "sync-plan" || task.workPane !== "verify"
-      || tasks.get(task.taskId) !== task || currentTask() !== task || settingsVisible
-      || task.closePending) return;
-  task.manualReadinessDemand = { paneRevision: task.paneRevision, navigation: navigationRevision,
-    sessionId: task.executionSessionId, planRequestId: task.planRequestId,
-    revision: task.manualReadinessRevision };
-  if (task.manualReadinessLoading) return;
-  task.manualReadinessLoading = true;
-  task.manualReadinessError = null;
-  renderTasks();
-  try {
-    while (task.manualReadinessDemand !== null) {
-      const demand = task.manualReadinessDemand;
-      task.manualReadinessDemand = null;
-      const stillCurrent = () => tasks.get(task.taskId) === task && currentTask() === task
-        && !settingsVisible && !task.closePending && task.workPane === "verify"
-        && task.paneRevision === demand.paneRevision && navigationRevision === demand.navigation
-        && task.manualReadinessRevision === demand.revision
-        && task.planRequestId === demand.planRequestId && task.executionSessionId === demand.sessionId;
-      if (!stillCurrent()) continue;
-      try {
-        let executionRevision = originalExecution(task).execution_revision;
-        let readiness = await getManualVerificationReadiness(task.taskId, demand.sessionId, executionRevision);
-        if (!stillCurrent()) continue;
-        if (originalExecution(task)?.execution_revision !== executionRevision) continue;
-        if (readiness.reason === "conflict") {
-          const summary = await openPlanView(task.taskId);
-          if (!stillCurrent()) continue;
-          if (summary.request_id !== demand.planRequestId
-              || summary.execution.session_id !== demand.sessionId) throw new Error("Original execution changed");
-          observeOriginalExecution(task, demand.planRequestId, summary.execution, false);
-          executionRevision = originalExecution(task).execution_revision;
-          readiness = await getManualVerificationReadiness(task.taskId, demand.sessionId, executionRevision);
-          if (!stillCurrent()) continue;
-          if (originalExecution(task)?.execution_revision !== executionRevision) continue;
-        }
-        if (readiness.reason === "conflict" || readiness.execution_revision !== executionRevision) {
-          throw new Error("Readiness did not reconcile");
-        }
-        task.manualReadiness = readiness;
-        task.manualReadinessError = null;
-      } catch (_error) {
-        if (stillCurrent()) {
-          task.manualReadiness = null;
-          task.manualReadinessError = "Verification readiness unavailable. Reload this view to try again.";
-        }
-      }
-    }
-  } finally {
-    task.manualReadinessLoading = false;
-    if (tasks.get(task.taskId) === task) renderTasks();
-  }
-}
-
-async function startManualVerificationAction(review) {
-  const task = currentInventoryTask(review);
-  if (task === null) return;
-  updateManualEligibility(task);
-  const readiness = currentReadiness(task);
-  const execution = originalExecution(task);
-  if (readiness === null || execution === null || !task.manualExactEligible
-      || task.inventoryAction?.pending || task.inventoryAction?.accepted) return;
-  const attempt = {
-    kind: "manual-start", review, sessionId: task.executionSessionId,
-    executionRevision: execution.execution_revision, readiness,
-    commandId: inventoryCommandId(), pending: true, accepted: false,
-    recovery: null, message: "Starting verification of copied files…",
-  };
-  task.inventoryAction = attempt;
-  review.message = attempt.message;
-  renderTasks();
-  const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt
-    && task.executionSessionId === attempt.sessionId
-    && originalExecution(task)?.execution_revision === attempt.executionRevision;
-  try {
-    const result = await startManualVerification(task.taskId, attempt.sessionId,
-      attempt.commandId, attempt.executionRevision, (recovery) => {
-        if (stillOwned()) {
-          attempt.recovery = recovery;
-          attempt.message = recovery.message;
-          if (currentInventoryTask(review) === task) {
-            review.message = attempt.message;
-            renderTasks();
-          }
-        }
-      });
-    if (!stillOwned()) return;
-    task.inventoryAction = null;
-    task.manualReadiness = null;
-    task.manualReadinessRevision += 1;
-    adoptTaskStart(result, "manual-verify", task.taskKind);
-    review.message = null;
-    renderTasks();
-    try { await refreshTasks(); } catch (_error) {
-      // The admitted session and attached drain already own current status.
-    }
-  } catch (error) {
-    if (!stillOwned()) return;
-    if (error instanceof StartPlanUncertainError || error instanceof OutcomeUnavailableError) {
-      attempt.message = attempt.recovery?.message ?? "Waiting for the original manual verification outcome…";
-      review.message = attempt.message;
-    } else {
-      task.inventoryAction = null;
-      review.message = "Copied-file verification did not start. Reload this view before trying again.";
-      void loadManualReadiness(task);
-    }
-    renderTasks();
-  }
-}
-
-function inventoryIntegrityEligible(task, review, mode, allowedAttempt = null) {
+function inventoryIntegrityEligible(task, review, mode, allowedAttempt = null, scope = "selected") {
   return currentInventoryTask(review) === task && !task.inventoryLoading
     && (task.inventoryAction === null || task.inventoryAction === allowedAttempt
       || (!task.inventoryAction.pending && !task.inventoryAction.accepted))
     && review.pending === null
-    && (task.taskKind === "inventory" || (task.taskKind === "sync-plan"
-      && mode === "verify" && task.manualFallbackEligible))
+    && (task.taskKind === "inventory" || (task.taskKind === "sync-plan" && mode === "verify"))
+    && (scope !== "copied" || (task.taskKind === "sync-plan" && task.executionStarted))
     && task.sessionReleased && task.sessionState !== "active" && !task.inventoryViewUnconfirmed
-    && review.summary.request_id === task.requestId && review.summary.selected_file_count > 0;
+    && review.summary.request_id === task.requestId
+    && (scope === "copied" || review.summary.selected_file_count > 0);
 }
 
 function cancelInventoryIntegrityStart(task, attempt) {
@@ -1697,12 +1526,12 @@ function cancelInventoryIntegrityStart(task, attempt) {
   renderTasks();
 }
 
-async function startInventoryIntegrityAction(review, mode, returnFocus) {
+async function startInventoryIntegrityAction(review, mode, returnFocus, scope = "selected") {
   const task = currentInventoryTask(review);
-  if (task === null || !inventoryIntegrityEligible(task, review, mode)
+  if (task === null || !inventoryIntegrityEligible(task, review, mode, null, scope)
       || !["baseline", "verify", "rebaseline"].includes(mode)) return;
   const attempt = {
-    kind: "integrity-start", mode, review, taskId: task.taskId,
+    kind: "integrity-start", mode, scope, review, taskId: task.taskId,
     requestId: review.summary.request_id, revision: review.summary.view_revision,
     selectedCount: review.summary.selected_file_count, commandId: inventoryCommandId(),
     hiddenSelectedCount: review.summary.hidden_selected_file_count,
@@ -1737,11 +1566,11 @@ async function startInventoryIntegrityAction(review, mode, returnFocus) {
 async function submitInventoryIntegrity(task, attempt) {
   if (task.inventoryAction !== attempt || attempt.submissionStarted) return;
   const review = task.inventoryReview;
-  if (review !== attempt.review || !inventoryIntegrityEligible(task, review, attempt.mode, attempt)
+  if (review !== attempt.review || !inventoryIntegrityEligible(task, review, attempt.mode, attempt, attempt.scope)
       || review.summary.request_id !== attempt.requestId
       || review.summary.view_revision !== attempt.revision
-      || review.summary.selected_file_count !== attempt.selectedCount
-      || review.summary.hidden_selected_file_count !== attempt.hiddenSelectedCount) {
+      || (attempt.scope === "selected" && (review.summary.selected_file_count !== attempt.selectedCount
+        || review.summary.hidden_selected_file_count !== attempt.hiddenSelectedCount))) {
     task.inventoryAction = null;
     if (review !== null) {
       review.message = "Selection changed before confirmation. Reloading the current selection…";
@@ -1763,7 +1592,7 @@ async function submitInventoryIntegrity(task, attempt) {
           attempt.message = recovery.message;
           renderTasks();
         }
-      });
+      }, attempt.scope);
     if (!stillOwned()) return;
     task.inventoryAction = null;
     adoptTaskStart(result, attempt.mode, task.taskKind);
@@ -1780,7 +1609,9 @@ async function submitInventoryIntegrity(task, attempt) {
     } else {
       attempt.pending = false;
       attempt.recovery = null;
-      attempt.message = "Integrity work did not start. Try again when you are ready.";
+      attempt.message = attempt.scope === "copied"
+        ? "Verification did not start. This action needs successful copied files and an available target. You can select files and use Verify current state."
+        : "Integrity work did not start. Try again when you are ready.";
       review.message = attempt.message;
       task.inventoryAction = null;
     }
@@ -1793,10 +1624,9 @@ async function controlInventoryIntegrity(review, actionName) {
   if (task === null || task.inventoryAction?.pending || task.inventoryAction?.accepted
       || review.pending !== null
       || task.sessionState !== "active" || task.sessionId === null
-      || !["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)
+      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)
       || !["pause", "resume", "cancel"].includes(actionName)) return;
-  const manual = task.sessionKind === "manual-verify";
-  const attempt = { kind: manual ? "manual-control" : "integrity-control", sessionId: task.sessionId, actionName,
+  const attempt = { kind: "integrity-control", sessionId: task.sessionId, actionName,
     pending: true, recovery: null, message: `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…` };
   task.inventoryAction = attempt;
   review.message = attempt.message;
@@ -1804,8 +1634,7 @@ async function controlInventoryIntegrity(review, actionName) {
   const stillOwned = () => tasks.get(task.taskId) === task && task.sessionId === attempt.sessionId
     && task.inventoryAction === attempt;
   try {
-    const control = manual ? controlExecution : controlIntegrity;
-    const result = await control(task.taskId, attempt.sessionId, actionName, (recovery) => {
+    const result = await controlIntegrity(task.taskId, attempt.sessionId, actionName, (recovery) => {
       if (stillOwned()) {
         attempt.recovery = recovery;
         attempt.message = recovery.message;
@@ -1844,10 +1673,9 @@ async function checkInventoryOutcome(task) {
   }
 }
 
-function inventoryActionEligible(task, review, kind, nodeId, allowedAttempt = null) {
+function inventoryActionEligible(task, review, kind, nodeId) {
   if (task === null || currentInventoryTask(review) !== task || task.inventoryLoading
-      || (task.inventoryAction !== allowedAttempt
-        && (task.inventoryAction?.pending || task.inventoryAction?.accepted))
+      || task.inventoryAction?.pending || task.inventoryAction?.accepted
       || (kind !== "refresh" && task.inventoryViewUnconfirmed) || review.pending !== null
       || !task.sessionReleased || task.sessionState === "active"
       || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)) return false;
@@ -1859,77 +1687,17 @@ function inventoryActionEligible(task, review, kind, nodeId, allowedAttempt = nu
   return kind === "refresh" || review.summary.request_id === task.requestId;
 }
 
-function warnBeforeInventoryRefresh(task) {
-  if (task.taskKind !== "sync-plan" || task.workPane !== "verify") return false;
-  const readiness = currentReadiness(task);
-  return !readiness?.attempted && !["attempted", "linked-execution", "already-verified",
-    "empty", "execution-ineligible", "incomplete", "unrecorded", "superseded",
-    "settlement-diverged"].includes(readiness?.reason);
-}
-
-function cancelInventoryActionConfirmation(task, attempt) {
-  if (task.inventoryAction !== attempt || attempt.submissionStarted) return;
-  task.inventoryAction = null;
-  renderTasks();
-}
-
-async function runInventoryAction(review, kind, nodeId, returnFocus) {
+async function runInventoryAction(review, kind, nodeId) {
   const task = currentInventoryTask(review);
   if (!inventoryActionEligible(task, review, kind, nodeId)) return;
   const attempt = {
     kind, requestId: task.requestId, revision: review.summary.view_revision,
-    nodeId, commandId: inventoryCommandId(), review, sessionId: task.sessionId,
-    publication: review.summary.request_id, navigation: navigationRevision,
-    planRequestId: task.planRequestId, executionSessionId: task.executionSessionId,
-    executionRevision: originalExecution(task)?.execution_revision ?? null,
-    pending: true, recovery: null, submissionStarted: false,
+    nodeId, commandId: inventoryCommandId(), review,
+    pending: true, recovery: null,
     message: kind === "refresh" ? "Starting inventory scan…" : "Updating missing-item visibility…",
   };
   task.inventoryAction = attempt;
-  if (kind !== "refresh" || !warnBeforeInventoryRefresh(task)) {
-    await submitInventoryAction(task, attempt);
-    return;
-  }
-  attempt.message = "Confirm Refresh in the dialog.";
-  renderTasks();
-  const row = nodeId === null ? null : review.window.rows.find((value) => value.node_id === nodeId)
-    ?? review.detail?.row;
-  try {
-    refreshConfirmation.show({
-      destructiveOperationCount: 1,
-      countDetail: row === null ? "Entire location"
-        : `${row.is_container ? "Folder" : "Item"}: ${row.display}${row.is_container ? " (including subfolders)" : ""}`,
-      returnFocus,
-      onCancel: () => cancelInventoryActionConfirmation(task, attempt),
-      onConfirm: () => { void submitInventoryAction(task, attempt); },
-    });
-  } catch (_error) {
-    cancelInventoryActionConfirmation(task, attempt);
-    if (task.inventoryReview === review) {
-      review.message = "Refresh confirmation unavailable. The scan did not start.";
-      renderTasks();
-    }
-  }
-}
-
-async function submitInventoryAction(task, attempt) {
-  if (task.inventoryAction !== attempt || attempt.submissionStarted) return;
-  const { review, kind, requestId, revision, nodeId } = attempt;
-  if (!inventoryActionEligible(task, review, kind, nodeId, attempt)
-      || task.requestId !== requestId || task.sessionId !== attempt.sessionId
-      || review.summary.request_id !== attempt.publication || review.summary.view_revision !== revision
-      || navigationRevision !== attempt.navigation || task.planRequestId !== attempt.planRequestId
-      || task.executionSessionId !== attempt.executionSessionId
-      || (originalExecution(task)?.execution_revision ?? null) !== attempt.executionRevision) {
-    task.inventoryAction = null;
-    if (task.inventoryReview === review) {
-      review.message = "Inventory changed before confirmation. Review the current view and choose Refresh again.";
-    }
-    renderTasks();
-    return;
-  }
-  attempt.submissionStarted = true;
-  attempt.message = kind === "refresh" ? "Starting inventory scan…" : "Updating missing-item visibility…";
+  const { requestId, revision } = attempt;
   cancelInventoryWindow(review);
   retireInventoryDetail(review);
   renderTasks();
@@ -1993,7 +1761,7 @@ function currentInventoryTask(review) {
 
 async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
-      || !["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)) return;
+      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)) return;
   task.inventoryOverlayRevision += 1;
   task.inventoryOverlayDirty = true;
   if (task.inventoryOverlayRunning || task.inventoryWindowRunning
@@ -2060,7 +1828,7 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
   } finally {
     task.inventoryOverlayRunning = false;
     if (tasks.get(task.taskId) === task && task.inventoryOverlayRevision !== attemptedRevision
-        && ["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind)) {
+        && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
       void refreshInventoryOverlay(task, task.sessionId);
     }
   }
@@ -2068,7 +1836,7 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
 
 async function loadInventoryReview(task, force = false) {
   const liveIntegrity = task !== undefined && task.sessionState === "active"
-    && ["baseline", "verify", "rebaseline", "manual-verify"].includes(task.sessionKind);
+    && ["baseline", "verify", "rebaseline"].includes(task.sessionKind);
   if (task === undefined || tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId
       || settingsVisible || task.closePending
       || (task.taskKind !== "inventory" && !task.executionStarted)
@@ -2124,7 +1892,6 @@ async function loadInventoryReview(task, force = false) {
           && task.paneRevision !== paneRevision) {
         void loadInventoryReview(task, force);
       }
-      if (task.taskKind === "sync-plan" && task.workPane === "verify") void loadManualReadiness(task);
     }
   }
 }

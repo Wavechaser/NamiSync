@@ -99,13 +99,6 @@ from namisync.modules.preflight import LocalObservationFileSystem, observe, pref
 from namisync.modules.scanner import NativeScannerBackend, WalkingScanner
 from namisync.modules.verifier import baseline, rebaseline, verify, verify_post_copy
 
-from .manual_verification import (
-    ManualVerificationCheckpoint, ManualVerificationInvocation, ManualVerificationRequest,
-    ManualVerificationReadiness,
-    ManualVerificationUnavailable, classify_manual_verification, freeze_manual_verification,
-    settle_canceled_manual_verification,
-)
-
 from .inventory import (
     IntegrityDependencies,
     IntegrityRequest,
@@ -142,6 +135,7 @@ from .execution_review import (
     read_retained_integrity_items,
     read_retained_operation_items,
     retained_evidence_subjects,
+    successful_copied_paths,
 )
 from .database_pair import (
     DatabasePairContract,
@@ -164,8 +158,6 @@ from .models import (
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
     RetainedInventoryIntegrity,
-    ManualVerificationMembership,
-    RetainedManualVerification,
     HistoryEventView,
     HistoryEventPageView,
     HistoryItemPageView,
@@ -230,7 +222,6 @@ EXECUTION_KIND = "sync-execution"
 INVENTORY_KIND = "inventory"
 BASELINE_KIND = "baseline"
 VERIFY_KIND = "verify"
-MANUAL_VERIFY_KIND = "manual-verify"
 REBASELINE_KIND = "rebaseline"
 
 _INTEGRITY_KINDS = {
@@ -335,8 +326,6 @@ class LocalWorkflowRuntime:
         self._execution_details: dict[str, ExecutionDetails] = {}
         self._retained_execution_reviews: dict[str, RetainedExecutionReview] = {}
         self._retained_inventory_integrity: dict[str, RetainedInventoryIntegrity] = {}
-        self._manual_memberships: dict[str, ManualVerificationMembership] = {}
-        self._retained_manual_verification: dict[str, RetainedManualVerification] = {}
         self._inventory_details: dict[str, InventoryDetails] = {}
         self._execution_started: dict[str, datetime] = {}
         self._history_store: HistoryStore | None = None
@@ -814,114 +803,18 @@ class LocalWorkflowRuntime:
             build_inventory_projection(location.location_id, rows), plan.target_root.path, None,
         )
 
-    def read_manual_verification_readiness(
-        self, execution: RetainedExecutionBinding,
-    ) -> ManualVerificationReadiness:
+    def read_copied_paths(self, execution: RetainedExecutionBinding) -> tuple[str, ...]:
         with self._lock:
             self._require_open()
             review = self._retained_execution_review_locked(execution.task_id)
             if review.binding != execution:
-                raise ValueError("manual verification execution binding changed")
-        with self._ledger_read() as repository:
-            return classify_manual_verification(repository, review).readiness
-
-    def prepare_manual_verification(self, request: object) -> WorkflowPreparation:
-        self._require_open()
-        if type(request) is not ManualVerificationRequest:
-            raise TypeError("manual verification requires its typed request")
-        with self._lock:
-            review = self._retained_execution_review_locked(request.execution.task_id)
-            if review.binding != request.execution:
-                raise ValueError("manual verification execution binding changed")
-        with self._ledger_read() as repository:
-            first = classify_manual_verification(repository, review)
-        if first.readiness.reason != "ready":
-            raise ManualVerificationUnavailable(first.readiness)
-        prepared = bind_inventory_request(
-            InventoryRequest(request.request_id, location_id=first.location_id),
-            ledger_path=self.ledger_path, backend=self._scanner_backend,
-            resolver=self._mounted_volume_resolver, database=self._database,
-        )
-        self._validate_prepared_location(prepared.binding)
-        self._ensure_database_contracts()
-        with self._ledger_read() as repository:
-            second = classify_manual_verification(repository, review)
-        with self._lock:
-            if self._retained_execution_review_locked(request.execution.task_id) is not review:
-                raise ValueError("manual verification execution binding changed")
-        checkpoint = freeze_manual_verification(
-            request, prepared.binding, second, _binding_root(prepared.binding))
-        membership = ManualVerificationMembership(request.execution, request.request_id,
-            prepared.binding.location_id, tuple((item.item_id, item.recorded_identity.row_id,
-                item.display_path) for item in checkpoint.selection.candidates))
-        with self._lock:
-            self._manual_memberships[request.request_id] = membership
-        return WorkflowPreparation(checkpoint,
-            (("volume", _volume_resource_key(prepared.binding.volume_id)),))
-
-    def read_manual_verification_membership(self, request_id: str) -> ManualVerificationMembership:
-        with self._lock:
-            return self._manual_memberships[request_id]
-
-    def capture_manual_verification(self, task_id: str, request_id: str,
-                                    session_id: str, result: OperationResult | None) -> RetainedManualVerification:
-        with self._lock:
-            current = self._retained_manual_verification.get(task_id)
-            if current is not None:
-                if (current.membership.request_id, current.session_id) != (request_id, session_id):
-                    raise ValueError("manual verification result binding changed")
-                return current
-            membership = self._manual_memberships[request_id]
-            if membership.execution.task_id != task_id or type(result) is not OperationResult:
-                raise ValueError("manual verification terminal result is unavailable")
-            subjects = {operation_id: (row_id, path) for operation_id, row_id, path in membership.subjects}
-            items = tuple(result_item_view(item) for item in result.items if type(item) is IntegrityOutcome)
-            if any((item.row_id, item.path) != subjects.get(item.item_id)
-                    or item.location_id != str(membership.location_id) or item.phase != "verify" for item in items):
-                raise ValueError("manual verification result changed its subject")
-            retained = RetainedManualVerification(membership, session_id, operation_result_view(result), items)
-            self._retained_manual_verification[task_id] = retained
-            return retained
-
-    def read_manual_verification(self, task_id: str) -> RetainedManualVerification:
-        with self._lock:
-            return self._retained_manual_verification[task_id]
-
-    def drop_manual_verification_details(self, request_id: str) -> None:
-        with self._lock:
-            self._manual_memberships.pop(request_id, None)
-
-    def retire_manual_verification(self, task_id: str) -> None:
-        with self._lock:
-            self._retained_manual_verification.pop(task_id, None)
-
-    def open_manual_verification(self, checkpoint: object) -> ManualVerificationInvocation:
-        self._require_open()
-        if type(checkpoint) is not ManualVerificationCheckpoint:
-            raise TypeError("manual verification requires its typed checkpoint")
-        return ManualVerificationInvocation(checkpoint, self._integrity_deps, self._deps.verifier)
-
-    def settle_canceled_manual_verification(
-        self, checkpoint: object, disposition: Disposition,
-    ) -> OperationResult:
-        self._require_open()
-        if type(checkpoint) is not ManualVerificationCheckpoint:
-            raise TypeError("manual verification requires its typed checkpoint")
-        return settle_canceled_manual_verification(checkpoint, disposition)
+                raise ValueError("copied-file scope execution binding changed")
+            return successful_copied_paths(review)
 
     def audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
         if record.checkpoint is None:
             raise ValueError("audit observer requires a nonterminal checkpoint")
         checkpoint = record.checkpoint
-        if record.kind == MANUAL_VERIFY_KIND:
-            if type(checkpoint) is not ManualVerificationCheckpoint:
-                raise TypeError("manual verification history requires its typed checkpoint")
-            store = self._ensure_history_store((_binding_root(checkpoint.binding),))
-            return store.observer(record, HistoryContext(
-                run_token=checkpoint.request.request_id, host_key=self.host_key,
-                activity_kind="verify", subject_kind="location",
-                subject_id=_location_subject_id(checkpoint.binding),
-            ))
         if record.kind == EXECUTION_KIND:
             if type(checkpoint) is not ExecutionCheckpoint:
                 raise TypeError("execution history requires its typed checkpoint")
@@ -1484,8 +1377,6 @@ class LocalWorkflowRuntime:
                 self._execution_details.clear()
                 self._retained_execution_reviews.clear()
                 self._retained_inventory_integrity.clear()
-                self._manual_memberships.clear()
-                self._retained_manual_verification.clear()
                 self._inventory_details.clear()
                 self._execution_started.clear()
                 self._closed = True

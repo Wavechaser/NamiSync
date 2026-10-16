@@ -887,6 +887,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Execution row presentation
 
+- MODERATE - FIXED (2026-10-16). Missing producer invalidation. Returning to
+  Plan after same-task inventory work could retain a digest attributed to the
+  execution even though the scan had superseded that ledger evidence. Cause:
+  auxiliary release refreshed Inventory but left the cached Plan window/detail
+  valid under the unchanged execution revision. Release now retires the detail
+  and marks the existing window refresh dirty; returning to Plan refreshes at
+  the retained offset. Ordinary composition checks current superseded evidence,
+  and browser probes cover pending-detail retirement and preserved review state.
+  Original execution and linked verification outcomes remain unchanged.
+
 - MINOR - FIXED (2026-10-11). Conflated outcome presentation. Execution rows
   labeled actual no-ops Skipped while giving both no-ops and deselected skips
   green completion styling. Cause: color used the broad skipped result and

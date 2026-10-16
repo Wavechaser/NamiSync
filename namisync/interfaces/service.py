@@ -35,7 +35,6 @@ from namisync.workflows import (
     HistoryItemPageView,
     HistoryRunSummaryView,
     INVENTORY_KIND,
-    MANUAL_VERIFY_KIND,
     PLAN_KIND,
     PreservationPolicy,
     REBASELINE_KIND,
@@ -57,8 +56,6 @@ from namisync.workflows import (
     ExecutionRefusalView,
     RetainedIntegrityItemWindow,
     RetainedInventoryIntegrity,
-    ManualVerificationRequest,
-    ManualVerificationReadiness,
     SyncOptions,
     VolumeResolutionRequired,
     VolumeResolutionState,
@@ -1975,78 +1972,13 @@ class NamiSyncService:
             return InventoryPublication(publication.projection, publication.root_path, details)
         return publication
 
-    def _manual_execution_binding(self, task_id: str, session_id: str) -> tuple[RetainedExecutionBinding, bool]:
+    def read_task_copied_paths(self, task_id: str) -> tuple[str, ...]:
+        self._require_open()
         with self._lock:
-            for request_id, state in self._plan_selections.items():
-                execution = state.execution_session
-                if (state.phase == "committed" and execution is not None
-                        and execution.session_id == session_id):
-                    token = state.plan_token
-                    binding = RetainedExecutionBinding(task_id, request_id, token.identity,
-                        session_id, execution.run_id)
-                    return binding, state.artifact.request.verify_after_execute
-        raise TaskUnavailableError("original execution is unavailable")
-
-    def read_task_manual_verification_readiness(
-        self, task_id: str, execution_session_id: str,
-    ) -> ManualVerificationReadiness:
-        self._require_open()
-        binding, linked = self._manual_execution_binding(task_id, execution_session_id)
-        if linked:
-            return ManualVerificationReadiness("linked-execution", 0)
-        try:
-            return self._runtime.read_manual_verification_readiness(binding)
-        except (KeyError, ValueError) as error:
-            raise TaskUnavailableError("manual verification is unavailable") from error
-
-    def task_manual_verification_attempted(self, task_id: str) -> bool:
-        try:
-            return self._lifecycle.manual_verification_attempted(task_id)
-        except LifecycleAssociationError as error:
-            raise TaskUnavailableError("manual verification is unavailable") from error
-
-    def read_task_manual_verification_membership(self, request_id: str):
-        self._require_open()
-        return self._runtime.read_manual_verification_membership(request_id)
-
-    def read_task_manual_verification(self, task_id: str):
-        self._require_open()
-        return self._runtime.read_manual_verification(task_id)
-
-    def start_task_manual_verification(
-        self, task_id: str, execution_session_id: str, *,
-        command_id: str, signature: tuple[object, ...],
-        delivery_factory: TaskDeliveryFactory,
-    ) -> TaskStartView:
-        with self._lifecycle.command_guard(command_id):
-            binding, linked = self._manual_execution_binding(task_id, execution_session_id)
-            if linked:
-                raise TaskUnavailableError("linked execution cannot start manual verification")
-            try:
-                claim = self._lifecycle.begin_task_manual_verification(
-                    task_id, execution_session_id, command_id, signature)
-            except LifecycleReceiptConflictError:
-                raise TaskIntentConflictError("task command intent conflicts") from None
-            except LifecycleAssociationError as error:
-                raise TaskUnavailableError("manual verification is unavailable") from error
-            if claim.replay is not None:
-                return TaskStartView(task_id, claim.replay.request_id, claim.replay.session_id)
-            fresh_id = uuid4().hex
-            try:
-                sink = delivery_factory(task_id)
-                if not callable(sink):
-                    raise TypeError("task delivery factory must return a sink")
-                session_id, receipt = self._submit_session(
-                    MANUAL_VERIFY_KIND, ManualVerificationRequest(fresh_id, binding),
-                    effect_kind="task-manual-verification", command_id=command_id,
-                    signature=signature, request_id=fresh_id, observation_sink=sink,
-                    task_id=task_id, detail_owner=("manual", fresh_id),
-                )
-                return TaskStartView(task_id, receipt.request_id, str(session_id))
-            except BaseException:
-                self._lifecycle.abort_task_start(task_id)
-                self._runtime.drop_manual_verification_details(fresh_id)
-                raise
+            binding = self._task_execution_bindings.get(task_id)
+        if binding is None:
+            raise TaskUnavailableError("original execution is unavailable")
+        return self._runtime.read_copied_paths(binding)
 
     def read_inventory_detail(self, location_id: int, row_id: str) -> dict[str, object] | None:
         self._require_open()
@@ -2512,10 +2444,6 @@ class NamiSyncService:
             )
             if not retire_plan:
                 if (task_id is not None and delivery is not None
-                        and self._lifecycle.settlement_binding(work).kind == "task-manual-verification"):
-                    self._runtime.capture_manual_verification(
-                        task_id, work.detail_owner[1], session_id, terminal_result)
-                if (task_id is not None and delivery is not None
                         and self._lifecycle.settlement_binding(work).kind == "task-integrity"):
                     with self._lock:
                         captured_entry = self._task_inventory_details.get(task_id)
@@ -2552,7 +2480,6 @@ class NamiSyncService:
                         retirement = None
             self._lifecycle.complete_settlement(work)
             if retire_plan and task_id is not None:
-                self._runtime.retire_manual_verification(task_id)
                 self._runtime.retire_inventory_integrity(task_id)
                 self._runtime.retire_captured_execution_review(task_id)
                 with self._lock:
@@ -2679,9 +2606,6 @@ class NamiSyncService:
             return
         if detail_kind == "inventory":
             self._runtime.drop_inventory_details(detail_id)
-            return
-        if detail_kind == "manual":
-            self._runtime.drop_manual_verification_details(detail_id)
             return
         raise RuntimeError(f"unknown runtime detail owner kind: {detail_kind}")
 
@@ -3129,10 +3053,6 @@ def _workflow_registry(
             runtime.open_execution,
             supports_pause=True,
             settle_canceled=runtime.settle_canceled_execution,
-        ),
-        MANUAL_VERIFY_KIND: registration(
-            runtime.prepare_manual_verification, runtime.open_manual_verification,
-            supports_pause=True, settle_canceled=runtime.settle_canceled_manual_verification,
         ),
         INVENTORY_KIND: registration(
             runtime.prepare_inventory,

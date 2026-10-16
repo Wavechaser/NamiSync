@@ -9,8 +9,8 @@ location inventory and integrity starts through the shared service; desktop
 actions remain Stage 6. Shared location-candidate admission and bounded
 remembered-location reads are implemented workflow services. Desktop Setup
 starts standalone inventory on a typed, picked or remembered root; cached
-desktop projections, ledger-current presentation and manual handoff
-remain accepted Stage 6 targets.
+desktop projections and ledger-current presentation are implemented. Deferred
+Verify copied files uses ordinary scoped integrity and its current-state results.
 
 ## Purpose
 
@@ -318,18 +318,20 @@ are independent of filtering and acknowledged-row hiding; checked byte
 accumulation reports overflow rather than clamping.
 
 Each inventory row keeps two orthogonal facts: ledger-derived
-`verification_state` and the latest ordinary-integrity overlay. Replacing an
-ordinary-integrity generation cannot rewrite execution or manual post-copy
-truth. Live overlays reconcile through the frozen workflow-item-to-domain-node
-map; unknown or duplicate alignment is structural failure, never a path join.
-The exact overlay and replacement protocol is owned by the bridge plan.
+`verification_state` and the latest ordinary-integrity overlay. Replacing that
+generation cannot rewrite original execution or automatic post-copy results.
+Selected-scope outcomes bind exact admitted row IDs. Verify copied files instead
+freezes normalized execution target paths so a fresh scan can create previously
+unrecorded rows; result admission checks path/location/mode and one-to-one
+path/row binding before retaining outcomes. Unknown or conflicting subjects
+refuse. BRIDGE owns the bounded overlay and replacement protocol.
 
-File detail exposes current durable ledger evidence. Execution evidence is a
-separate atomic-read projection over the original execution scope; it does not
-turn a plan row into hash storage or reinterpret ordinary integrity state.
-[VERIFIER.md](VERIFIER.md) owns how eligible durable evidence becomes a manual
-exact post-copy handoff, while [DATABASE.md](DATABASE.md) and the bridge plan
-own the exact join and wire classification.
+File detail exposes current durable ledger evidence. Execution evidence remains
+a separate atomic-read projection over the original execution scope. Later
+inventory operations may supersede that evidence; current ordinary verification
+does not become a claim about original copy bytes. VERIFIER owns ordinary and
+linked verification policy, DATABASE the atomic read, and PRESENTATION the
+displayed distinction.
 
 ## State Model
 

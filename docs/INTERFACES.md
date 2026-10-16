@@ -58,8 +58,8 @@ location id plus an optional exact selected scope and ambiguity-resolving mount;
 no adapter infers location from a mapping or another argument. Rebaseline also
 requires an explicit selected scope and exact boolean current-evidence acceptance
 before command custody, selected-node resolution or native work. The CLI forwards
-its required `--accept-current-evidence` flag into that shared admission. Queue control,
-machine output and desktop manual post-copy controls remain deferred; standalone
+its required `--accept-current-evidence` flag into that shared admission. Queue control
+and machine output remain deferred; standalone
 Inventory exposes ordinary integrity selection, starts and live controls.
 
 ## M1 Shared Service
@@ -87,18 +87,18 @@ Released execution tasks also expose current target-ledger Inventory reads and
 selection, bound to their committed original Plan and retained execution review.
 Opening needs an existing location and performs no native admission or scan.
 Plan reads/detail and exact Close remain available. After the released original
-execution, the same task may run its first eligible exact manual post-copy
-verification, or explicitly Refresh, change Inventory visibility, and verify
-current state. Each new session has a fresh current request/session; the original
+execution, the same task may run ordinary Verify on successful copied paths or
+its selected Inventory files, Refresh, and change Inventory visibility.
+Each new session has a fresh current request/session; the original
 Plan request, execution session, terminal record, and review results remain
 independent. Once the original execution is released, an existing Inventory
 publication remains readable during later active or paused auxiliary sessions.
 The current session must still be released before selection or another activity;
 live reads neither create a new publication nor grant mutation authority.
 A ledger read has no scan provenance until an actual scan occurs;
-later manual publication retains the last actual scan's provenance. Linked
-execution cannot start a manual session. A first valid manual claim is consumed
-even if native preparation fails, and equal command replay returns that outcome.
+later ordinary operations publish their actual scan provenance. Successful
+copied paths in partial or linked executions remain eligible for ordinary Verify.
+New commands may repeat it; equal command replay returns the original outcome.
 
 Inventory tasks additionally retain their exact `InventoryDetails` metadata at
 task scope before terminal release drops runtime request details, including
@@ -297,12 +297,11 @@ validation. Browser whole-batch refusal remains for transport, ordering,
 lifecycle, and snapshot admission failures, with clean replay of previously unaccepted
 updates.
 
-The service's `manual-verify` runtime route accepts an exact retained execution
-binding and produces an independent verification session/history result. Task
-association retains a first-attempt command receipt, a bounded separate manual
-result, and exact current-session control. Its result never changes original
-execution or automatic verification truth. Browser action controls and
-navigation remain the following M1-10 surface work.
+Verify copied files reads successful copied paths from the task's retained
+execution binding and uses the existing ordinary-integrity route. It has ordinary
+session/history identity, bounded latest results and current-session controls.
+There is no manual runtime kind or first-attempt receipt. Its result never
+changes original execution or automatic verification truth.
 
 The current public service surface includes:
 
@@ -550,8 +549,10 @@ ledger evidence, execution outcomes and automatic verification. Live loss is
 marked incomplete until terminal reconciliation replaces the complete map,
 including an empty result. Refresh retains these prior activity facts; Close
 retires them. Standalone desktop controls expose these starts and current-session
-controls with bounded row/detail results; manual post-copy navigation follows
-in its separate delivery unit.
+controls with bounded row/detail results. Execution tasks reuse these ordinary
+sessions for selected current-state Verify or server-derived copied-file scope.
+Successful copied paths may be verified again after partial or linked executions;
+the action neither changes checkbox selection nor rewrites execution truth.
 If a queued or resumed activity becomes unresolved at wake-up, its retained
 `InventoryDetailsView` carries the same state/candidates and the CLI renders the
 same corrective guidance. A provisional ambiguous binding exposes no selected
@@ -686,7 +687,7 @@ interprets `SessionNotFound` as custody already absent. Plan retirement uses one
 tolerant exact-token claim: a retired token produces no new work, while active
 mutation and retirement remain mutually exclusive. `TaskLifecycle.publish_start`
 requires a retained reviewed plan when publishing task execution and records
-its original execution session identity. Auxiliary Inventory/integrity/manual
+its original execution session identity. Auxiliary Inventory/integrity
 publication carries an existing plan association when present, without making
 it a requirement for standalone Inventory. Plan publication deliberately does
 not wait for plan retirement. Fresh service-minted plan

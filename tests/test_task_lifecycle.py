@@ -1221,6 +1221,7 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "start_task_inventory_refresh",
         "start_task_inventory_integrity",
         "read_task_inventory_integrity",
+        "read_task_copied_paths",
         "change_task_inventory_visibility",
         "start_task_plan_again",
         "start_task_execution",
@@ -1238,11 +1239,6 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "read_task_execution_items",
         "read_task_integrity_items",
         "read_task_execution_evidence",
-        "read_task_manual_verification_readiness",
-        "task_manual_verification_attempted",
-        "read_task_manual_verification_membership",
-        "start_task_manual_verification",
-        "read_task_manual_verification",
     }
 
 

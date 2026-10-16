@@ -473,16 +473,16 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     task.session_id = "9" * 32
     assert phase.review_ready() is False
     task.session_id = session_id
-    manual_session_id = "0" * 32
-    phase.manual = {
+    ordinary_session_id = "0" * 32
+    phase.ordinary = {
         "admitted": 17, "completed": 18,
-        "request_id": "7" * 32, "session_id": manual_session_id,
-        "command_id": "8" * 32, "readiness": {},
+        "request_id": "7" * 32, "session_id": ordinary_session_id,
+        "command_id": "8" * 32, "scope": "copied",
     }
-    task.session_id = manual_session_id
+    task.session_id = ordinary_session_id
     assert phase.capture_ready() is False
     phase.auxiliary_releases.append({
-        "admitted": 19, "completed": 20, "session_id": manual_session_id,
+        "admitted": 19, "completed": 20, "session_id": ordinary_session_id,
     })
     assert phase.capture_ready() is True
     identity = phase._expected_identity_locked()
@@ -506,14 +506,14 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     active_sessions.remove(session_id)
     assert phase.capture_ready() is True
     phase.controls = [
-        {"command": "control_execution", "action": "pause"},
-        {"command": "control_execution", "action": "resume"},
+        {"command": "control_integrity", "action": "pause"},
+        {"command": "control_integrity", "action": "resume"},
     ]
     phase.inventory_window = {
-        "manual_session_id": manual_session_id,
-        "manual_complete": True, "manual_item_count": 1,
+        "integrity_session_id": ordinary_session_id,
+        "integrity_complete": True, "integrity_item_count": 1,
     }
-    phase.close = {"session_id": manual_session_id}
+    phase.close = {"session_id": ordinary_session_id}
     tasks.clear()
     assert phase.capture_ready() is False
     assert phase.finished_ready() is True
@@ -561,6 +561,43 @@ def test_refresh_submission_is_counted_before_a_failed_handler(tmp_path: Path) -
     assert phase.refresh is None
 
 
+@pytest.mark.parametrize("branch,revision,request_matches,accepted", [
+    ("blocked", 1, True, True), ("blocked", 0, True, False),
+    ("blocked", 1, False, False), ("exact", 0, True, True),
+    ("exact", 1, True, False),
+])
+def test_ordinary_observer_admits_current_scope_then_releases_paused_worker(
+    tmp_path: Path, branch: str, revision: int, request_matches: bool, accepted: bool,
+) -> None:
+    from namisync.dispatcher import SessionNotFound
+
+    phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target", branch=branch)
+    task_id, request_id, session_id = "1" * 32, "2" * 32, "3" * 32
+    phase.plan = {"task_id": task_id}
+    phase.execution = {"session_id": "4" * 32}
+    phase.inventory_open = {"request_id": request_id, "view_revision": 0}
+    phase.selection = {"request_id": request_id, "view_revision": 1,
+                       "completed": 12, "selected_file_count": len(phase.fixture)}
+    phase.refresh = {"session_id": "5" * 32, "completed": 8}
+    phase.auxiliary_releases = [{"session_id": "5" * 32, "admitted": 9, "completed": 10}]
+    def get_session(_session_id: str) -> object:
+        raise SessionNotFound()
+    phase.registry = SimpleNamespace(_lifecycle=SimpleNamespace(get_session=get_session))
+    phase.ordinal = 20
+    result = SimpleNamespace(task_id=task_id, request_id="6" * 32, session_id=session_id)
+    start = phase._observe("start_inventory_integrity", lambda _payload: result)
+    assert start(SimpleNamespace(task_id=task_id, request_id=request_id if request_matches else "7" * 32,
+        expected_revision=revision, mode="verify", scope="copied" if branch == "exact" else "selected",
+        command_id="8" * 32)) is result
+    pause_result = SimpleNamespace(accepted=True, before="running", after="pausing")
+    pause = phase._observe("control_integrity", lambda _payload: pause_result)
+    assert pause(SimpleNamespace(task_id=task_id, session_id=session_id, action="pause")) is pause_result
+    assert phase.worker_release.is_set() is accepted
+    assert (phase.ordinary is not None) is accepted
+    assert phase.failure == (None if accepted else "ValueError")
+    assert phase.failure_command == (None if accepted else "start_inventory_integrity")
+
+
 def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) -> None:
     from namisync.dispatcher import SessionNotFound
 
@@ -586,9 +623,6 @@ def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) ->
     }
     phase.release = {"admitted": 3, "completed": 4, "session_id": execution_session}
     phase.window = {"admitted": 5, "completed": 6}
-    phase.readiness = [
-        {"reason": "ready", "ready_count": 1}, {"reason": "superseded"},
-    ]
     phase.refresh = {
         "admitted": 7, "completed": 8,
         "request_id": "7" * 32, "session_id": refresh_session,
@@ -626,81 +660,6 @@ def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) ->
     assert phase.finished_ready() is True
     phase.auxiliary_releases.pop()
     assert phase.finished_ready() is False
-
-
-def test_readiness_recorder_excludes_stale_replies_but_rejects_changed_identity(tmp_path: Path) -> None:
-    phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target", branch="blocked")
-    task_id, session_id = "1" * 32, "2" * 32
-    phase.plan = {"task_id": task_id}
-    phase.execution = {"session_id": session_id}
-    phase.window = {"execution_revision": 2}
-    payload = SimpleNamespace(task_id=task_id, session_id=session_id, expected_execution_revision=2)
-    ready = {"task_id": task_id, "session_id": session_id, "execution_revision": 2,
-        "reason": "ready", "applicable_count": 1, "ready_count": 1,
-        "already_verified_count": 0, "attempted": False}
-    conflict = {**ready, "execution_revision": 3, "reason": "conflict",
-        "applicable_count": 0, "ready_count": 0}
-
-    phase.record("get_manual_verification_readiness", 1, 2, payload, conflict)
-    assert phase.readiness == [], "a supported stale read cannot become accepted readiness"
-    phase.window["execution_revision"] = 3
-    phase.record("get_manual_verification_readiness", 3, 4, payload, ready)
-    assert phase.readiness == [], "a current reply crossing a newer window cannot authorize a start"
-    for invalid in ({**conflict, "task_id": "9" * 32},
-                    {**conflict, "session_id": "9" * 32},
-                    {**conflict, "execution_revision": None},
-                    {**ready, "execution_revision": 3},
-                    []):
-        with pytest.raises(ValueError, match="original execution identity"):
-            phase.record("get_manual_verification_readiness", 5, 6, payload, invalid)
-    phase.window["execution_revision"] = 2
-    phase.record("get_manual_verification_readiness", 7, 8, payload, ready)
-    assert len(phase.readiness) == 1
-    assert phase.readiness[0]["execution_revision"] == 2
-    assert phase.readiness[0]["reason"] == "ready"
-
-
-def test_manual_observer_rejects_early_control_and_duplicate_start(tmp_path: Path) -> None:
-    task_id = "1" * 32
-    phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target")
-    phase.plan = {"task_id": task_id, "request_id": "2" * 32,
-                  "session_id": "3" * 32, "task_label": "Task 1"}
-    phase.execution = {"admitted": 1, "completed": 2,
-                       "request_id": "4" * 32, "session_id": "5" * 32}
-    result = SimpleNamespace(accepted=True, before="running", after="pausing")
-    with pytest.raises(ValueError, match="current session"):
-        phase.record(
-            "control_execution", 3, 4,
-            SimpleNamespace(task_id=task_id, session_id="6" * 32, action="pause"),
-            result,
-        )
-    assert phase.worker_release.is_set() is False
-    phase.window = {"execution_revision": 8}
-    phase.readiness.append({"reason": "ready", "ready_count": 1, "attempted": False,
-                            "execution_revision": 7})
-    start_payload = SimpleNamespace(
-        task_id=task_id, session_id="5" * 32,
-        expected_execution_revision=8, command_id="8" * 32,
-    )
-    start_result = SimpleNamespace(
-        task_id=task_id, request_id="9" * 32, session_id="0" * 32,
-    )
-    with pytest.raises(ValueError, match="current exact readiness"):
-        phase.record("start_manual_verification", 5, 6, start_payload, start_result)
-    assert phase.manual is None
-    phase.readiness[-1]["execution_revision"] = 8
-    phase.record("start_manual_verification", 5, 6, start_payload, start_result)
-    first_start = dict(phase.manual)
-    with pytest.raises(ValueError, match="current exact readiness"):
-        phase.record("start_manual_verification", 7, 8, start_payload, start_result)
-    assert phase.manual == first_start
-    with pytest.raises(ValueError, match="current session"):
-        phase.record(
-            "control_execution", 5, 6,
-            SimpleNamespace(task_id=task_id, session_id="6" * 32, action="pause"),
-            result,
-        )
-    assert phase.worker_release.is_set() is False
 
 
 def test_task_execution_review_scenarios_own_disjoint_evidence_paths(tmp_path: Path) -> None:
@@ -768,7 +727,7 @@ def test_execution_review_evidence_ready_failure_final_and_privacy(tmp_path: Pat
     capture.phase.exact.failure = "ValueError"
     capture.phase.exact.failure_command = "control_execution"
     capture.phase.blocked.failure = "ValueError"
-    capture.phase.blocked.failure_command = "get_manual_verification_readiness"
+    capture.phase.blocked.failure_command = "start_inventory_integrity"
     capture_diagnostic = capture.phase.capture_readiness_diagnostic()
     assert set(capture_diagnostic) == child._CAPTURE_READINESS_DIAGNOSTIC
     capture.fail("wait-review", "RuntimeError", capture_diagnostic)
@@ -778,7 +737,7 @@ def test_execution_review_evidence_ready_failure_final_and_privacy(tmp_path: Pat
         "diagnostic": capture_diagnostic,
         "phase_failure": {
             "exact": {"type": "ValueError", "command": "control_execution"},
-            "blocked": {"type": "ValueError", "command": "get_manual_verification_readiness"},
+            "blocked": {"type": "ValueError", "command": "start_inventory_integrity"},
         },
     }
 
@@ -827,11 +786,7 @@ def test_installed_task_execution_review_real_copy_and_capture(
     assert exact["detail"]["operation_id"] == exact["window"]["operation_id"]
     assert exact["detail"]["execution_revision"] == exact["window"]["execution_revision"]
     assert exact["plan"]["request_id"] != exact["execution"]["request_id"]
-    assert exact["manual"]["readiness"]["reason"] == "ready"
-    assert exact["manual"]["readiness"]["ready_count"] == 24
-    assert exact["manual"]["readiness"]["attempted"] is False
-    assert exact["manual"]["session_id"] == exact["inventory_window"]["manual_session_id"]
-    assert blocked["readiness"][-1]["reason"] == "superseded"
+    assert exact["ordinary"]["session_id"] == exact["inventory_window"]["integrity_session_id"]
     assert blocked["refresh_admissions"] == 1
     assert blocked["selection"]["request_id"] == blocked["refresh"]["request_id"]
     assert blocked["selection"]["selected_file_count"] == 1

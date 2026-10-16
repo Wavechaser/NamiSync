@@ -22,7 +22,7 @@ while `RecordedCopyIdentity.scope_token` is that run's textual `run_token`.
 Location id and canonical target key come from the same transaction as the
 receipt and evidence. Recorder adds no operation-digest column.
 
-Executor and workflow own settlement attribution and manual post-copy policy.
+Executor and workflow own settlement attribution and verification policy.
 Recorder only supplies typed storage outcomes and conditional writes against
 the original scope, rechecking row, location, canonical path, present state,
 scope, current stat, attestation, and invalidation at the point of use.

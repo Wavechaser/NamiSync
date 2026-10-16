@@ -655,61 +655,6 @@ class LedgerRepository:
         finally:
             self._connection.rollback()
 
-    def read_manual_verification_evidence(
-        self, run_token: str, subjects: tuple[ExecutionEvidenceKey, ...],
-    ) -> ExecutionEvidenceSnapshot:
-        """Read the complete admitted handoff under one snapshot across chunks."""
-        if type(run_token) is not str or not run_token:
-            raise ValueError("execution evidence run token is required")
-        if type(subjects) is not tuple:
-            raise TypeError("manual verification subjects must be an exact tuple")
-        if len(subjects) > INTEGRITY_CANDIDATE_ROW_LIMIT:
-            raise _integrity_row_limit_error()
-        if any(type(subject) is not ExecutionEvidenceKey for subject in subjects):
-            raise TypeError("manual verification subject has the wrong type")
-        if not subjects:
-            return ExecutionEvidenceSnapshot(None, (), ())
-        tokens = tuple(dict.fromkeys(subject.operation_token for subject in subjects))
-        keys = tuple(sorted({subject.target_path_key for subject in subjects}))
-        self._connection.execute("BEGIN")
-        try:
-            run = self._connection.execute(
-                "SELECT id, run_token, activity_kind, target_location_id FROM runs WHERE run_token = ?",
-                (run_token,),
-            ).fetchone()
-            if run is None:
-                return ExecutionEvidenceSnapshot(None, (), ())
-            location_id = run["target_location_id"]
-            receipts = []
-            inventory = []
-            for start in range(0, len(tokens), QUERY_SUBJECT_BATCH_SIZE):
-                chunk = tokens[start:start + QUERY_SUBJECT_BATCH_SIZE]
-                placeholders = ",".join("?" for _ in chunk)
-                for row in self._connection.execute(
-                    f"SELECT op_token, kind, target_rel_path, outcome FROM operations WHERE run_id = ? AND op_token IN ({placeholders})",
-                    (int(run["id"]), *chunk),
-                ):
-                    receipts.append(ExecutionEvidenceReceiptFact(
-                        str(row["op_token"]), str(row["kind"]),
-                        normalize_relative_path(str(row["target_rel_path"])),
-                        str(row["outcome"]),
-                    ))
-            if location_id is not None:
-                for start in range(0, len(keys), QUERY_SUBJECT_BATCH_SIZE):
-                    chunk = keys[start:start + QUERY_SUBJECT_BATCH_SIZE]
-                    placeholders = ",".join("?" for _ in chunk)
-                    _append_inventory_snapshots(inventory, self._connection.execute(
-                        f"SELECT * FROM inventory WHERE location_id = ? AND rel_path_key IN ({placeholders})",
-                        (int(location_id), *chunk),
-                    ))
-            return ExecutionEvidenceSnapshot(
-                ExecutionEvidenceRunFact(str(run["run_token"]), str(run["activity_kind"]),
-                    None if location_id is None else int(location_id)),
-                tuple(receipts), tuple(inventory),
-            )
-        finally:
-            self._connection.rollback()
-
     def get_inventory_by_row_ids(
         self, location_id: int, row_ids: Iterable[str]
     ) -> tuple[InventorySnapshot, ...]:

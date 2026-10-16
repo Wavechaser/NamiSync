@@ -19,12 +19,10 @@ _TASK_EFFECT_KINDS = frozenset({
     "task-execution",
     "task-inventory",
     "task-integrity",
-    "task-manual-verification",
 })
 _AUXILIARY_TASK_EFFECT_KINDS = frozenset({
     "task-inventory",
     "task-integrity",
-    "task-manual-verification",
 })
 _PLANLESS_INVENTORY_EFFECT_KINDS = frozenset({
     "task-inventory",
@@ -151,7 +149,6 @@ class _TaskEffect:
     retirement_claim_id: int | None = None
     retiring: bool = False
     inventory_start_command_ids: set[str] = field(default_factory=set)
-    manual_attempt_command_id: str | None = None
     execution_session_id: str | None = None
 
 
@@ -465,49 +462,6 @@ class TaskLifecycle:
         signature: tuple[object, ...],
     ) -> TaskStartClaim:
         return self._begin_inventory_activity(task_id, request_id, command_id, signature, "task-integrity")
-
-    def begin_task_manual_verification(
-        self, task_id: str, execution_session_id: str, command_id: str,
-        signature: tuple[object, ...],
-    ) -> TaskStartClaim:
-        self._require_command_id(command_id)
-        self._require_opaque_id(execution_session_id, "execution session id")
-        self._require_signature(signature)
-        replay = self.replay_start(command_id, "task-manual-verification", signature)
-        if replay is not None:
-            if replay.task_id != task_id:
-                raise LifecycleReceiptConflictError("manual replay belongs to another task")
-            return TaskStartClaim(task_id, replay, False)
-        with self._condition:
-            task = self._tasks.get(task_id)
-            prior = None if task is None else self._sessions.get(task.session_id)
-            if (self._closed or task is None or prior is None or task.plan_token is None
-                    or task.manual_attempt_command_id is not None
-                    or prior.kind not in _TASK_EFFECT_KINDS
-                    or task.execution_session_id != execution_session_id
-                    or prior.plan_token != task.plan_token
-                    or not prior.session_released or prior.terminal_digest is None
-                    or prior.settlement_claim is not None or prior.observation_claim is not None
-                    or task.retiring or task.retirement_claim_id is not None
-                    or task.admission_identity is not None):
-                raise LifecycleAssociationError("manual verification is unavailable")
-            if any(other.start_command_id == command_id for other in self._tasks.values()):
-                raise LifecycleReceiptConflictError("command id belongs to another task start")
-            if task.start_command_id is not None and task.start_command_id not in self._start_receipts:
-                raise LifecycleAssociationError("task start remains pending")
-            task.manual_attempt_command_id = command_id
-            task.start_command_id = command_id
-            task.start_signature = signature
-            task.start_kind = "task-manual-verification"
-            task.start_failed = False
-            return TaskStartClaim(task_id, None, False)
-
-    def manual_verification_attempted(self, task_id: str) -> bool:
-        with self._condition:
-            task = self._tasks.get(task_id)
-            if task is None or task.plan_token is None:
-                raise LifecycleAssociationError("manual verification task is unavailable")
-            return task.manual_attempt_command_id is not None
 
     def _begin_inventory_activity(
         self, task_id: str, request_id: str, command_id: str,

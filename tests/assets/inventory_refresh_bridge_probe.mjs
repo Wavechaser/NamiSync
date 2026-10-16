@@ -60,7 +60,7 @@ assert.equal(requests.length, 4);
 assert.equal(observations.length, 2, "ordinary start recovery observes its original command");
 assert.equal(requests.at(-1).command, "start_inventory_integrity");
 assert.deepEqual(requests.at(-1).payload, {task_id: taskId, request_id: priorRequest,
-  command_id: "8".repeat(32), expected_revision: 7, mode: "rebaseline", accept_current_evidence: true});
+  command_id: "8".repeat(32), expected_revision: 7, mode: "rebaseline", accept_current_evidence: true, scope:"selected"});
 for (const args of [
   [taskId, priorRequest, commandId, 7, "rebaseline", false],
   [taskId, priorRequest, commandId, 7, "verify", 1],
@@ -68,4 +68,7 @@ for (const args of [
   [taskId, priorRequest, commandId, 2 ** 53, "baseline", false],
 ]) assert.throws(() => bridge.startInventoryIntegrity(...args));
 assert.equal(requests.length, 4);
+assert.deepEqual(await bridge.startInventoryIntegrity(taskId, priorRequest, "9".repeat(32), 7, "verify", false, null, "copied"), result);
+assert.equal(requests.at(-1).payload.scope, "copied");
+assert.throws(() => bridge.startInventoryIntegrity(taskId, priorRequest, commandId, 7, "rebaseline", true, null, "copied"));
 console.log("ok");

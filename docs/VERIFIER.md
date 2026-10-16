@@ -9,9 +9,9 @@ compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; the standalone
 desktop now exposes those actions and live controls. Signed-64 totals, exact event v5, and full-width native
-identity are active. The no-rescan manual post-copy workflow and ledger-current
-classification and same-task attachment are implemented; visible desktop actions
-remain pending. Fresh rebaseline admits
+identity are active. Deferred Verify copied files reuses ordinary scoped integrity;
+ledger-current execution classification and same-task attachment remain separate.
+Fresh rebaseline admits
 eligible selected rows with or without prior evidence after explicit acceptance.
 
 ## Purpose
@@ -272,7 +272,7 @@ new evidence. Recorder refusal/error degrades recording without rewriting the
 content verdict. Successful replacement clears invalidation/reappearance only
 atomically with the evidence transaction. Pause/resume retains exact admitted
 ids/order and completed results without reapplying fresh-selection filters.
-Automatic linked and manual exact post-copy verification remain separate.
+Automatic linked post-copy verification remains separate from ordinary Verify.
 Delivery and regression gates live in the
 [active M1 plan](M1_PLAN.md#remaining-checkpoints).
 
@@ -309,47 +309,22 @@ and envelope limits are owned by
 [BRIDGE.md](BRIDGE.md); verifier preserves only the local pause/resume
 state needed to continue the same admitted work.
 
-Ordinary manual verification is location-scoped and independent of any current
-plan or mapping. It must not require both source and target roots. The manual
-post-copy action is a separate, explicitly execution-linked workflow.
+Ordinary verification is location-scoped and needs only the target location.
+Deferred **Verify copied files** supplies successful byte-producing target paths
+from a retained execution to that same ordinary workflow. It refreshes those
+paths and compares current evidence; it does not attest against the original
+copy's evidence or require an unmodified execution scope token. Repeated actions
+are ordinary new sessions, while recovery observes only the original command.
+The operation may establish missing evidence and report baselined/incomplete;
+this is not a verification success. Missing and unsupported targets keep ordinary
+outcomes and scan warnings, including zero outcomes when no row exists.
 
-### Stage 6 manual post-copy handoff
-
-The manual workflow classifies current durable ledger state; it never
-reconstructs candidates from retained operation-time hashes. Those transient
-attestations exist only for immediate linked verification and same-session
-pause/resume and never become history, ledger, task, or JavaScript state. The
-exact atomic join and presentation classification are centralized in
-[BRIDGE.md](BRIDGE.md) and [DATABASE.md](DATABASE.md).
-
-A handoff is ready only when every applicable selected byte-producing operation
-has a successful terminal outcome and current committed evidence. An unrelated
-non-byte failure or a task-level close/flush issue does not erase committed
-evidence, but unrecorded, superseded, incomplete, or post-settlement-diverged
-work blocks the exact handoff. An empty applicable set is not vacuous success,
-and an all-already-verified set starts no work.
-
-Start never treats a prior read as authorization. It reclassifies atomically,
-freshly admits the target only for a ready subset, then classifies once more to
-freeze the work. The verifier reads and conditionally records against the
-original execution scope; a last-moment row, stat, scope, mount, or invalidation
-race becomes a truthful item/result disposition rather than evidence for a
-different state.
-
-A ready handoff receives a new dispatcher/history session. Its result cannot
-rewrite immutable execution truth or the ordinary-integrity result. The specific
-pause checkpoint retains frozen ledger-derived candidates and completed bytes;
-resume resolves the same target binding again without scanning or substituting
-new evidence. Paused cancellation does not reopen work. Native read retries
-remain the existing verifier policy.
-
-Task attachment and separate replacement publication are implemented; visible
-desktop controls remain pending M1-10 consumers.
-Terminal Verify-remaining/subset retry stays deferred. When exact handoff is
-unavailable, the accepted desktop fallback is an
-explicitly ordinary verify-current workflow whose refresh may establish a new
-scope. Exact replacement retention and task attachment semantics remain bridge
-authority.
+The former no-rescan exact-manual handoff and one-shot opportunity are retired.
+Linked automatic verification retains its distinct transient copy evidence,
+conditional recording, complete post-copy phase admission and pause/resume rules
+described above. Original execution results stay immutable. Later inventory
+operations may supersede run-relative displayed evidence without changing those
+execution results. DATABASE and PRESENTATION own current evidence classification.
 
 Verifier totals follow the active checked-arithmetic contract in
 [BRIDGE.md](BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;

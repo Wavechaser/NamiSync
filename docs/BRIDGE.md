@@ -480,8 +480,6 @@ BOOTSTRAP rows, commands require OPEN.
 | `open_plan_view` | `{task_id:TaskId}` | `PlanViewSummary` | 5 s; one identical-payload retry |
 | `open_inventory_view` | `{task_id:TaskId}` | `InventoryViewSummary` | 5 s; one identical-payload retry |
 | `refresh_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
-| `get_manual_verification_readiness` | `{task_id:TaskId,session_id:HexId,expected_execution_revision:SafeInt}` | `ManualVerificationReadiness` | 5 s; one identical-payload retry |
-| `start_manual_verification` | `{task_id:TaskId,session_id:HexId,command_id:HexId,expected_execution_revision:SafeInt}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | observed original result; 5 s feedback; no mutation replay |
 | `acknowledge_inventory`, `restore_inventory` | `{task_id:TaskId,request_id:HexId,command_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId}` | `InventoryVisibilityResult` | observed original result; 5 s feedback; no mutation replay |
 | `update_inventory_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[InventoryFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `set_inventory_selection` | `{task_id:TaskId,request_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId,selected:boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no automatic retry or mutation replay |
@@ -605,19 +603,19 @@ the old publication intact. Scan completeness remains separate from projection
 completeness.
 
 `start_inventory_integrity` is an observed asynchronous mutation with exact
-`task_id`, `request_id`, `command_id`, `expected_revision`, `mode` and
-`accept_current_evidence` fields. Mode is baseline, verify or rebaseline; the
+`task_id`, `request_id`, `command_id`, `expected_revision`, `mode`,
+`accept_current_evidence` and `scope` fields. Mode is baseline, verify or rebaseline; the
 acknowledgement is an exact Boolean and must be true for rebaseline. No path,
 row population or location comes from the browser. Original receipt recovery
 precedes current-publication checks. Fresh admission requires nonempty complete
-server selection and shares the existing 48-entry start capacity. Changed
+server scope and shares the existing 48-entry start capacity. Changed
 original intent conflicts. `control_integrity` is an observed direct mutation
 with exact task/session/action (pause, resume or cancel).
 
 Sync tasks retain their original `plan_request_id` while `request_id`,
 `session_id` and `session_kind` describe current activity. `TaskSessionKind` is
-`sync-plan`, `sync-execution`, `inventory`, `baseline`, `verify`, `rebaseline`
-or `manual-verify`; it is null exactly when the session ID is null. Inventory
+`sync-plan`, `sync-execution`, `inventory`, `baseline`, `verify` or `rebaseline`;
+it is null exactly when the session ID is null. Inventory
 tasks have no Plan request. Plan reads resolve original identity, including
 after auxiliary starts; retained Plan summaries identify the original execution.
 Fresh auxiliary starts require a released association with the same retained
@@ -627,23 +625,14 @@ The browser adopts the accepted start's current request and session together,
 while retaining original Plan identity. A task-list read begun before that
 acceptance cannot overwrite it; reconciliation reads current state afterward.
 
-Manual command `session_id` names the original execution.
-`ManualVerificationReadiness` contains exactly `task_id`, `session_id`,
-`execution_revision`, `reason`, `applicable_count`, `ready_count`,
-`already_verified_count` and `attempted`. Counts/revision are SafeInt, `attempted`
-is Boolean, and reason is a finite workflow or admission disposition. This read
-grants no authority.
-Start rechecks the whole handoff and admits the target afresh. It accepts no
-browser paths, evidence or subsets. The first valid fresh claim consumes the
-opportunity through later failure or cancellation; preclaim identity, revision
-and capacity refusals do not. Original-command observation precedes fresh
-attempt checks. Linked execution cannot start this separate manual action.
-Manual live control uses `control_execution` against its current manual session;
-ordinary integrity on either task kind uses `control_integrity`.
-
-Browser terminal-record admission includes manual verification's canonical kind
-and pause capability. The complete drain batch validates before event/cursor
-adoption; an unknown kind or mismatched capability still rejects the batch.
+Ordinary integrity `scope` is exactly `selected` or `copied`; copied is valid
+only for Verify on a retained released execution task. Selected freezes complete
+checkbox membership; copied freezes successful byte-producing target paths from
+the retained execution, including successful work in partial or linked runs.
+Neither scope accepts browser-supplied paths. An empty scope refuses rather than
+becoming whole-location work. Each fresh command may repeat ordinary verification;
+observing an original command never repeats its effect. Current controls use
+`control_integrity`, not the original execution session.
 
 After an ordinary start, inventory windows and domain details additionally carry
 an `integrity` context: activity request/session/mode/location identity, result
@@ -653,28 +642,17 @@ count. At most 256 facts cross a window and at most one crosses detail; full
 selected populations remain server-owned. Terminal reconciliation replaces the
 live subset and clears the gap flag, even with zero outcomes. These activity
 facts do not reinterpret the separate current ledger fields. Existing pure
-inventory responses omit this context. Standalone controls and the explicit
-ordinary fallback in a sync task's Verify pane consume these ordinary overlays.
-Manual controls consume their separate context below. The page binds readiness
-to original execution identity/revision and binds controls to the current session;
-pane changes fence pending reads without replacing the retained Plan identity.
-The page observes matching Plan-summary/current-window execution facts separately
-from Plan painting, monotonically within the original session and reset on its
-replacement. A readiness conflict is only a hint: one `open_plan_view` summary
-read may reconcile those facts, followed by one readiness reread. This page-owned
-round fetches no Plan rows, grants no start authority and does not change the
-bridge's existing same-payload transport retry. One running read coalesces latest
-demand; repeated conflict or read failure offers Reload instead of polling.
-Manual Start still captures and submits the exact current execution revision
-once; the backend independently checks admission and original-command recovery.
-
-Manual windows/details instead add an independent `manual_verification` context:
-original execution session, manual request/session/location, result revision,
-complete/gap and compact returned-row outcomes including operation and row IDs.
-The same 256-window/one-detail limits apply. Exact frozen membership binds these
-facts; a different row at the same path cannot inherit an outcome. Terminal
-reconciliation replaces the live subset, including zero outcomes. Manual and
-ordinary contexts coexist without changing original automatic execution facts.
+inventory responses omit this context. Standalone controls and both selected
+and copied-file Verify actions in sync tasks consume this one ordinary overlay.
+Selected subjects use admitted row IDs;
+copied scope uses workflow-owned canonical path admission with the frozen
+location/mode and binds emitted rows
+one-to-one, including rows created by its fresh scan. Unknown or conflicting
+subjects refuse. All replies retain current request/session/publication fences.
+Plan/Verify navigation preserves original Plan identity and retires obsolete
+reads. There is no manual-specific readiness command, session kind or result
+context. Scans may supersede execution-relative ledger evidence while original
+execution and automatic-verification results remain unchanged.
 
 Visibility requires the current released request, a matching complete publication
 and its exact revision. Full/root, folder and leaf membership comes from the

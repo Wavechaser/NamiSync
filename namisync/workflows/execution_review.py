@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections.abc import Mapping
 from pathlib import Path
 
 from namisync.core.evidence import ContentEvidence, Outcome, Provenance
 from namisync.core.events import ItemOutcome
 from namisync.core.execution import ExecutionReason
-from namisync.core.integrity import IntegrityOutcome
+from namisync.core.integrity import (
+    INTEGRITY_CANDIDATE_ROW_LIMIT, IntegrityCandidateLimitError,
+    IntegrityCandidateLimitExceeded, IntegrityOutcome,
+)
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, Plan, PlanOperation
 from namisync.core.session import Disposition, OperationResult, SessionState
@@ -135,6 +139,41 @@ def build_retained_execution_review(
         tuple(operation for operation in plan.operations
               if str(operation.op_id) in selected and operation.kind in _COPY_LIKE),
     )
+
+
+def successful_copied_paths(review: RetainedExecutionReview) -> tuple[str, ...]:
+    """Derive ordinary current-state scope from successful copy-like outcomes."""
+    paths = {}
+    for operation in review.applicable_operations:
+        item = review.operation_items.get(str(operation.op_id))
+        if item is not None and item.outcome is Outcome.SUCCEEDED:
+            paths.setdefault(normalize_relative_path(operation.target_rel_path), operation.target_rel_path)
+            if len(paths) > INTEGRITY_CANDIDATE_ROW_LIMIT:
+                raise IntegrityCandidateLimitError(IntegrityCandidateLimitExceeded.rows())
+    return tuple(paths[key] for key in sorted(paths))
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class CopiedSubjectScope:
+    """Frozen copied-file membership and admission of its observed row identity."""
+
+    path_keys: frozenset[str]
+
+    def __init__(self, paths: tuple[str, ...]) -> None:
+        object.__setattr__(self, "path_keys", frozenset(
+            normalize_relative_path(path) for path in paths))
+
+    def admit(
+        self, path: str, row_id: str,
+        path_rows: Mapping[str, str], row_paths: Mapping[str, str],
+    ) -> str | None:
+        """Classify without binding: callers commit only after accepting the fact."""
+        key = normalize_relative_path(path)
+        if (key not in self.path_keys
+                or path_rows.get(key, row_id) != row_id
+                or row_paths.get(row_id, key) != key):
+            return None
+        return key
 
 
 def read_retained_operation_items(

@@ -337,54 +337,43 @@ Selection replies replace authoritative summary/window state; uncertain or stale
 gestures reload that state rather than replaying membership changes. Rebaseline
 confirmation binds the selected count and scope to the exact publication revision.
 
-Execution tasks can also attach ordinary current-location work and one first
-exact manual verification. Their current activity request/session/kind is
-independent of original Plan request, execution session, terminal timestamps,
-operation results and automatic verification. Plan detail, anchors/follow and
-Plan again retain original identity; task status follows current activity.
-Reconstruction obtains the original execution identity from the Plan summary,
-never from a current auxiliary session. Auxiliary progress cannot drive Plan
-follow or replace its terminal result.
+Execution tasks can attach ordinary current-location work. Their current activity
+request/session/kind is independent of original Plan request, execution session,
+terminal timestamps, operation results and automatic verification. Plan detail,
+anchors/follow and Plan again retain original identity; task status follows
+current activity. Reconstruction gets original execution identity from the Plan
+summary, never from a current auxiliary session. Auxiliary progress cannot drive
+Plan follow or replace its terminal result.
 
-Manual verification has a separate frozen operation-to-row membership and
-result generation. Inventory window/detail exposes only matching returned-row
-manual facts, alongside ordinary facts and current ledger evidence. The renderer
-indexes each bounded result window once; a detail still requires matching
-generation and row/operation identity. It does not repeatedly validate the
-window's own result membership for each rendered row. Terminal
-normalization repairs a live Gap and retains outcomes completed before pause.
-Manual hashing preserves actual prior scan provenance; subsequent ordinary
-scanning supplies its own scan identity. The desktop's same-task Plan/Verify
-navigation retains both pane states while retiring pending reads from the pane
-being left. One task-owned original-execution fact binds readiness and manual
-Start to the retained Plan request and original session. Matching Plan summaries
-and current execution windows feed this observation independently of permission
-to repaint Plan; a release reload may advance the fact while Verify is visible.
-Within one original execution its revision cannot decrease. A new original
-execution resets it; an auxiliary session association does not. Terminal state,
-snapshots and manual/ordinary results retain their separate owners.
+**Verify copied files** supplies successful execution copy-target paths to
+ordinary Verify without changing Inventory checkbox selection. It is repeatable,
+includes successful work in partial or linked executions, and refuses an empty
+copied population. The server freezes copied paths under current-task admission;
+the browser supplies no paths. Scanning may create a new row for a formerly
+unrecorded copy, so copied-scope outcome admission binds normalized path,
+location and mode and establishes a one-to-one path/row identity. Selected-scope
+ordinary operations retain their exact selected-row membership. Neither scope
+can accept foreign or conflicting subjects.
 
-Readiness keeps one running read and one coalesced latest demand. A newer execution
-fact preserves demand while retiring an older reply. On conflict, one existing
-Plan-summary read reconciles the original execution, followed by one readiness
-reread without fetching or replacing Plan rows. Conflict alone grants no
-eligibility. Repeated conflict or transport error settles with actionable Reload;
-there is no polling or mutation replay. Pane/task/Settings navigation, Close and
-original-session replacement retire pending read authority; reentry can demand
-a fresh read. Current manual and ordinary controls use their own session identities. Manual results,
-ordinary results and stored ledger evidence have separate labels and generations;
-a new zero-item result does not fall back to old item facts. Returning to Plan
-retains original details, selection, follow and viewport custody.
+One latest ordinary result generation covers both start scopes. Each bounded
+window is indexed once; detail retains generation and row identity checks.
+Terminal normalization repairs a live Gap and retains outcomes completed before
+pause, including a truthful empty result. Ledger state stays separate from
+ordinary outcomes; baselined is not verified. A scan supplies its own provenance
+and may supersede execution-relative evidence. There is no separate manual
+result slot, readiness read or first-attempt claim.
 
+Plan/Verify navigation retains pane state while retiring pending reads from the
+pane being left. Current ordinary controls address only their current session;
+returning to Plan preserves its focused item, selection, follow and viewport.
+An auxiliary scan or ordinary-integrity release marks current execution evidence
+dirty and retires its cached or pending detail. Returning to Plan consumes the
+existing bounded refresh at the retained offset, even when the original
+execution revision is unchanged. Original execution outcomes remain retained.
 Refresh retains its complete explicit scan scope and current activity request,
-including recovery from a displayed prior publication. In a sync Verify pane,
-ready or unresolved exact readiness requires confirmation before scan submission.
-Opening or canceling the dialog sends no scan and retires no read. Confirm
-rechecks the captured task/review, navigation, current association, publication,
-view, original execution and node against normal admission; it neither retargets
-the active row nor replays a command. Conclusive consumed/unavailable readiness
-and standalone Inventory need no warning. This discloses scan supersession;
-it does not preserve or reinterpret execution evidence across scans.
+including recovery from a displayed prior publication. It needs no exact-
+verification-forfeiture confirmation because that one-shot feature is retired.
+Rebaseline consent and ordinary revision/admission fences remain unchanged.
 
 One existing view revision fences selection, windows and details. A stale request
 or revision changes nothing; selection changes advance the revision. Selection

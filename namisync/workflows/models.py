@@ -598,22 +598,6 @@ class RetainedInventoryIntegrity:
 
 
 @dataclass(frozen=True, slots=True)
-class ManualVerificationMembership:
-    execution: RetainedExecutionBinding
-    request_id: str
-    location_id: int
-    subjects: tuple[tuple[str, str, str], ...]
-
-
-@dataclass(frozen=True, slots=True)
-class RetainedManualVerification:
-    membership: ManualVerificationMembership
-    session_id: str
-    result: OperationResultView
-    items: tuple[IntegrityOutcomeView, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class HistoryRunSummaryView:
     run_token: str
     session_id: str

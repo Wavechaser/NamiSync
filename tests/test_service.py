@@ -2350,8 +2350,6 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     runtime._execution_details = {"run": execution_details}
     runtime._retained_execution_reviews = {}
     runtime._retained_inventory_integrity = {}
-    runtime._manual_memberships = {}
-    runtime._retained_manual_verification = {}
     runtime._inventory_details = {"request": inventory_details}
     runtime._execution_started = {"run": NOW}
     del plan, execution_details, inventory_details
@@ -2415,8 +2413,6 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     runtime._execution_details = {}
     runtime._retained_execution_reviews = {}
     runtime._retained_inventory_integrity = {}
-    runtime._manual_memberships = {}
-    runtime._retained_manual_verification = {}
     runtime._inventory_details = {}
     runtime._execution_started = {}
     first_errors: list[Exception] = []
@@ -4089,9 +4085,6 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
         def drop_plan(self, candidate: str) -> None:
             self.dropped.append(candidate)
 
-        def retire_manual_verification(self, _task_id: str) -> None:
-            pass
-
         def retire_inventory_integrity(self, _task_id: str) -> None:
             pass
 
@@ -4482,9 +4475,6 @@ def test_task_association_gates_reobserve_release_and_close_effects() -> None:
         def drop_plan(self, candidate: str) -> None:
             self.plan_drops.append(candidate)
 
-        def retire_manual_verification(self, _task_id: str) -> None:
-            pass
-
         def retire_inventory_integrity(self, _task_id: str) -> None:
             pass
 
@@ -4639,9 +4629,6 @@ def test_ls_4b_whole_operation_cleanup_replay_converges(
         def drop_plan(self, candidate: str) -> None:
             assert candidate == request_id
             effect("plan", candidate)
-
-        def retire_manual_verification(self, _task_id: str) -> None:
-            pass
 
         def retire_inventory_integrity(self, _task_id: str) -> None:
             pass
@@ -4934,9 +4921,6 @@ def test_s6_cleanup_replay_repeats_owner_calls_not_effects() -> None:
             self.detail_calls.append(candidate)
             if self.details.pop(candidate, None) is not None:
                 self.detail_transitions.append(candidate)
-
-        def retire_manual_verification(self, _task_id: str) -> None:
-            pass
 
         def retire_inventory_integrity(self, _task_id: str) -> None:
             pass

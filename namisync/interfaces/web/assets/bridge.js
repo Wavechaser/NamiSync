@@ -40,8 +40,6 @@ const COMMAND_POLICY_JSON = `{
   "open_plan_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "open_inventory_view": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "start_inventory_integrity": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
-  "get_manual_verification_readiness": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
-  "start_manual_verification": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "control_integrity": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "refresh_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "acknowledge_inventory": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
@@ -138,7 +136,6 @@ const TASK_SESSION_PAUSE_SUPPORT = Object.freeze({
   baseline: true,
   verify: true,
   rebaseline: true,
-  "manual-verify": true,
 });
 const RECORDING_STATES = Object.freeze(["ok", "degraded"]);
 const TASK_RECORDING_REASONS_V5 = Object.freeze([
@@ -752,41 +749,18 @@ export function refreshInventory(taskId, requestId, commandId, expectedRevision,
   "refresh_inventory", INVENTORY_START_TIMEOUT_MS, onDelayed);
 }
 
-export function startInventoryIntegrity(taskId, requestId, commandId, expectedRevision, mode, acceptCurrentEvidence, onDelayed = null) {
+export function startInventoryIntegrity(taskId, requestId, commandId, expectedRevision, mode, acceptCurrentEvidence, onDelayed = null, scope = "selected") {
   requireTaskId(taskId, "startInventoryIntegrity");
   if (typeof requestId !== "string" || !ID_PATTERN.test(requestId)
       || typeof commandId !== "string" || !ID_PATTERN.test(commandId)
       || !isNonnegativeInteger(expectedRevision) || !["baseline", "verify", "rebaseline"].includes(mode)
-      || typeof acceptCurrentEvidence !== "boolean" || (mode === "rebaseline" && !acceptCurrentEvidence)) {
+      || typeof acceptCurrentEvidence !== "boolean" || (mode === "rebaseline" && !acceptCurrentEvidence)
+      || !["selected", "copied"].includes(scope) || (scope === "copied" && mode !== "verify")) {
     throw new TypeError("startInventoryIntegrity requires a confirmed current selection");
   }
   return submitStart(Object.freeze({task_id: taskId, request_id: requestId, command_id: commandId,
-    expected_revision: expectedRevision, mode, accept_current_evidence: acceptCurrentEvidence}),
+    expected_revision: expectedRevision, mode, accept_current_evidence: acceptCurrentEvidence, scope}),
   "start_inventory_integrity", INVENTORY_START_TIMEOUT_MS, onDelayed);
-}
-
-export function getManualVerificationReadiness(taskId, sessionId, expectedExecutionRevision) {
-  requireTaskId(taskId, "getManualVerificationReadiness");
-  if (typeof sessionId !== "string" || !ID_PATTERN.test(sessionId)
-      || !isNonnegativeInteger(expectedExecutionRevision)) {
-    throw new TypeError("manual readiness requires original execution identity and revision");
-  }
-  return inventoryRead("get_manual_verification_readiness",
-    {task_id: taskId, session_id: sessionId,
-      expected_execution_revision: expectedExecutionRevision},
-    (value) => validateManualVerificationReadiness(value, taskId, sessionId));
-}
-
-export function startManualVerification(taskId, sessionId, commandId, expectedExecutionRevision, onDelayed = null) {
-  requireTaskId(taskId, "startManualVerification");
-  if (typeof sessionId !== "string" || !ID_PATTERN.test(sessionId)
-      || typeof commandId !== "string" || !ID_PATTERN.test(commandId)
-      || !isNonnegativeInteger(expectedExecutionRevision)) {
-    throw new TypeError("manual start requires original execution identity and revision");
-  }
-  return submitStart(Object.freeze({task_id: taskId, session_id: sessionId,
-    command_id: commandId, expected_execution_revision: expectedExecutionRevision}),
-  "start_manual_verification", INVENTORY_START_TIMEOUT_MS, onDelayed);
 }
 
 export function controlIntegrity(taskId, sessionId, action, onDelayed = null) {
@@ -3032,42 +3006,9 @@ function validateInventoryIntegrity(value, rowIds) {
     });
 }
 
-function validateManualVerificationReadiness(value, taskId, sessionId) {
-  return isExactObject(value, ["task_id", "session_id", "execution_revision", "reason",
-    "applicable_count", "ready_count", "already_verified_count", "attempted"])
-    && value.task_id === taskId && value.session_id === sessionId
-    && [value.execution_revision, value.applicable_count, value.ready_count,
-      value.already_verified_count].every(isNonnegativeInteger)
-    && ["ready", "already-verified", "empty", "incomplete", "unrecorded",
-      "superseded", "settlement-diverged", "execution-ineligible", "busy",
-      "attempted", "linked-execution", "conflict"].includes(value.reason)
-    && typeof value.attempted === "boolean";
-}
-
-function validateManualVerification(value, rowIds) {
-  return isExactObject(value, ["execution_session_id", "request_id", "session_id",
-    "location_id", "revision", "complete", "gap", "items"])
-    && [value.execution_session_id, value.request_id, value.session_id].every(
-      (id) => typeof id === "string" && ID_PATTERN.test(id))
-    && isScalar64(value.location_id) && value.location_id !== "0"
-    && isNonnegativeInteger(value.revision)
-    && typeof value.complete === "boolean" && typeof value.gap === "boolean"
-    && !(value.complete && value.gap)
-    && Array.isArray(value.items) && value.items.length <= 256
-    && new Set(value.items.map((item) => item?.row_id)).size === value.items.length
-    && value.items.every((item) => isExactObject(item, ["row_id", "operation_id", "result",
-      "reason", "recording", "record_disposition", "detail_omitted_count"])
-      && isScalar64(item.row_id) && rowIds.includes(item.row_id)
-      && typeof item.operation_id === "string" && ID_PATTERN.test(item.operation_id)
-      && validateIntegrityCompact({result: item.result, reason: item.reason,
-        recording: item.recording, record_disposition: item.record_disposition,
-        detail_omitted_count: item.detail_omitted_count}));
-}
-
 function validateInventoryWindow(value) {
-  return isExactObject(value, ["disposition", "view_revision", "highlight_revision", "offset", "total", "rows", ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "integrity") ? ["integrity"] : []), ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "manual_verification") ? ["manual_verification"] : [])])
+  return isExactObject(value, ["disposition", "view_revision", "highlight_revision", "offset", "total", "rows", ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "integrity") ? ["integrity"] : [])])
     && (!Object.prototype.hasOwnProperty.call(value, "integrity") || (Array.isArray(value.rows) && validateInventoryIntegrity(value.integrity, value.rows.map((row) => row?.row_id))))
-    && (!Object.prototype.hasOwnProperty.call(value, "manual_verification") || (Array.isArray(value.rows) && validateManualVerification(value.manual_verification, value.rows.map((row) => row?.row_id))))
     && ["current", "conflict"].includes(value.disposition)
     && [value.view_revision, value.highlight_revision, value.offset, value.total].every(isNonnegativeInteger)
     && Array.isArray(value.rows) && value.rows.length <= 256
@@ -3127,11 +3068,9 @@ function isScanWarningCode(value) {
 }
 
 function validateInventoryDetail(value) {
-  if (!isExactObject(value, ["disposition", "view_revision", "node_id", "snapshot", "detail", ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "integrity") ? ["integrity"] : []), ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "manual_verification") ? ["manual_verification"] : [])])
+  if (!isExactObject(value, ["disposition", "view_revision", "node_id", "snapshot", "detail", ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "integrity") ? ["integrity"] : [])])
       || (Object.prototype.hasOwnProperty.call(value, "integrity") && (!validateInventoryIntegrity(value.integrity, [value.detail?.row?.row_id])
         || value.integrity.location_id !== value.detail?.row?.location_id))
-      || (Object.prototype.hasOwnProperty.call(value, "manual_verification") && (!validateManualVerification(value.manual_verification, [value.detail?.row?.row_id])
-        || value.manual_verification.location_id !== value.detail?.row?.location_id))
       || !["current", "conflict", "unavailable"].includes(value.disposition)
       || !isNonnegativeInteger(value.view_revision) || !isNodeId(value.node_id)) return false;
   if (value.disposition !== "current") return value.detail === null && value.snapshot === null;

@@ -2,6 +2,7 @@
 
 from namisync.core.integrity import IntegrityMode
 from namisync.core.models import VolumeId
+from namisync.workflows.execution_review import CopiedSubjectScope
 from namisync.core.planning import (
     DeletionPolicy,
     FilterSet,
@@ -26,9 +27,6 @@ from namisync.workflows.inventory import (
     resolve_reviewed_binding,
 )
 from namisync.workflows.database_pair import DatabaseAdmissionError, DatabasePairContract
-from namisync.workflows.manual_verification import (
-    ManualVerificationRequest, ManualVerificationReadiness, ManualVerificationUnavailable,
-)
 from namisync.workflows.inventory_projection import (
     InventoryProjection,
     InventoryProjectionNode,
@@ -52,8 +50,6 @@ from namisync.workflows.models import (
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
     RetainedInventoryIntegrity,
-    ManualVerificationMembership,
-    RetainedManualVerification,
     HistoryEventView,
     HistoryEventPageView,
     HistoryItemPageView,
@@ -78,7 +74,6 @@ from namisync.workflows.runtime import (
     BASELINE_KIND,
     EXECUTION_KIND,
     INVENTORY_KIND,
-    MANUAL_VERIFY_KIND,
     PLAN_KIND,
     REBASELINE_KIND,
     VERIFY_KIND,
@@ -123,6 +118,7 @@ def integrity_request(
 
 
 __all__ = [
+    "CopiedSubjectScope",
     "BASELINE_KIND",
     "CompactUnsignedIntegers",
     "DatabasePairContract",
@@ -140,8 +136,6 @@ __all__ = [
     "RetainedExecutionSummary",
     "RetainedIntegrityItemWindow",
     "RetainedInventoryIntegrity",
-    "ManualVerificationMembership",
-    "RetainedManualVerification",
     "FilterSet",
     "HistoryEventPageView",
     "HistoryEventView",
@@ -180,10 +174,6 @@ __all__ = [
     "SyncOptions",
     "SortDirection",
     "VERIFY_KIND",
-    "MANUAL_VERIFY_KIND",
-    "ManualVerificationRequest",
-    "ManualVerificationReadiness",
-    "ManualVerificationUnavailable",
     "VolumeResolution",
     "VolumeResolutionRequired",
     "VolumeResolutionState",

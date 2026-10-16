@@ -298,15 +298,11 @@ classification; adapters only forward that result. Current-state evidence
 cannot silently become execution evidence. Later task failure does not revoke
 an independently committed item receipt.
 
-Manual exact handoff requires a fresh coherent snapshot, repeats the repository
-read before verifier attachment, and retains the original execution scope as
-conditional authority. Recording degradation outside an item does not erase
-coherent item evidence; explicit settlement divergence blocks the handoff.
-The dedicated `read_manual_verification_evidence` method admits at most 120,000
-raw subjects, then holds one transaction across bounded receipt and target-key
-chunks. This complete handoff read does not relax the 256-subject presentation
-reader. Classification and readiness remain workflow-owned; the repository
-returns current facts without starting a scan or retaining operation-time hashes.
+Deferred Verify copied files uses the ordinary selected-path scan and integrity
+reader. The former complete-population manual-handoff reader is retired; the
+bounded atomic execution-evidence reader remains unchanged. An inventory scan
+can supersede execution-relative evidence even when bytes are unchanged. Current
+ledger verification is separate from evidence attributed to that original run.
 
 ## Purpose And Boundaries
 

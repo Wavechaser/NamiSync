@@ -177,6 +177,28 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16)
+
+- Replace the one-shot exact manual verification path with ordinary Verify
+  over server-derived successful COPY/UPDATE/MOVE_UPDATE target paths, including
+  successful work from partial or linked executions. Fresh commands may repeat
+  it; original-command recovery never repeats effects. Checkbox selection is
+  unchanged and an empty copied scope refuses.
+- Reuse ordinary scan, integrity controls and result publication. Missing
+  evidence may be baselined without claiming verification; missing subjects and
+  zero outcomes remain visible as ordinary results or scan warnings. Later
+  scans can supersede execution-relative evidence without rewriting original
+  execution or automatic verification results. Retire the exact readiness,
+  first-claim and separate result machinery and its Refresh forfeiture warning.
+- Refresh current execution evidence after auxiliary inventory work, including
+  when returning from Verify. Retire stale detail reads without resetting Plan
+  selection, viewport or follow preference; the original execution result stays
+  retained.
+- Independently review copied-subject admission and the exact-family retirement;
+  pass 2,978 affected workflow/interface checks, all 12 import contracts and 13
+  installed execution, Inventory, shell, gallery and host/transport cases.
+  Preserve earlier failed receipts and the unexplained larger-window fixture.
+
 #### Align Verify table interaction and action consequences (2026-10-15 – 2026-10-16)
 
 - Generate browser session-kind and pause-capability mirror cases from the

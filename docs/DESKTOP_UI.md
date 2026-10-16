@@ -7,8 +7,8 @@ review, execution admission and live pause/resume/cancel controls are active;
 retained execution-result review is active in that Plan pane. Inventory has a
 separate bounded read pane with search, facets, sibling sorting and current
 evidence details, Refresh, missing-item visibility, complete file selection and
-ordinary integrity controls. Manual post-copy navigation, history and full
-settings remain pending. Current v5 item
+ordinary integrity controls and deferred ordinary copied-file verification.
+History and full settings remain pending. Current v5 item
 progress and detailed result rows are reduced by the bridge for bounded display.
 
 This document owns visual/user interaction behavior. BRIDGE owns exact transport,
@@ -1746,8 +1746,8 @@ A forced process exit cannot wait for settlement and provides no durable live
 task or resume promise; later work starts from fresh observation and review.
 
 Normally completed linked execution/verification retains read-only file lists,
-item status, and each phase's aggregate status. Normal execution-only completion
-may offer the first manual post-copy verification when eligible. Non-stopping
+item status, and each phase's aggregate status. Retained executions with successful
+copied targets may start ordinary Verify copied files after release. Non-stopping
 degradation retains that same review experience with visible issue axes, without
 item retries. Canceled or otherwise abnormally terminated sessions retain their
 terminal truth for review and close, without resume, retry, or session cleanup.
@@ -1892,33 +1892,26 @@ starting a scan or hash. Returning to Plan retains its selection, details,
 follow setting and viewport. Pane changes retire pending navigation reads;
 late replies cannot replace the other pane's state or feedback.
 
-Verify reads exact readiness against the original execution identity/revision.
-**Verify copied files** is available only for a ready, nonempty, unattempted
-handoff with a released current association. Its one original command is observed
-after delivery uncertainty; Check never submits another attempt. An admitted
-claim stays consumed through failure or cancellation. Readiness grants no
-authority and Start rechecks it. Linked, empty, already-verified, attempted and
-ineligible handoffs show guidance; busy or stale state needs a fresh read.
+**Verify copied files** starts ordinary Verify on server-derived successful
+copy targets from the retained execution. It scans those paths and checks current
+evidence, without changing Inventory checkbox selection. The action can repeat
+with a new command after release, including successful work in a partial or
+linked execution. Empty copied scope starts nothing. Each uncertain command
+retains Check original outcome; Check never submits another operation.
 
-On this pane, **Verify copied files** is primary and Refresh is secondary.
-Whole, selected and context-row Refresh ask for confirmation while the exact
-opportunity is ready or unresolved. The dialog explains that rescanning can
-make it unavailable even when files are unchanged, and that explicitly selected
-current-state verification remains possible afterward. Cancel is the default
-and starts no scan. Confirm submits the captured scope only if its task,
-publication, view and original execution still match; stale consent asks for a
-fresh choice. A conclusively consumed or unavailable exact opportunity needs no
-warning, and standalone Inventory retains immediate Refresh. Superseded guidance
-describes evidence no longer being current, not a claim that file contents changed.
+Selected **Verify current state** is an ordinary action independent of copied-file
+eligibility. It uses the complete nonempty server-owned checkbox selection and
+never runs automatically. Baseline and Rebaseline remain hidden on sync tasks.
+Both Verify scopes share current-session controls and one latest ordinary result;
+neither controls or rewrites the original execution. Missing evidence may be
+baselined and reported incomplete, not verified. Missing/unsupported targets and
+scan warnings remain visible without an all-copied-files-verified claim.
 
-For a normally completed original execution, only incomplete, unrecorded,
-superseded or settlement-diverged handoff evidence can offer the clearly labelled
-ordinary **Verify current state** fallback. It uses the current nonempty
-server-owned selection and never runs automatically. Baseline and Rebaseline
-are hidden on sync tasks. Standalone Inventory ordinary controls are described
-below. Manual controls address the current manual session through execution
-control; ordinary controls address the current ordinary integrity session.
-Neither route controls or rewrites the original execution.
+Refresh needs no exact-verification-forfeiture warning: the one-shot exact action
+is retired. Its normal current-task/publication/revision checks remain, and
+Rebaseline still requires consent. Later scans may truthfully supersede the
+execution's displayed evidence without implying changed file contents or
+altering original execution and linked verification outcomes.
 
 Pre-execution capacity refusal, including queued wakeup refusal, keeps the task
 visible without execution, automatic retry, or automatic close. Scan/planner
@@ -1951,7 +1944,7 @@ The browser never reconstructs them from display paths.
 
 Plan rows remain hash-free. Execution evidence is shown only when the bounded
 atomic ledger view classifies it as execution-owned; current-state evidence is
-labelled separately. Execution and manual post-copy overlays remain independent
+labelled separately. Execution and ordinary-integrity overlays remain independent
 fields. A replacement attempt decorates from one complete new generation, never
 a mixture or old fallback, while settled membership remains stable until
 terminal publication. View behavior, grouping, evidence classes, overlays,
@@ -2115,8 +2108,8 @@ initial baseline without claiming a verification. The
 owns the outcomes and deferred compare-and-accept behavior.
 
 The standalone integrity surface presents ledger-derived verification state
-separately from its latest ordinary-integrity overlay. Manual post-copy results
-never enter that field. Folder rollups exclude warnings and do not change when acknowledged
+separately from its latest ordinary-integrity overlay, including copied-file
+verification. Folder rollups exclude warnings and do not change when acknowledged
 rows are hidden. Overflow is displayed as unavailable, never a clamped total.
 Details label current digest provenance/currentness/invalidation and render
 times without floating-point authority. Exact inventory view, filter, overlay,

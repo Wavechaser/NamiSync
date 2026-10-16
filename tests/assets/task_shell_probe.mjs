@@ -464,8 +464,6 @@ const bridgeUrl = moduleUrl(`
   export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryDetail = () => Promise.reject(new Error("unused inventory read"));
-  export const getManualVerificationReadiness = () => Promise.reject(new Error("unused manual readiness"));
-  export const startManualVerification = () => Promise.reject(new Error("unused manual start"));
   export const refreshInventory = () => Promise.reject(new Error("unused inventory action"));
   export const acknowledgeInventory = () => Promise.reject(new Error("unused inventory action"));
   export const restoreInventory = () => Promise.reject(new Error("unused inventory action"));
@@ -2991,7 +2989,7 @@ const auxiliaryWindowBase = planWindows.length;
 const auxiliaryTask = globalThis.taskHarness.adoptTask({
   task_id: auxiliaryTaskId, session_id: auxiliarySessionId, session_state: "active",
   session_released: false, task_kind: "sync-plan", request_id: auxiliaryRequestId,
-  plan_request_id: auxiliaryPlanId, session_kind: "manual-verify",
+  plan_request_id: auxiliaryPlanId, session_kind: "verify",
 });
 await until(() => planOpens.length === auxiliaryOpenBase + 1);
 const auxiliaryPlan = planSummary({
@@ -3012,7 +3010,7 @@ assert.equal(auxiliaryTask.reviewSessionId, originalExecutionId);
 assert.equal(auxiliaryTask.review.summary.request_id, auxiliaryPlanId);
 assert.equal(selectTaskExecution(auxiliaryTask).execution.session_id, originalExecutionId);
 assert.equal(taskStatusDigest(auxiliaryTask).title, "Verifying");
-auxiliaryTask.error = "Manual verification updates unavailable";
+auxiliaryTask.error = "Verification updates unavailable";
 const auxiliaryReloadBase = planOpens.length;
 const auxiliaryReloadWindowBase = planWindows.length;
 const auxiliaryOriginalFact = auxiliaryTask.originalExecutionFact;
@@ -3022,7 +3020,7 @@ planOpens[auxiliaryReloadBase].resolve(auxiliaryPlan);
 await until(() => planWindows.length === auxiliaryReloadWindowBase + 1);
 planWindows[auxiliaryReloadWindowBase].resolve(planWindow(auxiliaryPlan));
 await until(() => !auxiliaryTask.reviewLoading);
-assert.equal(auxiliaryTask.error, "Manual verification updates unavailable",
+assert.equal(auxiliaryTask.error, "Verification updates unavailable",
   "an original Plan reload cannot clear current auxiliary recovery feedback");
 assert.equal(auxiliaryTask.originalExecutionFact, auxiliaryOriginalFact,
   "an equal-revision reload does not replace original execution facts with auxiliary activity");
