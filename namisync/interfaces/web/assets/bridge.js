@@ -3187,7 +3187,7 @@ function validatePlanViewSummary(value) {
 function validateExecutionSummary(value) {
   if (!isExactObject(value, [
     "execution_revision", "session_id", "result", "failed_operation_count",
-    "disk_capacity_failure_count", "gap", "trash_location", "started_at", "ended_at", "refusal",
+    "disk_capacity_failure_count", "has_successful_copied_files", "gap", "trash_location", "started_at", "ended_at", "refusal",
   ]) || !isNonnegativeInteger(value.execution_revision)
       || !(value.session_id === null
         || (typeof value.session_id === "string" && ID_PATTERN.test(value.session_id)))) {
@@ -3196,12 +3196,14 @@ function validateExecutionSummary(value) {
   const terminalAbsent = value.result === null
     && value.failed_operation_count === null
     && value.disk_capacity_failure_count === null
+    && value.has_successful_copied_files === null
     && value.trash_location === null
     && value.started_at === null
     && value.ended_at === null && value.refusal === null;
   const terminalPresent = validateOperationResultView(value.result)
     && isNonnegativeInteger(value.failed_operation_count)
     && isNonnegativeInteger(value.disk_capacity_failure_count)
+    && typeof value.has_successful_copied_files === "boolean"
     && value.disk_capacity_failure_count <= value.failed_operation_count
     && isBoundedPath(value.trash_location)
     && (value.started_at === null || isUtcTimestamp(value.started_at))

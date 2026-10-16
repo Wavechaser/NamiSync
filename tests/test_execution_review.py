@@ -151,6 +151,37 @@ def test_copied_scope_keeps_only_successful_selected_copy_targets(status):
     review = build_retained_execution_review(binding, result, plan(members),
         frozenset(str(member.op_id) for member in members[:-1]))
     assert successful_copied_paths(review) == ("a.bin", "Z.bin")
+    assert review.summary.has_successful_copied_files is True
+    assert review.result is result
+
+
+@pytest.mark.parametrize("kind,outcome,selected,expected", [
+    (OperationKind.COPY, Outcome.SUCCEEDED, True, True),
+    (OperationKind.UPDATE, Outcome.SUCCEEDED, True, True),
+    (OperationKind.MOVE_UPDATE, Outcome.SUCCEEDED, True, True),
+    (OperationKind.MOVE, Outcome.SUCCEEDED, True, False),
+    (OperationKind.NOOP, Outcome.SUCCEEDED, True, False),
+    (OperationKind.DELETE, Outcome.SUCCEEDED, True, False),
+    (OperationKind.COPY, Outcome.FAILED, True, False),
+    (OperationKind.COPY, Outcome.SKIPPED, True, False),
+    (OperationKind.COPY, None, True, False),
+    (OperationKind.COPY, Outcome.SUCCEEDED, False, False),
+])
+def test_retained_copied_fact_matches_selected_successful_byte_producing_scope(
+    kind, outcome, selected, expected,
+):
+    stat = file_stat(size=0)
+    member = operation(kind, source=stat, intended=stat)
+    degraded = outcome is Outcome.SUCCEEDED
+    result = OperationResult(SessionState.COMPLETED,
+        recording=RecordingStatus.DEGRADED if degraded else RecordingStatus.OK,
+        items=() if outcome is None else (_item(member, outcome, degraded=degraded),))
+    review = build_retained_execution_review(
+        RetainedExecutionBinding("task", "plan", 1, "execution", "run"),
+        result, plan((member,)), frozenset({str(member.op_id)}) if selected else frozenset(),
+    )
+    assert review.summary.has_successful_copied_files is expected
+    assert bool(successful_copied_paths(review)) is expected
     assert review.result is result
 
 

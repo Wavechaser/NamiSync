@@ -1136,7 +1136,9 @@ assert.equal(walk(presentationPane.element).find(value => Object.hasOwn(value.da
 
 Object.assign(presentationTask, {taskKind:"sync-plan", executionStarted:true, workPane:"verify",
   sessionKind:"inventory", sessionState:"completed", sessionReleased:true, snapshot:null,
-  requestId:presentationReview.summary.request_id});
+  requestId:presentationReview.summary.request_id, planRequestId:"original-plan", executionSessionId:"original-execution",
+  originalExecutionFact:{planRequestId:"original-plan", execution:{session_id:"original-execution",
+    execution_revision:7, has_successful_copied_files:true}}});
 presentationPane.render(presentationTask);
 const presentationAction = key => walk(presentationPane.element).find(value => value.dataset.action === key);
 assert.equal(presentationAction("inventory-baseline").hidden, true);
@@ -1146,6 +1148,28 @@ assert.equal(presentationAction("inventory-verify").textContent, "Verify current
 assert.equal(presentationAction("verify-copied-files").hidden, false);
 presentationAction("verify-copied-files").click();
 assert.deepEqual(copiedStarts, [[presentationReview]]);
+const retainedCopiedFact = presentationTask.originalExecutionFact;
+presentationReview.summary = {...presentationReview.summary, selected_file_count:1};
+presentationTask.originalExecutionFact = {...retainedCopiedFact,
+  execution:{...retainedCopiedFact.execution, has_successful_copied_files:false}};
+presentationPane.render(presentationTask);
+assert.equal(presentationAction("verify-copied-files").disabled, true);
+presentationAction("verify-copied-files").click();
+assert.equal(copiedStarts.length, 1, "a known-empty copied scope cannot start");
+assert.match(text(presentationPane.element), /Execution copied no files successfully\. Select files and use Verify current state\./);
+assert.equal(presentationAction("inventory-verify").disabled, false, "selected Verify stays independent");
+for (const unknown of [null,
+  {...retainedCopiedFact, execution:{...retainedCopiedFact.execution, has_successful_copied_files:null}},
+  {...presentationTask.originalExecutionFact, planRequestId:"foreign-plan"},
+  {...presentationTask.originalExecutionFact, execution:{...presentationTask.originalExecutionFact.execution, session_id:"foreign-execution"}},
+]) {
+  presentationTask.originalExecutionFact = unknown;
+  presentationPane.render(presentationTask);
+  assert.equal(presentationAction("verify-copied-files").disabled, false, "unavailable/foreign truth is not empty");
+  assert.doesNotMatch(text(presentationPane.element), /Execution copied no files successfully/);
+}
+presentationTask.originalExecutionFact = retainedCopiedFact;
+presentationPane.render(presentationTask);
 presentationAction("pane-plan").click();
 assert.deepEqual(paneChanges.at(-1), [presentationTask, "plan"]);
 presentationPane.dispose();

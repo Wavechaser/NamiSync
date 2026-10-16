@@ -99,6 +99,9 @@ A ledger read has no scan provenance until an actual scan occurs;
 later ordinary operations publish their actual scan provenance. Successful
 copied paths in partial or linked executions remain eligible for ordinary Verify.
 New commands may repeat it; equal command replay returns the original outcome.
+The retained summary also reports whether any successful copied subject exists.
+This is unavailable until terminal capture and independent of current auxiliary
+activity; it guides the copied action without replacing start admission.
 
 Inventory tasks additionally retain their exact `InventoryDetails` metadata at
 task scope before terminal release drops runtime request details, including

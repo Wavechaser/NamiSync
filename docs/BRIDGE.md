@@ -37,6 +37,9 @@ execution terminal record and retained result have been captured. After capture,
 never started; an unrun filesystem result may still have a worker start time.
 The browser validates this exact shape on Plan summary and window reads;
 neither time is inferred from event receipt or a local clock.
+The same execution summary carries `has_successful_copied_files`: null before
+retained terminal capture, then an exact Boolean. It describes original selected
+copy-like successes, not current verification eligibility or filesystem state.
 
 ### M1-8-R0 active-operation anchor contract
 
@@ -700,7 +703,8 @@ node and Boolean state are either both null or both present.
 
 `execution` is exactly `{execution_revision:SafeInt,session_id:null|HexId,
 result:null|OperationResultView,failed_operation_count:null|SafeInt,
-disk_capacity_failure_count:null|SafeInt,gap:null|{minimum_first_missed_seq:
+disk_capacity_failure_count:null|SafeInt,has_successful_copied_files:null|Boolean,
+gap:null|{minimum_first_missed_seq:
 PositiveSafeInt,maximum_first_missed_seq:PositiveSafeInt},trash_location:null|
 string,refusal:null|{origin:"preflight"|"commitment"|"other",codes:[RefusalCode]}}`.
 The summary also carries the nullable record timestamps described above.

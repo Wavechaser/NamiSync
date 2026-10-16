@@ -548,6 +548,7 @@ class RetainedExecutionSummary:
     failed_operation_count: int
     disk_capacity_failure_count: int
     trash_location: str
+    has_successful_copied_files: bool
     refusal: ExecutionRefusalView | None = None
 
     @classmethod
@@ -559,6 +560,7 @@ class RetainedExecutionSummary:
         failed_operation_count: int,
         disk_capacity_failure_count: int,
         trash_location: str,
+        has_successful_copied_files: bool,
         refusal: ExecutionRefusalView | None = None,
     ) -> RetainedExecutionSummary:
         return cls(
@@ -568,6 +570,7 @@ class RetainedExecutionSummary:
             failed_operation_count,
             disk_capacity_failure_count,
             trash_location,
+            has_successful_copied_files,
             refusal,
         )
 

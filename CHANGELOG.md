@@ -179,6 +179,13 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16)
 
+- Disable Verify copied files with visible guidance when retained original
+  execution truth confirms that no selected copy succeeded. A successful
+  zero-byte or partial copy still qualifies; unknown truth retains server
+  admission. Reuse the existing execution summary without a readiness read.
+  Pass 415 owning tests, 2,997 workflow/interface tests, all 12 import contracts
+  and both installed execution sizes plus Inventory. Retain the preceding
+  foreground refusals as failed receipts.
 - Share browser viewport geometry, window demand, request generations,
   settlement and reveal beneath separate Plan and Inventory/tree panels.
   Preserve app-owned Plan reads across panel reuse and tree cancellation

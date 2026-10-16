@@ -456,6 +456,7 @@ class _Service:
             0,
             0,
             "target/.synctrash/" + "d" * 32,
+            has_successful_copied_files=False,
         )
 
     def read_task_execution_items(self, task_id, operation_ids):
@@ -543,6 +544,7 @@ class _ExecutionOverlayService(_Service):
             0,
             0,
             "target/.synctrash/" + self.run_id,
+            has_successful_copied_files=True,
         )
 
     def read_task_execution_items(self, task_id, operation_ids):
@@ -7005,7 +7007,7 @@ def test_execution_inventory_visibility_preserves_original_review(tmp_path, refr
 @pytest.mark.parametrize("state,expected", [
     ("unchanged", ["verified"]), ("changed", ["modified"]),
     ("missing", ["missing"]), ("rowless", ["baselined"]),
-    ("rowless-missing", []),
+    ("rowless-missing", []), ("uncopied", []),
 ])
 def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_path, linked, state, expected):
     from namisync.db.connections import connect_ledger_writer
@@ -7014,7 +7016,10 @@ def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_pat
     source, target = tmp_path / "source", tmp_path / "target"
     source.mkdir()
     target.mkdir()
-    (source / "one.txt").write_bytes(b"copied bytes")
+    if state != "uncopied":
+        (source / "one.txt").write_bytes(b"copied bytes")
+    else:
+        (source / "folder").mkdir()
     with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
         service.initialize_database_contracts()
         registry = _make_registry(service, drain_wait=0.1)
@@ -7037,6 +7042,19 @@ def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_pat
             wire_intent=("execute",))
         view = finish(execution)
         original = registry._execution_summary_locked(registry._tasks[planned.task_id])
+        if state == "uncopied":
+            assert original["has_successful_copied_files"] is False
+            before_starts = dict(registry._start_responses)
+            with pytest.raises(ValueError, match="selected files"):
+                registry.start_inventory_integrity(planned.task_id, execution.request_id,
+                    expected_revision=view["view_revision"], mode="verify", scope="copied",
+                    accept_current_evidence=False, command_id="6" * 32, wire_intent=("empty-copied",))
+            assert registry._start_responses == before_starts
+            assert registry._tasks[planned.task_id].session_id == execution.session_id
+            assert registry._tasks[planned.task_id].ordinary_integrity is None
+            registry.close_task(planned.task_id, execution.session_id)
+            return
+        assert original["has_successful_copied_files"] is True
         if state == "unchanged":
             (target / "outside.bin").write_bytes(b"outside copied scope")
             refreshed = registry.refresh_inventory(planned.task_id, execution.request_id,

@@ -381,6 +381,11 @@ unrecorded copy, so copied-scope outcome admission binds normalized path,
 location and mode and establishes a one-to-one path/row identity. Selected-scope
 ordinary operations retain their exact selected-row membership. Neither scope
 can accept foreign or conflicting subjects.
+An identity/revision-admitted original execution summary with an explicitly
+empty copied population disables the copied action with guidance to select files
+for current-state Verify. Unknown facts preserve server admission; they do not
+mean empty and trigger no readiness read or polling. Later inventory work does
+not rewrite this original-execution fact.
 
 One latest ordinary result generation covers both start scopes. Each bounded
 window is indexed once; detail retains generation and row identity checks.

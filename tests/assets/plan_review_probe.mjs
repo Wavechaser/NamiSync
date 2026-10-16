@@ -326,6 +326,7 @@ const review = {
     execution: {
       execution_revision: 0, session_id: null, result: null,
       failed_operation_count: null, disk_capacity_failure_count: null,
+      has_successful_copied_files: null,
       gap: null, trash_location: null,
     },
     rows: [row],
@@ -1221,6 +1222,7 @@ const terminalResult = {
 const executionSummary = {
   execution_revision: 9, session_id: "6".repeat(32), result: terminalResult,
   failed_operation_count: 2, disk_capacity_failure_count: 1,
+  has_successful_copied_files: true,
   gap: { minimum_first_missed_seq: 4, maximum_first_missed_seq: 8 },
   trash_location: `D:\\${hostile}`,
 };
@@ -1558,6 +1560,7 @@ const capacityReview = {
       result: capacityResult,
       failed_operation_count: 1,
       disk_capacity_failure_count: 1,
+      has_successful_copied_files: false,
     },
   },
   executionDetail: null,

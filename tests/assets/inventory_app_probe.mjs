@@ -772,6 +772,7 @@ function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId
   owner.reviewSessionId = originalSessionId;
   owner.review = {summary:{task_id:taskId, request_id:requestId, highlight_focus_node_id:null},
     window:{execution:{session_id:originalSessionId, execution_revision:7,
+      has_successful_copied_files:true,
       result:{headline, disposition:"ran", recording:headline === "degraded" ? "degraded" : "ok"}}}};
   app.observeOriginalExecution(owner, requestId, owner.review.window.execution);
   owner.inventoryReview = {...currentD1Review,
@@ -792,6 +793,22 @@ const copiedTask = attachReleasedExecutionTask("task-" + "1".repeat(32),
 app.selectTask(copiedTask.taskId);
 app.switchTaskPane(copiedTask, "verify"); await tick();
 const copiedReview = copiedTask.inventoryReview;
+const copiedFact = copiedTask.originalExecutionFact;
+app.observeOriginalExecution(copiedTask, copiedTask.planRequestId,
+  {...copiedFact.execution, execution_revision:8, has_successful_copied_files:false});
+const knownEmptyBase = calls.filter(([name]) => name === "integrity-start").length;
+await app.startInventoryIntegrityAction(copiedReview, "verify", trigger, "copied");
+assert.equal(calls.filter(([name]) => name === "integrity-start").length, knownEmptyBase,
+  "a known-empty original execution does not allocate a new start command");
+app.observeOriginalExecution(copiedTask, copiedTask.planRequestId, copiedFact.execution);
+app.observeOriginalExecution(copiedTask, "foreign-plan",
+  {...copiedFact.execution, execution_revision:9});
+app.observeOriginalExecution(copiedTask, copiedTask.planRequestId,
+  {...copiedFact.execution, session_id:"foreign-execution", execution_revision:9});
+assert.equal(copiedTask.originalExecutionFact.execution.has_successful_copied_files, false,
+  "older or foreign facts cannot re-enable a known-empty action");
+app.observeOriginalExecution(copiedTask, copiedTask.planRequestId,
+  {...copiedFact.execution, execution_revision:9, has_successful_copied_files:null});
 copiedReview.summary = {...copiedReview.summary, selected_file_count:0, hidden_selected_file_count:0};
 const retainedOriginal = copiedTask.originalExecutionFact;
 const copiedStartBase = calls.filter(([name]) => name === "integrity-start").length;
@@ -803,7 +820,7 @@ app.switchTaskPane(copiedTask, "plan");
 delayedIntegrityStart.resolve({task_id:copiedTask.taskId, session_id:"d".repeat(32), request_id:"e".repeat(32)});
 await copiedStart; delayedIntegrityStart = null;
 assert.equal(calls.filter(([name]) => name === "integrity-start").length, copiedStartBase + 1,
-  "a double copied gesture starts one ordinary command");
+  "unknown copied truth preserves server admission and a double gesture starts one command");
 assert.deepEqual(calls.findLast(([name]) => name === "integrity-start").slice(5), ["verify", false, "copied"]);
 assert.equal(copiedTask.sessionKind, "verify");
 assert.equal(copiedTask.originalExecutionFact, retainedOriginal);

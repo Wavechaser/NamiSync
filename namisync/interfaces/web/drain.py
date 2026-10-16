@@ -683,6 +683,9 @@ class TaskRegistry:
             "disk_capacity_failure_count": (
                 None if retained is None else retained.disk_capacity_failure_count
             ),
+            "has_successful_copied_files": (
+                None if retained is None else retained.has_successful_copied_files
+            ),
             "gap": gap,
             "trash_location": None if retained is None else retained.trash_location,
             "refusal": None if retained is None or retained.refusal is None else {

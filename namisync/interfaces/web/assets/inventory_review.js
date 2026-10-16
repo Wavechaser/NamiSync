@@ -676,6 +676,11 @@ export function createInventoryReviewPanel(callbacks) {
     diagnostics.hidden = review === null || !detailsExpanded;
     const available = review !== null;
     const syncTask = value.taskKind === "sync-plan" && value.executionStarted;
+    const executionFact = value.originalExecutionFact;
+    const copiedScopeEmpty = executionFact?.planRequestId === value.planRequestId
+      && value.executionSessionId != null
+      && executionFact?.execution?.session_id === value.executionSessionId
+      && executionFact.execution.has_successful_copied_files === false;
     refresh.classList.toggle("nami-button--primary", !syncTask);
     switcher.ariaLabel = syncTask ? "Task view" : "Task type";
     renderText(planPane, syncTask ? "Plan" : "Sync");
@@ -750,6 +755,8 @@ export function createInventoryReviewPanel(callbacks) {
     renderFilesystemText(statusLine, [...new Set([
       available ? `${publication}${hasScan ? ` · ${review.summary.scan_complete ? "" : "incomplete · "}${scanCounts}` : ""}` : "",
       guidance, value.inventoryAction?.message,
+      available && syncTask && copiedScopeEmpty && value.sessionReleased
+        ? "Execution copied no files successfully. Select files and use Verify current state." : "",
     ].filter(Boolean))].join(" · "));
     renderText(globalScanState, `Current activity: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
     renderFilesystemText(globalScanFacts, available
@@ -790,7 +797,7 @@ export function createInventoryReviewPanel(callbacks) {
       || review.summary.selected_file_count === 0 || Boolean(blocked());
     renderText(verify, syncTask ? "Verify current state" : "Verify");
     copiedVerify.hidden = !syncTask || currentAuxiliary;
-    copiedVerify.disabled = !value.sessionReleased || !currentPublication || Boolean(blocked());
+    copiedVerify.disabled = copiedScopeEmpty || !value.sessionReleased || !currentPublication || Boolean(blocked());
     pause.hidden = !currentAuxiliary || value.executionControlState === "paused";
     pause.disabled = !currentAuxiliary || value.executionControlState !== "running" || Boolean(blocked());
     resume.hidden = !currentAuxiliary || value.executionControlState !== "paused";

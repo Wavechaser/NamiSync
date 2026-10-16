@@ -66,6 +66,7 @@ const execution = {
   result: null,
   failed_operation_count: null,
   disk_capacity_failure_count: null,
+  has_successful_copied_files: null,
   gap: null,
   trash_location: null,
   started_at: null,
@@ -131,6 +132,7 @@ const terminalResult = {
 const terminalExecution = {
   ...execution, session_id: "1".repeat(32), result: terminalResult,
   failed_operation_count: 0, disk_capacity_failure_count: 0,
+  has_successful_copied_files: true,
   trash_location: "D:\\.synctrash",
   started_at: "2026-08-12T10:00:00+00:00",
   ended_at: "2026-08-12T10:00:03+00:00",
@@ -141,6 +143,10 @@ if (acceptedTerminal.execution.ended_at !== terminalExecution.ended_at) {
   throw new Error("terminal record time was not preserved");
 }
 for (const invalid of [
+  ...[undefined, null, 0, 1, "false"].map(has_successful_copied_files => ({
+    ...terminalExecution, has_successful_copied_files,
+  })),
+  ...[false, true].map(has_successful_copied_files => ({...execution, has_successful_copied_files})),
   { ...terminalExecution, ended_at: null },
   { ...terminalExecution, started_at: "2026-08-12T10:00:00+05:30" },
   { ...terminalExecution, started_at: undefined },
@@ -151,13 +157,18 @@ for (const invalid of [
     () => null,
     (error) => error,
   );
-  if (rejected === null) throw new Error("invalid execution timestamp was accepted");
+  if (rejected === null) throw new Error("invalid execution summary was accepted");
 }
-if (requests.length !== 13 || requests.some((request) => request.command !== "get_plan_window")) {
+responseResult = { ...baseWindow(null), execution: { ...terminalExecution, has_successful_copied_files: false } };
+if ((await bridge.getPlanWindow(taskId, 0, 0, 1)).execution.has_successful_copied_files !== false) {
+  throw new Error("known-empty terminal copied scope was not preserved");
+}
+if (requests.length !== 28 || requests.some((request) => request.command !== "get_plan_window")) {
   throw new Error(`unexpected bridge command receipt: ${requests.length}`);
 }
 const refusedExecution = {
   ...terminalExecution,
+  has_successful_copied_files: false,
   result: { ...terminalResult, headline: "failed", filesystem: "refused", disposition: "unrun" },
   refusal: { origin: "preflight", codes: ["insufficient_space", "root_unavailable"] },
 };

@@ -1901,6 +1901,10 @@ evidence, without changing Inventory checkbox selection. The action can repeat
 with a new command after release, including successful work in a partial or
 linked execution. Empty copied scope starts nothing. Each uncertain command
 retains Check original outcome; Check never submits another operation.
+When the original execution summary confirms that no copied file succeeded, the
+button stays visible but disabled, with guidance to select files and use Verify
+current state. An unavailable summary does not imply an empty population; server
+admission remains decisive without a new readiness check.
 
 Selected **Verify current state** is an ordinary action independent of copied-file
 eligibility. It uses the complete nonempty server-owned checkbox selection and

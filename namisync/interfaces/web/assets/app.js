@@ -1513,7 +1513,8 @@ function inventoryIntegrityEligible(task, review, mode, allowedAttempt = null, s
       || (!task.inventoryAction.pending && !task.inventoryAction.accepted))
     && review.pending === null
     && (task.taskKind === "inventory" || (task.taskKind === "sync-plan" && mode === "verify"))
-    && (scope !== "copied" || (task.taskKind === "sync-plan" && task.executionStarted))
+    && (scope !== "copied" || (task.taskKind === "sync-plan" && task.executionStarted
+      && originalExecution(task)?.has_successful_copied_files !== false))
     && task.sessionReleased && task.sessionState !== "active" && !task.inventoryViewUnconfirmed
     && review.summary.request_id === task.requestId
     && (scope === "copied" || review.summary.selected_file_count > 0);

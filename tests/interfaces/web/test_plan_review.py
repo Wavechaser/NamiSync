@@ -221,6 +221,7 @@ def test_complete_plan_256_row_envelope_including_execution_has_response_margin(
         "review_refusal": {"reason": "review_fact_limit_exceeded", "tree_kind": "inventory",
             "population": "informational", "axis": "retained-bytes", "row_limit": 9007199254740991, "byte_limit": "9" * 19}}
     execution = {"execution_revision": 9007199254740991, "session_id": "f" * 32, "result": result,
+        "has_successful_copied_files": True,
         "failed_operation_count": 9007199254740991, "disk_capacity_failure_count": 9007199254740991,
         "gap": {"minimum_first_missed_seq": 9007199254740991, "maximum_first_missed_seq": 9007199254740991},
         "trash_location": "\x01" * 32767, "started_at": stamp, "ended_at": stamp,

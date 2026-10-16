@@ -113,6 +113,8 @@ def build_retained_execution_review(
     failed = tuple(
         item for item in operations.values() if item.outcome is Outcome.FAILED
     )
+    applicable_operations = tuple(operation for operation in plan.operations
+        if str(operation.op_id) in selected and operation.kind in _COPY_LIKE)
     return RetainedExecutionReview(
         binding,
         result,
@@ -126,6 +128,11 @@ def build_retained_execution_review(
             trash_location=str(
                 Path(plan.target_root.path) / ".synctrash" / binding.run_id
             ),
+            has_successful_copied_files=any(
+                (item := operations.get(str(operation.op_id))) is not None
+                and item.outcome is Outcome.SUCCEEDED
+                for operation in applicable_operations
+            ),
             refusal=(
                 ExecutionRefusalView.from_details(details or ExecutionDetails(binding.run_id))
                 if result.status is SessionState.REFUSED
@@ -136,8 +143,7 @@ def build_retained_execution_review(
         operations,
         integrity,
         _target_ownership(plan, selected),
-        tuple(operation for operation in plan.operations
-              if str(operation.op_id) in selected and operation.kind in _COPY_LIKE),
+        applicable_operations,
     )
 
 

@@ -114,6 +114,7 @@ const summary = (terminal, patch = {}) => ({
   execution_revision: 7, session_id: "1".repeat(32), result: terminal,
   failed_operation_count: terminal === null ? null : 0,
   disk_capacity_failure_count: terminal === null ? null : 0,
+  has_successful_copied_files: terminal === null ? null : false,
   gap: null, trash_location: terminal === null ? null : "D:\\.synctrash", ...patch,
 });
 
@@ -344,6 +345,7 @@ const mixedResult = result({
 const mixedWindow = {
   execution: summary(mixedResult, {
     failed_operation_count: 1, disk_capacity_failure_count: 1,
+    has_successful_copied_files: true,
   }),
   rows: [
     {

@@ -358,6 +358,7 @@ const capacityRailResult = {
 const capacityRailWindow = {
   session_id: "8".repeat(32), result: capacityRailResult,
   failed_operation_count: 1, disk_capacity_failure_count: 1,
+  has_successful_copied_files: false,
 };
 assert.equal(taskStatusDigest({
   sessionKind: "sync-execution", sessionId: "8".repeat(32),
@@ -605,6 +606,7 @@ function planSummary(overrides = {}) {
       result: null,
       failed_operation_count: null,
       disk_capacity_failure_count: null,
+      has_successful_copied_files: null,
       gap: null,
       trash_location: null,
       refusal: null,
@@ -1429,6 +1431,7 @@ const executionWindow = (reviewSummary, offset, revision, result = null) => ({
     ended_at: result === null ? null : "2026-09-23T01:01:05+00:00",
     failed_operation_count: result === null ? null : result.filesystem === "failed" ? 1 : 0,
     disk_capacity_failure_count: result === null ? null : 0,
+    has_successful_copied_files: result === null ? null : false,
   },
 });
 const executionResult = (patch = {}) => ({

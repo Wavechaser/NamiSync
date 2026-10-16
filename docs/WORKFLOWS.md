@@ -46,6 +46,9 @@ COPY, UPDATE and MOVE_UPDATE outcomes; no-op, failed and absent outcomes add no
 paths. An empty copied population refuses rather than becoming whole-location
 work. Successful work in partial or linked executions can be checked again.
 The scope is server-derived independently of current Inventory checkboxes.
+The retained execution summary records once whether this population is nonempty,
+without materializing paths. It remains an original-execution fact after later
+inventory operations; start-time scope derivation and admission still decide work.
 The workflow deduplicates paths by canonical identity and owns copied-subject
 membership and path-to-row admission. The adapter retains compact display
 outcomes and stages bindings only after accepting the corresponding fact.
