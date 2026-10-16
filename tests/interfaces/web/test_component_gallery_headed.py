@@ -56,6 +56,7 @@ _ASSET_NAMES = (
     "execution_confirmation.js",
     "inventory_review.js",
     "table_columns.js",
+    "table_controller.js",
 )
 _TEST_ONLY_MARKERS = (
     b"NAMISYNC_TEST_ONLY_COMPONENT_GALLERY_5CE45567A17F4D74",

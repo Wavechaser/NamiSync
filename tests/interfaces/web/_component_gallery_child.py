@@ -31,6 +31,7 @@ _ASSET_NAMES = (
     "execution_confirmation.js",
     "inventory_review.js",
     "table_columns.js",
+    "table_controller.js",
 )
 _MEDIA_FEATURES: dict[str, tuple[tuple[str, str], ...]] = {
     "light": (

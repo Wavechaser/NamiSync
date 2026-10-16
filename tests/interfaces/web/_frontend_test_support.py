@@ -39,6 +39,7 @@ INITIAL_ASSETS = {
     "filter_menu.js",
     "row_menu.js",
     "table_columns.js",
+    "table_controller.js",
     "icons.js",
     "icons/LICENSE.txt",
     "icons/SOURCE.json",

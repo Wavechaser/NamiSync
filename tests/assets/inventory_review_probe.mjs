@@ -117,7 +117,8 @@ const moduleUrl = (source) => `data:text/javascript;base64,${Buffer.from(source)
 const assetRoot = process.argv[2];
 const renderUrl = moduleUrl(await readFile(join(assetRoot, "render.js"), "utf8"));
 const highlightUrl = moduleUrl(await readFile(join(assetRoot, "row_highlight.js"), "utf8"));
-const treeUrl = moduleUrl((await readFile(join(assetRoot, "tree.js"), "utf8")).replace("./render.js", renderUrl).replace("./row_highlight.js", highlightUrl));
+const tableControllerUrl = moduleUrl(await readFile(join(assetRoot, "table_controller.js"), "utf8"));
+const treeUrl = moduleUrl((await readFile(join(assetRoot, "tree.js"), "utf8")).replace("./render.js", renderUrl).replace("./row_highlight.js", highlightUrl).replace("./table_controller.js", tableControllerUrl));
 const fileRowUrl = moduleUrl((await readFile(join(assetRoot, "file_row.js"), "utf8")).replace("./render.js", renderUrl));
 const integrityUrl = moduleUrl((await readFile(join(assetRoot, "integrity.js"), "utf8"))
   .replace("./file_row.js", fileRowUrl).replace("./render.js", renderUrl));

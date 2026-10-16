@@ -250,6 +250,16 @@ preserves scrolling; explicit keyboard movement reveals the complete target row
 below the header. The outer viewport alone owns the stable vertical gutter and
 header/body column alignment.
 
+`table_controller.js` owns the common viewport geometry, coverage, request
+generations, settlement and programmatic reveal. The Plan panel and Inventory's
+tree adapter keep row rendering and focus policy: Plan uses roving grid rows;
+Inventory uses an active descendant and its own Refresh target. Neither panel
+keeps a second copy of the controller's pending-window or travel state.
+Tree hands its requests to the app and reports their retirement. Plan's app owns
+reads across panel reuse; the panel supplies demand, so review replacement,
+empty external publication and teardown retire that demand silently. Other
+viewport cancellations retain their existing callback to the owning app.
+
 Plan and Inventory scrolling prefetch within 64 rows of the loaded edge in the
 direction of travel. Placement retains 32 rows behind travel within one requested
 256-row window, clamped at the sequence endpoints. Only the travel-side edge
@@ -257,6 +267,13 @@ triggers prefetch; the trailing margin cannot cause stationary ping-pong.
 Actual returned rows determine coverage, including short pages; the requested
 start is not clamped to `total - 256`, which could pin a short tail page away
 from the viewport.
+Repeating the same start is unnecessary only when its loaded window already
+contains 256 rows or reaches the sequence end; a short nonterminal window may
+still need another read after resize. A settled scroll commit schedules no extra
+reconciliation frame. Passive replacement restores scroll before tree active-row
+reconciliation. Programmatic scroll suppression matches the assigned offset;
+a different browser-adjusted offset may update travel but cannot disable Follow
+without a manual-input signal.
 Keyboard and programmatic reveals rebase travel direction. Hidden viewports
 retire scroll intent; resize does not invent a travel direction.
 An uncovered viewport coalesces to its latest intent with at most one window read in flight.
@@ -302,8 +319,9 @@ overlap the current viewport and chooses its active row from that viewport,
 not its original requested index. Changed demand is reconciled after settlement;
 a short response for unchanged demand does not initiate an automatic retry loop.
 Keyboard and external requests retain exact intent-generation checks. A failed
-or blocked read explicitly settles only its matching tree generation, without
-automatic retry; a later changed viewport can retry. A stale null result cannot
+or blocked read explicitly settles only its matching tree generation. An unchanged
+viewport does not retry; movement since that request retains one reconciliation
+for the changed demand, and later viewport movement can retry. A stale null result cannot
 settle a newer keyboard or external request. Covered returns, loaded-row gestures, replacement
 requests and disposal retire obsolete intent through the tree's optional
 `requestCancelled(generation)` callback, after invalidation. A successful commit

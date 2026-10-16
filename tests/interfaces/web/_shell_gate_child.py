@@ -79,6 +79,7 @@ _ASSETS = (
     "tokens.css",
     "theme.js",
     "tree.js",
+    "table_controller.js",
 )
 
 _INITIAL_PROBE = r"""

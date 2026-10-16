@@ -87,12 +87,44 @@ server view/cache/scope arithmetic, browser viewport controller, read admission,
 then Inventory Follow/Go. `rv2-rv3-refresh-02.md` reconciles RV1's ordinary scope,
 workflow-owned path admission and current-evidence invalidation; recheck its
 unchanged Stage A owners against the integrated RV1 commit before implementation.
-Stage A is complete from `fd461e5`: shared server-view transitions, cache and scope
+Stage A is complete in `e3d1fb7`: shared server-view transitions, cache and scope
 arithmetic, with separate domain owners. `rv2a-candidate-07.md` and
 `rv2a-review-01.md` record its unchanged consumer APIs, 159 focused/scale passes,
 19 composition passes, 2,459 interfaces/tools passes (three skips) and 12 import
 contracts. Browser controller, shared read admission and Inventory Follow/Go
-follow as separate dependent outcomes.
+follow as separate dependent outcomes. Stage B is rebuilding from `e3d1fb7`, using
+`rv2b-design-01.md` for the shared viewport/request controller and finite asset,
+probe, installed-provenance and instrumentation migrations.
+The user reviewed recovery `0556322` on
+`codex/wip-20261016-2159-review-controller` and authorized the bounded rebuild.
+`build/review-rv1-rv2b-20261016/review-rv1-rv2b-01.md` expands the mechanism from
+cancellation callbacks to the finite transition differences between the original
+engines: tree hands owned requests to the app and reports retirement; Plan's app
+owns reads while its panel supplies demand. Preserve that distinction, including
+silent Plan reset/disposal with a custody comment. Reconcile short/full/end-window
+resize, settled-frame scheduling, moved-viewport failure, zero-row retirement,
+programmatic scroll, resize observation and scroll-before-active-row ordering as
+one declared migration population. Migrate the two textual test consumers and
+use a full 256-row Plan fixture for its bounded-window assertion. Run all owning
+modules before broad gates, then the named installed cases and fresh review.
+The recovery remains intact; `codex/review-controller-rebuild` has no WIP ancestry.
+Rebuilt B passes all 103 owning tests, 2,459 interfaces/tools checks (three
+privilege skips), 12 imports and ten installed cases across native01/02/04.
+`rv2b-native-accounting-01.json` binds unchanged package/frozen inputs;
+native02's Inventory context-escape timeout remains inconclusive with its fixture
+retained. `rv2b-review-01.md` owns final independent acceptance before commit.
+`rv2c-design-01.md` is read-only design awaiting B integration/revalidation.
+The user also authorized a separate RV1 follow-up: do not offer an enabled copied
+Verify action when the execution has no successful copied subjects. Retain server
+admission/refusal and original execution truth; census its bounded summary/browser
+consumers before implementation. The review's wording suggestion and older Node
+PATH observation are recorded leads, not automatic additional product scope.
+`rv1-empty-action-design-01.md` defines that follow-up: one retained workflow
+Boolean, its existing summary/wire consumers and fixtures, and explicit-false
+browser disabling with visible guidance. Unknown facts keep server admission;
+no new readiness read/pump or scope materialization. After B, revalidate the
+overlapping probes, run workflows/interfaces/import and installed execution/
+Inventory gates, then independently review one cross-layer fix commit.
 `rv5-census-01.md` identifies the independent command catalog, shared specimen
 producers, gallery-only row adapter and equivalent-witness journey reductions;
 execution journey changes belong to RV1 first. These are finite designs, not

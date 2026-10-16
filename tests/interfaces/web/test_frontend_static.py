@@ -265,14 +265,15 @@ def test_modules_use_only_local_explicit_js_imports(
         "inventory_review.js": ["./table_columns.js", "./task_status.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./tree.js", "./row_highlight.js", "./integrity.js", "./render.js"],
         "plan.js": ["./file_row.js", "./render.js"],
         "table_columns.js": [],
-        "plan_review.js": ["./row_highlight.js", "./table_columns.js", "./plan.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./render.js", "./task_status.js"],
+        "table_controller.js": [],
+        "plan_review.js": ["./table_controller.js", "./row_highlight.js", "./table_columns.js", "./plan.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./render.js", "./task_status.js"],
         "rail.js": ["./icons.js", "./render.js", "./task_status.js"],
         "task_status.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
         "setup.js": ["./icons.js", "./render.js"],
         "theme.js": ["./bridge.js", "./render.js"],
-        "tree.js": ["./render.js", "./row_highlight.js"],
+        "tree.js": ["./render.js", "./row_highlight.js", "./table_controller.js"],
         "row_highlight.js": [],
     }
     assert all(

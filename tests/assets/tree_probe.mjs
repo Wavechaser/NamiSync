@@ -224,10 +224,11 @@ const treeSource = await readFile(treePath, "utf8");
 const renderSpecifier = '"./render.js"';
 assert.equal(treeSource.split(renderSpecifier).length - 1, 1);
 const highlightUrl = dataModuleUrl(await readFile(new URL("row_highlight.js", `file:///${treePath.replaceAll("\\", "/")}`), "utf8"));
+const tableControllerUrl = dataModuleUrl(await readFile(new URL("table_controller.js", `file:///${treePath.replaceAll("\\", "/")}`), "utf8"));
 const linkedTreeSource = treeSource.replace(
   renderSpecifier,
   JSON.stringify(renderUrl),
-).replace("./row_highlight.js", highlightUrl);
+).replace("./row_highlight.js", highlightUrl).replace("./table_controller.js", tableControllerUrl);
 const {ROW_H, createTree} = await import(dataModuleUrl(linkedTreeSource));
 
 assert.equal(ROW_H, 28);
@@ -719,7 +720,7 @@ resizeDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(resizeRequests, [{index: 3, generation: 2}]);
 assert.throws(
   () => resizeTree.beginWindowRequest(),
-  /tree controller is disposed/,
+  /controller is disposed/,
 );
 assert.equal(resizeTree.commitWindow(2, unreadableWindow), false);
 assert.equal(staleReads, 0);
@@ -1133,6 +1134,8 @@ narrowRoot.dispatch("scroll");
 assert.equal(narrowDocument.defaultView.animationFrames.length, 1);
 assert.equal(narrowTree.commitWindow(2, fixtureWindow(7, 1)), true);
 assert.equal(narrowRoot.scrollTop, 4 * ROW_H);
+assert.equal(narrowRoot.getAttribute("aria-activedescendant"), treeItems(narrowRoot)[0].id,
+  "restoring DOM-clamped scroll precedes choosing the visible active row");
 narrowDocument.defaultView.flushAnimationFrame();
 assert.equal(narrowDocument.defaultView.animationFrames.length, 0);
 narrowRoot.dispatch("scroll");
@@ -1179,6 +1182,23 @@ const movingExternal = movingTree.beginWindowRequest();
 assert.equal(movingTree.finishWindowRequest(movingRequests[2].generation), false,
   "a stale failed read cannot settle a newer external request");
 assert.equal(movingTree.commitWindow(movingExternal, fixtureWindow(18, 4)), true);
+
+// Failure reconciles one newer viewport demand, but never retries at rest.
+movingRoot.scrollTop = 28 * ROW_H;
+movingRoot.dispatch("scroll");
+movingDocument.defaultView.flushAnimationFrame();
+const movingFailure = movingRequests.at(-1).generation;
+movingRoot.scrollTop = 32 * ROW_H;
+movingRoot.dispatch("scroll");
+const beforeMovingFailure = movingRequests.length;
+assert.equal(movingTree.finishWindowRequest(movingFailure), true);
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, beforeMovingFailure + 1,
+  "a failed read reconciles demand that moved while it was running");
+movingTree.finishWindowRequest(movingRequests.at(-1).generation);
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, beforeMovingFailure + 1,
+  "unchanged failed demand remains settled");
 
 
 

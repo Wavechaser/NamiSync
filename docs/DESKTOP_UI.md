@@ -1247,6 +1247,9 @@ task navigation and a work region with truthful empty states under the standard
 native title frame. `rail.js` and `panels.js` own that accessible frame; they
 do not create fake task or session data.
 
+Plan and the `tree.js` adapter share `table_controller.js` for viewport geometry,
+window generations, coverage, settlement and reveal. Their row and focus policies
+remain separate; Inventory is not a mode of the Plan panel.
 The shared `tree.js` consumes only windows already decided by Python's pure
 `visible_sequence.py`. It renders at most 256 returned rows plus fixed virtual
 spacers, uses exact 28-CSS-pixel rows and the filesystem-text helper, exposes
@@ -1263,7 +1266,7 @@ and a completed off-window target use the invocation's fixed row height to revea
 the entire row in its designated viewport (the root by default). User scroll bursts and
 layout-only viewport resizes enter the same coalesced animation-frame
 reconciliation. Crossing a virtual spacer requests the missing leading or
-trailing global index with the tree-owned generation;
+trailing global index with the controller-owned generation;
 new positions share the in-flight scroll generation. A still-owned response
 that overlaps the current viewport is accepted even after further scrolling,
 preserves `scrollTop`, and chooses a visible active row using the current

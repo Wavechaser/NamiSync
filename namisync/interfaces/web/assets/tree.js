@@ -1,5 +1,6 @@
 import { renderFilesystemText } from "./render.js";
 import { keyboardHighlightGesture } from "./row_highlight.js";
+import { createTableController } from "./table_controller.js";
 
 export const ROW_H = 28;
 
@@ -15,7 +16,6 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   if (!(viewport instanceof Element) || !Number.isSafeInteger(topInset) || topInset < 0) {
     throw new TypeError("tree viewport and top inset must be valid");
   }
-  const viewportHeight = () => Math.max(0, viewport.clientHeight - topInset);
   const document = root.ownerDocument;
   if (document === null || typeof document?.createElement !== "function") {
     throw new TypeError("tree root must belong to a document");
@@ -28,9 +28,6 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   const decorateRow = optionalCallback(callbacks, "decorateRow");
   const context = optionalCallback(callbacks, "context");
   const highlight = optionalCallback(callbacks, "highlight");
-  const requestFrame = document.defaultView.requestAnimationFrame.bind(
-    document.defaultView,
-  );
   const treeId = nextTreeId;
   nextTreeId += 1;
 
@@ -44,33 +41,18 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   const bottomSpacer = createSpacer(document);
   root.replaceChildren(topSpacer, bottomSpacer);
 
-  let currentGeneration = 0;
-  let currentTotal = 0;
-  let currentOffset = 0;
-  let currentEnd = 0;
   let renderedByIndex = new Map();
   let activeElement = null;
   let activeNodeId = null;
   let activeVisibleIndex = null;
-  let pendingRequest = null;
-  let settledScrollViewport = null;
-  let scrollTopObserved = viewport.scrollTop;
-  let scrollDirection = 0;
-  let expectedProgrammaticScroll = null;
-  let scrollFramePending = false;
   let initializedActive = false;
   let disposed = false;
 
-  root.addEventListener("keydown", onKeyDown);
-  viewport.addEventListener("scroll", onScroll, {passive: true});
-  root.addEventListener("focus", onFocus);
-  viewport.addEventListener("pointerdown", cancelNavigation);
-  viewport.addEventListener("wheel", cancelNavigation, { passive: true });
-  viewport.addEventListener("touchstart", cancelNavigation, { passive: true });
-  const resizeObserver = new document.defaultView.ResizeObserver(() => {
-    scheduleViewportCheck();
+  const table = createTableController(viewport, rowHeight, topInset, {
+    requestIndex, requestCancelled, viewportChanged: reconcileVisibleActive,
   });
-  resizeObserver.observe(viewport);
+  root.addEventListener("keydown", onKeyDown);
+  root.addEventListener("focus", onFocus);
 
   function onFocus() {
     if (activeElement !== null) {
@@ -85,162 +67,90 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     }
   }
 
-  function beginWindowRequest(pendingIndex = null) {
-    if (disposed) {
-      throw new Error("tree controller is disposed");
-    }
-    scrollDirection = 0;
-    scrollTopObserved = viewport.scrollTop;
-    return beginRequest(pendingIndex, "external");
-  }
-
-  function beginRequest(pendingIndex, kind) {
-    currentGeneration += 1;
-    cancelPendingRequest();
-    settledScrollViewport = null;
-    pendingRequest = Object.freeze({
-      clientHeight: kind === "scroll" ? viewportHeight() : null,
-      generation: currentGeneration,
-      index: pendingIndex,
-      kind,
-      scrollTop: kind === "scroll" ? viewport.scrollTop : null,
-      direction: kind === "scroll" ? scrollDirection : 0,
-    });
-    return currentGeneration;
-  }
-
-  function finishWindowRequest(generation) {
-    if (disposed || generation !== currentGeneration || pendingRequest?.generation !== generation) return false;
-    clearPendingRequest();
-    settledScrollViewport = Object.freeze({
-      clientHeight: viewportHeight(), scrollTop: viewport.scrollTop,
-    });
-    return true;
-  }
-
   function commitWindow(generation, window, preferredNodeId = null, reveal = true) {
-    if (disposed || generation !== currentGeneration) {
-      return false;
-    }
-    const offset = window.offset;
-    const total = window.total;
-    const sourceRows = window.rows;
-    const admittedRequest = pendingRequest?.generation === generation
-      ? pendingRequest
-      : null;
-    const requestKind = admittedRequest?.kind ?? null;
-    const requestedIndex = admittedRequest?.index ?? null;
-    if (requestKind === "scroll" && viewportHeight() > 0 &&
-        (offset * rowHeight >= viewport.scrollTop + viewportHeight() ||
-         (offset + sourceRows.length) * rowHeight <= viewport.scrollTop)) {
-      clearPendingRequest();
-      if (viewport.scrollTop === admittedRequest.scrollTop &&
-          viewportHeight() === admittedRequest.clientHeight) {
-        settledScrollViewport = Object.freeze({
-          clientHeight: viewportHeight(), scrollTop: viewport.scrollTop,
+    return table.commitWindow(generation, window, (admittedRequest, restoreScroll) => {
+      const offset = window.offset;
+      const total = window.total;
+      const sourceRows = window.rows;
+      const requestKind = admittedRequest?.kind ?? null;
+      const requestedIndex = admittedRequest?.index ?? null;
+      const entries = sourceRows.map((sourceRow) => {
+        const row = snapshotRow(sourceRow);
+        let entry;
+        const element = createRow(document, treeId, row, (event) => {
+          event.stopPropagation();
+          if (row.expanded === null) {
+            return;
+          }
+          acceptRenderedIntent(entry);
+          root.focus({preventScroll: true});
+          toggle(row.node_id, !row.expanded);
         });
-      } else {
-        scheduleViewportCheck();
+        decorateRow(element, sourceRow);
+        entry = Object.freeze({element, row});
+        element.addEventListener("click", (event) => {
+          acceptRenderedIntent(entry, callbacks.highlight === undefined);
+          root.focus({preventScroll: true});
+          activate(row.node_id, event);
+        });
+        element.addEventListener("contextmenu", (event) => {
+          acceptRenderedIntent(entry, false);
+          context(row.node_id, event, element);
+        });
+        return entry;
+      });
+      const nextByIndex = new Map(
+        entries.map((entry) => [entry.row.visible_index, entry]),
+      );
+
+      const leadingRows = Math.min(offset, total);
+      const trailingRows = Math.max(
+        total - leadingRows - entries.length,
+        0,
+      );
+      topSpacer.style.blockSize = `${leadingRows * rowHeight}px`;
+      bottomSpacer.style.blockSize = `${trailingRows * rowHeight}px`;
+      root.replaceChildren(
+        topSpacer,
+        ...entries.map((entry) => entry.element),
+        bottomSpacer,
+      );
+      renderedByIndex = nextByIndex;
+      restoreScroll();
+
+      let target = null;
+      if (requestKind === "scroll") {
+        target = visibleEntry();
+      } else if (preferredNodeId !== null) {
+        target = entries.find(
+          (entry) => entry.row.node_id === preferredNodeId,
+        ) ?? null;
       }
-      return false;
-    }
-    const preservedScrollTop = viewport.scrollTop;
-    const entries = sourceRows.map((sourceRow) => {
-      const row = snapshotRow(sourceRow);
-      let entry;
-      const element = createRow(document, treeId, row, (event) => {
-        event.stopPropagation();
-        if (row.expanded === null) {
-          return;
-        }
-        acceptRenderedIntent(entry);
-        root.focus({preventScroll: true});
-        toggle(row.node_id, !row.expanded);
-      });
-      decorateRow(element, sourceRow);
-      entry = Object.freeze({element, row});
-      element.addEventListener("click", (event) => {
-        acceptRenderedIntent(entry, callbacks.highlight === undefined);
-        root.focus({preventScroll: true});
-        activate(row.node_id, event);
-      });
-      element.addEventListener("contextmenu", (event) => {
-        acceptRenderedIntent(entry, false);
-        context(row.node_id, event, element);
-      });
-      return entry;
-    });
-    const nextByIndex = new Map(
-      entries.map((entry) => [entry.row.visible_index, entry]),
-    );
-
-    const leadingRows = Math.min(offset, total);
-    const trailingRows = Math.max(
-      total - leadingRows - entries.length,
-      0,
-    );
-    topSpacer.style.blockSize = `${leadingRows * rowHeight}px`;
-    bottomSpacer.style.blockSize = `${trailingRows * rowHeight}px`;
-    root.replaceChildren(
-      topSpacer,
-      ...entries.map((entry) => entry.element),
-      bottomSpacer,
-    );
-    currentTotal = total;
-    currentOffset = leadingRows;
-    currentEnd = leadingRows + entries.length;
-    renderedByIndex = nextByIndex;
-    if (requestKind === "scroll" || !reveal) {
-      setProgrammaticScrollTop(preservedScrollTop, false);
-    }
-    if (pendingRequest?.generation === generation) {
-      clearPendingRequest();
-    }
-
-    let target = null;
-    if (requestKind === "scroll") {
-      target = visibleEntry();
-    } else if (preferredNodeId !== null) {
-      target = entries.find(
-        (entry) => entry.row.node_id === preferredNodeId,
-      ) ?? null;
-    }
-    if (
-      target === null && requestKind !== "scroll" &&
-      requestedIndex !== null
-    ) {
-      target = renderedByIndex.get(requestedIndex) ?? null;
-    }
-    if (
-      target === null && requestKind !== "scroll" && activeNodeId !== null
-    ) {
-      target = entries.find(
-        (entry) => entry.row.node_id === activeNodeId,
-      ) ?? null;
-    }
-    if (
-      target === null && requestKind !== "scroll" && entries.length > 0
-    ) {
-      target = nearestEntry(entries, activeVisibleIndex);
-    }
-    if (target === null) {
-      clearActive(requestKind === "scroll");
-    } else {
-      setActive(target, reveal && requestKind !== "scroll");
-      if (requestKind === "keyboard" && callbacks.highlight !== undefined) highlight("replace", target.row.node_id);
-    }
-    const scrollViewportUnchanged = requestKind === "scroll" &&
-      viewport.scrollTop === admittedRequest.scrollTop &&
-      viewportHeight() === admittedRequest.clientHeight;
-    if (scrollViewportUnchanged) {
-      settledScrollViewport = Object.freeze({
-        clientHeight: viewportHeight(),
-        scrollTop: viewport.scrollTop,
-      });
-    } else {
-      scheduleViewportCheck();
-    }
-    return true;
+      if (
+        target === null && requestKind !== "scroll" &&
+        requestedIndex !== null
+      ) {
+        target = renderedByIndex.get(requestedIndex) ?? null;
+      }
+      if (
+        target === null && requestKind !== "scroll" && activeNodeId !== null
+      ) {
+        target = entries.find(
+          (entry) => entry.row.node_id === activeNodeId,
+        ) ?? null;
+      }
+      if (
+        target === null && requestKind !== "scroll" && entries.length > 0
+      ) {
+        target = nearestEntry(entries, activeVisibleIndex);
+      }
+      if (target === null) {
+        clearActive(requestKind === "scroll");
+      } else {
+        setActive(target, reveal && requestKind !== "scroll");
+        if (requestKind === "keyboard" && callbacks.highlight !== undefined) highlight("replace", target.row.node_id);
+      }
+    }, reveal);
   }
 
   function setActive(entry, reveal = true) {
@@ -261,20 +171,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   }
 
   function revealActiveRow() {
-    if (activeVisibleIndex === null || viewportHeight() <= 0) {
-      return;
-    }
-    const rowTop = activeVisibleIndex * rowHeight;
-    const rowBottom = rowTop + rowHeight;
-    const viewportTop = viewport.scrollTop;
-    const viewportBottom = viewportTop + viewportHeight();
-    if (rowTop < viewportTop) {
-      setProgrammaticScrollTop(rowTop);
-    } else if (rowBottom > viewportBottom) {
-      setProgrammaticScrollTop(
-        Math.max(rowBottom - viewportHeight(), 0),
-      );
-    }
+    if (activeVisibleIndex !== null) table.revealRow(activeVisibleIndex);
   }
 
   function clearActive(suppressFocusInitialization = false) {
@@ -291,9 +188,8 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   }
 
   function navigateTo(visibleIndex) {
-    scrollDirection = 0;
-    scrollTopObserved = viewport.scrollTop;
-    if (visibleIndex < 0 || visibleIndex >= currentTotal) {
+    table.resetTravel();
+    if (visibleIndex < 0 || visibleIndex >= table.total) {
       return;
     }
     const rendered = renderedByIndex.get(visibleIndex);
@@ -302,116 +198,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       if (callbacks.highlight !== undefined) highlight("replace", rendered.row.node_id);
       return;
     }
-    requestWindow(visibleIndex, "keyboard");
-  }
-
-  function requestWindow(visibleIndex, kind, offset = Math.max(0, visibleIndex - 32)) {
-    if (
-      kind === "scroll" && pendingRequest?.kind === "scroll"
-      && pendingRequest.direction === scrollDirection
-    ) {
-      return;
-    }
-    const generation = beginRequest(visibleIndex, kind);
-    try {
-      requestIndex(visibleIndex, generation, offset);
-    } catch (error) {
-      if (pendingRequest?.generation === generation) {
-        clearPendingRequest();
-      }
-      throw error;
-    }
-  }
-
-  function onScroll() {
-    if (
-      expectedProgrammaticScroll !== null &&
-      viewport.scrollTop === expectedProgrammaticScroll.scrollTop
-    ) {
-      const reconcile = expectedProgrammaticScroll.reconcile;
-      expectedProgrammaticScroll = null;
-      scrollTopObserved = viewport.scrollTop;
-      if (!reconcile) {
-        return;
-      }
-    } else {
-      expectedProgrammaticScroll = null;
-      const direction = Math.sign(viewport.scrollTop - scrollTopObserved);
-      if (direction !== 0) scrollDirection = direction;
-      scrollTopObserved = viewport.scrollTop;
-      if (pendingRequest?.kind === "keyboard") {
-        invalidatePendingRequest();
-      }
-    }
-    scheduleViewportCheck();
-  }
-
-  function scheduleViewportCheck() {
-    if (disposed || scrollFramePending) {
-      return;
-    }
-    scrollFramePending = true;
-    requestFrame(() => {
-      scrollFramePending = false;
-      if (!disposed) {
-        reconcileViewport();
-      }
-    });
-  }
-
-  function reconcileViewport() {
-    if (viewportHeight() <= 0 || currentTotal <= 0) {
-      scrollDirection = 0;
-      scrollTopObserved = viewport.scrollTop;
-      settledScrollViewport = null;
-      if (pendingRequest?.kind === "scroll") invalidatePendingRequest();
-      return;
-    }
-    if (
-      settledScrollViewport !== null &&
-      viewport.scrollTop === settledScrollViewport.scrollTop &&
-      viewportHeight() === settledScrollViewport.clientHeight
-    ) {
-      return;
-    }
-    settledScrollViewport = null;
-    if (pendingRequest?.kind === "external") {
-      reconcileVisibleActive();
-      return;
-    }
-    if (pendingRequest?.kind === "keyboard") {
-      return;
-    }
-
-    const viewportTop = Math.max(viewport.scrollTop, 0);
-    const viewportBottom = viewportTop + viewportHeight();
-    const firstIndex = Math.min(
-      Math.floor(viewportTop / rowHeight),
-      currentTotal - 1,
-    );
-    const lastIndex = Math.min(
-      Math.max(Math.ceil(viewportBottom / rowHeight) - 1, firstIndex),
-      currentTotal - 1,
-    );
-    const covered = firstIndex >= currentOffset && lastIndex < currentEnd;
-    const direction = scrollDirection || (firstIndex < currentOffset ? -1 : 1);
-    const offset = Math.min(currentTotal - 1, Math.max(0,
-      direction < 0 ? lastIndex + 1 + 32 - 256 : firstIndex - 32));
-    const advancing = direction < 0 ? offset < currentOffset : offset > currentOffset;
-    const nearEdge = scrollDirection !== 0 && (direction < 0
-      ? currentOffset > 0 && firstIndex - currentOffset <= 64
-      : currentEnd < currentTotal && currentEnd - lastIndex - 1 <= 64);
-    if (covered && (!nearEdge || !advancing)) {
-      reconcileVisibleActive();
-      if (pendingRequest?.kind === "scroll") {
-        invalidatePendingRequest();
-      }
-      return;
-    }
-
-    reconcileVisibleActive();
-    const requestTarget = firstIndex < currentOffset ? firstIndex : lastIndex;
-    requestWindow(requestTarget, "scroll", offset);
+    table.requestKeyboard(visibleIndex);
   }
 
   function reconcileVisibleActive(preferredIndex = null) {
@@ -426,13 +213,8 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   }
 
   function visibleEntry(preferredIndex = null) {
-    if (viewportHeight() < rowHeight) {
-      return null;
-    }
-    const viewportTop = Math.max(viewport.scrollTop, 0);
-    const viewportBottom = viewportTop + viewportHeight();
-    const firstFullIndex = Math.ceil(viewportTop / rowHeight);
-    const lastFullIndex = Math.floor(viewportBottom / rowHeight) - 1;
+    const [firstFullIndex, lastFullIndex] = table.bounds(true);
+    if (lastFullIndex < firstFullIndex) return null;
     const nearestIndex = preferredIndex ?? activeVisibleIndex ?? firstFullIndex;
     let active = null;
     let nearest = null;
@@ -458,64 +240,21 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     return active ?? nearest;
   }
 
-  function invalidatePendingRequest() {
-    currentGeneration += 1;
-    cancelPendingRequest();
-  }
-
   function acceptRenderedIntent(entry, reveal = true) {
-    invalidateInternalRequest();
+    table.invalidateInternalRequest();
     setActive(entry, reveal);
-  }
-
-  function invalidateInternalRequest() {
-    if (
-      pendingRequest?.kind === "keyboard" ||
-      pendingRequest?.kind === "scroll"
-    ) {
-      invalidatePendingRequest();
-    }
-  }
-
-  function cancelNavigation() {
-    if (pendingRequest?.kind === "keyboard") invalidatePendingRequest();
-  }
-
-  function setProgrammaticScrollTop(value, reconcile = true) {
-    const previous = viewport.scrollTop;
-    viewport.scrollTop = value;
-    if (reconcile) {
-      scrollDirection = 0;
-      scrollTopObserved = viewport.scrollTop;
-    }
-    if (viewport.scrollTop !== previous) {
-      expectedProgrammaticScroll = Object.freeze({
-        reconcile,
-        scrollTop: viewport.scrollTop,
-      });
-    }
-  }
-
-  function clearPendingRequest() {
-    pendingRequest = null;
-  }
-
-  function cancelPendingRequest() {
-    const generation = pendingRequest?.generation;
-    clearPendingRequest();
-    if (generation !== undefined) requestCancelled(generation);
   }
 
   function onKeyDown(event) {
     const gesture = keyboardHighlightGesture(event);
     if (!event.defaultPrevented && callbacks.highlight !== undefined && gesture !== null) {
       event.preventDefault();
-      invalidateInternalRequest();
+      table.invalidateInternalRequest();
       highlight(gesture, null);
       return;
     }
     if (event.altKey || event.ctrlKey || event.metaKey
-        || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) invalidateInternalRequest();
+        || !["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) table.invalidateInternalRequest();
     if (
       event.defaultPrevented || event.altKey || event.ctrlKey ||
       event.metaKey
@@ -523,19 +262,19 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       return;
     }
     if (activeVisibleIndex === null) {
-      if (event.key === "Home" && currentTotal > 0) {
+      if (event.key === "Home" && table.total > 0) {
         event.preventDefault();
         navigateTo(0);
-      } else if (event.key === "End" && currentTotal > 0) {
+      } else if (event.key === "End" && table.total > 0) {
         event.preventDefault();
-        navigateTo(currentTotal - 1);
+        navigateTo(table.total - 1);
       }
       return;
     }
     const active = renderedByIndex.get(activeVisibleIndex);
     if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
       if (active !== undefined) {
-        invalidateInternalRequest();
+        table.invalidateInternalRequest();
         context(active.row.node_id, event, active.element);
       }
       return;
@@ -543,11 +282,11 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
-        navigateTo(Math.min((pendingRequest?.kind === "keyboard" ? pendingRequest.index : activeVisibleIndex) + 1, currentTotal - 1));
+        navigateTo(Math.min((table.keyboardIndex ?? activeVisibleIndex) + 1, table.total - 1));
         break;
       case "ArrowUp":
         event.preventDefault();
-        navigateTo(Math.max((pendingRequest?.kind === "keyboard" ? pendingRequest.index : activeVisibleIndex) - 1, 0));
+        navigateTo(Math.max((table.keyboardIndex ?? activeVisibleIndex) - 1, 0));
         break;
       case "Home":
         event.preventDefault();
@@ -555,12 +294,12 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
         break;
       case "End":
         event.preventDefault();
-        navigateTo(currentTotal - 1);
+        navigateTo(table.total - 1);
         break;
       case "ArrowRight":
         event.preventDefault();
         if (active !== undefined && active.row.expanded === false) {
-          invalidateInternalRequest();
+          table.invalidateInternalRequest();
           toggle(active.row.node_id, true);
         } else if (
           active !== undefined && active.row.expanded === true &&
@@ -572,7 +311,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       case "ArrowLeft":
         event.preventDefault();
         if (active !== undefined && active.row.expanded === true) {
-          invalidateInternalRequest();
+          table.invalidateInternalRequest();
           toggle(active.row.node_id, false);
         } else if (
           active !== undefined && active.row.parent_visible_index !== null
@@ -583,7 +322,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       case "Enter":
         event.preventDefault();
         if (active !== undefined) {
-          invalidateInternalRequest();
+          table.invalidateInternalRequest();
           activate(active.row.node_id);
         }
         break;
@@ -602,18 +341,13 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       return;
     }
     disposed = true;
-    currentGeneration += 1;
-    cancelPendingRequest();
-    resizeObserver.disconnect();
+    table.dispose();
     root.removeEventListener("keydown", onKeyDown);
-    viewport.removeEventListener("scroll", onScroll);
     root.removeEventListener("focus", onFocus);
-    viewport.removeEventListener("pointerdown", cancelNavigation);
-    viewport.removeEventListener("wheel", cancelNavigation);
-    viewport.removeEventListener("touchstart", cancelNavigation);
   }
 
-  return Object.freeze({beginWindowRequest, commitWindow, finishWindowRequest, cancelNavigation, dispose});
+  return Object.freeze({beginWindowRequest: table.beginWindowRequest, commitWindow,
+    finishWindowRequest: table.finishWindowRequest, cancelNavigation: table.cancelNavigation, dispose});
 }
 
 function optionalCallback(callbacks, name) {

@@ -63,8 +63,8 @@ def transform_asset(name: str, source: str) -> str:
             ("    settleAttemptResponse(attempt, response);", "    settleAttemptResponse(attempt, response);\n    globalThis.__tableLoading.validated(attempt, response);"),
         ),
         "tree.js": (
-            ("    const offset = window.offset;", "    const loadingStarted = performance.now();\n    const offset = window.offset;"),
-            ("    return true;\n  }\n\n  function setActive", "    globalThis.__tableLoading.dom(window, loadingStarted, {generation, current_generation: currentGeneration});\n    return true;\n  }\n\n  function setActive"),
+            ("      const offset = window.offset;", "      const loadingStarted = performance.now();\n      const offset = window.offset;"),
+            ("    }, reveal);", "      globalThis.__tableLoading.dom(window, loadingStarted, {generation});\n    }, reveal);"),
         ),
         "plan_review.js": (
             ("    const checkboxes = [];", "    const loadingStarted = performance.now();\n    const checkboxes = [];"),

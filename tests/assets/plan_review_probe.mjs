@@ -121,6 +121,10 @@ class ElementFake {
     this.listeners.set(name, listeners);
   }
 
+  removeEventListener(name, callback) {
+    this.listeners.set(name, (this.listeners.get(name) ?? []).filter((item) => item !== callback));
+  }
+
   dispatch(name, properties = {}) {
     const event = { type: name, target: this, currentTarget: this, preventDefault() {}, stopPropagation() {}, ...properties };
     for (const callback of this.listeners.get(name) ?? []) callback(event);
@@ -220,9 +224,11 @@ const filterUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "filt
 const rowMenuUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "row_menu.js"), "utf8"))
   .replace("./render.js", renderUrl));
 const tableColumnsUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "table_columns.js"), "utf8"));
+const tableControllerUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "table_controller.js"), "utf8"));
 const highlightUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "row_highlight.js"), "utf8"));
 const source = (await readFile(process.argv[2], "utf8"))
   .replace("./row_highlight.js", highlightUrl)
+  .replace("./table_controller.js", tableControllerUrl)
   .replace("./table_columns.js", tableColumnsUrl)
   .replace("./filter_menu.js", filterUrl)
   .replace("./row_menu.js", rowMenuUrl)
@@ -1047,6 +1053,8 @@ assert.equal(viewport.scrollTop, 0, "switching reviews starts within retained ro
 document.defaultView.flushAnimationFrame();
 assert.equal(calls.length, beforeDispose, "task switch does not fetch the old viewport");
 viewport.clientHeight = (ROW_HEIGHT * 400) + ROW_HEIGHT;
+task.review = { ...nextReview, window: { ...nextReview.window, rows: Array.from({length: 256},
+  (_, index) => ({ ...row, node_id: `node-${String(index).padStart(32, "0")}`, visible_index: index })) } };
 panel.render(task);
 document.defaultView.flushAnimationFrame();
 panel.render(task);
@@ -1776,6 +1784,11 @@ const resizeBody = findByClass(resizePanel.element, "nami-plan-review__list");
 const resizeGrid = findByClass(resizePanel.element, "nami-file-list__grid");
 const resizeHeader = findByClass(resizePanel.element, "nami-file-list__header");
 const resizeObserver = document.defaultView.observers.at(-1);
+const triggerResize = () => {
+  for (const observer of document.defaultView.observers) {
+    if (observer.observed === resizeBody) observer.trigger();
+  }
+};
 const resizeTask = { ...task, review };
 for (const cell of resizeHeader.children) cell.measuredWidth = 0;
 resizePanel.render(resizeTask);
@@ -1784,7 +1797,7 @@ assert.equal(resizeGrid.dataset.columnsFrozen, undefined,
   "an unlaid-out table does not retain zero column widths");
 const fittedWidths = [32, 320, 128, 112, 100, 112, 256];
 resizeHeader.children.forEach((cell, index) => { cell.measuredWidth = fittedWidths[index]; });
-resizeObserver.trigger();
+triggerResize();
 document.defaultView.flushAnimationFrame();
 assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
   "first visible layout freezes fitted non-filename widths without a gesture");
@@ -1801,7 +1814,7 @@ document.defaultView.flushAnimationFrame();
 assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
   "a reused panel retains its column widths");
 resizeBody.clientHeight = (700) + ROW_HEIGHT;
-resizeObserver.trigger();
+triggerResize();
 document.defaultView.flushAnimationFrame();
 assert.deepEqual(resizeCalls, [0], "reused review observes newly visible rows after resize");
 assertSameNode(resizeObserver.observed, resizeBody, "reused review observes its current body");
@@ -1814,10 +1827,10 @@ resizePanel.dispose();
 resizePanel.render(resizeTask);
 document.defaultView.flushAnimationFrame();
 resizeBody.clientHeight = (700) + ROW_HEIGHT;
-resizeObserver.trigger();
+triggerResize();
 document.defaultView.flushAnimationFrame();
 assert.deepEqual(resizeCalls, [0, 0], "another reuse responds to the next viewport resize");
-resizeObserver.trigger();
+triggerResize();
 document.defaultView.flushAnimationFrame();
 assert.deepEqual(resizeCalls, [0, 0], "one settled resize does not duplicate the window read");
 resizePanel.dispose();

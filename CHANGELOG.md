@@ -179,6 +179,14 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16)
 
+- Share browser viewport geometry, window demand, request generations,
+  settlement and reveal beneath separate Plan and Inventory/tree panels.
+  Preserve app-owned Plan reads across panel reuse and tree cancellation
+  callbacks; restore scroll before active-row reconciliation. Full/end windows
+  avoid redundant same-start reads, while resize can fill a short window.
+  Pass 103 owning checks, 2,459 interfaces/tools checks (three privilege skips),
+  12 imports and all ten installed cases across unchanged dependency-bound runs.
+  Retain the inconclusive Inventory context-menu timeout and foreground refusals.
 - Share server review caches, staged view transitions and complete-scope counting
   between Plan and Inventory while retaining their separate selection and
   publication rules, public constructors and bounded windows. Pass 159 focused/
