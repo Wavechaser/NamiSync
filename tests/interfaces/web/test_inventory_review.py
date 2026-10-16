@@ -9,6 +9,7 @@ from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
 from namisync.core.pathing import normalize_relative_path
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
 from namisync.interfaces.web.inventory_review import InventoryReviewState
+from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.workflows import PlanSortColumn, SortDirection, build_inventory_projection
 from _db_fixtures import NOW, attestation, file_stat
 
@@ -168,13 +169,13 @@ def test_selection_large_folder_does_not_rederive_or_rescan_per_window(monkeypat
         r"C:\root", True, 120_000, 0)
     folder = view.projection.nodes[1]
     assert _select(view, folder.node_id)["selected_file_count"] == 120_000
-    prefix = view._selected_prefix
+    scope = view._view.scope
     def refuse(*args, **kwargs):
         raise AssertionError("window must use retained selection prefixes")
-    monkeypatch.setattr(InventoryReviewState, "_refresh_selection", refuse)
+    monkeypatch.setattr(InventoryReviewState, "_scope", refuse)
     monkeypatch.setattr(InventoryReviewState, "_derive", refuse)
     assert view.window(expected_revision=1, offset=119_745, limit=256)["rows"][-1]["selection"] == "all"
-    assert view.summary()["selection"] == "all" and view._selected_prefix is prefix
+    assert view.summary()["selection"] == "all" and view._view.scope is scope
 
 
 def test_complete_view_of_incomplete_scan_keeps_warnings_ack_hiding_and_rollups():
@@ -210,7 +211,7 @@ def test_search_collapse_sort_reset_and_exact_generic_row_frame():
 def test_windows_reuse_sequence_and_failed_update_retains_complete_view(monkeypatch):
     view = _view()
     previous = view.summary()
-    sequence = view._visible
+    sequence = view._view.visible
     def refuse(*args, **kwargs):
         raise ValueError("derivation refused")
     monkeypatch.setattr(review_module, "_derive_visible_sequence_from_validated", refuse)
@@ -218,10 +219,66 @@ def test_windows_reuse_sequence_and_failed_update_retains_complete_view(monkeypa
         assert len(view.window(expected_revision=0, offset=offset, limit=1)["rows"]) <= 1
     with pytest.raises(ValueError, match="refused"):
         _update(view, search_query="new")
-    assert view.summary() == previous and view._visible is sequence
+    assert view.summary() == previous and view._view.visible is sequence
     assert _update(view)["disposition"] == "noop"
     with pytest.raises(ValueError, match="256"):
         view.window(expected_revision=0, offset=0, limit=257)
+
+
+def test_inventory_sort_and_collapse_reuse_complete_matching_scope(monkeypatch):
+    view = _view()
+    _select(view)
+    scope = view._view.scope
+    membership = view.selected_row_ids
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("sort and collapse cannot change matching selection scope")
+
+    monkeypatch.setattr(InventoryReviewState, "_scope", refuse)
+    _update(view, sort_column=PlanSortColumn.SIZE, sort_direction=SortDirection.DESCENDING,
+            collapse_node_id=view.projection.nodes[1].node_id, collapsed=True)
+
+    assert view._view.scope is scope and view.selected_row_ids == membership
+    assert view.summary()["selected_file_count"] == 2
+    assert view.summary()["scope_selected_file_count"] == 2
+    assert _update(view)["disposition"] == "noop"
+
+
+@pytest.mark.parametrize("failure", ["scope", "highlight_revision"])
+def test_inventory_failed_query_preserves_complete_highlighted_view(monkeypatch, failure):
+    view = _view()
+    _select(view)
+    view.mutate_highlight(expected_view_revision=view.view_revision, expected_highlight_revision=0,
+        gesture="replace", node_id=view.projection.nodes[1].node_id)
+    if failure == "highlight_revision":
+        view.highlight_revision = MAX_JAVASCRIPT_SAFE_INTEGER
+    else:
+        def refuse(*_args, **_kwargs):
+            raise RuntimeError("scope refused")
+        monkeypatch.setattr(InventoryReviewState, "_scope", refuse)
+    before, cache = view.summary(), view._view
+    window = view.window(expected_revision=1, offset=0, limit=256)
+
+    with pytest.raises(OverflowError if failure == "highlight_revision" else RuntimeError):
+        _update(view, search_query="b.txt")
+
+    assert view._view is cache and view.summary() == before
+    assert view.window(expected_revision=1, offset=0, limit=256) == window
+
+
+def test_inventory_failed_selection_keeps_membership_and_cached_view(monkeypatch):
+    view = _view()
+    before, cache = view.summary(), view._view
+
+    def refuse(*_args, **_kwargs):
+        raise RuntimeError("scope refused")
+
+    monkeypatch.setattr(InventoryReviewState, "_scope", refuse)
+    with pytest.raises(RuntimeError, match="scope refused"):
+        _select(view)
+
+    assert not view.selected_row_ids
+    assert view._view is cache and view.summary() == before
 
 
 def test_empty_search_has_no_synthetic_ancestors_and_warning_cannot_collapse():

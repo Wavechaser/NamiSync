@@ -941,11 +941,13 @@ server projections as authoritative.
 Workflow code owns hierarchy and membership; the web adapter owns generic
 flattening, filtering, windowing, and accessible presentation. Cosmetic state
 is stored separately from semantic settings and never persists authority.
-`interfaces/web/plan_review.py` retains only canonical and current display orders
-for the current projection. View-only changes reuse ordering; selection-only
-replacement may rebind it through the workflow's topology/key preservation
-guarantee. Fresh acquisition owns new orders; there is no in-place full projection
-replacement route. Supported view/selection publication remains atomic.
+`interfaces/web/plan_review.py` and `inventory_review.py` retain separate domain
+selection and publication rules. They compose `review_view.py` for the current
+order, visible sequence, scope counts and staged view-transition algorithm.
+Plan additionally retains its canonical display order; selection-only replacement
+may rebind it through the workflow's topology/key preservation guarantee.
+Fresh Plan acquisition owns new orders; Inventory publication replacement owns
+a new projection. Supported view/selection publication remains atomic.
 `interfaces/web/visible_sequence.py` owns compact visibility indexes and
 derives bounded-window accessibility values from them; these indexes cannot
 reinterpret domain membership or selection. See `PRESENTATION.md` for the

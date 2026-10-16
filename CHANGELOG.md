@@ -179,6 +179,11 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16)
 
+- Share server review caches, staged view transitions and complete-scope counting
+  between Plan and Inventory while retaining their separate selection and
+  publication rules, public constructors and bounded windows. Pass 159 focused/
+  scale cases, 19 composition cases, 2,459 interfaces/tools cases (three skips)
+  and all 12 import contracts, with independent source and consumer review.
 - Replace the one-shot exact manual verification path with ordinary Verify
   over server-derived successful COPY/UPDATE/MOVE_UPDATE target paths, including
   successful work from partial or linked executions. Fresh commands may repeat

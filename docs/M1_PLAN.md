@@ -73,7 +73,7 @@ windows, highlight/checkbox separation, truthful zero/partial results, condition
 recording and exact Close remain. Repository recurrence and mandatory stops apply;
 declared consumer migrations are one finite mechanism population.
 
-RV0 is committed as `01089be`. RV1's closed scope and retirement mapping remain
+RV0 is committed as `01089be`; RV1 as `fd461e5`. RV1's closed scope and retirement mapping remain
 in `rv1-design-01.md`, `rv1-candidate-15.md` and `rv1-correction-24.md` under the
 evidence root. [WORKFLOWS](WORKFLOWS.md), [BRIDGE](BRIDGE.md) and
 [PRESENTATION](PRESENTATION.md) own its current behavior: copied Verify includes
@@ -87,6 +87,12 @@ server view/cache/scope arithmetic, browser viewport controller, read admission,
 then Inventory Follow/Go. `rv2-rv3-refresh-02.md` reconciles RV1's ordinary scope,
 workflow-owned path admission and current-evidence invalidation; recheck its
 unchanged Stage A owners against the integrated RV1 commit before implementation.
+Stage A is complete from `fd461e5`: shared server-view transitions, cache and scope
+arithmetic, with separate domain owners. `rv2a-candidate-07.md` and
+`rv2a-review-01.md` record its unchanged consumer APIs, 159 focused/scale passes,
+19 composition passes, 2,459 interfaces/tools passes (three skips) and 12 import
+contracts. Browser controller, shared read admission and Inventory Follow/Go
+follow as separate dependent outcomes.
 `rv5-census-01.md` identifies the independent command catalog, shared specimen
 producers, gallery-only row adapter and equivalent-witness journey reductions;
 execution journey changes belong to RV1 first. These are finite designs, not

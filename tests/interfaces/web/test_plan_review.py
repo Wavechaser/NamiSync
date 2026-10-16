@@ -1127,6 +1127,48 @@ def test_plan_review_reuses_order_for_search_filter_and_collapse(monkeypatch) ->
     assert state.current_order is current
 
 
+def test_plan_review_sort_and_collapse_reuse_complete_matching_scope(monkeypatch) -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(), 0,
+                            "reviewing", "source", "target")
+    scope = state._view.scope
+    before = state.selection_scope(expected_view_revision=0, expected_selection_revision=0)
+
+    def refuse(*_args):
+        raise AssertionError("sort and collapse cannot change matching selection scope")
+
+    monkeypatch.setattr(PlanReviewState, "_scope", refuse)
+    state.update(expected_revision=0, search_query="", filters=frozenset(),
+        sort_column=PlanSortColumn.FILENAME, sort_direction=SortDirection.DESCENDING,
+        collapse_node_id="folder", collapsed=True)
+
+    assert state._view.scope is scope
+    assert state.selection_scope(expected_view_revision=1, expected_selection_revision=0) == before
+
+
+@pytest.mark.parametrize("failure", ["scope", "highlight_revision"])
+def test_plan_review_failed_query_preserves_complete_highlighted_view(monkeypatch, failure) -> None:
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, _projection(), 0,
+                            "reviewing", "source", "target")
+    state.mutate_highlight(expected_view_revision=0, expected_highlight_revision=0,
+                           gesture="replace", node_id="folder")
+    if failure == "highlight_revision":
+        state.highlight_revision = MAX_JAVASCRIPT_SAFE_INTEGER
+    else:
+        def refuse(*_args):
+            raise RuntimeError("scope refused")
+        monkeypatch.setattr(PlanReviewState, "_scope", refuse)
+    before, cache = state.summary(), state._view
+    window = state.window(expected_revision=0, offset=0, limit=256)
+
+    with pytest.raises(OverflowError if failure == "highlight_revision" else RuntimeError):
+        state.update(expected_revision=0, search_query="beta", filters=frozenset(),
+            sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+            collapse_node_id=None, collapsed=None)
+
+    assert state._view is cache and state.summary() == before
+    assert state.window(expected_revision=0, offset=0, limit=256) == window
+
+
 def test_plan_review_privately_publishes_sort_from_validated_canonical_order(
     monkeypatch,
 ) -> None:

@@ -150,6 +150,15 @@ no filesystem access, disclosure context or action authority.
 
 ## Views, windows, and selection
 
+Plan and Inventory use one server view-transition and cache implementation.
+Their owners supply sorting, matching and direct selection contributions;
+shared mechanics check revision capacity, stage replacement values and publish
+together. Expected revisions remain guarded by each domain entry point.
+Sort or collapse alone reuses matching-scope counts. Selection replacement
+preserves ordering and visibility when the domain owner guarantees unchanged
+topology; a new Inventory publication rebuilds against its new projection.
+Domain selection, workflow effects and row serialization remain separate.
+
 Plan views are server-side, opaque, immutable/revisioned projections. A response formed for a stale lifecycle, selection, result, view-state, or projection revision returns a typed conflict and does not combine old structure with new detail. The browser keeps at most its current 256-row window and treats DOM rows as disposable. Server selection remains authoritative across virtualized rows, collapse, filters, and windows. A Plan header bulk gesture applies to all selectable operations whose own rows match the current search and operation filters; a folder gesture applies to matching descendants only. Both include matches outside the loaded window and under collapsed folders. Sorting, collapse and scroll do not change gesture membership. View changes alone never alter selection, and Execute always uses the complete current selection, including hidden operations. Workflow dependency closure can reselect an operation outside the view when a chosen operation requires it; safety exclusions remain in force. Inventory read views and their separate complete-folder Refresh and visibility actions have desktop controls.
 
 The synthetic Plan root remains internal to the projection and its complete-plan

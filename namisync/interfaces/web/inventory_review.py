@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from array import array
 from dataclasses import asdict, dataclass, field
 
-from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.workflows import (
     InventoryDetails, InventoryProjection, InventoryProjectionNode, InventoryProjectionOrder, InventoryRollup,
     PlanSortColumn, SortDirection,
@@ -17,6 +15,9 @@ from .visible_sequence import (
 )
 from .plan_review import _tail_text
 from .row_highlight import apply_row_highlight, highlight_visible_index
+from .review_view import (
+    ReviewView, ScopeCounts, count_scope, covered_positions, next_revision, update_review_view,
+)
 
 
 INVENTORY_FILTERS = frozenset({
@@ -79,46 +80,41 @@ class InventoryReviewState:
     sort_column: PlanSortColumn = PlanSortColumn.PATH
     sort_direction: SortDirection = SortDirection.ASCENDING
     collapsed_node_ids: frozenset[str] = field(default_factory=frozenset)
-    _order: InventoryProjectionOrder = field(init=False, repr=False)
-    _visible: VisibleSequence[InventoryProjectionNode] = field(init=False, repr=False)
-    _selected_prefix: array = field(init=False, repr=False)
-    _scope_selectable: array = field(init=False, repr=False)
-    _scope_selected: array = field(init=False, repr=False)
-    _hidden_selected_count: int = field(init=False, default=0, repr=False)
+    _view: ReviewView[InventoryProjectionOrder, InventoryProjectionNode] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self._order = sort_inventory_projection(self.projection, self.sort_column, self.sort_direction)
-        self._visible = self._derive(self._order, self.search_query, self.filters, self.collapsed_node_ids)
-        self._refresh_selection()
+        order = self._sort(self.sort_column, self.sort_direction)
+        self._view = ReviewView(
+            order, self._derive(order, self.search_query, self.filters, self.collapsed_node_ids),
+            self._scope(self.search_query, self.filters),
+        )
 
-    def _refresh_selection(self) -> None:
-        selected = array("Q", [0])
-        selectable_scope = array("Q", [0])
-        selected_scope = array("Q", [0])
-        hidden = 0
-        query = self.search_query.casefold()
-        for node in self.projection.nodes:
-            file = (node.row is not None and node.row.entry_kind is not None
-                    and node.row.entry_kind.value == "file")
-            matches = file and self._matches(node, query)
-            chosen = file and node.row.row_id in self.selected_row_ids
-            selected.append(selected[-1] + int(chosen))
-            selectable_scope.append(selectable_scope[-1] + int(matches))
-            selected_scope.append(selected_scope[-1] + int(chosen and matches))
-            hidden += int(chosen and not matches)
-        self._selected_prefix = selected
-        self._scope_selectable, self._scope_selected = selectable_scope, selected_scope
-        self._hidden_selected_count = hidden
+    def _sort(self, column: PlanSortColumn, direction: SortDirection) -> InventoryProjectionOrder:
+        return sort_inventory_projection(self.projection, column, direction)
 
-    def _matches(self, node: InventoryProjectionNode, query: str) -> bool:
+    def _scope(self, search: str, filters: frozenset[str], *,
+               selected_row_ids: frozenset[str] | None = None) -> ScopeCounts:
+        selected = self.selected_row_ids if selected_row_ids is None else selected_row_ids
+        query = search.casefold()
+
+        def contributions():
+            for node in self.projection.nodes:
+                file = (node.row is not None and node.row.entry_kind is not None
+                        and node.row.entry_kind.value == "file")
+                yield (file and self._matches(node, query, filters), int(file),
+                       int(file and node.row.row_id in selected))
+        return count_scope(contributions())
+
+    def _matches(self, node: InventoryProjectionNode, query: str,
+                 filters: frozenset[str] | None = None) -> bool:
+        filters = self.filters if filters is None else filters
         categories = _categories(node)
-        return (("acknowledged" not in categories or "acknowledged" in self.filters)
-                and (bool(categories & self.filters) if self.filters else bool(categories))
+        return (("acknowledged" not in categories or "acknowledged" in filters)
+                and (bool(categories & filters) if filters else bool(categories))
                 and query in node.display.casefold())
 
     def _selection(self, node: InventoryProjectionNode) -> dict[str, object]:
-        count = self._scope_selectable[node.subtree_end] - self._scope_selectable[node.position]
-        selected = self._scope_selected[node.subtree_end] - self._scope_selected[node.position]
+        count, selected = self._view.scope.subtree(node.position, node.subtree_end)
         return {"selectable": count > 0,
                 "selection": "none" if selected == 0 else "all" if selected == count else "partial"}
 
@@ -144,18 +140,19 @@ class InventoryReviewState:
         result = self.selected_row_ids | scope if selected else self.selected_row_ids - scope
         if result == self.selected_row_ids:
             return self.summary(disposition="noop")
-        if self.view_revision >= MAX_JAVASCRIPT_SAFE_INTEGER:
-            raise OverflowError("inventory view revision is exhausted")
+        revision = next_revision(self.view_revision)
+        scope_counts = self._scope(self.search_query, self.filters, selected_row_ids=result)
+        view = ReviewView(self._view.order, self._view.visible, scope_counts)
         self.selected_row_ids = result
-        self._refresh_selection()
-        self.view_revision += 1
+        self._view = view
+        self.view_revision = revision
         return self.summary()
 
     def mutate_highlight(self, *, expected_view_revision: int, expected_highlight_revision: int,
                          gesture: str, node_id: str | None) -> dict[str, object]:
         if expected_view_revision != self.view_revision or expected_highlight_revision != self.highlight_revision:
             return self.summary(disposition="conflict")
-        disposition = apply_row_highlight(self, self._visible, gesture, node_id)
+        disposition = apply_row_highlight(self, self._view.visible, gesture, node_id)
         return self.summary(disposition="current" if disposition == "applied" else disposition)
 
     def set_highlighted_selection(self, *, request_id: str, expected_revision: int,
@@ -165,20 +162,13 @@ class InventoryReviewState:
             return self.summary(disposition="conflict")
         if type(selected) is not bool:
             raise TypeError("inventory selection must be a boolean")
-        deltas = [0] * (len(self.projection.nodes) + 1)
-        for node_id in self.highlighted_node_ids:
-            node = self.projection.node_for_id(node_id)
-            deltas[node.position] += 1
-            deltas[node.subtree_end] -= 1
-        covered = 0
-        scope: set[str] = set()
-        query = self.search_query.casefold()
-        for node in self.projection.nodes:
-            covered += deltas[node.position]
-            if (covered and node.row is not None and node.row.entry_kind is not None
-                    and node.row.entry_kind.value == "file" and self._matches(node, query)):
-                scope.add(node.row.row_id)
-        return self._assign_selection(frozenset(scope), selected)
+        nodes = self.projection.nodes
+        ranges = ((node.position, node.subtree_end) for node in (
+            self.projection.node_for_id(node_id) for node_id in self.highlighted_node_ids))
+        scope = frozenset(nodes[position].row.row_id
+            for position in covered_positions(len(nodes), ranges)
+            if self._view.scope.selectable[position + 1] > self._view.scope.selectable[position])
+        return self._assign_selection(scope, selected)
 
     def _derive(self, order: InventoryProjectionOrder, search: str,
                 filters: frozenset[str], collapsed: frozenset[str]) -> VisibleSequence[InventoryProjectionNode]:
@@ -203,22 +193,22 @@ class InventoryReviewState:
             "highlight_revision": self.highlight_revision,
             "highlight_anchor_node_id": self.highlight_anchor_node_id,
             "highlight_focus_node_id": self.highlight_focus_node_id,
-            "highlight_focus_visible_index": highlight_visible_index(self._visible, self.highlight_focus_node_id),
+            "highlight_focus_visible_index": highlight_visible_index(self._view.visible, self.highlight_focus_node_id),
             "highlighted_count": len(self.highlighted_node_ids),
             "scan_request_id": self.scan_request_id,
             "scan_complete": self.scan_complete, "observed_count": self.observed_count,
             "scan_scope": None if self.scan_scope is None else {"kind": self.scan_scope[0], "path": self.scan_scope[1]},
             "missing_count": self.missing_count, "warning_count": self.projection.warning_count,
             "rollup": inventory_rollup_wire(self.projection.nodes[0].rollup),
-            "visible_row_count": max(0, len(self._visible.visible_positions) - 1),
+            "visible_row_count": max(0, len(self._view.visible.visible_positions) - 1),
             "search_query": self.search_query, "filters": sorted(self.filters),
             "sort_column": self.sort_column.value, "sort_direction": self.sort_direction.value,
             "collapsed_count": len(self.collapsed_node_ids),
-            "selected_file_count": self._selected_prefix[-1],
+            "selected_file_count": self._view.scope.selected_total,
             "selectable_file_count": self.projection.nodes[0].rollup.file_count,
-            "hidden_selected_file_count": self._hidden_selected_count,
-            "scope_selectable_file_count": self._scope_selectable[-1],
-            "scope_selected_file_count": self._scope_selected[-1],
+            "hidden_selected_file_count": self._view.scope.hidden_selected,
+            "scope_selectable_file_count": self._view.scope.selectable[-1],
+            "scope_selected_file_count": self._view.scope.selected[-1],
             "selection": self._selection(self.projection.nodes[0])["selection"],
         }
 
@@ -228,8 +218,7 @@ class InventoryReviewState:
                     scan_scope: tuple[str, str | None] | None,
                     scan_request_id: str | None = None) -> InventoryReviewState:
         """Stage one complete replacement while preserving surviving gestures."""
-        if self.view_revision >= MAX_JAVASCRIPT_SAFE_INTEGER:
-            raise OverflowError("inventory view revision is exhausted")
+        revision = next_revision(self.view_revision)
         collapsed = frozenset(
             node_id for node_id in self.collapsed_node_ids
             if node_id in projection.position_by_node_id
@@ -237,7 +226,7 @@ class InventoryReviewState:
         )
         return InventoryReviewState(
             self.task_id, request_id, projection, root_path, scan_complete,
-            observed_count, missing_count, self.view_revision + 1,
+            observed_count, missing_count, revision,
             self.search_query, self.filters, self.sort_column, self.sort_direction, collapsed,
             scan_scope=scan_scope,
             scan_request_id=scan_request_id,
@@ -266,27 +255,17 @@ class InventoryReviewState:
             else:
                 next_collapsed.discard(collapse_node_id)
         next_collapsed = frozenset(next_collapsed)
-        state = (search_query, filters, sort_column, sort_direction, next_collapsed)
-        if state == (self.search_query, self.filters, self.sort_column, self.sort_direction, self.collapsed_node_ids):
-            return self.summary(disposition="noop")
-        if self.view_revision >= MAX_JAVASCRIPT_SAFE_INTEGER:
-            raise OverflowError("inventory view revision is exhausted")
-        order = self._order if (sort_column, sort_direction) == (self.sort_column, self.sort_direction) else sort_inventory_projection(self.projection, sort_column, sort_direction)
-        visible = self._derive(order, search_query, filters, next_collapsed)
-        if search_query != self.search_query or filters != self.filters:
-            apply_row_highlight(self, self._visible, "clear", None)
-        self.search_query, self.filters, self.sort_column, self.sort_direction, self.collapsed_node_ids = state
-        self._order, self._visible = order, visible
-        self._refresh_selection()
-        self.view_revision += 1
-        return self.summary()
+        disposition = update_review_view(self, search_query=search_query, filters=filters,
+            sort_column=sort_column, sort_direction=sort_direction,
+            collapsed_node_ids=next_collapsed)
+        return self.summary(disposition="current" if disposition == "applied" else disposition)
 
     def window(self, *, expected_revision: int, offset: int, limit: int) -> dict[str, object]:
         if expected_revision != self.view_revision:
             return {"disposition": "conflict", "view_revision": self.view_revision,
                     "highlight_revision": self.highlight_revision,
                     "offset": offset, "total": 0, "rows": []}
-        window = window_visible_sequence(self._visible, offset=offset + 1, limit=limit)
+        window = window_visible_sequence(self._view.visible, offset=offset + 1, limit=limit)
         rows = []
         for frame in window.rows:
             node, row = frame.node, frame.node.row
