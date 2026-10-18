@@ -23,8 +23,7 @@ M1-10 is complete as of 2026-10-14, including the requested integrated A–C
 review before D and final cross-component review. The authorized GUI-hardening
 follow-up below is also complete. The review consolidation batch below is complete
 as of 2026-10-19. M1-12, release and DOC-2 remain inactive. Backend optimization
-is closed for the earlier executor batch; the planning observation optimization
-below is newly active.
+is closed, including the planning lexical preparation outcomes below.
 Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
 stops and recovery.
@@ -54,7 +53,7 @@ Use small independently reviewed commits and serialize shared source/gates.
 | ID | Outcome and finite population | Acceptance and commit boundary | Status |
 | --- | --- | --- | --- |
 | PO1 | Avoid a second absolute spelling validation in `core/pathing.py` only when the already-validated absolute input equals the unchanged `abspath` result. Tests: `tests/test_core_scanplan.py`; subject policy: CORE. | 433 focused passes/one capability skip; reconciled ordinary 6,115 unique passes/four capability skips; 12 import contracts; baseline count control; eight light/four count planning children with unchanged inputs; independent review approved. | Complete; `po1/review.md` and integration receipt bind commit. |
-| PO2 | In `modules/preflight.py`, prepare candidate native spelling at the existing conversion point after chain admission/root resolution; a private native-input resolver and final stat reuse that string. Keep ordinary-input wrapper and resolved-output validation. Population: source module, affected private resolution interceptors and direct ordering/final-metadata witnesses in `tests/test_preflight.py`, PREFLIGHT. | Refresh against integrated PO1, then existing held-root/native/missing/unsafe/trash/max-path seams, preflight department plus direct workflow consumers, separate before/after diagnostics and independent review. One preflight performance commit; final ordinary gate by changed dependencies. | Design accepted; waits for PO1 integration. |
+| PO2 | Reuse candidate native spelling for resolution/final stat while preserving all probes and output validation. Preflight, its native freshness/order witnesses and PREFLIGHT own the change. | Final focused125, preflight/workflows1067, service41, current package-byte87 passes; imports12; intended control failure; eight light/four count children with unchanged inputs; fresh independent approval. Unaffected behavioral passes reused by dependency. | Complete: `9e3bcec`; `po2/review.md`, `po2/integration.json`. |
 
 Both preserve all filesystem probes and their ordering, missing/unavailable,
 reparse/placeholder, namespace/Unicode/length handling, root holds and fresh
@@ -75,6 +74,16 @@ where required; they must continue witnessing candidate resolution. Root
 resolution reuse is deferred: PREFLIGHT requires it and DEFENSE's existing
 resolution-skipping grant is executor-specific. Leaf consolidation is deferred:
 the early refusal and post-resolution metadata reads have different roles.
+PO2 reuses PO1's unaffected behavioral passes but refreshes existing package-byte
+consumers: wheel metadata, transport custody, wheel assets and version tests.
+Their package identity depends on changed preflight bytes; no headed UI behavior
+or native host-contract change requires a new headed gate.
+PO1 `5216bf0` and PO2 `9e3bcec` were committed directly on original `milestone1`.
+No worktree/recovery branch, stash, push or PR was created. Failed and invalid
+receipts remain: interrupted ordinary01 is unclassified; ordinary02's source-tree
+temp refusals are fully reconciled; PO2 control01 missed its spy and is invalid.
+Corrected controls and outside-source gates retain logs and input identities.
+PERFORMANCE owns measured ranges and limits. No further checkpoint is active.
 
 ### Review consolidation — 2026-10-16–19
 

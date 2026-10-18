@@ -23,6 +23,73 @@ eligible. Historical observations remain bound to their measured dependencies.
 Methods and current result summaries belong here; detailed investigation
 chronology belongs in the named evidence root or archived historical material.
 
+## Planning lexical preparation — PO1/PO2 (2026-10-19)
+
+This diagnostic follows the `ca31654` observation study retained in
+`build/observation-study-20261012/report.md`. That study identified repeated
+absolute spelling validation and candidate input preparation; it did not
+authorize filesystem-fact reuse. NOOP current-state observation remains intact.
+
+PO1 compares archived source `d1d19c61` with the same package plus the reviewed
+`core/pathing.py` change integrated as `5216bf0`. Two sequential fresh-process/
+database light samples per version use each of two real 8,000-file fixtures:
+80 groups, 32 fixed bytes per file and fixed mtimes, with either 7,200 or 800
+matching target files. The remaining targets are absent. Exact paths, bytes,
+size and timestamps are verified outside timing. Fixture absolute paths differ
+between mixes, so compare versions within a mix, not mixes as an isolated
+action-ratio experiment. This is warm-filesystem source execution, not installed
+release, cold-cache, p95 or universal-device evidence. The observed host is
+Windows build 26200, i7-13700K, 63.69 GiB RAM, NTFS, Python 3.13.14 and SQLite
+3.50.4; power and unrelated workload are uncontrolled. Tests and measurements
+run in separate intervals.
+
+| PO1 interval, seconds; two-sample min–max | Baseline | PO1 |
+| --- | ---: | ---: |
+| 90% NOOP: request through first window | 12.381–12.394 | 10.794–10.854 |
+| 90% NOOP: current-world observation | 9.105–9.111 | 7.536–7.583 |
+| 10% NOOP: request through first window | 11.181–11.206 | 9.868–9.872 |
+| 10% NOOP: current-world observation | 8.568–8.579 | 7.254–7.257 |
+
+Four separate instrumented children count whole-planning absolute-spelling
+validation calls: 211,391→130,239 for 90% NOOP and 192,147→117,417 for 10% NOOP.
+Their timings are excluded. The source mechanism removes one repeat validation
+only when a validated absolute input equals its normalization result; the counts
+witness that reduction on these fixtures without establishing a latency gate.
+All twelve children produce the expected COPY/NOOP populations, complete scans,
+256-row initial windows and complete shutdown/custody release. No plan executes.
+
+`build/planning-optimization-20261019/` retains frozen baseline/candidate sources,
+helper/containment hashes, runtime, fixture census, raw sample receipts, count
+receipts and reproduction scripts. `frozen_inputs.json` equals
+`inputs_after.json`; the candidate source matches the integrated change.
+`summary.json` contains all eight light observations, and `report.md` explains
+their limits. Recollect for changed product, producer, checker, fixture, driver
+or host dependencies. PREFLIGHT/CORE own behavior; these figures promise no
+speed for other operation mixes, root depths, devices or remote paths.
+
+PO2 uses a separate frozen driver/source set in the `po2-measurement/` child
+directory, preserving all PO1 inputs. Fresh baseline `5216bf0` is compared with
+only the candidate `modules/preflight.py` overlay, at the same fixture paths
+and with the same correctness checks. Tests are again serialized outside
+measurement. All eight light and four count children complete with unchanged
+inputs, expected actions, complete scans/windows and clean shutdown.
+
+| PO2 interval, seconds; two-sample min–max | PO1 baseline | PO2 |
+| --- | ---: | ---: |
+| 90% NOOP: request through first window | 10.819–11.234 | 10.322–10.401 |
+| 90% NOOP: current-world observation | 7.570–7.828 | 7.043–7.114 |
+| 10% NOOP: request through first window | 9.803–9.850 | 9.494–9.504 |
+| 10% NOOP: current-world observation | 7.197–7.243 | 6.889–6.919 |
+
+Separate instrumented counts of preflight native-input preparation fall from
+47,603 to 32,323 for 90% NOOP, and 41,203 to 32,323 for 10% NOOP. The removed
+15,280/8,880 conversions correspond to existing subjects reaching final stat;
+absent subjects retain candidate preparation for resolution but never reach
+that final read. Both leaf reads and root/candidate resolutions remain.
+The slower second 90%-NOOP baseline is retained, not discarded as an outlier.
+Each checkpoint has its own comparison; combined cross-checkpoint timings are
+sequential observations rather than a new controlled aggregate experiment.
+
 ## Initial planning observation — LS1 (2026-10-12)
 
 The LS1 display-sequence candidate based on `42aa079` was measured without
