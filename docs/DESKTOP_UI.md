@@ -544,11 +544,12 @@ cards and fills are unchanged; their small WCG deviation is accepted. The
 gallery's historical normal/opaque flyout labels do not isolate popup alpha
 (both fills are opaque); its shadowless control remains useful.
 
-Three file-list surface modules share presentation components.
-`file_row.js` owns the shared row skeleton; `plan.js` exports only
-`renderPlanRow(element, rowView)` and `integrity.js` exports
-`renderIntegrityRow(element, rowView)` plus its existing `createIntegrityCell`
-helper, reused by Inventory without replacing tree-owned row elements.
+The file-list surfaces share presentation components. `file_row.js` owns the
+shared row skeleton; `plan.js` exports only `renderPlanRow(element, rowView)`.
+`integrity.js` exports `createIntegrityCell`, reused by Inventory without
+replacing tree-owned row elements. The component gallery owns its standalone
+`renderIntegrityRow(element, rowView)` adapter and its validation, using that
+same product cell renderer and row skeleton.
 Inputs are page-local presentation
 views, not bridge envelopes or compatibility contracts. Callers supply native
 checkbox state, mixed state and accessible labels; depth, folder and expanded

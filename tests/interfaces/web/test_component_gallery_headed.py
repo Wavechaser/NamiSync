@@ -2334,6 +2334,7 @@ def test_component_gallery_script_uses_production_components_without_domain_auth
     assert 'import("/icons.js")' in script
     assert 'import("/plan.js")' in script
     assert 'import("/integrity.js")' in script
+    assert 'import("/file_row.js")' in script
     assert 'import("/rail.js")' in script
     assert 'import("/plan_review.js")' in script
     assert "const galleryRail = createTaskRail({" in script
@@ -2341,6 +2342,32 @@ def test_component_gallery_script_uses_production_components_without_domain_auth
     assert "app.append(galleryRail.element);" in script
     assert re.search(r"\bPLAN_ROW_CASES\s*,\s*renderPlanRow\s*,", script)
     assert re.search(r"\bINTEGRITY_ROW_CASES\s*,\s*renderIntegrityRow\s*,", script)
+    fields = re.search(r"const STRING_FIELDS = Object\.freeze\((\[[\s\S]*?\])\);", script)
+    assert fields is not None
+    assert json.loads(re.sub(r",\s*]", "]", fields.group(1))) == [
+        "presenceText", "presenceStatus", "checksumText",
+    ]
+    for name, expected in (
+        ("INTEGRITY_KEYS", list(_INTEGRITY_CASES)),
+        ("ROW_LIFECYCLE_KEYS", ["verifying", "completed"]),
+    ):
+        keys = re.search(rf"const {name} = Object\.freeze\(new Set\((\[[\s\S]*?\])\)\);", script)
+        assert keys is not None, name
+        assert json.loads(re.sub(r",\s*]", "]", keys.group(1))) == expected
+    assert "ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey)" in script
+    assert 'rowView.lifecycleKey === "verifying"' in script
+    assert "Number.isFinite(rowView.progressPercent)" in script
+    assert "rowView.progressPercent >= 0" in script
+    assert "rowView.progressPercent <= 100" in script
+    assert "rowView.progressPercent === undefined" in script
+    assert "INTEGRITY_KEYS.has(rowView.presenceStatus)" in script
+    assert 'renderFileRow(element, rowView, {' in script
+    assert 'renderText(checksum, rowView.checksumText);' in script
+    assert '"integrityText"' not in script
+    assert '"integrityStatus"' not in script
+    assert '"nami-integrity-row__presence"' in script
+    assert '"nami-file-row__cell nami-integrity-row__checksum"' in script
+    assert '"nami-integrity-row__integrity"' not in script
     assert "renderer(row, rowView);" in script
     assert "localStorage" not in script
     assert "sessionStorage" not in script

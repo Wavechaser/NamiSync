@@ -826,8 +826,7 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
         "renderPlanRow"
     ]
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", integrity) == [
-        "createIntegrityCell",
-        "renderIntegrityRow"
+        "createIntegrityCell"
     ]
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", file_row) == [
         "renderFileRow",
@@ -910,32 +909,6 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     assert 'checkbox.type = "checkbox";' in file_row
     assert 'checkbox.indeterminate = rowView.mixed;' in file_row
     assert 'renderFileRow(element, rowView, {' in plan
-    assert 'renderFileRow(element, rowView, {' in integrity
-    assert _javascript_frozen_array(integrity, "STRING_FIELDS") == (
-        "presenceText",
-        "presenceStatus",
-        "checksumText",
-    )
-    assert _javascript_frozen_set(integrity, "INTEGRITY_KEYS") == (
-        "verified",
-        "baselined",
-        "unverified",
-        "modified",
-        "reappeared",
-        "unsupported",
-        "canceled",
-        "missing",
-        "mismatched",
-        "error",
-    )
-    assert _javascript_frozen_set(integrity, "ROW_LIFECYCLE_KEYS") == (
-        "verifying",
-        "completed",
-    )
-    assert "ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey)" in integrity
-    assert 'rowView.lifecycleKey === "verifying"' in integrity
-    assert "Number.isFinite(rowView.progressPercent)" in integrity
-    assert "INTEGRITY_KEYS.has(rowView.presenceStatus)" in integrity
     assert "cell.dataset.lifecycle = lifecycle;" in integrity
     assert "cell.dataset.integrity = integrity;" in integrity
     assert "presenceTone" not in integrity
@@ -943,11 +916,6 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     assert ".dataset.form" not in integrity
     assert 'label.className = "nami-file-state-label";' in integrity
     assert "cell.append(label);" in integrity
-    assert '"integrityText"' not in integrity
-    assert '"integrityStatus"' not in integrity
-    assert '"nami-integrity-row__presence"' in integrity
-    assert '"nami-integrity-row__checksum"' in integrity
-    assert '"nami-integrity-row__integrity"' not in integrity
     assert 'element.replaceChildren(selection, name, size, ...details.cells, notes);' in file_row
     assert 'progress.className = "nami-progress nami-progress--inline";' in file_row
     assert 'progress.setAttribute("role", "progressbar");' in file_row

@@ -308,12 +308,13 @@ window.addEventListener("unhandledrejection", (event) => {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule, { renderPlanRow }, { renderIntegrityRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }, { createInventoryReviewPanel }] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }, { createIntegrityCell }, { renderFileRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }, { createInventoryReviewPanel }] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
     import("/plan.js"),
     import("/integrity.js"),
+    import("/file_row.js"),
     import("/rail.js"),
     import("/execution_confirmation.js"),
     import("/plan_review.js"),
@@ -324,11 +325,87 @@ window.addEventListener("unhandledrejection", (event) => {
     typeof createIcon !== "function"
     || !Array.isArray(ICON_NAMES)
     || typeof renderPlanRow !== "function"
-    || typeof renderIntegrityRow !== "function"
+    || typeof createIntegrityCell !== "function"
+    || typeof renderFileRow !== "function"
     || typeof createPlanReviewPanel !== "function"
   ) {
     throw new TypeError("installed icon registry has an invalid public shape");
   }
+  const STRING_FIELDS = Object.freeze([
+    "presenceText",
+    "presenceStatus",
+    "checksumText",
+  ]);
+  const INTEGRITY_KEYS = Object.freeze(new Set([
+    "verified",
+    "baselined",
+    "unverified",
+    "modified",
+    "reappeared",
+    "unsupported",
+    "canceled",
+    "missing",
+    "mismatched",
+    "error",
+  ]));
+  const ROW_LIFECYCLE_KEYS = Object.freeze(new Set([
+    "verifying",
+    "completed",
+  ]));
+
+  function validProgressPercent(rowView) {
+    const verifying = rowView.lifecycleKey === "verifying";
+    return verifying
+      ? typeof rowView.progressPercent === "number" &&
+        Number.isFinite(rowView.progressPercent) &&
+        rowView.progressPercent >= 0 &&
+        rowView.progressPercent <= 100
+      : rowView.progressPercent === undefined;
+  }
+
+  function validRowView(rowView) {
+    return rowView !== null &&
+      typeof rowView === "object" &&
+      !Array.isArray(rowView) &&
+      STRING_FIELDS.every((name) => typeof rowView[name] === "string") &&
+      validProgressPercent(rowView) &&
+      (
+        rowView.lifecycleKey === undefined
+          ? INTEGRITY_KEYS.has(rowView.presenceStatus)
+          : typeof rowView.lifecycleKey === "string" &&
+            ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey) &&
+            rowView.presenceStatus === ""
+      );
+  }
+
+  function renderIntegrityRow(element, rowView) {
+    if (!(element instanceof HTMLElement)) {
+      throw new TypeError("renderIntegrityRow target must be an HTMLElement");
+    }
+    if (!validRowView(rowView)) {
+      throw new TypeError("renderIntegrityRow view is invalid");
+    }
+    const ownerDocument = element.ownerDocument;
+    const presence = createIntegrityCell(
+      ownerDocument,
+      "nami-integrity-row__presence",
+      "primary",
+      rowView.presenceStatus,
+      rowView.lifecycleKey,
+      rowView.presenceText,
+      rowView.progressPercent,
+    );
+    const checksum = ownerDocument.createElement("div");
+    checksum.className = "nami-file-row__cell nami-integrity-row__checksum";
+    checksum.dataset.fileColumn = "secondary";
+    checksum.setAttribute("role", "cell");
+    renderText(checksum, rowView.checksumText);
+    renderFileRow(element, rowView, {
+      className: "nami-integrity-row",
+      cells: [presence, checksum],
+    });
+  }
+
   galleryWatchdog = setTimeout(async () => {
     if (gallerySettled) return;
     gallerySettled = true;

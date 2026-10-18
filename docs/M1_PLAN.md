@@ -262,6 +262,20 @@ sizes and 12 imports. `rv5c-review-01.md`, `rv5c-native-accounting-01.json` and
 `rv5c-01-integration.json` own independent review, exact input/package provenance
 and commit accounting. The two fixture-construction failures remain preserved;
 neither required a product change or weaker probe containment.
+`rv5d-refresh-01.md` bounds the final relocation to integrity.js, gallery.js,
+test_frontend_static.py and test_component_gallery_headed.py. Move only the
+gallery's standalone row adapter and exclusive validation into the existing
+gallery; retain the product integrity cell, safe text and row skeleton. Move
+adapter-only assertions to the gallery owner with independent expected keys.
+The owning frontend/gallery and Inventory probes, interfaces/import gates,
+four-mode installed gallery and independent delta review remain mandatory.
+RV5D passes 86 owning checks, all four installed gallery checks and 12 imports.
+Its full ordinary gate (`rv6-ordinary-01.log`) passes 6,111 tests with four
+WinError 1314 symlink/reparse capability skips and 35 headed deselections.
+The 534 frozen product/test/tool/build inputs may supply RV6 acceptance only
+after exact integration verification. `rv5d-review-01.md`,
+`rv5d-native-accounting-01.json` and `rv5d-01-integration.json` own final review,
+package/input provenance and commit accounting.
 
 ### Verify table hardening — 2026-10-15–16
 

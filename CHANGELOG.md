@@ -179,6 +179,8 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
 
+- Keep the standalone integrity-row specimen adapter and its validators in the
+  component gallery, sharing the product cell renderer and row skeleton.
 - Cover Plan sorting through real server receipts and rendered row order,
   replacing two native Filename click/wait stages while retaining the
   installed Size cycle and input/focus/effect checks.
