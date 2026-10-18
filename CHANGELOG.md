@@ -179,81 +179,37 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
 
-- Keep the standalone integrity-row specimen adapter and its validators in the
-  component gallery, sharing the product cell renderer and row skeleton.
-- Cover Plan sorting through real server receipts and rendered row order,
-  replacing two native Filename click/wait stages while retaining the
-  installed Size cycle and input/focus/effect checks.
-- Share real Inventory fixture production between browser probes and the
-  component gallery, retaining local appearance cases, paging and independent
-  visual expectations in installed tests and manual preview.
-- Consolidate command exposure and policy expectations into one independent
-  test catalog shared by native/browser, installed-host and benchmark checks;
-  retain drift controls and package exclusion.
-- Share browser recovery-handle attachment across execution and Inventory
-  actions while retaining each action's ownership, feedback and settlement.
-  Check continues to observe the original request without resubmitting it.
-- Share typed delivery snapshot capture and restoration across execution and
-  ordinary Inventory starts. Replace positional summary and diagnostic readers
-  while preserving caller-owned map copies, rollback and generation custody.
-- Honor manual scroll-away while Inventory row interaction is temporarily blocked,
-  keeping Follow disabled after the pending work completes without changing the
-  retained active row. Document that collapsing its parent clears the active row
-  and Refresh selected target.
-- Add RV3 Inventory Follow and Go to current item using the same browser navigation
-  and override mechanics as Plan. Resolve current ordinary integrity items through
-  their frozen scope and visible ancestors. Automatic following requires the
-  canonical unfiltered view; manual override persists, and one-shot Go preserves
-  the view. Passive scrolling retains active row identity and the Refresh target
-  off-window, detaches/restores ARIA with the rendered row, and never chooses a
-  replacement. Bounded server membership evidence distinguishes actual view
-  removal from window absence. Focus alone does not move the viewport; explicit
-  navigation resumes from the retained position. Keep row menus valid through
-  harmless repaint and settle native input stages against committed publications.
-- Share navigation-read admission and foreground freshness between separate Plan
-  and Inventory surfaces. Keep exact request cancellation and latest pending
-  intent across review replacement; an old viewport retry cannot overtake newer
-  navigation. Background failures retain a reread only for independently newer
-  demand, while retired reads stay silent. Plan Follow uses the same reader.
-- Disable Verify copied files with visible guidance when retained original
-  execution truth confirms that no selected copy succeeded. A successful
-  zero-byte or partial copy still qualifies; unknown truth retains server
-  admission. Reuse the existing execution summary without a readiness read.
-  Pass 415 owning tests, 2,997 workflow/interface tests, all 12 import contracts
-  and both installed execution sizes plus Inventory. Retain the preceding
-  foreground refusals as failed receipts.
-- Share browser viewport geometry, window demand, request generations,
-  settlement and reveal beneath separate Plan and Inventory/tree panels.
-  Preserve app-owned Plan reads across panel reuse and tree cancellation
-  callbacks; restore scroll before active-row reconciliation. Full/end windows
-  avoid redundant same-start reads, while resize can fill a short window.
-  Pass 103 owning checks, 2,459 interfaces/tools checks (three privilege skips),
-  12 imports and all ten installed cases across unchanged dependency-bound runs.
-  Retain the inconclusive Inventory context-menu timeout and foreground refusals.
-- Share server review caches, staged view transitions and complete-scope counting
-  between Plan and Inventory while retaining their separate selection and
-  publication rules, public constructors and bounded windows. Pass 159 focused/
-  scale cases, 19 composition cases, 2,459 interfaces/tools cases (three skips)
-  and all 12 import contracts, with independent source and consumer review.
-- Replace the one-shot exact manual verification path with ordinary Verify
-  over server-derived successful COPY/UPDATE/MOVE_UPDATE target paths, including
-  successful work from partial or linked executions. Fresh commands may repeat
-  it; original-command recovery never repeats effects. Checkbox selection is
-  unchanged and an empty copied scope refuses.
-- Reuse ordinary scan, integrity controls and result publication. Missing
-  evidence may be baselined without claiming verification; missing subjects and
-  zero outcomes remain visible as ordinary results or scan warnings. Later
-  scans can supersede execution-relative evidence without rewriting original
-  execution or automatic verification results. Retire the exact readiness,
-  first-claim and separate result machinery and its Refresh forfeiture warning.
-- Refresh current execution evidence after auxiliary inventory work, including
-  when returning from Verify. Retire stale detail reads without resetting Plan
-  selection, viewport or follow preference; the original execution result stays
-  retained.
-- Independently review copied-subject admission and the exact-family retirement;
-  pass 2,978 affected workflow/interface checks, all 12 import contracts and 13
-  installed execution, Inventory, shell, gallery and host/transport cases.
-  Preserve earlier failed receipts and the unexplained larger-window fixture.
+- Share server view/cache/scope mechanics, browser viewport/navigation and
+  revision-aware read ownership beneath separate Plan and Inventory panels.
+  Preserve their distinct read-cancellation, selection and publication rules.
+- Add Inventory Follow and Go through the common browser infrastructure.
+  Passive windows retain active identity and Refresh selected's target while
+  ARIA follows the rendered element; focus alone never reveals the row.
+  Manual scrolling disables Follow even during pending work. Actual view removal,
+  including parent collapse, clears the target. Keep menus valid through harmless
+  repaint and settle native input stages against committed publications.
+- Replace one-shot exact copied-file verification with repeatable ordinary
+  scan/Verify over workflow-admitted successful copied paths, including partial
+  and linked executions. Preserve checkbox selection, truthful empty/incomplete
+  results, original execution truth and linked automatic verification. Known-empty
+  copied scope disables the action; unknown facts retain server admission.
+  Retire exact readiness/claim/result machinery and the Refresh-forfeiture warning.
+- Refresh execution-relative evidence after auxiliary Inventory work without
+  resetting Plan selection, viewport or Follow. Share typed delivery snapshots
+  and owned recovery-handle attachment while preserving map-copy depth, rollback,
+  settlement and Check's original-command routing; recovery never repeats effects.
+- Consolidate independent command/policy expectations and real Inventory specimen
+  production. Retain negative controls, local gallery appearance overlays,
+  independent visual verdicts and installed-only product imports.
+- Replace only two native Filename sort click/wait stages with real server/native
+  receipts, real Plan header callbacks and independent rendered-order checks.
+  Keep the installed Size cycle and native input/focus/effect guards. Move the
+  gallery-only integrity adapter/validators to tests, sharing the product cell
+  renderer and row skeleton.
+- Close with 6,111 ordinary passes (four capability skips), affected installed
+  checks, 12 import contracts and independent review. Condense completed delivery
+  records and replace the session handoff. Remove one duplicate test environment
+  while retaining wheels, raw evidence, failed fixtures and recovery refs.
 
 #### Align Verify table interaction and action consequences (2026-10-15 – 2026-10-16)
 

@@ -2045,8 +2045,8 @@ original command without submitting another operation. Pause, Resume and Cancel
 address only the exact current ordinary session, with task status derived from
 that activity's snapshot rather than relabeling every Inventory activity a scan.
 
-Refresh selected follows the tree's current active file or folder in its loaded
-window, including arrow-key navigation while Details is hidden. Arrows move
+Refresh selected follows the tree's retained active file or folder, including
+while it is outside the loaded window and while Details is hidden. Arrows move
 highlight without reading or replacing item details. A cleared active row or an
 active notice disables Refresh selected. Acknowledge missing and Restore visibility
 continue to act on the item displayed in the details card.

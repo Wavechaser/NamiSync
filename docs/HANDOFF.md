@@ -1,55 +1,37 @@
-# Latest session — remaining RV checkpoints resumed
+# Latest session — review consolidation closed
 
-2026-10-18. The user accepted RV3 and resumed RV4–6, ending the review pause.
-[M1_PLAN](M1_PLAN.md) owns the active outcomes. M1-12, release, DOC-2, push and PR
-remain outside this session. Work is on `milestone1` after RV3 `4fceac7b`.
+2026-10-19. RV4–6 and the accepted RV3 follow-up are complete on `milestone1`.
+The requested recap is the next step. M1-12, release, DOC-2, push and PR remain
+inactive; [M1_PLAN](M1_PLAN.md) owns scope and completed outcome pointers.
 
-RV2 (`5e505fbc`, `fd11a5bb`, `1aeb9397`) remains accepted unchanged. RV3 adds
-Inventory Follow and Go through the shared controller/read owner beneath separate
-panels. Passive Follow retains active node identity and Refresh selected's target
-off-window; ARIA detaches and restores with the row element. Focus alone does not
-reveal or override Follow. Explicit navigation starts from the retained position.
-An optional exact-node membership result on the existing bounded window read
-distinguishes actual view removal from window absence, with no extra read pump.
+This session integrated manual-scroll Follow override (`69d37fa4`), typed delivery
+snapshots (`273045ff`), owned recovery attachment (`f6323384`), independent command
+expectations (`19722028`), shared real Inventory specimens (`ae09351a`), composed
+Plan sorting coverage (`4d52f95f`) and the gallery-owned integrity adapter
+(`bffa23be`). Each has its own accepted review and integration record under
+`build/review-consolidation-20261016/`. RV2 stays accepted unchanged; Inventory
+remains a separate panel above the shared infrastructure.
 
-The approved menu correction retains row/view/publication/action/session currency
-through harmless repaint. Native input stages settle prior gesture publications,
-listen on stable ancestors, and report the pending wait, checked-element
-connectivity and popup transitions. Preparatory `focus({preventScroll:true})`
-remains. Existing foreground, focus, hit-target, trusted-input and effect guards
-are intact.
+The full ordinary suite passed 6,111 tests with four symlink/reparse capability
+skips; all 12 import contracts passed. `rv6-gate-inputs-01.json` binds 534 physical
+product/test/tool/build inputs, unchanged through integration. The latest affected
+installed checks pass: execution/Inventory in RV4B, shell in RV5C and gallery in RV5D,
+with unchanged host/transport results retained by exercised dependency.
+`rv6-cross-review-01.md` records final cross-outcome review and reuse rationale.
+`rv6-01-integration.json` binds the documentation closure commit.
 
-All evidence below is in `build/review-consolidation-20261016/`.
-The bounded follow-up preserves manual scroll-away override while row interaction
-is blocked, without releasing the active-row gate. Subject docs now explicitly
-state that collapsing the active row's parent clears that row and its Refresh
-target. `rv3-scroll-01-candidate.json` freezes tree.js and the two existing probes;
-`rv3-scroll-builder-06.md` records the reproducer and fixture corrections.
-Three focused tests, 2,062 interfaces cases, two installed Inventory/SH-G7 cases
-and 12 imports pass. Independent `rv3-scroll-review-01.md` owns final acceptance;
-`rv3-scroll-01-integration.json` records its atomic commit and preserved inputs.
+Removed one regenerable accepted-run environment (27,616,543 logical file bytes).
+The matching wheel, manifests, raw receipts, source staging and retained reference
+environment remain; all failed or unexplained fixtures are untouched.
+`rv6-cleanup-01.json` records the exact subtree. No recovery branch or stash was
+removed. Original RV3 squash and saved-work accounting remain in
+`rv3-integration.json`; recovery `f67fa6c`
+(parent `a932d5d8`), RV2B `0556322`/rebuild ref, older stopped Verify refs and all
+five unrelated stashes remain. Retain both ablation reports and the original
+user handoff `build/verify-ux-20261015/recurrence-input-handoff-01.md`.
 
-The user explicitly allowed correction on recovery `a932d5d8` without rebuilding.
-The reviewed-tree squash has sole parent `1aeb9397`, preserving physical
-tested bytes and keeping WIP history off `milestone1`. `rv3-integration.json`
-records the final and corrected recovery commits, all 39 paths, exact tree/physical
-hash checks, branch identities and the five untouched pre-existing stashes.
-Retain recovery refs until RV6 accounting; no cleanup has run in this session.
-The original RV3 gates, package identities and disposition remain in
-`rv3-revision-review-01.md` and `rv3-native-accounting-02.json`.
-
-Historical RV3 native05–07 context stalls remain unexplained. The deterministic
-late-publication/menu witness establishes a corrected mechanism, not those runs'
-causation. Keep their complete fixtures and all earlier failed receipts, including
-unexplained RV1 larger-window and RV2B context evidence. Also retain both ablation
-reports, the original user handoff
-`build/verify-ux-20261015/recurrence-input-handoff-01.md`, prior 48-entry accounting,
-recovery `0556322`/its rebuild ref and the older stopped Verify ref.
-
-`rv4-refresh-02.md` revalidates `rv4-design-01.md` against integrated RV3. After
-the scroll correction commits, confirm its tree/probe-only delta and release A:
-typed delivery snapshot capture/restore, both constructors, transition summaries
-and the installed-shell diagnostic. B separately shares only five owned attempt
-callbacks. Each needs its own gate and independent review before commit. RV5's
-older census needs current-source refresh. RV6 owns final ordinary full-suite and
-cross-outcome closure; the earlier RV1 full-suite receipt was not green.
+Keep all failed receipts and complete unexplained RV1 native01 larger-window,
+RV2B native02 context and RV3 native05–07 fixtures. Later passes and the menu
+mechanism witness do not establish those runs' causes. C's two fixture-construction
+failures are preserved and corrected; neither required product changes or weaker
+probe containment. No product blocker remains in this accepted consolidation.
