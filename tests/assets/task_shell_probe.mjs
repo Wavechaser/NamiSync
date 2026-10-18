@@ -465,6 +465,7 @@ const bridgeUrl = moduleUrl(`
   export const updateInventoryView = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryWindow = () => Promise.reject(new Error("unused inventory read"));
   export const getInventoryDetail = () => Promise.reject(new Error("unused inventory read"));
+  export const getInventoryItemAnchor = () => Promise.reject(new Error("unused inventory anchor"));
   export const refreshInventory = () => Promise.reject(new Error("unused inventory action"));
   export const acknowledgeInventory = () => Promise.reject(new Error("unused inventory action"));
   export const restoreInventory = () => Promise.reject(new Error("unused inventory action"));
@@ -501,7 +502,7 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanDetail, getInventoryDetail, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, mutatePlanHighlightedSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, acknowledgeInventory, admitLocation, BridgeTransportError, closeTask, controlExecution, createTask, echoReadiness, getExecutionDetail, getPlanDetail, getInventoryDetail, getInventoryItemAnchor, getInventoryWindow, openInventoryView, refreshInventory, restoreInventory, updateInventoryView, getPlanAnchor, getPlanOperationAnchor, getPlanWindow, revealPlanMove, listTasks, markBridgeOperational, mutatePlanHighlight, mutatePlanSelection, mutatePlanHighlightedSelection, openPlanView, OutcomeUnavailableError, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startExecution, startInventory, startPlan, startTaskDrain, TaskCloseUncertainError, TaskCreateUncertainError, TerminalPresentationError, TerminalSessionReleaseError, updatePlanView, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
@@ -1796,6 +1797,8 @@ assert.equal(liveReview.follow.scrollOffset, 1280,
   "explicit Go to current jumps to the cached target");
 assert.equal(planAnchors.length, sameTargetAnchorBase,
   "explicit cached Go does not launch an anchor lookup");
+globalThis.planReviewHarness.callbacks.onFollowOverride(liveReview, 1280, 1289);
+assert.equal(liveReview.follow.enabled, true, "manual travel within the target viewport preserves Follow");
 planWindows.splice(sameTargetWindowBase);
 
 globalThis.planReviewHarness.callbacks.onFollowOverride(liveReview);

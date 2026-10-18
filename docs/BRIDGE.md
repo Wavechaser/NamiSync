@@ -56,8 +56,9 @@ unavailable/retired-task refusal remains active. An operation absent from the
 retained Plan is invalid; an excluded operation with no visible ancestor returns
 current with null target. The synthetic root is never a visible target. Existing
 node-anchor callers and complete-request ingress bounds remain unchanged. No selection, filter,
-sort or execution mutation is authorized by lookup. Execution and post-copy
-verification share operation identity; standalone integrity lookup is excluded.
+sort or execution mutation is authorized by lookup. Execution and linked post-copy
+verification share operation identity. Ordinary integrity uses the separate
+Inventory anchor below.
 The client coalesces to the latest target with bounded outstanding work and
 retires replies after manual navigation or identity/view change. This is the
 only R0 command extension; the Plan execution-summary response also carries
@@ -488,7 +489,8 @@ BOOTSTRAP rows, commands require OPEN.
 | `set_inventory_selection` | `{task_id:TaskId,request_id:HexId,expected_revision:SafeInt,node_id:null\|NodeId,selected:boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no automatic retry or mutation replay |
 | `mutate_inventory_highlight` | Same compact gesture and expected view/highlight revision fields as `mutate_plan_highlight` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `set_inventory_highlighted_selection` | `{task_id:TaskId,request_id:HexId,expected_revision:SafeInt,expected_highlight_revision:SafeInt,selected:boolean}` | `InventoryViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
-| `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,highlight_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}` | 5 s; one identical-payload retry |
+| `get_inventory_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` with optional `anchor_node_id:NodeId` | `{disposition:"current"\|"conflict",view_revision:SafeInt,highlight_revision:SafeInt,offset:SafeInt,total:SafeInt,rows:[InventoryWindowRow]}`; nominated reads also echo `anchor_node_id` and return `anchor_visible_index:SafeInt\|null` | 5 s; one identical-payload retry |
+| `get_inventory_anchor` | `{task_id:TaskId,session_id:HexId,expected_revision:SafeInt,item_id:string}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,node_id:null\|NodeId,index:null\|SafeInt}` | 5 s; one identical-payload retry |
 | `get_inventory_detail` | `{task_id:TaskId,expected_revision:SafeInt,node_id:NodeId}` | `{disposition:"current"\|"conflict"\|"unavailable",view_revision:SafeInt,node_id:NodeId,snapshot:null\|InventorySnapshotDetail,detail:null\|InventoryCurrentDetail}` | 5 s; one identical-payload retry |
 | `update_plan_view` | `{task_id:TaskId,expected_revision:SafeInt,search_query:string,filters:[PlanFilter],sort_column:"path"\|"filename"\|"size"\|"mtime",sort_direction:"ascending"\|"descending",collapse_node_id:null\|NodeId,collapsed:null\|boolean}` | `PlanViewSummary` | current-state recovery; 5 s feedback; no mutation replay |
 | `get_plan_window` | `{task_id:TaskId,expected_revision:SafeInt,offset:SafeInt,limit:1..256}` | `{disposition:"current"\|"conflict",view_revision:SafeInt,offset:SafeInt,total:SafeInt,execution:ExecutionSummary,rows:[PlanWindowRow]}` | 5 s; one identical-payload retry |
@@ -515,6 +517,15 @@ an admitted Python handler. Start replay resolves retained wire intent before
 volatile slots: equal id/intent survives expiry; changed wire/resolved intent
 conflicts. Lifecycle release/close uses exact owner identity and idempotent
 recovery, not invented command receipts.
+
+`get_inventory_anchor` carries the opaque current integrity item ID unchanged,
+nonempty and bounded to 1,024 UTF-8 bytes at the adapter ingress. Under the task lock,
+lookup binds the ordinary request/session/mode/location and current view object.
+Stale session/view returns conflict; a foreign location or mapped out-of-scope
+subject refuses. Selected scope uses frozen membership; copied scope uses pure
+workflow admission. An admitted subject absent from the displayed projection,
+or with no visible ancestor, returns a null target. Lookup does not read the
+ledger, bind row/path associations or mutate selection/view state.
 
 Inventory selection is a process-live presentation gesture on the current
 released publication. A null node selects/deselects matching files in the location;
@@ -572,7 +583,13 @@ shapes are serialized by `inventory_review.py` and validated by `bridge.js`.
 `InventoryFilter` admits present, unverified, verified, modified, reappeared,
 unsupported, missing, mismatched, acknowledged and notice. Path sort is ascending
 only; reset is an explicit path/ascending gesture. Windows contain at most 256
-rows and conflict replies contain no rows. Inventory window display is a basename
+rows and conflict replies contain no rows. A nominated active node's visible
+index is resolved in the same current view as the window, using the existing
+index without I/O. Null means that exact node is absent from the current visible
+sequence; it never substitutes a visible ancestor. Only an admitted current reply
+for the still-retained node may update or clear browser active identity. A
+conflict cannot authorize clearing. Calls without a nomination keep the original
+request and response shape. Inventory window display is a basename
 bounded to 300 UTF-16 units; flat warning rows show the warning code and a path
 tail bounded to 255 units. Their warning object is exactly `{code,detail}`, with
 detail bounded to 300 units. No complete path is repeated in a window. These

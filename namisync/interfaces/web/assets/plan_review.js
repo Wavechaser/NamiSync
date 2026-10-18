@@ -623,10 +623,7 @@ export function createPlanReviewPanel(callbacks) {
       },
       requestCancelled: () => { if (current !== null) callbacks.onWindow(current, null); },
       manualScroll: (first, last) => {
-        const target = current?.follow?.anchorIndex;
-        if (current !== null && (!Number.isSafeInteger(target) || target < first || target > last)) {
-          callbacks.onFollowOverride(current);
-        }
+        if (current !== null) callbacks.onFollowOverride(current, first, last);
       },
     });
   }

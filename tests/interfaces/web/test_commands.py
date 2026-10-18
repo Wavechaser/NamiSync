@@ -360,6 +360,11 @@ class _Service:
         self.calls.append(("get-plan-anchor", task_id, kwargs))
         return {"disposition": "current", "node_id": kwargs["node_id"], "index": 0}
 
+    def get_inventory_anchor(self, task_id, **kwargs):
+        self.calls.append(("get-inventory-anchor", task_id, kwargs))
+        return {"disposition": "current", "view_revision": kwargs["expected_revision"],
+                "node_id": "node-" + "9" * 32, "index": 17}
+
     def reveal_plan_move(self, task_id, **kwargs):
         self.calls.append(("reveal-plan-move", task_id, kwargs))
         return {"summary": {"disposition": "applied"}, "node_id": kwargs["node_id"], "index": 0}
@@ -606,6 +611,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "get_plan_window",
         "get_execution_detail",
         "reveal_plan_move",
+        "get_inventory_anchor",
         "get_plan_anchor",
         "mutate_plan_selection",
         "mutate_plan_scope",
@@ -670,7 +676,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         (("list_tasks", "read_cosmetic_section", "open_inventory_view"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
          CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
-        (("get_inventory_window", "get_inventory_detail"), CommandAccess.READ_ONLY,
+        (("get_inventory_window", "get_inventory_detail", "get_inventory_anchor"), CommandAccess.READ_ONLY,
          FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
          CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
         (("update_inventory_view", "set_inventory_selection", "mutate_inventory_highlight", "set_inventory_highlighted_selection"), CommandAccess.READ_ONLY,
@@ -734,6 +740,28 @@ def test_operation_anchor_request_is_exact_read_only_and_session_bound() -> None
     assert len(service.calls) == 1
 
 
+def test_inventory_anchor_is_bounded_exact_read_only_and_session_bound():
+    commands, _, authority = _commands()
+    spec = commands["get_inventory_anchor"]
+    payload = {"task_id": TASK_ID, "session_id": SESSION_ID, "expected_revision": 3, "item_id": "1:2"}
+    assert _invoke(spec, payload)["index"] == 17
+    boundary_payload = {**payload, "item_id": "é" * 512}
+    assert _invoke(spec, boundary_payload)["index"] == 17
+    assert spec.access is CommandAccess.READ_ONLY
+    for invalid in ({**payload, "command_id": "a" * 32}, {**payload, "node_id": "node-" + "9" * 32},
+                    {**payload, "session_id": "foreign"}, {**payload, "expected_revision": True},
+                    {**payload, "item_id": ""}, {**payload, "item_id": "x" * 1025},
+                    {**payload, "item_id": "é" * 512 + "x"},
+                    {**payload, "item_id": "\ud800"},
+                    {key: value for key, value in payload.items() if key != "item_id"}):
+        with pytest.raises(CommandPayloadError):
+            _invoke(spec, invalid)
+    assert authority.calls == [("get-inventory-anchor", TASK_ID, {
+        "session_id": SESSION_ID, "expected_revision": 3, "item_id": "1:2"}),
+        ("get-inventory-anchor", TASK_ID, {
+            "session_id": SESSION_ID, "expected_revision": 3, "item_id": "é" * 512})]
+
+
 def test_inventory_read_commands_validate_before_reaching_task_authority() -> None:
     commands, _, authority = _commands()
     node_id = "node-" + "9" * 32
@@ -759,6 +787,21 @@ def test_inventory_read_commands_validate_before_reaching_task_authority() -> No
     with pytest.raises(CommandPayloadError):
         _invoke(commands["get_inventory_window"], {**payloads["get_inventory_window"], "limit": 257})
     assert len(authority.calls) == 4
+
+
+def test_inventory_window_accepts_only_bounded_optional_node_nomination():
+    commands, _, authority = _commands()
+    payload = {"task_id": TASK_ID, "expected_revision": 0, "offset": 0, "limit": 1}
+    node_id = "node-" + "9" * 32
+    _invoke(commands["get_inventory_window"], {**payload, "anchor_node_id": node_id})
+    assert authority.calls[-1][2]["anchor_node_id"] == node_id
+    before = len(authority.calls)
+    for anchor in (True, 1, "foreign", "node-" + "f" * 33, "node-" + "F" * 32):
+        with pytest.raises(CommandPayloadError):
+            _invoke(commands["get_inventory_window"], {**payload, "anchor_node_id": anchor})
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["get_plan_window"], {**payload, "anchor_node_id": node_id})
+    assert len(authority.calls) == before
 
 
 def test_inventory_refresh_command_has_exact_original_intent_and_bounded_node_ingress():

@@ -818,7 +818,8 @@ body {
   pointer-events: auto;
 }
 
-.nami-plan-review__list {
+.nami-plan-review__list,
+.nami-inventory-review__list {
   scroll-padding-block-end: 5rem;
 }
 

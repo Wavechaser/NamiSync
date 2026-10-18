@@ -1297,10 +1297,12 @@ folder's own available mtime, never a time inferred from descendants. Sorting
 preserves hierarchy, node ids, selection, collapse, and execution authority
 and order. It advances coherent view revisions, indexes, and anchors; the
 browser cannot sort only a page or reuse old numeric indexes. Ordinary
-sort/reset starts at offset zero. **M1-8-R0 follow:** automatic following
+sort/reset starts at offset zero. Automatic following
 is available only in canonical path-key order with no search or filters. It
-starts enabled for a new eligible execution and follows execution/post-copy
-verification's active operation or nearest visible collapsed ancestor. User
+starts enabled for a new eligible execution or ordinary integrity session and
+follows its active operation/item or nearest visible collapsed ancestor. Plan
+uses original execution/linked-verification activity; Inventory uses current
+ordinary baseline/verify/rebaseline activity, including copied-file Verify. User
 scrolling the target out of view, or changing sort/search/filter, disables it;
 only explicit action resumes it, even after returning to an eligible view.
 Programmatic scroll does not disable follow. Pause/phase changes preserve the
@@ -1309,14 +1311,20 @@ selection or keyboard focus, and stale replies cannot undo manual navigation.
 Repeated progress for the same target in the loaded window does not reposition
 the viewport; explicit Go still jumps to it.
 
-Float **Go to current operation** and **Turn on autoscroll** over the rows at
+Float **Go to current operation** (Plan), **Go to current item** (Inventory), and
+**Turn on autoscroll** over the rows at
 the viewport's lower-right, reusing existing floating-control conventions. Go
 performs a one-time jump in the current view, without enabling follow or changing
 sort/filters. If the target and ancestors are excluded, report that fact. Enable
 appears only when follow is eligible and off. With no active target, controls
 cannot jump to a fabricated row. Both actions support keyboard use; underlying
 rows/actions must be scrollable clear of the overlay. A distance readout is not
-required. PRESENTATION owns resolution; M1_PLAN owns finite R0 acceptance.
+required. Inventory following leaves highlights, checkbox selection, details and
+Refresh selected untouched. Its active identity stays retained off-window; ARIA
+detaches while the row has no element and restores when it renders again. Focus
+alone does not reveal that row or override Follow. Explicit navigation resumes
+from the retained position; only actual disappearance from the view clears it.
+PRESENTATION owns resolution and passive publication; M1_PLAN owns finite acceptance.
 
 The Plan review renders its current bounded window in the compact file-row grid
 with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
@@ -2092,7 +2100,10 @@ presence is missing, including a domain folder, using the existing node-scoped
 visibility command. Missing descendants do not qualify a present folder. The
 toolbar retains its existing complete-folder actions. Notices offer details only.
 Opening a menu never initiates a command; stale, pending, closing or replaced
-owners cannot dispatch one.
+owners cannot dispatch one. Inventory menu currency follows the nominated row,
+view revision, publication and action/session ownership. Repainting the same
+row after a highlight publication does not by itself dismiss its menu; a changed
+view or lost row still invalidates it.
 Owned row gestures suppress the browser context menu even when their current
 custom menu is stale or empty. The open menu also consumes the Menu key's native
 follow-up context gesture without moving the popup or its focus.

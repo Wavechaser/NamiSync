@@ -177,8 +177,18 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-17)
+#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-18)
 
+- Add RV3 Inventory Follow and Go to current item using the same browser navigation
+  and override mechanics as Plan. Resolve current ordinary integrity items through
+  their frozen scope and visible ancestors. Automatic following requires the
+  canonical unfiltered view; manual override persists, and one-shot Go preserves
+  the view. Passive scrolling retains active row identity and the Refresh target
+  off-window, detaches/restores ARIA with the rendered row, and never chooses a
+  replacement. Bounded server membership evidence distinguishes actual view
+  removal from window absence. Focus alone does not move the viewport; explicit
+  navigation resumes from the retained position. Keep row menus valid through
+  harmless repaint and settle native input stages against committed publications.
 - Share navigation-read admission and foreground freshness between separate Plan
   and Inventory surfaces. Keep exact request cancellation and latest pending
   intent across review replacement; an old viewport retry cannot overtake newer

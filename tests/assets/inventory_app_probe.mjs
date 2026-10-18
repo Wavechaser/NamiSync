@@ -61,6 +61,7 @@ globalThis.inventoryHarness = {
     calls.push(["window", taskId, revision, offset, limit]);
     return delayedWindow?.promise ?? Promise.resolve(windowResponse(revision, offset));
   },
+  getInventoryItemAnchor() { throw new Error("unexpected inventory anchor"); },
   updateInventoryView(taskId, revision, gesture) {
     calls.push(["view", taskId, revision, gesture]);
     if (delayedView !== null) return delayedView.promise;
@@ -1141,4 +1142,91 @@ await app.runInventoryAction(refreshOwner.inventoryReview, "refresh", null, trig
 assert.equal(calls.filter(([name]) => name === "refresh").length, refreshCount + 1);
 assert.equal(globalThis.inventoryConfirmations.length, confirmationCount);
 refuseRefresh = false;
+
+// Ordinary Inventory Follow uses the current session and C's one read job, including pane/loading reentry.
+const followTask = attachReleasedExecutionTask("task-" + "d".repeat(32),
+  "e".repeat(32), "f".repeat(32), "a".repeat(32));
+app.selectTask(followTask.taskId); await tick();
+app.adoptTask({task_id:followTask.taskId, session_id:"b".repeat(32), request_id:"c".repeat(32),
+  plan_request_id:followTask.planRequestId, task_kind:"sync-plan", session_kind:"verify",
+  session_state:"active", session_released:false});
+followTask.inventoryReview = {...currentD1Review, detail:null, pending:null, actionRevision:0,
+  summary:{...fixture.views.maximum.summary, task_id:followTask.taskId, request_id:followTask.requestId},
+  window:fixture.views.maximum.window, follow:null};
+const followAnchors = [], followWindows = [];
+let heldFollowAnchor = defer();
+globalThis.inventoryHarness.getInventoryItemAnchor = (taskId, sessionId, revision, itemId) => {
+  followAnchors.push({taskId, sessionId, revision, itemId});
+  return heldFollowAnchor?.promise ?? Promise.resolve({disposition:"current", view_revision:revision,
+    node_id:real.node_id, index:itemId.endsWith(":1") ? 40 : 300});
+};
+const followWindow = (revision, offset) => ({...fixture.views.maximum.window,
+  view_revision:revision, highlight_revision:followTask.inventoryReview.summary.highlight_revision,
+  offset, rows:fixture.views.maximum.window.rows.slice(0, Math.min(256, fixture.views.maximum.window.total - offset))
+    .map((row, index) => ({...row, visible_index:offset + index}))});
+globalThis.inventoryHarness.getInventoryWindow = (taskId, revision, offset) => {
+  followWindows.push(offset); return Promise.resolve(followWindow(revision, offset));
+};
+const followSnapshot = (itemId, itemType = "integrity") => ({session_id:followTask.sessionId,
+  session_state:"active", control_state:"running", phase:"verify",
+  active_item:itemId === null ? null : {item_id:itemId, item_type:itemType}, presentation:{item_percent:10}});
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
+assert.equal(followAnchors.length, 0, "a hidden Inventory pane launches no Follow read");
+app.switchTaskPane(followTask, "verify");
+assert.equal(followAnchors.length, 1, "pane return resolves the last current active item without another event");
+const oldFollow = heldFollowAnchor;
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
+heldFollowAnchor = null;
+oldFollow.resolve({disposition:"current", view_revision:followTask.inventoryReview.summary.view_revision,
+  node_id:real.node_id, index:40});
+await tick();
+assert.equal(followAnchors.length, 2);
+assert.deepEqual(followAnchors.map(value => value.itemId), ["1:1", "1:2"]);
+assert.ok(followWindows.includes(300));
+assert.equal(followWindows.includes(40), false, "a retired item anchor cannot dispatch its window");
+let followReview = followTask.inventoryReview;
+followReview.follow.scrollOffset = null;
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
+await tick();
+assert.equal(followAnchors.length, 2, "same loaded target progress does not resolve again");
+assert.equal(followReview.follow.scrollOffset, null, "same target progress does not reposition");
+globalThis.inventoryCallbacks.onFollowOverride(followReview, 300, 310);
+assert.equal(followReview.follow.enabled, true);
+globalThis.inventoryCallbacks.onFollowOverride(followReview, 0, 10);
+assert.equal(followReview.follow.enabled, false);
+followReview.summary = {...followReview.summary, sort_column:"filename", view_revision:1};
+const beforeGo = followAnchors.length;
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false); await tick();
+assert.equal(followAnchors.length, beforeGo + 1);
+assert.equal(followReview.summary.sort_column, "filename");
+assert.equal(followReview.follow.enabled, false, "Go in another view does not enable Follow or change sorting");
+followReview.summary = {...followReview.summary, sort_column:"path"};
+app.switchTaskPane(followTask, "plan");
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
+app.switchTaskPane(followTask, "verify"); await tick();
+assert.equal(followAnchors.length, beforeGo + 1, "same-session pane return preserves disabled choice");
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, true); await tick();
+assert.equal(followReview.follow.enabled, true);
+delayedOpen = defer();
+const followReload = app.loadInventoryReview(followTask, true);
+const duringLoad = followAnchors.length;
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
+assert.equal(followAnchors.length, duringLoad, "loading retains current target without reading through the old owner");
+delayedOpen.resolve({...followReview.summary, task_id:followTask.taskId, request_id:followTask.requestId});
+await followReload; delayedOpen = null; await tick();
+followReview = followTask.inventoryReview;
+assert.equal(followAnchors.length, duringLoad + 1, "load completion resolves the latest active item without another event");
+assert.equal(followReview.follow.enabled, true);
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("unmapped-scan", "operation"));
+assert.equal(followReview.follow.hasTarget, false, "non-integrity progress cannot invent an Inventory row");
+heldFollowAnchor = defer();
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
+const closingAnchor = heldFollowAnchor;
+const windowsBeforeRetirement = followWindows.length;
+app.showSettings();
+heldFollowAnchor = null;
+closingAnchor.resolve({disposition:"current", view_revision:followReview.summary.view_revision,
+  node_id:real.node_id, index:40});
+await tick();
+assert.equal(followWindows.length, windowsBeforeRetirement, "retired settings navigation dispatches no Follow window");
 process.stdout.write("ok\n");

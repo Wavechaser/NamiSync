@@ -46,6 +46,49 @@ def _select(view, node_id=None, selected=True, **changes):
     return view.set_selection(**values)
 
 
+def test_row_anchor_resolves_current_ancestor_and_never_changes_the_view():
+    view = _view()
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    node_id = view.projection.node_id_by_row_id["1"]
+    assert view.row_anchor(expected_revision=0, row_id="1")["node_id"] == node_id
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    before = view.summary()
+    assert view.row_anchor(expected_revision=1, row_id="1") == {
+        "disposition": "current", "view_revision": 1, "node_id": folder.node_id, "index": 0}
+    assert view.summary() == before
+    assert view.row_anchor(expected_revision=0, row_id="1")["disposition"] == "conflict"
+    _update(view, search_query="absent")
+    assert view.row_anchor(expected_revision=2, row_id="1")["index"] is None
+    assert view.row_anchor(expected_revision=2, row_id="new-scan-row")["index"] is None
+
+
+def test_window_nominated_node_reports_exact_visibility_without_ancestor_fallback():
+    view = _view()
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    node_id = view.projection.node_id_by_row_id["1"]
+    before = view.summary()
+    full = view.window(expected_revision=0, offset=0, limit=256)
+    index = next(row["visible_index"] for row in full["rows"] if row["node_id"] == node_id)
+    window = view.window(expected_revision=0, offset=0, limit=1, anchor_node_id=node_id)
+    assert window["anchor_node_id"] == node_id
+    assert window["anchor_visible_index"] == index
+    assert node_id not in {row["node_id"] for row in window["rows"]}
+    assert "anchor_node_id" not in full
+    assert view.summary() == before
+    _update(view, sort_column=PlanSortColumn.SIZE, sort_direction=SortDirection.ASCENDING)
+    sorted_window = view.window(expected_revision=1, offset=0, limit=256, anchor_node_id=node_id)
+    assert sorted_window["anchor_visible_index"] == next(
+        row["visible_index"] for row in sorted_window["rows"] if row["node_id"] == node_id)
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    assert view.window(expected_revision=2, offset=0, limit=1, anchor_node_id=node_id)["anchor_visible_index"] is None
+    assert view.row_anchor(expected_revision=2, row_id="1")["node_id"] == folder.node_id
+    assert view.window(expected_revision=0, offset=0, limit=1, anchor_node_id=node_id)["anchor_visible_index"] is None
+    assert view.window(expected_revision=2, offset=0, limit=1,
+                       anchor_node_id="node-" + "f" * 32)["anchor_visible_index"] is None
+    _update(view, search_query="absent")
+    assert view.window(expected_revision=3, offset=0, limit=1, anchor_node_id=node_id)["anchor_visible_index"] is None
+
+
 def test_selection_matching_scope_hidden_counts_and_single_revision():
     view = _view()
     assert view.summary()["selected_file_count"] == 0

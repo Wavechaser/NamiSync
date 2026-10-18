@@ -968,9 +968,10 @@ viewport.dispatch("scroll");
 document.defaultView.flushAnimationFrame();
 assert.equal(
   calls.filter(([name]) => name === "onFollowOverride").length,
-  overrideCount,
-  "a small manual scroll retains follow while the current operation stays visible",
+  overrideCount + 1,
+  "the panel reports manual viewport bounds to the shared Follow decision",
 );
+assert.deepEqual(calls.findLast(([name]) => name === "onFollowOverride").slice(2), [10, 10]);
 
 viewport.scrollTop = ROW_HEIGHT * 300;
 viewport.dispatch("scroll");

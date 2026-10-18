@@ -1064,6 +1064,33 @@ class TaskRegistry:
                 raise TaskUnavailableError("inventory view is unavailable")
         return task, view
 
+    def get_inventory_anchor(self, task_id: str, *, session_id: str,
+                             expected_revision: int, item_id: str) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if self._inventory_views.get(task_id) is not view:
+                raise TaskUnavailableError("inventory view is unavailable")
+            ordinary = task.ordinary_integrity
+            if (task.session_id != session_id or expected_revision != view.view_revision
+                    or ordinary is None or ordinary.session_id != session_id
+                    or ordinary.request_id != task.request_id
+                    or task.session_kind != ordinary.mode
+                    or ordinary.location_id != view.projection.location_id):
+                return {"disposition": "conflict", "view_revision": view.view_revision,
+                        "node_id": None, "index": None}
+            prefix = f"{ordinary.location_id}:"
+            if not item_id.startswith(prefix) or not (row_id := item_id[len(prefix):]):
+                raise ValueError("inventory anchor item is outside the ordinary location")
+            if ordinary.copied_scope is None:
+                if row_id not in ordinary.membership:
+                    raise ValueError("inventory anchor item is outside the selected scope")
+            elif row_id in view.projection.node_id_by_row_id:
+                row = view.projection.row_for_id(row_id)
+                if ordinary.copied_scope.admit(row.rel_path, row_id, ordinary.path_rows, ordinary.row_paths) is None:
+                    raise ValueError("inventory anchor item is outside the copied scope")
+            return view.row_anchor(expected_revision=expected_revision, row_id=row_id)
+
     def update_inventory_view(self, task_id: str, **gesture) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
         with task.condition:
@@ -1343,13 +1370,15 @@ class TaskRegistry:
         finally:
             self._leave_start_response(response)
 
-    def get_inventory_window(self, task_id: str, *, expected_revision: int, offset: int, limit: int) -> dict[str, object]:
+    def get_inventory_window(self, task_id: str, *, expected_revision: int, offset: int, limit: int,
+                             anchor_node_id: str | None = None) -> dict[str, object]:
         task, view = self._require_inventory_view(task_id)
         with task.condition:
             self._require_inventory_read_task_locked(task)
             if self._inventory_views.get(task_id) is not view:
                 raise TaskUnavailableError("inventory view is unavailable")
-            result = view.window(expected_revision=expected_revision, offset=offset, limit=limit)
+            result = view.window(expected_revision=expected_revision, offset=offset, limit=limit,
+                                 anchor_node_id=anchor_node_id)
             if task.ordinary_integrity is not None:
                 result["integrity"] = task.ordinary_integrity.wire(
                     row["row_id"] for row in result["rows"] if row["row_id"] is not None)

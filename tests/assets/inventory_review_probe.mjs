@@ -583,7 +583,7 @@ const assertProjectedWindow = (actual, expected, message) => {
   assert.deepEqual(actual.rows, expected.rows, message);
 };
 globalThis.inventoryViewportPromises = viewportPromises;
-const liveDetails = [], liveRefreshes = [];
+const liveDetails = [], liveRefreshes = [], liveHighlights = [];
 let admitInitial, startInitial, initialStarts = 0;
 globalThis.inventoryViewportHarness = {
   admitLocation: () => new Promise((resolve) => { admitInitial = resolve; }),
@@ -593,12 +593,17 @@ globalThis.inventoryViewportHarness = {
     viewportCalls.push(args);
     const capturedHighlight = liveReview?.highlightReceipt?.highlight_revision
       ?? liveReview?.summary.highlight_revision ?? 0;
-    return (viewportReply?.promise ?? Promise.resolve(args[2] >= 240 ? fixture.tail : liveReview?.window ?? fixture.views.maximum.window))
+    return (viewportReply?.promise ?? Promise.resolve(args[2] >= 240 ? fixture.tail
+      : liveReview?.window?.offset === 0 ? liveReview.window : fixture.views.maximum.window))
       .then(window => {
-        return {...window, highlight_revision:capturedHighlight};
+        const nomination = args[4] === null ? {} : {anchor_node_id:args[4],
+          anchor_visible_index:[...fixture.views.maximum.window.rows, ...fixture.views.middle.window.rows,
+            ...fixture.views.default.window.rows].find(row => row.node_id === args[4])?.visible_index ?? null};
+        return {...window, highlight_revision:capturedHighlight, ...nomination};
       });
   },
   mutateInventoryHighlight: (taskId, view, revision, gesture, nodeId) => {
+    liveHighlights.push([gesture, nodeId]);
     const rows = [...fixture.views.maximum.window.rows, ...fixture.views.middle.window.rows,
       ...fixture.views.default.window.rows];
     const focus = liveReview.summary.highlight_focus_visible_index;
@@ -649,7 +654,7 @@ for (const [key, value] of Object.entries({
   "./execution_confirmation.js": moduleUrl("export const createExecutionConfirmation = () => ({ element: document.createElement('dialog') });"),
   "./rail.js": moduleUrl("export const createTaskRail = () => ({ element: document.createElement('nav'), render() {} });"),
 })) appSource = appSource.replace(key, value);
-appSource += "\nexport { adoptTask, selectTask, panel, startCurrentInventory };";
+appSource += "\nexport { adoptTask, selectTask, panel, startCurrentInventory, loadInventoryReview };";
 const app = await import(moduleUrl(appSource));
 const initialTask = app.adoptTask({task_id: "task-" + "9".repeat(32), session_id: null,
   session_state: null, session_released: false, task_kind: null, request_id: null,
@@ -906,6 +911,59 @@ assert.equal(liveRefreshes[0][0], liveTask.taskId);
 assert.equal(liveRefreshes[0][1], liveTask.requestId);
 assert.equal(liveRefreshes[0][3], liveReview.summary.view_revision);
 assert.equal(liveRefreshes[0][4], liveFile.node_id, "Refresh selected follows the current active row, not the card");
+// Retained active identity is independent of both the card and server highlight focus.
+resetNavigation();
+const retainedLiveRow = liveReview.window.rows[10];
+liveReview.detail = cardSelection;
+const retainedCard = liveReview.detail;
+liveReview.summary = {...liveReview.summary, highlight_focus_node_id:liveReview.window.rows[90].node_id,
+  highlight_focus_visible_index:90};
+ownedContext(liveRow(retainedLiveRow.node_id), "contextmenu", {clientX:200, clientY:200});
+walk(app.panel.element).find(value => value.classList.contains("nami-row-menu")).dispatch("keydown", {key:"Escape"});
+assert.notEqual(retainedCard.row.node_id, retainedLiveRow.node_id);
+liveReview.window = {...fixture.tail, anchor_node_id:retainedLiveRow.node_id, anchor_visible_index:10};
+liveReview.passiveRevealWindow = liveReview.window;
+liveReview.follow = {hasTarget:true, eligible:true, enabled:true, scrollOffset:280};
+app.panel.render(liveTask);
+treeViewport.dispatch("scroll");
+while (frames.length) frames.shift()();
+assert.equal(treeRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(liveReview.activeNodeId, retainedLiveRow.node_id);
+assert.equal(liveReview.detail, retainedCard);
+const beforeRetainedRefresh = liveRefreshes.length;
+liveRefreshSelected.click(); await settle();
+assert.equal(liveRefreshes.length, beforeRetainedRefresh + 1);
+assert.equal(liveRefreshes.at(-1)[4], retainedLiveRow.node_id,
+  "app admission accepts retained off-window active identity independent of the card");
+const beforeRetainedArrow = viewportCalls.length;
+treeRoot.dispatch("keydown", {key:"ArrowDown", shiftKey:true});
+await settle(); await liveReview.highlightQueue;
+assert.deepEqual(liveHighlights.at(-1), ["extend", fixture.views.maximum.window.rows[11].node_id],
+  "first off-window Shift arrow starts from retained active index, not server focus");
+assert.ok(viewportCalls.slice(beforeRetainedArrow).some(args => args[4] === retainedLiveRow.node_id),
+  "app window wrapper nominates retained identity");
+// A same-window passive reveal must use the same retained origin on reentry.
+liveReview.summary = {...liveReview.summary, highlight_focus_node_id:liveReview.window.rows[90].node_id,
+  highlight_focus_visible_index:90};
+liveReview.passiveRevealWindow = liveReview.window;
+liveReview.follow.scrollOffset = 20;
+app.panel.render(liveTask);
+treeRoot.dispatch("keydown", {key:"ArrowDown"});
+await liveReview.highlightQueue;
+assert.deepEqual(liveHighlights.at(-1), ["replace", fixture.views.maximum.window.rows[12].node_id]);
+const beforeReloadReview = liveReview;
+const beforeReloadNode = liveReview.activeNodeId;
+viewportReply = delayedViewport();
+const reloadingReview = app.loadInventoryReview(liveTask, true);
+await settle();
+viewportReply.resolve({...fixture.tail});
+await reloadingReview;
+viewportReply = null;
+liveReview = liveTask.inventoryReview;
+assert.notEqual(liveReview, beforeReloadReview, "explicit reload replaces the review owner");
+assert.equal(liveReview.activeNodeId, beforeReloadNode, "reload retains a node proved visible in its new view");
+assert.equal(treeRoot.getAttribute("aria-activedescendant"), null, "reload may retain an off-window identity without ARIA");
+assert.equal(walk(app.panel.element).find(value => value.dataset.action === "inventory-refresh-selected").disabled, false);
 app.panel.renderSettings();
 const menuCalls = [];
 const menuPane = createInventoryReviewPanel({
@@ -978,6 +1036,31 @@ menuWalk().find((value) => value.dataset.action === "inventory-restore").click()
 assert.deepEqual(menuCalls.at(-1), ["visibility", menuReview, "restore", missingRow.node_id],
   "Restore retains the card item while a different row is active");
 assert.equal(menuWalk().find((value) => value.dataset.action === "inventory-refresh-selected").disabled, false);
+menuPointer(missingRow);
+const overlayRefresh = menuPopup.children.find(value => value.dataset.action === "row-refresh");
+const overlayInvoker = menuRow(missingRow);
+menuReview.window = {...menuReview.window, rows:menuReview.window.rows.map(row => ({...row}))};
+menuPane.render(menuTask);
+assert.equal(menuPopup.hidden, false, "same-node overlay does not close an owned menu");
+assert.notEqual(menuRow(missingRow), overlayInvoker);
+overlayRefresh.click();
+assert.deepEqual(menuCalls.at(-1), ["refresh", menuReview, missingRow.node_id, menuRow(missingRow)],
+  "overlay action uses the current row element");
+for (const [owner, key, replacement] of [[menuReview.summary, "view_revision", 19],
+  [menuReview.summary, "request_id", "f".repeat(32)], [menuReview, "actionRevision", 20],
+  [menuTask, "sessionId", "e".repeat(32)]]) {
+  menuPointer(missingRow);
+  const stale = menuPopup.children[0];
+  const original = owner[key];
+  owner[key] = replacement;
+  menuPane.render(menuTask);
+  assert.equal(menuPopup.hidden, true, `${key} invalidates the menu`);
+  const callCount = menuCalls.length;
+  stale.click();
+  assert.equal(menuCalls.length, callCount);
+  owner[key] = original;
+  menuPane.render(menuTask);
+}
 menuPointer(missingRow);
 const staleAcknowledge = menuPopup.children[2];
 menuReview.pending = "view";
@@ -1172,7 +1255,8 @@ assert.deepEqual(paneChanges.at(-1), [presentationTask, "plan"]);
 presentationPane.dispose();
 
 // A passive selection receipt keeps the live outer viewport and focused checkbox.
-const highlightCalls = [], highlightedSelections = [];
+const highlightCalls = [], highlightedSelections = [], followCalls = [];
+const alignedDetails = [], alignedSelections = [], alignedRefreshes = [];
 const alignedReview = {...fixture.views.maximum, pending:null, message:null, detail:null,
   queuedSearchQuery:null, scrollTop:0};
 const alignedTask = {...task, taskKind:"inventory", requestId:alignedReview.summary.request_id,
@@ -1181,7 +1265,10 @@ const alignedTask = {...task, taskKind:"inventory", requestId:alignedReview.summ
 const alignedPane = createInventoryReviewPanel({
   onHighlight:(...args) => highlightCalls.push(args),
   onHighlightedSelect:(...args) => highlightedSelections.push(args),
-  onDetail() {}, onWindow:async () => fixture.tail,
+  onNavigateCurrent:(...args) => followCalls.push(args),
+  onDetail:(...args) => alignedDetails.push(args), onWindow:async () => fixture.tail,
+  onSelect:(...args) => alignedSelections.push(args),
+  onRefresh:(...args) => alignedRefreshes.push(args),
 });
 alignedPane.render(alignedTask);
 const alignedTree = alignedPane.element.querySelector(".nami-inventory-review__rows");
@@ -1265,5 +1352,107 @@ assert.equal(alignedAction("inventory-refresh").classList.contains("nami-button-
 assert.equal(alignedAction("verify-copied-files").classList.contains("nami-button--primary"), true);
 alignedTask.taskKind = "inventory"; alignedPane.render(alignedTask);
 assert.equal(alignedAction("inventory-refresh").classList.contains("nami-button--primary"), true);
+alignedReview.follow = {hasTarget:true, eligible:true, enabled:false};
+alignedPane.render(alignedTask);
+assert.equal(alignedAction("go-current-item").hidden, false);
+assert.equal(alignedAction("enable-item-follow").hidden, false);
+alignedAction("go-current-item").click();
+alignedAction("enable-item-follow").click();
+assert.deepEqual(followCalls, [[alignedReview, false], [alignedReview, true]]);
+alignedReview.follow.enabled = true;
+alignedPane.render(alignedTask);
+assert.equal(alignedAction("enable-item-follow").hidden, true);
+alignedReview.follow.hasTarget = false;
+alignedPane.render(alignedTask);
+assert.equal(alignedAction("go-current-item").hidden, true);
+
+// The production Inventory panel routes passive publication and reveal through
+// its real tree, including the next programmatic frame and ordinary overlay.
+Object.assign(alignedReview, fixture.views.maximum, {pending:null, scrollTop:0,
+  detail:{row:real, state:"current", response:fixture.detail},
+  follow:{hasTarget:true, eligible:true, enabled:true, scrollOffset:null}});
+alignedPane.render(alignedTask);
+alignedRows()[1].click();
+const passiveActive = alignedTree.getAttribute("aria-activedescendant");
+const passiveNode = alignedRows()[1].dataset.nodeId;
+const passiveCheckbox = alignedAction("inventory-select-location");
+passiveCheckbox.focus();
+const passiveDetail = alignedReview.detail;
+const passiveSummary = alignedReview.summary;
+const passiveCallbacks = [highlightCalls.length, alignedSelections.length, alignedDetails.length];
+const checkPassiveCustody = () => {
+  assert.equal(alignedReview.detail, passiveDetail);
+  assert.equal(alignedReview.summary, passiveSummary);
+  assert.deepEqual([highlightCalls.length, alignedSelections.length, alignedDetails.length], passiveCallbacks);
+  assertSameNode(document.activeElement, passiveCheckbox, "passive reveal retains checkbox focus");
+  assert.equal(passiveCheckbox.checked, passiveSummary.selection === "all");
+};
+const publishPassive = (window, index) => {
+  alignedReview.window = {...window, rows:[...window.rows]};
+  alignedReview.passiveRevealWindow = alignedReview.window;
+  alignedReview.follow.scrollOffset = index;
+  alignedPane.render(alignedTask);
+  alignedViewport.dispatch("scroll");
+  while (frames.length) frames.shift()();
+  assert.equal(alignedReview.follow.scrollOffset, null);
+  assert.equal(alignedReview.passiveRevealWindow, null);
+  checkPassiveCustody();
+};
+publishPassive(fixture.views.maximum.window, 20);
+assert.ok(alignedViewport.scrollTop > 0, "same-page passive target is revealed");
+assert.equal(alignedTree.getAttribute("aria-activedescendant"), passiveActive);
+assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
+alignedAction("inventory-refresh-selected").click();
+assert.equal(alignedRefreshes.at(-1)[1], passiveNode, "Refresh retains the old active target");
+const samePageTop = alignedViewport.scrollTop;
+publishPassive(fixture.tail, 280);
+assert.ok(alignedViewport.scrollTop > samePageTop, "off-window passive target is revealed");
+assert.equal(alignedTree.getAttribute("aria-activedescendant"), null);
+assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
+const passiveRefreshes = alignedRefreshes.length;
+alignedAction("inventory-refresh-selected").click();
+assert.equal(alignedRefreshes.length, passiveRefreshes + 1);
+assert.equal(alignedRefreshes.at(-1)[1], passiveNode, "off-window Refresh keeps its identity target");
+alignedReview.window = {...fixture.tail, rows:[...fixture.tail.rows]};
+alignedPane.render(alignedTask);
+alignedViewport.dispatch("scroll");
+while (frames.length) frames.shift()();
+assert.equal(alignedTree.getAttribute("aria-activedescendant"), null,
+  "ordinary overlay/frame does not attach ARIA to a replacement");
+assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
+checkPassiveCustody();
+// A later ordinary publication may bring the old row back. Programmatic
+// viewport restoration restores the retained identity's ARIA target.
+alignedReview.scrollTop = 0;
+alignedReview.window = {...fixture.views.maximum.window, rows:[...fixture.views.maximum.window.rows]};
+alignedPane.render(alignedTask);
+alignedViewport.dispatch("scroll");
+while (frames.length) frames.shift()();
+assert.ok(alignedRows().some(row => row.dataset.nodeId === passiveNode), "the old row is represented again");
+assert.equal(alignedTree.getAttribute("aria-activedescendant"), passiveActive,
+  "ordinary row return/frame restores retained identity's ARIA");
+assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
+checkPassiveCustody();
+alignedReview.pending = "view";
+alignedPane.render(alignedTask);
+alignedRows()[3].click();
+alignedTree.dispatch("keydown", {key:"Home"});
+assert.equal(alignedReview.activeNodeId, passiveNode, "pending view cannot change a nominated active identity");
+alignedReview.pending = null;
+alignedReview.summary = {...alignedReview.summary, view_revision:alignedReview.summary.view_revision + 1};
+alignedReview.window = {...fixture.tail, anchor_node_id:passiveNode, anchor_visible_index:35};
+alignedReview.scrollTop = 280 * 24;
+alignedPane.render(alignedTask);
+assert.equal(alignedReview.activeNodeId, passiveNode, "new revision's exact off-window anchor retains the row");
+assert.equal(alignedTree.getAttribute("aria-activedescendant"), null, "new anchor window detaches the row");
+assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
+alignedReview.window = {...alignedReview.window, anchor_visible_index:null};
+alignedPane.render(alignedTask);
+assert.equal(alignedReview.activeNodeId, null, "exact disappearance clears identity during publication");
+alignedViewport.dispatch("scroll");
+while (frames.length) frames.shift()();
+assert.equal(alignedReview.activeNodeId, null, "exact disappearance clears identity");
+assert.equal(alignedAction("inventory-refresh-selected").disabled, true);
+assert.equal(alignedTree.getAttribute("aria-activedescendant"), null);
 alignedPane.dispose();
 process.stdout.write("ok\n");

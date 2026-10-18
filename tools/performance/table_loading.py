@@ -58,7 +58,7 @@ def transform_asset(name: str, source: str) -> str:
             ("const BRIDGE_SCHEMA_VERSION = 1;", PROBE.read_text(encoding="utf-8").split("// DRIVER\n")[0] + "\nconst BRIDGE_SCHEMA_VERSION = 1;"),
             ("    attempt.dispatched = true;", "    globalThis.__tableLoading.submit(attempt, request);\n    attempt.dispatched = true;"),
             ("export async function getPlanWindow(taskId, expectedRevision, offset, limit) {", "export async function getPlanWindow(taskId, expectedRevision, offset, limit) {\n  globalThis.__tableLoading.read('plan', offset);"),
-            ("export function getInventoryWindow(taskId, expectedRevision, offset, limit) {", "export function getInventoryWindow(taskId, expectedRevision, offset, limit) {\n  globalThis.__tableLoading.read('inventory', offset);"),
+            ("export function getInventoryWindow(taskId, expectedRevision, offset, limit, anchorNodeId = null) {", "export function getInventoryWindow(taskId, expectedRevision, offset, limit, anchorNodeId = null) {\n  globalThis.__tableLoading.read('inventory', offset);"),
             ("async function acceptNativeResponse(attempt, api, native) {", "async function acceptNativeResponse(attempt, api, native) {\n  globalThis.__tableLoading.native(attempt.requestId);"),
             ("    settleAttemptResponse(attempt, response);", "    settleAttemptResponse(attempt, response);\n    globalThis.__tableLoading.validated(attempt, response);"),
         ),

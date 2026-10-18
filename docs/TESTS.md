@@ -183,6 +183,14 @@ Shell context-menu and execution input stages yield the UI thread while waiting
 up to 15 seconds for foreground, with one native activation attempt, a window
 flash and guidance to leave the test window in front. Recheck the focused/hit target after acquisition;
 expiry records the observed/owned handles and refusal reason and sends no input.
+The Inventory journey settles a preparatory row gesture's committed highlight
+publication before arming the next stage. Trusted-input witnesses attach to a
+stable ancestor and match node/action identity, since accepted window publication
+may replace row elements. Post-gesture settlement uses the actual trusted event
+target, not an earlier checked element. The existing failure hook records the
+pending page-wait label, checked-element connectivity and popup open/close counts;
+parent timeout must not erase which page wait was pending. These diagnostics do
+not relax foreground, focus, hit-target, trusted-input or effect assertions.
 The shell's native context-menu acknowledgement waits allow 30 seconds, covering
 foreground acquisition and dispatch; its ordinary browser-state waits remain
 7.5 seconds. Execution's existing acknowledgement waits already allow 30 seconds.

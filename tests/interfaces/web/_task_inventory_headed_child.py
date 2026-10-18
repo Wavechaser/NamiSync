@@ -24,10 +24,11 @@ from _startup_test_support import headed_command_extension
 _COMMANDS = frozenset({"refresh_inventory", "acknowledge_inventory", "restore_inventory",
                        "set_inventory_selection", "set_inventory_highlighted_selection",
                        "mutate_inventory_highlight", "start_inventory_integrity", "control_integrity"})
+_READ_COMMANDS = frozenset({"get_inventory_anchor"})
 _FILE_BYTES = b"NamiSync native inventory fixture\r\n"
 _RANGE_STAGES = ("range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear")
 _INTEGRITY_STAGES = ("select-folder", "select-location-clear", "select-location", "baseline",
-                     "verify", "pause", "resume", "verify-cancel", "cancel",
+                     "verify", "follow-go", "pause", "resume", "verify-cancel", "cancel",
                      "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm")
 _CONFIRMATION_EXIT_FACT_KEYS = frozenset({
     "closed", "app_active", "theme_active", "scroll_restored", "focus_restored",
@@ -49,6 +50,7 @@ _OWN_FAILURES = frozenset({
     "initial inventory loading witness is invalid",
     "initial inventory scanner did not enter",
     "native integrity runner did not enter before control",
+    "native integrity Follow identity differs",
     "native integrity control witness timed out",
     "native integrity control did not leave held invocation",
     "integrity capture has no task identity",
@@ -103,6 +105,31 @@ def _bounded_integrity_custody_diagnostic(value: object) -> dict[str, object] | 
     return {key: value[key] for key in sorted(value)}
 
 
+def _bounded_follow_custody_diagnostic(value: object) -> dict[str, bool] | None:
+    keys = {"active_retained", "old_active_represented", "active_cleared", "active_allowed",
+            "selection_preserved", "query_preserved", "focus_preserved", "enable_hidden"}
+    if type(value) is not dict or set(value) != keys or any(type(value[key]) is not bool for key in keys):
+        return None
+    return {key: value[key] for key in sorted(keys)}
+
+
+def _bounded_stage_diagnostic(value: object) -> dict[str, object] | None:
+    keys = {"stage", "pending_wait", "listened_control_connected", "popup_open_count", "popup_close_count"}
+    if type(value) is not dict or set(value) != keys:
+        return None
+    for key in ("stage", "pending_wait"):
+        label = value[key]
+        if label is not None and (type(label) is not str or not 1 <= len(label) <= 96
+                or not label.isascii() or any(not (char.isalnum() or char == "-") for char in label)):
+            return None
+    if value["listened_control_connected"] is not None and type(value["listened_control_connected"]) is not bool:
+        return None
+    if any(type(value[key]) is not int or not 0 <= value[key] <= 65535
+           for key in ("popup_open_count", "popup_close_count")):
+        return None
+    return {key: value[key] for key in sorted(keys)}
+
+
 class _InventoryPhase:
     def __init__(self, source: Path) -> None:
         self.source = source
@@ -118,6 +145,7 @@ class _InventoryPhase:
         self.verify_release = threading.Event()
         self.verify_gate_pending = False
         self.verify_runner_calls = 0
+        self.verify_items: list[dict[str, str]] = []
         self.verify_control_entries: list[str] = []
         self.integrity_results: list[dict[str, object]] = []
 
@@ -141,17 +169,35 @@ class _InventoryPhase:
         original_verify = runtime._integrity_deps.runners[IntegrityMode.VERIFY]
 
         def gated_verify(selection: object, context: object, recorder: object) -> object:
+            from namisync.core.events import Progress
             with self.lock:
                 self.verify_runner_calls += 1
                 held = self.verify_gate_pending
                 self.verify_gate_pending = False
-                self.verify_runner_entered.set()
-            if held:
+                before_runner = held and self.verify_runner_calls > 1
+                if before_runner:
+                    self.verify_runner_entered.set()
+            # Only the first Verify needs a real item for Follow. The later
+            # cancel witness retains its original zero-outcome pre-run edge.
+            if before_runner:
                 if not self.verify_release.wait(60):
                     raise RuntimeError("native integrity control witness timed out")
                 context.run.checkpoint()
                 raise RuntimeError("native integrity control did not leave held invocation")
-            return original_verify(selection, context, recorder)
+            def observe(body: object) -> None:
+                nonlocal held
+                context.run.emit(body)
+                if held and type(body) is Progress and body.item_type == "integrity" and body.item_id is not None:
+                    held = False
+                    with self.lock:
+                        self.verify_items.append({"item_id": body.item_id, "item_type": body.item_type})
+                        self.verify_runner_entered.set()
+                    if not self.verify_release.wait(60):
+                        raise RuntimeError("native integrity control witness timed out")
+                    context.run.checkpoint()
+                    raise RuntimeError("native integrity control did not leave held invocation")
+            observed = replace(context, run=replace(context.run, emit=observe), progress_interval_seconds=0)
+            return original_verify(selection, observed, recorder)
 
         runtime._integrity_deps.runners[IntegrityMode.VERIFY] = gated_verify
 
@@ -197,6 +243,7 @@ class _InventoryPhase:
         last = projection.nodes[projection.position_by_path_key[normalize_relative_path(r"folder\zz.txt")]]
         fixture = {"folder_node_id": folder.node_id, "missing_node_id": missing.node_id,
                    "first_node_id": first.node_id, "last_node_id": last.node_id,
+                   "first_item_id": f"{first.row.location_id}:{first.row.row_id}",
                    "folder_display": folder.display, "missing_display": missing.display,
                    "folder_path": str(self.source / "folder"), "missing_path": missing.rel_path,
                    "domain_count": projection.nodes[0].rollup.domain_count}
@@ -214,7 +261,7 @@ class _InventoryPhase:
         from namisync.interfaces.web.commands import CommandSpec
 
         wrapped = dict(commands)
-        for name in _COMMANDS:
+        for name in _COMMANDS | _READ_COMMANDS:
             spec = wrapped[name]
             if type(spec) is not CommandSpec:
                 raise TypeError("inventory command is not an exact CommandSpec")
@@ -257,6 +304,9 @@ class _InventoryPhase:
                                        "session_id": result.session_id, "next_request_id": result.request_id})
                     elif name == "control_integrity":
                         record.update({"session_id": payload.session_id, "action": payload.action})
+                    elif name == "get_inventory_anchor":
+                        record.update({"session_id": payload.session_id, "item_id": payload.item_id,
+                                       "expected_revision": payload.expected_revision})
                     if name == "refresh_inventory":
                         record.update({"request_id": result.request_id, "session_id": result.session_id,
                                        "prior_request_id": payload.request_id})
@@ -332,6 +382,7 @@ class _InventoryPhase:
             "initial_scan_released": self.initial_scan_release.is_set(),
             "verify_runner_entered": self.verify_runner_entered.is_set(),
             "verify_runner_calls": self.verify_runner_calls,
+            "verify_items": list(self.verify_items),
             "verify_control_entries": verify_control_entries,
         }
 
@@ -382,6 +433,15 @@ class _InventoryPhase:
             raise RuntimeError("native integrity command identity or control differs")
         starts = matching("start_inventory_integrity", 4)
         controls = matching("control_integrity", 3)
+        anchors = matching("get_inventory_anchor", 1)
+        anchor = anchors[0]
+        if (anchor["session_id"] != starts[1]["session_id"]
+                or anchor["item_id"] != fixture["first_item_id"]
+                or anchor["result"]["disposition"] != "current"
+                or anchor["result"]["node_id"] != fixture["first_node_id"]
+                or not self.verify_items or self.verify_items[0] != {
+                    "item_id": fixture["first_item_id"], "item_type": "integrity"}):
+            raise RuntimeError("native integrity Follow identity differs")
         if (view["scan_scope"] != {"kind": "selection", "path": None}
                 or view["scan_request_id"] != starts[-1]["next_request_id"]):
             raise RuntimeError("inventory publication was not replaced")
@@ -435,6 +495,7 @@ class _InventoryPhase:
                                 "acknowledged": view["rollup"]["acknowledged"]},
                 "integrity_results": self.integrity_results,
                 "integrity_commands": {"selections": selections, "starts": starts, "controls": controls,
+                                       "anchors": anchors, "actual_items": list(self.verify_items),
                                        "highlighted_selections": highlighted,
                                        "runner_entry_controls": verify_control_entries}}
 
@@ -486,9 +547,13 @@ class _Recorder:
 _PAGE = r"""
 (async () => {
   const until = async (fn, label, attempts = 1200) => {
+    window.__inventoryWaiting = label;
     for (let i = 0; i < attempts; i += 1) {
       const value = await fn();
-      if (value) return value;
+      if (value) {
+        window.__inventoryWaiting = null;
+        return value;
+      }
       await new Promise(resolve => setTimeout(resolve, 25));
     }
     throw new Error(label);
@@ -563,7 +628,7 @@ _PAGE = r"""
   };
   const rangeStages = ['range-anchor', 'range-toggle', 'range-end', 'range-checkbox', 'range-clear'];
   const integrityStages = ['select-folder', 'select-location-clear', 'select-location', 'baseline',
-    'verify', 'pause', 'resume', 'verify-cancel', 'cancel',
+    'verify', 'follow-go', 'pause', 'resume', 'verify-cancel', 'cancel',
     'rebaseline-cancel-open', 'rebaseline-cancel', 'rebaseline-open', 'rebaseline-confirm'];
   const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-refresh', ...rangeStages, ...integrityStages].map(name => [name, false]));
   const keyboardInput = [];
@@ -571,6 +636,18 @@ _PAGE = r"""
     await until(() => document.hasFocus(), 'document-focus');
     const keyboardMenu = name === 'context-keyboard' || name === 'context-menu';
     const popup = review.querySelector('.nami-row-menu');
+    window.__inventoryPopupObserver?.disconnect();
+    let popupOpenCount = 0, popupCloseCount = 0;
+    const popupObserver = new MutationObserver(records => {
+      for (let index = 0; index < records.length; index += 1) {
+        const wasHidden = records[index].oldValue !== null;
+        const nowHidden = index + 1 < records.length ? records[index + 1].oldValue !== null : popup.hidden;
+        if (wasHidden && !nowHidden) popupOpenCount = Math.min(65535, popupOpenCount + 1);
+        if (!wasHidden && nowHidden) popupCloseCount = Math.min(65535, popupCloseCount + 1);
+      }
+    });
+    popupObserver.observe(popup, {attributes:true, attributeFilter:['hidden'], attributeOldValue:true});
+    window.__inventoryPopupObserver = popupObserver;
     const events = [];
     let opened = null;
     const observe = event => {
@@ -587,8 +664,10 @@ _PAGE = r"""
       };
     }
     let listenedControl = null;
-    window.__inventoryNativeCheck = async () => {
-      const selector = name === 'select-folder' ? `.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id="${window.__inventoryFixture.folder_node_id}"] input[data-action="inventory-select-row"]`
+    window.__inventoryStageFacts = () => ({stage:name, pending_wait:window.__inventoryWaiting ?? null,
+      listened_control_connected:listenedControl?.isConnected ?? null,
+      popup_open_count:popupOpenCount, popup_close_count:popupCloseCount});
+    const selector = name === 'select-folder' ? `.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id="${window.__inventoryFixture.folder_node_id}"] input[data-action="inventory-select-row"]`
         : name === 'range-anchor' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.first_node_id}"]`
         : name === 'range-toggle' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.missing_node_id}"]`
         : name === 'range-end' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.last_node_id}"]`
@@ -598,6 +677,7 @@ _PAGE = r"""
         : name === 'rebaseline-cancel' ? '#rebaseline-confirmation [data-cancel-execution]'
         : name === 'rebaseline-open' || name === 'rebaseline-cancel-open' ? '[data-action="inventory-rebaseline"]'
         : name === 'verify-cancel' ? '[data-action="inventory-verify"]'
+        : name === 'follow-go' ? '[data-action="go-current-item"]'
         : name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
         : name === 'filter-present' || name === 'filter-escape' ? '.nami-filter-menu__popup [data-filter="present"]'
         : name === 'filter-all' ? '.nami-filter-menu__popup [data-filter="all"]'
@@ -611,6 +691,20 @@ _PAGE = r"""
         : name === 'context-acknowledge' ? '.nami-row-menu [data-action="row-acknowledge"]'
         : name === 'context-restore' ? '[data-action="inventory-restore"]'
         : `[data-action="inventory-${name}"]`;
+    const gesture = name === 'context-open' ? 'contextmenu'
+      : ['filter-escape', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'selected-arrow-first', 'selected-arrow-second'].includes(name) ? 'keydown' : 'click';
+    let activatedControl = null;
+    // Window publications replace row elements; input custody follows their identity.
+    const trustedInput = event => {
+      const control = event.target instanceof Element ? event.target.closest(selector) : null;
+      if (event.isTrusted && control !== null
+          && (!name.startsWith('selected-arrow-') || event.key === 'ArrowDown')) {
+        nativeClicks[name] = true;
+        activatedControl ??= control;
+      }
+    };
+    document.addEventListener(gesture, trustedInput, true);
+    window.__inventoryNativeCheck = async () => {
       const control = document.querySelector(selector);
       if (control === null) return {point:null, facts:{connected:false}};
       if (name === 'rebaseline-open' || name === 'rebaseline-cancel-open') {
@@ -619,7 +713,7 @@ _PAGE = r"""
       const focusTarget = name === 'context-open' || name === 'selected-activate'
         || ['range-anchor', 'range-toggle', 'range-end'].includes(name)
         ? review.querySelector('.nami-inventory-review__rows') : control;
-      focusTarget.focus();
+      focusTarget.focus({preventScroll:true});
       await new Promise(resolve => requestAnimationFrame(resolve));
       const hitTarget = control === review.querySelector('.nami-inventory-review__rows')
         ? document.getElementById(control.getAttribute('aria-activedescendant')) : control;
@@ -630,20 +724,13 @@ _PAGE = r"""
       const facts = {document_focused:document.hasFocus(), connected:control.isConnected,
         enabled:!control.disabled, visible:!control.hidden, active:document.activeElement === focusTarget,
         hit_owned:control.contains(hit) || hit === control, sized:rect.width > 0 && rect.height > 0};
-      if (listenedControl !== control) {
-        const gesture = name === 'context-open' ? 'contextmenu'
-          : ['filter-escape', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'selected-arrow-first', 'selected-arrow-second'].includes(name) ? 'keydown' : 'click';
-        control.addEventListener(gesture, event => {
-          nativeClicks[name] ||= event.isTrusted
-            && (!name.startsWith('selected-arrow-') || event.key === 'ArrowDown');
-        }, {once:true});
-        listenedControl = control;
-      }
+      listenedControl = control;
       return {point, facts};
     };
     window.__inventoryNativeStage = `${name}-ready`;
     await until(() => window.__inventoryNativeAck === name, `native-${name}`, name === 'refresh' ? 2800 : 1200);
     await until(() => nativeClicks[name], `trusted-${name}`);
+    document.removeEventListener(gesture, trustedInput, true);
     if (keyboardMenu) {
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       for (const type of ['keydown', 'keyup', 'contextmenu']) document.removeEventListener(type, observe, true);
@@ -652,6 +739,7 @@ _PAGE = r"""
         stable_focus:opened?.item === document.activeElement,
         stable_position:opened?.rectangle[0] === rect.left && opened?.rectangle[1] === rect.top});
     }
+    return activatedControl;
   }
   await stage('refresh');
   const filterTrigger = review.querySelector('[data-action="filter-menu"]');
@@ -724,8 +812,13 @@ _PAGE = r"""
     && review.textContent.includes('Displayed scan: Entire location')
     && review.textContent.includes('notices from this scan'), 'refreshed-missing');
   const folder = () => row(fixture.folder_node_id);
-  const folderRow = await until(folder, 'folder-row');
-  folderRow.click();
+  const activateFolder = async label => {
+    const previous = await until(folder, 'folder-row');
+    previous.click();
+    // A repeated click may already look highlighted before its window re-read lands.
+    await until(() => !previous.isConnected && folder()?.dataset.highlighted === 'true', label);
+  };
+  await activateFolder('details-folder-settled');
   await stage('details');
   await until(() => {
     const control = review.querySelector('[data-action="inventory-acknowledge"]');
@@ -734,8 +827,7 @@ _PAGE = r"""
   await stage('acknowledge');
   await until(() => !missing() && folder()
     && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'acknowledged-hidden');
-  const nextFolder = await until(folder, 'folder-after-acknowledge');
-  nextFolder.click();
+  await activateFolder('restore-folder-settled');
   await stage('restore-details');
   await until(() => {
     const control = review.querySelector('[data-action="inventory-restore"]');
@@ -744,7 +836,7 @@ _PAGE = r"""
   await stage('restore');
   await until(() => missing()?.querySelector('[data-integrity="missing"]')
     && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'restored-visible');
-  folder().click();
+  await activateFolder('context-folder-settled');
   const itemHeading = () => review.querySelector('.nami-plan-review__detail h2');
   await until(() => itemHeading()?.textContent === fixture.folder_display, 'context-other-details');
   await stage('context-open');
@@ -770,7 +862,7 @@ _PAGE = r"""
   const ownMissingActions = [...contextPopup.children].map(item => item.textContent).join('|') === 'Show details|Refresh selected|Acknowledge missing';
   await stage('context-acknowledge');
   await until(() => !missing() && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'context-acknowledged-hidden');
-  folder().click();
+  await activateFolder('context-restore-folder-settled');
   await stage('context-restore-details');
   await until(() => !review.querySelector('[data-action="inventory-restore"]').disabled, 'context-restore-ready');
   await stage('context-restore');
@@ -789,14 +881,14 @@ _PAGE = r"""
     track_height:track.getBoundingClientRect().height,
     animation:getComputedStyle(track.firstElementChild).animationName,
     value:track.firstElementChild.style.getPropertyValue('--nami-progress-value')};
-  await stage('selected-activate');
+  const selectedFolderRow = await stage('selected-activate');
   const itemCard = review.querySelector('.nami-inventory-review__detail');
   await until(() => itemHeading()?.textContent === fixture.folder_display
     && itemCard.textContent.includes(fixture.folder_path), 'selected-folder-detail');
   const diagnostics = review.querySelector('.nami-inventory-review__diagnostics');
   if (!diagnostics.hidden) throw new Error('selected Details must remain hidden');
   const cardText = itemCard.textContent;
-  await until(() => folder()?.dataset.highlighted === 'true', 'selected-folder-highlight');
+  await until(() => !selectedFolderRow.isConnected && folder()?.dataset.highlighted === 'true', 'selected-folder-highlight');
   await stage('selected-arrow-first');
   await until(() => review.querySelector(`.nami-inventory-review__rows [data-node-id="${fixture.first_node_id}"]`)?.dataset.highlighted === 'true', 'selected-first-highlight');
   await stage('selected-arrow-second');
@@ -892,6 +984,32 @@ _PAGE = r"""
   const baselineResult = baselinePresentation.text;
   await stage('verify');
   await until(() => !review.querySelector('[data-action="inventory-pause"]').disabled, 'verify-active');
+  const go = await until(() => {
+    const value = review.querySelector('[data-action="go-current-item"]');
+    return value && !value.hidden && !value.disabled ? value : null;
+  }, 'ordinary-active-item');
+  const followBefore = {selection:selectionText(),
+    activeNode:document.getElementById(tree.getAttribute('aria-activedescendant'))?.dataset.nodeId ?? null,
+    query:search.value};
+  await stage('follow-go');
+  // This filtered target is already visible: the installed witness proves
+  // trusted Go input and the real worker item/anchor identity. The app/tree
+  // probes own preservation after asynchronous window publication.
+  const activeAfter = tree.getAttribute('aria-activedescendant');
+  const activeRetained = followBefore.activeNode !== null
+    && document.getElementById(activeAfter)?.dataset.nodeId === followBefore.activeNode;
+  const oldActiveRepresented = followBefore.activeNode !== null
+    && [...tree.querySelectorAll('[data-node-id]')].some(row => row.dataset.nodeId === followBefore.activeNode);
+  const followCustody = {active_retained:activeRetained, old_active_represented:oldActiveRepresented,
+    active_cleared:activeAfter === null,
+    active_allowed:followBefore.activeNode !== null && (oldActiveRepresented ? activeRetained : activeAfter === null),
+    selection_preserved:selectionText() === followBefore.selection,
+    query_preserved:search.value === followBefore.query, focus_preserved:document.activeElement === go,
+    enable_hidden:review.querySelector('[data-action="enable-item-follow"]').hidden};
+  window.__inventoryFollowCustodyFailure = followCustody;
+  const followClickCustody = followCustody.active_allowed && followCustody.selection_preserved
+    && followCustody.query_preserved && followCustody.focus_preserved && followCustody.enable_hidden;
+  if (!followClickCustody) throw new Error('native integrity Follow identity differs');
   await stage('pause');
   await until(() => !review.querySelector('[data-action="inventory-resume"]').disabled, 'verify-paused');
   await stage('resume');
@@ -946,6 +1064,7 @@ _PAGE = r"""
   const scanText = review.querySelector('.nami-inventory-review__status-line').textContent;
   const scanSelected = scanText.includes('Displayed scan: Selected items');
   const integrityJourney = {checkbox_custody:checkboxCustody, range_custody:rangeCustody,
+    follow_click_custody:followClickCustody,
     range_scroll:rangeScroll, hidden_selection:hiddenSelection,
     confirmation_text:confirmationText, cancel_preserved_result:cancelPreservedResult,
     baseline_result:baselineResult, verify_result:verifyResult, canceled_result:canceledResult,
@@ -996,7 +1115,8 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                            "assertion": _owned_failure(error),
                            "click_target": click_target,
                            "owned_handle": owned_handle, "observed_handle": observed_handle,
-                           "confirmation_exit": None, "integrity_custody": None})
+                           "confirmation_exit": None, "integrity_custody": None, "follow_custody": None,
+                           "stage_facts": None})
 
         def publish(value: object = None) -> None:
             if type(value) is dict:
@@ -1004,6 +1124,9 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                     value.get("confirmation_exit"))
                 diagnostic["integrity_custody"] = _bounded_integrity_custody_diagnostic(
                     value.get("integrity_custody"))
+                diagnostic["follow_custody"] = _bounded_follow_custody_diagnostic(
+                    value.get("follow_custody"))
+                diagnostic["stage_facts"] = _bounded_stage_diagnostic(value.get("stage_facts"))
             screenshot.with_name("inventory-failure-site.json").write_text(
                 json.dumps(diagnostic, sort_keys=True), encoding="utf-8",
             )
@@ -1013,6 +1136,10 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
           confirmation_exit:{last_close:window.__inventoryConfirmationLastClose ?? null,
             timeout:window.__inventoryConfirmationTimeout ?? null},
           integrity_custody:window.__inventoryCustodyFailure ?? null,
+          follow_custody:window.__inventoryFollowCustodyFailure ?? null,
+          stage_facts:window.__inventoryStageFacts?.() ?? {stage:null,
+            pending_wait:window.__inventoryWaiting ?? null, listened_control_connected:null,
+            popup_open_count:0, popup_close_count:0},
         })"""
         try:
             diagnostic_task = core.CallDevToolsProtocolMethodAsync(
@@ -1072,7 +1199,23 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                     raise RuntimeError("native inventory window is not foreground")
                 foreground_owned[name] = True
                 def released(_value: object) -> None:
-                    cdp.evaluate(f"window.__inventoryNativeAck='{name}';true", lambda _ack: next_stage(index + 1), f"ack-{name}")
+                    def acknowledge() -> None:
+                        cdp.evaluate(f"window.__inventoryNativeAck='{name}';true", lambda _ack: next_stage(index + 1), f"ack-{name}")
+                    if name != "follow-go":
+                        acknowledge()
+                        return
+                    anchor_deadline = monotonic() + 10
+                    def wait_anchor() -> None:
+                        with phase.lock:
+                            observed = any(item["command"] == "get_inventory_anchor" for item in phase.commands)
+                        if observed:
+                            acknowledge()
+                        elif monotonic() < anchor_deadline:
+                            cdp.evaluate("new Promise(resolve => setTimeout(() => resolve(true), 100))",
+                                         lambda _ready: wait_anchor(), "wait-follow-anchor")
+                        else:
+                            raise RuntimeError("native integrity Follow identity differs")
+                    wait_anchor()
                 if name in {"filter-escape", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "selected-arrow-first", "selected-arrow-second"}:
                     keyboard_menu = name == "context-keyboard"
                     key, virtual_key = (("ArrowDown", 40) if name.startswith("selected-arrow-")

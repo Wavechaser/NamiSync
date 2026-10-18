@@ -140,6 +140,17 @@ export function createInventoryReviewPanel(callbacks) {
   summary.append(statusActions, statusMeta, selectionSummary, statusLine, integrityResult, recoveryActions, progress);
 
   const table = element("div", "nami-card nami-plan-review__table-card nami-inventory-review__table");
+  const floatingControls = element("div", "nami-plan-review__floating-controls");
+  const goCurrent = button("Go to current item", "go-current-item");
+  const enableFollow = button("Turn on autoscroll", "enable-item-follow");
+  enableFollow.classList.add("nami-button--primary");
+  floatingControls.append(goCurrent, enableFollow);
+  goCurrent.addEventListener("click", () => {
+    if (current !== null && !goCurrent.disabled) callbacks.onNavigateCurrent?.(current, false);
+  });
+  enableFollow.addEventListener("click", () => {
+    if (current !== null && !enableFollow.disabled) callbacks.onNavigateCurrent?.(current, true);
+  });
   const toolbar = element("div", "nami-plan-review__toolbar");
   const filters = element("div", "nami-plan-review__filters");
   filters.ariaLabel = "Inventory filters";
@@ -223,7 +234,7 @@ export function createInventoryReviewPanel(callbacks) {
   list.append(grid);
   const columns = createTableColumns(grid, [...columnHeader.children], columnNames, [2, 12, 8, 7, 5, 7, 14], 1, 6);
   const empty = element("p", "nami-shell__guidance", "No items match this view.");
-  table.append(toolbar, list, empty);
+  table.append(toolbar, list, empty, floatingControls);
 
   const detail = element("section", "nami-card nami-plan-review__detail nami-inventory-review__detail");
   detail.tabIndex = 0;
@@ -260,6 +271,7 @@ export function createInventoryReviewPanel(callbacks) {
   let tree = null;
   let committedWindow = null;
   let activeNodeId = null;
+  let activeRefreshTarget = null;
   let rowOrdinaryItems = new Map();
   let rowOrdinaryMode = null;
   const selectionControls = new Map();
@@ -285,7 +297,11 @@ export function createInventoryReviewPanel(callbacks) {
       || current?.summary.request_id !== task?.requestId || task?.inventoryViewUnconfirmed;
   }
   function activeRow() {
-    return current?.window.rows.find((row) => row.node_id === activeNodeId) ?? null;
+    return current?.window.rows.find((row) => row.node_id === activeNodeId) ?? activeRefreshTarget;
+  }
+  function refreshTarget(row) {
+    return {node_id:row.node_id, warning:row.warning === null ? null : true,
+      viewRevision:current.summary.view_revision, publication:current.summary.request_id};
   }
   function updateRefreshSelected() {
     const row = activeRow();
@@ -467,12 +483,25 @@ export function createInventoryReviewPanel(callbacks) {
   function ensureTree() {
     if (tree !== null) return;
     tree = createTree(rows, {
+      initialActive: activeNodeId === null ? null : {
+        nodeId:activeNodeId, visibleIndex:current.window.anchor_visible_index,
+      },
+      interactionAllowed: () => !blocked(),
+      manualScroll: (first, last) => {
+        if (current !== null) callbacks.onFollowOverride?.(current, first, last);
+      },
       decorateRow,
       requestCancelled: (generation) => {
         if (current !== null) callbacks.onWindowCancelled?.(current, generation);
       },
       activeChanged: (nodeId) => {
         activeNodeId = nodeId;
+        const row = current?.window.rows.find(value => value.node_id === nodeId);
+        activeRefreshTarget = row === undefined ? null : refreshTarget(row);
+        if (current !== null) {
+          current.activeNodeId = nodeId;
+          current.activeRefreshTarget = activeRefreshTarget;
+        }
         updateRefreshSelected();
       },
       context: (nodeId, event, rowElement) => {
@@ -488,10 +517,10 @@ export function createInventoryReviewPanel(callbacks) {
         const publication = review.summary.request_id;
         const sessionId = owner.sessionId;
         const isCurrent = () => current === review && task === owner
-          && review.window === window && review.actionRevision === actionRevision
+          && review.activeNodeId === nodeId && review.actionRevision === actionRevision
           && review.summary.view_revision === viewRevision && review.summary.request_id === publication
           && owner.sessionId === sessionId
-          && !blocked() && owner.closeRecovery == null && rows.contains(rowElement);
+          && !blocked() && owner.closeRecovery == null;
         const actionBlocked = !owner.sessionReleased || owner.sessionState === "active";
         const actions = [{ id: "row-details", label: "Show details", run: () => {
           detailsExpanded = true;
@@ -505,7 +534,8 @@ export function createInventoryReviewPanel(callbacks) {
         }
         if (row.warning === null && !actionBlocked) {
           actions.push({ id: "row-refresh", label: "Refresh selected",
-            run: () => callbacks.onRefresh(review, nodeId, rowElement) });
+            run: () => callbacks.onRefresh(review, nodeId,
+              [...rows.children].find(value => value.dataset.nodeId === nodeId) ?? refreshSelected) });
           if (row.presence === "missing" && !row.acknowledged
               && review.summary.request_id === owner.requestId && !owner.inventoryViewUnconfirmed) {
             actions.push({ id: "row-acknowledge", label: "Acknowledge missing",
@@ -550,11 +580,23 @@ export function createInventoryReviewPanel(callbacks) {
     }, 24, list, 24);
   }
 
-  function commitTreeWindow(controller, generation, window, preferredNodeId = null, reveal = true) {
+  function commitTreeWindow(controller, generation, window, preferredNodeId = null, reveal = true, passive = false) {
     const ordinary = matchingIntegrity(window.integrity);
     rowOrdinaryItems = new Map((ordinary?.items ?? []).map((item) => [item.row_id, item]));
     rowOrdinaryMode = ordinary?.mode ?? null;
-    return controller.commitWindow(generation, window, preferredNodeId, reveal);
+    const accepted = passive ? controller.commitPassiveWindow(generation, window)
+      : controller.commitWindow(generation, window, preferredNodeId, reveal);
+    if (accepted) {
+      const row = window.rows.find(value => value.node_id === activeNodeId);
+      if (row !== undefined) activeRefreshTarget = refreshTarget(row);
+      else if (activeRefreshTarget !== null && window.anchor_node_id === activeNodeId
+          && window.anchor_visible_index !== null) {
+        activeRefreshTarget = {...activeRefreshTarget,
+          viewRevision:current.summary.view_revision, publication:current.summary.request_id};
+      }
+      if (current !== null) current.activeRefreshTarget = activeRefreshTarget;
+    }
+    return accepted;
   }
 
   function appendDetail(key, value, filesystem = false) {
@@ -656,6 +698,7 @@ export function createInventoryReviewPanel(callbacks) {
     tree = null;
     committedWindow = null;
     activeNodeId = null;
+    activeRefreshTarget = null;
     rowOrdinaryItems.clear();
     selectionControls.clear();
     current = null;
@@ -670,11 +713,22 @@ export function createInventoryReviewPanel(callbacks) {
     task = value;
     const first = current !== review;
     current = review;
+    if (tree === null && review?.activeNodeId === review?.window.anchor_node_id
+        && Number.isSafeInteger(review?.window.anchor_visible_index)) {
+      activeNodeId = review.activeNodeId;
+      activeRefreshTarget = review.activeRefreshTarget;
+    }
     resizeObserver.observe(list);
     if (focusInDetails && !detailsExpanded) title.focus();
     detailsToggle.hidden = review === null;
     diagnostics.hidden = review === null || !detailsExpanded;
     const available = review !== null;
+    const follow = review?.follow;
+    goCurrent.hidden = !available || follow?.hasTarget !== true;
+    enableFollow.hidden = goCurrent.hidden || follow?.eligible !== true || follow?.enabled === true;
+    goCurrent.disabled = Boolean(blocked());
+    enableFollow.disabled = goCurrent.disabled;
+    floatingControls.hidden = goCurrent.hidden && enableFollow.hidden;
     const syncTask = value.taskKind === "sync-plan" && value.executionStarted;
     const executionFact = value.originalExecutionFact;
     const copiedScopeEmpty = executionFact?.planRequestId === value.planRequestId
@@ -850,13 +904,19 @@ export function createInventoryReviewPanel(callbacks) {
       list.scrollTop = scrollTop;
       const generation = tree.beginWindowRequest();
       commitTreeWindow(tree, generation, review.window,
-        keyboard ? review.summary.highlight_focus_node_id : null, keyboard);
+        keyboard ? review.summary.highlight_focus_node_id : null, keyboard,
+        review.passiveRevealWindow === review.window);
+      review.passiveRevealWindow = null;
       committedWindow = review.window;
       if (!keyboard) list.scrollTop = scrollTop;
       if (focusedCheckbox !== undefined && review.pending !== "selection") {
         selectionControls.get(focusedCheckbox)?.focus?.({preventScroll: true});
       }
       review.keyboardRevealWindow = null;
+    }
+    if (Number.isSafeInteger(follow?.scrollOffset)) {
+      tree.revealPassiveRow(follow.scrollOffset);
+      follow.scrollOffset = null;
     }
     updateRefreshSelected();
     updateSelectionControls();

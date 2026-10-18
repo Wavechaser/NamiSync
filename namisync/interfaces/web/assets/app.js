@@ -10,6 +10,7 @@ import {
   echoReadiness,
   getExecutionDetail,
   getInventoryDetail,
+  getInventoryItemAnchor,
   getInventoryWindow,
   getPlanAnchor,
   getPlanDetail,
@@ -255,7 +256,7 @@ const panel = createWorkPanel({
   onRetryOutcome: (review) => { void retryReviewOutcome(review); },
   onPlanAgain: (review) => { void planAgainFromReview(review); },
   onExecutionDetail: (review, row) => { void readExecutionDetail(review, row); },
-  onFollowOverride: disablePlanFollow,
+  onFollowOverride: disableReviewFollow,
   onNavigateCurrent: (review, enableFollow) => { queuePlanFollow(review, enableFollow, true); },
   onRevealMove: (review, nodeId) => { void revealPlanMoveDestination(review, nodeId); },
   onPaneChange: switchTaskPane,
@@ -276,6 +277,8 @@ const panel = createWorkPanel({
   onStart: (review, mode, returnFocus) => { void startInventoryIntegrityAction(review, mode, returnFocus); },
   onCopiedStart: (review) => { void startInventoryIntegrityAction(review, "verify", null, "copied"); },
   onControl: (review, action) => { void controlInventoryIntegrity(review, action); },
+  onFollowOverride: disableReviewFollow,
+  onNavigateCurrent: (review, enableFollow) => { queueReviewFollow(review, INVENTORY_FOLLOW, enableFollow, true); },
   onCheckOutcome: (task) => { void checkInventoryOutcome(task); },
   onPaneChange: switchTaskPane,
 });
@@ -434,9 +437,11 @@ function switchTaskPane(task, paneName) {
     task.workPane = "verify";
     renderTasks();
     void loadInventoryReview(task);
+    followInventory(task);
     return;
   }
   if (task.inventoryReview !== null) {
+    interruptPlanHighlight(task.inventoryReview);
     cancelInventoryWindow(task.inventoryReview);
     if (task.inventoryReview.detail?.state === "loading") retireInventoryDetail(task.inventoryReview);
   }
@@ -454,6 +459,7 @@ function showSettings() {
     retirePlanDetail(task.review);
   }
   if (task?.inventoryReview != null) {
+    interruptPlanHighlight(task.inventoryReview);
     cancelInventoryWindow(task.inventoryReview);
     retireInventoryDetail(task.inventoryReview);
   }
@@ -462,15 +468,17 @@ function showSettings() {
   renderTasks();
 }
 
-function planFollowEligible(review) {
+function followEligible(review) {
   return review.summary.search_query === ""
     && review.summary.filters.length === 0
     && review.summary.sort_column === "path"
     && review.summary.sort_direction === "ascending";
 }
 
-function disablePlanFollow(review) {
+function disableReviewFollow(review, first = null, last = null) {
   if (review?.follow == null || review.follow.programmatic === true) return;
+  const target = review.follow.anchorIndex;
+  if (first !== null && Number.isSafeInteger(target) && target >= first && target <= last) return;
   review.follow.enabled = false;
   review.follow.generation += 1;
   renderTasks();
@@ -544,21 +552,83 @@ function tableReadOwner(task, inventory = false) {
   return task[key];
 }
 
+function inventoryActiveItem(task) {
+  const item = task.progressPresentation?.activeItem;
+  return task.sessionState === "active" && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+    && item?.item_type === "integrity" ? item.item_id : null;
+}
+
+function inventoryFollow(task, review) {
+  if (review.follow?.sessionId !== task.sessionId) {
+    review.follow = {sessionId: task.sessionId,
+      enabled: ["baseline", "verify", "rebaseline"].includes(task.sessionKind) && followEligible(review),
+      eligible: followEligible(review), hasTarget: false, generation: 0,
+      anchorKey: null, anchorIndex: null, scrollOffset: null, message: null};
+  }
+  review.follow.eligible = followEligible(review);
+  review.follow.hasTarget = inventoryActiveItem(task) !== null;
+  return review.follow;
+}
+
+function followInventory(task) {
+  if (task.inventoryReview === null) return;
+  const review = task.inventoryReview;
+  const follow = inventoryFollow(task, review);
+  if (!follow.hasTarget) cancelReviewFollow(review);
+  else if (follow.enabled && follow.eligible) queueReviewFollow(review, INVENTORY_FOLLOW);
+}
+
+function cancelReviewFollow(review) {
+  review.followRead?.job.cancel();
+  review.followRead = null;
+}
+
+const PLAN_FOLLOW = Object.freeze({
+  inventory: false, subject: "operation", owner: currentReviewTask,
+  loading: task => task.reviewLoading,
+  session: task => task.executionSessionId,
+  target: task => task.executionPresentation?.activeItem?.item_id ?? null,
+  anchor: getPlanOperationAnchor, window: getPlanWindow,
+  adopt(review, window) {
+    if (window.highlight_revision !== review.summary.highlight_revision) return false;
+    adoptExecutionWindow(review, window);
+    return true;
+  },
+});
+const INVENTORY_FOLLOW = Object.freeze({
+  inventory: true, subject: "item", owner: currentInventoryTask,
+  loading: task => task.inventoryLoading,
+  session: task => task.sessionId, target: inventoryActiveItem,
+  anchor: getInventoryItemAnchor, window: readInventoryWindow,
+  adopt(review, window) {
+    const summary = inventoryWindowSummary(review, window, review.summary.view_revision);
+    if (summary === null) return false;
+    review.summary = summary;
+    review.window = window;
+    review.passiveRevealWindow = window;
+    return true;
+  },
+});
+
 function queuePlanFollow(review, enableFollow = false, explicit = false) {
-  const task = currentReviewTask(review);
-  if (task === null || task.closePending || task.reviewLoading || review.pending !== null
-      || task.executionSessionId === null || review.follow == null) return;
-  review.follow.eligible = planFollowEligible(review);
-  const operationId = task.executionPresentation?.activeItem?.item_id ?? null;
+  queueReviewFollow(review, PLAN_FOLLOW, enableFollow, explicit);
+}
+
+function queueReviewFollow(review, adapter, enableFollow = false, explicit = false) {
+  const task = adapter.owner(review);
+  if (task === null || task.closePending || adapter.loading(task) || review.pending !== null
+      || adapter.session(task) === null || review.follow == null) return;
+  review.follow.eligible = followEligible(review);
+  const operationId = adapter.target(task);
   review.follow.hasTarget = operationId !== null;
   if (operationId === null) {
-    review.follow.message = "No operation is active.";
+    review.follow.message = `No ${adapter.subject} is active.`;
     review.message = review.follow.message;
     renderTasks();
     return;
   }
   if (enableFollow) review.follow.enabled = review.follow.eligible;
-  const sessionId = task.executionSessionId;
+  const sessionId = adapter.session(task);
   const viewRevision = review.summary.view_revision;
   const actionRevision = review.actionRevision;
   const followGeneration = review.follow.generation;
@@ -572,21 +642,21 @@ function queuePlanFollow(review, enableFollow = false, explicit = false) {
   }
   if (review.followRead?.key === anchorKey && review.followRead.generation === followGeneration) return;
   review.followRead?.job.cancel();
-  const owner = tableReadOwner(task);
+  const owner = tableReadOwner(task, adapter.inventory);
   const release = owner.beginForeground();
-  const current = () => currentReviewTask(review) === task
-    && !settingsVisible && !task.closePending && !task.reviewLoading && review.pending === null
+  const current = () => adapter.owner(review) === task
+    && !settingsVisible && !task.closePending && !adapter.loading(task) && review.pending === null
     && navigationRevision === navigation
-    && task.executionSessionId === sessionId && review.summary.view_revision === viewRevision
+    && adapter.session(task) === sessionId && review.summary.view_revision === viewRevision
     && review.actionRevision === actionRevision && review.follow.generation === followGeneration
-    && task.executionPresentation?.activeItem?.item_id === operationId;
+    && adapter.target(task) === operationId;
   const job = owner.request(current, async (stillCurrent) => {
     const anchor = review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
       ? {disposition: "current", index: review.follow.anchorIndex}
-      : await getPlanOperationAnchor(task.taskId, sessionId, viewRevision, operationId);
+      : await adapter.anchor(task.taskId, sessionId, viewRevision, operationId);
     if (!stillCurrent()) return null;
     if (anchor.disposition !== "current" || anchor.index === null) return {anchor, window: null};
-    const window = await getPlanWindow(task.taskId, viewRevision, anchor.index, 256);
+    const window = await adapter.window(task.taskId, viewRevision, anchor.index, 256);
     return {anchor, window};
   });
   const request = {key: anchorKey, generation: followGeneration, job};
@@ -595,23 +665,22 @@ function queuePlanFollow(review, enableFollow = false, explicit = false) {
     if (result === null || !current()) return;
     const {anchor, window} = result;
     if (window === null) {
-      review.follow.message = "The current operation is excluded from this view.";
+      review.follow.message = `The current ${adapter.subject} is excluded from this view.`;
       review.message = review.follow.message;
     } else {
       if (window.disposition !== "current" || window.view_revision !== viewRevision
-          || window.highlight_revision !== review.summary.highlight_revision) return;
-      adoptExecutionWindow(review, window);
+          || !adapter.adopt(review, window)) return;
       review.follow.anchorKey = anchorKey;
       review.follow.anchorIndex = anchor.index;
       review.follow.scrollOffset = anchor.index;
       review.follow.message = null;
-      if (["No operation is active.", "The current operation is excluded from this view.",
-        "Current operation navigation is unavailable. Try again."].includes(review.message)) review.message = null;
+      if ([`No ${adapter.subject} is active.`, `The current ${adapter.subject} is excluded from this view.`,
+        `Current ${adapter.subject} navigation is unavailable. Try again.`].includes(review.message)) review.message = null;
     }
     renderTasks();
   }).catch(() => {
     if (current()) {
-      review.follow.message = "Current operation navigation is unavailable. Try again.";
+      review.follow.message = `Current ${adapter.subject} navigation is unavailable. Try again.`;
       review.message = review.follow.message;
       renderTasks();
     }
@@ -634,6 +703,7 @@ function selectTask(taskId) {
     retirePlanDetail(previous.review);
   }
   if (previous?.inventoryReview != null) {
+    interruptPlanHighlight(previous.inventoryReview);
     cancelInventoryWindow(previous.inventoryReview);
     retireInventoryDetail(previous.inventoryReview);
   }
@@ -653,6 +723,7 @@ function selectTask(taskId) {
   }
   if (task.executionWindowDirty) void refreshExecutionWindow(task);
   if (task.sessionReleased && (task.taskKind === "inventory" || task.executionStarted)) void loadInventoryReview(task, true);
+  followInventory(task);
 }
 
 function adoptTask(summary) {
@@ -724,6 +795,7 @@ function adoptTask(summary) {
       task.stopDrain?.();
       task.stopDrain = null;
       if (task.inventoryReview !== null) {
+        interruptPlanHighlight(task.inventoryReview);
         cancelInventoryWindow(task.inventoryReview);
         retireInventoryDetail(task.inventoryReview);
       }
@@ -869,6 +941,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
       task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
     }
     if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+      if (task.inventoryReview !== null) inventoryFollow(task, task.inventoryReview);
       void refreshInventoryOverlay(task, sessionId);
     }
   }
@@ -905,6 +978,9 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
   if (task.review !== null && task.sessionKind === "sync-execution" && task.sessionState === "active") {
     task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
     if (task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
+  }
+  if (task.inventoryReview !== null && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+    followInventory(task);
   }
 }
 
@@ -1099,6 +1175,7 @@ async function closeRetainedTask(taskId) {
   task.inventoryRevision += 1;
   task.inventoryLoading = false;
   if (task.inventoryReview !== null) {
+    interruptPlanHighlight(task.inventoryReview);
     cancelInventoryWindow(task.inventoryReview);
     task.inventoryReview.actionRevision += 1;
     task.inventoryReview.pending = "close";
@@ -1482,7 +1559,7 @@ async function replaceInventoryPublication(task, review, summary, action, sessio
   const authoritative = summary.disposition === "conflict"
     ? await openInventoryView(task.taskId) : summary;
   if (!stillOwned()) return false;
-  const window = await getInventoryWindow(task.taskId, authoritative.view_revision, review.window.offset, 256);
+  const window = await readInventoryWindow(task.taskId, authoritative.view_revision, review.window.offset, 256);
   if (!stillOwned() || window.disposition !== "current"
       || window.view_revision !== authoritative.view_revision) return false;
   review.summary = authoritative;
@@ -1720,7 +1797,10 @@ function inventoryActionEligible(task, review, kind, nodeId) {
       || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)) return false;
   if (nodeId !== null) {
     const row = review.window.rows.find((value) => value.node_id === nodeId)
-      ?? (review.detail?.row?.node_id === nodeId ? review.detail.row : null);
+      ?? (review.detail?.row?.node_id === nodeId ? review.detail.row : null)
+      ?? (kind === "refresh" && review.activeRefreshTarget?.node_id === nodeId
+        && review.activeRefreshTarget.viewRevision === review.summary.view_revision
+        && review.activeRefreshTarget.publication === review.summary.request_id ? review.activeRefreshTarget : null);
     if (row === null || row.warning !== null) return false;
   }
   return kind === "refresh" || review.summary.request_id === task.requestId;
@@ -1827,7 +1907,7 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
       const windowRequest = review.windowRequestRevision;
       const detail = review.detail?.state === "current" ? review.detail : null;
       const [windowRead, detailRead] = await Promise.allSettled([
-        getInventoryWindow(task.taskId, revision, offset, 256),
+        readInventoryWindow(task.taskId, revision, offset, 256),
         detail === null ? Promise.resolve(null)
           : getInventoryDetail(task.taskId, revision, detail.row.node_id),
       ]);
@@ -1887,7 +1967,9 @@ async function loadInventoryReview(task, force = false) {
   const sessionId = task.sessionId;
   const navigation = navigationRevision;
   const paneRevision = task.paneRevision;
+  const retainedFollow = task.inventoryReview?.follow?.sessionId === sessionId ? task.inventoryReview.follow : null;
   if (task.inventoryReview !== null) {
+    interruptPlanHighlight(task.inventoryReview);
     cancelInventoryWindow(task.inventoryReview);
     task.inventoryReview.actionRevision += 1;
     task.inventoryReview.pending = null;
@@ -1905,17 +1987,25 @@ async function loadInventoryReview(task, force = false) {
   try {
     const summary = await openInventoryView(task.taskId);
     if (!stillCurrent()) return;
-    const window = await getInventoryWindow(task.taskId, summary.view_revision, 0, 256);
+    const window = await readInventoryWindow(task.taskId, summary.view_revision, 0, 256);
     if (!stillCurrent()) return;
     if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
       task.inventoryError = "Inventory changed. Reload the inventory view to continue.";
       return;
     }
+    const retainedTarget = task.inventoryReview?.activeRefreshTarget;
+    const retainActive = retainedTarget?.node_id === window.anchor_node_id
+      && Number.isSafeInteger(window.anchor_visible_index);
     task.inventoryReview = {
       summary, window, pending: null, message: null, queuedSearchQuery: null,
       actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop: 0,
       highlightQueue: Promise.resolve(),
+      follow: retainedFollow,
+      activeNodeId: retainActive ? retainedTarget.node_id : null,
+      activeRefreshTarget: retainActive ? {...retainedTarget,
+        viewRevision:summary.view_revision, publication:summary.request_id} : null,
     };
+    inventoryFollow(task, task.inventoryReview);
     task.inventoryViewUnconfirmed = false;
   } catch (error) {
     if (stillCurrent()) task.inventoryError = error?.code === "task_unavailable"
@@ -1927,6 +2017,7 @@ async function loadInventoryReview(task, force = false) {
     if (tasks.get(task.taskId) === task && task.inventoryRevision === request) {
       task.inventoryLoading = false;
       renderTasks();
+      followInventory(task);
       if (task.taskKind === "sync-plan" && task.workPane === "verify"
           && task.paneRevision !== paneRevision) {
         void loadInventoryReview(task, force);
@@ -1942,6 +2033,11 @@ async function changeInventoryView(review, patch) {
     if (review.pending === "view" && Object.keys(patch).length === 1
         && typeof patch.searchQuery === "string") review.queuedSearchQuery = patch.searchQuery;
     return;
+  }
+  interruptPlanHighlight(review);
+  if (["searchQuery", "filters", "sortColumn", "sortDirection"]
+      .some(key => Object.prototype.hasOwnProperty.call(patch, key))) {
+    disableReviewFollow(review);
   }
   const action = ++review.actionRevision;
   const sessionId = task.sessionId;
@@ -1973,7 +2069,7 @@ async function changeInventoryView(review, patch) {
       }
     });
     if (!stillCurrent()) return;
-    const window = await getInventoryWindow(task.taskId, summary.view_revision, 0, 256);
+    const window = await readInventoryWindow(task.taskId, summary.view_revision, 0, 256);
     if (!stillCurrent()) return;
     if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
       review.message = "Inventory changed. Reload the inventory view to continue.";
@@ -2018,6 +2114,11 @@ function inventoryWindowSummary(review, window, revision) {
       && receipt.highlight_revision === window.highlight_revision ? receipt : null;
 }
 
+function readInventoryWindow(taskId, revision, offset, limit) {
+  return getInventoryWindow(taskId, revision, offset, limit,
+    tasks.get(taskId)?.inventoryReview?.activeNodeId ?? null);
+}
+
 async function loadInventoryWindow(review, offset) {
   const task = currentInventoryTask(review);
   if (!inventoryWindowReady(task, review)) return null;
@@ -2034,7 +2135,7 @@ async function loadInventoryWindow(review, offset) {
     && review.summary.view_revision === revision && navigationRevision === navigation;
   const releaseForeground = tableReadOwner(task, true).beginForeground();
   const job = tableReadOwner(task, true).request(current,
-    () => getInventoryWindow(task.taskId, revision, offset, 256));
+    () => readInventoryWindow(task.taskId, revision, offset, 256));
   review.viewportRead = job;
   try {
     const window = await job.promise;
@@ -2550,7 +2651,7 @@ async function revealPlanMoveDestination(review, nodeId) {
     review.summary = result.summary;
     adoptExecutionWindow(review, window);
     review.refreshAvailable = false;
-    review.follow.eligible = planFollowEligible(review);
+    review.follow.eligible = followEligible(review);
     review.moveScrollOffset = result.index ?? window.offset;
     review.message = result.summary.disposition === "conflict"
       ? "View changed. Click the move destination again." : null;
@@ -2775,7 +2876,7 @@ async function readInventoryNavigationWindow(review, current, taskId, revision, 
   const task = tasks.get(taskId);
   if (task?.inventoryReview !== review || !current()) return null;
   const window = await tableReadOwner(task, true).request(current,
-    () => getInventoryWindow(taskId, revision, offset, limit)).promise;
+    () => readInventoryWindow(taskId, revision, offset, limit)).promise;
   if (window === null || !current()) return null;
   const summary = inventoryWindowSummary(review, window, revision);
   if (window.disposition !== "current" || summary === null) return null;
@@ -2786,8 +2887,7 @@ async function readInventoryNavigationWindow(review, current, taskId, revision, 
 function interruptPlanHighlight(review) {
   review.highlightGeneration = (review.highlightGeneration ?? 0) + 1;
   review.highlightNavigation = null;
-  review.followRead?.job.cancel();
-  review.followRead = null;
+  cancelReviewFollow(review);
   review.keyboardRevealWindow = null;
   if (review.highlightPump != null) review.highlightPump.next = null;
 }
@@ -3156,7 +3256,7 @@ async function submitReviewedExecution(task, attempt) {
       task.executionControlState = "running";
       task.reviewSessionId = result.session_id;
       if (attempt.review.follow !== null) {
-        attempt.review.follow.eligible = planFollowEligible(attempt.review);
+        attempt.review.follow.eligible = followEligible(attempt.review);
         attempt.review.follow.enabled = attempt.review.follow.eligible;
         attempt.review.follow.generation += 1;
         attempt.review.follow.anchorKey = null;

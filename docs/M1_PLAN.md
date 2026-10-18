@@ -52,13 +52,15 @@ manual verification. Later inventory operations may supersede execution-relative
 evidence. This supersedes the earlier exact/manual one-shot product requirement;
 it does not change linked automatic verification or original execution outcomes.
 Evidence: `build/review-consolidation-20261016/`. Root owns docs/integration.
+On 2026-10-17 the user requested a review pause after RV3 closes. Finish RV3's
+gate, review and atomic commit, then stop; RV4–6 implementation needs resumption.
 
 | Row / atomic outcome | Owners and finite consumer population | Gate / dependency |
 | --- | --- | --- |
 | RV0 — rules and delivery boundary | AGENTS, TESTS, PERFORMANCE, M1_PLAN and latest HANDOFF; session/checkpoint documentation, delta review, equivalent test relocation and accounted evidence retention. | Complete in `01089be`; independent document/contract review and local-link/diff checks passed. |
 | RV1 — ordinary Verify copied files | Complete. Successful retained copied paths use ordinary scan/Verify, controls and results. Workflow-owned subject admission preserves scope independently of checkboxes. Exact-only commands, claims, results and warning retired; original execution truth and command custody retained. | Reviewed `rv1-candidate-15.md` plus `rv1-correction-24.md`; 2,978 final workflows/interfaces passes, 12 imports, all 13 installed cases across native03/04. Earlier ordinary run had 6,064 passes and the subsequently corrected interface-boundary failure; unaffected passes retained by dependency. Raw failures and review remain under the evidence root. |
 | RV2 — common review infrastructure | Plan/Inventory server view state, visible-sequence/highlight helpers; separate browser panels above a shared controller; app read/navigation consumers, production probes, gallery, installed table cases and direct performance helper imports. | Reuse current range/selection/viewport/focus/read-settlement witnesses for both consumers; shared geometry/navigation is implemented once. Preserve row roles unless a separate accessibility change is justified. Depends RV1; split coherent server/browser commits after census. |
-| RV3 — Inventory Follow and Go | Common browser follow/reveal/controller, Inventory active-row/ancestor resolution in view/drain/command/bridge and current ordinary session observation; owning probes/composition/installed Inventory. | Off-window/collapsed/filtered/missing target, canonical-only automatic follow, user override, one-shot Go, session/pane/Close retirement; no selection or focus mutation. Depends RV2. |
+| RV3 — Inventory Follow and Go | Complete. Common browser follow/reveal/controller, Inventory active-row/ancestor resolution and current ordinary session observation; retained active identity and Refresh target across passive windows. | Candidate08; 2,469 interfaces/tools passes, three skips, 12 imports, ten current installed cases plus six unchanged transport results. Independent review and integration identities below. Paused for user review before RV4–6. |
 | RV4 — narrow follow-up sharing | Drain delivery snapshot construction/restore and existing browser start/control attempt consumers. Share remaining repeated mechanics after exact-manual retirement; retain domain admission, outcome/identity and original-command rules. | Existing success/refusal/rollback/late delivery/uncertain recovery/zero-result/replacement tests plus affected composition/native paths. No generic effect machine or speculative full-slot pipeline. Depends RV1 and reconciles RV2/3 app changes. |
 | RV5 — catalogs and test consumers | Existing command catalog tests/native helpers/benchmark helper; shared fixture support for Inventory/Plan gallery specimens; existing long Inventory/execution/shell journeys. Gallery-only integrity row helper moves to tests if still unused by product. | One independent golden exposure catalog; unknown/missing/policy mismatch controls. Each relocated assertion names its equivalent probe/composition witness; installed input/effect, focus/scroll and package guards remain. Serialize with owning product migration; optional performance timing stays non-gating. |
 | RV6 — closure and evidence reduction | Integrated RV1–5, matching subject docs/CHANGELOG, condensed current register and session HANDOFF; inventory task-owned regenerable evidence before cleanup. | Ordinary suite, imports, affected installed cases, final independent cross-outcome review, source/producer/checker provenance and recovery accounting. Preserve unexplained failures, original handoff, recovery refs and unrelated stashes. Stop for recap; no M1-12/release/push/PR. |
@@ -111,7 +113,7 @@ ten-test population and review. Its 415 owning tests, 2,997 workflow/interface
 tests, 12 imports and three installed execution/Inventory cases pass; native01
 foreground refusals remain failed receipts. The review's wording suggestion and
 older Node PATH observation remain leads, not additional product scope.
-RV2 Stage C shares app read ownership beneath both surfaces: one running/latest
+RV2 Stage C (`1aeb9397`) shares app read ownership beneath both surfaces: one running/latest
 navigation worker, exact job retirement and common freshness/reread decision.
 Thin domain adapters preserve silent Plan teardown, independent mutation custody,
 compatible summary adoption and initial/action-read overlap. Its six-file freeze
@@ -120,23 +122,63 @@ and retirement mapping are in `rv2c-candidate-14.json` / `.md`. Four real-app se
 skips), 12 imports and five installed execution/Inventory/task-shell cases pass.
 Native01's foreground refusals remain failed receipts; native02 passed without
 driver changes. `rv2c-native-accounting-01.json` records both package identities.
-Fresh review and integration are recorded in `rv2c-review-01.md` and
-`rv2c-integration.json`; dependent implementation waits for that commit.
+Fresh acceptance and integration are recorded in `rv2c-review-01.md` and
+`rv2c-integration.json`.
 
-RV3 is next, with final-C seam refresh in `rv3-design-01.md`. Its finite product
-population is visible_sequence/plan_review/inventory_review, drain/commands and
-existing app/bridge/tree/Plan/Inventory assets plus shared CSS. Reuse C's read
-owner and B's controller; share Follow decisions while retaining domain target
-identity and separate panels. Add a bounded read-only Inventory anchor admitted
-under the current ordinary session and scope; no ledger read or scope mutation.
-Passive reveal may clear an unrepresentable active row but never retarget focus,
-highlight, checkboxes, detail or Refresh selected. Automatic Follow requires the
-canonical unfiltered view; manual override persists, and Go neither changes the
-view nor enables Follow. Existing server/command/bridge and browser probes,
-complete command catalogs, performance hooks and installed Inventory's real-item
-journey are the declared consumer migration. Run existing composition first,
-then owning/interfaces/tools/import and affected installed gates, with fresh
-review before one atomic commit. No new asset, framework or verification policy.
+RV3's final candidate is `rv3-candidate-08.json`: 11 product and 20 test/helper
+paths, plus eight matching documents. It shares Follow decisions beneath separate
+panels using RV2's unchanged controller and read owner. A bounded read-only anchor
+resolves current ordinary integrity items through frozen scope and visible
+ancestors. Automatic Follow requires the canonical unfiltered view; manual
+override persists, and Go neither changes the view nor enables Follow.
+
+The 2026-10-18 user disposition replaces sticky-null with retained active identity.
+Passive windows detach/restore ARIA without changing the node or Refresh selected
+target. Off-window focus does not reveal, scroll or override Follow; explicit
+navigation starts from the retained position. Only actual current-view removal
+clears identity. The existing Inventory window read can nominate that node and
+return its exact indexed visibility, preserving old callers' shape and all
+revision/adoption fences. This adds no ledger read, full-view transfer, extra
+read pump or RV2 refactor. PRESENTATION and BRIDGE own the resulting contracts.
+
+Inventory menus use node/view/publication/action/session currency rather than
+disposable window/element identity. The approved native harness settles the prior
+gesture's publication, listens on stable ancestors, and records pending wait,
+control connectivity and popup transitions without weakening input/effect guards.
+The approved preparatory `preventScroll` correction remains. Existing probes own
+retention, detachment, ARIA restoration, true removal and no-replacement behavior;
+native input checks final identity/ARIA and real Follow/Go custody.
+
+Acceptance: five final correction checks, 42 performance-helper checks,
+2,469 interfaces/tools passes (three skips), Inventory native09, nine shared
+installed cases in shared03, and 12 import contracts pass. Six unchanged transport results from
+shared02 remain applicable by exercised-path dependency. `rv3-revision-review-01.md`
+owns independent review; `rv3-native-accounting-02.json` binds corrected package,
+driver and checker identities without rewriting historical accounting. Native05–07
+context stalls remain unexplained: the deterministic late-publication/menu witness
+establishes the corrected mechanism, not historical causation. Preserve all failed
+receipts and fixtures.
+
+Candidate08 changes only the declared table-loading instrumentation signature
+consumer from candidate07, retaining its exact-match drift guard. Product and
+installed driver/checker inputs remain unchanged; candidate07's installed and
+import passes remain applicable. The first department gate stopped at that helper
+anchor after 2,067 passes; its complete receipt remains preserved.
+
+The user accepted RV2 unchanged and explicitly allowed correcting recovery
+`a932d5d8` and integrating without rebuilding. The reviewed squash onto `1aeb9397`
+keeps WIP history off `milestone1`; `rv3-integration.json` records its final and
+corrected recovery commits and all 39 paths. Retain the recovery refs and five
+unrelated stashes. RV3 closes for the requested review pause; RV4–6 remain inactive.
+Read-only `rv4-design-01.md` splits the next sharing into two atomic outcomes:
+RV4A migrates both drain delivery snapshots, restore, summary and installed-shell
+positional readers together; RV4B shares only owned recovery-handle attachment in
+the five existing app start/control consumers. Preserve distinct map ownership,
+lock/effect ordering, rollback, domain settlement and Check routing; no generic
+effect engine. Each receives its own existing composition/owning,
+interfaces/tools/import and affected installed gates plus fresh review. Revalidate
+against integrated RV3 before implementation; later passes cannot retroactively
+qualify an earlier ungated commit.
 `rv5-census-01.md` identifies the independent command catalog, shared specimen
 producers, gallery-only row adapter and equivalent-witness journey reductions;
 execution journey changes belong to RV1 first. These are finite designs, not

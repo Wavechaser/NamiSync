@@ -544,6 +544,11 @@ revision before admission. Empty selection is never a full-location request.
 Each newly admitted ordinary session replaces the latest ordinary result overlay;
 failed admission restores the prior session, publication and results. Pause,
 resume and cancel require the exact current ordinary task/session.
+Read-only Follow lookup uses that same current association and its frozen scope,
+while the displayed Inventory publication may precede the auxiliary request.
+It resolves current integrity-item identity through the retained projection,
+without admitting effects or changing scope. BRIDGE owns request validation and
+PRESENTATION owns visible-ancestor and passive reveal behavior.
 
 Terminal release captures ordinary results before Dispatcher/detail cleanup and
 retains the actual workflow scan details for current-ledger publication. Result

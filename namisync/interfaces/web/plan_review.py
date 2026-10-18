@@ -30,7 +30,7 @@ from .visible_sequence import (
     VisibleSequenceParameters,
     _derive_visible_sequence_from_validated,
     _validate_structure,
-    resolve_visible_anchor,
+    resolve_visible_node_anchor,
     window_visible_sequence,
 )
 
@@ -523,15 +523,7 @@ class PlanReviewState:
                 "node_id": None,
                 "index": None,
                 }
-            position = self.projection.position_by_node_id.get(node_id)
-            if position is None:
-                raise ValueError("anchor node id is unknown")
-            chain: list[str] = []
-            while position is not None:
-                node = self.projection.nodes[position]
-                chain.append(node.node_id)
-                position = node.parent_index
-            anchor = resolve_visible_anchor(self._view.visible, chain)
+            anchor = resolve_visible_node_anchor(self._view.visible, node_id)
             if anchor is not None and anchor.index == 0:
                 anchor = None
             return {

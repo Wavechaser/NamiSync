@@ -479,12 +479,12 @@ selection overlays; prior benchmark receipts do not certify the new totals.
 
 Sort is process-live view state, never durable preference; it preserves tree identity, selection, recursive action scope, execution order, rollups, and domain truth. A rebuild derives the retained chosen sort from the new immutable projection and publishes its permutation, indexes, and revisions atomically; a failed rebuild preserves the previous complete view, and window reads perform no I/O to discover sort keys. Inventory projection sorting and its desktop read consumer are implemented. Inventory raw own-object sort keys remain distinct from complete folder byte rollups. Synthetic ancestors have no own size or mtime; real directories use only their observed values. Warnings retain an attachment-order tail and never affect domain rollups or scope.
 
-**M1-8-R0 surface.** Follow resolves the active operation to the nearest
+Follow resolves the active Plan operation or ordinary Inventory integrity item to the nearest
 visible ancestor-or-self under the current collapse, filter, search, sort and
 revision. Nothing visible means no target; never mutate filters or invent a
 root. Automatic follow is restricted to unfiltered, search-free canonical order.
 User scroll-away or changing sort/search/filter disables it until explicit enable;
-returning to canonical alone does not resume it. One-shot Go to current operation
+returning to canonical alone does not resume it. One-shot Go to the current item
 remains available in other views without enabling follow. DESKTOP_UI owns the
 floating controls and override behavior.
 
@@ -492,8 +492,28 @@ Reuse `PlanProjection.operation_node_id_by_id` and existing visible-anchor
 resolution for off-window operations; the browser must not derive node IDs or
 retain a full mapping. The read-only active-operation variant of `get_plan_anchor`
 is bound to the current task/session and view revision for execution and post-copy
-verification. Existing node-anchor callers retain their unchanged request shape. BRIDGE owns its exact wire extension;
-standalone integrity/inventory following remains outside this batch.
+verification. Inventory uses its projection's row index and the same ancestor
+walk, bound to the current ordinary baseline/verify/rebaseline session, location,
+frozen scope and view revision. Copied scope uses workflow-owned pure admission;
+lookup never changes scope associations or reads the ledger. A scan-created row
+absent from the displayed projection has no target. Scan, terminal and no-active
+states do not invent one. Existing Plan node-anchor callers are unchanged;
+BRIDGE owns the exact read-only requests.
+
+One app-local Follow transaction uses the shared table reader for anchor and
+bounded window lookup. Each domain supplies identity and adoption rules. Pane,
+session, view and user-intent changes retire the exact request. Passive Inventory
+publication/reveal uses the existing tree painter and controller. It retains the
+active node identity and keyboard position while that row is outside the loaded
+window, removing only `aria-activedescendant` until the row renders again. It
+never chooses a replacement. Refresh selected retains the node target. Focusing
+the tree while the active row is off-window does not reveal it, move the viewport
+or override Follow. Explicit arrow/Home/End navigation starts from the retained
+row; a click or manual scroll re-engages ordinary active-row navigation. Clear
+identity only when authoritative current-view evidence establishes disappearance,
+including filter/search/collapse/deletion, not because a bounded window omits it.
+Follow and Go never retarget highlighting, checkbox selection, detail or keyboard
+focus.
 
 ## Bounded work and focused measurement
 
@@ -512,7 +532,7 @@ Focused checks must catch the failures that small fixtures conceal: scope-qualif
 
 ## Implemented Plan and accepted future outcomes
 
-The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The inventory renderer retains the same bounded window with an explicit 24 px invocation of the generic `tree.js` foundation, whose default remains 28 px. Its Refresh and visibility controls pass server-owned node identities, never visible-row or browser-derived path scope. Refresh selected resolves the tree's current active file or folder row from that window; arrow navigation changes highlighting without a detail read. Clearing the active row, including viewport gaps, disables the action. Item-card visibility actions retain the card's displayed row independently. Follow mode remains an accepted future outcome.
+The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The inventory renderer retains the same bounded window with an explicit 24 px invocation of the generic `tree.js` foundation, whose default remains 28 px. Its Refresh and visibility controls pass server-owned node identities, never visible-row or browser-derived path scope. Refresh selected retains the active file or folder's node target across passive off-window publication; arrow navigation changes highlighting without a detail read. Actual removal from the current view clears the target and disables the action. Item-card visibility actions retain the card's displayed row independently.
 
 The Plan summary displays workflow-derived selected/eligible counts, selected
 required bytes, and planning issues (preflight refusals plus scan notices).

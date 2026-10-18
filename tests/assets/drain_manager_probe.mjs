@@ -387,6 +387,21 @@ assert.deepEqual(await operationAnchorPromise, {
 });
 requests.splice(operationAnchorIndex, 1);
 
+const inventoryAnchorIndex = requests.length;
+const inventoryAnchorPromise = bridge.getInventoryItemAnchor(task("a"), session("b"), 7, "1:2");
+await waitUntil(() => requests.length > inventoryAnchorIndex, "inventory anchor dispatch");
+const inventoryAnchorRequest = requests[inventoryAnchorIndex];
+assert.equal(inventoryAnchorRequest.request.command, "get_inventory_anchor");
+assert.deepEqual(inventoryAnchorRequest.request.payload, {
+  task_id:task("a"), session_id:session("b"), expected_revision:7, item_id:"1:2",
+});
+inventoryAnchorRequest.resolve({schema_version:1, request_id:inventoryAnchorRequest.request.request_id, ok:true,
+  result:{disposition:"current", view_revision:7, node_id:`node-${"d".repeat(32)}`, index:41}});
+assert.equal((await inventoryAnchorPromise).index, 41);
+requests.splice(inventoryAnchorIndex, 1);
+await assert.rejects(bridge.getInventoryItemAnchor(task("a"), session("b"), 7, "x".repeat(1025)), TypeError);
+await assert.rejects(bridge.getInventoryItemAnchor(task("a"), session("b"), 7, "é".repeat(512) + "x"), TypeError);
+
 // Numeric holes are legal, and a terminal record suppresses rearm.
 const acceptedOne = [];
 const refusedOne = [];

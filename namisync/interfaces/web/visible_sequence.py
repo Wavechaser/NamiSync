@@ -588,6 +588,21 @@ def to_visible_window_view(
     }
 
 
+def resolve_visible_node_anchor(
+    sequence: VisibleSequence[_VisibleNodeT], node_id: str,
+) -> VisibleAnchor | None:
+    """Resolve a node's complete ancestry against the current visible sequence."""
+    position = sequence.source_position_by_node_id.get(node_id)
+    if position is None:
+        raise ValueError("anchor node id is unknown")
+    chain: list[str] = []
+    while position is not None:
+        node = sequence.nodes[position]
+        chain.append(node.node_id)
+        position = node.parent_index
+    return resolve_visible_anchor(sequence, chain)
+
+
 def resolve_visible_anchor(
     sequence: VisibleSequence[_VisibleNodeT],
     candidate_node_ids: Iterable[str],

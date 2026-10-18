@@ -1306,6 +1306,102 @@ outerViewport.dispatch("scroll");
 outerDocument.defaultView.flushAnimationFrame();
 assert.equal(outerRequests.length, 1, "disposal detaches the outer listener");
 
+// Passive Follow retains identity independently of the loaded window and DOM.
+const passiveDocument = new TestDocument();
+const passiveRoot = passiveDocument.createElement("div");
+passiveRoot.clientHeight = 2 * ROW_H;
+const passiveChanges = [];
+const passiveTree = createTree(passiveRoot, {activeChanged: nodeId => passiveChanges.push(nodeId)});
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
+const retiredPassiveGeneration = passiveTree.beginWindowRequest();
+const acceptedOrdinaryGeneration = passiveTree.beginWindowRequest();
+assert.equal(passiveTree.commitPassiveWindow(retiredPassiveGeneration, unreadableWindow), false);
+passiveTree.commitWindow(acceptedOrdinaryGeneration, fixtureWindow(200, 4));
+assert.notEqual(passiveRoot.getAttribute("aria-activedescendant"), null,
+  "a rejected passive publication cannot change ordinary active-row policy");
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
+const passiveActive = passiveRoot.getAttribute("aria-activedescendant");
+const passiveNode = treeItems(passiveRoot).find(row => row.id === passiveActive).dataset.nodeId;
+const passiveChangeCount = passiveChanges.length;
+passiveTree.commitPassiveWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
+passiveTree.revealPassiveRow(2);
+passiveRoot.dispatch("scroll");
+passiveDocument.defaultView.flushAnimationFrame();
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), passiveActive);
+const retainedPassiveTop = passiveRoot.scrollTop;
+passiveRoot.dispatch("focus");
+assert.equal(passiveRoot.scrollTop, retainedPassiveTop,
+  "passive focus restoration cannot undo a current-item reveal");
+passiveTree.commitPassiveWindow(passiveTree.beginWindowRequest(), fixtureWindow(200, 4));
+passiveTree.revealPassiveRow(200);
+passiveRoot.dispatch("scroll");
+passiveDocument.defaultView.flushAnimationFrame();
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(passiveChanges.length, passiveChangeCount, "off-window publication never clears identity");
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), fixtureWindow(200, 4));
+passiveDocument.defaultView.flushAnimationFrame();
+passiveRoot.dispatch("focus");
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), null,
+  "off-window identity has no detached ARIA target");
+const offWindowTop = passiveRoot.scrollTop;
+passiveTree.cancelNavigation();
+for (const key of ["Tab", "Shift", "x"]) passiveRoot.dispatch("keydown", {key});
+passiveDocument.defaultView.flushAnimationFrame();
+passiveRoot.dispatch("focus");
+assert.equal(passiveRoot.scrollTop, offWindowTop, "focus and unrelated keys never reveal the retained row");
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), passiveActive, "row return restores ARIA");
+assert.equal(passiveChanges.length, passiveChangeCount);
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), {...fixtureWindow(200, 4),
+  anchor_node_id:passiveNode, anchor_visible_index:17});
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), null, "an exact off-window anchor retains identity");
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), {...fixtureWindow(200, 4),
+  anchor_node_id:passiveNode, anchor_visible_index:null});
+assert.equal(passiveChanges.at(-1), null, "exact view absence clears identity without a replacement");
+dispatchKey(passiveRoot, "Home");
+passiveTree.dispose();
+
+const retainedDocument = new TestDocument();
+const retainedRoot = retainedDocument.createElement("div");
+retainedRoot.clientHeight = 2 * ROW_H;
+const retainedRequests = [], retainedHighlights = [];
+const retainedTree = createTree(retainedRoot, {
+  requestIndex:(index, generation) => retainedRequests.push({index, generation}),
+  highlight:(...args) => retainedHighlights.push(args),
+});
+retainedTree.commitWindow(retainedTree.beginWindowRequest(), fixtureWindow(0, 4));
+retainedTree.commitPassiveWindow(retainedTree.beginWindowRequest(), fixtureWindow(200, 4));
+dispatchKey(retainedRoot, "ArrowDown");
+retainedRoot.dispatch("keydown", {key:"ArrowDown", shiftKey:true, preventDefault() {}});
+assert.deepEqual(retainedRequests.map(request => request.index), [1, 2], "held arrows accumulate from retained index");
+const retainedRequest = retainedRequests.at(-1);
+retainedTree.commitWindow(retainedRequest.generation, fixtureWindow(0, 4));
+assert.deepEqual(retainedHighlights, [["extend", fixtureWindow(0, 4).rows[2].node_id]]);
+assert.equal(retainedRoot.getAttribute("aria-activedescendant"), treeItems(retainedRoot)[2].id);
+retainedTree.dispose();
+
+// A view change can move an ordinary active row off-window without any prior Follow.
+const anchoredDocument = new TestDocument();
+const anchoredRoot = anchoredDocument.createElement("div");
+anchoredRoot.clientHeight = 2 * ROW_H;
+const anchoredChanges = [], anchoredRequests = [];
+const anchoredTree = createTree(anchoredRoot, {
+  activeChanged:nodeId => anchoredChanges.push(nodeId),
+  requestIndex:(index, generation) => anchoredRequests.push({index, generation}),
+});
+anchoredTree.commitWindow(anchoredTree.beginWindowRequest(), fixtureWindow(0, 4));
+const anchoredNode = anchoredChanges.at(-1);
+anchoredTree.commitWindow(anchoredTree.beginWindowRequest(), {...fixtureWindow(200, 4),
+  anchor_node_id:anchoredNode, anchor_visible_index:17}, null, false);
+anchoredDocument.defaultView.flushAnimationFrame();
+anchoredRoot.dispatch("focus");
+assert.deepEqual(anchoredChanges, [anchoredNode], "positive off-window anchor survives queued reconciliation");
+assert.equal(anchoredRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(anchoredRoot.scrollTop, 0, "focus does not reveal an admitted off-window identity");
+dispatchKey(anchoredRoot, "ArrowDown");
+assert.equal(anchoredRequests.at(-1).index, 18, "explicit navigation uses the newly admitted index");
+anchoredTree.dispose();
+
 // Arbitrary recycling cannot leave a stale active index or descendant.
 const recycledGeneration = tree.beginWindowRequest();
 assert.equal(

@@ -1937,6 +1937,7 @@ def _summarize(
         "control_integrity",
         "create_task",
         "get_execution_detail",
+        "get_inventory_anchor",
         "get_inventory_detail",
         "get_inventory_window",
         "get_plan_anchor",

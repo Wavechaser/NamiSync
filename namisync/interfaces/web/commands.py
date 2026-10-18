@@ -275,6 +275,8 @@ class TaskAuthority(Protocol):
 
     def get_inventory_detail(self, *args, **kwargs) -> dict[str, object]: ...
 
+    def get_inventory_anchor(self, *args, **kwargs) -> dict[str, object]: ...
+
     def update_plan_view(self, *args, **kwargs) -> dict[str, object]: ...
 
     def get_plan_window(self, *args, **kwargs) -> dict[str, object]: ...
@@ -520,6 +522,15 @@ class _PlanWindowPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class _InventoryWindowPayload:
+    task_id: str
+    expected_revision: int
+    offset: int
+    limit: int
+    anchor_node_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class _InventoryDetailPayload:
     task_id: str
     expected_revision: int
@@ -565,6 +576,14 @@ class _ExecutionDetailPayload:
     task_id: str
     operation_id: str
     expected_execution_revision: int
+
+
+@dataclass(frozen=True, slots=True)
+class _InventoryAnchorPayload:
+    task_id: str
+    session_id: str
+    expected_revision: int
+    item_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -1109,11 +1128,12 @@ def production_command_specs(
             expected_highlight_revision=payload.expected_highlight_revision, selected=payload.selected)
 
     def get_inventory_window(payload: object) -> object:
-        if type(payload) is not _PlanWindowPayload:
+        if type(payload) is not _InventoryWindowPayload:
             raise TypeError("get_inventory_window received an unvalidated payload")
         return registry.get_inventory_window(
             payload.task_id, expected_revision=payload.expected_revision,
             offset=payload.offset, limit=payload.limit,
+            **({} if payload.anchor_node_id is None else {"anchor_node_id": payload.anchor_node_id}),
         )
 
     def get_inventory_detail(payload: object) -> object:
@@ -1170,6 +1190,12 @@ def production_command_specs(
         return registry.reveal_plan_move(
             payload.task_id, expected_revision=payload.expected_revision, node_id=payload.node_id,
         )
+
+    def get_inventory_anchor(payload: object) -> object:
+        if type(payload) is not _InventoryAnchorPayload:
+            raise TypeError("get_inventory_anchor received an unvalidated payload")
+        return registry.get_inventory_anchor(payload.task_id, session_id=payload.session_id,
+            expected_revision=payload.expected_revision, item_id=payload.item_id)
 
     def get_plan_anchor(payload: object) -> object:
         if type(payload) is _PlanOperationAnchorPayload:
@@ -1578,7 +1604,7 @@ def production_command_specs(
                 retry=CommandRetry.NONE,
             ),
             "get_inventory_window": CommandSpec(
-                validate_payload=_validate_plan_window, handler=get_inventory_window,
+                validate_payload=_validate_inventory_window, handler=get_inventory_window,
                 access=CommandAccess.READ_ONLY, command_id=FieldRequirement.FORBIDDEN,
                 revision=FieldRequirement.REQUIRED, response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
@@ -1633,6 +1659,15 @@ def production_command_specs(
                 revision=FieldRequirement.REQUIRED,
                 response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
                 retry=CommandRetry.NONE,
+            ),
+            "get_inventory_anchor": CommandSpec(
+                validate_payload=_validate_inventory_anchor,
+                handler=get_inventory_anchor,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.REQUIRED,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "get_plan_anchor": CommandSpec(
                 validate_payload=_validate_plan_anchor,
@@ -2004,6 +2039,19 @@ def _validate_update_tree_view(value: object, allowed_filters: frozenset[str], c
     )
 
 
+def _validate_inventory_window(value: object) -> _InventoryWindowPayload:
+    if type(value) is not dict:
+        raise CommandPayloadError("get_inventory_window payload is invalid")
+    anchor_node_id = value.get("anchor_node_id")
+    if anchor_node_id is not None and (
+        type(anchor_node_id) is not str or re.fullmatch(r"node-[0-9a-f]{32}", anchor_node_id) is None
+    ):
+        raise CommandPayloadError("get_inventory_window anchor is invalid")
+    window = _validate_plan_window({key: item for key, item in value.items() if key != "anchor_node_id"})
+    return _InventoryWindowPayload(window.task_id, window.expected_revision, window.offset,
+                                   window.limit, anchor_node_id)
+
+
 def _validate_plan_window(value: object) -> _PlanWindowPayload:
     if type(value) is not dict or set(value) != {
         "task_id", "expected_revision", "offset", "limit"
@@ -2121,6 +2169,22 @@ def _validate_plan_move_reveal(value: object) -> _PlanAnchorPayload:
     if type(value) is not dict or set(value) != {"task_id", "expected_revision", "node_id"}:
         raise CommandPayloadError("reveal_plan_move payload is invalid")
     return _validate_plan_anchor(value)
+
+
+def _validate_inventory_anchor(value: object) -> _InventoryAnchorPayload:
+    if type(value) is not dict or set(value) != {"task_id", "session_id", "expected_revision", "item_id"}:
+        raise CommandPayloadError("get_inventory_anchor payload is invalid")
+    if (type(value["task_id"]) is not str or _TASK_ID.fullmatch(value["task_id"]) is None
+            or type(value["session_id"]) is not str or _OPAQUE_ID.fullmatch(value["session_id"]) is None
+            or not _is_javascript_safe_integer(value["expected_revision"]) or value["expected_revision"] < 0
+            or type(value["item_id"]) is not str or not value["item_id"]):
+        raise CommandPayloadError("get_inventory_anchor payload is invalid")
+    try:
+        if len(value["item_id"].encode("utf-8")) > 1_024:
+            raise CommandPayloadError("get_inventory_anchor item exceeds its bound")
+    except UnicodeEncodeError as error:
+        raise CommandPayloadError("get_inventory_anchor item is invalid") from error
+    return _InventoryAnchorPayload(value["task_id"], value["session_id"], value["expected_revision"], value["item_id"])
 
 
 def _validate_plan_anchor(value: object) -> _PlanAnchorPayload | _PlanOperationAnchorPayload:

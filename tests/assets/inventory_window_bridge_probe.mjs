@@ -56,6 +56,21 @@ for (const patch of [{selected_file_count: true}, {selected_file_count: 999},
 }
 response = fixture.window;
 assert.deepEqual(await bridge.getInventoryWindow(task, 0, 0, 256), fixture.window);
+const nominatedNode = fixture.window.rows[0].node_id;
+response = {...fixture.window, anchor_node_id:nominatedNode, anchor_visible_index:0};
+assert.equal((await bridge.getInventoryWindow(task, 0, 0, 256, nominatedNode)).anchor_visible_index, 0);
+assert.equal(requests.at(-1).payload.anchor_node_id, nominatedNode);
+for (const patch of [{anchor_node_id:"node-" + "f".repeat(32)}, {anchor_visible_index:true},
+  {anchor_visible_index:fixture.window.total}, {anchor_visible_index:null}, {anchor_visible_index:1}]) {
+  response = {...fixture.window, anchor_node_id:nominatedNode, anchor_visible_index:0, ...patch};
+  await assert.rejects(bridge.getInventoryWindow(task, 0, 0, 256, nominatedNode));
+}
+response = fixture.window;
+await assert.rejects(bridge.getInventoryWindow(task, 0, 0, 256, nominatedNode));
+response = {...fixture.window, anchor_node_id:"node-" + "f".repeat(32), anchor_visible_index:null};
+assert.equal((await bridge.getInventoryWindow(task, 0, 0, 256, response.anchor_node_id)).anchor_visible_index, null);
+await assert.rejects(bridge.getInventoryWindow(task, 0, 0, 256));
+assert.throws(() => bridge.getInventoryWindow(task, 0, 0, 256, "foreign"));
 response = fixture.zero_scope.summary;
 assert.equal((await bridge.openInventoryView(task)).scope_selectable_file_count, 0);
 response = fixture.zero_scope.window;

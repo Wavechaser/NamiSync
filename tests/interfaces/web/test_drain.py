@@ -2949,6 +2949,39 @@ def test_inventory_summary_carries_bounded_producing_scope(paths, roots, kind, p
     assert registry.open_inventory_view(start.task_id)["scan_scope"] == {"kind": kind, "path": path}
 
 
+@pytest.mark.parametrize("copied", [False, True])
+def test_inventory_anchor_admits_only_current_ordinary_scope_without_reads_or_binding(copied):
+    from namisync.interfaces.web.drain import _InventoryIntegrityState
+    from namisync.workflows import CopiedSubjectScope
+    registry, service, start, projection = _inventory_read_registry(path=r"folder\one.txt")
+    registry.release_terminal_session(start.task_id, start.session_id)
+    view = registry.open_inventory_view(start.task_id)
+    task = registry._tasks[start.task_id]
+    task.session_id, task.request_id, task.session_kind = "8" * 32, "9" * 32, "verify"
+    task.session_released = False
+    ordinary = _InventoryIntegrityState("verify", 1, frozenset({"1"}),
+        request_id=task.request_id, session_id=task.session_id,
+        copied_scope=CopiedSubjectScope((r"FOLDER\ONE.TXT",)) if copied else None)
+    task.ordinary_integrity = ordinary
+    before = (service.projection_calls, list(service.detail_calls), dict(ordinary.path_rows), dict(ordinary.row_paths))
+    payload = dict(session_id=task.session_id, expected_revision=view["view_revision"], item_id="1:1")
+    assert registry.get_inventory_anchor(start.task_id, **payload)["node_id"] == projection.node_id_by_row_id["1"]
+    assert registry.get_inventory_anchor(start.task_id, **{**payload, "session_id": start.session_id})["disposition"] == "conflict"
+    assert registry.get_inventory_anchor(start.task_id, **{**payload, "expected_revision": 99})["disposition"] == "conflict"
+    with pytest.raises(ValueError, match="location"):
+        registry.get_inventory_anchor(start.task_id, **{**payload, "item_id": "2:1"})
+    if copied:
+        assert registry.get_inventory_anchor(start.task_id, **{**payload, "item_id": "1:2"})["index"] is None
+        ordinary.path_rows["FOLDER\\ONE.TXT"] = "2"
+        with pytest.raises(ValueError, match="copied scope"):
+            registry.get_inventory_anchor(start.task_id, **payload)
+        ordinary.path_rows.clear()
+    else:
+        with pytest.raises(ValueError, match="selected scope"):
+            registry.get_inventory_anchor(start.task_id, **{**payload, "item_id": "1:2"})
+    assert (service.projection_calls, service.detail_calls, ordinary.path_rows, ordinary.row_paths) == before
+
+
 def test_inventory_read_open_waits_for_release_then_windows_need_no_full_reread():
     registry, service, start, projection = _inventory_read_registry()
     with pytest.raises(TaskUnavailableError):
@@ -2961,6 +2994,12 @@ def test_inventory_read_open_waits_for_release_then_windows_need_no_full_reread(
     for offset in range(3):
         assert len(registry.get_inventory_window(start.task_id, expected_revision=0, offset=offset, limit=1)["rows"]) <= 1
     node = projection.node_id_by_row_id["1"]
+    nominated = registry.get_inventory_window(start.task_id, expected_revision=0, offset=2,
+                                              limit=1, anchor_node_id=node)
+    full = registry.get_inventory_window(start.task_id, expected_revision=0, offset=0, limit=256)
+    assert nominated["anchor_node_id"] == node
+    assert nominated["anchor_visible_index"] == next(
+        row["visible_index"] for row in full["rows"] if row["node_id"] == node)
     detail = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=node)
     assert detail["detail"]["attestation"]["content"]["provenance"] == "copy"
     assert service.detail_calls == [(1, "1")] and service.projection_calls == 1

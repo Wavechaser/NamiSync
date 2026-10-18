@@ -20,7 +20,7 @@ from conftest import HeadedInstalledWheel
 _CHILD = Path(__file__).with_name("_task_inventory_headed_child.py")
 _INTEGRITY_INPUT = {name: True for name in (
     "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear",
-    "select-folder", "select-location-clear", "select-location", "baseline", "verify", "pause", "resume",
+    "select-folder", "select-location-clear", "select-location", "baseline", "verify", "follow-go", "pause", "resume",
     "verify-cancel", "cancel", "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm",
 )}
 
@@ -72,6 +72,33 @@ def test_inventory_custody_failure_diagnostic_excludes_dom_and_unbounded_values(
                     {**facts, "range_scroll_after": -1}):
         assert child._bounded_integrity_custody_diagnostic(invalid) is None
     assert child._bounded_integrity_custody_diagnostic(None) is None
+    follow = {"active_retained": False, "old_active_represented": False,
+        "active_cleared": True, "active_allowed": True, "selection_preserved": True,
+        "query_preserved": True, "focus_preserved": True, "enable_hidden": True}
+    assert child._bounded_follow_custody_diagnostic(follow) == follow
+    assert child._bounded_follow_custody_diagnostic({**follow, "path": r"C:\private"}) is None
+    assert child._bounded_follow_custody_diagnostic({**follow, "active_allowed": 1}) is None
+    assert child._bounded_follow_custody_diagnostic(None) is None
+
+
+def test_inventory_stage_diagnostic_names_wait_and_bounds_replacement_facts() -> None:
+    facts = {"stage": "context-open", "pending_wait": "trusted-context-open",
+             "listened_control_connected": False, "popup_open_count": 1, "popup_close_count": 1}
+    assert child._bounded_stage_diagnostic(facts) == facts
+    assert child._bounded_stage_diagnostic({
+        "stage": None, "pending_wait": "task-card", "listened_control_connected": None,
+        "popup_open_count": 0, "popup_close_count": 0,
+    }) is not None
+    for invalid in ({**facts, "path": r"C:\private"},
+                    {**facts, "pending_wait": r"C:\private"},
+                    {**facts, "pending_wait": "x" * 97},
+                    {**facts, "stage": 1},
+                    {**facts, "listened_control_connected": 0},
+                    {**facts, "popup_open_count": True},
+                    {**facts, "popup_close_count": -1},
+                    {**facts, "popup_open_count": 65536}):
+        assert child._bounded_stage_diagnostic(invalid) is None
+    assert child._bounded_stage_diagnostic(None) is None
 
 
 @pytest.mark.headed
@@ -197,6 +224,9 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "active_node_id": selected_refresh["node_id"],
         }
         commands = initial["report"]["integrity_commands"]
+        assert initial["report"]["integrity_journey"]["follow_click_custody"] is True
+        assert commands["anchors"][0]["item_id"] == initial["report"]["fixture"]["first_item_id"]
+        assert commands["actual_items"][0]["item_type"] == "integrity"
         starts = commands["starts"]
         assert starts[0]["request_id"] == selected_refresh["request_id"]
         assert initial["report"]["publication"]["request_id"] == starts[-1]["next_request_id"]

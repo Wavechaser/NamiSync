@@ -55,6 +55,7 @@ const COMMAND_POLICY_JSON = `{
   "get_plan_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_execution_detail": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "get_plan_anchor": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "get_inventory_anchor": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "reveal_plan_move": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
   "mutate_plan_selection": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "mutate_plan_scope": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
@@ -833,15 +834,18 @@ export function setInventorySelection(taskId, requestId, expectedRevision, nodeI
   PLAN_VIEW_TIMEOUT_MS, false, onDelayed);
 }
 
-export function getInventoryWindow(taskId, expectedRevision, offset, limit) {
+export function getInventoryWindow(taskId, expectedRevision, offset, limit, anchorNodeId = null) {
   requireTaskId(taskId, "getInventoryWindow");
   if (!isNonnegativeInteger(expectedRevision) || !isNonnegativeInteger(offset)
-      || !Number.isInteger(limit) || limit < 1 || limit > 256) {
+      || !Number.isInteger(limit) || limit < 1 || limit > 256
+      || !(anchorNodeId === null || isNodeId(anchorNodeId))) {
     throw new TypeError("getInventoryWindow requires a bounded exact window");
   }
-  return inventoryRead("get_inventory_window", {task_id: taskId, expected_revision: expectedRevision, offset, limit},
+  const anchor = anchorNodeId === null ? {} : {anchor_node_id: anchorNodeId};
+  return inventoryRead("get_inventory_window", {task_id: taskId, expected_revision: expectedRevision, offset, limit, ...anchor},
     (value) => validateInventoryWindow(value) && value.offset === offset
-      && value.rows.length <= limit && (value.disposition === "conflict" || value.view_revision === expectedRevision));
+      && value.rows.length <= limit && (value.disposition === "conflict" || value.view_revision === expectedRevision)
+      && (anchorNodeId === null ? !Object.prototype.hasOwnProperty.call(value, "anchor_node_id") : value.anchor_node_id === anchorNodeId));
 }
 
 export function mutateInventoryHighlight(taskId, expectedViewRevision, expectedHighlightRevision,
@@ -1021,6 +1025,20 @@ export class OutcomeUnavailableError extends BridgeTransportError {
     super("The original action outcome cannot be confirmed. Close and reopen NamiSync to review its current state.");
     this.name = "OutcomeUnavailableError";
   }
+}
+
+export async function getInventoryItemAnchor(taskId, sessionId, expectedRevision, itemId) {
+  requireTaskId(taskId, "getInventoryItemAnchor");
+  if (typeof sessionId !== "string" || !ID_PATTERN.test(sessionId)
+      || !isNonnegativeInteger(expectedRevision) || !isBoundedV5Text(itemId, true)) {
+    throw new TypeError("getInventoryItemAnchor requires exact session, revision, and item identities");
+  }
+  const payload = Object.freeze({task_id: taskId, session_id: sessionId,
+    expected_revision: expectedRevision, item_id: itemId});
+  const submit = () => dispatchAttempt("get_inventory_anchor", payload, validatePlanAnchor, PLAN_VIEW_TIMEOUT_MS);
+  try { return await submit(); }
+  catch (error) { if (!(error instanceof BridgeTransportError)) throw error; }
+  return submit();
 }
 
 export async function getPlanOperationAnchor(
@@ -3007,7 +3025,8 @@ function validateInventoryIntegrity(value, rowIds) {
 }
 
 function validateInventoryWindow(value) {
-  return isExactObject(value, ["disposition", "view_revision", "highlight_revision", "offset", "total", "rows", ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "integrity") ? ["integrity"] : [])])
+  const anchored = isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "anchor_node_id");
+  return isExactObject(value, ["disposition", "view_revision", "highlight_revision", "offset", "total", "rows", ...(isPlainJsonObject(value) && Object.prototype.hasOwnProperty.call(value, "integrity") ? ["integrity"] : []), ...(anchored ? ["anchor_node_id", "anchor_visible_index"] : [])])
     && (!Object.prototype.hasOwnProperty.call(value, "integrity") || (Array.isArray(value.rows) && validateInventoryIntegrity(value.integrity, value.rows.map((row) => row?.row_id))))
     && ["current", "conflict"].includes(value.disposition)
     && [value.view_revision, value.highlight_revision, value.offset, value.total].every(isNonnegativeInteger)
@@ -3015,7 +3034,10 @@ function validateInventoryWindow(value) {
     && (value.disposition !== "conflict" || (value.rows.length === 0 && value.total === 0))
     && value.rows.every((row, index) => validateInventoryRow(row)
       && row.visible_index === value.offset + index && row.visible_index < value.total)
-    && new Set(value.rows.map((row) => row.node_id)).size === value.rows.length;
+    && new Set(value.rows.map((row) => row.node_id)).size === value.rows.length
+    && (!anchored || (isNodeId(value.anchor_node_id) && isNullableNonnegativeInteger(value.anchor_visible_index)
+      && (value.anchor_visible_index === null || value.anchor_visible_index < value.total)
+      && value.rows.every(row => (row.node_id === value.anchor_node_id) === (row.visible_index === value.anchor_visible_index))));
 }
 
 function validateInventoryRow(value) {

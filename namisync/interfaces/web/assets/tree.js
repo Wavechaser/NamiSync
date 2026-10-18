@@ -43,18 +43,26 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
 
   let renderedByIndex = new Map();
   let activeElement = null;
-  let activeNodeId = null;
-  let activeVisibleIndex = null;
-  let initializedActive = false;
+  let activeNodeId = callbacks.initialActive?.nodeId ?? null;
+  let activeVisibleIndex = callbacks.initialActive?.visibleIndex ?? null;
+  let initializedActive = activeNodeId !== null;
+  let passiveReveal = initializedActive;
+  let keyboardGesture = "replace";
   let disposed = false;
 
   const table = createTableController(viewport, rowHeight, topInset, {
     requestIndex, requestCancelled, viewportChanged: reconcileVisibleActive,
+    manualScroll: (first, last) => {
+      if (callbacks.interactionAllowed?.() === false) return;
+      passiveReveal = false;
+      callbacks.manualScroll?.(first, last);
+    },
   });
   root.addEventListener("keydown", onKeyDown);
   root.addEventListener("focus", onFocus);
 
   function onFocus() {
+    if (passiveReveal || callbacks.interactionAllowed?.() === false) return;
     if (activeElement !== null) {
       revealActiveRow();
       return;
@@ -67,8 +75,9 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     }
   }
 
-  function commitWindow(generation, window, preferredNodeId = null, reveal = true) {
+  function commitWindow(generation, window, preferredNodeId = null, reveal = true, passive = false) {
     return table.commitWindow(generation, window, (admittedRequest, restoreScroll) => {
+      if (passive) passiveReveal = true;
       const offset = window.offset;
       const total = window.total;
       const sourceRows = window.rows;
@@ -79,6 +88,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
         let entry;
         const element = createRow(document, treeId, row, (event) => {
           event.stopPropagation();
+          if (callbacks.interactionAllowed?.() === false) return;
           if (row.expanded === null) {
             return;
           }
@@ -89,11 +99,13 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
         decorateRow(element, sourceRow);
         entry = Object.freeze({element, row});
         element.addEventListener("click", (event) => {
+          if (callbacks.interactionAllowed?.() === false) return;
           acceptRenderedIntent(entry, callbacks.highlight === undefined);
           root.focus({preventScroll: true});
           activate(row.node_id, event);
         });
         element.addEventListener("contextmenu", (event) => {
+          if (callbacks.interactionAllowed?.() === false) { event.preventDefault(); event.stopPropagation(); return; }
           acceptRenderedIntent(entry, false);
           context(row.node_id, event, element);
         });
@@ -118,37 +130,50 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       renderedByIndex = nextByIndex;
       restoreScroll();
 
+      const anchorMatches = activeNodeId !== null && window.anchor_node_id === activeNodeId;
+      const disappeared = anchorMatches && window.anchor_visible_index === null;
+      if (disappeared) { passiveReveal = true; clearActive(true); }
+      else if (anchorMatches) {
+        activeVisibleIndex = window.anchor_visible_index;
+        if (requestKind === "external" && preferredNodeId === null) passiveReveal = true;
+      }
       let target = null;
-      if (requestKind === "scroll") {
-        target = visibleEntry();
+      if (requestKind === "keyboard") {
+        target = renderedByIndex.get(requestedIndex) ?? null;
       } else if (preferredNodeId !== null) {
-        target = entries.find(
-          (entry) => entry.row.node_id === preferredNodeId,
-        ) ?? null;
+        target = entries.find(entry => entry.row.node_id === preferredNodeId) ?? null;
+      } else if (passiveReveal) {
+        target = entries.find(entry => entry.row.node_id === activeNodeId) ?? null;
+      } else if (requestKind === "scroll") {
+        target = visibleEntry();
+      } else if (anchorMatches) {
+        target = entries.find(entry => entry.row.node_id === activeNodeId) ?? null;
       }
       if (
-        target === null && requestKind !== "scroll" &&
+        !passiveReveal && !anchorMatches && target === null && requestKind !== "scroll" &&
         requestedIndex !== null
       ) {
         target = renderedByIndex.get(requestedIndex) ?? null;
       }
       if (
-        target === null && requestKind !== "scroll" && activeNodeId !== null
+        !passiveReveal && !anchorMatches && target === null && requestKind !== "scroll" && activeNodeId !== null
       ) {
         target = entries.find(
           (entry) => entry.row.node_id === activeNodeId,
         ) ?? null;
       }
       if (
-        target === null && requestKind !== "scroll" && entries.length > 0
+        !passiveReveal && !anchorMatches && target === null && requestKind !== "scroll" && entries.length > 0
       ) {
         target = nearestEntry(entries, activeVisibleIndex);
       }
       if (target === null) {
-        clearActive(requestKind === "scroll");
+        if ((passiveReveal || anchorMatches) && !disappeared && total > 0) detachActive();
+        else clearActive(passiveReveal || requestKind === "scroll" || disappeared);
       } else {
+        if (requestKind === "keyboard" || preferredNodeId !== null) passiveReveal = false;
         setActive(target, reveal && requestKind !== "scroll");
-        if (requestKind === "keyboard" && callbacks.highlight !== undefined) highlight("replace", target.row.node_id);
+        if (requestKind === "keyboard" && callbacks.highlight !== undefined) highlight(keyboardGesture, target.row.node_id);
       }
     }, reveal);
   }
@@ -176,18 +201,22 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
 
   function clearActive(suppressFocusInitialization = false) {
     const changed = activeNodeId !== null;
+    detachActive();
+    activeNodeId = null;
+    activeVisibleIndex = null;
+    initializedActive = suppressFocusInitialization;
+    if (changed) activeChanged(null);
+  }
+
+  function detachActive() {
     if (activeElement !== null) {
       delete activeElement.dataset.active;
     }
     activeElement = null;
-    activeNodeId = null;
-    activeVisibleIndex = null;
-    initializedActive = suppressFocusInitialization;
     root.removeAttribute("aria-activedescendant");
-    if (changed) activeChanged(null);
   }
 
-  function navigateTo(visibleIndex) {
+  function navigateTo(visibleIndex, gesture = "replace") {
     table.resetTravel();
     if (visibleIndex < 0 || visibleIndex >= table.total) {
       return;
@@ -195,13 +224,20 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     const rendered = renderedByIndex.get(visibleIndex);
     if (rendered !== undefined) {
       acceptRenderedIntent(rendered);
-      if (callbacks.highlight !== undefined) highlight("replace", rendered.row.node_id);
+      if (callbacks.highlight !== undefined) highlight(gesture, rendered.row.node_id);
       return;
     }
+    keyboardGesture = gesture;
     table.requestKeyboard(visibleIndex);
   }
 
   function reconcileVisibleActive(preferredIndex = null) {
+    if (passiveReveal || callbacks.interactionAllowed?.() === false) {
+      const retained = [...renderedByIndex.values()].find(entry => entry.row.node_id === activeNodeId);
+      if (retained !== undefined) setActive(retained, false);
+      else detachActive();
+      return;
+    }
     const target = visibleEntry(preferredIndex);
     if (target !== null) {
       if (target.element !== activeElement) {
@@ -241,15 +277,32 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   }
 
   function acceptRenderedIntent(entry, reveal = true) {
+    passiveReveal = false;
     table.invalidateInternalRequest();
     setActive(entry, reveal);
   }
 
   function onKeyDown(event) {
+    if (callbacks.interactionAllowed?.() === false) {
+      event.stopPropagation();
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", " ", "ContextMenu"].includes(event.key)
+          || (event.key === "F10" && event.shiftKey)) {
+        event.preventDefault();
+      }
+      return;
+    }
     const gesture = keyboardHighlightGesture(event);
     if (!event.defaultPrevented && callbacks.highlight !== undefined && gesture !== null) {
       event.preventDefault();
+      const retainedIndex = table.keyboardIndex ?? activeVisibleIndex;
       table.invalidateInternalRequest();
+      if ((passiveReveal || activeElement === null) && activeVisibleIndex !== null && gesture.startsWith("move_")) {
+        navigateTo(Math.max(0, Math.min(table.total - 1,
+          retainedIndex + (gesture.startsWith("move_down") ? 1 : -1))),
+        gesture.endsWith("_extend") ? "extend" : "replace");
+        return;
+      }
+      if (gesture !== "clear") passiveReveal = false;
       highlight(gesture, null);
       return;
     }
@@ -346,8 +399,20 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
     root.removeEventListener("focus", onFocus);
   }
 
+  function commitPassiveWindow(generation, window) {
+    return commitWindow(generation, window, null, false, true);
+  }
+  function revealPassiveRow(index) {
+    passiveReveal = true;
+    table.revealRow(index);
+  }
+  function cancelNavigation() {
+    table.cancelNavigation();
+  }
+
   return Object.freeze({beginWindowRequest: table.beginWindowRequest, commitWindow,
-    finishWindowRequest: table.finishWindowRequest, cancelNavigation: table.cancelNavigation, dispose});
+    commitPassiveWindow, revealPassiveRow,
+    finishWindowRequest: table.finishWindowRequest, cancelNavigation, dispose});
 }
 
 function optionalCallback(callbacks, name) {

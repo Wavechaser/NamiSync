@@ -11,7 +11,7 @@ from namisync.workflows import (
 )
 from .visible_sequence import (
     VisibleSequence, VisibleSequenceParameters, _derive_visible_sequence_from_validated,
-    window_visible_sequence,
+    window_visible_sequence, resolve_visible_node_anchor,
 )
 from .plan_review import _tail_text
 from .row_highlight import apply_row_highlight, highlight_visible_index
@@ -260,11 +260,29 @@ class InventoryReviewState:
             collapsed_node_ids=next_collapsed)
         return self.summary(disposition="current" if disposition == "applied" else disposition)
 
-    def window(self, *, expected_revision: int, offset: int, limit: int) -> dict[str, object]:
+    def row_anchor(self, *, expected_revision: int, row_id: str) -> dict[str, object]:
+        result = {"disposition": "current", "view_revision": self.view_revision,
+                  "node_id": None, "index": None}
+        if expected_revision != self.view_revision:
+            return {**result, "disposition": "conflict"}
+        node_id = self.projection.node_id_by_row_id.get(row_id)
+        if node_id is not None:
+            anchor = resolve_visible_node_anchor(self._view.visible, node_id)
+            if anchor is not None and anchor.index > 0:
+                result.update(node_id=anchor.node_id, index=anchor.index - 1)
+        return result
+
+    def window(self, *, expected_revision: int, offset: int, limit: int,
+               anchor_node_id: str | None = None) -> dict[str, object]:
+        anchor = {} if anchor_node_id is None else {
+            "anchor_node_id": anchor_node_id,
+            "anchor_visible_index": None if expected_revision != self.view_revision
+                else highlight_visible_index(self._view.visible, anchor_node_id),
+        }
         if expected_revision != self.view_revision:
             return {"disposition": "conflict", "view_revision": self.view_revision,
                     "highlight_revision": self.highlight_revision,
-                    "offset": offset, "total": 0, "rows": []}
+                    "offset": offset, "total": 0, "rows": [], **anchor}
         window = window_visible_sequence(self._view.visible, offset=offset + 1, limit=limit)
         rows = []
         for frame in window.rows:
@@ -300,4 +318,4 @@ class InventoryReviewState:
             })
         return {"disposition": "current", "view_revision": self.view_revision,
                 "highlight_revision": self.highlight_revision,
-                "offset": offset, "total": max(0, window.total - 1), "rows": rows}
+                "offset": offset, "total": max(0, window.total - 1), "rows": rows, **anchor}
