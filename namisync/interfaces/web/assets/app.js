@@ -314,6 +314,15 @@ function checkableOutcome(recovery) {
   return recovery?.canCheck === true;
 }
 
+function ownedAttemptRecovery(attempt, stillOwned, present = null) {
+  return (recovery) => {
+    if (!stillOwned()) return;
+    attempt.recovery = recovery;
+    present?.(recovery);
+    renderTasks();
+  };
+}
+
 function canCancelAfterFixedReviewOutcome(task, review) {
   const attempt = task.executionControlAttempt;
   return review !== null && review.pending === "outcome"
@@ -1702,13 +1711,10 @@ async function submitInventoryIntegrity(task, attempt) {
   const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt;
   try {
     const result = await startInventoryIntegrity(task.taskId, attempt.requestId, attempt.commandId,
-      attempt.revision, attempt.mode, attempt.mode === "rebaseline", (recovery) => {
-        if (stillOwned()) {
-          attempt.recovery = recovery;
-          attempt.message = recovery.message;
-          renderTasks();
-        }
-      }, attempt.scope);
+      attempt.revision, attempt.mode, attempt.mode === "rebaseline",
+      ownedAttemptRecovery(attempt, stillOwned, (recovery) => {
+        attempt.message = recovery.message;
+      }), attempt.scope);
     if (!stillOwned()) return;
     task.inventoryAction = null;
     adoptTaskStart(result, attempt.mode, task.taskKind);
@@ -1750,13 +1756,10 @@ async function controlInventoryIntegrity(review, actionName) {
   const stillOwned = () => tasks.get(task.taskId) === task && task.sessionId === attempt.sessionId
     && task.inventoryAction === attempt;
   try {
-    const result = await controlIntegrity(task.taskId, attempt.sessionId, actionName, (recovery) => {
-      if (stillOwned()) {
-        attempt.recovery = recovery;
+    const result = await controlIntegrity(task.taskId, attempt.sessionId, actionName,
+      ownedAttemptRecovery(attempt, stillOwned, (recovery) => {
         attempt.message = recovery.message;
-        renderTasks();
-      }
-    });
+      }));
     if (!stillOwned()) return;
     attempt.pending = false;
     attempt.accepted = result.accepted;
@@ -1821,12 +1824,12 @@ async function runInventoryAction(review, kind, nodeId) {
   retireInventoryDetail(review);
   renderTasks();
   const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt;
-  const onDelayed = (recovery) => {
-    if (!stillOwned()) return;
-    if (typeof recovery?.check === "function") attempt.recovery = recovery;
+  const attachRecovery = ownedAttemptRecovery(attempt, stillOwned, () => {
     attempt.message = attempt.recovery?.message ?? "Waiting for the original inventory outcome…";
-    renderTasks();
-  };
+  });
+  const onDelayed = (recovery) => attachRecovery(
+    typeof recovery?.check === "function" ? recovery : attempt.recovery,
+  );
   try {
     const result = kind === "refresh"
       ? await refreshInventory(task.taskId, requestId, attempt.commandId, revision, nodeId, onDelayed)
@@ -3215,13 +3218,8 @@ async function submitReviewedExecution(task, attempt) {
     attempt.requestId,
     attempt.selectionRevision,
     attempt.destructiveAcknowledged,
-    (recovery) => {
-      if (tasks.get(task.taskId) === task && task.executionAttempt === attempt
-          && task.review !== null) {
-        attempt.recovery = recovery;
-        renderTasks();
-      }
-    },
+    ownedAttemptRecovery(attempt, () => tasks.get(task.taskId) === task
+      && task.executionAttempt === attempt && task.review !== null),
   );
   attempt.submissionStarted = true;
   attempt.state = "submitting";
@@ -3373,13 +3371,10 @@ async function controlReviewedExecution(review, actionName) {
   const stillOwned = () => tasks.get(task.taskId) === task
     && task.sessionId === sessionId && task.executionControlAttempt === attempt;
   try {
-    const result = await controlExecution(task.taskId, sessionId, actionName, (recovery) => {
-      if (stillOwned() && task.review !== null) {
-        attempt.recovery = recovery;
+    const result = await controlExecution(task.taskId, sessionId, actionName,
+      ownedAttemptRecovery(attempt, () => stillOwned() && task.review !== null, (recovery) => {
         if (!independentCancel) task.review.recovery = recovery;
-        renderTasks();
-      }
-    });
+      }));
     if (!stillOwned() || task.sessionState !== "active" || task.drainUnavailable) return;
     recordExecutionControlResult(task, attempt, result);
   } catch (error) {

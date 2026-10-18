@@ -179,6 +179,9 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
 
+- Share browser recovery-handle attachment across execution and Inventory
+  actions while retaining each action's ownership, feedback and settlement.
+  Check continues to observe the original request without resubmitting it.
 - Share typed delivery snapshot capture and restoration across execution and
   ordinary Inventory starts. Replace positional summary and diagnostic readers
   while preserving caller-owned map copies, rollback and generation custody.

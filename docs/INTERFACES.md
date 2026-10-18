@@ -589,6 +589,11 @@ Each issuing page owner retains the bridge's stable recovery handle instead of
 copying its pending, checking and unavailable state. Review uncertainty stays on
 its retained review and execution-control observation on its issuing control
 attempt; workflow stages and exact ownership guards remain page responsibilities.
+Execution and ordinary Inventory start/control callbacks share only owned-handle
+attachment and repaint. Their callers retain the ownership predicate and feedback,
+including independent Cancel and Refresh's feedback-only notifications. Result
+settlement and Check routing remain with those callers and the original bridge
+attempt; sharing does not add a second request or recovery state machine.
 An explicit Close after a fixed
 review/control error uses the existing exact task/session cleanup; it neither
 replays the uncertain action nor claims its outcome is known.

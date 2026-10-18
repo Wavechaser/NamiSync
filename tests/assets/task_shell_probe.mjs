@@ -2536,6 +2536,11 @@ const pauseReview = unknownPauseTask.review;
 const pauseBase = executionControls.length;
 globalThis.planReviewHarness.callbacks.onControl(pauseReview, "pause");
 await until(() => executionControls.length === pauseBase + 1);
+const pauseRecovery = executionControls.at(-1).recovery;
+assertSameNode(unknownPauseTask.executionControlAttempt.recovery, pauseRecovery,
+  "execution control retains the supplied handle");
+assertSameNode(pauseReview.recovery, pauseRecovery,
+  "ordinary execution control shares that handle with its review");
 executionControls.at(-1).notify({ state: "fixed-unknown", canCheck: false,
   message: "execution-fixed-outcome-sentinel" });
 executionControls.at(-1).reject(new OutcomeUnavailableErrorType(null, false));
@@ -2546,6 +2551,11 @@ globalThis.planReviewHarness.callbacks.onControl(pauseReview, "cancel");
 await until(() => executionControls.length === pauseBase + 2);
 assert.equal(pauseReview.pending, "outcome");
 assert.equal(unknownPauseTask.executionControlAttempt.independent, true);
+const cancelRecovery = executionControls.at(-1).recovery;
+assertSameNode(unknownPauseTask.executionControlAttempt.recovery, cancelRecovery,
+  "independent Cancel retains its own supplied handle");
+assertSameNode(pauseReview.recovery, pauseRecovery,
+  "independent Cancel preserves the original review handle");
 let cancelObservationCalls = 0;
 executionControls.at(-1).notify({ state: "unavailable", canCheck: true,
   message: "execution-check-sentinel", check: () => {
@@ -2569,6 +2579,8 @@ planWindows.at(-1).resolve(planWindow(pauseReview.summary));
 await until(() => unknownPauseTask.review !== pauseReview);
 const reloadedPauseReview = unknownPauseTask.review;
 assert.equal(reloadedPauseReview.pending, "outcome");
+assertSameNode(reloadedPauseReview.recovery, pauseRecovery,
+  "review replacement preserves the original Pause handle");
 assert.equal(reloadedPauseReview.recovery.message, "execution-fixed-outcome-sentinel");
 globalThis.planReviewHarness.callbacks.onRetryOutcome(reloadedPauseReview);
 await until(() => cancelObservationCalls === 1);

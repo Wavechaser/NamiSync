@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { assertSameNode } from "./fake_dom_assertions.mjs";
+import { fakeRecoveryHandle } from "./fake_recovery_handle.mjs";
 
 class ElementFake {
   constructor(tag) {
@@ -27,6 +28,7 @@ let delayedDetail = null, delayedWindow = null, delayedView = null, delayedOpen 
 let taskSnapshot = null, observedChecks = 0, refuseRefresh = false, delayedRefresh = null;
 let refuseIntegrityStart = false;
 let delayedIntegrityStart = null, integrityStartChecks = 0;
+let delayedIntegrityControl = null, integrityControlChecks = 0, refreshChecks = 0;
 let delayedSelection = null, selectionDisposition = "current", selectedFileCount = fixture.views.default.summary.selected_file_count;
 let executionStartResult = null;
 let planSummaryResponse = null, planWindowResponse = null, delayedPlanOpen = null;
@@ -79,13 +81,22 @@ globalThis.inventoryHarness = {
     taskSnapshot = { ...taskSnapshot, task_id: taskId, session_id: "7".repeat(32),
       session_state: "active", session_released: false, request_id: "8".repeat(32),
       session_kind: "inventory" };
-    return delayedRefresh?.promise ?? Promise.resolve({ task_id: taskId, session_id: taskSnapshot.session_id,
+    if (delayedRefresh !== null) {
+      const held = delayedRefresh;
+      held.recovery = fakeRecoveryHandle({canCheck:true, message:"refresh-check-sentinel",
+        check() { refreshChecks += 1; return Promise.resolve(null); }});
+      args[5]?.(held.recovery);
+      return held.promise;
+    }
+    return Promise.resolve({ task_id: taskId, session_id: taskSnapshot.session_id,
       request_id: taskSnapshot.request_id });
   },
   restoreInventory(...args) {
     calls.push(["restore", ...args.slice(0, 5)]);
-    args[5]?.({ canCheck: true, checking: false, message: "Original result pending",
-      check() { observedChecks += 1; return Promise.resolve(); } });
+    const recovery = fakeRecoveryHandle({canCheck:true, message:"Original result pending",
+      check() { observedChecks += 1; return Promise.resolve(); }});
+    if (delayedVisibility !== null) delayedVisibility.recovery = recovery;
+    args[5]?.(recovery);
     return delayedVisibility?.promise ?? Promise.resolve({ task_id: args[0], request_id: args[1],
       action: "restore", expected_revision: args[3], total: 3, applied: 1, noop: 0,
       stale: 1, conflict: 1, unresolved_count: 0, disposition: "completed" });
@@ -117,18 +128,30 @@ globalThis.inventoryHarness = {
       request_id:taskSnapshot.request_id};
     if (delayedIntegrityStart !== null) {
       const held = delayedIntegrityStart;
-      onDelayed({canCheck:true, checking:false, message:"Check original integrity start",
+      held.recovery = fakeRecoveryHandle({canCheck:true, message:"integrity-start-check-sentinel",
         check() { integrityStartChecks += 1; held.resolve(result); return held.promise; }});
+      held.notify = () => onDelayed(held.recovery);
+      held.notify();
       return held.promise;
     }
     return Promise.resolve(result);
   },
-  controlIntegrity(taskId, sessionId, action) {
+  controlIntegrity(taskId, sessionId, action, onDelayed) {
     calls.push(["integrity-control", taskId, sessionId, action]);
-    return Promise.resolve({session_id:sessionId, action, accepted:true,
+    const result = {session_id:sessionId, action, accepted:true,
       before:action === "resume" ? "paused" : "running",
       after:action === "pause" ? "pausing" : action === "cancel" ? "canceling" : "running",
-      detail:null});
+      detail:null};
+    if (delayedIntegrityControl !== null) {
+      const held = delayedIntegrityControl;
+      held.result = result;
+      held.recovery = fakeRecoveryHandle({canCheck:true, message:"integrity-control-check-sentinel",
+        check() { integrityControlChecks += 1; return Promise.resolve(null); }});
+      held.notify = () => onDelayed(held.recovery);
+      held.notify();
+      return held.promise;
+    }
+    return Promise.resolve(result);
   },
   startExecution(taskId, requestId, revision, acknowledged) {
     calls.push(["execution-start", taskId, requestId, revision, acknowledged]);
@@ -413,6 +436,8 @@ assert.deepEqual(restoreCall.slice(1, 3), [taskId, task.requestId]);
 assert.equal(restoreCall[4], review.summary.view_revision);
 assert.equal(restoreCall[5], acknowledgedRow.node_id);
 assert.equal(task.inventoryAction.pending, true);
+assertSameNode(task.inventoryAction.recovery, delayedVisibility.recovery,
+  "Restore retains the exact supplied recovery handle");
 await app.checkInventoryOutcome(task);
 assert.equal(observedChecks, 1);
 assert.equal(calls.filter(([name]) => name === "restore").length, 1, "Check cannot submit again");
@@ -506,7 +531,16 @@ app.adoptTask({ task_id: taskId, session_id: "b".repeat(32), session_state: "com
   session_released: true, task_kind: "inventory", request_id: fixture.views.default.summary.request_id,
   plan_request_id: null, session_kind: "inventory" });
 delayedRefresh = defer();
+const lateRefresh = delayedRefresh;
+const heldRefreshCount = calls.filter(([name]) => name === "refresh").length;
 const lateStart = app.runInventoryAction(task.inventoryReview, "refresh", null);
+assertSameNode(task.inventoryAction.recovery, lateRefresh.recovery,
+  "Refresh retains the exact supplied recovery handle");
+assert.equal(task.inventoryAction.message, "refresh-check-sentinel");
+await app.checkInventoryOutcome(task);
+assert.equal(refreshChecks, 1);
+assert.equal(calls.filter(([name]) => name === "refresh").length, heldRefreshCount + 1,
+  "Check observes Refresh without a second submission");
 await app.refreshTasks();
 const observedDrain = drains.at(-1);
 observedDrain[2]({ update_type: "record" }, {
@@ -709,9 +743,18 @@ globalThis.inventoryHarness.listTasks = () => ++integrityListReads === 1
   ? staleIntegrityList.promise : Promise.resolve({tasks:[taskSnapshot]});
 const heldIntegrityRead = app.refreshTasks();
 delayedIntegrityStart = defer();
+const heldIntegrityStart = delayedIntegrityStart;
 const delayedStart = app.startInventoryIntegrityAction(d1Review, "baseline", trigger);
 await tick();
 assert.equal(d1Task.inventoryAction.recovery.canCheck, true);
+assertSameNode(d1Task.inventoryAction.recovery, heldIntegrityStart.recovery,
+  "ordinary start retains the supplied handle");
+assert.equal(d1Task.inventoryAction.message, "integrity-start-check-sentinel");
+heldIntegrityStart.recovery.message = "integrity-start-later-sentinel";
+heldIntegrityStart.notify();
+assertSameNode(d1Task.inventoryAction.recovery, heldIntegrityStart.recovery,
+  "later ordinary start notifications retain the original handle");
+assert.equal(d1Task.inventoryAction.message, "integrity-start-later-sentinel");
 await app.checkInventoryOutcome(d1Task);
 await delayedStart;
 delayedIntegrityStart = null;
@@ -730,7 +773,20 @@ assert.equal(d1Task.requestId, "e".repeat(32),
 assert.equal(d1Task.sessionId, "d".repeat(32));
 globalThis.inventoryHarness.listTasks = originalListTasks;
 const controlsBefore = calls.filter(([name]) => name === "integrity-control").length;
-await app.controlInventoryIntegrity(d1Review, "pause");
+delayedIntegrityControl = defer();
+const heldIntegrityControl = delayedIntegrityControl;
+const pausedIntegrity = app.controlInventoryIntegrity(d1Review, "pause");
+const ordinaryControlAttempt = d1Task.inventoryAction;
+assertSameNode(ordinaryControlAttempt.recovery, heldIntegrityControl.recovery,
+  "ordinary control retains the supplied handle");
+assert.equal(ordinaryControlAttempt.message, "integrity-control-check-sentinel");
+await app.checkInventoryOutcome(d1Task);
+assert.equal(integrityControlChecks, 1);
+assert.equal(calls.filter(([name]) => name === "integrity-control").length, controlsBefore + 1,
+  "Check observes the ordinary control without a second submission");
+heldIntegrityControl.resolve(heldIntegrityControl.result);
+await pausedIntegrity;
+delayedIntegrityControl = null;
 assert.equal(calls.filter(([name]) => name === "integrity-control").length, controlsBefore + 1);
 assert.equal(d1Task.inventoryAction.accepted, true);
 await app.controlInventoryIntegrity(d1Review, "pause");
@@ -746,6 +802,13 @@ const activeSnapshot = {session_id:d1Task.sessionId, session_state:"active", pha
 app.acceptTaskUpdate(d1Task, d1Task.sessionId, {update_type:"state"}, activeSnapshot);
 assert.equal(d1Task.inventoryAction, null,
   "the authoritative pausing snapshot releases accepted receipt custody");
+const retiredControlMessage = ordinaryControlAttempt.message;
+const retiredControlRenders = renders.length;
+heldIntegrityControl.recovery.message = "retired-control-sentinel";
+heldIntegrityControl.notify();
+assert.equal(d1Task.inventoryAction, null, "a retired callback cannot attach to current ordinary state");
+assert.equal(ordinaryControlAttempt.message, retiredControlMessage);
+assert.equal(renders.length, retiredControlRenders, "a retired callback cannot repaint the task");
 assert.equal(d1Task.executionControlState, "pausing");
 app.acceptTaskUpdate(d1Task, d1Task.sessionId, {update_type:"progress"},
   {...activeSnapshot, control_state:"paused",

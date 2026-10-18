@@ -199,7 +199,7 @@ snapshot and one capture owner, preserving caller-prepared map copies and the
 existing restore ordering; no reset helper is needed by default. Its installed
 gate is both task-shell sizes. RV4B follows A's accepted commit with its own
 app/probe population and execution/Inventory/task-shell installed gate.
-RV4A's final candidate passes 257 owning checks, 2,469 interfaces/tools checks
+RV4A (`273045ff`) passes 257 owning checks, 2,469 interfaces/tools checks
 (three skips), both installed shell sizes and 12 imports. `rv4a-review-01.md`
 and `rv4a-01-integration.json` own its final independent review and commit
 accounting; raw baseline, owning and gate receipts remain under the evidence root.
@@ -210,10 +210,27 @@ callbacks; retain each caller's predicate, presentation, result settlement and
 Refresh feedback-only fallback. Extend existing held-action cases only for exact
 handle identity, Check routing and retired-owner rejection; bridge policy stays
 in its existing tests. No read/Follow, wire, effect or retry-policy change.
+RV4B's frozen candidate passes 63 owning/transport checks, 2,469 interfaces/tools
+checks (three unavailable-symlink skips), five installed execution/Inventory/shell
+cases and 12 imports. `rv4b-review-01.md` and `rv4b-01-integration.json` own final
+review and commit accounting; the current raw receipts remain in the evidence root.
 `rv5-census-01.md` identifies the independent command catalog, shared specimen
 producers, gallery-only row adapter and equivalent-witness journey reductions;
 execution journey changes belong to RV1 first. These are finite designs, not
 acceptance evidence or permission to bypass the dependency gates above.
+`rv5-refresh-02.md` refreshes that corpus at `69d37fa4`; revalidate RV4's actual
+delta before implementation. It separates four atomic outcomes: A, one literal
+command/policy oracle consumed by the seven existing test modules and benchmark
+helper; B, a real Inventory specimen producer shared by the two probes and gallery,
+with local appearance overlays and unchanged installed-package resolution; C,
+replace only the shell's two Filename sort roundtrips with a composed server/panel
+order witness, retaining the native Size cycle; D, move the gallery-only integrity
+row adapter into gallery.js, retaining the product integrity cell. Exact finite
+paths and assertion relocations are in that evidence note. Plan specimens remain
+local because their differing purposes provide no demonstrated shared-owner gain.
+A/B require interfaces/tools and their affected installed host/transport/gallery
+gates; C/D require interfaces plus shell/gallery respectively, with wheel guards
+and independent review for each. No other journey stages or guards are retired.
 
 ### Verify table hardening — 2026-10-15–16
 
