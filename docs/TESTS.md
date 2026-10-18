@@ -363,6 +363,10 @@ composition tests when native input is not part of the guarantee. Installed
 journeys retain the input-to-handler-to-effect seam, focus/scroll/accessibility,
 packaging and native-only checks. Relocate assertions only with an explicit
 equivalent witness; shortening a journey cannot silently retire coverage.
+Plan's sort probe composes real server view receipts with header callbacks and
+rendered rows, using independent expected Filename/Size/canonical orders. The
+installed shell retains the Size ascending/descending/reset cycle and chevron
+observation; the two Filename click/wait stages belong to that composed probe.
 Gallery panels may share fixture producers with probes, while their visual and
 behavioral assertions remain independent. Shared fixture code belongs in
 underscore-prefixed support modules, never imported collected tests.

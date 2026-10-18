@@ -682,18 +682,12 @@ window.addEventListener("error", (event) => {
   resizeHandle.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }));
   const keyboardResizeWorked = tableCells[4].getBoundingClientRect().width > sizeAfterPointer + 7;
   tableCard.style.removeProperty("inline-size");
-  const nameSort = review.querySelector('[data-sort-column="filename"]');
   const sizeSort = review.querySelector('[data-sort-column="size"]');
-  nameSort.click();
-  await until(() => tableCells[1].ariaSort === "ascending" && review.dataset.pending === "", "ascending Plan header sort");
-  nameSort.click();
-  await until(() => tableCells[1].ariaSort === "descending" && review.dataset.pending === "", "descending Plan header sort");
-  const chevronsVisible = !nameSort.querySelector(".nami-icon--chevron-down").hidden;
   sizeSort.click();
-  await until(() => tableCells[4].ariaSort === "ascending" && review.dataset.pending === "", "changed Plan header sort");
-  const changedSortStartsAscending = tableCells[1].ariaSort === "none";
+  await until(() => tableCells[4].ariaSort === "ascending" && review.dataset.pending === "", "ascending Size sort");
   sizeSort.click();
   await until(() => tableCells[4].ariaSort === "descending" && review.dataset.pending === "", "second Size sort");
+  const chevronsVisible = !sizeSort.querySelector(".nami-icon--chevron-down").hidden;
   sizeSort.click();
   await until(() => tableCells[4].ariaSort === "none" && review.dataset.pending === "", "canonical Plan header reset");
   review.querySelector('[data-action="filter-menu"]').click();
@@ -724,7 +718,6 @@ window.addEventListener("error", (event) => {
     keyboardResizeWorked,
     passiveSizing,
     chevronsVisible,
-    changedSortStartsAscending,
     planGeometry,
   };
   await control("prepare_plan_again");

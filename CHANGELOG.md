@@ -179,6 +179,9 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
 
+- Cover Plan sorting through real server receipts and rendered row order,
+  replacing two native Filename click/wait stages while retaining the
+  installed Size cycle and input/focus/effect checks.
 - Share real Inventory fixture production between browser probes and the
   component gallery, retaining local appearance cases, paging and independent
   visual expectations in installed tests and manual preview.

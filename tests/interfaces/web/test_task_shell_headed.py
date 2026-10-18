@@ -470,7 +470,6 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
             "pointerResizeWorked": True,
             "keyboardResizeWorked": True,
             "chevronsVisible": True,
-            "changedSortStartsAscending": True,
             "planGeometry": {
                 "documentFitsViewport": True,
                 "workBodyFitsViewport": True,

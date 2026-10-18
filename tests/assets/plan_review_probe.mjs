@@ -2127,4 +2127,48 @@ for (const name of ["wheel", "pointerdown", "touchstart"]) {
   assert.equal(scrollReads.length, readsBefore + 1, "the retired highlight never reads to reclaim focus");
   assertSameNode(document.activeElement, focusBefore, "input interruption prevents stale focus adoption");
 }
+if (process.argv[5] === "--sort-fixture") {
+  const receipts = JSON.parse(await readFile(process.argv[6], "utf8"));
+  const sortReview = { ...receipts[0], pending: null, message: "" };
+  const sortTask = { review: sortReview, error: null, canPlanAgain: true,
+    executionStarted: false, sessionState: "completed", executionControlState: "running",
+    closePending: false, executionAttempt: null };
+  const sortCalls = [];
+  const sortPanel = createPlanReviewPanel({ ...callbacks,
+    onViewChange: (owner, patch) => sortCalls.push([owner, patch]),
+  });
+  const states = [
+    ["path", "ascending", ["alpha", "mu", "zeta"]],
+    ["filename", "ascending", ["alpha", "mu", "zeta"]],
+    ["filename", "descending", ["zeta", "mu", "alpha"]],
+    ["size", "ascending", ["mu", "zeta", "alpha"]],
+    ["size", "descending", ["alpha", "zeta", "mu"]],
+    ["path", "ascending", ["alpha", "mu", "zeta"]],
+  ];
+  assert.equal(receipts.length, states.length);
+  sortPanel.render(sortTask);
+  for (const [index, [column, direction, order]] of states.entries()) {
+    if (index > 0) {
+      const clickedColumn = column === "path" ? "size" : column;
+      findByDataset(sortPanel.element, "sortColumn", clickedColumn).dispatch("click");
+      assert.equal(sortCalls.length, index, "each header click emits one view change");
+      assertSameNode(sortCalls.at(-1)[0], sortReview, "sort callback keeps review identity");
+      assert.deepEqual(sortCalls.at(-1)[1], { sortColumn: column, sortDirection: direction });
+      Object.assign(sortReview, receipts[index]);
+      sortPanel.render(sortTask);
+    }
+    assert.equal(sortReview.summary.view_revision, index);
+    assert.equal(sortReview.window.view_revision, index);
+    assert.deepEqual(walk(sortPanel.element).filter((element) => element.dataset.nodeId !== undefined)
+      .map((element) => element.dataset.nodeId), order, `${column} ${direction} renders server order`);
+    for (const name of ["filename", "size", "mtime"]) {
+      const header = findByDataset(sortPanel.element, "sortColumn", name);
+      const active = name === column;
+      assert.equal(header.parentElement.ariaSort, active ? direction : "none");
+      assert.equal(findByClass(header, "nami-icon--chevron-up").hidden, !active || direction !== "ascending");
+      assert.equal(findByClass(header, "nami-icon--chevron-down").hidden, !active || direction !== "descending");
+    }
+  }
+  sortPanel.dispose();
+}
 process.stdout.write("ok");

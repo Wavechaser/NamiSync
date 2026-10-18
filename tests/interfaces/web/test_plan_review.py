@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -20,6 +22,7 @@ from namisync.workflows import (
 from namisync.workflows.models import PlanArtifact, PlanRequest
 
 from _db_fixtures import file_stat, operation, plan
+from _frontend_test_support import _node_executable, run_node_probe
 
 
 def _node(
@@ -461,6 +464,60 @@ def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> No
         "index": 0,
     }
     assert state.window(expected_revision=0, offset=0, limit=1)["disposition"] == "conflict"
+
+
+def test_plan_sort_receipts_drive_real_panel_header_effects(tmp_path: Path) -> None:
+    from namisync.interfaces.web.drain import TaskRegistry, _TaskState, _decorate_execution_window
+
+    root = replace(_node("root", "Plan", 0, None, 4, container=True),
+        selection="selected", selectable_operation_count=3,
+        selected_operation_count=3, operation_count=3)
+    nodes = (root, *(replace(
+        _node(name, name + ".txt", index, 0, index + 1,
+            operation_id=str(index) * 32, kind="copy", size=size),
+        filename_key=name + ".txt", path=name + ".txt", path_origin="source",
+    ) for index, (name, size) in enumerate((("zeta", 20), ("alpha", 30), ("mu", 10)), 1)))
+    projection = PlanProjection("a" * 32, nodes,
+        {node.node_id: node.position for node in nodes},
+        {node.operation_id: node.node_id for node in nodes[1:]},
+        frozenset(node.operation_id for node in nodes[1:]))
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, projection,
+        0, "reviewing", r"C:\source", r"D:\target")
+    task = _TaskState(state.task_id, "2" * 32, lambda: 0.0)
+
+    def receipt(summary):
+        return {"summary": TaskRegistry._decorate_plan_summary_locked(task, summary),
+            "window": _decorate_execution_window(
+                state.window(expected_revision=state.view_revision, offset=0, limit=256),
+                TaskRegistry._execution_summary_locked(task),
+                task.execution_operation_results, task.execution_integrity_results, {})}
+
+    receipts = [receipt(state.summary())]
+    for column, direction in (
+        (PlanSortColumn.FILENAME, SortDirection.ASCENDING),
+        (PlanSortColumn.FILENAME, SortDirection.DESCENDING),
+        (PlanSortColumn.SIZE, SortDirection.ASCENDING),
+        (PlanSortColumn.SIZE, SortDirection.DESCENDING),
+        (PlanSortColumn.PATH, SortDirection.ASCENDING),
+    ):
+        summary = state.update(expected_revision=state.view_revision, search_query="",
+            filters=frozenset(), sort_column=column, sort_direction=direction,
+            collapse_node_id=None, collapsed=None)
+        assert summary["disposition"] == "applied"
+        receipts.append(receipt(summary))
+    fixture = tmp_path / "plan-sort.json"
+    fixture.write_text(json.dumps(receipts), encoding="utf-8")
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the composed Plan sort witness"
+    project = Path(__file__).parents[3]
+    assets = project / "namisync/interfaces/web/assets"
+    completed = run_node_probe([
+        str(node), str(project / "tests/assets/plan_review_probe.mjs"),
+        str(assets / "plan_review.js"), str(assets / "render.js"),
+        str(assets / "icons.js"), "--sort-fixture", str(fixture),
+    ], timeout=10)
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
 
 
 def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:

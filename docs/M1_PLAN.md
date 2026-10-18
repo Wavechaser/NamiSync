@@ -252,11 +252,16 @@ database seed helper to the package and checker identities. `rv5b-review-01.md`
 and `rv5b-01-integration.json` own final review and commit accounting.
 `rv5c-refresh-01.md` bounds C to test_plan_review.py, its existing JavaScript
 probe, and the shell child/parent. A three-sibling real state fixture supplies
-explicit filename keys and distinct canonical/Filename/Size orders; the probe
+matching path/filename keys and differing Filename/Size orders; the probe
 checks independent literal row orders after actual header callbacks and receipt
 adoption. Only then remove the two Filename native roundtrips and move the
 chevron observation to the retained Size cycle. Both installed shell sizes remain
 mandatory; no other input, focus, effect, viewport or Close coverage is retired.
+RV5C passes 124 owning checks, 2,075 interfaces checks, both installed shell
+sizes and 12 imports. `rv5c-review-01.md`, `rv5c-native-accounting-01.json` and
+`rv5c-01-integration.json` own independent review, exact input/package provenance
+and commit accounting. The two fixture-construction failures remain preserved;
+neither required a product change or weaker probe containment.
 
 ### Verify table hardening — 2026-10-15–16
 
