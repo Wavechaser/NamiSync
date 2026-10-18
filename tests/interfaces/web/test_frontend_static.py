@@ -14,6 +14,7 @@ import pytest
 from conftest import BuiltWheel
 
 import _frontend_test_support as frontend_support
+from _command_catalog import assert_browser_command_policy
 from _tree_window_fixture import (
     TREE_WINDOW_FIXTURE_SCHEMA,
     TreeWindowFixture,
@@ -1221,7 +1222,8 @@ def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None
         for name, spec in commands.items()
     }
 
-    assert browser_policy == native_policy
+    assert_browser_command_policy(browser_policy)
+    assert_browser_command_policy(native_policy)
 
 
 def test_ready_transition_cannot_overwrite_a_native_close_status(

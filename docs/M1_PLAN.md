@@ -231,6 +231,20 @@ local because their differing purposes provide no demonstrated shared-owner gain
 A/B require interfaces/tools and their affected installed host/transport/gallery
 gates; C/D require interfaces plus shell/gallery respectively, with wheel guards
 and independent review for each. No other journey stages or guards are retired.
+RV5A's final catalog candidate passes 481 owning checks and 238 checks after
+removing an unused import, 2,480 interfaces/tools checks (three unavailable-symlink
+skips), nine installed host/transport/gallery checks and 12 imports. Its eight
+changed inputs and unchanged benchmark-test dependency are frozen separately
+from product inputs; `rv5a-review-01.md` and `rv5a-01-integration.json` own final
+review and integration. No production command, policy or native guard changed.
+`rv5b-refresh-01.md` resolves B's fixture details: move the existing Inventory
+producer into `_review_fixtures.py`, add one production-emitted gallery seed,
+and assemble it in the common gallery child entry. Its finite writes are that
+helper, test_inventory_frontend.py, the gallery child/script and its existing
+parent test. Keep fourteen local appearance overlays, numeric test identities,
+64-row gallery paging, strict scenario execution and installed-only product
+imports. Both Inventory probes and all four gallery modes retain their existing
+independent assertions; no Plan fixture abstraction or launcher rewrite.
 
 ### Verify table hardening — 2026-10-15–16
 

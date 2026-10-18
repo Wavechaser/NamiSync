@@ -59,7 +59,6 @@ from namisync.interfaces.web.commands import (
     CommandRetry,
     CommandResponsePolicy,
     CommandWork,
-    FieldRequirement,
     PickerUnavailableError,
     PlanningRefusedError,
     PUBLIC_VIEW_DATACLASSES,
@@ -112,6 +111,9 @@ from tests.interfaces.web._public_view_witnesses import (
     iter_public_view_witnesses,
 )
 from _service_fixtures import make_service
+from _command_catalog import (
+    COMMAND_POLICY, CommandPolicy, assert_command_catalog, assert_browser_command_policy,
+)
 
 
 SOURCE_ID = "slot-11111111111111111111111111111111"
@@ -577,138 +579,65 @@ def test_move_reveal_command_routes_only_compact_revisioned_group_identity() -> 
             _invoke(commands["reveal_plan_move"], invalid)
 
 
+def _command_policy_projection(commands):
+    return {
+        name: CommandPolicy(*(getattr(spec, field).value for field in CommandPolicy._fields))
+        for name, spec in commands.items()
+    }
+
+
 def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete() -> None:
     commands, _, _ = _commands()
 
-    assert tuple(commands) == (
-        "shell_ready",
-        "readiness_echo",
-        "pick_folder",
-        "read_setup",
-        "probe_recent_pairs",
-        "prepare_setup",
-        "admit_location",
-        "create_task",
-        "list_tasks",
-        "start_plan",
-        "start_inventory",
-        "plan_again",
-        "open_plan_view",
-        "open_inventory_view",
-        "refresh_inventory",
-        "start_inventory_integrity",
-        "control_integrity",
-        "acknowledge_inventory",
-        "restore_inventory",
-        "update_inventory_view",
-        "set_inventory_selection",
-        "mutate_inventory_highlight",
-        "set_inventory_highlighted_selection",
-        "get_inventory_window",
-        "get_inventory_detail",
-        "update_plan_view",
-        "get_plan_detail",
-        "get_plan_window",
-        "get_execution_detail",
-        "reveal_plan_move",
-        "get_inventory_anchor",
-        "get_plan_anchor",
-        "mutate_plan_selection",
-        "mutate_plan_scope",
-        "mutate_plan_highlight",
-        "mutate_plan_highlighted_selection",
-        "start_execution",
-        "control_execution",
-        "next_events",
-        "release_terminal_session",
-        "close_task",
-        "read_cosmetic_section",
-        "replace_cosmetic_section",
-    )
+    assert_command_catalog(_command_policy_projection(commands))
+    for name, spec in commands.items():
+        assert spec.work is CommandWork(COMMAND_POLICY[name].work), name
+        assert spec.phase is CommandPhase(COMMAND_POLICY[name].phase), name
     assert "test_report" not in commands
-    async_commands = {
-        "refresh_inventory",
-        "start_inventory_integrity",
-        "acknowledge_inventory",
-        "restore_inventory",
-        "create_task",
-        "start_plan",
-        "start_inventory",
-        "plan_again",
-        "release_terminal_session",
-        "close_task",
-        "probe_recent_pairs",
-        "start_execution",
-    }
-    for name, spec in commands.items():
-        assert spec.work is (
-            CommandWork.ASYNC_SMALL if name in async_commands else CommandWork.DIRECT
-        ), name
-    assert {
-        name for name, spec in commands.items()
-        if spec.response_policy is CommandResponsePolicy.MUTATION_OBSERVED
-    } == {
-        "create_task", "start_plan", "start_inventory", "refresh_inventory", "start_inventory_integrity", "control_integrity",
-        "acknowledge_inventory", "restore_inventory",
-        "plan_again", "mutate_plan_selection", "mutate_plan_scope",
-        "mutate_plan_highlighted_selection", "start_execution",
-        "control_execution", "release_terminal_session", "close_task",
-    }
-    assert {
-        name for name, spec in commands.items()
-        if spec.response_policy is CommandResponsePolicy.FEEDBACK_ONLY
-    } == {
-        "admit_location", "update_plan_view", "mutate_plan_highlight", "reveal_plan_move",
-        "replace_cosmetic_section", "update_inventory_view", "set_inventory_selection",
-        "mutate_inventory_highlight", "set_inventory_highlighted_selection",
-    }
-    # Each group shares one policy; the browser mirror is checked separately.
-    groups = (
-        (("shell_ready",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
-         FieldRequirement.FORBIDDEN, CommandResponsePolicy.STARTUP_5_SECONDS, CommandRetry.NONE),
-        (("readiness_echo",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
-         FieldRequirement.FORBIDDEN, CommandResponsePolicy.STARTUP_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
-        (("pick_folder",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
-         FieldRequirement.FORBIDDEN, CommandResponsePolicy.INTERACTIVE, CommandRetry.NONE),
-        (("create_task", "start_plan", "start_inventory", "plan_again"),
-         CommandAccess.MUTATING, FieldRequirement.REQUIRED, FieldRequirement.FORBIDDEN,
-         CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
-        (("list_tasks", "read_cosmetic_section", "open_inventory_view"), CommandAccess.READ_ONLY,
-         FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
-         CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
-        (("get_inventory_window", "get_inventory_detail", "get_inventory_anchor"), CommandAccess.READ_ONLY,
-         FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
-         CommandResponsePolicy.LOCAL_5_SECONDS, CommandRetry.SAME_PAYLOAD_ONCE),
-        (("update_inventory_view", "set_inventory_selection", "mutate_inventory_highlight", "set_inventory_highlighted_selection"), CommandAccess.READ_ONLY,
-         FieldRequirement.FORBIDDEN, FieldRequirement.REQUIRED,
-         CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
-        (("refresh_inventory", "start_inventory_integrity", "acknowledge_inventory", "restore_inventory"), CommandAccess.MUTATING,
-         FieldRequirement.REQUIRED, FieldRequirement.REQUIRED,
-         CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
-        (("next_events",), CommandAccess.READ_ONLY, FieldRequirement.FORBIDDEN,
-         FieldRequirement.FORBIDDEN, CommandResponsePolicy.DRAIN_30_SECONDS, CommandRetry.NONE),
-        (("release_terminal_session", "close_task"), CommandAccess.MUTATING,
-         FieldRequirement.FORBIDDEN, FieldRequirement.FORBIDDEN,
-         CommandResponsePolicy.MUTATION_OBSERVED, CommandRetry.NONE),
-        (("replace_cosmetic_section",), CommandAccess.MUTATING, FieldRequirement.FORBIDDEN,
-         FieldRequirement.REQUIRED, CommandResponsePolicy.FEEDBACK_ONLY, CommandRetry.NONE),
-    )
-    for names, access, command_id, revision, response_policy, retry in groups:
-        for name in names:
-            spec = commands[name]
-            assert (spec.access, spec.command_id, spec.revision, spec.response_policy, spec.retry) == (
-                access, command_id, revision, response_policy, retry,
-            ), name
-    for name, spec in commands.items():
-        assert spec.phase is (
-            CommandPhase.BOOTSTRAP if name in {"shell_ready", "readiness_echo"}
-            else CommandPhase.OPEN
-        ), name
-
     with pytest.raises(TypeError):
         commands["future_command"] = commands["pick_folder"]  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
         commands["pick_folder"].retry = CommandRetry.NONE  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("corruption", ("unknown", "missing", "order"))
+def test_independent_command_catalog_rejects_exposure_drift(corruption: str) -> None:
+    commands, _, _ = _commands()
+    actual = _command_policy_projection(commands)
+    if corruption == "unknown":
+        actual["future_command"] = actual["pick_folder"]
+    elif corruption == "missing":
+        del actual["pick_folder"]
+    else:
+        actual = dict(reversed(tuple(actual.items())))
+    with pytest.raises(AssertionError):
+        assert_command_catalog(actual)
+
+
+@pytest.mark.parametrize("field", CommandPolicy._fields)
+def test_independent_command_catalog_rejects_policy_drift(field: str) -> None:
+    commands, _, _ = _commands()
+    original = getattr(commands["pick_folder"], field)
+    alternative = next(value for value in type(original) if value != original)
+    changed = {**commands, "pick_folder": replace(commands["pick_folder"], **{field: alternative})}
+    with pytest.raises(AssertionError):
+        assert_command_catalog(_command_policy_projection(changed))
+
+
+def test_independent_catalog_rejects_coordinated_native_and_browser_policy_drift() -> None:
+    commands, _, _ = _commands()
+    changed = {**commands, "pick_folder": replace(commands["pick_folder"],
+        response_policy=CommandResponsePolicy.LOCAL_5_SECONDS)}
+    browser = {
+        name: {"response_policy": spec.response_policy.value,
+               "retry": spec.retry.value, "phase": spec.phase.value}
+        for name, spec in changed.items()
+    }
+    assert browser["pick_folder"]["response_policy"] == changed["pick_folder"].response_policy.value
+    with pytest.raises(AssertionError):
+        assert_command_catalog(_command_policy_projection(changed))
+    with pytest.raises(AssertionError):
+        assert_browser_command_policy(browser)
 
 
 def test_operation_anchor_request_is_exact_read_only_and_session_bound() -> None:

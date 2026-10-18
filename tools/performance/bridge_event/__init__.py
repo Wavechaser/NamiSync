@@ -43,6 +43,7 @@ from _headed_native import (  # noqa: E402
     wait_for_window,
 )
 from _headed_evidence import EvidencePaths, EvidenceReader  # noqa: E402
+from _command_catalog import SORTED_COMMAND_NAMES  # noqa: E402
 
 
 _CHILD = Path(__file__).with_name("child.py")
@@ -1929,51 +1930,7 @@ def _summarize(
         and job_memory["max_sample_interval_seconds"]
         <= _MEMORY_MAX_BLIND_INTERVAL_SECONDS
     )
-    production_names = [
-        "acknowledge_inventory",
-        "admit_location",
-        "close_task",
-        "control_execution",
-        "control_integrity",
-        "create_task",
-        "get_execution_detail",
-        "get_inventory_anchor",
-        "get_inventory_detail",
-        "get_inventory_window",
-        "get_plan_anchor",
-        "get_plan_detail",
-        "get_plan_window",
-        "list_tasks",
-        "mutate_inventory_highlight",
-        "mutate_plan_highlight",
-        "mutate_plan_highlighted_selection",
-        "mutate_plan_scope",
-        "mutate_plan_selection",
-        "next_events",
-        "open_inventory_view",
-        "open_plan_view",
-        "pick_folder",
-        "plan_again",
-        "prepare_setup",
-        "probe_recent_pairs",
-        "read_cosmetic_section",
-        "read_setup",
-        "readiness_echo",
-        "refresh_inventory",
-        "release_terminal_session",
-        "replace_cosmetic_section",
-        "restore_inventory",
-        "reveal_plan_move",
-        "set_inventory_highlighted_selection",
-        "set_inventory_selection",
-        "shell_ready",
-        "start_execution",
-        "start_inventory",
-        "start_inventory_integrity",
-        "start_plan",
-        "update_inventory_view",
-        "update_plan_view",
-    ]
+    production_names = list(SORTED_COMMAND_NAMES)
     combined_names = sorted(
         [*production_names, "benchmark_report", "benchmark_start"]
     )

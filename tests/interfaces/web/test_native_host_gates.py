@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import pytest
 
+from _command_catalog import SORTED_COMMAND_NAMES
 import _native_gate_child as native_gate_child
 from conftest import HeadedInstalledWheel
 from _headed_evidence import (
@@ -404,51 +405,7 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert len(presentation_revisions) == 1
     assert presentation_revisions == sorted(set(presentation_revisions))
     assert all(revision > 0 for revision in presentation_revisions)
-    assert evidence["production_command_names"] == [
-        "acknowledge_inventory",
-        "admit_location",
-        "close_task",
-        "control_execution",
-        "control_integrity",
-        "create_task",
-        "get_execution_detail",
-        "get_inventory_anchor",
-        "get_inventory_detail",
-        "get_inventory_window",
-        "get_plan_anchor",
-        "get_plan_detail",
-        "get_plan_window",
-        "list_tasks",
-        "mutate_inventory_highlight",
-        "mutate_plan_highlight",
-        "mutate_plan_highlighted_selection",
-        "mutate_plan_scope",
-        "mutate_plan_selection",
-        "next_events",
-        "open_inventory_view",
-        "open_plan_view",
-        "pick_folder",
-        "plan_again",
-        "prepare_setup",
-        "probe_recent_pairs",
-        "read_cosmetic_section",
-        "read_setup",
-        "readiness_echo",
-        "refresh_inventory",
-        "release_terminal_session",
-        "replace_cosmetic_section",
-        "restore_inventory",
-        "reveal_plan_move",
-        "set_inventory_highlighted_selection",
-        "set_inventory_selection",
-        "shell_ready",
-        "start_execution",
-        "start_inventory",
-        "start_inventory_integrity",
-        "start_plan",
-        "update_inventory_view",
-        "update_plan_view",
-    ]
+    assert evidence["production_command_names"] == list(SORTED_COMMAND_NAMES)
     assert evidence["combined_command_names"] == sorted(
         [*evidence["production_command_names"], "native_probe"]
     )
@@ -1138,51 +1095,7 @@ def _assert_packaged_popup_evidence(
     assert page["initial_url"] == page["final_url"]
     assert page["document_token"].startswith("packaged-")
     assert page["ready_count"] == 1
-    assert evidence["production_command_names"] == [
-        "acknowledge_inventory",
-        "admit_location",
-        "close_task",
-        "control_execution",
-        "control_integrity",
-        "create_task",
-        "get_execution_detail",
-        "get_inventory_anchor",
-        "get_inventory_detail",
-        "get_inventory_window",
-        "get_plan_anchor",
-        "get_plan_detail",
-        "get_plan_window",
-        "list_tasks",
-        "mutate_inventory_highlight",
-        "mutate_plan_highlight",
-        "mutate_plan_highlighted_selection",
-        "mutate_plan_scope",
-        "mutate_plan_selection",
-        "next_events",
-        "open_inventory_view",
-        "open_plan_view",
-        "pick_folder",
-        "plan_again",
-        "prepare_setup",
-        "probe_recent_pairs",
-        "read_cosmetic_section",
-        "read_setup",
-        "readiness_echo",
-        "refresh_inventory",
-        "release_terminal_session",
-        "replace_cosmetic_section",
-        "restore_inventory",
-        "reveal_plan_move",
-        "set_inventory_highlighted_selection",
-        "set_inventory_selection",
-        "shell_ready",
-        "start_execution",
-        "start_inventory",
-        "start_inventory_integrity",
-        "start_plan",
-        "update_inventory_view",
-        "update_plan_view",
-    ]
+    assert evidence["production_command_names"] == list(SORTED_COMMAND_NAMES)
     assert evidence["combined_command_names"] == sorted(
         [*evidence["production_command_names"], "packaged_probe"]
     )

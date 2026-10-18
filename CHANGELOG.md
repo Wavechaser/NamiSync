@@ -179,6 +179,9 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
 
+- Consolidate command exposure and policy expectations into one independent
+  test catalog shared by native/browser, installed-host and benchmark checks;
+  retain drift controls and package exclusion.
 - Share browser recovery-handle attachment across execution and Inventory
   actions while retaining each action's ownership, feedback and settlement.
   Check continues to observe the original request without resubmitting it.

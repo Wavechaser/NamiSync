@@ -369,6 +369,11 @@ underscore-prefixed support modules, never imported collected tests.
 Keep one independently specified expected command catalog for exposure/policy
 checks; consumers reuse it or derive operational lists from production specs.
 Derivation must not make unintended command exposure self-accepting.
+The literal oracle lives in `tests/interfaces/web/_command_catalog.py`; its
+ordered names and complete policy facts feed the native, browser, installed-host
+and benchmark checks. Browser/native agreement alone is insufficient. Keep
+unknown, missing and wrong-policy controls, explicit test-command extensions,
+immutable production specs and test-support exclusion from the wheel.
 Optional measurement runs are not automatic gates. Known direct consumer breaks
 still need migration or an explicit disposition. Evidence retention follows
 [PERFORMANCE](PERFORMANCE.md#evidence-retention).
