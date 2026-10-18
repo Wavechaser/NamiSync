@@ -138,6 +138,11 @@ reviewed/current mount before physical resolution, and typed anchor or volume
 changes remain observation evidence for pure judgment to map to `root_changed`.
 Root and candidate physical resolution, final no-follow leaf stat, and fresh
 temp-parent/trash volume observations remain required on the held path.
+Subject observation prepares its candidate native spelling after chain admission
+and root resolution, then reuses that string for candidate resolution and the
+final no-follow stat. This reuses only lexical preparation: resolution output
+still receives logical-spelling validation, and both leaf reads retain their
+existing ordering and roles.
 
 Every existing relative component of a subject, temp parent, or `.synctrash`
 path is likewise no-follow admitted before physical resolution, volume probing,

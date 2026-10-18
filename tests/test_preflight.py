@@ -39,7 +39,11 @@ from namisync.core.models import (
     VolumeEvidence,
     VolumeId,
 )
-from namisync.core.pathing import normalize_relative_path, to_extended_length_path
+from namisync.core.pathing import (
+    from_extended_length_path,
+    normalize_relative_path,
+    to_extended_length_path,
+)
 from namisync.core.planning import (
     DeletionPolicy,
     FilterSet,
@@ -302,7 +306,7 @@ def test_observe_holds_roots_preserves_probes_and_releases(
     parent_volume_probes: list[str] = []
     real_admit = preflight_module.admit_root
     real_guard = root_authority_module.RootHold.require_ordinary
-    real_resolve = preflight_module._resolved_logical_path
+    real_resolve = preflight_module._resolve_native_path
     real_stat = preflight_module.os.stat
     real_volume = preflight_module.observe_native_volume
 
@@ -315,7 +319,7 @@ def test_observe_holds_roots_preserves_probes_and_releases(
         return real_guard(hold)
 
     def resolve(path, *, strict):
-        resolves.append(str(path))
+        resolves.append(from_extended_length_path(str(path)))
         return real_resolve(path, strict=strict)
 
     def stat(path, *args, **kwargs):
@@ -347,7 +351,7 @@ def test_observe_holds_roots_preserves_probes_and_releases(
 
     monkeypatch.setattr(preflight_module, "admit_root", admit)
     monkeypatch.setattr(root_authority_module.RootHold, "require_ordinary", guard)
-    monkeypatch.setattr(preflight_module, "_resolved_logical_path", resolve)
+    monkeypatch.setattr(preflight_module, "_resolve_native_path", resolve)
     monkeypatch.setattr(preflight_module.os, "stat", stat)
     monkeypatch.setattr(preflight_module, "observe_native_volume", volume)
     world = observe(review, HeldFileSystem())
@@ -610,7 +614,7 @@ def test_held_observation_refuses_attribute_failure_before_later_probes(
 
         monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
         monkeypatch.setattr(preflight_module, "admit_root", later_probe)
-        monkeypatch.setattr(preflight_module, "_resolved_logical_path", later_probe)
+        monkeypatch.setattr(preflight_module, "_resolve_native_path", later_probe)
         monkeypatch.setattr(preflight_module, "admit_existing_relative_chain", later_probe)
         issue = (
             RootAuthorityIssue.PLACEHOLDER_COMPONENT if state == "placeholder"
@@ -669,7 +673,7 @@ def test_held_observation_refuses_inplace_attribute_only_junction_conversion(
                 raise AssertionError("converted held root reached a later probe or fallback")
 
             monkeypatch.setattr(preflight_module, "admit_root", later_probe)
-            monkeypatch.setattr(preflight_module, "_resolved_logical_path", later_probe)
+            monkeypatch.setattr(preflight_module, "_resolve_native_path", later_probe)
             monkeypatch.setattr(preflight_module, "admit_existing_relative_chain", later_probe)
             monkeypatch.setattr(preflight_module.shutil, "disk_usage", later_probe)
             monkeypatch.setattr(preflight_module.os, "scandir", later_probe)
@@ -718,7 +722,7 @@ def test_local_root_authority_failure_stops_before_later_probe(
     )
     monkeypatch.setattr(
         preflight_module,
-        "_resolved_logical_path",
+        "_resolve_native_path",
         lambda *_args, **_kwargs: _explode("physical resolution"),
     )
 
@@ -744,6 +748,54 @@ def test_local_root_authority_failure_stops_before_later_probe(
             assert raised.value is rejected
 
 
+def test_local_subject_reuses_native_input_and_reads_metadata_after_resolution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    subject = tmp_path / "payload.bin"
+    subject.write_bytes(b"before")
+    authority = _local_authority(tmp_path)
+    events: list[str] = []
+    real_native = preflight_module._native_path
+    real_resolve = preflight_module._resolve_native_path
+    real_stat = preflight_module.os.stat
+
+    def native(path):
+        if str(path) == str(subject):
+            events.append("candidate preparation")
+        return real_native(path)
+
+    def resolve(path, *, strict):
+        logical = from_extended_length_path(str(path))
+        events.append("candidate resolution" if logical == str(subject) else "root resolution")
+        resolved = real_resolve(path, strict=strict)
+        if logical == str(subject):
+            subject.write_bytes(b"after resolution")
+        return resolved
+
+    def stat(path, *args, **kwargs):
+        if (
+            kwargs.get("follow_symlinks") is False
+            and from_extended_length_path(str(path)) == str(subject)
+        ):
+            events.append("leaf stat")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(preflight_module, "_native_path", native)
+    monkeypatch.setattr(preflight_module, "_resolve_native_path", resolve)
+    monkeypatch.setattr(preflight_module.os, "stat", stat)
+
+    observed = LocalObservationFileSystem().stat(authority, "payload.bin", PROFILE)
+
+    assert observed.stat is not None
+    assert observed.stat.size == len(b"after resolution")
+    assert observed.error is None
+    assert events == [
+        "leaf stat", "root resolution", "candidate preparation",
+        "candidate resolution", "leaf stat",
+    ]
+
+
 def test_local_missing_subject_stops_before_final_leaf_probe(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -762,8 +814,8 @@ def test_local_missing_subject_stops_before_final_leaf_probe(
     )
     monkeypatch.setattr(
         preflight_module,
-        "_resolved_logical_path",
-        lambda path, *, strict: str(path),
+        "_resolve_native_path",
+        lambda path, *, strict: from_extended_length_path(str(path)),
     )
 
     with patch.object(
@@ -806,7 +858,7 @@ def test_local_unsafe_relative_chain_stops_before_later_probes(
     )
     monkeypatch.setattr(
         preflight_module,
-        "_resolved_logical_path",
+        "_resolve_native_path",
         lambda *_args, **_kwargs: _explode("physical resolution"),
     )
     monkeypatch.setattr(

@@ -134,7 +134,13 @@ def _native_path(path: str | Path) -> str:
 
 
 def _resolved_logical_path(path: str | Path, *, strict: bool) -> str:
-    resolved = Path(_native_path(path)).resolve(strict=strict)
+    return _resolve_native_path(_native_path(path), strict=strict)
+
+
+def _resolve_native_path(native_path: str, *, strict: bool) -> str:
+    """Resolve a prepared native operand and validate its logical result."""
+
+    resolved = Path(native_path).resolve(strict=strict)
     return from_extended_length_path(str(resolved))
 
 
@@ -285,8 +291,9 @@ class LocalObservationFileSystem:
                 authority.logical_root,
                 strict=True,
             )
-            resolved_candidate = _resolved_logical_path(
-                candidate, strict=False
+            native_candidate = _native_path(candidate)
+            resolved_candidate = _resolve_native_path(
+                native_candidate, strict=False
             )
             contained = is_path_below(resolved_candidate, resolved_root)
             representable = len(resolved_candidate) <= profile.max_path
@@ -296,7 +303,7 @@ class LocalObservationFileSystem:
                 return StatObservation(None, None, True, representable)
             try:
                 observed = os.stat(
-                    _native_path(candidate), follow_symlinks=False
+                    native_candidate, follow_symlinks=False
                 )
             except FileNotFoundError:
                 return StatObservation(None, None, True, representable)
