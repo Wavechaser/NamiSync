@@ -235,6 +235,29 @@ class _InventoryIntegrityState:
                           for row_id in row_ids if row_id in self.items]}
 
 
+@dataclass(frozen=True, slots=True)
+class _TaskDeliverySnapshot:
+    queue: tuple[TaskDeliveryUpdate, ...]
+    progress_available_at: float | None
+    terminal_record: SessionRecordView | None
+    terminal_pending: bool
+    delivered_terminal_event: SessionEventView | None
+    delivered_terminal_record: SessionRecordView | None
+    session_released: bool
+    closing: bool
+    execution_revision: int
+    execution_session_id: str | None
+    execution_summary: RetainedExecutionSummary | None
+    execution_operation_results: dict[str, dict[str, object]]
+    execution_integrity_results: dict[str, dict[str, object]]
+    execution_gap_minimum: int | None
+    execution_gap_maximum: int | None
+    execution_membership: Mapping[str, str] | None
+    presentation_state: TaskPresentationState | None
+    progress_sample_at: float | None
+    session_kind: str | None
+
+
 @dataclass(slots=True)
 class _TaskState:
     task_id: str
@@ -265,7 +288,7 @@ class _TaskState:
     setup: TaskSetupSnapshotView | None = None
     start_response_ids: set[str] = field(default_factory=set)
     prior_session_id: str | None = None
-    prior_delivery: tuple[object, ...] | None = None
+    prior_delivery: _TaskDeliverySnapshot | None = None
     execution_revision: int = 0
     execution_session_id: str | None = None
     execution_terminal_record: SessionRecordView | None = None
@@ -627,7 +650,7 @@ class TaskRegistry:
                 else task.session_id
             )
             prior_record = (
-                task.prior_delivery[5]
+                task.prior_delivery.delivered_terminal_record
                 if task.transition and task.prior_delivery is not None
                 else None
             )
@@ -644,14 +667,14 @@ class TaskRegistry:
                 session_id,
                 session_state,
                 (
-                    bool(task.prior_delivery[6])
+                    bool(task.prior_delivery.session_released)
                     if task.transition and task.prior_delivery is not None
                     else task.session_released
                 ),
                 task.task_kind,
                 task.request_id,
                 task.plan_request_id,
-                (task.prior_delivery[18] if task.transition and task.prior_delivery is not None
+                (task.prior_delivery.session_kind if task.transition and task.prior_delivery is not None
                  else task.session_kind),
             )
 
@@ -1227,15 +1250,10 @@ class TaskRegistry:
                 if self._closing or task.retiring or not task.transition:
                     raise TaskUnavailableError("inventory task is unavailable")
                 task.prior_session_id = task.session_id
-                task.prior_delivery = (
-                    tuple(task.queue), task.progress_available_at, task.terminal_record,
-                    task.terminal_pending, task.delivered_terminal_event,
-                    task.delivered_terminal_record, task.session_released, task.closing,
-                    task.execution_revision, task.execution_session_id, task.execution_summary,
-                    dict(task.execution_operation_results), dict(task.execution_integrity_results),
-                    task.execution_gap_minimum, task.execution_gap_maximum,
-                    task.execution_membership, task.presentation_state, task.progress_sample_at,
-                    task.session_kind,
+                task.prior_delivery = self._capture_delivery(
+                    task,
+                    execution_operation_results=dict(task.execution_operation_results),
+                    execution_integrity_results=dict(task.execution_integrity_results),
                 )
                 task.generation += 1
                 task.session_id = None
@@ -2120,32 +2138,16 @@ class TaskRegistry:
                     task.execution_revision
                 )
                 task.prior_session_id = task.session_id
-                task.prior_delivery = (
-                    tuple(task.queue),
-                    task.progress_available_at,
-                    task.terminal_record,
-                    task.terminal_pending,
-                    task.delivered_terminal_event,
-                    task.delivered_terminal_record,
-                    task.session_released,
-                    task.closing,
-                    task.execution_revision,
-                    task.execution_session_id,
-                    task.execution_summary,
-                    {
+                task.prior_delivery = self._capture_delivery(
+                    task,
+                    execution_operation_results={
                         key: dict(value)
                         for key, value in task.execution_operation_results.items()
                     },
-                    {
+                    execution_integrity_results={
                         key: dict(value)
                         for key, value in task.execution_integrity_results.items()
                     },
-                    task.execution_gap_minimum,
-                    task.execution_gap_maximum,
-                    task.execution_membership,
-                    task.presentation_state,
-                    task.progress_sample_at,
-                    task.session_kind,
                 )
                 task.generation += 1
                 task.session_id = None
@@ -2283,6 +2285,34 @@ class TaskRegistry:
                 task.condition.notify_all()
 
     @staticmethod
+    def _capture_delivery(
+        task: _TaskState, *,
+        execution_operation_results: dict[str, dict[str, object]],
+        execution_integrity_results: dict[str, dict[str, object]],
+    ) -> _TaskDeliverySnapshot:
+        return _TaskDeliverySnapshot(
+            queue=tuple(task.queue),
+            progress_available_at=task.progress_available_at,
+            terminal_record=task.terminal_record,
+            terminal_pending=task.terminal_pending,
+            delivered_terminal_event=task.delivered_terminal_event,
+            delivered_terminal_record=task.delivered_terminal_record,
+            session_released=task.session_released,
+            closing=task.closing,
+            execution_revision=task.execution_revision,
+            execution_session_id=task.execution_session_id,
+            execution_summary=task.execution_summary,
+            execution_operation_results=execution_operation_results,
+            execution_integrity_results=execution_integrity_results,
+            execution_gap_minimum=task.execution_gap_minimum,
+            execution_gap_maximum=task.execution_gap_maximum,
+            execution_membership=task.execution_membership,
+            presentation_state=task.presentation_state,
+            progress_sample_at=task.progress_sample_at,
+            session_kind=task.session_kind,
+        )
+
+    @staticmethod
     def _restore_plan_delivery(task: _TaskState) -> None:
         with task.condition:
             prior = task.prior_delivery
@@ -2290,29 +2320,29 @@ class TaskRegistry:
                 return
             task.generation += 1
             task.session_id = task.prior_session_id
-            task.queue = deque(prior[0])
-            task.progress_available_at = prior[1]
-            task.terminal_record = prior[2]
-            task.terminal_pending = prior[3]
-            task.delivered_terminal_event = prior[4]
-            task.delivered_terminal_record = prior[5]
-            task.session_released = prior[6]
-            task.closing = prior[7]
-            task.execution_revision = prior[8]
-            task.execution_session_id = prior[9]
-            task.execution_summary = prior[10]
+            task.queue = deque(prior.queue)
+            task.progress_available_at = prior.progress_available_at
+            task.terminal_record = prior.terminal_record
+            task.terminal_pending = prior.terminal_pending
+            task.delivered_terminal_event = prior.delivered_terminal_event
+            task.delivered_terminal_record = prior.delivered_terminal_record
+            task.session_released = prior.session_released
+            task.closing = prior.closing
+            task.execution_revision = prior.execution_revision
+            task.execution_session_id = prior.execution_session_id
+            task.execution_summary = prior.execution_summary
             task.execution_operation_results = {
-                key: dict(value) for key, value in prior[11].items()
+                key: dict(value) for key, value in prior.execution_operation_results.items()
             }
             task.execution_integrity_results = {
-                key: dict(value) for key, value in prior[12].items()
+                key: dict(value) for key, value in prior.execution_integrity_results.items()
             }
-            task.execution_gap_minimum = prior[13]
-            task.execution_gap_maximum = prior[14]
-            task.execution_membership = prior[15]
-            task.presentation_state = prior[16]
-            task.progress_sample_at = prior[17]
-            task.session_kind = prior[18]
+            task.execution_gap_minimum = prior.execution_gap_minimum
+            task.execution_gap_maximum = prior.execution_gap_maximum
+            task.execution_membership = prior.execution_membership
+            task.presentation_state = prior.presentation_state
+            task.progress_sample_at = prior.progress_sample_at
+            task.session_kind = prior.session_kind
             task.prior_session_id = None
             task.prior_delivery = None
             task.transition = False

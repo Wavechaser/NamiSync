@@ -620,6 +620,11 @@ supplies it to the factory before publication or dispatcher admission. A
 factory may create provisional adapter state; its own call frame discards that
 state on failure, and no application or service rollback refers back into the
 adapter. The web registry enumerates only successfully published tasks.
+Follow-up delivery factories share one typed private snapshot and capture/restore
+owner. Their callers retain admission, effect ordering and the different result-map
+copy policies. Rollback restores prior delivery and execution facts under the task
+condition while advancing generation; it never reinstates an obsolete drain claim.
+Transition summaries and installed diagnostics read named snapshot fields.
 
 The same lifecycle owner atomically claims a published blank task for its first
 plan or inventory session, preserving attach-before-schedulability. Competing

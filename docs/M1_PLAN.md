@@ -191,6 +191,25 @@ effect engine. Each receives its own existing composition/owning,
 interfaces/tools/import and affected installed gates plus fresh review. Revalidate
 against integrated RV3 before implementation; later passes cannot retroactively
 qualify an earlier ungated commit.
+`rv4-refresh-02.md` confirms those seams at `4fceac7b`; the accepted follow-up
+`69d37fa4` changes only tree/probes and matching docs, so the refresh remains valid.
+RV4A's finite write population is drain.py, test_drain.py and the installed shell
+child, plus matching INTERFACES/CHANGELOG/register updates. Use a private typed
+snapshot and one capture owner, preserving caller-prepared map copies and the
+existing restore ordering; no reset helper is needed by default. Its installed
+gate is both task-shell sizes. RV4B follows A's accepted commit with its own
+app/probe population and execution/Inventory/task-shell installed gate.
+RV4A's final candidate passes 257 owning checks, 2,469 interfaces/tools checks
+(three skips), both installed shell sizes and 12 imports. `rv4a-review-01.md`
+and `rv4a-01-integration.json` own its final independent review and commit
+accounting; raw baseline, owning and gate receipts remain under the evidence root.
+`rv4b-refresh-01.md` confirms B's finite population: app.js and the existing
+Inventory app/task-shell probes, with matching INTERFACES/CHANGELOG/register
+updates. Share owned recovery-handle attachment across the five existing
+callbacks; retain each caller's predicate, presentation, result settlement and
+Refresh feedback-only fallback. Extend existing held-action cases only for exact
+handle identity, Check routing and retired-owner rejection; bridge policy stays
+in its existing tests. No read/Follow, wire, effect or retry-policy change.
 `rv5-census-01.md` identifies the independent command catalog, shared specimen
 producers, gallery-only row adapter and equivalent-witness journey reductions;
 execution journey changes belong to RV1 first. These are finite designs, not

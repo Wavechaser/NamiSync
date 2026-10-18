@@ -7048,7 +7048,7 @@ def test_execution_inventory_visibility_preserves_original_review(tmp_path, refr
     ("missing", ["missing"]), ("rowless", ["baselined"]),
     ("rowless-missing", []), ("uncopied", []),
 ])
-def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_path, linked, state, expected):
+def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_path, monkeypatch, linked, state, expected):
     from namisync.db.connections import connect_ledger_writer
     from namisync.interfaces.service import NamiSyncService
     from namisync.workflows import LocationCandidate
@@ -7136,6 +7136,34 @@ def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_pat
                 ["verified"] if state == "rowless" and index else expected)
             assert view["scan_request_id"] == started.request_id
             assert registry._execution_summary_locked(registry._tasks[planned.task_id]) == original
+            if state == "unchanged" and index == 0:
+                before_tasks = registry.list_tasks()
+                plan_view = registry.open_plan_view(planned.task_id)
+                before_plan = registry.get_plan_window(planned.task_id,
+                    expected_revision=plan_view["view_revision"], offset=0, limit=256)
+                failed_sinks, transition_summaries = [], []
+                def refuse_replacement(task_id, request_id, **kwargs):
+                    sink = kwargs["delivery_factory"](task_id)
+                    failed_sinks.append(sink)
+                    sink(replace(_event(1), session_id="f" * 32))
+                    transition_summaries.append(registry.list_tasks())
+                    raise RuntimeError("ordinary replacement refused")
+                with monkeypatch.context() as failure:
+                    failure.setattr(service, "start_task_inventory_integrity", refuse_replacement)
+                    with pytest.raises(RuntimeError, match="task start failed"):
+                        registry.start_inventory_integrity(planned.task_id, started.request_id,
+                            expected_revision=view["view_revision"], mode="baseline", scope="selected",
+                            accept_current_evidence=False, command_id="a" * 32,
+                            wire_intent=("failed-replacement",))
+                assert transition_summaries == [before_tasks]
+                failed_sinks[0](replace(_event(2), session_id="f" * 32))
+                assert registry.list_tasks() == before_tasks
+                assert registry._tasks[planned.task_id].queue == deque()
+                assert registry.get_inventory_window(planned.task_id,
+                    expected_revision=view["view_revision"], offset=0, limit=256)["integrity"] == overlay
+                assert registry.get_plan_window(planned.task_id,
+                    expected_revision=plan_view["view_revision"], offset=0, limit=256) == before_plan
+                assert registry._execution_summary_locked(registry._tasks[planned.task_id]) == original
             if state == "unchanged":
                 review = service._runtime._retained_execution_reviews[planned.task_id]
                 operation_ids = tuple(review.operation_items)

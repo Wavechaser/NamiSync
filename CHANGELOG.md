@@ -177,8 +177,11 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-18)
+#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
 
+- Share typed delivery snapshot capture and restoration across execution and
+  ordinary Inventory starts. Replace positional summary and diagnostic readers
+  while preserving caller-owned map copies, rollback and generation custody.
 - Honor manual scroll-away while Inventory row interaction is temporarily blocked,
   keeping Follow disabled after the pending work completes without changing the
   retained active row. Document that collapsing its parent clears the active row

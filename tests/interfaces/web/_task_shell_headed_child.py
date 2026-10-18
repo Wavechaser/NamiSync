@@ -1533,7 +1533,7 @@ class _Control:
                         else task.session_id
                     )
                     prior_record = (
-                        task.prior_delivery[5]
+                        task.prior_delivery.delivered_terminal_record
                         if task.transition and task.prior_delivery is not None
                         else None
                     )
@@ -1551,7 +1551,7 @@ class _Control:
                             and session_id != self.review_plan_session_id
                         ),
                         "task_delivery_session_released": (
-                            bool(task.prior_delivery[6])
+                            bool(task.prior_delivery.session_released)
                             if task.transition and task.prior_delivery is not None
                             else task.session_released
                         ),
