@@ -555,6 +555,33 @@ def test_installed_asset_assertion_materializes_light_baseline(
     assert calls == ["light"]
 
 
+def test_component_gallery_scenario_injects_real_inventory_for_raw_preview(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario = _SCENARIO.read_text(encoding="utf-8")
+    support = str(Path(__file__).resolve().parents[2])
+    prior_paths = [path for path in sys.path if path != support]
+    monkeypatch.setattr(sys, "path", prior_paths.copy())
+
+    assembled = component_gallery_child._gallery_scenario(scenario)
+
+    assert sys.path == [*prior_paths, support]
+    prefix = '"use strict";\nglobalThis.__namiGalleryInventory = '
+    assert assembled.startswith(prefix)
+    payload, end = json.JSONDecoder().raw_decode(assembled[len(prefix):])
+    assert assembled[len(prefix) + end:] == ";\n" + scenario
+    rows = payload["rows"]
+    assert len(rows) == payload["summary"]["visible_row_count"] == 300
+    assert [row["visible_index"] for row in rows] == list(range(300))
+    assert len({row["node_id"] for row in rows}) == 300
+    assert len({row["row_id"] for row in rows}) == 300
+    assert len(payload["window"]["rows"]) == 256
+    assert payload["window"]["total"] == 300
+    assert rows[0]["recorded_checksum"] == "0123456789abcdef0123456789abcdef"
+    assert payload["detail"]["observed"]["mtime_ns"] == "1000000000"
+    assert payload["detail"]["row"]["last_observed_at"] == "2026-12-31T23:04:59.999999+00:00"
+
+
 def test_component_gallery_harness_uses_packaged_page_and_test_owned_script() -> None:
     child = _CHILD.read_text(encoding="utf-8")
 

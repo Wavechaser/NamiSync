@@ -245,6 +245,18 @@ parent test. Keep fourteen local appearance overlays, numeric test identities,
 64-row gallery paging, strict scenario execution and installed-only product
 imports. Both Inventory probes and all four gallery modes retain their existing
 independent assertions; no Plan fixture abstraction or launcher rewrite.
+RV5B's final candidate passes 31 owning checks, 2,481 interfaces/tools checks
+(three unavailable-symlink skips), all four installed gallery checks and 12
+imports. `rv5b-native-accounting-01.json` binds the new producer and unchanged
+database seed helper to the package and checker identities. `rv5b-review-01.md`
+and `rv5b-01-integration.json` own final review and commit accounting.
+`rv5c-refresh-01.md` bounds C to test_plan_review.py, its existing JavaScript
+probe, and the shell child/parent. A three-sibling real state fixture supplies
+explicit filename keys and distinct canonical/Filename/Size orders; the probe
+checks independent literal row orders after actual header callbacks and receipt
+adoption. Only then remove the two Filename native roundtrips and move the
+chevron observation to the retained Size cycle. Both installed shell sizes remain
+mandatory; no other input, focus, effect, viewport or Close coverage is retired.
 
 ### Verify table hardening — 2026-10-15–16
 

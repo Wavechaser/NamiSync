@@ -179,6 +179,9 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
 
+- Share real Inventory fixture production between browser probes and the
+  component gallery, retaining local appearance cases, paging and independent
+  visual expectations in installed tests and manual preview.
 - Consolidate command exposure and policy expectations into one independent
   test catalog shared by native/browser, installed-host and benchmark checks;
   retain drift controls and package exclusion.

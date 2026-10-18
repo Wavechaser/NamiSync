@@ -3002,12 +3002,22 @@ def _execute_script_checked(
     task.GetAwaiter().OnCompleted(completion)
 
 
+def _gallery_scenario(scenario: str) -> str:
+    test_support = str(Path(__file__).resolve().parents[2])
+    if test_support not in sys.path:
+        sys.path.append(test_support)
+    from _review_fixtures import inventory_gallery_fixture
+
+    return ('"use strict";\nglobalThis.__namiGalleryInventory = '
+        + json.dumps(inventory_gallery_fixture()) + ";\n" + scenario)
+
+
 def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     from namisync.interfaces.web import host
     from namisync.interfaces.web.host import DesktopInstanceIdentity
     from namisync.interfaces.web.paths import AppPaths
 
-    scenario = arguments.scenario.resolve(strict=True).read_text(encoding="utf-8")
+    scenario = _gallery_scenario(arguments.scenario.resolve(strict=True).read_text(encoding="utf-8"))
     recorder.set("runtime", _runtime_identity())
     recorder.set("installed_assets", _installed_asset_evidence())
     recorder.set("media_parameters", json.loads(_media_parameters(arguments.mode)))

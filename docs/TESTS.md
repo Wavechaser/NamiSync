@@ -366,6 +366,10 @@ equivalent witness; shortening a journey cannot silently retire coverage.
 Gallery panels may share fixture producers with probes, while their visual and
 behavioral assertions remain independent. Shared fixture code belongs in
 underscore-prefixed support modules, never imported collected tests.
+Inventory probes and gallery use `_review_fixtures.py` to emit real projection
+summaries, rows and details. Gallery-only appearance overlays and paging remain
+local. The common gallery child assembles that data for installed tests and manual
+preview without adding the checkout root to product imports.
 Keep one independently specified expected command catalog for exposure/policy
 checks; consumers reuse it or derive operational lists from production specs.
 Derivation must not make unintended command exposure self-accepting.

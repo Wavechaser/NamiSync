@@ -1955,23 +1955,19 @@ window.addEventListener("unhandledrejection", (event) => {
   async function inventoryPanelObservation() {
     const pageScroll = { x: window.scrollX, y: window.scrollY };
     const settled = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const checksum = "0123456789abcdef0123456789abcdef";
+    const specimen = globalThis.__namiGalleryInventory;
     const cases = ["verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched",
       "acknowledged", "reappeared-mismatch", "folder", "child", "notice", "partial", "overflow"];
-    const rollup = { domain_count: 300, file_count: 300, size: 3000, size_overflow: false, size_partial: false,
-      present: 298, unverified: 2, verified: 294, modified: 1, reappeared: 1, unsupported: 1,
-      missing: 1, mismatched: 1, acknowledged: 0 };
+    const rollup = specimen.summary.rollup;
     const rowAt = (index) => {
       const state = cases[index] ?? "verified";
-      const row = { node_id: String(index + 1), row_id: String(index + 1), display: `evidence-${index}.txt`,
-        depth: 0, visible_index: index, parent_visible_index: null, first_child_visible_index: null,
-        position_in_set: index + 1, set_size: 300, expanded: null, is_container: false, kind: "file",
-        selectable: true, selection: "none",
+      // Numeric IDs keep this gallery's independent appearance selectors stable.
+      const row = { ...specimen.rows[index], node_id: String(index + 1),
         presence: ["unsupported", "missing"].includes(state) ? state : "present",
         verification_state: ["unsupported", "missing", "reappeared"].includes(state) ? "unverified" : state,
-        reappeared: state === "reappeared", acknowledged: false, size: 10, mtime_ns: "1000000000",
-        has_baseline: state !== "unverified", recorded_checksum: state === "unverified" ? null : checksum,
-        warning: null, rollup };
+        reappeared: state === "reappeared",
+        has_baseline: state !== "unverified",
+        recorded_checksum: state === "unverified" ? null : specimen.rows[index].recorded_checksum };
       if (state === "acknowledged") Object.assign(row, {presence:"missing", verification_state:"unverified", acknowledged:true});
       if (state === "reappeared-mismatch") Object.assign(row, {verification_state:"mismatched", reappeared:true});
       if (["folder", "partial", "overflow"].includes(state)) Object.assign(row, {
@@ -1984,16 +1980,12 @@ window.addEventListener("unhandledrejection", (event) => {
         warning:{code:"access_denied", detail:"Cannot read this item."}});
       return row;
     };
-    const windowAt = (offset) => ({ offset, total: 300,
-      rows: Array.from({ length: Math.min(64, 300 - offset) }, (_, index) => rowAt(offset + index)) });
-    const review = { summary: { root_path: "C:\\recorded", request_id: "1".repeat(32),
-      rollup, visible_row_count: 300, filters: [], scan_scope: { kind: "location" }, scan_complete: true,
-      observed_count: 299, missing_count: 1, warning_count: 0, search_query: "",
-      sort_column: "path", sort_direction: "ascending", selected_file_count: 0,
-      selectable_file_count: 300, hidden_selected_file_count: 0, selection: "none" },
+    const rows = specimen.rows.map((_row, index) => rowAt(index));
+    const windowAt = (offset) => ({ ...specimen.window, offset, rows: rows.slice(offset, offset + 64) });
+    const review = { summary: specimen.summary,
       window: windowAt(0), detail: null,
       pending: null, message: null, queuedSearchQuery: null };
-    const inventoryTask = { taskId: "task-" + "2".repeat(32), requestId: "1".repeat(32),
+    const inventoryTask = { taskId: specimen.summary.task_id, requestId: specimen.summary.request_id,
       sessionState: "completed", sessionReleased: true, taskKind: "inventory", inventoryReview: review };
     const requests = [];
     const panel = createInventoryReviewPanel({
@@ -2048,13 +2040,7 @@ window.addEventListener("unhandledrejection", (event) => {
     const widths = () => headers.map((value) => Number(value.getBoundingClientRect().width.toFixed(3)));
     const firstRow = () => viewport.querySelector(".nami-inventory-row");
     const observedAt = "2026-12-31T23:04:59.999999+00:00";
-    review.detail = { row: rowAt(0), state: "current", response: { detail: {
-      row: { path: "evidence-0.txt", presence: "present", verification_state: "verified",
-        last_observed_at: observedAt, last_verified_at: null, missing_since: null,
-        acknowledged_at: null, reappeared_at: null, verification_invalidated_at: null,
-        verification_invalidated_reason: null, unsupported_reason: null },
-      observed: { kind: "file", size: 10, mtime_ns: "1000000000", file_identity: null }, attestation: null,
-    } } };
+    review.detail = { row: rows[0], state: "current", response: { detail: specimen.detail } };
     panel.render(inventoryTask);
     const detailValue = (label) => [...root.querySelectorAll(".nami-plan-review__detail dt")]
       .find((term) => term.textContent === label).nextElementSibling.textContent;
