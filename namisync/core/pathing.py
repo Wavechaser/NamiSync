@@ -323,14 +323,16 @@ def to_extended_length_path(path: str) -> str:
     if logical != raw:
         # A valid extended drive/UNC spelling is already at the native boundary.
         return raw
-    if os.name == "nt" and PureWindowsPath(logical).is_absolute():
+    validated_absolute = os.name == "nt" and PureWindowsPath(logical).is_absolute()
+    if validated_absolute:
         # Validate before ``abspath`` can normalize an ambiguous Win32 spelling
         # onto a different ordinary filesystem object.
         _validate_absolute_path_spelling(logical)
     absolute = os.path.abspath(logical)
     if os.name != "nt":
         return absolute
-    _validate_absolute_path_spelling(absolute)
+    if not validated_absolute or absolute != logical:
+        _validate_absolute_path_spelling(absolute)
     if absolute.startswith("\\\\"):
         return "\\\\?\\UNC\\" + absolute[2:]
     return "\\\\?\\" + absolute

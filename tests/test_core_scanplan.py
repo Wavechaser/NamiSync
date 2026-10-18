@@ -908,6 +908,45 @@ def test_extended_length_path_round_trips_without_changing_logical_identity(
     assert from_extended_length_path(logical) == logical
 
 
+@pytest.mark.skipif(os.name != "nt", reason="Windows native path spelling")
+@pytest.mark.parametrize(
+    "logical",
+    [r"C:\folder\file.bin", r"\\server\share\folder\file.bin"],
+)
+def test_native_conversion_validates_unchanged_absolute_spelling_once(
+    logical: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    validated: list[str] = []
+    original = path_contracts._validate_absolute_path_spelling
+
+    def record(path: str) -> None:
+        validated.append(path)
+        original(path)
+
+    monkeypatch.setattr(path_contracts, "_validate_absolute_path_spelling", record)
+
+    native = to_extended_length_path(logical)
+
+    assert native == (
+        "\\\\?\\UNC\\" + logical[2:]
+        if logical.startswith("\\\\") else "\\\\?\\" + logical
+    )
+    assert validated == [logical]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows absolute path rules")
+@pytest.mark.parametrize("logical", ["relative.bin", r"C:\safe\file.bin"])
+def test_native_conversion_validates_a_changed_absolute_result(
+    logical: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(path_contracts.os.path, "abspath", lambda path: r"C:\safe\NUL")
+
+    with pytest.raises(PathValidationError, match="Windows device"):
+        to_extended_length_path(logical)
+
+
 def test_lexical_absolute_path_normalizes_without_requiring_an_existing_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

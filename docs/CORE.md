@@ -632,7 +632,11 @@ UNC filesystem namespaces that round-trip to a stable ordinary spelling.
 Device/NT namespaces, malformed
 extended UNC anchors, trailing-dot/space or reserved DOS components, and other
 ordinary-ambiguous absolute names are refused rather than normalized onto
-another tree. Reserved DOS aliases include `CONIN$`, `CONOUT$`, and the
+another tree. Native conversion validates an ordinary absolute input before
+normalization and reuses that lexical validation only when `abspath` returns
+the identical spelling. Changed results and relative inputs retain absolute
+output validation; resolved filesystem evidence is validated separately.
+Reserved DOS aliases include `CONIN$`, `CONOUT$`, and the
 superscript-one/two/three `COM`/`LPT` forms as well as the ordinary numbered
 devices. Native
 `OSError` filename fields are rendered back into logical spelling before

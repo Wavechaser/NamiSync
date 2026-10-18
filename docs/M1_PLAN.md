@@ -23,7 +23,8 @@ M1-10 is complete as of 2026-10-14, including the requested integrated A–C
 review before D and final cross-component review. The authorized GUI-hardening
 follow-up below is also complete. The review consolidation batch below is complete
 as of 2026-10-19. M1-12, release and DOC-2 remain inactive. Backend optimization
-is closed.
+is closed for the earlier executor batch; the planning observation optimization
+below is newly active.
 Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
 stops and recovery.
@@ -41,6 +42,39 @@ the old tip and opens a draft PR from `milestone1-anthony`. Before any action,
 freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
+
+### Planning observation optimization — 2026-10-19
+
+Authorized with execute-task from clean `d1d19c61` on `milestone1`. The earlier
+`ca31654` investigation remains applicable to unchanged pathing/root-authority/
+preflight source. Keep current-state observation for NOOPs; action mix varies,
+so the earlier mostly-NOOP fixture is not a universal benefit estimate.
+Use small independently reviewed commits and serialize shared source/gates.
+
+| ID | Outcome and finite population | Acceptance and commit boundary | Status |
+| --- | --- | --- | --- |
+| PO1 | Avoid a second absolute spelling validation in `core/pathing.py` only when the already-validated absolute input equals the unchanged `abspath` result. Tests: `tests/test_core_scanplan.py`; subject policy: CORE. | 433 focused passes/one capability skip; reconciled ordinary 6,115 unique passes/four capability skips; 12 import contracts; baseline count control; eight light/four count planning children with unchanged inputs; independent review approved. | Complete; `po1/review.md` and integration receipt bind commit. |
+| PO2 | In `modules/preflight.py`, prepare candidate native spelling at the existing conversion point after chain admission/root resolution; a private native-input resolver and final stat reuse that string. Keep ordinary-input wrapper and resolved-output validation. Population: source module, affected private resolution interceptors and direct ordering/final-metadata witnesses in `tests/test_preflight.py`, PREFLIGHT. | Refresh against integrated PO1, then existing held-root/native/missing/unsafe/trash/max-path seams, preflight department plus direct workflow consumers, separate before/after diagnostics and independent review. One preflight performance commit; final ordinary gate by changed dependencies. | Design accepted; waits for PO1 integration. |
+
+Both preserve all filesystem probes and their ordering, missing/unavailable,
+reparse/placeholder, namespace/Unicode/length handling, root holds and fresh
+attributes, fallbacks, reviewed representation limits and NOOP subjects. No
+filesystem fact cache, root-resolution reuse, leaf-check removal, parent-safety
+cache, scanner-fact substitution or GUI change is authorized by these rows.
+Changed safety or observation contracts require adjudication under AGENTS;
+its mandatory and recurrence stops apply. Earlier executor-only consolidation
+and oracle exceptions do not authorize preflight probe removal. Measurements
+are diagnostics, not latency gates. Evidence/scripts and failed receipts live
+under `build/planning-optimization-20261019/`; PERFORMANCE owns final methods
+and results. The orchestrator owns M1_PLAN/HANDOFF/CHANGELOG and final integration;
+builders own only their assigned product/tests/subject docs. M1-12/release/DOC-2,
+push, PR and unrelated recovery refs remain inactive or untouched.
+PO2 introduces no shared-chain callback, public shape, handle or invocation
+cache. Existing resolver spies move to the actual native-resolution boundary
+where required; they must continue witnessing candidate resolution. Root
+resolution reuse is deferred: PREFLIGHT requires it and DEFENSE's existing
+resolution-skipping grant is executor-specific. Leaf consolidation is deferred:
+the early refusal and post-resolution metadata reads have different roles.
 
 ### Review consolidation — 2026-10-16–19
 
