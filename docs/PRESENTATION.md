@@ -487,6 +487,9 @@ User scroll-away or changing sort/search/filter disables it until explicit enabl
 returning to canonical alone does not resume it. One-shot Go to the current item
 remains available in other views without enabling follow. DESKTOP_UI owns the
 floating controls and override behavior.
+Manual scroll-away still disables Follow while a pending view/selection change,
+inventory action, loading or Close blocks row interaction. That notification does
+not authorize active-row changes or other blocked gestures.
 
 Reuse `PlanProjection.operation_node_id_by_id` and existing visible-anchor
 resolution for off-window operations; the browser must not derive node IDs or
@@ -512,6 +515,8 @@ or override Follow. Explicit arrow/Home/End navigation starts from the retained
 row; a click or manual scroll re-engages ordinary active-row navigation. Clear
 identity only when authoritative current-view evidence establishes disappearance,
 including filter/search/collapse/deletion, not because a bounded window omits it.
+Collapsing an active row's parent therefore clears that row and its Refresh
+selected target; expanding the parent does not restore the former active identity.
 Follow and Go never retarget highlighting, checkbox selection, detail or keyboard
 focus.
 

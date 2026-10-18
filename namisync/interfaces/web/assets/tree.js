@@ -53,8 +53,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   const table = createTableController(viewport, rowHeight, topInset, {
     requestIndex, requestCancelled, viewportChanged: reconcileVisibleActive,
     manualScroll: (first, last) => {
-      if (callbacks.interactionAllowed?.() === false) return;
-      passiveReveal = false;
+      if (callbacks.interactionAllowed?.() !== false) passiveReveal = false;
       callbacks.manualScroll?.(first, last);
     },
   });

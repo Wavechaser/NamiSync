@@ -1,9 +1,8 @@
-# Latest session — RV3 review closure
+# Latest session — remaining RV checkpoints resumed
 
-2026-10-18. [M1_PLAN](M1_PLAN.md) owns the accepted consolidation. RV3 is complete
-on `milestone1` and paused for the user's requested review.
-RV4–6 implementation remains inactive. M1-12, release,
-DOC-2, push and PR are outside this session.
+2026-10-18. The user accepted RV3 and resumed RV4–6, ending the review pause.
+[M1_PLAN](M1_PLAN.md) owns the active outcomes. M1-12, release, DOC-2, push and PR
+remain outside this session. Work is on `milestone1` after RV3 `4fceac7b`.
 
 RV2 (`5e505fbc`, `fd11a5bb`, `1aeb9397`) remains accepted unchanged. RV3 adds
 Inventory Follow and Go through the shared controller/read owner beneath separate
@@ -20,34 +19,24 @@ connectivity and popup transitions. Preparatory `focus({preventScroll:true})`
 remains. Existing foreground, focus, hit-target, trusted-input and effect guards
 are intact.
 
-All evidence below is in `build/review-consolidation-20261016/`:
-
-- `rv3-candidate-08.json` freezes 31 source/test/helper inputs; eight subject and
-  closure documents accompany the outcome. `rv3-revision-review-01.md` reviews the
-  current correction against prior RV3 review. It resolved renderer-floor API
-  compatibility and positive-anchor retention through queued frame/focus work.
-- Owning verification: 31 checks in `rv3-identity-focused-07.log`, then five
-  applicable correction checks in `rv3-identity-review-correction-02.log`, and
-  42 performance-helper checks in `rv3-identity-performance-consumer-01.log`.
-  Final interfaces/tools acceptance: 2,469 passed, three skipped, in
-  `rv3-revision-departments02.log`.
-- Current installed gates pass: Inventory09 (one case) and shared03 (nine cases,
-  both Execution Review/Task Shell sizes, gallery and tree). All 12 import
-  contracts pass in `rv3-imports03.log`. Six unchanged transport results from
-  shared02 are reused by exercised-path dependency, documented in the review.
-- `rv3-native-accounting-02.json` verifies final source/install/wheel identities
-  and retains the earlier accounting hash. Candidate06's Inventory08 pass remains
-  a separate receipt; candidate07 is qualified by Inventory09/shared03. Candidate08
-  changes only the declared table-loading signature instrumentation consumer;
-  installed product/driver/checker inputs and import dependencies are unchanged.
-  The first department run's helper-anchor failure after 2,067 passes is retained.
+All evidence below is in `build/review-consolidation-20261016/`.
+The bounded follow-up preserves manual scroll-away override while row interaction
+is blocked, without releasing the active-row gate. Subject docs now explicitly
+state that collapsing the active row's parent clears that row and its Refresh
+target. `rv3-scroll-01-candidate.json` freezes tree.js and the two existing probes;
+`rv3-scroll-builder-06.md` records the reproducer and fixture corrections.
+Three focused tests, 2,062 interfaces cases, two installed Inventory/SH-G7 cases
+and 12 imports pass. Independent `rv3-scroll-review-01.md` owns final acceptance;
+`rv3-scroll-01-integration.json` records its atomic commit and preserved inputs.
 
 The user explicitly allowed correction on recovery `a932d5d8` without rebuilding.
 The reviewed-tree squash has sole parent `1aeb9397`, preserving physical
 tested bytes and keeping WIP history off `milestone1`. `rv3-integration.json`
 records the final and corrected recovery commits, all 39 paths, exact tree/physical
 hash checks, branch identities and the five untouched pre-existing stashes.
-Retain recovery refs; no evidence or checkout cleanup is part of this closure.
+Retain recovery refs until RV6 accounting; no cleanup has run in this session.
+The original RV3 gates, package identities and disposition remain in
+`rv3-revision-review-01.md` and `rv3-native-accounting-02.json`.
 
 Historical RV3 native05–07 context stalls remain unexplained. The deterministic
 late-publication/menu witness establishes a corrected mechanism, not those runs'
@@ -57,8 +46,10 @@ reports, the original user handoff
 `build/verify-ux-20261015/recurrence-input-handoff-01.md`, prior 48-entry accounting,
 recovery `0556322`/its rebuild ref and the older stopped Verify ref.
 
-RV4's read-only design in `rv4-design-01.md` predates the revised RV3 membership
-and identity work. Revalidate its affected seams against integrated RV3 only
-after the user resumes. The final ordinary full-suite gate belongs to RV6 and
-remains pending; the earlier RV1 full-suite receipt was not green. No current GUI
-test remains running.
+`rv4-refresh-02.md` revalidates `rv4-design-01.md` against integrated RV3. After
+the scroll correction commits, confirm its tree/probe-only delta and release A:
+typed delivery snapshot capture/restore, both constructors, transition summaries
+and the installed-shell diagnostic. B separately shares only five owned attempt
+callbacks. Each needs its own gate and independent review before commit. RV5's
+older census needs current-source refresh. RV6 owns final ordinary full-suite and
+cross-outcome closure; the earlier RV1 full-suite receipt was not green.

@@ -179,6 +179,10 @@ explicit, reviewable and regression-backed.
 
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-18)
 
+- Honor manual scroll-away while Inventory row interaction is temporarily blocked,
+  keeping Follow disabled after the pending work completes without changing the
+  retained active row. Document that collapsing its parent clears the active row
+  and Refresh selected target.
 - Add RV3 Inventory Follow and Go to current item using the same browser navigation
   and override mechanics as Plan. Resolve current ordinary integrity items through
   their frozen scope and visible ancestors. Automatic following requires the

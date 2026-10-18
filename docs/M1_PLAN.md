@@ -52,15 +52,26 @@ manual verification. Later inventory operations may supersede execution-relative
 evidence. This supersedes the earlier exact/manual one-shot product requirement;
 it does not change linked automatic verification or original execution outcomes.
 Evidence: `build/review-consolidation-20261016/`. Root owns docs/integration.
-On 2026-10-17 the user requested a review pause after RV3 closes. Finish RV3's
-gate, review and atomic commit, then stop; RV4–6 implementation needs resumption.
+The user resumed RV4–6 on 2026-10-18 after accepting RV3, with two minor follow-ups:
+manual scroll-away must still disable Follow while interaction is blocked, without
+changing retained active identity; document that collapsing its parent removes
+the active row from the view and clears its Refresh target. Deliver that bounded
+tree/panel correction first. Its three existing probes, 2,062 interfaces cases,
+12 imports and installed Inventory/SH-G7 pass; `rv3-scroll-review-01.md` and
+`rv3-scroll-01-integration.json` own final review and commit accounting. Its
+population is tree.js and the existing tree/Inventory probes, matching
+PRESENTATION/DESKTOP_UI/CHANGELOG, and the register/session updates.
+`rv4-refresh-02.md` revalidates RV4's named seams against integrated RV3; confirm
+the follow-up's tree/probe-only delta before its serialized A/B commits.
+RV5's census also requires current-source refresh;
+RV6 closes the accepted batch. M1-12, release, DOC-2 and remote actions stay inactive.
 
 | Row / atomic outcome | Owners and finite consumer population | Gate / dependency |
 | --- | --- | --- |
 | RV0 — rules and delivery boundary | AGENTS, TESTS, PERFORMANCE, M1_PLAN and latest HANDOFF; session/checkpoint documentation, delta review, equivalent test relocation and accounted evidence retention. | Complete in `01089be`; independent document/contract review and local-link/diff checks passed. |
 | RV1 — ordinary Verify copied files | Complete. Successful retained copied paths use ordinary scan/Verify, controls and results. Workflow-owned subject admission preserves scope independently of checkboxes. Exact-only commands, claims, results and warning retired; original execution truth and command custody retained. | Reviewed `rv1-candidate-15.md` plus `rv1-correction-24.md`; 2,978 final workflows/interfaces passes, 12 imports, all 13 installed cases across native03/04. Earlier ordinary run had 6,064 passes and the subsequently corrected interface-boundary failure; unaffected passes retained by dependency. Raw failures and review remain under the evidence root. |
 | RV2 — common review infrastructure | Plan/Inventory server view state, visible-sequence/highlight helpers; separate browser panels above a shared controller; app read/navigation consumers, production probes, gallery, installed table cases and direct performance helper imports. | Reuse current range/selection/viewport/focus/read-settlement witnesses for both consumers; shared geometry/navigation is implemented once. Preserve row roles unless a separate accessibility change is justified. Depends RV1; split coherent server/browser commits after census. |
-| RV3 — Inventory Follow and Go | Complete. Common browser follow/reveal/controller, Inventory active-row/ancestor resolution and current ordinary session observation; retained active identity and Refresh target across passive windows. | Candidate08; 2,469 interfaces/tools passes, three skips, 12 imports, ten current installed cases plus six unchanged transport results. Independent review and integration identities below. Paused for user review before RV4–6. |
+| RV3 — Inventory Follow and Go | Complete. Common browser follow/reveal/controller, Inventory active-row/ancestor resolution and current ordinary session observation; retained active identity and Refresh target across passive windows. | Candidate08; 2,469 interfaces/tools passes, three skips, 12 imports, ten current installed cases plus six unchanged transport results. Integrated `4fceac7b`; accepted by user, with the bounded follow-up above. |
 | RV4 — narrow follow-up sharing | Drain delivery snapshot construction/restore and existing browser start/control attempt consumers. Share remaining repeated mechanics after exact-manual retirement; retain domain admission, outcome/identity and original-command rules. | Existing success/refusal/rollback/late delivery/uncertain recovery/zero-result/replacement tests plus affected composition/native paths. No generic effect machine or speculative full-slot pipeline. Depends RV1 and reconciles RV2/3 app changes. |
 | RV5 — catalogs and test consumers | Existing command catalog tests/native helpers/benchmark helper; shared fixture support for Inventory/Plan gallery specimens; existing long Inventory/execution/shell journeys. Gallery-only integrity row helper moves to tests if still unused by product. | One independent golden exposure catalog; unknown/missing/policy mismatch controls. Each relocated assertion names its equivalent probe/composition witness; installed input/effect, focus/scroll and package guards remain. Serialize with owning product migration; optional performance timing stays non-gating. |
 | RV6 — closure and evidence reduction | Integrated RV1–5, matching subject docs/CHANGELOG, condensed current register and session HANDOFF; inventory task-owned regenerable evidence before cleanup. | Ordinary suite, imports, affected installed cases, final independent cross-outcome review, source/producer/checker provenance and recovery accounting. Preserve unexplained failures, original handoff, recovery refs and unrelated stashes. Stop for recap; no M1-12/release/push/PR. |
@@ -169,7 +180,8 @@ The user accepted RV2 unchanged and explicitly allowed correcting recovery
 `a932d5d8` and integrating without rebuilding. The reviewed squash onto `1aeb9397`
 keeps WIP history off `milestone1`; `rv3-integration.json` records its final and
 corrected recovery commits and all 39 paths. Retain the recovery refs and five
-unrelated stashes. RV3 closes for the requested review pause; RV4–6 remain inactive.
+unrelated stashes. The requested RV3 review pause ended with the user's acceptance
+and resumption on 2026-10-18; the bounded follow-up and RV4–6 are active.
 Read-only `rv4-design-01.md` splits the next sharing into two atomic outcomes:
 RV4A migrates both drain delivery snapshots, restore, summary and installed-shell
 positional readers together; RV4B shares only owned recovery-handle attachment in

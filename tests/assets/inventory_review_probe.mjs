@@ -654,7 +654,7 @@ for (const [key, value] of Object.entries({
   "./execution_confirmation.js": moduleUrl("export const createExecutionConfirmation = () => ({ element: document.createElement('dialog') });"),
   "./rail.js": moduleUrl("export const createTaskRail = () => ({ element: document.createElement('nav'), render() {} });"),
 })) appSource = appSource.replace(key, value);
-appSource += "\nexport { adoptTask, selectTask, panel, startCurrentInventory, loadInventoryReview };";
+appSource += "\nexport { adoptTask, selectTask, panel, startCurrentInventory, loadInventoryReview, acceptTaskUpdate };";
 const app = await import(moduleUrl(appSource));
 const initialTask = app.adoptTask({task_id: "task-" + "9".repeat(32), session_id: null,
   session_state: null, session_released: false, task_kind: null, request_id: null,
@@ -963,6 +963,59 @@ liveReview = liveTask.inventoryReview;
 assert.notEqual(liveReview, beforeReloadReview, "explicit reload replaces the review owner");
 assert.equal(liveReview.activeNodeId, beforeReloadNode, "reload retains a node proved visible in its new view");
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), null, "reload may retain an off-window identity without ARIA");
+assert.equal(walk(app.panel.element).find(value => value.dataset.action === "inventory-refresh-selected").disabled, false);
+// A real manual scroll during selection settlement disables app-owned Follow.
+// Its synchronous render and later progress retain the active Refresh target.
+const blockedFollowAnchors = [];
+globalThis.inventoryViewportHarness.getInventoryItemAnchor = (...args) => {
+  blockedFollowAnchors.push(args);
+  return Promise.resolve({disposition:"current", view_revision:liveReview.summary.view_revision,
+    node_id:fixture.views.maximum.window.rows[60].node_id, index:60});
+};
+liveTask.sessionKind = "verify";
+liveTask.sessionState = "active";
+liveTask.sessionReleased = false;
+liveReview.window = {...fixture.views.maximum.window, anchor_node_id:liveReview.activeNodeId,
+  anchor_visible_index:12};
+liveReview.passiveRevealWindow = liveReview.window;
+liveReview.scrollTop = 0;
+liveReview.follow = {sessionId:liveTask.sessionId, enabled:true, eligible:true, hasTarget:true,
+  generation:0, anchorIndex:20, scrollOffset:20};
+app.panel.render(liveTask);
+treeViewport.dispatch("scroll");
+while (frames.length) frames.shift()();
+const blockedFollowNode = liveReview.activeNodeId;
+const blockedRefreshTarget = liveReview.activeRefreshTarget;
+const blockedFollowDetails = liveReview.detail;
+const blockedFollowHighlights = liveHighlights.length;
+liveReview.pending = "selection";
+app.panel.render(liveTask);
+treeViewport.dispatch("wheel");
+treeViewport.scrollTop = 40 * 24;
+treeViewport.dispatch("scroll");
+assert.equal(liveReview.follow.enabled, false, "blocked scroll-away disables Follow through the real app callback");
+assert.equal(liveReview.follow.generation, 1);
+liveRow(fixture.views.maximum.window.rows[30].node_id).click();
+treeRoot.dispatch("keydown", {key:"Home"});
+while (frames.length) frames.shift()();
+assert.equal(liveReview.activeNodeId, blockedFollowNode);
+assert.deepEqual(liveReview.activeRefreshTarget, blockedRefreshTarget);
+assert.equal(liveReview.detail, blockedFollowDetails);
+assert.equal(liveHighlights.length, blockedFollowHighlights, "blocked row gestures remain inert");
+liveReview.pending = null;
+app.acceptTaskUpdate(liveTask, liveTask.sessionId, null, {session_id:liveTask.sessionId,
+  session_state:"active", control_state:"running", phase:"verify",
+  active_item:{item_id:"1:60", item_type:"integrity"}, presentation:{item_percent:25}});
+await settle();
+while (frames.length) frames.shift()();
+assert.equal(liveReview.follow.enabled, false, "later accepted progress cannot resume overridden Follow");
+assert.deepEqual(blockedFollowAnchors, []);
+assert.equal(treeViewport.scrollTop, 40 * 24);
+assert.equal(liveReview.activeNodeId, blockedFollowNode);
+assert.deepEqual(liveReview.activeRefreshTarget, blockedRefreshTarget);
+liveTask.sessionState = "completed";
+liveTask.sessionReleased = true;
+app.panel.render(liveTask);
 assert.equal(walk(app.panel.element).find(value => value.dataset.action === "inventory-refresh-selected").disabled, false);
 app.panel.renderSettings();
 const menuCalls = [];

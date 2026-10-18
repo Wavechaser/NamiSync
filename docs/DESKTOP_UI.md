@@ -1324,6 +1324,9 @@ Refresh selected untouched. Its active identity stays retained off-window; ARIA
 detaches while the row has no element and restores when it renders again. Focus
 alone does not reveal that row or override Follow. Explicit navigation resumes
 from the retained position; only actual disappearance from the view clears it.
+Collapsing its parent counts as disappearance and clears Refresh selected's
+target. Manual scroll-away disables Follow even while pending work blocks row
+interaction; completion does not resume it automatically.
 PRESENTATION owns resolution and passive publication; M1_PLAN owns finite acceptance.
 
 The Plan review renders its current bounded window in the compact file-row grid

@@ -1361,6 +1361,37 @@ assert.equal(passiveChanges.at(-1), null, "exact view absence clears identity wi
 dispatchKey(passiveRoot, "Home");
 passiveTree.dispose();
 
+// A blocked manual scroll still reports Follow override, without retiring the
+// passive active identity when the callback renders or the gate later opens.
+const blockedDocument = new TestDocument();
+const blockedRoot = blockedDocument.createElement("div");
+blockedRoot.clientHeight = 2 * ROW_H;
+let interactionAllowed = true;
+const blockedChanges = [], blockedScrolls = [];
+const blockedTree = createTree(blockedRoot, {
+  interactionAllowed:() => interactionAllowed,
+  activeChanged:nodeId => blockedChanges.push(nodeId),
+  manualScroll:(...bounds) => blockedScrolls.push(bounds),
+});
+blockedTree.commitWindow(blockedTree.beginWindowRequest(), fixtureWindow(0, 4));
+const blockedActive = blockedRoot.getAttribute("aria-activedescendant");
+blockedTree.commitPassiveWindow(blockedTree.beginWindowRequest(), fixtureWindow(0, 4));
+blockedTree.revealPassiveRow(2);
+blockedRoot.dispatch("scroll");
+blockedDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(blockedScrolls, [], "programmatic reveal never reports manual override");
+interactionAllowed = false;
+blockedRoot.dispatch("wheel");
+blockedRoot.scrollTop = 2 * ROW_H;
+blockedRoot.dispatch("scroll");
+assert.deepEqual(blockedScrolls, [[2, 3]], "blocked manual scroll notifies its consumer");
+interactionAllowed = true;
+blockedDocument.defaultView.flushAnimationFrame();
+assert.equal(blockedRoot.getAttribute("aria-activedescendant"), blockedActive,
+  "blocked scroll retains passive identity after the gate opens");
+assert.equal(blockedChanges.length, 1);
+blockedTree.dispose();
+
 const retainedDocument = new TestDocument();
 const retainedRoot = retainedDocument.createElement("div");
 retainedRoot.clientHeight = 2 * ROW_H;
