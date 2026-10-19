@@ -15,9 +15,9 @@ Preflight uses the active capacity-observation and refusal contract in
 Preflight separates current-world observation from pure judgment:
 
 ```python
-observe(review: ExecutionReview, fs: FileSystem, *,
+observe(review: ExecutionReview, fs: FileSystem, *, plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None) -> ObservedWorld
-preflight(review: ExecutionReview, world: ObservedWorld, *,
+preflight(review: ExecutionReview, world: ObservedWorld, *, plan_review: bool = False,
           review_admission: PlanReviewProducerAdmission | None = None) -> Verdict
 ```
 
@@ -35,6 +35,12 @@ filesystem. It records only remaining selected-operation subjects, required
 target parents, both roots, capacity, exact reclaimable temp bytes, trash
 safety, and one UTC timestamp. The native local backend performs no cleanup or
 hydration.
+
+The full execution scope is the default. Planning explicitly sets
+`plan_review=True` through observation, scope derivation, judgment and both
+result-adoption gates. That mode omits NOOP direct file subjects and their stat
+judgments while retaining their target parents and every non-stat check.
+Empty execution status and review-capacity authority do not select this mode.
 
 `preflight()` consumes only the frozen outer `ObservedWorld` contract in
 `namisync.core.preflight`. It reports all applicable typed run- and
@@ -85,6 +91,10 @@ the exact admitted world identity, gates the complete informational population
 before refusal traversal, validates truth, code, selection, subject, and text
 relations in place, and retains the exact callback verdict and refusal order.
 An equal replacement world is not the admitted world and fails ordinarily.
+Both adoption gates derive allowed subjects with the same explicit mode as the
+observer and judge. A review callback cannot publish an omitted NOOP file
+subject or a refusal naming it; a subject independently required as a target
+parent remains admissible.
 
 Only the final observed-world mapping slots and verdict refusal-tuple slots/
 informational rows are charged to the retained plan artifact. Construction
@@ -99,9 +109,12 @@ complete projections, later task/serialization, native, or browser copies.
 ## Observation Boundary
 
 Observation touches only remaining selected-operation paths and their required
-parents/roots. It records source and target stats (or absence), root/physical
-volume evidence, free space, exact reclaimable owned-temp bytes, trash path
-resolution/writability, and one injected UTC timestamp.
+parents/roots. Review mode omits NOOP source and target file paths, but keeps
+their target parents in both the observed subjects and `target_parent_paths`.
+A NOOP target independently needed as another operation's parent still receives
+parent safety checks. Observation records source and target stats (or absence),
+root/physical volume evidence, free space, exact reclaimable owned-temp bytes,
+trash path resolution/writability, and one injected UTC timestamp.
 
 Stats are keyed by `Subject(root, rel_path_key)`, never by relative-path string
 alone, but observation still passes planned relative-path spelling to the
@@ -180,7 +193,9 @@ the run. It verifies:
 - no selected operation is blocked, overlaps a blocked correspondence region,
   or depends on blocked, failed, canceled, or deferred work;
 - current source/target/type/identity/size/mtime evidence matches each planned
-  before-state within capability granularity;
+  before-state within capability granularity; review mode skips these direct
+  stat judgments for NOOPs, including observation, containment and representation
+  refusals, while retaining root, parent, blocked/quarantine and dependency checks;
 - managed attribute bits match; link count matches for MOVE and MOVE_UPDATE
   eligibility, while creation time and other attribute bits are not drift facts;
 - expected absence is still absence and expected destination occupancy/type is
@@ -205,11 +220,15 @@ selection-digest match before it calls observation/preflight.
 
 ## Repetition And Freshness
 
-Plan review may display a verdict from one observation. Execution always makes
-a fresh observation; it does not reuse the review snapshot merely because it is
-recent. This resolves the contradictory reuse wording noted during review: time
-closeness is not evidence of unchanged state. Resume and queue wakeup likewise
-observe fresh.
+Plan review displays fresh checks for selected change operations and all required
+target parents, including NOOP parents, with NOOP file facts remaining as of the
+scans. A NOOP that changes between scan and review may therefore leave review
+ready. Execution always observes and judges every remaining selected operation,
+including NOOPs, before temp cleanup or executor admission; detected drift
+refuses the whole fresh run without changing target data. It does not reuse the review snapshot
+merely because it is recent. This resolves the contradictory reuse wording noted
+during review: time closeness is not evidence of unchanged state. Resume and
+queue wakeup likewise observe fresh.
 
 Residual TOCTOU remains after observation. Executor therefore performs a final
 per-operation guard immediately before each mutation; preflight does not replace

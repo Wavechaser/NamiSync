@@ -261,6 +261,7 @@ class Observer(Protocol):
         review: ExecutionReview,
         fs: ObservationFileSystem,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld: ...
 
@@ -271,6 +272,7 @@ class Preflight(Protocol):
         review: ExecutionReview,
         world: ObservedWorld,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict: ...
 
@@ -477,12 +479,14 @@ def _run_plan(
         raw_world = deps.observer(
             review,
             deps.observation_fs,
+            plan_review=True,
             review_admission=producer_admission,
         )
         world = adopt_plan_observed_world(
             raw_world,
             review,
             producer_admission,
+            plan_review=True,
         )
         del raw_world
         admit_retained_plan_observed_world(world, retained_admission)
@@ -490,6 +494,7 @@ def _run_plan(
         raw_verdict = deps.preflight(
             review,
             world,
+            plan_review=True,
             review_admission=producer_admission,
         )
         verdict = adopt_plan_verdict(
@@ -497,6 +502,7 @@ def _run_plan(
             world,
             review,
             producer_admission,
+            plan_review=True,
         )
         del (
             raw_verdict,

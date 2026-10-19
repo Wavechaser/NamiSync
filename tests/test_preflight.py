@@ -30,6 +30,7 @@ from namisync.core.models import (
     EntryKind,
     FileIdentity,
     FileRecord,
+    IgnoreSet,
     MetadataSnapshot,
     Root,
     ScanResult,
@@ -78,8 +79,10 @@ from namisync.core.root_authority import (
     observe_native_volume,
 )
 from namisync.core.scalars import MAX_SIGNED_64, ScalarDomainError
+from namisync.core.session import RunContext
 from namisync.modules.planner import plan
 from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
+from namisync.modules.scanner import scan as native_scan
 from tests._executor_fixtures import _create_directory_reparse
 
 
@@ -1403,7 +1406,8 @@ def test_incomplete_scan_refuses_selected_destructive_work(
     assert expected <= _codes(xset, _world(xset))
 
 
-def test_preflight_refuses_manually_selected_blocked_correspondence() -> None:
+@pytest.mark.parametrize("plan_review", (False, True))
+def test_preflight_refuses_manually_selected_blocked_correspondence(plan_review: bool) -> None:
     source = _scan(
         "source",
         SOURCE_VOLUME,
@@ -1435,6 +1439,11 @@ def test_preflight_refuses_manually_selected_blocked_correspondence() -> None:
         for operation in built.operations
         if operation.target_rel_path == r"foo\keep.txt"
     )
+    if plan_review:
+        built = replace(built, operations=tuple(
+            replace(operation, kind=OperationKind.NOOP) if operation is counterpart else operation
+            for operation in built.operations
+        ))
     xset = ExecutionReview(
         built,
         frozenset({counterpart.op_id}),
@@ -1442,7 +1451,16 @@ def test_preflight_refuses_manually_selected_blocked_correspondence() -> None:
         {},
     )
 
-    assert RefusalCode.BLOCKED_CORRESPONDENCE in _codes(xset, _world(xset))
+    assert RefusalCode.BLOCKED_CORRESPONDENCE in {
+        refusal.code for refusal in preflight(xset, _world(xset), plan_review=plan_review).refusals
+    }
+    blocked = next(operation for operation in built.operations if operation.blocked)
+    selected_blocked = replace(xset, selection=frozenset({blocked.op_id}))
+    assert RefusalCode.OPERATION_BLOCKED in {
+        refusal.code for refusal in preflight(
+            selected_blocked, _world(selected_blocked), plan_review=plan_review
+        ).refusals
+    }
 
 
 @pytest.mark.parametrize(
@@ -1601,20 +1619,30 @@ def test_same_or_nested_resolved_roots_are_refused() -> None:
     assert RefusalCode.ROOTS_OVERLAP in _codes(xset, replace(world, roots=roots))
 
 
-def test_dependency_break_and_blocked_dependency_are_refused() -> None:
+@pytest.mark.parametrize("plan_review", (False, True))
+def test_dependency_break_and_blocked_dependency_are_refused(plan_review: bool) -> None:
     xset = _xset(
         source_files=(_file(r"folder\copy.bin"),),
         source_directories=(_dir("folder"),),
     )
     mkdir = next(operation for operation in xset.plan.operations if operation.kind is OperationKind.MKDIR)
     copy_op = next(operation for operation in xset.plan.operations if operation.kind is OperationKind.COPY)
+    if plan_review:
+        xset = replace(xset, plan=replace(xset.plan, operations=tuple(
+            replace(operation, kind=OperationKind.NOOP) if operation is copy_op else operation
+            for operation in xset.plan.operations
+        )))
     not_closed = ExecutionReview(
         xset.plan,
         frozenset({copy_op.op_id}),
         xset.run_id,
         {},
     )
-    assert RefusalCode.SELECTION_NOT_CLOSED in _codes(not_closed, _world(not_closed))
+    assert RefusalCode.SELECTION_NOT_CLOSED in {
+        refusal.code for refusal in preflight(
+            not_closed, _world(not_closed), plan_review=plan_review
+        ).refusals
+    }
 
     failed = ExecutionReview(
         xset.plan,
@@ -1622,7 +1650,9 @@ def test_dependency_break_and_blocked_dependency_are_refused() -> None:
         xset.run_id,
         {mkdir.op_id: Outcome.FAILED},
     )
-    assert RefusalCode.DEPENDENCY_UNAVAILABLE in _codes(failed, _world(failed))
+    assert RefusalCode.DEPENDENCY_UNAVAILABLE in {
+        refusal.code for refusal in preflight(failed, _world(failed), plan_review=plan_review).refusals
+    }
 
     blocked = ExecutionReview(
         xset.plan,
@@ -1630,9 +1660,9 @@ def test_dependency_break_and_blocked_dependency_are_refused() -> None:
         xset.run_id,
         {mkdir.op_id: Outcome.BLOCKED},
     )
-    assert RefusalCode.DEPENDENCY_UNAVAILABLE in _codes(
-        blocked, _world(blocked)
-    )
+    assert RefusalCode.DEPENDENCY_UNAVAILABLE in {
+        refusal.code for refusal in preflight(blocked, _world(blocked), plan_review=plan_review).refusals
+    }
 
 
 @pytest.mark.parametrize(
@@ -1811,6 +1841,100 @@ class InstrumentedFileSystem:
 
     def now_utc(self) -> datetime:
         return NOW
+
+
+@pytest.mark.parametrize(("nested", "mixed"), ((False, False), (True, False), (True, True)))
+def test_plan_review_omits_noop_files_but_keeps_parents(nested: bool, mixed: bool) -> None:
+    prefix = "folder\\" if nested else ""
+    same = prefix + "same.bin"
+    copy = prefix + "copy.bin"
+    review = _xset(
+        source_files=(_file(same), *((_file(copy, index=2),) if mixed else ())),
+        target_files=(_file(same, volume="DST"),),
+        source_directories=(_dir("folder"),) if nested else (),
+        target_directories=(_dir("folder"),) if nested else (),
+    )
+
+    class FileSystem(InstrumentedFileSystem):
+        def stat(self, authority, rel_path, profile):
+            value = super().stat(authority, rel_path, profile)
+            if rel_path == "folder":
+                return StatObservation(_dir("folder").stat)
+            return value
+
+    filesystem = FileSystem(review)
+    full = observe(review, filesystem)
+    assert observe(review, FileSystem(review), plan_review=False) == full
+    filesystem.stat_calls.clear()
+    world = observe(review, filesystem, plan_review=True)
+    expected_paths = {
+        Subject("target", "FOLDER"): "folder",
+    } if nested else {}
+    if mixed:
+        expected_paths.update({
+            Subject("source", normalize_relative_path(copy)): copy,
+            Subject("target", normalize_relative_path(copy)): copy,
+        })
+    assert dict(world.paths) == expected_paths
+    assert set(world.stats) == set(expected_paths)
+    assert preflight_module.plan_observation_scope(review, plan_review=True) == (
+        expected_paths, full.target_parent_paths,
+    )
+    assert preflight_module.plan_observation_scope(review) == (
+        dict(full.paths), full.target_parent_paths,
+    )
+    assert world.target_parent_paths == full.target_parent_paths == frozenset({"folder" if nested else ""})
+    assert set(filesystem.stat_calls) == {
+        (subject.root_id, path) for subject, path in expected_paths.items()
+    }
+    assert set(world.roots) == {"source", "target"}
+    assert preflight(review, world, plan_review=True).ok
+    roots = dict(world.roots)
+    roots["source"] = RootObservation(None, None, None, "unavailable")
+    assert RefusalCode.ROOT_UNAVAILABLE in {
+        refusal.code for refusal in preflight(
+            review, replace(world, roots=roots), plan_review=True
+        ).refusals
+    }
+
+
+@pytest.mark.parametrize(("observation", "expected"), (
+    (StatObservation(None), RefusalCode.TARGET_DRIFT),
+    (StatObservation(_file("folder").stat), RefusalCode.TYPE_CHANGED),
+    (StatObservation(None, "denied"), RefusalCode.OBSERVATION_UNAVAILABLE),
+    (StatObservation(_dir("folder").stat, contained=False), RefusalCode.PATH_ESCAPE),
+    (StatObservation(_dir("folder").stat, representable=False), RefusalCode.PATH_UNREPRESENTABLE),
+))
+def test_plan_review_noop_parent_still_refuses_unsafe_parent(observation, expected) -> None:
+    review = _xset(
+        source_files=(_file("same.bin"), _file(r"folder\copy.bin", index=2)),
+        target_files=(_file("same.bin", volume="DST"),),
+        source_directories=(_dir("folder"),),
+        target_directories=(_dir("folder"),),
+    )
+    operations = tuple(
+        replace(operation, target_rel_path="folder")
+        if operation.kind is OperationKind.NOOP else operation
+        for operation in review.plan.operations
+    )
+    review = replace(review, plan=replace(review.plan, operations=operations))
+    world = observe(review, InstrumentedFileSystem(review), plan_review=True)
+    parent = Subject("target", "FOLDER")
+    stats = dict(world.stats)
+    stats[parent] = observation
+    world = replace(world, stats=stats)
+    admission = PlanReviewProducerAdmission()
+    assert preflight_module.adopt_plan_observed_world(
+        world, review, admission, plan_review=True
+    ) is world
+    verdict = preflight(review, world, plan_review=True)
+    assert any(
+        refusal.code is expected and refusal.subject == parent and refusal.op_id is None
+        for refusal in verdict.refusals
+    )
+    assert preflight_module.adopt_plan_verdict(
+        verdict, world, review, admission, plan_review=True
+    ) is verdict
 
 
 def test_observation_is_read_only_and_stats_only_remaining_touched_paths_and_parents() -> None:
@@ -2154,6 +2278,53 @@ def test_free_space_root_failure_skips_reclaimable_and_trash(
         RefusalCode.ROOT_CHANGED,
         RefusalCode.ROOT_UNAVAILABLE,
     } == {RefusalCode.ROOT_CHANGED}
+
+
+def test_plan_review_credits_temp_in_noop_only_parent(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    for root in (source, target):
+        (root / "keep").mkdir(parents=True)
+        path = root / "keep" / "same.bin"
+        path.write_bytes(b"same")
+        os.utime(path, ns=(1_700_000_000_000_000_000,) * 2)
+    (source / "copy.bin").write_bytes(b"copy payload")
+    context = RunContext(lambda _event: None, lambda: None)
+    source_scan = native_scan(Root(str(source), "source"), IgnoreSet(), context)
+    target_scan = native_scan(Root(str(target), "target"), IgnoreSet(), context)
+    built = plan(
+        source_scan, target_scan,
+        MappingSnapshot.empty(source_scan.volume_id, target_scan.volume_id),
+        SyncOptions(), Scope.everything(),
+    )
+    review = ExecutionReview(
+        built, frozenset(operation.op_id for operation in built.operations),
+        validated_run_id("a" * 32), {},
+    )
+    assert {operation.kind for operation in built.operations} == {
+        OperationKind.NOOP, OperationKind.COPY,
+    }
+    stale_temp = target / "keep" / ("old.bin.synctmp-" + "b" * 32 + "-" + "c" * 32)
+    stale_temp.write_bytes(b"temp")
+    filesystem = LocalObservationFileSystem()
+    monkeypatch.setattr(filesystem, "free_space", lambda _authority: built.required_bytes - 4)
+
+    for plan_review in (True, False):
+        world = observe(review, filesystem, plan_review=plan_review)
+        assert world.target_parent_paths == frozenset({"", "keep"})
+        assert Subject("target", "KEEP") in world.stats
+        assert world.reclaimable_temp_bytes == 4
+        assert preflight(review, world, plan_review=plan_review).ok
+        insufficient = preflight(
+            review, replace(world, free_space=world.free_space - 1),
+            plan_review=plan_review,
+        )
+        assert {refusal.code for refusal in insufficient.refusals} == {
+            RefusalCode.INSUFFICIENT_SPACE,
+        }
+    assert stale_temp.read_bytes() == b"temp"
 
 
 def test_local_reclaimable_temp_count_is_exact_and_excludes_synctrash(

@@ -869,6 +869,35 @@ def test_world_construction_canonicalizes_utc_alias_and_adoption_keeps_identity(
     assert verdict.observed is captured
 
 
+@pytest.mark.parametrize("root_id", ("source", "target"))
+def test_plan_review_adoption_rejects_omitted_noop_subject(root_id: str) -> None:
+    source = _scan(SOURCE_ROOT, files=(_file("same.bin"),))
+    target = _scan(TARGET_ROOT, files=(_file("same.bin"),))
+    review = _xset(_planned(source, target))
+    assert {operation.kind for operation in review.remaining()} == {OperationKind.NOOP}
+    filesystem = _ObservationFileSystem(source, target)
+    world = observe(review, filesystem, plan_review=True)
+    verdict = preflight(review, world, plan_review=True)
+    admission = PlanReviewProducerAdmission()
+    assert verdict.ok
+    assert adopt_plan_observed_world(world, review, admission, plan_review=True) is world
+    assert adopt_plan_verdict(verdict, world, review, admission, plan_review=True) is verdict
+
+    full = observe(review, filesystem)
+    assert adopt_plan_observed_world(full, review, admission) is full
+    subject = Subject(root_id, "SAME.BIN")
+    supplied = replace(
+        world, stats={subject: full.stats[subject]}, paths={subject: "same.bin"},
+    )
+    with pytest.raises(ValueError, match="subject outside the plan"):
+        adopt_plan_observed_world(supplied, review, admission, plan_review=True)
+    refusal = Refusal(RefusalCode.SIZE_CHANGED, review.remaining()[0].op_id, subject)
+    with pytest.raises(ValueError, match="refusal names an unobserved subject"):
+        adopt_plan_verdict(
+            Verdict(False, (refusal,), world), world, review, admission, plan_review=True,
+        )
+
+
 def test_world_constructor_normalizes_declared_mapping_enumeration() -> None:
     source = _scan(SOURCE_ROOT)
     target = _scan(TARGET_ROOT, files=(_file("obsolete.bin"),))
@@ -1778,11 +1807,12 @@ def test_each_raw_population_refuses_first_excess_before_save(
         execution_set: ExecutionReview,
         fs: object,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld:
         del review_admission
         calls.append("observer")
-        world = observe(execution_set, fs)  # type: ignore[arg-type]
+        world = observe(execution_set, fs, plan_review=plan_review)  # type: ignore[arg-type]
         if population == "world-stats":
             return replace(
                 world,
@@ -1811,6 +1841,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del execution_set, review_admission
@@ -2118,11 +2149,13 @@ def test_unadmitted_exact_plan_signal_cannot_become_refusal(
             execution_set: ExecutionReview,
             fs: object,
             *,
+            plan_review: bool = False,
             review_admission: PlanReviewProducerAdmission | None = None,
         ) -> ObservedWorld:
             world = observe(
                 execution_set,
                 fs,  # type: ignore[arg-type]
+                plan_review=plan_review,
                 review_admission=review_admission,
             )
             return replace(world, stats=FailingMapping())
@@ -2332,19 +2365,21 @@ def test_workflow_producers_receive_only_counter_free_admission_capability(
         execution_set: ExecutionReview,
         fs: object,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld:
         capture(review_admission)
-        return observe(execution_set, fs)  # type: ignore[arg-type]
+        return observe(execution_set, fs, plan_review=plan_review)  # type: ignore[arg-type]
 
     def preflight_callback(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         capture(review_admission)
-        return preflight(execution_set, world)
+        return preflight(execution_set, world, plan_review=plan_review)
 
     deps = _workflow_dependencies(
         saved,
@@ -2459,6 +2494,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         review: ExecutionReview,
         fs: object,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld:
         del review_admission
@@ -2468,7 +2504,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         with pytest.raises(TypeError):
             review.status[review.plan.operations[0].op_id] = Outcome.SUCCEEDED
         raw["review"] = review
-        value = observe(review, fs)  # type: ignore[arg-type]
+        value = observe(review, fs, plan_review=plan_review)  # type: ignore[arg-type]
         raw["world"] = value
         return value
 
@@ -2476,6 +2512,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         review: ExecutionReview,
         world: ObservedWorld,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del review_admission
@@ -2486,7 +2523,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         with pytest.raises(TypeError):
             world.stats[subject] = StatObservation(None)
         raw["adopted_world"] = world
-        value = preflight(review, world)
+        value = preflight(review, world, plan_review=plan_review)
         raw["verdict"] = value
         return value
 
@@ -2530,13 +2567,14 @@ def test_workflow_admitted_world_refuses_ordinary_mapping_mutation(
         review: ExecutionReview,
         world: ObservedWorld,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del review_admission
         subject = next(iter(world.stats))
         with pytest.raises(TypeError):
             world.stats[subject] = StatObservation(None)
-        return preflight(review, world)
+        return preflight(review, world, plan_review=plan_review)
 
     deps.preflight = read_only_preflight
     assert _run(deps).status is SessionState.COMPLETED
@@ -2555,6 +2593,7 @@ def test_preflight_equal_replacement_world_is_ordinary_identity_failure(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del execution_set, review_admission
@@ -2615,12 +2654,14 @@ def test_run_plan_freezes_request_fields_before_policy_access(
         execution_set: ExecutionReview,
         fs: object,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld:
         observed_run_ids.append(str(execution_set.run_id))
         return real_observer(
             execution_set,
             fs,
+            plan_review=plan_review,
             review_admission=review_admission,
         )
 
@@ -2659,6 +2700,7 @@ def test_workflow_accepts_exact_final_retention_and_refuses_first_extra(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
+        plan_review: bool = False,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del execution_set, review_admission

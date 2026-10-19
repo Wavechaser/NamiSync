@@ -1024,6 +1024,71 @@ def test_commit_rejects_selection_authority_from_an_equal_plan(tmp_path: Path) -
         runtime.close()
 
 
+@pytest.mark.parametrize("drift_side", ("source", "target"))
+def test_plan_review_noop_drift_refuses_execution_before_effects(
+    tmp_path: Path,
+    drift_side: str,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    for root in (source, target):
+        path = root / "same.bin"
+        path.write_bytes(b"same")
+        os.utime(path, ns=(1_700_000_000_000_000_000,) * 2)
+    (source / "copy.bin").write_bytes(b"copy")
+    stale_temp = target / ("old.bin.synctmp-" + "e" * 32 + "-" + "f" * 32)
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    scanner = runtime._deps.scanner
+    executor = runtime._deps.executor
+    executor_calls: list[object] = []
+
+    def scan(*args, **kwargs):
+        value = scanner(*args, **kwargs)
+        if value.root.path == str(target):
+            changed = source if drift_side == "source" else target
+            (changed / "same.bin").write_bytes(b"changed since scan")
+            stale_temp.write_bytes(b"old temporary payload")
+        return value
+
+    def execute(*args, **kwargs):
+        executor_calls.append(args[0])
+        return executor(*args, **kwargs)
+
+    runtime._deps = replace(runtime._deps, scanner=scan, executor=execute)
+    request = PlanRequest("a" * 32, str(source), str(target))
+    context = RunContext(lambda _event: None, lambda: None)
+    try:
+        planned = runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
+        assert planned.status is SessionState.COMPLETED
+        artifact = runtime.get_plan(request.request_id)
+        assert {operation.kind for operation in artifact.plan.operations} == {
+            OperationKind.NOOP, OperationKind.COPY,
+        }
+        assert artifact.verdict.ok
+        before = {path.name: path.read_bytes() for path in target.iterdir()}
+        execution = runtime.commit_plan(
+            request.request_id, run_id="b" * 32, committed_at=NOW,
+        )
+        result = runtime.open_execution(
+            runtime.prepare_execution(execution).checkpoint
+        ).run(context)
+
+        assert result.status is SessionState.REFUSED
+        assert result.disposition is Disposition.UNRUN
+        details = runtime.get_execution_details("b" * 32)
+        assert any(
+            refusal.code == RefusalCode.SIZE_CHANGED.value and refusal.path == "same.bin"
+            for refusal in details.refusals
+        )
+        assert executor_calls == []
+        assert {path.name: path.read_bytes() for path in target.iterdir()} == before
+        assert stale_temp.exists()
+        assert not (target / "copy.bin").exists()
+    finally:
+        runtime.close()
+
+
 def test_commit_reuses_exact_selection_without_deriving_again(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

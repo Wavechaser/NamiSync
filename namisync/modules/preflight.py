@@ -509,6 +509,7 @@ def _require_execution_review(value: object) -> ExecutionReview:
 def _operation_subjects(
     review: ExecutionReview,
     *,
+    plan_review: bool = False,
     review_admission: PlanReviewProducerAdmission | None = None,
 ) -> tuple[
     dict[Subject, tuple[Root, str, CapabilityProfile]],
@@ -542,7 +543,8 @@ def _operation_subjects(
         target_parents.add(parent)
 
     for operation in review.remaining():
-        if operation.source_rel_path is not None:
+        observe_files = not (plan_review and operation.kind is OperationKind.NOOP)
+        if observe_files and operation.source_rel_path is not None:
             subject = Subject(plan.source_root.root_id, normalize_relative_path(operation.source_rel_path))
             retain_subject(
                 subject,
@@ -552,15 +554,16 @@ def _operation_subjects(
                     plan.source_profile,
                 ),
             )
-        target_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.target_rel_path))
-        retain_subject(
-            target_subject,
-            (
-                plan.target_root,
-                operation.target_rel_path,
-                plan.target_profile,
-            ),
-        )
+        if observe_files:
+            target_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.target_rel_path))
+            retain_subject(
+                target_subject,
+                (
+                    plan.target_root,
+                    operation.target_rel_path,
+                    plan.target_profile,
+                ),
+            )
         parent = str(PureWindowsPath(operation.target_rel_path).parent)
         parent = "" if parent == "." else parent
         retain_parent(parent)
@@ -572,15 +575,16 @@ def _operation_subjects(
                 replace_existing=False,
             )
         if operation.prior_target_rel_path is not None:
-            prior_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.prior_target_rel_path))
-            retain_subject(
-                prior_subject,
-                (
-                    plan.target_root,
-                    operation.prior_target_rel_path,
-                    plan.target_profile,
-                ),
-            )
+            if observe_files:
+                prior_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.prior_target_rel_path))
+                retain_subject(
+                    prior_subject,
+                    (
+                        plan.target_root,
+                        operation.prior_target_rel_path,
+                        plan.target_profile,
+                    ),
+                )
             prior_parent = str(PureWindowsPath(operation.prior_target_rel_path).parent)
             prior_parent = "" if prior_parent == "." else prior_parent
             retain_parent(prior_parent)
@@ -596,10 +600,12 @@ def _operation_subjects(
 
 def plan_observation_scope(
     review: ExecutionReview,
+    *,
+    plan_review: bool = False,
 ) -> tuple[dict[Subject, str], frozenset[str]]:
     """Return the exact path populations the plan observer may publish."""
 
-    subjects, target_parents = _operation_subjects(review)
+    subjects, target_parents = _operation_subjects(review, plan_review=plan_review)
     return (
         {
             subject: rel_path
@@ -613,6 +619,7 @@ def observe(
     review: ExecutionReview,
     fs: ObservationFileSystem,
     *,
+    plan_review: bool = False,
     review_admission: PlanReviewProducerAdmission | None = None,
 ) -> ObservedWorld:
     """Read the current scoped world without making any safety decision."""
@@ -625,13 +632,16 @@ def observe(
     review = _require_execution_review(review)
     scope = getattr(fs, "root_scope", None)
     with nullcontext() if scope is None else scope():
-        return _observe(review, fs, review_admission=review_admission)
+        return _observe(
+            review, fs, plan_review=plan_review, review_admission=review_admission
+        )
 
 
 def _observe(
     review: ExecutionReview,
     fs: ObservationFileSystem,
     *,
+    plan_review: bool,
     review_admission: PlanReviewProducerAdmission | None,
 ) -> ObservedWorld:
     plan = review.plan
@@ -694,6 +704,7 @@ def _observe(
 
     subjects, target_parents = _operation_subjects(
         review,
+        plan_review=plan_review,
         review_admission=review_admission,
     )
     stats: dict[Subject, StatObservation] = {}
@@ -894,6 +905,8 @@ def adopt_plan_observed_world(
     value: object,
     review: ExecutionReview,
     admission: PlanReviewProducerAdmission,
+    *,
+    plan_review: bool = False,
 ) -> ObservedWorld:
     """Admit one exact observer graph without rebuilding it."""
 
@@ -915,7 +928,9 @@ def adopt_plan_observed_world(
         raise TypeError("observed target parent paths must be an exact frozenset")
     admission.require_source_rows(len(value.target_parent_paths))
 
-    allowed_paths, allowed_parents = plan_observation_scope(review)
+    allowed_paths, allowed_parents = plan_observation_scope(
+        review, plan_review=plan_review
+    )
     for raw_index, (raw_subject, raw_observation) in enumerate(
         value.stats.items(),
         start=1,
@@ -983,6 +998,8 @@ def adopt_plan_verdict(
     world: ObservedWorld,
     review: ExecutionReview,
     admission: PlanReviewProducerAdmission,
+    *,
+    plan_review: bool = False,
 ) -> Verdict:
     """Admit exact preflight output without rebuilding or reordering it."""
 
@@ -999,7 +1016,7 @@ def adopt_plan_verdict(
         raise ValueError("preflight verdict truth does not match its refusals")
     admission.require_informational_source_rows(len(value.refusals))
 
-    allowed_paths, _ = plan_observation_scope(review)
+    allowed_paths, _ = plan_observation_scope(review, plan_review=plan_review)
     for raw_refusal in value.refusals:
         if type(raw_refusal) is not Refusal:
             raise TypeError("preflight refusals must contain exact Refusal values")
@@ -1118,6 +1135,7 @@ def preflight(
     review: ExecutionReview,
     world: ObservedWorld,
     *,
+    plan_review: bool = False,
     review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Verdict:
     """Purely judge all applicable refusal reasons for an execution set."""
@@ -1241,6 +1259,9 @@ def preflight(
                 refusals.append(Refusal(RefusalCode.DEPENDENCY_UNAVAILABLE, operation.op_id, detail=str(dependency)))
             elif dependency_status is None and dependency not in remaining_ids:
                 refusals.append(Refusal(RefusalCode.DEPENDENCY_UNAVAILABLE, operation.op_id, detail=str(dependency)))
+
+        if plan_review and operation.kind is OperationKind.NOOP:
+            continue
 
         if operation.source_rel_path is not None and operation.source_expected is not None:
             subject = Subject(plan.source_root.root_id, normalize_relative_path(operation.source_rel_path))

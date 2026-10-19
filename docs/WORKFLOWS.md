@@ -292,7 +292,11 @@ construction or the other unmodeled construction/callback costs.
    direct blockers `BLOCKED`, quarantine overlapping/dependent work as
    `DEFERRED`, and withhold destructive/identity moves when either scan is
    incomplete.
-7. Observe/preflight that exact selection for review information.
+7. Observe/preflight that exact selection with explicit `plan_review=True` through
+   both callbacks and their result-adoption gates. Review omits NOOP direct file
+   stats and stat judgments; their parents/temp accounting, roots and non-stat
+   judgments remain. NOOP file facts stay as of the scans. Execution and resume
+   retain the full default observation/judgment scope.
 8. Return the immutable plan/verdict with reviewed authority and typed warning/
    refusal facts intact after all disposable collaborator copies retire;
    terminate and release locks. Stage 6 projects those facts as inert notices

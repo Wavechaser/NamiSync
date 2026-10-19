@@ -578,7 +578,10 @@ request/revision admission and recovery.
 
 Every successfully built, unexecuted plan reports neutral **Plan ready**, not
 executable readiness. Execute independently requires preflight readiness and a
-nonempty executable selection. A strictly empty plan says **Plan is empty**;
+nonempty executable selection. Review preflight refreshes change-operation facts;
+NOOP file facts remain as of the scans. Execution freshly checks all selected
+operations, so later-detected NOOP drift can refuse execution before target
+effects. A strictly empty plan says **Plan is empty**;
 a nonempty plan with no search/filter matches says **No items match these filters**.
 Neither navigation nor these labels change execution eligibility or selection.
 

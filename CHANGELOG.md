@@ -25,7 +25,7 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
-#### Reduce planning path preparation (2026-10-19)
+#### Reduce planning observation work (2026-10-19)
 
 - Skip duplicate absolute spelling validation only when normalization returns
   the exact already-validated string; reuse a subject's prepared native spelling
@@ -35,12 +35,16 @@ owning contracts.
   and avoid impossible reserved-name matches. Preserve results and error messages,
   including the original component-order fallback for overlong whole paths.
 - Preserve both leaf reads, both physical resolutions, held-root checks,
-  missing/unsafe refusal, resolved-output validation and NOOP current observation.
+  missing/unsafe refusal and resolved-output validation.
   Root-resolution reuse, leaf removal and shared-parent safety caching remain
   deferred.
+- Planning now omits selected NOOP direct file observations and stat judgments,
+  while retaining their target parents, temporary-file capacity credit and other
+  checks. Execution, resume and verification retain full fresh observation.
+  NOOP drift can leave review ready, then refuse execution before target effects.
 - Independently reviewed atomic core/preflight outcomes pass focused native,
   ordinary/dependency, service, import and package-identity checks. Separate
-  warm 8,000-file measurements cover 90% and 10% NOOP mixes; final first-window
+  warm 8,000-file PO1/PO2 measurements cover 90% and 10% NOOP mixes; their first-window
   observations are 10.322–10.401s and 9.494–9.504s respectively, with no latency
   guarantee. [PERFORMANCE](docs/PERFORMANCE.md) retains both checkpoint comparisons.
 
