@@ -947,6 +947,51 @@ def test_native_conversion_validates_a_changed_absolute_result(
         to_extended_length_path(logical)
 
 
+@pytest.mark.parametrize(
+    ("tail", "message"),
+    [
+        ("C:file", "relative path is absolute or qualified"),
+        ("1:file", "relative path contains a stream or drive qualifier"),
+        ("NUL\\\ud800", "relative path names a Windows device"),
+        ("bad?\\\x00", "absolute path has an invalid Windows component"),
+        (".\\\udfff", "relative path has an unsafe component"),
+        ("a\\\ud800", "relative path must be valid Unicode"),
+        ("a\\\x00", "relative path cannot contain NUL"),
+        ("NUL\\" + "a" * 32_768, "relative path names a Windows device"),
+        ("a" * 32_768, "relative path exceeds the UTF-16 path bound"),
+        ("\U0001f600" * 16_384, "relative path exceeds the UTF-16 path bound"),
+    ],
+    ids=[
+        "drive", "stream", "device-before-surrogate", "invalid-before-nul",
+        "dot-before-surrogate", "surrogate", "nul", "device-before-bound",
+        "component-bound", "astral-bound",
+    ],
+)
+@pytest.mark.parametrize("root", ["C:\\", "\\\\server\\share\\"])
+def test_absolute_component_validation_preserves_first_error(
+    root: str, tail: str, message: str,
+) -> None:
+    with pytest.raises(PathValidationError) as caught:
+        path_contracts._validate_absolute_path_spelling(root + tail)
+    assert str(caught.value) == message
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        "Straße\\ß\\conifer.txt",
+        "\U0001f600" * 16_383 + "a",
+        "\\".join(["a" * 200] * 170),
+    ],
+    ids=["unicode", "astral-limit", "whole-bound-fallback"],
+)
+def test_absolute_component_text_proof_keeps_valid_and_overbound_wholes(
+    tail: str,
+) -> None:
+    # The private spelling check historically bounds components, not the whole.
+    path_contracts._validate_absolute_path_spelling("C:\\" + tail)
+
+
 def test_lexical_absolute_path_normalizes_without_requiring_an_existing_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

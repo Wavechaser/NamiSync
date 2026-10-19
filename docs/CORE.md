@@ -636,6 +636,11 @@ another tree. Native conversion validates an ordinary absolute input before
 normalization and reuses that lexical validation only when `abspath` returns
 the identical spelling. Changed results and relative inputs retain absolute
 output validation; resolved filesystem evidence is validated separately.
+Absolute spelling validation may admit whole-string UTF-16 text once before
+checking components. A failed whole-text proof falls back to the original
+component validation order and messages; it does not itself refuse the path.
+Component checks share the relative-path rules, and reserved-name lookup may
+skip basename lengths absent from the length-preserving uppercase device set.
 Reserved DOS aliases include `CONIN$`, `CONOUT$`, and the
 superscript-one/two/three `COM`/`LPT` forms as well as the ordinary numbered
 devices. Native

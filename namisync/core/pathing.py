@@ -28,6 +28,7 @@ _RESERVED_BASENAMES = {
     *(f"COM{number}" for number in "¹²³"),
     *(f"LPT{number}" for number in "¹²³"),
 }
+_RESERVED_LENGTHS = frozenset(len(name) for name in _RESERVED_BASENAMES)
 
 
 def _uppercase_one_codepoint(value: str) -> str:
@@ -57,8 +58,6 @@ def validate_relative_path(value: str, *, allow_root: bool = False) -> str:
         raise
     except ValueError as error:
         raise PathValidationError(str(error)) from error
-    if any("\ud800" <= character <= "\udfff" for character in value):
-        raise PathValidationError("relative path contains an unpaired surrogate")
     if value == "":
         if allow_root:
             return ""
@@ -71,19 +70,27 @@ def validate_relative_path(value: str, *, allow_root: bool = False) -> str:
     if upper_prefix.startswith(_DEVICE_PREFIXES):
         raise PathValidationError("relative path uses a device namespace")
 
-    components = canonical.split("\\")
-    for component in components:
-        if component in {"", ".", ".."}:
-            raise PathValidationError("relative path has an unsafe component")
-        if ":" in component:
-            raise PathValidationError("relative path contains a stream or drive qualifier")
-        if component.endswith((" ", ".")):
-            raise PathValidationError("relative path has a Windows-ambiguous suffix")
-        basename = component.split(".", 1)[0]
-        if _uppercase_one_codepoint(basename) in _RESERVED_BASENAMES:
-            raise PathValidationError("relative path names a Windows device")
+    for component in canonical.split("\\"):
+        _validate_relative_component(component)
 
     return canonical
+
+
+def _validate_relative_component(component: str) -> None:
+    """Check one component after text and path-prefix admission."""
+
+    if component in {"", ".", ".."}:
+        raise PathValidationError("relative path has an unsafe component")
+    if ":" in component:
+        raise PathValidationError("relative path contains a stream or drive qualifier")
+    if component.endswith((" ", ".")):
+        raise PathValidationError("relative path has a Windows-ambiguous suffix")
+    basename = component.split(".", 1)[0]
+    if (
+        len(basename) in _RESERVED_LENGTHS
+        and _uppercase_one_codepoint(basename) in _RESERVED_BASENAMES
+    ):
+        raise PathValidationError("relative path names a Windows device")
 
 
 def fold_validated_path(canonical: str) -> str:
@@ -193,17 +200,26 @@ def _validate_absolute_path_spelling(path: str) -> None:
     else:
         raise PathValidationError("path is not an absolute drive or UNC path")
 
+    # Whole-text admission proves each component's Unicode, NUL and length
+    # checks. On failure, keep the original component-by-component errors.
+    try:
+        require_utf16_path(canonical, "relative path")
+        whole_text_valid = True
+    except (TypeError, ValueError):
+        whole_text_valid = False
     for component in components:
         if not component:
             raise PathValidationError("absolute path has an empty component")
-        if any(
-            character in _INVALID_ABSOLUTE_COMPONENT_CHARACTERS
-            for character in component
-        ):
+        if not _INVALID_ABSOLUTE_COMPONENT_CHARACTERS.isdisjoint(component):
             raise PathValidationError(
                 "absolute path has an invalid Windows component"
             )
-        validate_relative_path(component)
+        if not whole_text_valid:
+            validate_relative_path(component)
+            continue
+        if _DRIVE_PREFIX.match(component):
+            raise PathValidationError("relative path is absolute or qualified")
+        _validate_relative_component(component)
 
 
 def _display_extended_length_path(path: str) -> str | None:

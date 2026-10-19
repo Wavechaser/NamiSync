@@ -30,6 +30,10 @@ owning contracts.
 - Skip duplicate absolute spelling validation only when normalization returns
   the exact already-validated string; reuse a subject's prepared native spelling
   for candidate resolution and final stat.
+- Reduce each lexical validation's work: share component checks, prove UTF-16
+  text properties once when possible, remove an unreachable surrogate scan,
+  and avoid impossible reserved-name matches. Preserve results and error messages,
+  including the original component-order fallback for overlong whole paths.
 - Preserve both leaf reads, both physical resolutions, held-root checks,
   missing/unsafe refusal, resolved-output validation and NOOP current observation.
   Root-resolution reuse, leaf removal and shared-parent safety caching remain

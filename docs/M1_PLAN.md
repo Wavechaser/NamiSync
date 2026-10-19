@@ -23,7 +23,7 @@ M1-10 is complete as of 2026-10-14, including the requested integrated A–C
 review before D and final cross-component review. The authorized GUI-hardening
 follow-up below is also complete. The review consolidation batch below is complete
 as of 2026-10-19. M1-12, release and DOC-2 remain inactive. Backend optimization
-is closed, including the planning lexical preparation outcomes below.
+continues with the authorized PO3/PO5 outcomes and conditional PO4 study below.
 Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
 stops and recovery.
@@ -83,7 +83,46 @@ No worktree/recovery branch, stash, push or PR was created. Failed and invalid
 receipts remain: interrupted ordinary01 is unclassified; ordinary02's source-tree
 temp refusals are fully reconciled; PO2 control01 missed its spy and is invalid.
 Corrected controls and outside-source gates retain logs and input identities.
-PERFORMANCE owns measured ranges and limits. No further checkpoint is active.
+PERFORMANCE owns measured ranges and limits. These closed rows retain their
+original scope; the following authorization supersedes their NOOP exclusion.
+
+### Planning observation continuation — 2026-10-19
+
+User authorized PO3 and PO5 from clean `faa580f5`, continuing execute-task and
+small atomic commits. PO5 omits NOOP file checks at planning only; execution,
+resume and verification preflight retain them. After PO5 verification and fresh
+independent acceptance, measure/profile PO4 on actual filesystems before starting
+its implementation units. Contradictory or unresolved equivalence evidence pauses
+PO4 for user review. Earlier prototype timings are leads, not acceptance.
+
+| ID | Outcome and finite population | Acceptance and commit boundary | Status |
+| --- | --- | --- | --- |
+| PO3 | Cheaper per-call lexical validation with identical results/messages: `core/pathing.py`, `tests/test_core_scanplan.py`, CORE. Remove unreachable surrogate scan; factor component checks; whole-string UTF-16 proof with original-validation fallback; reserved-name length filter. | Focused190/one capability skip; pinned differential6.4M comparisons; host ordinary6139/four capability skips covers core/scanner/preflight and package consumers; imports12. Input identities unchanged. Fresh independent review required before atomic `perf(core)` commit. | Verified; review/integration receipt in `po3/`. |
+| PO5 | Review-only omission of selected NOOP file subjects/stat refusals, preserving their parents/temp accounting and all non-stat judgments. Explicit mode through observation, judgment and scope/adoption; execution remains the full default. Owners: preflight and workflow composition; tests: preflight/workflow/service direct consumers; docs: PREFLIGHT, WORKFLOWS, FEATURES, PRESENTATION plus protocol owner only if required by exact signature. Elaborate direct callable helpers before implementation. | Mixed NOOP+COPY scan-to-review drift: review succeeds, execution refuses before any target effect; all-NOOP and NOOP-only-parent/temp cases; omitted-subject refusal rejected by adoption; unchanged execution/resume/verification; preflight/workflows/service, imports and current package-byte checks; independent review. One atomic commit after PO3. | Authorized, read-only design while PO3 proceeds. |
+| PO4 study | After PO5 acceptance, profile chain admission, root/candidate resolution, final leaf stat and temp discovery on real files; probe confirmed-hold root/ancestor namespace behavior and leaf/missing/reparse/placeholder distinctions. Compare held/fallback paths and action mixes. Evidence in task scratch; PERFORMANCE owns measured results. | State stable-filesystem equivalence separately from concurrent-mutation residuals. Inspect actual native evidence before authorizing implementation start; pause for review if it contradicts or cannot support the assumption. No timings alone prove equivalence. | Conditional on PO5 acceptance. |
+| PO4a-1 / PO4a-2 / PO4b | Conditional subsequent atomic units: held root resolution reuse, held candidate resolution omission, then one final held leaf observation. Retain fresh held attributes, descendant admission and unheld fallback. Source/test/doc population and gates elaborated from post-PO5 measurements before edits. | Native held/fallback/refusal and representation witnesses, direct consumer gates and independent review per unit; DEFENSE/PREFLIGHT wording must match accepted residuals. User review before implementation if study challenges equivalence. | No product edits before study decision. |
+
+Orchestrator owns M1_PLAN/HANDOFF/CHANGELOG, integration and evidence disposition;
+builders own explicitly assigned component files. Evidence lives under
+`build/planning-optimization-next-20261019/`, with numbered logs, source identities
+and retained failures. No shared-parent safety cache, NOOP execution omission,
+scanner-fact substitution or GUI redesign. Existing AGENTS mandatory/recurrence
+stops apply. M1-12/release/DOC-2, push and PR remain inactive. Serialize product
+changes and test/measurement runs; reuse unaffected verification by dependency.
+
+PO5 elaboration: `plan_review=False` is the full-default keyword on observation,
+judgment, scope and both adoption gates; only planning explicitly passes true.
+Finite product files are `modules/preflight.py` and `workflows/sync.py` (including
+its callable protocols). Tests are `test_preflight.py`, `test_workflows.py`,
+and `test_plan_review_limits.py`; the last file's eleven injected planning
+callbacks accept/forward the keyword and its core-owned cases run separately
+from the preflight/workflows/service filter. Subject docs are PREFLIGHT,
+WORKFLOWS, FEATURES and PRESENTATION. No new core DTO or UI implementation.
+Retain a subject required independently as a parent; omitted NOOP direct targets
+must not suppress parent judgment. Native mixed-plan drift witnesses cover both
+source and target drift, executor non-entry and unchanged target/temp artifacts.
+The separate NOOP-only-parent witness retains exact stale-temp capacity credit.
+`po5/design.md` records inspected direct consumers and unchanged resume seams.
 
 ### Review consolidation — 2026-10-16–19
 
