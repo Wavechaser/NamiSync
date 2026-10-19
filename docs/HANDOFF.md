@@ -1,47 +1,55 @@
-# Latest session — planning lexical optimization complete
+# Latest session — PO3/PO5 complete; PO4 awaits review
 
-2026-10-19, original `milestone1`, starting clean at `d1d19c61`. User invoked
-execute-task and authorized small atomic commits, keeping NOOP current-state
-observation. M1_PLAN owns the closed PO1/PO2 scope.
+2026-10-19, original `milestone1`, starting clean at `faa580f5`. User continued
+execute-task, authorized PO3 and planning-only NOOP omission (PO5), then actual
+filesystem profiling before conditional PO4. Explicit stop: pause before PO4
+if evidence does not support equivalence. M1_PLAN owns the checkpoint record.
 
 Integrated after fresh independent review:
 
-- `5216bf0`: core conversion skips repeat absolute validation only when the
-  normalization result equals the exact already-validated input.
-- `9e3bcec`: preflight prepares candidate native spelling once for resolution
-  and final stat; both leaf probes and both resolutions remain.
+- `b1c433c2`: cheaper per-call lexical validation, identical results/messages.
+- `30349d0`: planning omits NOOP direct file checks; parents/temp accounting and
+  non-stat checks remain. Execution/resume/verification retain full observation.
 
-Root holds, current attributes, fallback, unsafe/missing refusal, output
-validation, representation bounds and NOOP scope are unchanged. Root-resolution
-reuse, leaf removal and shared-parent safety caching remain deferred. No
-filesystem-fact cache or new handles. M1-12/release/DOC-2, push and PR inactive.
+PO3: pinned differential 6.4M, native seam 43, focused 190/one privilege skip,
+host ordinary 6139/four symlink-privilege skips and imports 12. Initial parameter-ID
+failure and sandbox ordinary 81 failures remain retained; all 81 passed in the
+corrected host run, as did 20 prior skips. Four capability skips remain.
+PO5: native 3, focused 108 including 97 admission-limit cases, neighborhood 3155
+including all 87 package-refresh cases, imports 12. Initial size-drift reason
+assertion corrected to the existing size_changed contract. Input manifests
+match accepted bytes; unrelated PO3 behavior evidence reused by dependency.
 
-PO1: focused 433/one capability skip; ordinary coverage reconciled to 6,115
-unique passes/four capability skips; imports 12. Ordinary01 was interrupted
-without full errors and remains unclassified. Ordinary02 used source-tree temp
-fixtures and hit deliberate corpus/custody refusals; all 93 failed/error nodes
-are reconciled by outside-source rerun, not a single green invocation.
-PO2: final focused 125, preflight/workflows 1,067, service 41,
-current package-byte refresh 87, imports 12. Unaffected behavioral passes reused
-by dependency; old package-byte receipts are not PO2 authority. Its valid
-baseline control fails after fresh metadata assertions. Control01 missed its
-spy due to copied globals and remains invalid, not a product failure.
+Evidence is `build/planning-optimization-next-20261019/`, with each outcome's
+receipt, independent review and integration identity. Keep scripts, failed
+receipts and task-owned scratch. Native tests require host execution permissions,
+outside-repository TEMP/TMP/basetemp and explicit Node; sandbox execution caused
+the retained native capability failures. Do not claim skips as native coverage.
 
-`build/planning-optimization-20261019/` retains manifests, reviews, integration
-records, logs/XML, controls and all receipts. `po2/builder-receipt.json` accounts
-outside-source scratch roots and package identities; PO1 affected scratch is
-named in its runner/receipts. Keep failed fixtures and both studies. No task
-branch/worktree exists; no unrelated recovery refs/stashes or older evidence
-were removed. No cleanup was needed.
+PO4 read-only study ran at `30349d0`. Three warm source-planning samples per
+8,000-file mix: 90% NOOP 2.976–3.052s, 10% NOOP 6.813–6.995s; observation
+0.724–0.747s and 4.925–5.069s. Ten children completed with correct populations
+and shutdown; product/helper/driver hashes and fixture content/mtime digests
+remained equal. PERFORMANCE owns counts, timings and limits; no candidate
+speedup claim.
 
-Two sequential warm samples per version/mix show final first-window times
-10.322–10.401s (90% NOOP) and 9.494–9.504s (10% NOOP), for 8,000 real files.
-All 24 diagnostic children across both checkpoints had correct actions and
-clean shutdown. PERFORMANCE owns separate comparisons and limits: source
-execution, warm local NTFS, sparse samples, uncontrolled background/power,
-no latency gate.
+Native evidence supports bounded confirmed-root reuse: held root/ancestor
+renames fail and released controls succeed; fresh held attributes refuse an
+in-place converted root. Candidate-resolution omission loses a demonstrated
+post-chain junction escape refusal (prototype returns absence, no outside-root
+metadata/effect shown). Single-leaf observation sees a file created after chain
+admission where the retained early read reports absence. These challenge
+unconditional equivalence; they do not demonstrate corruption or a hard-wall
+incident. Planning residuals are not automatically disposed by execution's
+quiescence wording. Short aliases/cloud-provider fixtures were unavailable.
 
-Use explicit outside-repository host TEMP/TMP and Node paths for full tests.
-Repository-local basetemp is invalid for corpus/custody tests; sandbox temp
-and native junction access differ from host capabilities. The prior review-
-consolidation handoff remains in Git at `d1d19c61` if its context is needed.
+All PO4 implementation is paused under the user's condition. Suggested next
+decision: bounded PO4a-1 first; separately accept or decline PO4a-2's resolution/
+representation residuals and PO4b's changed leaf observation timing. Read
+`po4/report.md`, numbered native/profile receipts and independent evidence review
+before expanding the finite implementation gates. No PO4 product delta exists.
+
+No branch/worktree, stash, push or PR was created; no unrelated state or old
+evidence was cleaned. Completed product work is safely committed, so no recovery
+WIP is needed. M1-12/release/DOC-2 remain inactive. Earlier PO1/PO2 history is
+retained in Git and `build/planning-optimization-20261019/`.

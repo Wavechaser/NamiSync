@@ -47,6 +47,10 @@ owning contracts.
   warm 8,000-file PO1/PO2 measurements cover 90% and 10% NOOP mixes; their first-window
   observations are 10.322–10.401s and 9.494–9.504s respectively, with no latency
   guarantee. [PERFORMANCE](docs/PERFORMANCE.md) retains both checkpoint comparisons.
+- After PO3/PO5, three warm 8,000-file samples measured 2.976–3.052s for 90% NOOP
+  and 6.813–6.995s for 10% NOOP. Native PO4 study supports bounded root reuse but
+  demonstrates changed descendant-refusal and leaf-appearance observations.
+  Pause all PO4 implementation for the requested review; no PO4 product changes.
 
 #### Deliver bounded direct target writes (2026-09-29 – 2026-09-30)
 

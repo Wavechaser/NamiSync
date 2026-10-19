@@ -23,6 +23,72 @@ eligible. Historical observations remain bound to their measured dependencies.
 Methods and current result summaries belong here; detailed investigation
 chronology belongs in the named evidence root or archived historical material.
 
+## Planning observation continuation — PO3/PO5 and PO4 study (2026-10-19)
+
+PO3 `b1c433c2` reduces per-call lexical work with identical results/messages;
+PO5 `30349d0` omits NOOP direct file checks only during review. Execution,
+resume and verification keep full fresh observation. PREFLIGHT owns that scope.
+The following measurements describe the integrated PO3/PO5 source, with no
+PO4 product changes. They are not a controlled before/after speedup comparison.
+
+The existing two 8,000-file fixtures below were checked for exact path/content/
+size/mtime identity before and after. Each mix received one excluded warmup,
+three fresh-process light samples (alternating mixes), and one separate counted
+sample. Product, helper and driver hashes and fixture digests remained equal.
+All ten real planning children produced the expected COPY/NOOP counts, complete
+scans, ready plans, 256-row windows and complete shutdown/custody release.
+No plan executed. Host: Windows build26200, Python3.13.14, SQLite3.50.4, local
+NTFS, warm filesystem, outside-source databases. Tests and measurements were
+serialized. Source execution, small samples and uncontrolled background/power
+limit generalization; remote/cold/deep-tree and installed release are unmeasured.
+
+| Three light samples, seconds | 90% NOOP | 10% NOOP |
+| --- | ---: | ---: |
+| Request through first window | 2.976–3.052 | 6.813–6.995 |
+| Current-world observation | 0.724–0.747 | 4.925–5.069 |
+
+Counted boundary durations include Python processing and wrapper overhead;
+admission/chain cover all preflight callers and overlap temp discovery. Root/
+candidate resolution and final stat below are subject-only. Do not sum rows
+or use counted-run elapsed times as the light timing comparison.
+
+| Boundary | 90% NOOP: calls / seconds | 10% NOOP: calls / seconds |
+| --- | ---: | ---: |
+| Root admission or held-attribute check | 1,684 / 0.015 | 14,484 / 0.094 |
+| Chain admission | 1,760 / 0.177 | 14,560 / 1.437 |
+| Subject root resolution | 1,680 / 0.135 | 14,480 / 1.117 |
+| Subject candidate resolution | 1,680 / 0.178 | 14,480 / 1.503 |
+| Final subject leaf stat | 880 / 0.028 | 7,280 / 0.226 |
+| Temporary-file discovery | 1 / 0.117 | 1 / 0.100 |
+
+PO4 native probes used task-owned NTFS fixtures and read-only experimental
+observer variants. Root/ancestor renames failed while held and succeeded after
+release; conversion of a nonempty ancestor to a junction failed with error145.
+An empty held root could become a junction, but the fresh held-attribute query
+refused it. These support retaining that guard and bounded root-reuse reasoning.
+Stable present/missing/nondirectory/reparse and path-length cases agreed.
+Case-alias roots retained unconfirmed fallback. Native cloud placeholders were
+not provisioned; the volume supplied no short alias, so neither is claimed as
+native equivalence coverage. Conditional fallback variants were not implemented.
+
+Two actual mutation barriers challenge unconditional equivalence: after chain
+admission found a missing intermediate, an existing ancestor was converted to
+a junction. Current resolution refused an escape while the no-resolution
+prototype returned absence (no outside-root
+metadata read or effect was demonstrated); creating a missing leaf after chain
+admission returned absence with retained early observation but present metadata
+with one final leaf read. Disappearance cases agreed. These are precise changes
+in observed drift, not demonstrated corruption. The user's conditional scope
+therefore pauses every PO4 implementation unit for review. Timing does not
+accept a residual, and execution's quiescence wording does not automatically
+dispose of planning-observation differences.
+
+Evidence: `build/planning-optimization-next-20261019/po4/` retains native scripts,
+numbered native receipts, profile driver/inputs, fixture digests, ten child
+receipts, raw counts and independent review. Recollect affected evidence when
+product, driver, helper, fixture or host dependencies change. M1_PLAN owns the
+pause and next decision; no PO4 candidate speedup is claimed.
+
 ## Planning lexical preparation — PO1/PO2 (2026-10-19)
 
 This diagnostic follows the `ca31654` observation study retained in
