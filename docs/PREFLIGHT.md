@@ -153,14 +153,21 @@ changes remain observation evidence for pure judgment to map to `root_changed`.
 Subject root physical resolution is omitted only after that call's admission
 has checked fresh ordinary attributes on a live confirmed invocation hold. Its
 logical root spelling already matches the held normalized DOS final name except
-drive-letter case. Candidate physical resolution, final no-follow leaf stat,
-and fresh temp-parent/trash volume observations remain required on the held path.
-Unconfirmed holds and direct backend calls retain subject root resolution.
-Subject observation prepares its candidate native spelling after chain admission
-and root resolution, then reuses that string for candidate resolution and the
-final no-follow stat. This reuses only lexical preparation: resolution output
-still receives logical-spelling validation, and both leaf reads retain their
-existing ordering and roles.
+drive-letter case. For this held path, subject containment and the capability
+profile's `max_path` use the validated logical absolute candidate spelling for
+both present and missing subjects; candidate physical resolution is omitted.
+Final no-follow leaf stat and fresh temp-parent/trash volume observations remain.
+Unconfirmed holds and direct backend calls retain root/candidate resolution and
+its resolved-length policy. Native candidate spelling is prepared after chain
+admission and reused for the final stat (and fallback candidate resolution).
+Both leaf reads retain their existing ordering and roles.
+
+Descendant admission and observation are separate moments. A descendant replaced
+after admission can change the observed result; omitting candidate resolution
+can lose its later escape refusal, including reporting absence after a missing
+intermediate ended admission. This accepted concurrent-observation distinction
+applies to planning and execution preflight. It is not atomic namespace evidence
+or permission to omit the executor's independent effect-time guards.
 
 ### Handle-relative observation option
 

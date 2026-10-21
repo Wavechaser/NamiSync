@@ -364,7 +364,7 @@ def test_observe_holds_roots_preserves_probes_and_releases(
     assert preflight(review, world).ok
     for root in roots:
         assert resolves.count(str(root)) == 1
-        assert str(root / "copy.bin") in resolves
+        assert str(root / "copy.bin") not in resolves
     assert to_extended_length_path(str(roots[0] / "copy.bin")) in leaf_stats
     assert str(roots[1]) in parent_volume_probes
     for root in roots:
@@ -401,13 +401,86 @@ def test_subject_reuses_root_spelling_only_inside_a_confirmed_hold(
 
     assert observed == baseline
     candidate = str(Path(authority.logical_root) / "payload.bin")
-    assert resolutions == (
-        [(candidate, False)] if mode == "held" else
-        [(authority.logical_root, True), (candidate, False)]
-    )
+    assert resolutions == ([] if mode == "held" else [
+        (authority.logical_root, True), (candidate, False),
+    ])
     released = root.with_name("released")
     root.rename(released)
     released.rename(root)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows path representation")
+@pytest.mark.parametrize("mode", ("held", "direct", "case-alias"))
+@pytest.mark.parametrize("present", (False, True))
+def test_subject_path_length_boundary_for_present_and_missing_entries(
+    tmp_path: Path,
+    mode: str,
+    present: bool,
+) -> None:
+    root = tmp_path / "managed-root"
+    root.mkdir()
+    subject = root / "payload.bin"
+    if present:
+        subject.write_bytes(b"representation witness")
+    authority = _local_authority(root)
+    if mode == "case-alias":
+        authority = replace(authority, logical_root=str(root.with_name("MANAGED-ROOT")))
+    candidate = str(Path(authority.logical_root) / "payload.bin")
+    filesystem = LocalObservationFileSystem()
+    with filesystem.root_scope() if mode != "direct" else nullcontext():
+        exact = filesystem.stat(
+            authority, "payload.bin", replace(PROFILE, max_path=len(candidate)),
+        )
+        excess = filesystem.stat(
+            authority, "payload.bin", replace(PROFILE, max_path=len(candidate) - 1),
+        )
+
+    assert exact.error is excess.error is None
+    assert exact.contained and excess.contained
+    assert exact.representable and not excess.representable
+    assert exact.stat == excess.stat
+    assert (exact.stat is not None) is present
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows descendant replacement")
+@pytest.mark.parametrize("held", (False, True))
+def test_subject_observation_after_a_missing_descendant_is_replaced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    held: bool,
+) -> None:
+    root = tmp_path / "root"
+    child = root / "child"
+    child.mkdir(parents=True)
+    replacement = tmp_path / "replacement"
+    (replacement / "missing").mkdir(parents=True)
+    marker = replacement / "missing" / "payload.bin"
+    marker.write_bytes(b"outside root unchanged")
+    authority = _local_authority(root)
+    real_chain = preflight_module.admit_existing_relative_chain
+
+    def replace_after_chain(*args, **kwargs):
+        result = real_chain(*args, **kwargs)
+        assert not result
+        child.rmdir()
+        _create_directory_reparse(child, replacement)
+        return result
+
+    monkeypatch.setattr(preflight_module, "admit_existing_relative_chain", replace_after_chain)
+    filesystem = LocalObservationFileSystem()
+    try:
+        with filesystem.root_scope() if held else nullcontext():
+            observed = filesystem.stat(authority, r"child\missing\payload.bin", PROFILE)
+        assert observed.stat is None
+        if held:
+            assert observed.error is None and observed.contained
+        else:
+            assert observed.error == "resolved path escapes root"
+            assert not observed.contained
+        assert marker.read_bytes() == b"outside root unchanged"
+    finally:
+        if child.is_junction():
+            child.rmdir()
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")

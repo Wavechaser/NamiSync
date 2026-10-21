@@ -303,14 +303,16 @@ class LocalObservationFileSystem:
                 canonical,
                 include_leaf=True,
             )
+            held_root = self._has_confirmed_root(authority)
             resolved_root = (
                 authority.logical_root
-                if self._has_confirmed_root(authority)
+                if held_root
                 else _resolved_logical_path(authority.logical_root, strict=True)
             )
             native_candidate = _native_path(candidate)
-            resolved_candidate = _resolve_native_path(
-                native_candidate, strict=False
+            resolved_candidate = (
+                candidate if held_root
+                else _resolve_native_path(native_candidate, strict=False)
             )
             contained = is_path_below(resolved_candidate, resolved_root)
             representable = len(resolved_candidate) <= profile.max_path

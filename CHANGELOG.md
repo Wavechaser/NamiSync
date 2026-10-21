@@ -30,6 +30,10 @@ owning contracts.
 - Reuse the confirmed invocation root spelling for subject observation after
   fresh held-attribute admission, avoiding repeated physical root resolution.
   Unheld observation retains full resolution.
+- Omit repeated candidate resolution on that confirmed held path, retaining
+  component admission and applying the approved validated logical-spelling
+  path-length budget. Concurrent disappearance/replacement diagnostics may
+  differ; independent execution guards remain unchanged.
 - Preserve handle-relative observation as a future option with actual NTFS,
   exFAT and OneDrive evidence; cloud intermediate-component semantics remain
   unresolved by a single native open. Continue the selected PO4 path instead.

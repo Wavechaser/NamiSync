@@ -784,9 +784,15 @@ Bottom to top, each rung closes more of the path-to-use gap at rising cost:
    components before physical resolution. Executor resolution may skip repeated
    physical root/candidate resolution only for an exact confirmed invocation
    hold, after checking current held attributes and the lexical descendant walk.
-   Preflight may likewise reuse that exact held root spelling after fresh held
-   attributes, including the first confirmed access; candidate resolution and
-   descendant admission remain required there.
+   Preflight may likewise use validated logical root/candidate spelling after
+   fresh held attributes, including the first confirmed access, and descendant
+   admission. Its held representation limit uses that spelling for present and
+   missing subjects; unconfirmed paths retain physical resolution. Planning and
+   execution preflight accept the observation-time distinction when a concurrent
+   writer replaces descendants after admission: the omitted candidate resolution
+   may have supplied an additional escape refusal, including after a missing
+   intermediate ended the walk. This does not authorize mutating effects or
+   change their independent final guards.
    *Implemented baseline.*
 2. **Re-stat or revalidate at point of touch.** Recheck root, parent, leaf,
    identity, and relevant metadata immediately before the operation.
