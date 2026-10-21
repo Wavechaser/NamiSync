@@ -36,6 +36,10 @@ owning contracts.
   differ; independent execution guards remain unchanged.
 - Observe the held-path leaf once at the final no-follow metadata read while
   retaining intermediate-component admission and the full unheld fallback.
+- Final ordinary verification passes 6,178 tests with four existing privilege
+  skips. Warm 8,000-file planning samples measure 2.626–2.660 seconds at 90% NOOP
+  and 3.844–3.917 seconds at 10% NOOP; PERFORMANCE records historical comparison
+  limits, unchanged fixtures and complete plan/shutdown evidence.
 - Preserve handle-relative observation as a future option with actual NTFS,
   exFAT and OneDrive evidence; cloud intermediate-component semantics remain
   unresolved by a single native open. Continue the selected PO4 path instead.

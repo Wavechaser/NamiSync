@@ -100,7 +100,7 @@ PO4 for user review. Earlier prototype timings are leads, not acceptance.
 | PO3 | Cheaper per-call lexical validation with identical results/messages: `core/pathing.py`, `tests/test_core_scanplan.py`, CORE. Remove unreachable surrogate scan; factor component checks; whole-string UTF-16 proof with original-validation fallback; reserved-name length filter. | Focused190/one capability skip; pinned differential6.4M comparisons; host ordinary6139/four capability skips covers core/scanner/preflight and package consumers; imports12. Input identities unchanged; fresh independent approval. | Complete: `b1c433c2`; review/integration receipt in `po3/`. |
 | PO5 | Review-only omission of selected NOOP file subjects/stat refusals, preserving parents/temp accounting and all non-stat judgments. Explicit mode through observation, judgment and scope/adoption; execution remains full default. Finite population is elaborated below. | Native mixed drift refuses before effects; all-NOOP, parent/temp and omitted-subject admission witnesses; native3, focused108 including all97 limits cases, neighborhood3155 including all87 package-refresh cases, imports12; unchanged inputs and fresh independent approval. | Complete: `30349d0`; `po5/receipt.json`, review and integration receipts. |
 | PO4 study | Profile chain admission, root/candidate resolution, final leaf stat and temp discovery after PO5; actual NTFS held-root/ancestor and descendant/leaf mutation probes; bounded fallback and capability observations. PERFORMANCE owns numbers and limits. | Ten planning children correct/clean, three light samples per mix and separate counted children; frozen input/fixture identities. Actual mutation probes disprove unconditional observation equivalence; independent evidence review agrees with pause. | Complete at `30349d0`; evidence `po4/`. |
-| PO4a-1 / PO4a-2 / PO4b | Held root resolution reuse, candidate resolution omission, then one final held leaf observation remain proposed atomic units. Fresh held attributes, descendant admission and unheld fallback must remain. | Root reuse has bounded source/native support. Candidate omission loses a demonstrated escape refusal; leaf consolidation changes a demonstrated missing-to-present observation. Precise preflight residuals need user review; no automatic planning T3 disposition from execution quiescence. | Paused before all PO4 implementation under the user's explicit equivalence-review condition. No product changes. |
+| PO4a-1 / PO4a-2 / PO4b | Held root resolution reuse, candidate resolution omission, then one final held leaf observation remain proposed atomic units. Fresh held attributes, descendant admission and unheld fallback must remain. | Root reuse has bounded source/native support. Candidate omission loses a demonstrated escape refusal; leaf consolidation changes a demonstrated missing-to-present observation. Precise preflight residuals need user review; no automatic planning T3 disposition from execution quiescence. | Completed by the 2026-10-21 continuation below after explicit user acceptance of timing differences and logical-spelling policy. |
 
 Orchestrator owns M1_PLAN/HANDOFF/CHANGELOG, integration and evidence disposition;
 builders own explicitly assigned component files. Evidence lives under
@@ -124,14 +124,11 @@ source and target drift, executor non-entry and unchanged target/temp artifacts.
 The separate NOOP-only-parent witness retains exact stale-temp capacity credit.
 `po5/design.md` records inspected direct consumers and unchanged resume seams.
 
-At this boundary, independent review supports a bounded PO4a-1 proposal first,
-then a separate explicit decision on PO4a-2/PO4b observation residuals and
-short-name representation. The short-alias and native cloud-placeholder cases
-were unavailable on this fixture; no unsupported coverage is claimed. No
-supported hard-wall/data-loss/false-success incident was demonstrated. This is
-the requested review pause, not a safety-incident stop. PO3/PO5 are committed;
-there is no unfinished product delta requiring a recovery branch. Keep failed
-receipts and scratch; no worktree, push or PR was created.
+The 2026-10-19 study paused at non-equivalent concurrent observations, without
+demonstrating a hard-wall incident. The user subsequently accepted those timing
+differences and the continuation below supersedes that pause. Earlier unavailable
+native cloud coverage was supplied during that continuation; short-name expansion
+is addressed by the explicit logical-spelling policy decision below.
 
 ### Handle-relative observation continuation — 2026-10-21
 
@@ -144,8 +141,8 @@ use original PO4 if the preferred route cannot preserve required behavior.
 
 | ID | Outcome and finite population | Verification / commit boundary | Status |
 | --- | --- | --- | --- |
-| HR-1 | Resolve exFAT (user-provided K:), cloud-placeholder, ACL, alias/representation, missing-path and root-acquisition questions. Core root/native/identity and preflight are owners; executor/verifier remain direct shared-contract consumers, not migration targets. | Retained native receipts, complete metadata and safe judgment comparisons, independent design review. Scratch only until a coherent implementation is settled. | Active; OneDrive fixture path requested. |
-| HR-2 | Implement one relative subject algorithm with reusable restrictive root hold and fresh per-access acquisition, or original PO4 if compatibility blocks it. Elaborate exact files/gates after HR-1. | Native affected seam, core/preflight/workflow consumer tests, package/import checks and ordinary suite where shared-contract impact requires it; matching CORE/PREFLIGHT/DEFENSE docs, independent review, smallest coherent commits. | Authorized; depends on HR-1. |
+| HR-1 | Investigate exFAT, cloud-placeholder, ACL, alias/representation, missing-path and root-acquisition questions. | Retained native receipts and independent evidence review; bounded ACL test did not induce access failure, so no general ACL parity claim. | Complete as route selection; handle-relative implementation deferred and retained as a documented option. |
+| HR-2 / PO4 | Implement the selected original PO4 in preflight, direct tests and PREFLIGHT/DEFENSE. | Independent review per atomic unit; final native45, ordinary6178/four existing privilege skips, imports12; unchanged input manifests. | Complete: a1 b2ce02e, a2 13a3504, b 17822b1. |
 
 Evidence: `build/handle-relative-investigation-20261020/` and continuation
 `build/handle-relative-investigation-20261021/`. Preserve execution NOOP checks,
@@ -158,7 +155,8 @@ The user explicitly approved validated logical absolute spelling as the path
 length basis for present and missing subjects, replacing resolved-alias length.
 exFAT probes support one Basic/Standard metadata path with profile-qualified
 identity; combined StatInformation(68) is not supported on the tested SD card.
-Implementation may proceed while native OneDrive acceptance awaits its fixture.
+The logical-spelling policy applies to the optimized held route; unheld fallback
+retains its prior physically resolved representation checks.
 
 Actual OneDrive probes at H:\OneDrive\NamiSync_OneDrive show strict relative
 opens still succeed on cloud reparse entries even with thread-local placeholder
@@ -175,12 +173,13 @@ as a documented option and proceeding with PO4. PREFLIGHT owns the future-option
 design note; PERFORMANCE owns prototype evidence and limits. This selection is
 not a finding that the native approach escaped containment or recalled content.
 
-PO4a-1 is verified and independently approved: confirmed held root spelling
-replaces subject root resolution; first admission freshly queries held attributes
-before caching. Native25, preflight143, consumers243, package93 pass with unchanged
-inputs. Candidate resolution/two leaf reads remain for the next atomic units.
-Receipts: `20261021/implementation/`; the discarded native draft is preserved
-there as investigation source, not product code.
+PO4a-1 reuses confirmed root spelling with fresh attributes before first cache.
+PO4a-2 omits held candidate resolution; PO4b retains intermediate admission and
+one final no-follow leaf read. Unheld behavior and executor guards are unchanged.
+Earlier per-unit native/preflight/consumer/package gates and failed receipts
+remain in `20261021/implementation/`; the discarded native draft is preserved
+there as investigation source, not product code. PERFORMANCE owns final profile
+results and limitations. No core API or executor/verifier behavior changed.
 
 ### Review consolidation — 2026-10-16–19
 

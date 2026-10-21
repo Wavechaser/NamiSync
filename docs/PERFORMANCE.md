@@ -30,6 +30,36 @@ The earlier NTFS five-round comparison is retained under
 `build/handle-relative-investigation-20261020/`. Cloud and final integrated
 observer acceptance remain separate from these prototype receipts.
 
+## Integrated PO4 profile — 2026-10-21
+
+Source `17822b1` on the same Windows 11/NTFS host reused the exact historical
+two 8,000-file fixtures. Each mix received one excluded warmup, three alternating
+fresh-process light samples and one separate counted sample. All ten children
+produced complete ready plans, expected COPY/NOOP populations, 256-row first
+windows and clean shutdown/custody release. Full before/after fixture digests
+matched the earlier digests; product/helper/driver dependencies stayed unchanged.
+
+| Request to first window, seconds | Post-PO3/PO5 historical | Integrated PO4 |
+| --- | ---: | ---: |
+| 90% NOOP | 2.976–3.052 | 2.626–2.660 |
+| 10% NOOP | 6.813–6.995 | 3.844–3.917 |
+| Observation only, 90% NOOP | 0.724–0.747 | 0.360–0.364 |
+| Observation only, 10% NOOP | 4.925–5.069 | 1.913–1.979 |
+
+Counted subject root and candidate resolutions fell from 1,680 each / 14,480
+each to zero in both mixes. Root-admission, chain and temp-discovery call counts
+were unchanged. Final subject stats increased from 880/7,280 to 1,680/14,480:
+missing leaves now reach the authoritative final read instead of ending in the
+early chain check. This does not mean duplicate leaf reads were retained.
+
+These warm local samples are historical comparisons, not randomized paired
+causal estimates, cold/remote-storage guarantees or p95 acceptance criteria.
+No plan executed. Counts came from separately instrumented runs; inclusive
+boundary durations must not be summed. Raw provenance, receipts and analysis:
+`build/handle-relative-investigation-20261021/final-profile/`
+`run_c5df5b36a3254270b98b92acbd468846/`. Earlier unit/native gates and independent
+reviews are retained under the sibling `implementation/` directory.
+
 ## Evidence retention
 
 After acceptance and recovery accounting, keep raw results, manifests, exact
