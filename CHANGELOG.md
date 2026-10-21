@@ -34,6 +34,8 @@ owning contracts.
   component admission and applying the approved validated logical-spelling
   path-length budget. Concurrent disappearance/replacement diagnostics may
   differ; independent execution guards remain unchanged.
+- Observe the held-path leaf once at the final no-follow metadata read while
+  retaining intermediate-component admission and the full unheld fallback.
 - Preserve handle-relative observation as a future option with actual NTFS,
   exFAT and OneDrive evidence; cloud intermediate-component semantics remain
   unresolved by a single native open. Continue the selected PO4 path instead.

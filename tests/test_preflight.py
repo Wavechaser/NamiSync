@@ -483,6 +483,108 @@ def test_subject_observation_after_a_missing_descendant_is_replaced(
             child.rmdir()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="native Windows leaf observation")
+@pytest.mark.parametrize("held", (False, True))
+def test_subject_leaf_metadata_is_read_once_only_on_the_held_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    held: bool,
+) -> None:
+    subject = tmp_path / "payload.bin"
+    subject.write_bytes(b"metadata witness")
+    authority = _local_authority(tmp_path)
+    expected = LocalObservationFileSystem().stat(authority, "payload.bin", PROFILE)
+    leaf_reads: list[str] = []
+    real_stat = preflight_module.os.stat
+
+    def stat(path, *args, **kwargs):
+        if (
+            str(path) == to_extended_length_path(str(subject))
+            and kwargs.get("follow_symlinks") is False
+        ):
+            leaf_reads.append(str(path))
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(preflight_module.os, "stat", stat)
+    filesystem = LocalObservationFileSystem()
+    with filesystem.root_scope() if held else nullcontext():
+        observed = filesystem.stat(authority, "payload.bin", PROFILE)
+
+    assert observed == expected
+    assert len(leaf_reads) == (1 if held else 2)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows leaf replacement")
+@pytest.mark.parametrize("held", (False, True))
+@pytest.mark.parametrize("transition", ("appears", "disappears"))
+def test_subject_leaf_transition_after_parent_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    held: bool,
+    transition: str,
+) -> None:
+    subject = tmp_path / "payload.bin"
+    if transition == "disappears":
+        subject.write_bytes(b"before admission")
+    authority = _local_authority(tmp_path)
+    real_chain = preflight_module.admit_existing_relative_chain
+
+    def mutate_after_chain(*args, **kwargs):
+        exists = real_chain(*args, **kwargs)
+        if transition == "appears":
+            subject.write_bytes(b"after admission")
+        else:
+            subject.unlink()
+        return exists
+
+    monkeypatch.setattr(preflight_module, "admit_existing_relative_chain", mutate_after_chain)
+    filesystem = LocalObservationFileSystem()
+    with filesystem.root_scope() if held else nullcontext():
+        observed = filesystem.stat(authority, "payload.bin", PROFILE)
+
+    assert observed.error is None and observed.contained and observed.representable
+    if transition == "appears" and held:
+        assert observed.stat is not None
+        assert observed.stat.size == len(b"after admission")
+    else:
+        assert observed.stat is None
+    assert subject.exists() is (transition == "appears")
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows preflight composition")
+def test_native_planned_directory_chain_is_admitted_but_file_parent_refuses(
+    tmp_path: Path,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    (source / "first" / "second").mkdir(parents=True)
+    target.mkdir()
+    (source / "first" / "second" / "payload.bin").write_bytes(b"planned directories")
+    context = RunContext(lambda _event: None, lambda: None)
+    source_scan = native_scan(Root(str(source), "source"), IgnoreSet(), context)
+    target_scan = native_scan(Root(str(target), "target"), IgnoreSet(), context)
+    built = plan(
+        source_scan, target_scan,
+        MappingSnapshot.empty(source_scan.volume_id, target_scan.volume_id),
+        SyncOptions(), Scope.everything(),
+    )
+    assert sum(operation.kind is OperationKind.MKDIR for operation in built.operations) == 2
+    review = ExecutionReview(
+        built, frozenset(operation.op_id for operation in built.operations),
+        validated_run_id("a" * 32), {},
+    )
+    for plan_review in (False, True):
+        world = observe(review, LocalObservationFileSystem(), plan_review=plan_review)
+        assert preflight(review, world, plan_review=plan_review).ok
+    obstruction = target / "first"
+    obstruction.write_bytes(b"file parent unchanged")
+    for plan_review in (False, True):
+        world = observe(review, LocalObservationFileSystem(), plan_review=plan_review)
+        verdict = preflight(review, world, plan_review=plan_review)
+        assert not verdict.ok
+        assert RefusalCode.DESTINATION_APPEARED in {refusal.code for refusal in verdict.refusals}
+        assert obstruction.read_bytes() == b"file parent unchanged"
+
+
 @pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")
 @pytest.mark.parametrize("swap_target", (False, True))
 def test_observe_mixed_hold_fallback_preserves_admission_and_refusal(
@@ -648,8 +750,10 @@ def test_observe_releases_holds_on_observation_and_world_errors(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows directory reparse")
+@pytest.mark.parametrize("rel_path", ("junction", r"junction\copy.bin"))
 def test_held_observation_still_rejects_descendant_reparse(
     tmp_path: Path,
+    rel_path: str,
 ) -> None:
     root = tmp_path / "root"
     root.mkdir()
@@ -666,7 +770,7 @@ def test_held_observation_still_rejects_descendant_reparse(
             with pytest.raises(OSError) as refused:
                 root.rename(tmp_path / "root-moved")
             assert refused.value.winerror == 32
-            observed = filesystem.stat(authority, r"junction\copy.bin", PROFILE)
+            observed = filesystem.stat(authority, rel_path, PROFILE)
             assert observed.stat is None
             assert "reparse" in observed.error
     finally:
@@ -2543,9 +2647,11 @@ def test_local_observation_uses_native_spelling_but_reports_logical_paths(
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
+@pytest.mark.parametrize("held", (False, True))
 def test_deep_observation_failure_reports_logical_path_spelling(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    held: bool,
 ) -> None:
     root_path = tmp_path / ("a" * 90) / ("b" * 90) / ("c" * 90)
     assert len(str(root_path)) > 260
@@ -2562,11 +2668,9 @@ def test_deep_observation_failure_reports_logical_path_spelling(
         return real_stat(path, *args, **kwargs)
 
     monkeypatch.setattr(preflight_module.os, "stat", denied_stat)
-    observation = LocalObservationFileSystem().stat(
-        authority,
-        "blocked.bin",
-        PROFILE,
-    )
+    filesystem = LocalObservationFileSystem()
+    with filesystem.root_scope() if held else nullcontext():
+        observation = filesystem.stat(authority, "blocked.bin", PROFILE)
 
     assert observation.stat is None
     assert observation.error is not None

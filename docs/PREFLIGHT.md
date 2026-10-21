@@ -160,7 +160,10 @@ Final no-follow leaf stat and fresh temp-parent/trash volume observations remain
 Unconfirmed holds and direct backend calls retain root/candidate resolution and
 its resolved-length policy. Native candidate spelling is prepared after chain
 admission and reused for the final stat (and fallback candidate resolution).
-Both leaf reads retain their existing ordering and roles.
+The held path excludes the leaf from preliminary chain admission and obtains
+its metadata once with the final no-follow stat, retaining placeholder/reparse
+classification there. All existing intermediate components remain admitted.
+Fallback paths retain preliminary leaf admission and their final stat.
 
 Descendant admission and observation are separate moments. A descendant replaced
 after admission can change the observed result; omitting candidate resolution
@@ -168,6 +171,10 @@ can lose its later escape refusal, including reporting absence after a missing
 intermediate ended admission. This accepted concurrent-observation distinction
 applies to planning and execution preflight. It is not atomic namespace evidence
 or permission to omit the executor's independent effect-time guards.
+A leaf appearing after preliminary admission can now be observed on the held
+path, whereas fallback's earlier absence ends that observation. A leaf removed
+before the final stat is absent. These are observation-time facts, not a frozen
+snapshot or a promise that a name continues to denote the observed object.
 
 ### Handle-relative observation option
 

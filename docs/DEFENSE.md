@@ -793,6 +793,10 @@ Bottom to top, each rung closes more of the path-to-use gap at rising cost:
    may have supplied an additional escape refusal, including after a missing
    intermediate ended the walk. This does not authorize mutating effects or
    change their independent final guards.
+   The held subject walk admits intermediate components and obtains leaf
+   metadata once at its final no-follow stat; a leaf appearing after the walk
+   can therefore be observed where fallback's earlier absence would end the
+   observation. Placeholder/reparse classification remains at that final stat.
    *Implemented baseline.*
 2. **Re-stat or revalidate at point of touch.** Recheck root, parent, leaf,
    identity, and relevant metadata immediately before the operation.

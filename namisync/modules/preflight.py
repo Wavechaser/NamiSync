@@ -298,12 +298,12 @@ class LocalObservationFileSystem:
 
         admitted = self._admit_root(authority)
         try:
+            held_root = self._has_confirmed_root(authority)
             exists = admit_existing_relative_chain(
                 authority,
                 canonical,
-                include_leaf=True,
+                include_leaf=not held_root,
             )
-            held_root = self._has_confirmed_root(authority)
             resolved_root = (
                 authority.logical_root
                 if held_root
