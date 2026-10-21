@@ -238,8 +238,24 @@ class LocalObservationFileSystem:
             return scoped.admitted
         admitted = admit_root(authority)
         if scoped.hold.confirm():
+            scoped.hold.require_ordinary()
             scoped.admitted = admitted
         return admitted
+
+    def _has_confirmed_root(self, authority: RootAuthority) -> bool:
+        invocation = _OBSERVATION_INVOCATION.get()
+        if (
+            invocation is None
+            or invocation.owner is not self
+            or invocation.stack is None
+        ):
+            return False
+        scoped = invocation.roots.get(authority)
+        return (
+            scoped is not None
+            and scoped.admitted is not None
+            and scoped.hold.confirm()
+        )
 
     def observe_root(self, authority: RootAuthority) -> RootObservation:
         try:
@@ -287,9 +303,10 @@ class LocalObservationFileSystem:
                 canonical,
                 include_leaf=True,
             )
-            resolved_root = _resolved_logical_path(
-                authority.logical_root,
-                strict=True,
+            resolved_root = (
+                authority.logical_root
+                if self._has_confirmed_root(authority)
+                else _resolved_logical_path(authority.logical_root, strict=True)
             )
             native_candidate = _native_path(candidate)
             resolved_candidate = _resolve_native_path(

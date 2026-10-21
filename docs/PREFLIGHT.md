@@ -129,7 +129,8 @@ logical root, optional reviewed volume anchor, and expected `VolumeId`. Its
 native filesystem enters one invocation-owned `root_scope()`; the first native
 root admission acquires a core root hold before fully admitting that authority.
 Only successful admission followed by the hold's strict final-path confirmation
-permits matching root facts to be reused for later calls in that invocation.
+and fresh ordinary-directory attributes permits matching root facts to be
+reused for later calls in that invocation.
 Before each reuse, the backend requires current ordinary-directory attributes
 from that same held handle. This guard runs at the root-admission boundary of
 root, subject, free-space, reclaimable-temp and trash observations, without
@@ -149,13 +150,36 @@ admit again; return or any exception closes every hold and resets the scope.
 Admission no-follow checks every configured-root component below the
 reviewed/current mount before physical resolution, and typed anchor or volume
 changes remain observation evidence for pure judgment to map to `root_changed`.
-Root and candidate physical resolution, final no-follow leaf stat, and fresh
-temp-parent/trash volume observations remain required on the held path.
+Subject root physical resolution is omitted only after that call's admission
+has checked fresh ordinary attributes on a live confirmed invocation hold. Its
+logical root spelling already matches the held normalized DOS final name except
+drive-letter case. Candidate physical resolution, final no-follow leaf stat,
+and fresh temp-parent/trash volume observations remain required on the held path.
+Unconfirmed holds and direct backend calls retain subject root resolution.
 Subject observation prepares its candidate native spelling after chain admission
 and root resolution, then reuses that string for candidate resolution and the
 final no-follow stat. This reuses only lexical preparation: resolution output
 still receives logical-spelling validation, and both leaf reads retain their
 existing ordering and roles.
+
+### Handle-relative observation option
+
+A single native relative subject open remains a future option. Local NTFS and
+the supplied exFAT fixture support metadata-only strict opens plus same-handle
+Basic/Standard metadata; full 128-bit identity is queried only for profiles
+supporting it. This could remove the per-component pathname walk and candidate
+resolution while keeping subject metadata tied to the opened object. The
+investigation does not establish an equivalent complete observer or a production
+speedup; [PERFORMANCE](PERFORMANCE.md) owns the measured methods and limits.
+
+Real OneDrive probes show that default placeholder presentation can hide reparse
+attributes and that strict DONT_REPARSE opens can still succeed on exposed cloud
+entries. A final handle's attributes do not establish intermediate-component
+classification. Root admission, two acquisition lifetimes, alias corroboration,
+and complete parent/absence judgments also need a settled design. This option
+therefore remains unimplemented under [M1_PLAN](M1_PLAN.md); the current pathname
+algorithm and its existing placeholder policy remain active. These probes do
+not establish that the pathname algorithm detects every hidden cloud component.
 
 Every existing relative component of a subject, temp parent, or `.synctrash`
 path is likewise no-follow admitted before physical resolution, volume probing,

@@ -10,6 +10,26 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Handle-relative compatibility probes — 2026-10-21
+
+At product revision `e6734bbd`, the user-provided K: SD card was natively
+identified as exFAT, serial BA1F1F45. Strict relative opens with DONT_REPARSE
+and NO_RECALL succeeded under both confirmed restrictive and freshly acquired
+metadata root handles. Basic/Standard information matched current FileStat
+for files, directories and a 370-character path, with identity absent by profile.
+Combined StatInformation(68) returned C000000D on present entries; it is not a
+universal query. This establishes bounded compatibility, not implementation
+acceptance or coverage of every supported filesystem.
+
+Raw contained probes, driver receipts, exact commands and retained fixture
+manifest live under `build/handle-relative-investigation-20261021/exfat/`.
+The isolated K: fixture is recorded there; no unrelated SD-card contents were
+changed. Warm three-round, twenty-call subject diagnostics are in that report;
+they are incomplete-adapter microbenchmarks, not end-to-end planning speedups.
+The earlier NTFS five-round comparison is retained under
+`build/handle-relative-investigation-20261020/`. Cloud and final integrated
+observer acceptance remain separate from these prototype receipts.
+
 ## Evidence retention
 
 After acceptance and recovery accounting, keep raw results, manifests, exact

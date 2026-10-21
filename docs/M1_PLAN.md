@@ -133,6 +133,55 @@ the requested review pause, not a safety-incident stop. PO3/PO5 are committed;
 there is no unfinished product delta requiring a recovery branch. Keep failed
 receipts and scratch; no worktree, push or PR was created.
 
+### Handle-relative observation continuation — 2026-10-21
+
+The user accepts PO4's demonstrated concurrent timing differences and authorizes
+implementation of either route, prioritizing one handle-relative subject observer
+with two root acquisition modes. The earlier equivalence-review pause is resolved
+for those timing differences. Do not retain the old subject algorithm merely as
+a compatibility fallback. First resolve native compatibility and root lifecycle;
+use original PO4 if the preferred route cannot preserve required behavior.
+
+| ID | Outcome and finite population | Verification / commit boundary | Status |
+| --- | --- | --- | --- |
+| HR-1 | Resolve exFAT (user-provided K:), cloud-placeholder, ACL, alias/representation, missing-path and root-acquisition questions. Core root/native/identity and preflight are owners; executor/verifier remain direct shared-contract consumers, not migration targets. | Retained native receipts, complete metadata and safe judgment comparisons, independent design review. Scratch only until a coherent implementation is settled. | Active; OneDrive fixture path requested. |
+| HR-2 | Implement one relative subject algorithm with reusable restrictive root hold and fresh per-access acquisition, or original PO4 if compatibility blocks it. Elaborate exact files/gates after HR-1. | Native affected seam, core/preflight/workflow consumer tests, package/import checks and ordinary suite where shared-contract impact requires it; matching CORE/PREFLIGHT/DEFENSE docs, independent review, smallest coherent commits. | Authorized; depends on HR-1. |
+
+Evidence: `build/handle-relative-investigation-20261020/` and continuation
+`build/handle-relative-investigation-20261021/`. Preserve execution NOOP checks,
+no-recall/reparse refusal, full identity, unknown-versus-absence safety and
+invocation cleanup. No GUI work, parent-safety cache, executor/verifier migration,
+push or PR. Existing mandatory stops remain. User explicitly permits isolated
+test fixtures on K:; never modify unrelated SD-card contents.
+
+The user explicitly approved validated logical absolute spelling as the path
+length basis for present and missing subjects, replacing resolved-alias length.
+exFAT probes support one Basic/Standard metadata path with profile-qualified
+identity; combined StatInformation(68) is not supported on the tested SD card.
+Implementation may proceed while native OneDrive acceptance awaits its fixture.
+
+Actual OneDrive probes at H:\OneDrive\NamiSync_OneDrive show strict relative
+opens still succeed on cloud reparse entries even with thread-local placeholder
+exposure. Leaf classification cannot establish intermediate cloud-component
+refusal. The preferred one-open mechanism therefore does not replace the existing
+component guarantee; select the user's authorized original PO4 alternative.
+Retain the existing component admission and unheld fallback. Apply the approved
+logical spelling budget to the optimized held route. Cloud default-presentation
+root admission differs from exposed admission already in current code; record
+the bounded finding separately, not as an authorization to redesign scanner,
+executor or provider policy. No content recall or product effect was demonstrated.
+The user subsequently explicitly confirmed preserving handle-relative observation
+as a documented option and proceeding with PO4. PREFLIGHT owns the future-option
+design note; PERFORMANCE owns prototype evidence and limits. This selection is
+not a finding that the native approach escaped containment or recalled content.
+
+PO4a-1 is verified and independently approved: confirmed held root spelling
+replaces subject root resolution; first admission freshly queries held attributes
+before caching. Native25, preflight143, consumers243, package93 pass with unchanged
+inputs. Candidate resolution/two leaf reads remain for the next atomic units.
+Receipts: `20261021/implementation/`; the discarded native draft is preserved
+there as investigation source, not product code.
+
 ### Review consolidation — 2026-10-16–19
 
 The user approved the reconciled S1–S4/test/documentation recommendations from

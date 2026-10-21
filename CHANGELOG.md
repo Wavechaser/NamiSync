@@ -25,7 +25,14 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
-#### Reduce planning observation work (2026-10-19)
+#### Reduce planning observation work (2026-10-19 – 2026-10-21)
+
+- Reuse the confirmed invocation root spelling for subject observation after
+  fresh held-attribute admission, avoiding repeated physical root resolution.
+  Unheld observation retains full resolution.
+- Preserve handle-relative observation as a future option with actual NTFS,
+  exFAT and OneDrive evidence; cloud intermediate-component semantics remain
+  unresolved by a single native open. Continue the selected PO4 path instead.
 
 - Skip duplicate absolute spelling validation only when normalization returns
   the exact already-validated string; reuse a subject's prepared native spelling

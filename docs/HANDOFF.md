@@ -1,55 +1,29 @@
-# Latest session — PO3/PO5 complete; PO4 awaits review
+# Latest session — PO4 implementation, 2026-10-21
 
-2026-10-19, original `milestone1`, starting clean at `faa580f5`. User continued
-execute-task, authorized PO3 and planning-only NOOP omission (PO5), then actual
-filesystem profiling before conditional PO4. Explicit stop: pause before PO4
-if evidence does not support equivalence. M1_PLAN owns the checkpoint record.
+At e6734bbd user authorized one handle-relative observer or PO4, approved logical
+absolute spelling for path-length budgets, then explicitly selected PO4 while
+preserving the handle-relative option in documentation. PREFLIGHT owns that
+future option; PERFORMANCE owns measurements; M1_PLAN owns scope.
 
-Integrated after fresh independent review:
+Actual NTFS/exFAT prototypes matched metadata. exFAT requires Basic/Standard
+rather than StatInformation(68). Actual OneDrive strict opens succeed even with
+cloud reparses exposed; leaf classification cannot establish intermediate cloud
+component admission. This does not demonstrate hydration or containment escape.
+Default placeholder visibility also limits existing checks. Thread modes restored,
+metadata unchanged, no content read or user files mutated. Evidence is under
+build/handle-relative-investigation-20261020 and -20261021 (exfat/cloud/design).
+K: retained fixture is NamiSync-probe-5d4b3b539c3d4e5a8f1fa95568a26e6d.
+OneDrive fixture H:\OneDrive\NamiSync_OneDrive remains untouched.
 
-- `b1c433c2`: cheaper per-call lexical validation, identical results/messages.
-- `30349d0`: planning omits NOOP direct file checks; parents/temp accounting and
-  non-stat checks remain. Execution/resume/verification retain full observation.
+PO4a-1 ready after independent review: reuse confirmed held root spelling,
+retain candidate resolution and both leaf reads. First admission now queries
+held attributes before caching. Native25, preflight143, consumers243, package93
+pass with unchanged before/after inputs. Earlier failed receipts retained under
+20261021/implementation. Native draft primitives were preserved in its
+abandoned-native folder and removed from production, not integrated.
 
-PO3: pinned differential 6.4M, native seam 43, focused 190/one privilege skip,
-host ordinary 6139/four symlink-privilege skips and imports 12. Initial parameter-ID
-failure and sandbox ordinary 81 failures remain retained; all 81 passed in the
-corrected host run, as did 20 prior skips. Four capability skips remain.
-PO5: native 3, focused 108 including 97 admission-limit cases, neighborhood 3155
-including all 87 package-refresh cases, imports 12. Initial size-drift reason
-assertion corrected to the existing size_changed contract. Input manifests
-match accepted bytes; unrelated PO3 behavior evidence reused by dependency.
-
-Evidence is `build/planning-optimization-next-20261019/`, with each outcome's
-receipt, independent review and integration identity. Keep scripts, failed
-receipts and task-owned scratch. Native tests require host execution permissions,
-outside-repository TEMP/TMP/basetemp and explicit Node; sandbox execution caused
-the retained native capability failures. Do not claim skips as native coverage.
-
-PO4 read-only study ran at `30349d0`. Three warm source-planning samples per
-8,000-file mix: 90% NOOP 2.976–3.052s, 10% NOOP 6.813–6.995s; observation
-0.724–0.747s and 4.925–5.069s. Ten children completed with correct populations
-and shutdown; product/helper/driver hashes and fixture content/mtime digests
-remained equal. PERFORMANCE owns counts, timings and limits; no candidate
-speedup claim.
-
-Native evidence supports bounded confirmed-root reuse: held root/ancestor
-renames fail and released controls succeed; fresh held attributes refuse an
-in-place converted root. Candidate-resolution omission loses a demonstrated
-post-chain junction escape refusal (prototype returns absence, no outside-root
-metadata/effect shown). Single-leaf observation sees a file created after chain
-admission where the retained early read reports absence. These challenge
-unconditional equivalence; they do not demonstrate corruption or a hard-wall
-incident. Planning residuals are not automatically disposed by execution's
-quiescence wording. Short aliases/cloud-provider fixtures were unavailable.
-
-All PO4 implementation is paused under the user's condition. Suggested next
-decision: bounded PO4a-1 first; separately accept or decline PO4a-2's resolution/
-representation residuals and PO4b's changed leaf observation timing. Read
-`po4/report.md`, numbered native/profile receipts and independent evidence review
-before expanding the finite implementation gates. No PO4 product delta exists.
-
-No branch/worktree, stash, push or PR was created; no unrelated state or old
-evidence was cleaned. Completed product work is safely committed, so no recovery
-WIP is needed. M1-12/release/DOC-2 remain inactive. Earlier PO1/PO2 history is
-retained in Git and `build/planning-optimization-20261019/`.
+Continue separately reviewed PO4a-2 candidate resolution omission with approved
+logical spelling budget, then PO4b single final leaf observation. Unheld fallback
+remains unchanged. Builder owns preflight/tests/subject docs; orchestrator owns
+register/changelog/handoff/integration. No unrelated GUI changes, push, PR or
+cleanup. No executor/verifier migration or new cloud policy is authorized.

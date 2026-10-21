@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from contextvars import copy_context
 import ctypes
 from dataclasses import FrozenInstanceError, fields, replace
@@ -359,11 +359,11 @@ def test_observe_holds_roots_preserves_probes_and_releases(
     monkeypatch.setattr(preflight_module, "observe_native_volume", volume)
     world = observe(review, HeldFileSystem())
     assert admissions == [str(root) for root in roots]
-    assert held_guards.count(str(roots[0])) == 1
-    assert held_guards.count(str(roots[1])) == 3
+    assert held_guards.count(str(roots[0])) == 2
+    assert held_guards.count(str(roots[1])) == 4
     assert preflight(review, world).ok
     for root in roots:
-        assert resolves.count(str(root)) >= 2
+        assert resolves.count(str(root)) == 1
         assert str(root / "copy.bin") in resolves
     assert to_extended_length_path(str(roots[0] / "copy.bin")) in leaf_stats
     assert str(roots[1]) in parent_volume_probes
@@ -371,6 +371,43 @@ def test_observe_holds_roots_preserves_probes_and_releases(
         moved = root.with_name(root.name + "-released")
         root.rename(moved)
         moved.rename(root)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")
+@pytest.mark.parametrize("mode", ("held", "direct", "case-alias"))
+def test_subject_reuses_root_spelling_only_inside_a_confirmed_hold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mode: str,
+) -> None:
+    root = tmp_path / "managed-root"
+    root.mkdir()
+    (root / "payload.bin").write_bytes(b"root spelling witness")
+    authority = _local_authority(root)
+    baseline = LocalObservationFileSystem().stat(authority, "payload.bin", PROFILE)
+    if mode == "case-alias":
+        authority = replace(authority, logical_root=str(root.with_name("MANAGED-ROOT")))
+    resolutions: list[tuple[str, bool]] = []
+    real_resolve = preflight_module._resolve_native_path
+
+    def resolve(path, *, strict):
+        resolutions.append((from_extended_length_path(str(path)), strict))
+        return real_resolve(path, strict=strict)
+
+    monkeypatch.setattr(preflight_module, "_resolve_native_path", resolve)
+    filesystem = LocalObservationFileSystem()
+    with filesystem.root_scope() if mode != "direct" else nullcontext():
+        observed = filesystem.stat(authority, "payload.bin", PROFILE)
+
+    assert observed == baseline
+    candidate = str(Path(authority.logical_root) / "payload.bin")
+    assert resolutions == (
+        [(candidate, False)] if mode == "held" else
+        [(authority.logical_root, True), (candidate, False)]
+    )
+    released = root.with_name("released")
+    root.rename(released)
+    released.rename(root)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows root holds")
@@ -589,17 +626,21 @@ def _assert_held_observation_refusal(filesystem, authority, surface, issue):
 @pytest.mark.skipif(os.name != "nt", reason="native Windows current root attributes")
 @pytest.mark.parametrize("surface", ("root", "subject"))
 @pytest.mark.parametrize("state", ("placeholder", "query-failure"))
+@pytest.mark.parametrize("first_access", (False, True))
 def test_held_observation_refuses_attribute_failure_before_later_probes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     surface: str,
     state: str,
+    first_access: bool,
 ) -> None:
     authority = _local_authority(tmp_path)
     filesystem = LocalObservationFileSystem()
     queries: list[int] = []
+    real_admit = preflight_module.admit_root
     with filesystem.root_scope():
-        assert filesystem.observe_root(authority).error is None
+        if not first_access:
+            assert filesystem.observe_root(authority).error is None
         assert root_authority_module._WINDOWS is not None
 
         def query(handle, kind, output, size):
@@ -616,7 +657,14 @@ def test_held_observation_refuses_attribute_failure_before_later_probes(
             raise AssertionError("unsafe held root reached a later probe or fallback")
 
         monkeypatch.setattr(root_authority_module._WINDOWS, "get_file_information_ex", query)
-        monkeypatch.setattr(preflight_module, "admit_root", later_probe)
+        admissions: list[RootAuthority] = []
+
+        def admit(current):
+            assert first_access and not admissions
+            admissions.append(current)
+            return real_admit(current)
+
+        monkeypatch.setattr(preflight_module, "admit_root", admit)
         monkeypatch.setattr(preflight_module, "_resolve_native_path", later_probe)
         monkeypatch.setattr(preflight_module, "admit_existing_relative_chain", later_probe)
         issue = (
@@ -625,6 +673,13 @@ def test_held_observation_refuses_attribute_failure_before_later_probes(
         )
         _assert_held_observation_refusal(filesystem, authority, surface, issue)
         assert queries == [0]
+        assert admissions == ([authority] if first_access else [])
+        if first_access:
+            invocation = preflight_module._OBSERVATION_INVOCATION.get()
+            assert invocation.roots[authority].admitted is None
+    released = tmp_path.with_name(tmp_path.name + "-released")
+    tmp_path.rename(released)
+    released.rename(tmp_path)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native NTFS in-place root conversion")
