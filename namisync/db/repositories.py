@@ -124,6 +124,8 @@ class InventorySnapshot:
     unsupported_reason: str | None
     hardlink_group: str | None
     invalidation: VerificationInvalidation | None = None
+    observed_attributes: int | None = None
+    observed_size: int | None = None
 
     @property
     def verification_state(self) -> InventoryVerificationState:
@@ -406,6 +408,8 @@ def _inventory_snapshot(row: sqlite3.Row) -> InventorySnapshot:
         reappeared_at=_optional_time(row["reappeared_at"]),
         unsupported_reason=row["unsupported_reason"],
         hardlink_group=row["hardlink_group"],
+        observed_attributes=row["observed_attributes"],
+        observed_size=row["observed_size"],
         invalidation=(
             None
             if row["verification_invalidated_at"] is None
@@ -758,7 +762,7 @@ class LedgerRepository:
             cursor = self._connection.execute(
                 f"""SELECT * FROM inventory
                       WHERE location_id = ?
-                        AND entry_kind <> 'directory'
+                        AND (entry_kind <> 'directory' OR unsupported_reason IS NOT NULL)
                         AND {predicate}
                       ORDER BY rel_path_key, id
                       LIMIT ?""",
@@ -774,7 +778,7 @@ class LedgerRepository:
                 f"""SELECT * FROM inventory
                       WHERE location_id = ?
                         AND rel_path_key IN ({placeholders})
-                        AND entry_kind <> 'directory'
+                        AND (entry_kind <> 'directory' OR unsupported_reason IS NOT NULL)
                         AND {predicate}
                       ORDER BY rel_path_key, id
                       LIMIT ?""",

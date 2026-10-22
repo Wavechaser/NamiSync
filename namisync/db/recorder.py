@@ -182,12 +182,18 @@ def _unsupported_record_projection(value: UnsupportedRecord) -> dict[str, object
         or (value.kind is not None and type(value.kind) is not EntryKind)
     ):
         raise TypeError("unsupported record projection requires typed record and reasons")
-    return {
+    projection = {
         "rel_path": value.rel_path,
         "rel_path_key": value.rel_path_key,
         "reason": value.reason.value,
         "kind": None if value.kind is None else value.kind.value,
     }
+    # Keep existing receipt hashes when the scan carries no advisory evidence.
+    if value.observed_attributes is not None:
+        projection["observed_attributes"] = value.observed_attributes
+    if value.observed_size is not None:
+        projection["observed_size"] = value.observed_size
+    return projection
 
 
 def _scan_warning_projection(value: ScanWarning) -> dict[str, object]:
@@ -853,6 +859,9 @@ class LedgerRecorder:
                 command.location_id,
                 record.rel_path,
                 record.rel_path_key,
+                "unsupported" if record.kind is None else record.kind.value,
+                record.observed_size,
+                record.observed_attributes,
                 at,
                 command.host_id,
                 command.scope_token,
@@ -864,17 +873,18 @@ class LedgerRecorder:
         for start in range(0, len(unsupported_rows), 400):
             connection.executemany(
                 """INSERT INTO inventory(
-                       location_id, rel_path, rel_path_key, entry_kind, presence,
+                       location_id, rel_path, rel_path_key, entry_kind,
+                       observed_size, observed_attributes, presence,
                        last_observed_at, observation_host_id, scope_token,
                        unsupported_reason
-                   ) VALUES (?, ?, ?, 'unsupported', 'unsupported', ?, ?, ?, ?)
+                   ) VALUES (?, ?, ?, ?, ?, ?, 'unsupported', ?, ?, ?, ?)
                    ON CONFLICT(location_id, rel_path_key) DO UPDATE SET
                        rel_path = excluded.rel_path,
-                       entry_kind = 'unsupported', presence = 'unsupported',
-                       observed_size = NULL, observed_mtime_ns = NULL,
+                       entry_kind = excluded.entry_kind, presence = 'unsupported',
+                       observed_size = excluded.observed_size, observed_mtime_ns = NULL,
                        file_identity_volume_serial = NULL,
                        file_identity_file_index = NULL, observed_nlink = NULL,
-                       observed_attributes = NULL, observed_created_ns = NULL,
+                       observed_attributes = excluded.observed_attributes, observed_created_ns = NULL,
                        last_observed_at = excluded.last_observed_at,
                        observation_host_id = excluded.observation_host_id,
                        scope_token = excluded.scope_token,

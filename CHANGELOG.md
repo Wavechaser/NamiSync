@@ -230,6 +230,11 @@ explicit, reviewable and regression-backed.
 - Document current hidden-marker detection limits and the complete native
   enumeration/stat boundary. Defer universal detection and hydration-proof
   scanning to M2; the authorized M1 advisory reuses observed metadata.
+- Retain observed attributes and known file sizes for unsupported scan records
+  and inventory persistence without making them executable or verification-
+  eligible. Recall classification uses the visible bit independently of hidden
+  reparse markers, adds no scan I/O and preserves existing receipt hashes when
+  the optional evidence is absent.
 
 #### Update local runtimes and verify security-update compatibility (2026-10-22)
 

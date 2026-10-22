@@ -19,6 +19,7 @@ from namisync.core.integrity import (
     VerificationInvalidationReason,
 )
 from namisync.core.models import (
+    EntryKind,
     FileRecord,
     ScanScope,
     UnsupportedReason,
@@ -79,6 +80,73 @@ def _file_with_stat(path: str, stat) -> FileRecord:
         stat.nlink,
         stat.metadata,
     )
+
+
+@pytest.mark.parametrize("kind, size", [(EntryKind.FILE, 79_000_000), (EntryKind.FILE, None), (EntryKind.DIRECTORY, None)])
+def test_unsupported_advisory_roundtrips_without_becoming_observed_stat(tmp_path: Path, kind, size) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    record = UnsupportedRecord("cloud", "CLOUD", UnsupportedReason.PLACEHOLDER, kind, 0x400400, size)
+    try:
+        command = InventoryCommand(setup.source_location_id, setup.host_id,
+                                   _scan(setup, (), unsupported=(record,)), "cloud-scan", NOW)
+        assert setup.recorder.record_inventory(command).disposition is RecordDisposition.APPLIED
+        assert setup.recorder.record_inventory(command).disposition is RecordDisposition.NOOP
+        with LedgerRepository(setup.recorder.path) as repository:
+            row, = repository.get_inventory(setup.source_location_id)
+        assert row.entry_kind is kind
+        assert row.presence.value == "unsupported"
+        assert row.observed is None
+        assert row.observed_attributes == 0x400400
+        assert row.observed_size == size
+        assert row.verification_state is InventoryVerificationState.UNVERIFIED
+        with pytest.raises(RecordingError):
+            setup.recorder.record_inventory(replace(command, scan=_scan(
+                setup, (), unsupported=(replace(record, observed_attributes=0),),
+            )))
+        setup.recorder.record_inventory(replace(command, scope_token="unavailable", scan=_scan(
+            setup, (), unsupported=(_unsupported("cloud"),),
+        )))
+        with LedgerRepository(setup.recorder.path) as repository:
+            unavailable, = repository.get_inventory(setup.source_location_id)
+        assert unavailable.entry_kind is None
+        assert unavailable.observed_attributes is None
+        assert unavailable.observed_size is None
+        assert unavailable.observed is None
+    finally:
+        setup.recorder.close()
+    # The normal cold reader admits the existing schema without a migration.
+    with LedgerRepository(tmp_path / "ledger.db") as repository:
+        assert repository.get_inventory(setup.source_location_id)[0].presence.value == "unsupported"
+
+
+def test_unsupported_without_advisory_preserves_existing_receipt_projection() -> None:
+    record = UnsupportedRecord("cloud", "CLOUD", UnsupportedReason.PLACEHOLDER, EntryKind.FILE)
+    assert recorder_module._unsupported_record_projection(record) == {
+        "rel_path": "cloud", "rel_path_key": "CLOUD", "reason": "placeholder", "kind": "file",
+    }
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_known_unsupported_directory_remains_an_integrity_skip_candidate(tmp_path: Path, missing) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    try:
+        command = InventoryCommand(setup.source_location_id, setup.host_id, _scan(
+            setup, (), unsupported=(UnsupportedRecord(
+                "cloud", "CLOUD", UnsupportedReason.PLACEHOLDER,
+                EntryKind.DIRECTORY, 0x400400,
+            ),),
+        ), "unsupported-dir", NOW)
+        setup.recorder.record_inventory(command)
+        if missing:
+            setup.recorder.record_inventory(replace(command, scan=_scan(setup, ()), scope_token="absent"))
+        with LedgerRepository(setup.recorder.path) as repository:
+            for paths in ((), ("cloud",)):
+                row, = repository.get_integrity_candidates(setup.source_location_id, IntegrityMode.BASELINE, path_keys=paths)
+                assert row.observed is None
+                assert row.entry_kind is EntryKind.DIRECTORY
+                assert row.presence.value == ("missing" if missing else "unsupported")
+    finally:
+        setup.recorder.close()
 
 
 def test_complete_inventory_over_33k_marks_missing_without_parameter_overflow(

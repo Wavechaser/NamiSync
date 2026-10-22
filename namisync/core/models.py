@@ -31,6 +31,7 @@ from .scalars import (
 
 # Windows attributes that execution deliberately propagates from source to target.
 MANAGED_FILE_ATTRIBUTE_MASK = 0x00000001 | 0x00000002 | 0x00000004 | 0x00002000
+FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000
 MAX_VOLUME_TEXT_UTF16_UNITS = 260
 # Inventory root identifiers retain the complete admitted request id plus the
 # longest production suffix (``:refresh:`` and one SafeInt generation) and the
@@ -161,6 +162,15 @@ class FileIdentity:
             maximum_units=MAX_VOLUME_TEXT_UTF16_UNITS,
             allow_empty=False,
         )
+
+
+def has_recall_on_data_access(attributes: int | None) -> bool:
+    """Report positive recall evidence; false does not establish local residency."""
+
+    if attributes is None:
+        return False
+    require_safe_int(attributes, "file attributes")
+    return bool(attributes & FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,6 +338,8 @@ class UnsupportedRecord:
     rel_path_key: str
     reason: UnsupportedReason
     kind: EntryKind | None = None
+    observed_attributes: int | None = None
+    observed_size: int | None = None
 
     def __post_init__(self) -> None:
         if type(self.rel_path_key) is not str:
@@ -336,6 +348,10 @@ class UnsupportedRecord:
             raise TypeError("unsupported record reason has the wrong type")
         if self.kind is not None and type(self.kind) is not EntryKind:
             raise TypeError("unsupported record kind has the wrong type")
+        if self.observed_attributes is not None:
+            require_safe_int(self.observed_attributes, "observed file attributes")
+        if self.observed_size is not None:
+            require_signed_64(self.observed_size, "observed file size")
         canonical = validate_relative_path(self.rel_path)
         if self.rel_path_key != fold_validated_path(canonical):
             raise ValueError("unsupported path key is not canonical")

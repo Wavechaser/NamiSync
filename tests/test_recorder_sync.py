@@ -291,7 +291,9 @@ def test_recorder_hash_projections_cover_exact_known_dataclasses() -> None:
     cases = (
         (recorder_module._file_record_projection, scan.files[0]),
         (recorder_module._directory_record_projection, scan.directories[0]),
-        (recorder_module._unsupported_record_projection, scan.unsupported[0]),
+        (recorder_module._unsupported_record_projection, replace(
+            scan.unsupported[0], observed_attributes=0x400000, observed_size=5,
+        )),
         (recorder_module._scan_warning_projection, scan.warnings[0]),
         (recorder_module._scan_scope_projection, scan.scope),
         (recorder_module._scan_projection, scan),

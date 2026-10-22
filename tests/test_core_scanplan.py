@@ -15,6 +15,8 @@ import namisync.core.pathing as path_contracts
 import namisync.core.planning as planning_contracts
 import namisync.core.scalars as scalar_contracts
 from namisync.core.models import IgnoreSet
+
+
 from namisync.core.pathing import (
     PathValidationError,
     fold_validated_path,
@@ -40,6 +42,29 @@ from _identity_hash_fixtures import (
     hash_fixtures,
     two_copy_plan,
 )
+
+
+@pytest.mark.parametrize("attributes, expected", [(None, False), (0, False), (0x1000, False), (0x400000, True), (0x400400, True)])
+def test_recall_advisory_uses_visible_bit_without_reparse_requirement(attributes, expected) -> None:
+    assert model_contracts.has_recall_on_data_access(attributes) is expected
+
+
+@pytest.mark.parametrize("attributes", [True, "4194304", -1, 2**53])
+def test_recall_advisory_rejects_malformed_attributes(attributes) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        model_contracts.has_recall_on_data_access(attributes)
+
+
+@pytest.mark.parametrize("field, value", [
+    ("observed_attributes", True), ("observed_attributes", -1),
+    ("observed_size", True), ("observed_size", -1), ("observed_size", 2**63),
+])
+def test_unsupported_advisory_evidence_has_scalar_bounds(field, value) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        model_contracts.UnsupportedRecord(
+            "cloud.bin", "CLOUD.BIN", model_contracts.UnsupportedReason.PLACEHOLDER,
+            **{field: value},
+        )
 
 
 @pytest.mark.parametrize("kind", tuple(planning_contracts.OperationKind))

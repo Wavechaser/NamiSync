@@ -45,6 +45,16 @@ retention remain separate concerns.
 
 ## Implemented M0 Surface
 
+Recall advisories use the visible `RECALL_ON_DATA_ACCESS` bit (`0x00400000`)
+independently of placeholder refusal classification. Ordinary records retain
+their existing raw metadata. Unsupported observations now retain known kind,
+attributes and usable file size from the same no-follow stat in every scope;
+an unavailable stat contributes no invented attributes or size. Unsupported
+directories retain attributes but no file-size contribution. A missing or
+unrepresentable size remains unknown rather than zero. These advisory facts
+add no probe or content read and do not change refusal, traversal or completeness.
+Absence of positive recall evidence does not establish local availability.
+
 `namisync.modules.scanner` provides the module-level `scan()` entry point and
 an injectable `WalkingScanner`. Its native backend uses metadata-only Windows
 enumeration and volume capability observation; tests replace that backend to
@@ -165,9 +175,9 @@ The authorized M1 recall advisory is pending delivery: visible
 that an item may not be fully available locally, independently of reparse bits.
 Its absence is not proof of local availability. Counters cover scanned file
 observations and their total logical sizes, including unsupported observations
-when file kind and size are known; source and target observations count
-independently. Directories can carry row indications but do not add file counts
-or bytes. Logical size is not a download estimate, especially for partially
+with known file kind; missing sizes make the byte estimate partial. Source and
+target observations count independently. Directories can carry row indications
+but do not add file counts or bytes. Logical size is not a download estimate, especially for partially
 resident files. Selection does not redefine these scan-wide totals.
 
 Current exposed placeholder/reparse refusals remain unchanged. Advisory metadata

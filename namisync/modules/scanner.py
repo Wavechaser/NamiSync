@@ -62,6 +62,7 @@ from namisync.core.root_authority import (
 from namisync.core.review import ScanPopulationAdmission
 from namisync.core.session import RunContext
 from namisync.core.scalars import (
+    MAX_SIGNED_64,
     ScalarDomainError,
     require_utf16_path,
 )
@@ -252,6 +253,21 @@ class NativeScannerBackend:
 
 def _attributes(stat: os.stat_result) -> int:
     return int(getattr(stat, "st_file_attributes", 0))
+
+
+def _unsupported_observation(
+    rel_path: str,
+    reason: UnsupportedReason,
+    stat: os.stat_result,
+    kind: EntryKind | None,
+) -> UnsupportedRecord:
+    size = getattr(stat, "st_size", None) if kind is EntryKind.FILE else None
+    if type(size) is not int or not 0 <= size <= MAX_SIGNED_64:
+        size = None
+    return UnsupportedRecord(
+        rel_path, normalize_relative_path(rel_path), reason, kind,
+        getattr(stat, "st_file_attributes", None), size,
+    )
 
 
 def _created_ns(stat: os.stat_result) -> int | None:
@@ -687,10 +703,10 @@ class WalkingScanner:
                     EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                 )
                 unsupported.append(
-                    UnsupportedRecord(
+                    _unsupported_observation(
                         relative_start,
-                        normalize_relative_path(relative_start),
                         UnsupportedReason.PLACEHOLDER,
+                        root_stat,
                         kind,
                     )
                 )
@@ -705,10 +721,10 @@ class WalkingScanner:
                     EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                 )
                 unsupported.append(
-                    UnsupportedRecord(
+                    _unsupported_observation(
                         relative_start,
-                        normalize_relative_path(relative_start),
                         UnsupportedReason.REPARSE_POINT,
+                        root_stat,
                         kind,
                     )
                 )
@@ -782,10 +798,11 @@ class WalkingScanner:
                 )
                 continue
             unsupported.append(
-                UnsupportedRecord(
+                _unsupported_observation(
                     relative_start,
-                    normalize_relative_path(relative_start),
                     UnsupportedReason.UNKNOWN_TYPE,
+                    root_stat,
+                    None,
                 )
             )
             warnings.append(
@@ -866,6 +883,7 @@ class WalkingScanner:
                 ):
                     continue
 
+                stat = None
                 try:
                     stat = entry.stat(follow_symlinks=False)
                     if (
@@ -881,14 +899,21 @@ class WalkingScanner:
                             logical_error_text(error),
                         )
                     )
-                    unsupported.append(
-                        UnsupportedRecord(
+                    if stat is None:
+                        record = UnsupportedRecord(
                             rel_path,
                             normalize_relative_path(rel_path),
                             self._unsupported_error(error),
                             EntryKind.DIRECTORY if is_directory else None,
                         )
-                    )
+                    else:
+                        kind = EntryKind.DIRECTORY if is_directory or is_directory_stat(stat) else (
+                            EntryKind.FILE if stat_module.S_ISREG(stat.st_mode) else None
+                        )
+                        record = _unsupported_observation(
+                            rel_path, self._unsupported_error(error), stat, kind,
+                        )
+                    unsupported.append(record)
                     complete = False
                     continue
 
@@ -903,7 +928,7 @@ class WalkingScanner:
                 if is_placeholder_stat(stat):
                     kind = EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                     unsupported.append(
-                        UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.PLACEHOLDER, kind)
+                        _unsupported_observation(rel_path, UnsupportedReason.PLACEHOLDER, stat, kind)
                     )
                     warnings.append(ScanWarning(ScanWarningCode.PLACEHOLDER, rel_path))
                     if is_directory:
@@ -912,7 +937,7 @@ class WalkingScanner:
                 if is_reparse_stat(stat):
                     kind = EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                     unsupported.append(
-                        UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.REPARSE_POINT, kind)
+                        _unsupported_observation(rel_path, UnsupportedReason.REPARSE_POINT, stat, kind)
                     )
                     warnings.append(ScanWarning(ScanWarningCode.REPARSE_POINT, rel_path))
                     if is_directory:
@@ -986,7 +1011,7 @@ class WalkingScanner:
                     )
                 else:
                     unsupported.append(
-                        UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.UNKNOWN_TYPE)
+                        _unsupported_observation(rel_path, UnsupportedReason.UNKNOWN_TYPE, stat, None)
                     )
                     warnings.append(ScanWarning(ScanWarningCode.UNKNOWN_TYPE, rel_path))
                     complete = False
@@ -1053,12 +1078,18 @@ class WalkingScanner:
                 continue
             if is_placeholder_stat(stat):
                 unsupported.append(
-                    UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.PLACEHOLDER)
+                    _unsupported_observation(
+                        rel_path, UnsupportedReason.PLACEHOLDER, stat,
+                        EntryKind.DIRECTORY if is_directory_stat(stat) else EntryKind.FILE,
+                    )
                 )
                 warnings.append(ScanWarning(ScanWarningCode.PLACEHOLDER, rel_path))
             elif is_reparse_stat(stat):
                 unsupported.append(
-                    UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.REPARSE_POINT)
+                    _unsupported_observation(
+                        rel_path, UnsupportedReason.REPARSE_POINT, stat,
+                        EntryKind.DIRECTORY if is_directory_stat(stat) else EntryKind.FILE,
+                    )
                 )
                 warnings.append(ScanWarning(ScanWarningCode.REPARSE_POINT, rel_path))
             elif is_directory:
@@ -1091,10 +1122,11 @@ class WalkingScanner:
                 )
             else:
                 unsupported.append(
-                    UnsupportedRecord(
+                    _unsupported_observation(
                         rel_path,
-                        normalize_relative_path(rel_path),
                         UnsupportedReason.UNKNOWN_TYPE,
+                        stat,
+                        None,
                     )
                 )
                 warnings.append(ScanWarning(ScanWarningCode.UNKNOWN_TYPE, rel_path))

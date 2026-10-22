@@ -664,7 +664,7 @@ def test_selected_scan_checks_cancellation_before_touching_the_final_leaf() -> N
 @pytest.mark.parametrize(
     ("scope_kind", "expected_complete", "expected_kind"),
     (
-        ("paths", True, None),
+        ("paths", True, EntryKind.DIRECTORY),
         ("subtrees", False, EntryKind.DIRECTORY),
     ),
 )
@@ -1349,6 +1349,73 @@ def test_placeholder_is_typed_without_file_probe_or_descent() -> None:
     assert not probed
     assert result.unsupported[0].reason is UnsupportedReason.PLACEHOLDER
     assert result.complete
+
+
+@pytest.mark.parametrize("scope", [ScanScope.full(), ScanScope.selected(("cloud",)), ScanScope.subtrees(("cloud",))])
+@pytest.mark.parametrize("directory", [False, True])
+def test_unsupported_recall_evidence_survives_every_scope_without_extra_probes(scope, directory) -> None:
+    path = r"C:\root\cloud"
+    attributes = 0x400000 | FILE_ATTRIBUTE_REPARSE_POINT
+    observed = _fake_stat(ino=2, directory=directory, attributes=attributes)
+    entry = FakeEntry("cloud", path, directory, observed)
+    backend = ScopedAdmissionBackend({path: observed}, {r"C:\root": [entry]})
+    result = WalkingScanner(backend).scan(Root(r"C:\root", "source"), IgnoreSet(), _ctx(), scope)
+    record, = result.unsupported
+    assert record.kind is (EntryKind.DIRECTORY if directory else EntryKind.FILE)
+    assert record.observed_attributes == attributes
+    assert record.observed_size == (None if directory else 5)
+    assert record.reason is UnsupportedReason.PLACEHOLDER
+    assert result.files == ()
+    assert backend.scandir_calls == ([r"C:\root"] if scope == ScanScope.full() else [])
+    assert backend.lstat_calls.count(path) == (0 if scope == ScanScope.full() else 1)
+
+
+def test_hidden_marker_recall_file_remains_ordinary_with_metadata_evidence() -> None:
+    observed = _fake_stat(ino=2, attributes=0x400000)
+    backend = ScopedAdmissionBackend({}, {r"C:\root": [FakeEntry("cloud", r"C:\root\cloud", False, observed)]})
+    result = WalkingScanner(backend).scan(Root(r"C:\root", "source"), IgnoreSet(), _ctx())
+    record, = result.files
+    assert record.metadata.attributes == 0x400000
+    assert record.size == 5
+    assert result.unsupported == ()
+    assert r"C:\root\cloud" not in backend.lstat_calls
+
+
+def test_failed_identity_fallback_retains_only_this_entries_available_advisory() -> None:
+    path = r"C:\root\a-cloud"
+    observed = _fake_stat(ino=0, attributes=0x400000)
+    backend = ScopedAdmissionBackend(
+        {path: PermissionError("identity unavailable")},
+        {r"C:\root": [
+            FakeEntry("a-cloud", path, False, observed),
+            FakeEntry("b-unavailable", r"C:\root\b-unavailable", False, PermissionError("stat unavailable")),
+        ]},
+    )
+    result = WalkingScanner(backend).scan(Root(r"C:\root", "source"), IgnoreSet(), _ctx())
+    retained, unavailable = result.unsupported
+    assert retained.reason is UnsupportedReason.ACCESS_DENIED
+    assert retained.observed_attributes == 0x400000
+    assert retained.observed_size == 5
+    assert retained.kind is EntryKind.FILE
+    assert unavailable.observed_attributes is None
+    assert unavailable.observed_size is None
+    assert unavailable.kind is None
+    assert result.files == ()
+    assert not result.complete
+    assert backend.lstat_calls.count(path) == 1
+    assert r"C:\root\b-unavailable" not in backend.lstat_calls
+
+
+@pytest.mark.parametrize("size", [None, -1, 2**63])
+def test_unsupported_recall_size_unavailable_does_not_discard_recall_evidence(size) -> None:
+    observed = _fake_stat(ino=2, attributes=0x400400)
+    observed.st_size = size
+    backend = FakeBackend({r"C:\root": [FakeEntry("cloud", r"C:\root\cloud", False, observed)]}, _profile())
+    result = WalkingScanner(backend).scan(Root(r"C:\root", "source"), IgnoreSet(), _ctx())
+    record, = result.unsupported
+    assert record.observed_attributes == 0x400400
+    assert record.observed_size is None
+    assert record.kind is EntryKind.FILE
 
 
 def test_junction_identity_cycle_never_recurses_twice() -> None:

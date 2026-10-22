@@ -630,6 +630,17 @@ conflicts. DELETE still records its exact reviewed prior payload.
 
 ## Inventory And Missing Retention
 
+Unsupported observations preserve known entry kind and nullable raw attributes
+and logical file size in the existing observation columns. Repository snapshots
+expose those advisory facts separately; unsupported rows still have no usable
+`FileStat` and retain unsupported presence; advisory facts do not make them
+eligible for verification. A later
+unavailable observation clears the previous advisory facts rather than borrowing
+them. Missing rows retain their last evidence as historical evidence, not current
+residency. Existing databases need no schema or epoch change; old unsupported
+rows without these facts remain unknown. Inventory receipt hashes include new
+facts when supplied and retain the old projection when both fields are absent.
+
 Remembered-location readback derives source, target and pair suggestions from
 durable sync run activity joined to its active mapping. It excludes soft-deleted
 mappings, deduplicates stable location or pair identities, orders by newest run
