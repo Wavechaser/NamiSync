@@ -12,7 +12,7 @@ const FACETS = Object.freeze([
   ["present", "Present"], ["unverified", "Unverified"], ["verified", "Verified"],
   ["modified", "Modified"], ["reappeared", "Reappeared"], ["unsupported", "Unsupported"],
   ["missing", "Missing"], ["mismatched", "Mismatch"], ["acknowledged", "Acknowledged"],
-  ["notice", "Notice"],
+  ["notice", "Notice"], ["recall", "Not fully local"],
 ]);
 const label = (value) => FACETS.find(([key]) => key === value)?.[1] ?? value;
 const integrityLabel = (value) => ({baselined: "Baselined", canceled: "Canceled",
@@ -413,6 +413,14 @@ export function createInventoryReviewPanel(callbacks) {
     disclosure.append(chevron);
     rowElement.children[1].classList.add("nami-file-row__name-text");
     name.append(...Array.from(rowElement.children));
+    if (row.recall) {
+      const availability = element("span", "nami-file-row__availability");
+      availability.setAttribute("role", "img");
+      availability.ariaLabel = "Not fully available locally. Access may retrieve content through your provider.";
+      availability.title = availability.ariaLabel;
+      availability.append(createIcon(document, "cloud-arrow-down", "sm"));
+      name.append(availability);
+    }
     const selection = element("div", "nami-file-row__cell nami-file-row__selection");
     const checkbox = element("input", "nami-checkbox");
     checkbox.type = "checkbox";
@@ -637,7 +645,7 @@ export function createInventoryReviewPanel(callbacks) {
     if (row.is_container) {
       appendDetail("Complete folder scope", rollupText(row.rollup));
       for (const [key, text] of FACETS) {
-        if (key !== "notice") appendDetail(`Folder ${text.toLowerCase()}`, String(row.rollup[key]));
+        if (key !== "notice" && key !== "recall") appendDetail(`Folder ${text.toLowerCase()}`, String(row.rollup[key]));
       }
     }
     if (row.row_id === null) {
@@ -872,7 +880,8 @@ export function createInventoryReviewPanel(callbacks) {
       : domain && acknowledgedCount > 0 ? "Restore visibility does not restore the missing file." : "");
     scopeHint.hidden = scopeHint.textContent === "";
     const counts = Object.fromEntries(FACETS.map(([key]) => [key,
-      key === "notice" ? review.summary.warning_count : review.summary.rollup[key]]));
+      key === "notice" ? review.summary.warning_count
+        : key === "recall" ? review.summary.recall_item_count : review.summary.rollup[key]]));
     filterMenu.render(review.summary.filters, counts, Boolean(blocked()));
     if (first || (!searchDraft && review.pending !== "view")) search.value = review.summary.search_query;
     if (review.queuedSearchQuery === null && review.pending === null && search.value === review.summary.search_query) searchDraft = false;

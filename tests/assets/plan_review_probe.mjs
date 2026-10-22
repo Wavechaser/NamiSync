@@ -627,7 +627,6 @@ assert.deepEqual(calls.at(-1), ["onViewChange", review,
 const filterTrigger = findAction(panel.element, "filter-menu");
 const filterPopup = findByClass(panel.element, "nami-filter-menu__popup");
 const filterItem = (key) => findByDataset(filterPopup, "filter", key);
-const noticeFilter = filterItem("notice");
 const allFilter = filterItem("all");
 assert.equal(allFilter.ariaChecked, "true");
 assert.equal(allFilter.ariaLabel, "All 180");
@@ -635,7 +634,7 @@ assert.equal(filterItem("copy").ariaLabel, "Copy 100");
 assert.equal(filterItem("mkdir").ariaLabel, "Create folder 0");
 assert.equal(filterTrigger.children[2].textContent, "0");
 assert.equal(filterTrigger.dataset.active, "false");
-assert.equal(filterPopup.children.length, 14);
+assert.equal(filterPopup.children.length, 15);
 const beforeOpen = calls.length;
 filterTrigger.dispatch("click");
 assert.equal(filterPopup.hidden, false);
@@ -671,11 +670,11 @@ review.summary = { ...summary, search_query: "literal search", filters: [] };
 panel.render(task);
 assert.equal(filterTrigger.children[2].textContent, "0", "search never counts as a category");
 filterPopup.dispatch("keydown", { key: "End" });
-assertSameNode(document.activeElement, noticeFilter);
+assertSameNode(document.activeElement, filterItem("recall"));
 filterPopup.dispatch("keydown", { key: "Home" });
 assertSameNode(document.activeElement, allFilter);
 filterPopup.dispatch("keydown", { key: "ArrowUp" });
-assertSameNode(document.activeElement, noticeFilter);
+assertSameNode(document.activeElement, filterItem("recall"));
 review.pending = "view";
 panel.render(task);
 assert.equal(filterTrigger.ariaDisabled, "true");
@@ -686,7 +685,7 @@ assertSameNode(document.activeElement, filterTrigger, "Escape returns trigger fo
 review.pending = null;
 panel.render(task);
 filterTrigger.dispatch("keydown", { key: "ArrowUp" });
-assertSameNode(document.activeElement, noticeFilter);
+assertSameNode(document.activeElement, filterItem("recall"));
 document.dispatch("pointerdown", { target: panel.element });
 assert.equal(filterPopup.hidden, true);
 filterTrigger.dispatch("click");
@@ -2171,4 +2170,31 @@ if (process.argv[5] === "--sort-fixture") {
   }
   sortPanel.dispose();
 }
+const recallRequests = [];
+const recallPanel = createPlanReviewPanel({ ...callbacks,
+  onViewChange: (_owner, patch) => recallRequests.push(patch),
+});
+const recallTask = { ...task, executionStarted: false, executionAttempt: null, closePending: false,
+  review: { ...review, pending: null, summary: { ...summary, filters: [], selection_state: "reviewing",
+    filter_counts: { ...summary.filter_counts, recall: 1 } },
+    window: { ...review.window, offset: 0, total: 1, rows: [{ ...row, recall: true, visible_index: 0 }] } },
+};
+recallPanel.render(recallTask);
+const recallIndicator = findByClass(recallPanel.element, "nami-file-row__availability");
+assert.equal(recallIndicator.attributes.get("role"), "img");
+assert.equal(recallIndicator.ariaLabel, "Not fully available locally. Access may retrieve content through your provider.");
+assert.equal(recallIndicator.title, recallIndicator.ariaLabel);
+assert.equal(findByClass(recallIndicator, "nami-icon--cloud-arrow-down").ariaHidden, "true");
+findByDataset(recallPanel.element, "action", "filter-menu").dispatch("click");
+findByDataset(recallPanel.element, "filter", "recall").dispatch("click");
+assert.deepEqual(recallRequests.at(-1), {filters: new Set(["recall"])});
+assert.ok(findByClass(recallPanel.element, "nami-plan-review__cloud-advisory").textContent.includes("local filesystem work only"));
+assert.ok(!findByClass(recallPanel.element, "nami-plan-review__plan-breakdown").textContent.includes("Not fully"));
+recallPanel.render(recallTask);
+assert.equal(walk(recallPanel.element).filter((item) => item.classList.contains("nami-file-row__availability")).length, 1);
+recallTask.review.window = { ...recallTask.review.window,
+  rows: recallTask.review.window.rows.map((item) => ({ ...item, recall: false })) };
+recallPanel.render(recallTask);
+assert.equal(walk(recallPanel.element).filter((item) => item.classList.contains("nami-file-row__availability")).length, 0);
+recallPanel.dispose();
 process.stdout.write("ok");

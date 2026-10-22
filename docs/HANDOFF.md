@@ -1,40 +1,44 @@
-# Latest session — Python/pip security maintenance complete, 2026-10-22
+# Latest session — recall advisory delivery, 2026-10-22
 
-Updated system Python at `C:\Program Files\Python313` and the user-managed
-Python3.13 runtime to3.13.17. Updated the existing managed3.14 runtime to3.14.9.
-NamiSync stays on3.13; `venv --upgrade` refreshed its existing launcher/config.
-System installer completed after user-approved UAC: exit0, no restart required.
-The supervising update command also exited0. No installer/approval remains pending.
-Python Install Manager automatically updated itself to26.4 during inspection.
+Completed the authorized narrow M1 recall advisory batch on `milestone1` using
+execute-task. No worktrees, push or PR. PO4 remains accepted and unchanged;
+M1-12, release and DOC-2 remain inactive.
 
-All four interpreters now have pip26.2.2 and vendored certifi2026.10.19, checked
-in both normal and isolated mode. The compromised emSign root is absent from
-each bundle, and isolated `pip check` passes for all four. Removed the redundant
-user-level pip copy created by the supervisor after verifying fixed global pip.
-NamiSync's installed package versions differ only in pip26.1.2 ->26.2.2.
-No product/test source or other project dependency changed.
+Integrated outcomes:
 
-Compatibility on the updated NamiSync environment:
-- Host/native87 and imports12 pass.
-- Ordinary6,178 pass; four existing symlink-privilege skips,35 headed deselected.
-- One real installed-wheel SH-G-6 WebView2 startup/Ready/close smoke passes.
-- Final interpreter/package checks, repository diff and active local doc links pass.
-The system-wide update does not change the tested venv/base; these passes remain
-applicable. The smoke is not the complete headed release suite.
+- `adce88d`: separately commit the user's preexisting toolchain-maintenance
+  documentation; evidence in `build/node-security-20261022/`.
+- `a3aa2e4`: cloud policy, local completion and hydration-boundary documentation.
+- `b3f1c2c`: retain unsupported observed attributes/size without granting execution
+  eligibility or changing the database schema.
+- `ecbeed3`: full-scan recall totals through the bridge, row flags and filters.
+- The GUI commit containing this closeout: accessible Microsoft cloud-arrow-down
+  icons and **Not fully local** filters in Plan/Inventory, plus cloud guidance in
+  expanded Plan details. Aggregate counts/sizes remain bridge-only.
 
-Evidence: `build/node-security-20261022/python-update/`, including original
-config/packages, verified installer/wheel, install logs, ordinary/headed XML,
-`final-verification.json` and `status.md`. A failed quoting-only cleanup attempt
-made no changes; its receipt remains alongside successful guarded cleanup.
+Each atomic outcome received independent review. Final verification: 6,220
+ordinary passes, four existing Windows privilege skips, all four installed GUI
+modes and 12 import contracts. All 540 gate inputs matched before/after and across
+final gates. Icon provenance checked against the pinned Fluent archive. GUI
+evidence verifies filter callbacks/results, accessible labels, installed glyph
+mask and layout; no bitmap of the recall specimens was captured.
 
-Earlier Node24.22.1 maintenance and local security triage remain in the parent
-evidence directory. `security-review.md` records the earlier inspection, not
-current Python/pip status. The user reports Chrome updated. FlClash/Codex vendor
-updates and VMware remain deferred by the user; their managed files were not
-modified. GitHub private Dependabot alerts remain unread (HTTP401 at triage).
+Evidence and failed receipts: `build/recall-advisory-20261022/`, especially
+`reviews.md`, `ra2-receipt.md`, `ra3-receipt.md` and `ra4-receipt.md`.
+The introduced folder-details recall-rollup error was corrected before delivery;
+remaining failures were fixture migrations/authoring errors and an existing
+transition-observation timing seam. No unresolved product finding remains.
 
-Baseline inspected: `a631891430210f6f423805463b8724867e3cb435`. PO4 remains
-complete; prior evidence is in `build/handle-relative-investigation-20261021/implementation/`.
-Retained `K:\NamiSync-probe-5d4b3b539c3d4e5a8f1fa95568a26e6d` fixture and
-read-only `H:\OneDrive\NamiSync_OneDrive` context were not used or cleaned up.
-M1-12/release/DOC-2 remain inactive. No commit/push/PR/history rewrite occurred.
+The actual FULL scan of the user OneDrive fixture observed four files, including
+two recall-marked files totaling 79,529,014 logical bytes. Both online allocations
+remained zero and captured metadata stayed unchanged. No content reads, execution
+or user-file writes occurred. This is bounded evidence, not a universal hydration
+guarantee. SCANNER documents runtime metadata fallbacks and the M2 native/provider
+work needed for stronger guarantees.
+
+Recall is advisory, not network authorization or a complete cloud inventory.
+Reviewed local effects retain existing destructive treatment; success means local
+filesystem completion, not provider upload completion or remote verification.
+The user OneDrive folder and prior K: fixture remain untouched. No task-created
+worktrees or branches require cleanup. Future aggregate status-panel placement
+and stronger M2 guarantees require separately activated work.

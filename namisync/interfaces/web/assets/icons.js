@@ -16,6 +16,7 @@ const GLYPH_CLASSES = Object.freeze({
   "chevron-right": "nami-icon--chevron-right",
   "chevron-up": "nami-icon--chevron-up",
   "clipboard-paste": "nami-icon--clipboard-paste",
+  "cloud-arrow-down": "nami-icon--cloud-arrow-down",
   "copy": "nami-icon--copy",
   "database-arrow-up": "nami-icon--database-arrow-up",
   "database-checkmark": "nami-icon--database-checkmark",

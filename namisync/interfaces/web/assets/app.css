@@ -1607,6 +1607,12 @@ body {
   text-overflow: ellipsis;
 }
 
+.nami-file-row__availability {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
 .nami-plan-move-pill {
   align-items: center;
   appearance: none;

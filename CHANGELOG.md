@@ -240,6 +240,10 @@ explicit, reviewable and regression-backed.
   Row availability flags and overlapping filters preserve operation reasons,
   selection and unsupported eligibility; missing historical rows are unflagged.
   Totals remain independent of review selection, filtering and visible windows.
+- Add accessible Microsoft Fluent cloud-arrow-down indicators and **Not fully
+  local** filters to Plan and Inventory. Keep the scan aggregate out of the
+  status panel, and make provider/local-completion guidance available in the
+  existing expanded Plan details.
 
 #### Update local runtimes and verify security-update compatibility (2026-10-22)
 

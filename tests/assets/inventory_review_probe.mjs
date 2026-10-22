@@ -287,7 +287,7 @@ const filterTrigger = action("filter-menu");
 const filterPopup = find((value) => value.classList.contains("nami-filter-menu__popup"));
 const filterItem = (key) => find((value) => value.dataset.filter === key);
 assert.equal(filterTrigger.children[2].textContent, "0");
-assert.equal(filterPopup.children.length, 11);
+assert.equal(filterPopup.children.length, 12);
 assert.equal(filterItem("all").children[2].hidden, true, "reset does not invent a count");
 assert.equal(filterItem("acknowledged").ariaLabel, "Acknowledged 1");
 assert.match(text(pane.element), /Displayed scan: Entire location · incomplete/);
@@ -1175,6 +1175,9 @@ assert.ok(folderPopup.children.some(value => value.dataset.action === "row-ackno
 assert.equal(folderPopup.children.some(value => /restore/i.test(value.textContent)), false);
 folderPopup.children.find(value => value.dataset.action === "row-acknowledge").click();
 assert.deepEqual(folderCalls, [[folderReview, "acknowledge", folderDomain.node_id]]);
+folderReview.detail = {row: folderDomain, state: "loading"};
+folderPane.render(folderTask);
+assert.doesNotMatch(text(folderPane.element), /Folder not fully local|undefined/);
 folderPane.dispose();
 const presentationRows = [
   {...real, node_id:"presence-return", reappeared:true, verification_state:"unverified"},
@@ -1508,4 +1511,32 @@ assert.equal(alignedReview.activeNodeId, null, "exact disappearance clears ident
 assert.equal(alignedAction("inventory-refresh-selected").disabled, true);
 assert.equal(alignedTree.getAttribute("aria-activedescendant"), null);
 alignedPane.dispose();
+const recallRequests = [];
+const recallPane = createInventoryReviewPanel({
+  onViewChange: (_owner, patch) => recallRequests.push(patch), onDetail() {},
+  onWindow() {}, onReload() {}, onCheckOutcome() {}, onRefresh() {}, onVisibility() {},
+});
+const recallReview = { ...fixture.views.default, pending: null, message: null, detail: null, queuedSearchQuery: null,
+  summary: { ...fixture.views.default.summary, recall_item_count: 1 },
+  window: { ...fixture.views.default.window,
+    rows: fixture.views.default.window.rows.map((row, index) => ({ ...row, recall: index === 0 })) },
+};
+recallPane.render({ taskId: "recall", requestId: recallReview.summary.request_id,
+  taskKind: "inventory", inventoryReview: recallReview, sessionState: "completed", sessionReleased: true });
+const recallIndicator = walk(recallPane.element).find((item) => item.classList.contains("nami-file-row__availability"));
+assert.equal(recallIndicator.getAttribute("role"), "img");
+assert.equal(recallIndicator.ariaLabel, "Not fully available locally. Access may retrieve content through your provider.");
+assert.equal(recallIndicator.title, recallIndicator.ariaLabel);
+assert.equal(recallIndicator.children[0].ariaHidden, "true");
+walk(recallPane.element).find((item) => item.dataset.action === "filter-menu").click();
+walk(recallPane.element).find((item) => item.dataset.filter === "recall").click();
+assert.deepEqual(recallRequests.at(-1), {filters: ["recall"]});
+const recallTask = { taskId: "recall", requestId: recallReview.summary.request_id,
+  taskKind: "inventory", inventoryReview: recallReview, sessionState: "completed", sessionReleased: true };
+recallPane.render(recallTask);
+assert.equal(walk(recallPane.element).filter((item) => item.classList.contains("nami-file-row__availability")).length, 1);
+recallReview.window = { ...recallReview.window, rows: recallReview.window.rows.map((item) => ({ ...item, recall: false })) };
+recallPane.render(recallTask);
+assert.equal(walk(recallPane.element).filter((item) => item.classList.contains("nami-file-row__availability")).length, 0);
+recallPane.dispose();
 process.stdout.write("ok\n");

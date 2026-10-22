@@ -18,6 +18,17 @@ archived with the original plans; current bridge evidence has one BRIDGE owner.
 
 ## Purpose
 
+Plan and Inventory show a Microsoft Fluent cloud-arrow-down beside names with
+positive scan-time recall evidence, independently of operation reasons and
+unsupported state. Its accessible label and tooltip read: “Not fully available
+locally. Access may retrieve content through your provider.” Both filter menus
+include “Not fully local”; directories can match on their own evidence. The
+filter count describes matching rows, not scan-wide file bytes. No icon is a
+claim that unmarked files are fully local. Plan Task details includes the general
+source-download, target-propagation and local-completion advisory. Aggregate
+recall file/byte counters remain available through the bridge for later status
+panel work; there is no new counter or confirmation modal in this delivery.
+
 NamiSync's Windows desktop is a local, headed adapter for reviewing and
 controlling safe one-way mirroring, location inventory and integrity work, and
 retained history. It makes the workflow's existing facts comprehensible; it

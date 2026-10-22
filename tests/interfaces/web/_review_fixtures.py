@@ -3,10 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from types import SimpleNamespace
 
-from _db_fixtures import NOW, attestation, file_stat
+from _db_fixtures import NOW, attestation, file_stat, operation, plan
 from namisync.core.integrity import VerificationInvalidation, VerificationInvalidationReason
-from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+from namisync.core.models import EntryKind, FileRecord, MetadataSnapshot, ScanWarning, ScanWarningCode
+from namisync.core.planning import OperationKind
+from namisync.core.preflight import Verdict
+from namisync.interfaces.web.plan_review import PlanReviewState
+from namisync.workflows.models import PlanArtifact, PlanRequest
+from namisync.workflows import build_plan_projection
 from namisync.core.pathing import normalize_relative_path
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
 from namisync.interfaces.web.inventory_review import InventoryReviewState
@@ -82,3 +88,34 @@ def inventory_gallery_fixture() -> dict[str, object]:
     tail = view.window(expected_revision=0, offset=256, limit=256)
     return {"summary": view.summary(), "window": first,
         "rows": first["rows"] + tail["rows"], "detail": inventory_current_detail(row)}
+
+
+def recall_gallery_fixture() -> dict[str, object]:
+    """Real projections over synthetic metadata; never reads cloud content."""
+    facts = (("cloud.bin", replace(file_stat(), metadata=MetadataSnapshot(0x400000, None))),
+             ("local.bin", file_stat()))
+    records = tuple(FileRecord(path, normalize_relative_path(path), stat.size, stat.mtime_ns,
+                              stat.file_identity, stat.nlink, stat.metadata) for path, stat in facts)
+    value = plan(tuple(operation(OperationKind.COPY, source_path=path, target_path=path,
+                                 source=stat, intended=stat) for path, stat in facts))
+    request = PlanRequest("8" * 32, value.source_root.path, value.target_root.path)
+    source = SimpleNamespace(files=records, directories=(), unsupported=(), warnings=())
+    empty = SimpleNamespace(files=(), directories=(), unsupported=(), warnings=())
+    artifact = PlanArtifact(request, source, empty, value, Verdict(True, (), SimpleNamespace()))
+    plan_view = PlanReviewState("task-" + "8" * 32, request.request_id,
+        build_plan_projection(request.request_id, artifact), 0, "reviewing", "source", "target")
+    rows = tuple(InventorySnapshot(str(index), 1, path, normalize_relative_path(path), EntryKind.FILE,
+        InventoryPresence.PRESENT, stat, None, NOW, None, "scope", None, None, None, None, None)
+        for index, (path, stat) in enumerate(facts, 1))
+    inventory_view = InventoryReviewState("task-" + "9" * 32, "9" * 32,
+        build_inventory_projection(1, rows), r"C:\synthetic", True, 2, 0,
+        recall=RecallSummary(1, facts[0][1].size), scan_request_id="9" * 32)
+    result = {}
+    for name, view in (("plan", plan_view), ("inventory", inventory_view)):
+        default = {"summary": view.summary(), "window": view.window(expected_revision=0, offset=0, limit=256)}
+        view.update(expected_revision=0, search_query="", filters=frozenset({"recall"}),
+                    sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+                    collapse_node_id=None, collapsed=None)
+        result[name] = {"default": default, "filtered": {"summary": view.summary(),
+            "window": view.window(expected_revision=view.view_revision, offset=0, limit=256)}}
+    return result

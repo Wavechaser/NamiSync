@@ -74,6 +74,35 @@ _RECENT_REFUSAL_MESSAGES = (
 )
 
 
+def _recall_sample() -> dict[str, object]:
+    label = "Not fully available locally. Access may retrieve content through your provider."
+    return {kind: {
+        "before_count": 2, "after_count": 1, "requested_filter": "recall", "matching_row": True,
+        "label": label, "title": label, "role": "img", "decorative_child": "true",
+        "mask": 'url("/icons/cloud_arrow_down_16_regular.svg")', "width": 16,
+        "no_summary_counter": True,
+        "cloud_note": ("Reading cloud-backed sources may download content; target changes may sync through your provider. Completion covers local filesystem work only." if kind == "plan" else ""),
+    } for kind in ("plan", "inventory")}
+
+
+def _assert_recall_advisory(value: dict[str, object]) -> None:
+    for kind, expected in _recall_sample().items():
+        assert {key: item for key, item in value[kind].items() if key != "mask"} == {
+            key: item for key, item in expected.items() if key != "mask"
+        }
+        assert "cloud_arrow_down_16_regular.svg" in value[kind]["mask"]
+
+
+def test_recall_gallery_report_keeps_shape_separate_from_behavior() -> None:
+    sample = _recall_sample()
+    assert component_gallery_child._valid_recall_advisory(sample)
+    _assert_recall_advisory(sample)
+    sample["plan"]["after_count"] = 2
+    assert component_gallery_child._valid_recall_advisory(sample)
+    with pytest.raises(AssertionError):
+        _assert_recall_advisory(sample)
+
+
 def _recent_ui_sample() -> dict[str, object]:
     def action(label: str, primary: bool, disabled: bool, glyph: str) -> dict[str, object]:
         return {"label": label, "primary": primary, "disabled": disabled, "mask": f'url("/{glyph}")'}
@@ -569,7 +598,15 @@ def test_component_gallery_scenario_injects_real_inventory_for_raw_preview(
     prefix = '"use strict";\nglobalThis.__namiGalleryInventory = '
     assert assembled.startswith(prefix)
     payload, end = json.JSONDecoder().raw_decode(assembled[len(prefix):])
-    assert assembled[len(prefix) + end:] == ";\n" + scenario
+    remainder = assembled[len(prefix) + end:]
+    recall_prefix = ";\nglobalThis.__namiGalleryRecall = "
+    assert remainder.startswith(recall_prefix)
+    recall, recall_end = json.JSONDecoder().raw_decode(remainder[len(recall_prefix):])
+    assert remainder[len(recall_prefix) + recall_end:] == ";\n" + scenario
+    for kind in ("plan", "inventory"):
+        assert len(recall[kind]["default"]["window"]["rows"]) == 2
+        filtered = recall[kind]["filtered"]["window"]["rows"]
+        assert len(filtered) == 1 and filtered[0]["recall"] is True
     rows = payload["rows"]
     assert len(rows) == payload["summary"]["visible_row_count"] == 300
     assert [row["visible_index"] for row in rows] == list(range(300))
@@ -1831,6 +1868,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             )
         ],
         "control_contract": {
+            "recall_advisory": _recall_sample(),
             "inventory_panel": _inventory_panel_sample(),
             "recent_ui": _recent_ui_sample(),
             "accent": {
@@ -2503,6 +2541,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         for name in ("hdr", "advanced_color")
     )
     for report in (light, dark, forced):
+        _assert_recall_advisory(report["control_contract"]["recall_advisory"])
         _assert_recent_ui(report["control_contract"]["recent_ui"], forced=report["media"]["forced"],
                           system_colors=report["icons"]["system_colors"])
         theme = "dark" if report["media"]["dark"] else "light"
@@ -3104,6 +3143,7 @@ def test_sh_g_13_component_gallery_honors_reduced_motion(
 ) -> None:
     light = component_gallery_evidence.result("light")["report"]
     reduced = component_gallery_evidence.result("reduced")["report"]
+    _assert_recall_advisory(reduced["control_contract"]["recall_advisory"])
     _assert_recent_ui(reduced["control_contract"]["recent_ui"])
 
     assert light["media"]["reduced"] is False

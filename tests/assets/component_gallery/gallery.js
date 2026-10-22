@@ -1308,7 +1308,7 @@ window.addEventListener("unhandledrejection", (event) => {
         filter_counts: {
           all: 21, copy: 4, mkdir: 1, move: 3, rename: 1, update: 2,
           move_update: 1, trash: 2, delete: 1, noop: 2, error: 0,
-          unsupported: 1, blocked: 2, notice: 1,
+          unsupported: 1, blocked: 2, notice: 1, recall: 0,
         },
         sort_column: "path", sort_direction: "ascending",
         selection_state: "reviewing", scope_selectable_operation_count: 21,
@@ -1503,7 +1503,22 @@ window.addEventListener("unhandledrejection", (event) => {
     throw new Error("filter menu counts must align right");
   }
 
-  await new Promise(resolve => setTimeout(resolve, durationMilliseconds(getComputedStyle(filterTrigger).transitionDuration) + 30));
+  const settleFilterTransition = async () => {
+    const animations = filterTrigger.getAnimations();
+    let timeout;
+    try {
+      await Promise.race([
+        Promise.all(animations.map((animation) => animation.finished)),
+        new Promise((_, reject) => {
+          timeout = setTimeout(() => reject(new Error("filter transition did not settle")), 1000);
+        }),
+      ]);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+  await settleFilterTransition();
   const filterColorReference = document.createElement("span");
   filterColorReference.style.cssText = "position:fixed;visibility:hidden;forced-color-adjust:none";
   filterColorReference.style.backgroundColor = "var(--color-accent-fill)";
@@ -1530,7 +1545,7 @@ window.addEventListener("unhandledrejection", (event) => {
   if (filterTrigger.children[2].textContent !== "0" || filterTrigger.dataset.active !== "false") {
     throw new Error("inactive Filter counter must remain visible");
   }
-  await new Promise(resolve => setTimeout(resolve, durationMilliseconds(getComputedStyle(filterTrigger).transitionDuration) + 30));
+  await settleFilterTransition();
   filterColorReference.style.backgroundColor = "var(--color-button-fill)";
   filterColorReference.style.color = "var(--color-neutral-foreground)";
   const inactiveFilterStyle = getComputedStyle(filterTrigger);
@@ -3492,7 +3507,7 @@ window.addEventListener("unhandledrejection", (event) => {
     (firstFilterBounds.top + firstFilterBounds.bottom) / 2);
   minimumFilterPopup.dispatchEvent(new KeyboardEvent('keydown', {key:'End', bubbles:true}));
   await new Promise(resolve => requestAnimationFrame(resolve));
-  const finalFilter = minimumFilterPopup.querySelector('[data-filter="notice"]');
+  const finalFilter = minimumFilterPopup.querySelector('[data-filter="recall"]');
   const menuBounds = minimumFilterPopup.getBoundingClientRect();
   const finalFilterBounds = finalFilter.getBoundingClientRect();
   const clipBounds = minimumWork.getBoundingClientRect();
@@ -3884,7 +3899,61 @@ window.addEventListener("unhandledrejection", (event) => {
       .filter((control) => control.closest("[hidden]") === null).map(rectangle),
     rows: [...panel.querySelectorAll("[data-node-id]")].map(rectangle),
   }));
+  const recallEvidence = {};
+  for (const kind of ["plan", "inventory"]) {
+    const fixture = globalThis.__namiGalleryRecall[kind];
+    const review = { ...fixture.default, pending: null, message: "", detail: null, queuedSearchQuery: null };
+    if (kind === "plan") review.window = { ...review.window,
+      execution: planReviewTask.review.window.execution,
+      rows: review.window.rows.map((row) => ({ ...row, execution: row.operation_id === null
+        ? null : { operation: null, automatic_verification: null, evidence: null } })),
+    };
+    const task = { ...planReviewTask, taskId: fixture.default.summary.task_id,
+      taskKind: kind === "plan" ? "sync-plan" : "inventory", sessionReleased: true,
+      requestId: fixture.default.summary.request_id,
+      ...(kind === "plan" ? {review} : {inventoryReview: review}) };
+    const requests = [];
+    let panel;
+    const callbacks = { ...planReviewCallbacks, onDetail() {}, onReload() {}, onCheckOutcome() {},
+      onRefresh() {}, onVisibility() {}, onStart() {},
+      onViewChange(owner, patch) {
+        requests.push([...patch.filters]);
+        const execution = owner.window.execution;
+        Object.assign(owner, fixture.filtered);
+        if (kind === "plan") owner.window = { ...owner.window, execution,
+          rows: owner.window.rows.map((row) => ({ ...row, execution: row.operation_id === null
+            ? null : { operation: null, automatic_verification: null, evidence: null } })),
+        };
+        panel.render(task);
+      },
+    };
+    panel = kind === "plan" ? createPlanReviewPanel(callbacks) : createInventoryReviewPanel(callbacks);
+    panel.element.dataset.gallerySection = `recall_${kind}`;
+    panel.element.style.gridColumn = "1 / -1";
+    panel.element.style.blockSize = "480px";
+    app.append(panel.element);
+    panel.render(task);
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const before = [...panel.element.querySelectorAll("[data-node-id]")].map((row) => row.dataset.nodeId);
+    panel.element.querySelector('[data-action="filter-menu"]').click();
+    panel.element.querySelector('[data-filter="recall"]').click();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const indicator = panel.element.querySelector(".nami-file-row__availability");
+    const icon = indicator.querySelector(".nami-icon");
+    const after = [...panel.element.querySelectorAll("[data-node-id]")].map((row) => row.dataset.nodeId);
+    const note = panel.element.querySelector(".nami-plan-review__cloud-advisory");
+    recallEvidence[kind] = {
+      before_count: before.length, after_count: after.length,
+      requested_filter: requests[0]?.join(",") ?? "", matching_row: after[0] === fixture.filtered.window.rows[0].node_id,
+      label: indicator.ariaLabel, title: indicator.title, role: indicator.getAttribute("role"),
+      decorative_child: icon.ariaHidden, mask: getComputedStyle(icon).maskImage,
+      width: icon.getBoundingClientRect().width,
+      no_summary_counter: !panel.element.querySelector(".nami-plan-review__summary").textContent.includes("Not fully"),
+      cloud_note: note?.textContent ?? "",
+    };
+  }
   const controlContract = {
+    recall_advisory: recallEvidence,
     recent_ui: recentUiEvidence,
     accent: accentTokens,
     tri_state: {

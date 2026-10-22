@@ -16,7 +16,7 @@ import {
 
 const FILTERS = Object.freeze([
   "copy", "mkdir", "move", "rename", "update", "move_update", "trash", "delete",
-  "error", "unsupported", "blocked", "noop", "notice",
+  "error", "unsupported", "blocked", "noop", "notice", "recall",
 ]);
 const WINDOW_LIMIT = 256;
 const ROW_HEIGHT = 24;
@@ -25,6 +25,7 @@ const DISPLAY_LABELS = Object.freeze({
   error: "Error", noop: "No change", notice: "Notice", mkdir: "Create folder",
   recase: "Recase", rename: "Rename", move_update: "Move + update", trash: "Move to trash",
   delete: "Delete", unsupported: "Unsupported", blocked: "Blocked",
+  recall: "Not fully local",
 });
 const REASON_LABELS = Object.freeze({
   source_only: "Only in source", metadata_match: "Metadata matches",
@@ -505,8 +506,11 @@ export function createPlanReviewPanel(callbacks) {
   planBreakdown.className = "nami-plan-review__plan-breakdown";
   const globalStatus = document.createElement("p");
   globalStatus.className = "nami-plan-review__global-status";
+  const cloudAdvisory = document.createElement("p");
+  cloudAdvisory.className = "nami-plan-review__cloud-advisory";
+  renderText(cloudAdvisory, "Reading cloud-backed sources may download content; target changes may sync through your provider. Completion covers local filesystem work only.");
   globalDiagnostics.append(globalTitle, globalStatus, planDiagnostics, planBreakdown,
-    executionReview, executionIssues, executionTrash);
+    cloudAdvisory, executionReview, executionIssues, executionTrash);
   diagnostics.append(globalDiagnostics, detailCard);
   summary.append(progress);
   content.append(tableCard);
@@ -955,6 +959,15 @@ export function createPlanReviewPanel(callbacks) {
         committed,
         task.executionPresentation,
       ));
+      if (row.recall) {
+        const availability = document.createElement("span");
+        availability.className = "nami-file-row__availability";
+        availability.setAttribute("role", "img");
+        availability.ariaLabel = "Not fully available locally. Access may retrieve content through your provider.";
+        availability.title = availability.ariaLabel;
+        availability.append(createIcon(document, "cloud-arrow-down", "sm"));
+        element.querySelector(".nami-file-row__name").append(availability);
+      }
       element.insertBefore(element.querySelector(".nami-file-row__size"),
         element.querySelector(".nami-plan-row__modified"));
       element.dataset.nodeId = row.node_id;
@@ -1199,7 +1212,7 @@ export function createPlanReviewPanel(callbacks) {
     const planFacts = `${review.summary.selected_operation_count} of ${review.summary.selectable_operation_count} selected · ${formatByteCount(review.summary.required_bytes)} required · ${planningIssues} planning issues`;
     updateText(planDiagnostics, `Plan: ${review.summary.preflight_refusal_count} refusals · ${review.summary.warning_count} warnings · ${review.summary.destructive_operation_count} destructive operations`);
     planDiagnostics.hidden = task.executionStarted;
-    const breakdown = FILTERS.filter((key) => review.summary.filter_counts?.[key] > 0)
+    const breakdown = FILTERS.filter((key) => key !== "recall" && review.summary.filter_counts?.[key] > 0)
       .map((key) => `${displayLabel(key)} ${review.summary.filter_counts[key]}`);
     updateText(planBreakdown, `Plan actions: ${breakdown.join(" · ")}`);
     planBreakdown.hidden = breakdown.length === 0;

@@ -30,8 +30,8 @@ stops and recovery.
 
 2026-10-22 local toolchain maintenance installs official Node.js 24.22.1 and
 Python/pip security updates and checks NamiSync compatibility and local exposure; no
-delivery row is activated or product contract changed. [HANDOFF](HANDOFF.md)
-records the session evidence.
+delivery row is activated or product contract changed. Commit `adce88d` records
+the documentation; raw evidence remains in `build/node-security-20261022/`.
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
@@ -56,10 +56,10 @@ builders serialize shared source and test gates. Original checkout: `milestone1`
 
 | ID | Accepted outcome and finite owners | Verification and atomic boundary | Status |
 | --- | --- | --- | --- |
-| RA1 | Clarify cloud policy in DEFENSE, FEATURES, SCANNER and relevant README/PREFLIGHT limitations: reviewed local effects, local completion, advisory rather than network authorization; document actual hydration boundary and M2 next steps. | Source/native-dependency audit, existing OneDrive evidence limits, documentation consistency/link/diff checks, independent review; documentation commit. | Complete. |
+| RA1 | Clarify cloud policy in DEFENSE, FEATURES, SCANNER and relevant README/PREFLIGHT limitations: reviewed local effects, local completion, advisory rather than network authorization; document actual hydration boundary and M2 next steps. | Source/native-dependency audit, existing OneDrive evidence limits, documentation consistency/link/diff checks, independent review; documentation commit. | Complete; `a3aa2e4`. |
 | RA2 | Retain positive recall evidence from already-observed attributes for ordinary and unsupported scan entries; preserve file size where available. Core models/classification, scanner, recorder/repository and their direct contract/test consumers; SCANNER/DATABASE. | Focused scanner/persistence roundtrip and malformed/missing evidence cases, owning and direct consumer departments, independent review; evidence-retention commit. | Complete; ordinary 6,209 passed/four existing privilege skips, imports 12, independent review approved. |
 | RA3 | Workflow projections and desktop bridge expose full-scan file count/logical byte total, row-specific recall flags and matching filters for Plan/Inventory. Owners: workflow models/inventory/plan projections, web review/commands/drain, browser bridge validators, direct fixtures; BRIDGE/PRESENTATION. | Full-scan vs selection/window/filter invariance, source/target and unsupported coverage, stale/missing observations, bounded wire validation and overlapping filter semantics; affected departments and independent review; bridge commit. | Complete; ordinary 6,219 passed/four existing privilege skips, imports 12; independent review approved. |
-| RA4 | Integrate accessible cloud-arrow-down indicators and non-local filter choices in Plan/Inventory. Use pinned Microsoft Fluent icon catalog/generator and existing filter/menu conventions; no summary counter UI. Assets/catalog, frontend/native/headed fixtures, DESKTOP_UI/TOOLS. | Production browser consumers, icon provenance/check, real installed GUI/filter and gallery witnesses, ordinary suite/import contracts, independent review; GUI commit and batch closeout. | Pending RA3. |
+| RA4 | Integrate accessible cloud-arrow-down indicators and non-local filter choices in Plan/Inventory. Use pinned Microsoft Fluent icon catalog/generator and existing filter/menu conventions; no summary counter UI. Assets/catalog, frontend/native/headed fixtures, DESKTOP_UI/TOOLS. | Production browser consumers, icon provenance/check, real installed GUI/filter and gallery witnesses, ordinary suite/import contracts, independent review; GUI commit and batch closeout. | Complete; 6,220 ordinary passes/four existing privilege skips, four installed GUI modes, 12 import contracts; independent review and evidence below. |
 
 Recall means positive `0x00400000` evidence, independently of reparse markers;
 absence is not proof of local availability. Directories can carry the row flag,
@@ -81,37 +81,21 @@ complete no-hydration fix is established; this batch documents that boundary.
 Existing user OneDrive files remain read-only and must not be content-read.
 AGENTS mandatory and recurrence stops apply. M1-12/release/DOC-2, push and PR remain
 inactive. Evidence and failed receipts: `build/recall-advisory-20261022/`.
-Before each pending row implementation, elaborate its exact source/test population
-and refresh seams against its integrated predecessor; routine direct consumer
-migrations stay inside the accepted outcome.
+Delivered commits: RA1 `a3aa2e4`, RA2 `b3f1c2c`, RA3 `ecbeed3`; RA4 is
+the GUI delivery commit containing this closeout. Each outcome received an
+independent review before integration. `reviews.md` and `ra2-receipt.md` through
+`ra4-receipt.md` under the evidence root retain corrections, failed receipts and
+final gate identities; Git retains the finite checkpoint elaborations.
 
-RA2 elaboration: `core/models.py` owns the attribute predicate and optional
-unsupported `observed_attributes`/`observed_size`; scanner populates these only
-from successful existing observations. Recorder/repositories retain known kind
-and advisory columns, keeping unsupported `observed` non-executable. Review cold
-database validators and direct integrity consumers; no schema/epoch reset.
-Optional absent facts preserve existing digest projections, present facts bind
-replay identity. Tests: core scanplan, scanner, recorder inventory integrity and
-identity receipts, repository/database validation plus affected workflow consumers.
-SCANNER/DATABASE own the retention contract. Acceptance is focused native/mock
-seams followed by ordinary suite and imports, then fresh adversarial review.
-
-RA3 design at `a3aa2e4` (refresh after RA2 integration): workflow recall summary
-shared by plan/inventory, projection models and reconstruction, inventory details
-and service view, web review/commands/drain and browser bridge validators. Plan
-summary retains separate source/target counts; inventory retains actual scan
-counts, null when no scan occurred. Wire sizes follow decimal-string and explicit
-partial/overflow conventions. Counts cover known file observations with positive
-recall evidence; unknown-kind entries can flag rows but cannot assert file count.
-Scan completeness remains separate from unknown size. Missing historical rows
-never assert current recall status. Inventory facet item count includes flagged
-directories and stays distinct from file totals. Plan recall overlaps action
-categories without changing their partition or double-counting prior-path context.
-Tests cover workflow projections/details and web review/bridge, including exact
-shape fixtures in window/review/task-shell/gallery probes. PRESENTATION/BRIDGE
-own disclosure; no GUI counter is authorized. RA4 uses the existing expanded Plan
-details for a static source-read/target-propagation/local-completion advisory,
-independent of recall markers; no new modal or status counter.
+The final GUI candidate passed 6,220 ordinary tests (four existing privilege
+skips), four installed gallery modes and 12 import contracts with 540 unchanged
+inputs. Native GUI evidence covers the actual filter callback, matching row,
+accessible label, installed icon mask and layout; no recall-specimen bitmap was
+captured. The full OneDrive scan observed two recall-marked files totaling
+79,529,014 logical bytes, with both online allocations still zero afterward.
+That bounded observation does not establish a universal no-hydration guarantee.
+Aggregate counters remain bridge-only. Strong detection and hydration guarantees,
+cloud completion tracking and new authorization dialogs remain excluded.
 
 ### Planning observation optimization — 2026-10-19
 

@@ -1389,6 +1389,23 @@ def _valid_recent_ui(value: object) -> bool:
     )
 
 
+def _valid_recall_advisory(value: object) -> bool:
+    if type(value) is not dict or set(value) != {"plan", "inventory"}:
+        return False
+    for row in value.values():
+        if type(row) is not dict or set(row) != {
+            "before_count", "after_count", "requested_filter", "matching_row", "label", "title",
+            "role", "decorative_child", "mask", "width", "no_summary_counter", "cloud_note",
+        }:
+            return False
+        if not (all(type(row[key]) is str for key in ("requested_filter", "label", "title", "role", "decorative_child", "mask", "cloud_note"))
+                and all(type(row[key]) is int and row[key] >= 0 for key in ("before_count", "after_count"))
+                and all(type(row[key]) is bool for key in ("matching_row", "no_summary_counter"))
+                and type(row["width"]) in (int, float) and math.isfinite(row["width"])):
+            return False
+    return True
+
+
 def _valid_control_contract(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "accent",
@@ -1404,6 +1421,7 @@ def _valid_control_contract(value: object) -> bool:
         "file_list",
         "integrity_list",
         "recent_ui",
+        "recall_advisory",
     }:
         return False
     accent = value["accent"]
@@ -1418,7 +1436,8 @@ def _valid_control_contract(value: object) -> bool:
     file_list = value["file_list"]
     integrity_list = value["integrity_list"]
     return (
-        _valid_recent_ui(value["recent_ui"])
+        _valid_recall_advisory(value["recall_advisory"])
+        and _valid_recent_ui(value["recent_ui"])
         and _valid_inventory_panel(value["inventory_panel"])
         and type(accent) is dict
         and set(accent) == {"fill", "fill_hover", "fill_pressed", "foreground"}
@@ -3006,10 +3025,12 @@ def _gallery_scenario(scenario: str) -> str:
     test_support = str(Path(__file__).resolve().parents[2])
     if test_support not in sys.path:
         sys.path.append(test_support)
-    from _review_fixtures import inventory_gallery_fixture
+    from _review_fixtures import inventory_gallery_fixture, recall_gallery_fixture
 
     return ('"use strict";\nglobalThis.__namiGalleryInventory = '
-        + json.dumps(inventory_gallery_fixture()) + ";\n" + scenario)
+        + json.dumps(inventory_gallery_fixture())
+        + ";\nglobalThis.__namiGalleryRecall = " + json.dumps(recall_gallery_fixture())
+        + ";\n" + scenario)
 
 
 def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:

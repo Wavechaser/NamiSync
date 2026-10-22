@@ -80,6 +80,10 @@ scan current state and may supersede execution-relative evidence; original
 execution and automatic verification results remain unchanged. Final lifecycle
 acceptance, packaging and beta closure remain open, so the window is
 not yet the complete desktop product.
+Plan and Inventory mark observed recall-required items with a cloud indicator
+and a **Not fully local** filter. Scan-wide recall file counts and logical sizes
+are available through the bridge for later status-panel integration; they are
+not download-volume predictions or a complete cloud inventory.
 The [M1 delivery register](docs/M1_PLAN.md) records execution-review acceptance,
 affected performance verification, and any remaining recovery work.
 Desktop release also requires scoped cold-start resource budgets and repeated/
