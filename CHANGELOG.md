@@ -221,6 +221,32 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Update local runtimes and verify security-update compatibility (2026-10-22)
+
+- Install official Node.js 24.22.1 x64 for the local user, verify its SHA-256
+  checksum and OpenJS signature, and persist user PATH plus `NAMISYNC_TEST_NODE`.
+  Codex's separately managed bundled 24.19.0 runtime remains unchanged.
+- Frontend/bridge compatibility: 266 focused tests pass. Ordinary verification
+  passes 6,178 tests with four existing symlink-privilege skips and 35 headed
+  tests deselected; all 12 import contracts pass. No product or dependency
+  changes are required by these checks.
+- Installation receipts and test output, including temporary-directory failures,
+  are retained in ignored `build/node-security-20261022/`.
+- Follow-up read-only security triage identifies outdated pip/certificate bundles,
+  Chrome and vendor-managed runtimes, plus older VMware Workstation exposure.
+  GitLab's advisory does not apply to the GitHub-hosted repository; private
+  Dependabot alerts remain uninspected because authentication was unavailable.
+  No further updates or product changes were made by the triage.
+- Apply the subsequent authorized Python/pip updates: managed Python3.13.17
+  and3.14.9, pip26.2.2 with vendored certifi2026.10.19, and the refreshed existing
+  NamiSync virtual environment on3.13.17. Preserve every project package version
+  except pip. After Windows consent, also update the separate system-wide Python
+  to3.13.17; installer exit0, no restart required. Verify fixed pip/certificates
+  in normal and isolated mode for every updated interpreter.
+- Verify Python3.13.17 compatibility: ordinary6,178 passes/four existing privilege
+  skips, host/native87, imports12, clean dependency checks and one real installed
+  WebView2 startup/ready/close pass. No product or test fixes are needed.
+
 #### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
 
 - Share server view/cache/scope mechanics, browser viewport/navigation and

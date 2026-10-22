@@ -28,6 +28,11 @@ Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
 stops and recovery.
 
+2026-10-22 local toolchain maintenance installs official Node.js 24.22.1 and
+Python/pip security updates and checks NamiSync compatibility and local exposure; no
+delivery row is activated or product contract changed. [HANDOFF](HANDOFF.md)
+records the session evidence.
+
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and evidence in the completed M1-9 section below. |

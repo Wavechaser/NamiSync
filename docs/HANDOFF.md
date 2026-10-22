@@ -1,40 +1,40 @@
-# Latest session — PO4 complete, 2026-10-21
+# Latest session — Python/pip security maintenance complete, 2026-10-22
 
-Integrated independently reviewed atomic commits:
-- b2ce02e: reuse confirmed held root spelling; query fresh attributes before first cache.
-- 13a3504: omit held candidate resolution, using approved logical-spelling length budget.
-- 17822b1: retain intermediate admission and one final no-follow leaf read.
-Unheld fallback and executor/verifier behavior remain unchanged. Execution,
-resume and verification still observe NOOP files. User accepted the demonstrated
-concurrent observation timing differences and explicitly selected PO4.
+Updated system Python at `C:\Program Files\Python313` and the user-managed
+Python3.13 runtime to3.13.17. Updated the existing managed3.14 runtime to3.14.9.
+NamiSync stays on3.13; `venv --upgrade` refreshed its existing launcher/config.
+System installer completed after user-approved UAC: exit0, no restart required.
+The supervising update command also exited0. No installer/approval remains pending.
+Python Install Manager automatically updated itself to26.4 during inspection.
 
-Verification: final native45; ordinary6178 passed/four existing symlink-privilege
-skips/35 headed deselected; imports12. Earlier per-unit preflight/consumer/package
-gates passed. Each accepted gate has equal input manifests and independent review.
-Failed probes and first-attempt test receipts are retained; none are counted as passes.
-Evidence: build/handle-relative-investigation-20261021/implementation/.
+All four interpreters now have pip26.2.2 and vendored certifi2026.10.19, checked
+in both normal and isolated mode. The compromised emSign root is absent from
+each bundle, and isolated `pip check` passes for all four. Removed the redundant
+user-level pip copy created by the supervisor after verifying fixed global pip.
+NamiSync's installed package versions differ only in pip26.1.2 ->26.2.2.
+No product/test source or other project dependency changed.
 
-Final profile at17822b1: ten serial children complete with expected action counts,
-256-row windows and clean shutdown/custody release. Source/helper/driver hashes
-and full fixture digests unchanged; same fixtures as historical post-PO3/PO5 study.
-Three light samples: 90%NOOP2.626–2.660s;10%NOOP3.844–3.917s. Observation
-.360–.364s and1.913–1.979s. PERFORMANCE owns methods/counts/comparison limits.
-Raw final-profile/run_c5df5b36a3254270b98b92acbd468846/ under same evidence root.
-No sync plan executed by measurements.
+Compatibility on the updated NamiSync environment:
+- Host/native87 and imports12 pass.
+- Ordinary6,178 pass; four existing symlink-privilege skips,35 headed deselected.
+- One real installed-wheel SH-G-6 WebView2 startup/Ready/close smoke passes.
+- Final interpreter/package checks, repository diff and active local doc links pass.
+The system-wide update does not change the tested venv/base; these passes remain
+applicable. The smoke is not the complete headed release suite.
 
-Handle-relative observation remains a documented future option in PREFLIGHT.
-NTFS/exFAT support strict relative opens and Basic/Standard queries; exFAT does
-not support combined StatInformation68. Real OneDrive strict opens still succeed
-on cloud reparses even in exposed mode, so leaf classification cannot prove
-intermediate cloud-component refusal. Default presentation also limits existing
-checks; no claim of universal cloud detection or observed hydration/escape.
-Cloud probes read metadata only, restored thread mode, and left recorded metadata
-unchanged. No content reads or OneDrive writes. Native draft preserved in ignored
-implementation/abandoned-native; no core API changes remain in product.
+Evidence: `build/node-security-20261022/python-update/`, including original
+config/packages, verified installer/wheel, install logs, ordinary/headed XML,
+`final-verification.json` and `status.md`. A failed quoting-only cleanup attempt
+made no changes; its receipt remains alongside successful guarded cleanup.
 
-Retained user-authorized K: fixture:
-K:\NamiSync-probe-5d4b3b539c3d4e5a8f1fa95568a26e6d (manifest:3files/11dirs).
-H:\OneDrive\NamiSync_OneDrive was used read-only. No cleanup of fixtures,
-unrelated work or evidence, no worktree/stash/push/PR. M1-12/release/DOC-2 remain
-inactive. No product changes remain pending after PO4; future native work needs
-its own settled design and user scope, not automatic continuation.
+Earlier Node24.22.1 maintenance and local security triage remain in the parent
+evidence directory. `security-review.md` records the earlier inspection, not
+current Python/pip status. The user reports Chrome updated. FlClash/Codex vendor
+updates and VMware remain deferred by the user; their managed files were not
+modified. GitHub private Dependabot alerts remain unread (HTTP401 at triage).
+
+Baseline inspected: `a631891430210f6f423805463b8724867e3cb435`. PO4 remains
+complete; prior evidence is in `build/handle-relative-investigation-20261021/implementation/`.
+Retained `K:\NamiSync-probe-5d4b3b539c3d4e5a8f1fa95568a26e6d` fixture and
+read-only `H:\OneDrive\NamiSync_OneDrive` context were not used or cleaned up.
+M1-12/release/DOC-2 remain inactive. No commit/push/PR/history rewrite occurred.
