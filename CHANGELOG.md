@@ -221,6 +221,16 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Expose scan-time local availability and clarify cloud behavior (2026-10-22)
+
+- Clarify that chosen cloud-synced folders may download source content or
+  propagate approved target changes; these are advisory provider effects,
+  not catastrophe backstops or separate network authorization. Success covers
+  local work, not cloud upload completion or remote verification.
+- Document current hidden-marker detection limits and the complete native
+  enumeration/stat boundary. Defer universal detection and hydration-proof
+  scanning to M2; the authorized M1 advisory reuses observed metadata.
+
 #### Update local runtimes and verify security-update compatibility (2026-10-22)
 
 - Install official Node.js 24.22.1 x64 for the local user, verify its SHA-256

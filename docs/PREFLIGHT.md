@@ -33,8 +33,9 @@ standalone producer admission and ordinary pre-run failure classification.
 `namisync.modules.preflight.observe()` consumes an injected read-only
 filesystem. It records only remaining selected-operation subjects, required
 target parents, both roots, capacity, exact reclaimable temp bytes, trash
-safety, and one UTC timestamp. The native local backend performs no cleanup or
-hydration.
+safety, and one UTC timestamp. The native local backend performs no cleanup and
+requests metadata rather than file contents. This is not a universal guarantee
+against provider-triggered hydration; see [SCANNER.md](SCANNER.md).
 
 The full execution scope is the default. Planning explicitly sets
 `plan_review=True` through observation, scope derivation, judgment and both

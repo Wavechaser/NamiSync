@@ -137,8 +137,9 @@ later recorder validation uses the shared nonconstructing exact-shape check.
    ADS and receives no preservation policy.
 7. Track visited directory identity across every recursive root so junctions,
    cross-root aliases, and mount loops terminate.
-8. Classify cloud/offline placeholders from attributes/reparse tags without
-   hydrating or reading them.
+8. Classify exposed cloud/offline placeholders from attributes/reparse tags.
+   Metadata observation does not deliberately read file contents; hidden cloud
+   markers can prevent this classifier from recognizing a placeholder.
 9. Revalidate the trusted anchor, full volume identity, and lexical root before
    returning. If they changed, discard the accumulated observations rather
    than attribute them to the original root.
@@ -148,6 +149,50 @@ later recorder validation uses the shared nonconstructing exact-shape check.
     traversal, NUL, and unpaired surrogates at the path boundary. Diagnostic
     text escapes hostile code units rather than inserting them into path-bearing
     records, serialized plans, or terminal output.
+
+### Cloud availability and hydration boundary
+
+The native scanner enumerates with `os.scandir` and observes metadata with
+`os.stat(..., follow_symlinks=False)` and directory-entry metadata. The explicit
+followed stat is reserved for an admitted folder-mounted root. These operations
+request metadata, not file content, but metadata intent alone is not a universal
+provider-level no-hydration guarantee. Directory enumeration may retrieve remote
+directory metadata without downloading file contents. Neither a network-free
+scan nor comprehensive cloud-placeholder detection is promised.
+
+The authorized M1 recall advisory is pending delivery: visible
+`FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS` (`0x400000`) is positive scan-time evidence
+that an item may not be fully available locally, independently of reparse bits.
+Its absence is not proof of local availability. Counters cover scanned file
+observations and their total logical sizes, including unsupported observations
+when file kind and size are known; source and target observations count
+independently. Directories can carry row indications but do not add file counts
+or bytes. Logical size is not a download estimate, especially for partially
+resident files. Selection does not redefine these scan-wide totals.
+
+Current exposed placeholder/reparse refusals remain unchanged. Advisory metadata
+does not grant cloud compatibility or permission to bypass those guards.
+[DEFENSE.md](DEFENSE.md) §2.5 owns the policy for reviewed local effects, provider
+propagation and local completion. Content reads during copy and verification
+can hydrate admitted sources; the advisory is information, not separate network
+authorization. M2 must establish provider coverage, residency changes and native
+metadata/enumeration behavior before claiming complete detection or hydration-
+proof scanning. Specifically, the inspected CPython 3.13.17 slow-stat path opens
+for `FILE_READ_ATTRIBUTES` without an explicit no-recall option, and has an
+`ERROR_INVALID_PARAMETER` fallback requesting `GENERIC_READ`; there is no evidence
+that this fallback is reached for the tested cloud files. Adding one flag at
+one call would not cover root/scoped probes, identity fallback and enumeration.
+Availability advisories add no filesystem access.
+
+M2 should define the boundary as no file-content hydration attributable to scan
+access, separately from namespace population and network traffic. Evaluate a
+metadata-only/no-recall backend across root and ancestor admission, scoped
+observations, identity fallback and folder mounts, preserving errors, identity,
+sharing and containment. Verify online, partially local, local, recall-on-open,
+virtual-directory, failure and changing-residency cases with provider fetch
+evidence as well as allocation observations. See Microsoft's
+[attribute definitions](https://learn.microsoft.com/windows/win32/fileio/file-attribute-constants)
+and [placeholder guidance](https://learn.microsoft.com/windows-hardware/drivers/ifs/placeholders_guidance).
 
 Root identity and scan evidence always use ordinary absolute drive or UNC
 spelling. The native backend adds the Windows extended-length prefix only for

@@ -47,6 +47,55 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Recall availability advisory — 2026-10-22
+
+User authorized this bounded M1 batch with execute-task, starting at `adce88d`
+after separately committing the preexisting toolchain-maintenance documentation.
+The orchestrator owns this register, HANDOFF, CHANGELOG, integration and review;
+builders serialize shared source and test gates. Original checkout: `milestone1`.
+
+| ID | Accepted outcome and finite owners | Verification and atomic boundary | Status |
+| --- | --- | --- | --- |
+| RA1 | Clarify cloud policy in DEFENSE, FEATURES, SCANNER and relevant README/PREFLIGHT limitations: reviewed local effects, local completion, advisory rather than network authorization; document actual hydration boundary and M2 next steps. | Source/native-dependency audit, existing OneDrive evidence limits, documentation consistency/link/diff checks, independent review; documentation commit. | Complete. |
+| RA2 | Retain positive recall evidence from already-observed attributes for ordinary and unsupported scan entries; preserve file size where available. Core models/classification, scanner, recorder/repository and their direct contract/test consumers; SCANNER/DATABASE. | Focused scanner/persistence roundtrip and malformed/missing evidence cases, owning and direct consumer departments, independent review; evidence-retention commit. | Pending RA1. |
+| RA3 | Workflow projections and desktop bridge expose full-scan file count/logical byte total, row-specific recall flags and matching filters for Plan/Inventory. Owners: workflow models/inventory/plan projections, web review/commands/drain, browser bridge validators, direct fixtures; BRIDGE/PRESENTATION. | Full-scan vs selection/window/filter invariance, source/target and unsupported coverage, stale/missing observations, bounded wire validation and overlapping filter semantics; affected departments and independent review; bridge commit. | Pending RA2. |
+| RA4 | Integrate accessible cloud-arrow-down indicators and non-local filter choices in Plan/Inventory. Use pinned Microsoft Fluent icon catalog/generator and existing filter/menu conventions; no summary counter UI. Assets/catalog, frontend/native/headed fixtures, DESKTOP_UI/TOOLS. | Production browser consumers, icon provenance/check, real installed GUI/filter and gallery witnesses, ordinary suite/import contracts, independent review; GUI commit and batch closeout. | Pending RA3. |
+
+Recall means positive `0x00400000` evidence, independently of reparse markers;
+absence is not proof of local availability. Directories can carry the row flag,
+but counters count files only. Counters describe all observed files in the scan
+scope after ignores, including unsupported files with usable evidence, not only
+selected/executable operations. Plan source/target observations remain distinct;
+any combined count counts observations rather than deduplicating physical objects.
+Sizes are logical bytes, not predicted network traffic. Partial/unavailable scan
+facts remain explicit; persisted observations never become a current live probe.
+
+Preserve unsupported eligibility, reparse/root/containment checks, scan completeness,
+selection, destructive review, local settlement truth and interface bounds. Advisory
+calculation adds no filesystem I/O and is orthogonal to operation reasons. Do not
+introduce hydration authorization, cloud completion tracking, remote verification,
+provider-specific compatibility or a universal detection/no-hydration guarantee.
+M2 owns stronger guarantees; the finite audit covers enumeration, root/scoped stat,
+stable-identity fallback and intentional executor/verifier content reads. No small
+complete no-hydration fix is established; this batch documents that boundary.
+Existing user OneDrive files remain read-only and must not be content-read.
+AGENTS mandatory and recurrence stops apply. M1-12/release/DOC-2, push and PR remain
+inactive. Evidence and failed receipts: `build/recall-advisory-20261022/`.
+Before each pending row implementation, elaborate its exact source/test population
+and refresh seams against its integrated predecessor; routine direct consumer
+migrations stay inside the accepted outcome.
+
+RA2 elaboration: `core/models.py` owns the attribute predicate and optional
+unsupported `observed_attributes`/`observed_size`; scanner populates these only
+from successful existing observations. Recorder/repositories retain known kind
+and advisory columns, keeping unsupported `observed` non-executable. Review cold
+database validators and direct integrity consumers; no schema/epoch reset.
+Optional absent facts preserve existing digest projections, present facts bind
+replay identity. Tests: core scanplan, scanner, recorder inventory integrity and
+identity receipts, repository/database validation plus affected workflow consumers.
+SCANNER/DATABASE own the retention contract. Acceptance is focused native/mock
+seams followed by ordinary suite and imports, then fresh adversarial review.
+
 ### Planning observation optimization — 2026-10-19
 
 Authorized with execute-task from clean `d1d19c61` on `milestone1`. The earlier

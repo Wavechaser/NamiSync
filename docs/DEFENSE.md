@@ -482,7 +482,7 @@ effects would change its inputs. It never refuses a faithfully executable plan
 because the plan looks unwise.
 
 Backstops are a closed list. An entry must also be irreversible and broad
-(root, volume or cloud-copy scale, or outside the reviewed roots), have a
+(root or volume scale, or outside the reviewed roots), have a
 demonstrably plausible trigger, refuse rather than adapt, and cost no more
 than §2.5 allows a rare catastrophe. Adding one is a scope decision.
 
@@ -493,7 +493,24 @@ than §2.5 allows a rare catastrophe. Adding one is a scope decision.
 | Root moved, deleted or converted during an invocation | Effects follow the root elsewhere or through a link | User or tool reorganizes folders mid-run |
 | Link traversal out of a root | Effects land outside the reviewed root | Profile compatibility junctions, pnpm, `mklink` relocations, old backups linking into `C:` |
 | Unreadable or incomplete observation treated as absent | Effects rely on an observation that was never made | Foreign-machine ACLs, access denial, enumeration errors |
-| Cloud placeholder recall or deletion | Hidden effects: downloading content, or deleting the cloud copy | Files On-Demand folders inside a managed root |
+
+Cloud propagation is not a catastrophe merely because it happens remotely.
+Users explicitly choosing cloud-synchronized source or target folders may
+reasonably expect their provider's ordinary behavior; NamiSync does not second-
+guess that choice. Source reads may download content, and target additions,
+replacements and deletions may propagate through the provider. Hydration can be
+reversed by freeing local space; provider propagation of approved local changes
+does not make those changes unreviewed. This does not authorize effects outside
+the reviewed local scope or weaken root, link and observation guards.
+
+Plan review shows the actual local writes, replacements and deletions using the
+ordinary destructive-operation treatment. Cloud behavior is advisory, not
+special authorization for network activity. Recall information describes
+potential execution cost and availability; it cannot promise a transfer amount
+or that unmarked files are local. NamiSync completion means its local filesystem
+work succeeded, subject to the existing integrity and recording result axes; it
+does not certify upload completion or a verified remote copy. Provider-wide
+recall detection and a universal no-hydration scan guarantee remain M2 work.
 
 #### 2.5.3 Guard-family dispositions
 
@@ -502,7 +519,8 @@ This table applies §2.5 to existing guard families. It sets target posture;
 
 | Guard family | Owners | Disposition |
 | --- | --- | --- |
-| Overlap, wrong root/volume, placeholder, link, unreadable-as-unknown | preflight, scanner, planner, root authority, executor, verifier | **Keep** as §2.5.2 backstops at observation and at the mutating effect. |
+| Overlap, wrong root/volume, link, unreadable-as-unknown | preflight, scanner, planner, root authority, executor, verifier | **Keep** as §2.5.2 backstops at observation and at the mutating effect. |
+| Exposed placeholder/reparse classification | scanner, root authority, preflight, executor, verifier | **Retain current refusals** as the implementation's supported-entry boundary, not a cloud-propagation catastrophe backstop. Hidden cloud markers can evade that classification; recall advisories do not broaden admitted entry types. |
 | Root identity during an invocation | root authority, executor, verifier, preflight | **Keep** the hold; **consolidate** duplicate admission within an effect where the hold permits reuse, retaining per-access held-attribute checks and fallback admission. |
 | Name representability and collisions | pathing core, scanner, planner | **Keep** at observation; **consolidate** repeated full-spelling revalidation of already-validated descendants. |
 | Hard links and duplicate identity | scanner, planner | **Keep** as warnings and move-detection eligibility; elsewhere link count is not a fidelity fact under §2.5.1. |

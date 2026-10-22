@@ -38,6 +38,14 @@ not veto plan-fidelity admission. A writer that wins after a final path-based gu
 documented external-writer boundary. The supported assumptions, tolerance
 classes, and exact residual dispositions live in the defense model.
 
+For user-chosen cloud-synchronized folders, source reads may download content
+and reviewed target changes may propagate through the sync provider. NamiSync
+reports local filesystem completion, not upload completion or remote-copy
+verification; [DEFENSE](docs/DEFENSE.md) §2.5 defines that boundary. Scanning
+requests metadata rather than file contents, but does not promise universal
+placeholder detection or hydration-free provider behavior; see
+[SCANNER](docs/SCANNER.md) for limitations and deferred guarantees.
+
 ## Current state
 
 M1's headless product is implemented and usable through the service and CLI:
