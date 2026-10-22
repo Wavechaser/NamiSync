@@ -44,6 +44,7 @@ const baseRow = {
   blocked_reason: null,
   selection: "selected",
   highlighted: false,
+  recall: false,
   selectable_operation_count: 1,
   selected_operation_count: 1,
   operation_count: 1,
@@ -215,8 +216,10 @@ const revealSummary = {
   highlighted_count: 0, source_path: "C:\\source", target_path: "D:\\target",
   selected_operation_count: 1, selectable_operation_count: 1, operation_count: 1,
   scope_selected_operation_count: 1, scope_selectable_operation_count: 1,
+  recall: {source: {file_count: 0, size: "0", size_overflow: false, size_partial: false},
+    target: {file_count: 0, size: "0", size_overflow: false, size_partial: false}},
   filter_counts: Object.fromEntries(["all", "copy", "mkdir", "move", "rename", "update", "move_update",
-    "trash", "delete", "noop", "blocked", "unsupported", "error", "notice"].map((key) => [key, key === "all" || key === "copy" ? 1 : 0])),
+    "trash", "delete", "noop", "blocked", "unsupported", "error", "notice", "recall"].map((key) => [key, key === "all" || key === "copy" ? 1 : 0])),
   preflight_ready: true, preflight_refusal_count: 0, warning_count: 0,
   requires_destructive_confirmation: false, destructive_operation_count: 0,
   destructive_operation_counts: { update: 0, move_update: 0, trash: 0, delete: 0 },
@@ -229,6 +232,21 @@ const revealStart = requests.length;
 const revealed = await bridge.revealPlanMove(taskId, 0, groupRow.node_id);
 if (revealed.index !== 400 || requests.length !== revealStart + 1
     || requests.at(-1).command !== "reveal_plan_move") throw new Error("move reveal did not use one compact command");
+responseResult = {...responseResult, summary: {...revealSummary,
+  filter_counts: {...revealSummary.filter_counts, recall: 2},
+  recall: {...revealSummary.recall, source: {file_count: 1, size: "9007199254740993", size_overflow: false, size_partial: false}}}};
+const recalled = await bridge.revealPlanMove(taskId, 0, groupRow.node_id);
+if (recalled.summary.filter_counts.recall !== 2 || recalled.summary.recall.source.size !== "9007199254740993") {
+  throw new Error("overlapping directory recall counts or exact size were lost");
+}
+for (const recall of [null, {source: revealSummary.recall.source},
+  {...revealSummary.recall, source: {...revealSummary.recall.source, size: null}}]) {
+  responseResult = {...revealed, summary: {...revealSummary, recall}};
+  if (await bridge.revealPlanMove(taskId, 0, groupRow.node_id).then(() => null, error => error) === null) {
+    throw new Error("invalid plan recall summary accepted");
+  }
+}
+responseResult = revealed;
 for (const value of [{ ...responseResult, index: 600 }, { ...responseResult, node_id: null },
   { ...responseResult, summary: { ...revealSummary, task_id: `task-${"9".repeat(32)}` } }]) {
   responseResult = value;

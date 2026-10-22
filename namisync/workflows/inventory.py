@@ -10,6 +10,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Iterator, Mapping, Protocol
 
+from namisync.workflows.recall import RecallSummary, scan_recall_summary
+
 from namisync.core.clock import Clock
 from namisync.core.exception_graph import (
     retire_exception_graph,
@@ -619,6 +621,7 @@ class InventoryDetails:
     selected_paths: tuple[str, ...] = ()
     warnings: tuple[ScanWarning, ...] = ()
     subtree_roots: tuple[str, ...] = ()
+    recall: RecallSummary | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1596,6 +1599,7 @@ def run_inventory(
             request.selected_paths,
             scan.warnings,
             request.subtree_roots,
+            recall=scan_recall_summary(scan),
         )
     )
     return OperationResult(SessionState.COMPLETED)
@@ -1700,6 +1704,7 @@ def run_integrity(
                     scan.complete,
                     request.selected_paths,
                     scan.warnings,
+                    recall=scan_recall_summary(scan),
                 )
             )
             if not scan.complete and not (

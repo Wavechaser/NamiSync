@@ -17,8 +17,16 @@ bridge.markBridgeOperational();
 const task = fixture.summary.task_id;
 response = fixture.summary;
 assert.deepEqual(await bridge.openInventoryView(task), fixture.summary);
+for (const recall of [null, {file_count: -1, size: "0", size_overflow: false, size_partial: false},
+  {file_count: 1, size: null, size_overflow: false, size_partial: false},
+  {file_count: 1, size: "1", size_overflow: false, size_partial: false, extra: true}]) {
+  response = {...fixture.summary, recall};
+  await assert.rejects(bridge.openInventoryView(task));
+}
+response = {...fixture.summary, recall: {file_count: 2, size: null, size_overflow: true, size_partial: true}};
+assert.deepEqual((await bridge.openInventoryView(task)).recall, response.recall);
 const noScan = {...fixture.summary, scan_request_id: null, scan_complete: null,
-  scan_scope: null, observed_count: null, missing_count: null};
+  scan_scope: null, observed_count: null, missing_count: null, recall: null};
 response = noScan;
 assert.deepEqual(await bridge.openInventoryView(task), noScan);
 for (const patch of [{scan_complete: false}, {scan_scope: {kind: "location", path: null}},

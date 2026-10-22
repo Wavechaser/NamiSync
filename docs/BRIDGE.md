@@ -568,8 +568,23 @@ failed replacement; its request identity continues to name that publication.
 state. `scan_request_id` identifies the actual retained inventory scan. It and
 scan completeness, scope, observed count and missing count are all null when
 there was no inventory scan, as on a released execution's target-ledger read.
-Ledger projection completeness never stands in for scan completion. Warning
-count still describes projection notices. Scan scope is a bounded descriptor naming the entire location, one exact
+Ledger projection completeness never stands in for scan completion.
+The scan-time `recall` aggregate is null with absent scan provenance; otherwise
+it contains `file_count`, decimal-string `size` (null on `size_overflow`), and
+`size_partial` for counted known files without size evidence. Plan summaries
+carry separate source/target aggregates from the complete retained scans after
+scan ignores, independent of selection, operation coverage and view gestures.
+These are logical file bytes, not predicted download bytes. Inventory
+`recall_item_count` and Plan `filter_counts.recall` count matching observed
+domain items, including directories and a recorded root; they are distinct from
+file totals. Existing root-hidden windows do not add a visible root row.
+The `recall` filter overlaps existing categories, so Plan `all` remains the sum
+of its exclusive operation/notice categories, excluding `recall`. Window rows
+carry a Boolean `recall`; missing inventory rows and synthetic ancestors do not
+inherit it from historical metadata or descendants. Exact validators admit these
+fields without changing execution/selection authority. GUI totals remain deferred.
+
+Warning count still describes projection notices. Scan scope is a bounded descriptor naming the entire location, one exact
 item, one recursive folder, or a multi-subject selection; it carries at most one
 path, never the complete scope arrays. It belongs to the producing publication,
 including while a newer scan is running or refused. `InventoryWindowRow` supplies server-derived frames and domain status,

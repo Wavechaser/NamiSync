@@ -585,6 +585,17 @@ effects. A strictly empty plan says **Plan is empty**;
 a nonempty plan with no search/filter matches says **No items match these filters**.
 Neither navigation nor these labels change execution eligibility or selection.
 
+Recall availability is a separate scan-time fact, independent of action reason,
+blocked status and selection. Workflow projections retain positive visible
+`RECALL_ON_DATA_ACCESS` evidence for ordinary and unsupported rows, including
+actual observed directories. Synthetic ancestors do not inherit the fact, and
+missing inventory rows never present old availability as current. The server's
+overlapping `recall` filter keeps parent context without changing operation
+eligibility. Its item count differs from the bridge's file-only scan aggregate;
+the latter is fixed across view gestures and is not an execution download estimate.
+Bridge support is delivered; row icons/filter controls are the next GUI checkpoint,
+and aggregate status-panel placement remains deferred.
+
 The planning page distinguishes execution preflight refusal, an invalid
 execution commitment and another unrun refusal. It explains each closed
 preflight code using fixed actionable wording and guides the user to resolve

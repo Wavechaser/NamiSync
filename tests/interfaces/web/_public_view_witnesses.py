@@ -598,6 +598,7 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "observed_count": 12,
                 "missing_count": 2,
                 "complete": True,
+                "recall": None,
                 "warnings": [
                     {
                         "code": "unsupported",

@@ -20,6 +20,7 @@ from namisync.workflows import (
     sort_plan_projection,
 )
 
+from .recall import recall_summary_wire
 from .row_highlight import apply_row_highlight, highlight_visible_index
 from .review_view import (
     ReviewView, ScopeCounts, count_scope, covered_positions,
@@ -50,6 +51,7 @@ PLAN_FILTERS = frozenset(
         "error",
         "unsupported",
         "notice",
+        "recall",
     }
 )
 
@@ -69,6 +71,7 @@ _PLAN_FILTER_COUNT_CATEGORIES = (
     "error",
     "unsupported",
     "notice",
+    "recall",
 )
 
 
@@ -178,6 +181,8 @@ class PlanReviewState:
             "scope_selected_operation_count": self._view.scope.selected[-1],
             "operation_count": root.operation_count,
             "filter_counts": dict(self._filter_counts),
+            "recall": {"source": recall_summary_wire(self.projection.source_recall),
+                       "target": recall_summary_wire(self.projection.target_recall)},
             "preflight_ready": self.projection.preflight_ready,
             "preflight_refusal_count": self.projection.preflight_refusal_count,
             "warning_count": self.projection.warning_count,
@@ -619,6 +624,8 @@ def _derive_view(
 def _direct_filter_count(node: PlanProjectionNode, filters: frozenset[str]) -> int:
     if node.row_kind == "notice":
         return int("notice" in filters)
+    if node.recall and "recall" in filters and not node.row_kind.startswith("prior-"):
+        return 1
     if node.row_kind.startswith("prior-"):
         return 0
     if node.operation_id is None:
@@ -639,7 +646,8 @@ def _plan_filter_counts(projection: PlanProjection) -> Mapping[str, int]:
     other blocked operations. Execution errors are not present in the immutable
     plan projection, so ``error`` remains zero until an error-bearing projection
     exists. Each notice is counted as ``notice``. ``all`` is therefore the sum
-    of the mutually exclusive operation/notice categories.
+    of the mutually exclusive operation/notice categories. Recall is an
+    overlapping advisory and also matches directly observed directory rows.
     """
 
     counts = {category: 0 for category in _PLAN_FILTER_COUNT_CATEGORIES}
@@ -658,6 +666,8 @@ def _plan_filter_counts(projection: PlanProjection) -> Mapping[str, int]:
             raise ValueError("plan projection contains an unknown filter category")
         counts[category] += 1
         counts["all"] += 1
+    counts["recall"] = sum(node.recall for node in projection.nodes
+                           if not node.row_kind.startswith("prior-"))
     return MappingProxyType(counts)
 
 
@@ -741,6 +751,7 @@ def _row_view(
         "blocked_reason": node.blocked_reason,
         "selection": node.selection if selection is None else selection,
         "highlighted": highlighted,
+        "recall": node.recall,
         "selectable_operation_count": node.selectable_operation_count,
         "selected_operation_count": node.selected_operation_count,
         "operation_count": node.operation_count,

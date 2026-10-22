@@ -235,6 +235,11 @@ explicit, reviewable and regression-backed.
   eligible. Recall classification uses the visible bit independently of hidden
   reparse markers, adds no scan I/O and preserves existing receipt hashes when
   the optional evidence is absent.
+- Expose separate source/target scan recall summaries and inventory scan totals
+  through the desktop bridge, including logical-byte partial/overflow state.
+  Row availability flags and overlapping filters preserve operation reasons,
+  selection and unsupported eligibility; missing historical rows are unflagged.
+  Totals remain independent of review selection, filtering and visible windows.
 
 #### Update local runtimes and verify security-update compatibility (2026-10-22)
 

@@ -2928,13 +2928,13 @@ function isNodeId(value) {
 
 const INVENTORY_FILTERS = new Set([
   "present", "unverified", "verified", "modified", "reappeared", "unsupported",
-  "missing", "mismatched", "acknowledged", "notice",
+  "missing", "mismatched", "acknowledged", "notice", "recall",
 ]);
 
 function isPlanViewGesture(value) {
   const filters = new Set([
     "copy", "mkdir", "move", "rename", "update", "move_update",
-    "trash", "delete", "noop", "blocked", "error", "unsupported", "notice",
+    "trash", "delete", "noop", "blocked", "error", "unsupported", "notice", "recall",
   ]);
   return isTreeViewGesture(value, filters);
 }
@@ -2966,9 +2966,17 @@ function validateInventoryRollup(value) {
     && (value.size_overflow === (value.size === null));
 }
 
+function validateRecallSummary(value) {
+  return isExactObject(value, ["file_count", "size", "size_overflow", "size_partial"])
+    && isNonnegativeInteger(value.file_count)
+    && (value.size === null || isScalar64(value.size))
+    && typeof value.size_overflow === "boolean" && typeof value.size_partial === "boolean"
+    && value.size_overflow === (value.size === null);
+}
+
 function validateInventorySummary(value) {
   return isExactObject(value, ["disposition", "task_id", "request_id", "location_id", "view_revision",
-    "root_path", "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count", "warning_count", "rollup",
+    "root_path", "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count", "warning_count", "rollup", "recall", "recall_item_count",
     "visible_row_count", "search_query", "filters", "sort_column", "sort_direction", "collapsed_count",
     "selected_file_count", "selectable_file_count", "hidden_selected_file_count", "selection",
     "scope_selectable_file_count", "scope_selected_file_count", "highlight_revision",
@@ -2981,14 +2989,15 @@ function validateInventorySummary(value) {
       .every((key) => isNonnegativeInteger(value[key]))
     && (value.root_path === null || isBoundedPath(value.root_path))
     && (value.scan_request_id === null
-      ? [value.scan_complete, value.scan_scope, value.observed_count, value.missing_count].every((fact) => fact === null)
+      ? [value.scan_complete, value.scan_scope, value.observed_count, value.missing_count, value.recall].every((fact) => fact === null)
       : typeof value.scan_request_id === "string" && ID_PATTERN.test(value.scan_request_id)
     && [value.observed_count, value.missing_count].every(isNonnegativeInteger)
     && isExactObject(value.scan_scope, ["kind", "path"])
     && (["location", "selection"].includes(value.scan_scope.kind)
       ? value.scan_scope.path === null
       : ["item", "folder"].includes(value.scan_scope.kind) && isBoundedPath(value.scan_scope.path))
-    && typeof value.scan_complete === "boolean") && validateInventoryRollup(value.rollup)
+    && typeof value.scan_complete === "boolean" && validateRecallSummary(value.recall)) && validateInventoryRollup(value.rollup)
+    && isNonnegativeInteger(value.recall_item_count)
     && [value.selected_file_count, value.selectable_file_count, value.hidden_selected_file_count].every(isNonnegativeInteger)
     && [value.scope_selectable_file_count, value.scope_selected_file_count,
       value.highlight_revision, value.highlighted_count].every(isNonnegativeInteger)
@@ -3044,7 +3053,7 @@ function validateInventoryRow(value) {
   return isExactObject(value, ["node_id", "display", "depth", "is_container", "visible_index",
     "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
     "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum", "acknowledged",
-    "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection", "highlighted"])
+    "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection", "highlighted", "recall"])
     && isNodeId(value.node_id) && isValidUnicode(value.display) && value.display.length <= 300
     && [value.depth, value.visible_index, value.position_in_set, value.set_size].every(isNonnegativeInteger)
     && value.position_in_set > 0 && value.position_in_set <= value.set_size
@@ -3058,7 +3067,7 @@ function validateInventoryRow(value) {
     && (value.verification_state === null || ["unverified", "verified", "modified", "mismatched"].includes(value.verification_state))
     && ((value.row_id === null) === (value.presence === null))
     && ((value.row_id === null) === (value.verification_state === null))
-    && [value.has_baseline, value.acknowledged, value.reappeared, value.highlighted].every((item) => typeof item === "boolean")
+    && [value.has_baseline, value.acknowledged, value.reappeared, value.highlighted, value.recall].every((item) => typeof item === "boolean")
     && (value.recorded_checksum === null || (typeof value.recorded_checksum === "string" && /^[0-9a-f]{32}$/.test(value.recorded_checksum)))
     && value.has_baseline === (value.recorded_checksum !== null)
     && [value.size, value.mtime_ns].every((item) => item === null || isScalar64(item))
@@ -3136,7 +3145,7 @@ function validatePlanViewSummary(value) {
     "highlight_focus_visible_index", "highlighted_count",
     "source_path", "target_path",
     "selected_operation_count", "selectable_operation_count", "operation_count",
-    "filter_counts",
+    "filter_counts", "recall",
     "scope_selected_operation_count", "scope_selectable_operation_count",
     "preflight_ready", "preflight_refusal_count", "warning_count",
     "requires_destructive_confirmation", "destructive_operation_count",
@@ -3165,12 +3174,14 @@ function validatePlanViewSummary(value) {
     && value.scope_selected_operation_count <= value.selected_operation_count
     && isExactObject(value.filter_counts, [
       "all", "copy", "mkdir", "move", "rename", "update", "move_update",
-      "trash", "delete", "noop", "blocked", "error", "unsupported", "notice",
+      "trash", "delete", "noop", "blocked", "error", "unsupported", "notice", "recall",
     ])
     && Object.values(value.filter_counts).every(isNonnegativeInteger)
     && value.filter_counts.all === Object.entries(value.filter_counts)
-      .filter(([category]) => category !== "all")
+      .filter(([category]) => category !== "all" && category !== "recall")
       .reduce((total, [, count]) => total + count, 0)
+    && isExactObject(value.recall, ["source", "target"])
+    && validateRecallSummary(value.recall.source) && validateRecallSummary(value.recall.target)
     && value.operation_count <= value.filter_counts.all
     && typeof value.preflight_ready === "boolean"
     && isNonnegativeInteger(value.preflight_refusal_count)
@@ -3348,7 +3359,7 @@ function validatePlanWindowRow(value) {
     "parent_visible_index", "first_child_visible_index", "position_in_set",
     "set_size", "expanded", "row_kind", "operation_id", "operation_kind",
     "presentation_kind", "prior_name",
-    "reason", "blocked_reason", "selection", "highlighted", "selectable_operation_count",
+    "reason", "blocked_reason", "selection", "highlighted", "recall", "selectable_operation_count",
     "selected_operation_count", "operation_count", "size", "mtime_ns",
     "dependency_count", "risk", "move_peer_id", "move_group", "notice",
     "selection_exclusion_reason", "execution",
@@ -3371,7 +3382,7 @@ function validatePlanWindowRow(value) {
     && (value.blocked_reason === null || ["unsupported", "case_mismatch", "case_collision", "type_collision",
       "destination_collision", "blocked_dependency"].includes(value.blocked_reason))
     && ["selected", "unselected", "mixed", "disabled"].includes(value.selection)
-    && typeof value.highlighted === "boolean"
+    && typeof value.highlighted === "boolean" && typeof value.recall === "boolean"
     && [value.selectable_operation_count, value.selected_operation_count,
       value.operation_count, value.dependency_count].every(isNonnegativeInteger)
     && value.selected_operation_count <= value.selectable_operation_count

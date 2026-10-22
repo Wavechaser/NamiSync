@@ -83,7 +83,7 @@ def _file_fact_state(operations, *, complete=True) -> PlanReviewState:
     value = replace(plan(tuple(operations)), source_complete=complete)
     request = PlanRequest("b" * 32, value.source_root.path, value.target_root.path)
     artifact = PlanArtifact(
-        request, SimpleNamespace(warnings=()), SimpleNamespace(warnings=(), directories=()),
+        request, SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()), SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
         value, Verdict(True, (), SimpleNamespace()),
     )
     return PlanReviewState(
@@ -91,6 +91,38 @@ def _file_fact_state(operations, *, complete=True) -> PlanReviewState:
         build_plan_projection(request.request_id, artifact),
         0, "reviewing", "source", "target",
     )
+
+
+def test_recall_filter_overlaps_actions_retains_directory_and_excludes_prior_counts():
+    from namisync.core.models import DirRecord, FileRecord, MetadataSnapshot
+    from namisync.core.pathing import normalize_relative_path
+    marked = MetadataSnapshot(0x400000, None)
+    moved = operation(OperationKind.MOVE, source_path=r"New\leaf", target_path=r"New\leaf",
+                      prior_target_path=r"Old\nested\leaf", source=file_stat(), target=file_stat())
+    directories = tuple(DirRecord(path, normalize_relative_path(path), 1, marked, None)
+                        for path in ("Old", r"Old\nested", "New"))
+    value = plan((moved,))
+    request = PlanRequest("b" * 32, value.source_root.path, value.target_root.path)
+    artifact = PlanArtifact(request,
+        SimpleNamespace(files=(), directories=(), unsupported=(), warnings=()),
+        SimpleNamespace(files=(FileRecord(r"Old\nested\leaf", normalize_relative_path(r"Old\nested\leaf"), 7, 1, None, 1, marked),),
+                        directories=directories, unsupported=(), warnings=()), value, Verdict(True, (), SimpleNamespace()))
+    projection = build_plan_projection(request.request_id, artifact)
+    prior = [node for node in projection.nodes if node.row_kind in {"prior-operation", "prior-folder"}]
+    assert prior and all(node.recall for node in prior)
+    state = PlanReviewState("task-" + "1" * 32, request.request_id, projection, 0, "reviewing", "source", "target")
+    original = state.summary()
+    expected_count = sum(node.recall for node in projection.nodes if not node.row_kind.startswith("prior-"))
+    assert original["filter_counts"]["recall"] == expected_count
+    assert expected_count > original["filter_counts"]["all"]
+    for filters in (frozenset({"recall"}), frozenset({"recall", "move"})):
+        state.update(expected_revision=state.view_revision, search_query="", filters=filters,
+                     sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+                     collapse_node_id=None, collapsed=None)
+        window = state.window(expected_revision=state.view_revision, offset=0, limit=256)
+        assert any(row["display"] == "New" and row["recall"] for row in window["rows"])
+        assert state.summary()["recall"] == original["recall"]
+    assert original["recall"]["target"]["file_count"] == 1
 
 
 def test_plan_detail_keeps_original_paths_and_refuses_stale_or_root_reads() -> None:
@@ -144,8 +176,8 @@ def test_window_scan_notice_keeps_side_code_and_complete_detail():
                           "ancestor\\" + "😀" * 1000, "\x01" * 1024)
     value = plan(())
     request = PlanRequest("b" * 32, value.source_root.path, value.target_root.path)
-    artifact = PlanArtifact(request, SimpleNamespace(warnings=(warning,)),
-        SimpleNamespace(warnings=(), directories=()), value, Verdict(True, (), SimpleNamespace()))
+    artifact = PlanArtifact(request, SimpleNamespace(warnings=(warning,), directories=(), files=(), unsupported=()),
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()), value, Verdict(True, (), SimpleNamespace()))
     state = PlanReviewState("task-" + "1" * 32, "a" * 32,
         build_plan_projection(request.request_id, artifact), 0, "reviewing", "source", "target")
     row = state.window(expected_revision=0, offset=0, limit=256)["rows"][0]
@@ -185,7 +217,7 @@ def test_complete_plan_256_row_envelope_including_execution_has_response_margin(
         "row_kind", "operation_id", "operation_kind", "presentation_kind", "prior_name", "reason",
         "blocked_reason", "selection", "highlighted", "selectable_operation_count", "selected_operation_count",
         "operation_count", "size", "mtime_ns", "dependency_count", "risk", "move_peer_id", "move_group",
-        "notice", "selection_exclusion_reason"}
+        "notice", "selection_exclusion_reason", "recall"}
     # Conservatively combine mutually exclusive optional fields into one row.
     # All varying text reaches its producer ceiling with six-byte JSON control
     # escaping; identities remain fixed ASCII, enums use their longest member.
@@ -558,6 +590,7 @@ def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
         "error": 0,
         "unsupported": 1,
         "notice": 1,
+        "recall": 0,
     }
     assert state.summary()["filter_counts"] == expected
     for revision, (category, expected_node) in enumerate(

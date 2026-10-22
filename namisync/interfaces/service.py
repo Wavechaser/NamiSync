@@ -240,6 +240,7 @@ class InventoryDetailsView:
     missing_count: int
     complete: bool
     warnings: tuple[ScanWarningView, ...] = ()
+    recall: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -3002,6 +3003,12 @@ def _inventory_details_view(details: InventoryDetails) -> InventoryDetailsView:
         selected_mount=resolution.selected_mount, candidates=resolution.candidates,
         detail=resolution.detail, selected_paths=details.selected_paths,
         observed_count=details.observed_count, missing_count=details.missing_count,
+        recall=None if details.recall is None else {
+            "file_count": details.recall.file_count,
+            "size": None if details.recall.size is None else str(details.recall.size),
+            "size_overflow": details.recall.size_overflow,
+            "size_partial": details.recall.size_partial,
+        },
         complete=details.complete,
         warnings=tuple(ScanWarningView(w.code.value, w.rel_path, w.detail) for w in details.warnings),
     )

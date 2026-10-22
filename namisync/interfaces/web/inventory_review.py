@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 
 from namisync.workflows import (
-    InventoryDetails, InventoryProjection, InventoryProjectionNode, InventoryProjectionOrder, InventoryRollup,
+    RecallSummary, InventoryDetails, InventoryProjection, InventoryProjectionNode, InventoryProjectionOrder, InventoryRollup,
     PlanSortColumn, SortDirection,
     sort_inventory_projection,
 )
@@ -14,6 +14,7 @@ from .visible_sequence import (
     window_visible_sequence, resolve_visible_node_anchor,
 )
 from .plan_review import _tail_text
+from .recall import recall_summary_wire
 from .row_highlight import apply_row_highlight, highlight_visible_index
 from .review_view import (
     ReviewView, ScopeCounts, count_scope, covered_positions, next_revision, update_review_view,
@@ -22,7 +23,7 @@ from .review_view import (
 
 INVENTORY_FILTERS = frozenset({
     "present", "unverified", "verified", "modified", "reappeared",
-    "unsupported", "missing", "mismatched", "acknowledged", "notice",
+    "unsupported", "missing", "mismatched", "acknowledged", "notice", "recall",
 })
 
 
@@ -55,6 +56,8 @@ def _categories(node: InventoryProjectionNode) -> frozenset[str]:
         categories.add("acknowledged")
     if row.reappeared_at is not None:
         categories.add("reappeared")
+    if node.recall:
+        categories.add("recall")
     return frozenset(categories)
 
 
@@ -69,6 +72,7 @@ class InventoryReviewState:
     missing_count: int | None
     scan_scope: tuple[str, str | None] | None = field(default=("location", None), kw_only=True)
     scan_request_id: str | None = field(default=None, kw_only=True)
+    recall: RecallSummary | None = field(default=None, kw_only=True)
     selected_row_ids: frozenset[str] = field(default_factory=frozenset, kw_only=True)
     highlight_revision: int = field(default=0, kw_only=True)
     highlighted_node_ids: frozenset[str] = field(default_factory=frozenset, kw_only=True)
@@ -83,6 +87,8 @@ class InventoryReviewState:
     _view: ReviewView[InventoryProjectionOrder, InventoryProjectionNode] = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
+        if (self.scan_request_id is None) != (self.recall is None):
+            raise ValueError("inventory scan identity and recall summary must agree")
         order = self._sort(self.sort_column, self.sort_direction)
         self._view = ReviewView(
             order, self._derive(order, self.search_query, self.filters, self.collapsed_node_ids),
@@ -196,6 +202,8 @@ class InventoryReviewState:
             "highlight_focus_visible_index": highlight_visible_index(self._view.visible, self.highlight_focus_node_id),
             "highlighted_count": len(self.highlighted_node_ids),
             "scan_request_id": self.scan_request_id,
+            "recall": None if self.recall is None else recall_summary_wire(self.recall),
+            "recall_item_count": self.projection.recall_item_count,
             "scan_complete": self.scan_complete, "observed_count": self.observed_count,
             "scan_scope": None if self.scan_scope is None else {"kind": self.scan_scope[0], "path": self.scan_scope[1]},
             "missing_count": self.missing_count, "warning_count": self.projection.warning_count,
@@ -216,7 +224,8 @@ class InventoryReviewState:
                     root_path: str | None, scan_complete: bool | None,
                     observed_count: int | None, missing_count: int | None, *,
                     scan_scope: tuple[str, str | None] | None,
-                    scan_request_id: str | None = None) -> InventoryReviewState:
+                    scan_request_id: str | None = None,
+                    recall: RecallSummary | None = None) -> InventoryReviewState:
         """Stage one complete replacement while preserving surviving gestures."""
         revision = next_revision(self.view_revision)
         collapsed = frozenset(
@@ -230,6 +239,7 @@ class InventoryReviewState:
             self.search_query, self.filters, self.sort_column, self.sort_direction, collapsed,
             scan_scope=scan_scope,
             scan_request_id=scan_request_id,
+            recall=recall,
             selected_row_ids=frozenset(row_id for row_id in self.selected_row_ids
                 if row_id in projection.node_id_by_row_id
                 and projection.row_for_id(row_id).entry_kind is not None
@@ -307,6 +317,7 @@ class InventoryReviewState:
                 "has_baseline": row is not None and row.attestation is not None,
                 "recorded_checksum": None if row is None or row.attestation is None else row.attestation.content.digest.hex(),
                 "acknowledged": row is not None and row.acknowledged_at is not None,
+                "recall": node.recall,
                 "reappeared": row is not None and row.reappeared_at is not None,
                 "size": None if node.size is None else str(node.size),
                 "mtime_ns": None if node.mtime_ns is None else str(node.mtime_ns),

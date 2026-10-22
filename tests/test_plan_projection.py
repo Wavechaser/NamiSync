@@ -24,6 +24,55 @@ from namisync.workflows.selection import derive_execution_selection
 from _db_fixtures import file_stat, operation, plan
 
 
+def test_recall_summary_counts_scan_files_not_operations_and_bounds_bytes():
+    from namisync.core.models import FileRecord, MetadataSnapshot, UnsupportedRecord, UnsupportedReason
+    from namisync.workflows.recall import scan_recall_summary
+    marked = MetadataSnapshot(0x400000, None)
+    file = FileRecord("cloud", "CLOUD", MAX_SIGNED_64, 1, None, 1, marked)
+    unknown_size = UnsupportedRecord("blocked", "BLOCKED", UnsupportedReason.PLACEHOLDER,
+                                     EntryKind.FILE, 0x400000, None)
+    scan = SimpleNamespace(files=(file,), directories=(), unsupported=(unknown_size,))
+    summary = scan_recall_summary(scan)
+    assert (summary.file_count, summary.size, summary.size_partial, summary.size_overflow) == (2, MAX_SIGNED_64, True, False)
+    scan.unsupported += (replace(unknown_size, rel_path="more", rel_path_key="MORE", observed_size=1),)
+    overflow = scan_recall_summary(scan)
+    assert (overflow.file_count, overflow.size, overflow.size_partial, overflow.size_overflow) == (3, None, True, True)
+    scan.files = ()
+    scan.unsupported = (replace(unknown_size, kind=None), replace(unknown_size, kind=EntryKind.DIRECTORY))
+    assert scan_recall_summary(scan).file_count == 0
+
+
+def test_recall_projection_uses_scan_evidence_and_survives_selection():
+    from namisync.core.models import FileRecord, MetadataSnapshot, UnsupportedRecord, UnsupportedReason
+    marked = MetadataSnapshot(0x400000, None)
+    copied = operation(OperationKind.COPY, source_path="cloud", target_path="cloud", source=file_stat(size=7))
+    blocked = replace(operation(OperationKind.NOOP, source_path="blocked", target_path="blocked"),
+                      blocked_reason=BlockedReason.UNSUPPORTED)
+    artifact = _artifact(copied, blocked)
+    artifact.source_scan.files = (FileRecord("cloud", "CLOUD", 7, 1, None, 1, marked),)
+    artifact.target_scan.unsupported = (UnsupportedRecord("blocked", "BLOCKED", UnsupportedReason.PLACEHOLDER,
+                                                         EntryKind.FILE, 0x400000, 13),)
+    projection = build_plan_projection(REQUEST_ID, artifact)
+    assert projection.source_recall.size == 7
+    assert projection.target_recall.size == 13
+    assert all(projection.node_for_id(projection.operation_node_id_by_id[str(op.op_id)]).recall for op in (copied, blocked))
+    changed = apply_plan_projection_selection(projection, selected_operation_ids=frozenset(), exclusion_reasons={})
+    assert (changed.source_recall, changed.target_recall) == (projection.source_recall, projection.target_recall)
+
+
+def test_recall_directory_flag_requires_its_own_observation():
+    from namisync.core.models import MetadataSnapshot
+    copied = operation(OperationKind.COPY, source_path=r"parent\cloud\leaf", target_path=r"parent\cloud\leaf", source=file_stat())
+    artifact = _artifact(copied)
+    artifact.source_scan.directories = (replace(_directory(r"parent\cloud"), metadata=MetadataSnapshot(0x400000, None)),)
+    projection = build_plan_projection(REQUEST_ID, artifact)
+    flags = {node.rel_path_key: node.recall for node in projection.nodes}
+    assert flags["PARENT\\CLOUD"] is True
+    assert flags["PARENT"] is False
+    assert flags["PARENT\\CLOUD\\LEAF"] is False
+    assert projection.source_recall.file_count == 0
+
+
 REQUEST_ID = "1" * 32
 
 
@@ -40,8 +89,8 @@ def _artifact(*operations, warnings=(), refusals=(), target_directories=()) -> P
     )
     return PlanArtifact(
         request,
-        SimpleNamespace(warnings=tuple(warnings)),
-        SimpleNamespace(warnings=(), directories=target_directories),
+        SimpleNamespace(warnings=tuple(warnings), directories=(), files=(), unsupported=()),
+        SimpleNamespace(warnings=(), directories=target_directories, files=(), unsupported=()),
         plan_value,
         Verdict(not refusals, tuple(refusals), SimpleNamespace()),
     )
@@ -53,7 +102,7 @@ def test_projection_keeps_original_spelling_and_notice_path_origin() -> None:
     source_warning = ScanWarning(ScanWarningCode.ACCESS_DENIED, r"Source\Case.txt", "source warning")
     target_warning = ScanWarning(ScanWarningCode.DISAPPEARED, r"Target\Case.txt", "target warning")
     artifact = _artifact(moved, warnings=(source_warning,))
-    artifact = replace(artifact, target_scan=SimpleNamespace(warnings=(target_warning,), directories=()))
+    artifact = replace(artifact, target_scan=SimpleNamespace(warnings=(target_warning,), directories=(), files=(), unsupported=()))
     projection = build_plan_projection(REQUEST_ID, artifact)
     canonical = projection.node_for_id(projection.operation_node_id_by_id[str(moved.op_id)])
     assert (canonical.path, canonical.path_origin) == (r"Destination\Mixed.txt", "target")
@@ -74,7 +123,7 @@ def test_projection_keeps_original_spelling_and_notice_path_origin() -> None:
     ]
     context = build_plan_projection(REQUEST_ID, replace(
         artifact, target_scan=SimpleNamespace(
-            warnings=(), directories=(_directory(r"Surviving\Old"),),
+            warnings=(), directories=(_directory(r"Surviving\Old"),), files=(), unsupported=(),
         ),
     ))
     inferred = next(node for node in context.nodes if node.rel_path_key == "SURVIVING")

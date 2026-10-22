@@ -1054,6 +1054,7 @@ class TaskRegistry:
                 None if details is None else details.missing_count,
                 scan_scope=None if details is None else inventory_scan_scope(details),
                 scan_request_id=None if details is None else details.request_id,
+                recall=None if details is None else details.recall,
             )
         except BaseException:
             with task.condition:

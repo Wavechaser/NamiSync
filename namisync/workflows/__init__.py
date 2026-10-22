@@ -9,6 +9,7 @@ from namisync.core.planning import (
     PreservationPolicy,
     SyncOptions,
 )
+from namisync.workflows.recall import RecallSummary
 from namisync.workflows.inventory import (
     IntegrityRequest,
     InventoryDetails,
@@ -144,6 +145,7 @@ __all__ = [
     "HistoryRunSummaryView",
     "INVENTORY_KIND",
     "IntegrityRequest",
+    "RecallSummary",
     "InventoryDetails",
     "InventoryRequest",
     "InventoryProjection",

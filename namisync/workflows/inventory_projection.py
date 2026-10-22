@@ -8,7 +8,7 @@ from hashlib import blake2b
 from types import MappingProxyType
 
 from namisync.core.integrity import InventoryVerificationState
-from namisync.core.models import EntryKind, ScanWarning
+from namisync.core.models import EntryKind, ScanWarning, has_recall_on_data_access
 from namisync.core.review import MAX_PLAN_REVIEW_ROWS
 from namisync.core.scalars import MAX_SIGNED_64, require_signed_64
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
@@ -63,6 +63,7 @@ class InventoryProjectionNode:
     row: InventorySnapshot | None
     warning: ScanWarning | None
     rollup: InventoryRollup
+    recall: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +74,7 @@ class InventoryProjection:
     position_by_path_key: Mapping[str, int]
     node_id_by_row_id: Mapping[str, str]
     warning_count: int
+    recall_item_count: int = 0
 
     def __post_init__(self) -> None:
         require_signed_64(self.location_id, "inventory projection location id")
@@ -229,6 +231,8 @@ def build_inventory_projection(
             own_path.rsplit("\\", 1)[-1].casefold() if own_path else None,
             None if stat is None else stat.size, None if stat is None else stat.mtime_ns,
             row, None, rollup,
+            row is not None and row.presence is not InventoryPresence.MISSING
+            and has_recall_on_data_access(row.observed.metadata.attributes if row.observed is not None else row.observed_attributes),
         ))
         if row is not None:
             node_ids_by_row[row.row_id] = node.node_id
@@ -243,7 +247,7 @@ def build_inventory_projection(
     return InventoryProjection(
         location_id, tuple(nodes), {node.node_id: node.position for node in nodes},
         {node.rel_path_key: node.position for node in nodes if node.warning is None},
-        node_ids_by_row, len(retained_warnings),
+        node_ids_by_row, len(retained_warnings), sum(node.recall for node in nodes),
     )
 
 

@@ -2898,7 +2898,7 @@ def test_br_g_33_close_task_delegates_terminal_fact_and_retires_delivery() -> No
 def _inventory_read_registry(*, selected_paths=(), subtree_roots=(), path="one.txt"):
     from namisync.core.models import EntryKind, VolumeId, ScanWarning, ScanWarningCode
     from namisync.db.repositories import InventoryPresence, InventorySnapshot
-    from namisync.workflows import (InventoryDetails, LocationBinding, VolumeResolution,
+    from namisync.workflows import (RecallSummary, InventoryDetails, LocationBinding, VolumeResolution,
         VolumeResolutionState, build_inventory_projection)
     from namisync.workflows.views import inventory_current_detail
     from _db_fixtures import NOW, file_stat, attestation
@@ -2912,7 +2912,7 @@ def _inventory_read_registry(*, selected_paths=(), subtree_roots=(), path="one.t
     binding = LocationBinding(VolumeId("test", "NTFS"), "", "C:\\", ("C:\\",), False, location_id=1)
     details = InventoryDetails(REQUEST, VolumeResolution(VolumeResolutionState.RESOLVED,
         binding, r"C:\root", "C:\\"), location_id=1, observed_count=1, complete=False,
-        selected_paths=selected_paths, subtree_roots=subtree_roots)
+        selected_paths=selected_paths, subtree_roots=subtree_roots, recall=RecallSummary())
     class Service(_Service):
         def __init__(self):
             super().__init__()
@@ -4649,7 +4649,7 @@ def test_supported_long_paths_remain_readable_through_production_plan_window(cas
         def get_plan_projection(self, request_id):
             artifact = PlanArtifact(
                 PlanRequest(request_id, value.source_root.path, value.target_root.path),
-                SimpleNamespace(warnings=warnings), SimpleNamespace(warnings=(), directories=()),
+                SimpleNamespace(warnings=warnings, directories=(), files=(), unsupported=()), SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
                 value, Verdict(True, (), SimpleNamespace()),
             )
             return (build_plan_projection(request_id, artifact),
@@ -4746,7 +4746,7 @@ def test_new_plan_view_collapses_move_groups_and_reopen_preserves_expansion() ->
             self.projection_calls += 1
             artifact = PlanArtifact(
                 PlanRequest(request_id, value.source_root.path, value.target_root.path),
-                SimpleNamespace(warnings=()), SimpleNamespace(warnings=(), directories=()),
+                SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()), SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
                 value, Verdict(True, (), SimpleNamespace()),
             )
             return (build_plan_projection(request_id, artifact),

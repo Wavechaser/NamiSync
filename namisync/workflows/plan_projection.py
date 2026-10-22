@@ -15,6 +15,7 @@ from namisync.core.planning import OpId, OperationKind, Plan, PlanOperation
 from namisync.core.scalars import MAX_SIGNED_64
 
 from .models import PlanArtifact
+from .recall import RecallSummary, recall_paths, scan_recall_summary
 from .node_tree import (
     NodeTree,
     NodeTreeKind,
@@ -128,6 +129,7 @@ class PlanProjectionNode:
     path: str | None = None
     path_origin: str | None = None
     scan_warning: ScanWarning | None = None
+    recall: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +142,8 @@ class PlanProjection:
     preflight_ready: bool = True
     preflight_refusal_count: int = 0
     warning_count: int = 0
+    source_recall: RecallSummary = RecallSummary()
+    target_recall: RecallSummary = RecallSummary()
 
     def __post_init__(self) -> None:
         nodes = tuple(self.nodes)
@@ -263,6 +267,7 @@ class _PlanProjectionDraft:
     path: str | None = None
     path_origin: str | None = None
     scan_warning: ScanWarning | None = None
+    recall: bool = False
 
 
 def build_plan_projection(
@@ -388,6 +393,20 @@ def build_plan_projection(
             drafts[target_draft].move_peer_id = drafts[prior_draft].node_id
             drafts[prior_draft].move_peer_id = drafts[target_draft].node_id
         del prior_operation_draft_by_id
+    source_recall_paths = recall_paths(artifact.source_scan)
+    target_recall_paths = recall_paths(artifact.target_scan)
+    for draft in drafts:
+        operation = operations.get(draft.operation_id)
+        if operation is None and draft.row_kind in {"folder", "operation-group"}:
+            draft.recall = draft.rel_path_key in source_recall_paths or draft.rel_path_key in target_recall_paths
+        if draft.row_kind.startswith("prior-") and draft.path is not None:
+            draft.recall = fold_validated_path(draft.path.replace('/', '\\')) in target_recall_paths
+        if operation is not None:
+            draft.recall = (
+                operation.source_rel_path is not None and fold_validated_path(operation.source_rel_path.replace('/', '\\')) in source_recall_paths
+                or fold_validated_path(operation.target_rel_path.replace('/', '\\')) in target_recall_paths
+                or operation.prior_target_rel_path is not None and fold_validated_path(operation.prior_target_rel_path.replace('/', '\\')) in target_recall_paths
+            )
     del groups, target_paths, target_directories, operations, safety_decision, decision, excluded, selectable
 
     for side, warnings in (
@@ -422,6 +441,8 @@ def build_plan_projection(
         drafts,
         selected,
         operation_draft_by_id,
+        source_recall=scan_recall_summary(artifact.source_scan),
+        target_recall=scan_recall_summary(artifact.target_scan),
         preflight_ready=artifact.verdict.ok,
         preflight_refusal_count=len(artifact.verdict.refusals),
         warning_count=(
@@ -606,6 +627,7 @@ def apply_plan_projection_selection(
         projection.preflight_ready,
         projection.preflight_refusal_count,
         projection.warning_count,
+        projection.source_recall, projection.target_recall,
     )
 
 
@@ -1038,6 +1060,8 @@ def _materialize_projection(
     preflight_ready: bool,
     preflight_refusal_count: int,
     warning_count: int,
+    source_recall: RecallSummary,
+    target_recall: RecallSummary,
 ) -> PlanProjection:
     subtree_ends = [index + 1 for index in range(len(drafts))]
     for index in range(len(drafts) - 1, 0, -1):
@@ -1071,6 +1095,7 @@ def _materialize_projection(
             move_peer_id=draft.move_peer_id,
             notice=draft.notice,
             scan_warning=draft.scan_warning,
+            recall=draft.recall,
             selection_exclusion_reason=draft.selection_exclusion_reason,
             filename_key=draft.filename_key,
             is_directory=draft.is_directory,
@@ -1099,6 +1124,7 @@ def _materialize_projection(
         preflight_ready,
         preflight_refusal_count,
         warning_count,
+        source_recall, target_recall,
     )
 
 

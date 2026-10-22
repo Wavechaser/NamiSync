@@ -1,4 +1,5 @@
 from __future__ import annotations
+from namisync.workflows import RecallSummary
 
 import os
 from dataclasses import replace
@@ -97,8 +98,8 @@ def _projection_artifact(plan_value) -> PlanArtifact:
             plan_value.source_root.path,
             plan_value.target_root.path,
         ),
-        SimpleNamespace(warnings=(), directories=()),
-        SimpleNamespace(warnings=(), directories=()),
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
         plan_value,
         Verdict(True, (), SimpleNamespace()),
     )
@@ -1670,7 +1671,7 @@ def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details(has_details) 
                 raise KeyError(request_id)
             return InventoryDetails(request_id, VolumeResolution(
                 VolumeResolutionState.RESOLVED, binding, root, "C:\\",
-            ), location_id=1, observed_count=1, complete=False)
+            ), location_id=1, observed_count=1, complete=False, recall=RecallSummary())
 
         def list_inventory(self, location_id):
             self.inventory_reads.append(location_id)
@@ -1956,6 +1957,23 @@ def test_br_g_17_omitted_revision_is_limited_to_pristine_cli_selection() -> None
     assert refused.disposition == "conflict"
 
 
+@pytest.mark.parametrize("summary", [None, RecallSummary(1, 7), RecallSummary(1, 2**53 + 1),
+                                    RecallSummary(2, None, True), RecallSummary(2, 7, False, True)])
+def test_inventory_recall_service_view_uses_exact_safe_wire_scalars(summary):
+    from namisync.core.models import VolumeId
+    from namisync.workflows import InventoryDetails, LocationBinding, VolumeResolution, VolumeResolutionState
+    from namisync.interfaces.web.bridge import snapshot_bridge_response_result
+    binding = LocationBinding(VolumeId("test", "NTFS"), "", "C:\\", ("C:\\",), False, location_id=1)
+    details = InventoryDetails("refresh", VolumeResolution(VolumeResolutionState.RESOLVED, binding, r"C:\root", "C:\\"),
+                               recall=summary)
+    service = _service(SimpleNamespace(get_inventory_details=lambda _: details))
+    view = service.get_inventory_details("refresh")
+    wire = snapshot_bridge_response_result(view, "1" * 32)
+    assert wire.recall == (None if summary is None else {
+        "file_count": summary.file_count, "size": None if summary.size is None else str(summary.size),
+        "size_overflow": summary.size_overflow, "size_partial": summary.size_partial})
+
+
 def test_br_g_18_typed_scan_warnings_reach_inventory_details_view() -> None:
     details = SimpleNamespace(
         request_id="refresh",
@@ -1975,6 +1993,7 @@ def test_br_g_18_typed_scan_warnings_reach_inventory_details_view() -> None:
         observed_count=0,
         missing_count=0,
         complete=False,
+        recall=RecallSummary(),
         warnings=(
             ScanWarning(
                 ScanWarningCode.ROOT_UNAVAILABLE,

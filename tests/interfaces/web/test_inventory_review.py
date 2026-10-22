@@ -46,6 +46,34 @@ def _select(view, node_id=None, selected=True, **changes):
     return view.set_selection(**values)
 
 
+def test_recall_filter_uses_current_positive_items_and_scan_totals_stay_fixed():
+    from namisync.core.models import MetadataSnapshot
+    from namisync.workflows import RecallSummary
+    marked = replace(file_stat(), metadata=MetadataSnapshot(0x400000, None))
+    projection = build_inventory_projection(1, (
+        _row("1", "cloud", observed=marked),
+        _row("2", "missing", observed=marked, presence=InventoryPresence.MISSING),
+        _row("3", "folder", entry_kind=EntryKind.DIRECTORY, observed=replace(marked, kind=EntryKind.DIRECTORY)),
+        _row("4", "blocked", presence=InventoryPresence.UNSUPPORTED, observed=None,
+             observed_attributes=0x400000, observed_size=13),
+        _row("5", "local"),
+    ))
+    summary = RecallSummary(2, 20)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", True, 4, 1,
+                                scan_request_id="2" * 32, recall=summary)
+    assert view.summary()["recall_item_count"] == 3
+    _update(view, filters=frozenset({"recall"}))
+    rows = view.window(expected_revision=view.view_revision, offset=0, limit=256)["rows"]
+    assert {row["display"] for row in rows} == {"cloud", "folder", "blocked"}
+    assert all(row["recall"] for row in rows)
+    assert view.summary()["recall"] == {"file_count": 2, "size": "20", "size_overflow": False, "size_partial": False}
+    _update(view, search_query="absent")
+    assert view.summary()["recall"]["file_count"] == 2
+    replacement = view.replacement("3" * 32, projection, r"C:\root", None, None, None,
+                                   scan_scope=None, scan_request_id=None)
+    assert replacement.summary()["recall"] is None
+
+
 def test_row_anchor_resolves_current_ancestor_and_never_changes_the_view():
     view = _view()
     folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
@@ -408,7 +436,7 @@ def test_complete_inventory_256_row_envelope_has_margin_under_response_wall():
     assert set(row) == {"node_id", "display", "depth", "is_container", "visible_index",
         "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
         "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum",
-        "acknowledged", "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection", "highlighted"}
+        "acknowledged", "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection", "highlighted", "recall"}
     assert set(row["rollup"]) == {"domain_count", "file_count", "present", "unverified", "verified", "modified",
         "reappeared", "unsupported", "missing", "mismatched", "acknowledged", "size", "size_overflow", "size_partial"}
     assert set(actual) == {"disposition", "view_revision", "highlight_revision", "offset", "total", "rows"}

@@ -1551,7 +1551,8 @@ def test_first_location_adopts_scan_once_before_registration_and_inventory(
     root = mount / "managed"
     root.mkdir(parents=True)
     ledger_path = tmp_path / "ledger.db"
-    scanner = _Scanner(records=(_file(),))
+    recalled = replace(_file(), metadata=MetadataSnapshot(0x400000, None))
+    scanner = _Scanner(records=(recalled,))
     details: list[InventoryDetails] = []
     adoption_calls: list[ScanResult] = []
     original_adopt = inventory_workflow.adopt_scan_result
@@ -1592,6 +1593,8 @@ def test_first_location_adopts_scan_once_before_registration_and_inventory(
     assert len(adoption_calls) == len(scanner.calls) == 1
     assert details[-1].resolution.state is VolumeResolutionState.RESOLVED
     assert details[-1].observed_count == 1
+    assert details[-1].recall is not None
+    assert (details[-1].recall.file_count, details[-1].recall.size) == (1, recalled.size)
     assert details[-1].selected_paths == details[-1].subtree_roots == ()
     with connect_ledger_reader(ledger_path) as connection:
         assert connection.execute("SELECT count(*) FROM mappings").fetchone()[0] == 0

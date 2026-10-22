@@ -170,7 +170,8 @@ provider-level no-hydration guarantee. Directory enumeration may retrieve remote
 directory metadata without downloading file contents. Neither a network-free
 scan nor comprehensive cloud-placeholder detection is promised.
 
-The authorized M1 recall advisory is pending delivery: visible
+The M1 recall advisory's projections and bridge are delivered; desktop controls
+remain the next GUI checkpoint. Visible
 `FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS` (`0x400000`) is positive scan-time evidence
 that an item may not be fully available locally, independently of reparse bits.
 Its absence is not proof of local availability. Counters cover scanned file

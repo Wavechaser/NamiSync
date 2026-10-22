@@ -10,7 +10,7 @@ from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
 from namisync.core.pathing import normalize_relative_path
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
 from namisync.interfaces.web.inventory_review import InventoryReviewState
-from namisync.workflows import PlanSortColumn, SortDirection, build_inventory_projection
+from namisync.workflows import RecallSummary, PlanSortColumn, SortDirection, build_inventory_projection
 from namisync.workflows.views import inventory_current_detail
 
 
@@ -26,7 +26,7 @@ def inventory_probe_fixture() -> dict[str, object]:
         presence=InventoryPresence.MISSING, acknowledged_at=NOW, missing_since=NOW)
     projection = build_inventory_projection(1, (row, acknowledged), (
         ScanWarning(ScanWarningCode.ACCESS_DENIED, "unreadable", "read failed"),))
-    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 1, scan_request_id="2" * 32)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 1, recall=RecallSummary(), scan_request_id="2" * 32)
     views = {"default": {"summary": view.summary(), "window": view.window(expected_revision=0, offset=0, limit=256)}}
     for name, changes in (
         ("acknowledged", {"filters": frozenset({"acknowledged"})}),
@@ -39,7 +39,7 @@ def inventory_probe_fixture() -> dict[str, object]:
     many = tuple(replace(row, row_id=str(index + 10), rel_path=rf"many\{index:03}.txt",
         rel_path_key=normalize_relative_path(rf"many\{index:03}.txt")) for index in range(300))
     maximum = InventoryReviewState(view.task_id, view.request_id, build_inventory_projection(1, many),
-        r"C:\root", True, 300, 0, scan_request_id=view.request_id)
+        r"C:\root", True, 300, 0, recall=RecallSummary(), scan_request_id=view.request_id)
     views["maximum"] = {"summary": maximum.summary(), "window": maximum.window(expected_revision=0, offset=0, limit=256)}
     views["middle"] = {"summary": maximum.summary(), "window": maximum.window(expected_revision=0, offset=240, limit=256)}
     invalidated = replace(row, invalidation=VerificationInvalidation(NOW, VerificationInvalidationReason.HASH_MISMATCH))
@@ -48,7 +48,7 @@ def inventory_probe_fixture() -> dict[str, object]:
         presence=InventoryPresence.MISSING, observed=replace(stat, kind=EntryKind.DIRECTORY),
         attestation=None, last_verified_at=None, missing_since=NOW)
     folder_view = InventoryReviewState(view.task_id, view.request_id,
-        build_inventory_projection(1, (missing_folder,)), r"C:\root", True, 0, 1, scan_request_id=view.request_id)
+        build_inventory_projection(1, (missing_folder,)), r"C:\root", True, 0, 1, recall=RecallSummary(), scan_request_id=view.request_id)
     detail = {"disposition": "current", "view_revision": 0, "node_id": projection.node_id_by_row_id["1"],
               "snapshot": {"path": row.rel_path, "warning": None}}
     snapshots = {node.node_id: {"disposition": "current", "view_revision": 0, "node_id": node.node_id,
@@ -77,7 +77,7 @@ def inventory_gallery_fixture() -> dict[str, object]:
         rel_path_key=normalize_relative_path(f"evidence-{index}.txt")) for index in range(300))
     view = InventoryReviewState("task-" + "2" * 32, "1" * 32,
         build_inventory_projection(1, rows), r"C:\recorded", True, 300, 0,
-        scan_scope=("location", None), scan_request_id="1" * 32)
+        scan_scope=("location", None), recall=RecallSummary(), scan_request_id="1" * 32)
     first = view.window(expected_revision=0, offset=0, limit=256)
     tail = view.window(expected_revision=0, offset=256, limit=256)
     return {"summary": view.summary(), "window": first,

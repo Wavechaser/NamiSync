@@ -1,6 +1,7 @@
 """Static invariants over the exact wheel-shipped frontend file set."""
 
 from __future__ import annotations
+from namisync.workflows import RecallSummary
 
 import json
 import re
@@ -510,7 +511,7 @@ def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_pa
         None, None, None, None, None)
     projection = build_inventory_projection(1, (row,), (
         ScanWarning(ScanWarningCode.ACCESS_DENIED, "", "root warning"),))
-    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 0, scan_request_id="2" * 32)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 0, recall=RecallSummary(), scan_request_id="2" * 32)
     detail = {"disposition": "current", "view_revision": 0,
               "node_id": projection.node_id_by_row_id["1"], "snapshot": {"path": row.rel_path, "warning": None},
               "detail": inventory_current_detail(row)}
@@ -520,7 +521,7 @@ def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_pa
     child = replace(row, rel_path=r"folder\subject.txt", rel_path_key=r"FOLDER\SUBJECT.TXT")
     zero_scope = InventoryReviewState(view.task_id, view.request_id,
         build_inventory_projection(1, (folder, child)), view.root_path, True, 2, 0,
-        scan_request_id=view.request_id, filters=frozenset({"unverified"}))
+        recall=RecallSummary(), scan_request_id=view.request_id, filters=frozenset({"unverified"}))
     fixture = tmp_path / "inventory-window.json"
     fixture.write_text(json.dumps({"summary": view.summary(),
         "window": view.window(expected_revision=0, offset=0, limit=256), "detail": detail,
