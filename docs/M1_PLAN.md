@@ -58,16 +58,18 @@ each unit receives fresh adversarial review before its commit.
 | --- | --- | --- | --- |
 | G1 | Stable Inventory highlight geometry and visible selected Sync/Integrity accent, preserving existing disabled controls until execution finishes. Web app CSS; direct browser/gallery consumers; DESKTOP_UI. | Selection geometry and disabled selected/unavailable control behavior, interface department and installed appearance witness; one selected-state fix. | Complete; 87 focused passes, 2,083 interface passes, installed light/dark/forced gallery and independent review. |
 | G2 | Explain successful baseline creation during Verify without claiming comparison verification. Desktop task-status digest and its shell probe; DESKTOP_UI. | Baseline aggregate and adverse terminal axes through production digest, existing mixed-result runtime witness; interface department; one summary fix. | Complete; focused production shell probe, 2,083 interface passes and independent review. |
-| G3 | Check all selectable files on a new explicit Inventory scan/Refresh publication; folders reflect aggregate selection. Inventory review state/drain and direct review, composition and headed consumers; PRESENTATION/DESKTOP_UI. | Initial/new user scan selects files, integrity-owned internal scan and visibility publication preserve choices, filtered/off-window selection and native journey; one default-selection fix. | Pending. |
+| G3 | Check all selectable files on a new explicit Inventory scan/Refresh publication; folders reflect aggregate selection. Inventory review state/drain and direct review, composition and headed consumers; PRESENTATION/DESKTOP_UI. | Initial/new user scan selects files, integrity-owned internal scan and visibility publication preserve choices, filtered/off-window selection and native journey; one default-selection fix. | Complete; 278 focused, 2,091 interface passes and installed Inventory journey; independently reviewed. Superseded next by G3b per user sequencing. |
+| G3b | User clarification: apply all-selected default only once at the first Inventory publication. Every later scan/Refresh retains checked/unchecked surviving files, removes departed IDs and leaves new files unchecked. Missing ledger rows retain checkbox state, explicitly confirmed by the user. Same adapter/direct consumer population as G3. | Initial all-selected plus checked/unchecked/removal/new-file replacement composition and native journey; separate correction commit after G3 as explicitly requested. | Pending after G3. |
 | G4 | Put Inventory live integrity results and existing per-item progress in Presence; ordinary present folders have blank Presence, retaining exceptional folder states. Inventory renderer and direct browser/gallery consumers; DESKTOP_UI. | Active/paused/terminal result precedence, supplied progress, missing/reappeared/unsupported folders and notes retention; interface department and installed witness; one Presence rendering fix. | Pending. |
 | G5 | Narrow Inventory reload visibility to actionable read recovery and place both pages' reload controls in their top action rows. Plan/Inventory renderer, app read-recovery state and direct browser/gallery consumers; DESKTOP_UI. | Loading/refresh/update do not flash recovery, real read failure remains recoverable, both placements; interface department and installed witness; one recovery-control fix. | Pending. |
 
 Preserve filesystem/evidence effects, eligibility, reviewed starts, session/result
 identity, bounded windows, selection authority, accessibility and unavailable
 controls. G2 changes GUI wording only: a new baseline is not a comparison and the
-workflow/CLI `verification-incomplete` classification remains intact. G3 resets
-selection for a new Inventory scan identity, not integrity-owned internal scans
-or each result refresh; a no-scan execution ledger retains its existing default.
+workflow/CLI `verification-incomplete` classification remains intact. G3b supersedes
+G3's later explicit-Refresh reset after G3 is committed, following the user's
+in-turn sequencing request. Final selection defaults once, then preserves
+surviving membership; a no-scan execution ledger retains its existing default.
 G4 consumes existing
 progress facts without adding a second reducer. Direct test consumers migrate
 with their production behavior; no wire/schema migration is planned. AGENTS

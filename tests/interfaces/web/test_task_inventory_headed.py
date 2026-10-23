@@ -19,7 +19,7 @@ from conftest import HeadedInstalledWheel
 
 _CHILD = Path(__file__).with_name("_task_inventory_headed_child.py")
 _INTEGRITY_INPUT = {name: True for name in (
-    "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear",
+    "range-reset", "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear",
     "select-folder", "select-location-clear", "select-location", "baseline", "verify", "follow-go", "pause", "resume",
     "verify-cancel", "cancel", "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm",
 )}
@@ -199,10 +199,12 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         enabled_nodes = {initial["report"]["fixture"][key]
                          for key in ("folder_node_id", "first_node_id", "missing_node_id")}
         assert not table["header_checkbox"]["disabled"]
+        assert table["header_checkbox"]["checked"]
         for row in table["row_checkboxes"]:
             assert row["appearance"]["disabled"] is (row["node_id"] not in enabled_nodes)
+            assert row["appearance"]["checked"] is (row["node_id"] in enabled_nodes)
         for checkbox in checkboxes:
-            assert not checkbox["checked"] and not checkbox["mixed"]
+            assert not checkbox["mixed"]
             assert [checkbox["width"], checkbox["height"]] == pytest.approx([16, 16], abs=0.5)
         for header_left, header_right, row_left, row_right in table["column_edges"]:
             assert [row_left, row_right] == pytest.approx([header_left, header_right], abs=1)
@@ -234,12 +236,12 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert [item["accept_current_evidence"] for item in starts] == [False, False, False, True]
         assert len({item["command_id"] for item in starts}) == 4
         assert [item["request_id"] for item in starts[1:]] == [item["next_request_id"] for item in starts[:-1]]
-        assert [item["selected"] for item in commands["selections"]] == [True, False, True]
-        assert [item["result"]["selected_file_count"] for item in commands["selections"]] == [3, 2, 3]
-        assert [item["result"]["hidden_selected_file_count"] for item in commands["selections"]] == [0, 2, 2]
+        assert [item["selected"] for item in commands["selections"]] == [False, True, False, True]
+        assert [item["result"]["selected_file_count"] for item in commands["selections"]] == [0, 3, 2, 3]
+        assert [item["result"]["hidden_selected_file_count"] for item in commands["selections"]] == [0, 0, 2, 2]
         assert [item["result"]["selected_file_count"] for item in commands["highlighted_selections"]] == [3, 0]
-        assert commands["selections"][0]["node_id"] == initial["report"]["fixture"]["folder_node_id"]
-        assert commands["selections"][1]["node_id"] is commands["selections"][2]["node_id"] is None
+        assert commands["selections"][1]["node_id"] == initial["report"]["fixture"]["folder_node_id"]
+        assert commands["selections"][0]["node_id"] is commands["selections"][2]["node_id"] is commands["selections"][3]["node_id"] is None
         assert [item["action"] for item in commands["controls"]] == ["pause", "resume", "cancel"]
         assert commands["runner_entry_controls"] == ["pause", "cancel"]
         assert [item["session_id"] for item in commands["controls"]] == [starts[1]["session_id"], starts[1]["session_id"], starts[2]["session_id"]]

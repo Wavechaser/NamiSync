@@ -228,6 +228,8 @@ explicit, reviewable and regression-backed.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.
+- Initialize checked Inventory file selection from published scans, with
+  folder aggregate states and unchanged operation eligibility.
 
 #### Expose scan-time local availability and clarify cloud behavior (2026-10-22)
 

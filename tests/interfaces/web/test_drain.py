@@ -3040,6 +3040,77 @@ def test_inventory_selection_requires_current_settled_publication(blocked):
     assert registry._inventory_views[start.task_id].selected_row_ids == frozenset()
 
 
+@pytest.mark.parametrize(("activity", "new_scan", "current_scan", "expected"), [
+    ("inventory", True, True, 1),
+    ("inventory", False, True, 0),
+    ("inventory", True, False, 0),
+    ("verify", True, True, 0),
+    ("baseline", True, True, 0),
+    ("rebaseline", True, True, 0),
+])
+def test_inventory_selection_resets_only_for_explicit_current_scan(activity, new_scan, current_scan, expected):
+    registry, service, start, projection = _inventory_read_registry()
+    task = registry._tasks[start.task_id]
+    task.session_kind = "inventory"
+    registry.release_terminal_session(start.task_id, start.session_id)
+    initial = registry.open_inventory_view(start.task_id)
+    assert initial["selected_file_count"] == 1
+    cleared = registry.set_inventory_selection(start.task_id, start.request_id,
+        expected_revision=0, node_id=None, selected=False)
+    original = service.get_task_inventory_projection
+    _, details = original(start.task_id, start.request_id)
+    request_id = "f" * 32 if new_scan else start.request_id
+    scan_id = request_id if current_scan else start.request_id
+    service.get_task_inventory_projection = lambda *args: (projection, replace(details, request_id=scan_id))
+    task.session_kind, task.request_id = activity, request_id
+    task.generation += 1
+    task.inventory_view_dirty = True
+    published = registry.open_inventory_view(start.task_id)
+    assert published["selected_file_count"] == expected
+    assert published["view_revision"] == cleared["view_revision"] + 1
+    assert registry.open_inventory_view(start.task_id)["selected_file_count"] == expected
+
+
+def test_inventory_real_integrity_preserves_subset_and_refresh_selects_all(tmp_path):
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.workflows import LocationCandidate
+    root = tmp_path / "files"
+    root.mkdir()
+    (root / "one.bin").write_bytes(b"one")
+    (root / "two.bin").write_bytes(b"two")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+            return registry.open_inventory_view(start.task_id)
+        shell = registry.create_task_shell("1" * 32)
+        scan = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id="2" * 32, wire_intent=("inventory", str(root)))
+        summary = finish(scan)
+        assert summary["selected_file_count"] == 2
+        rows = registry.get_inventory_window(scan.task_id, expected_revision=0, offset=0, limit=256)["rows"]
+        subset = registry.set_inventory_selection(scan.task_id, scan.request_id,
+            expected_revision=0, node_id=rows[0]["node_id"], selected=False)
+        assert subset["selected_file_count"] == 1
+        baseline = registry.start_inventory_integrity(scan.task_id, scan.request_id,
+            expected_revision=subset["view_revision"], mode="baseline", accept_current_evidence=False,
+            command_id="3" * 32, wire_intent=("baseline",))
+        baselined = finish(baseline)
+        assert baselined["scan_request_id"] != summary["scan_request_id"]
+        assert baselined["selected_file_count"] == 1
+        refresh = registry.refresh_inventory(scan.task_id, baseline.request_id,
+            expected_revision=baselined["view_revision"], node_id=None,
+            command_id="4" * 32, wire_intent=("refresh",))
+        refreshed = finish(refresh)
+        assert refreshed["selected_file_count"] == 2
+        assert refreshed["scan_request_id"] == refresh.request_id
+        registry.close_task(scan.task_id, refresh.session_id)
+
+
 def test_inventory_selection_real_scan_release_view_and_close(tmp_path):
     from namisync.interfaces.service import SessionObserver, _dispatcher
     from namisync.workflows import LocationCandidate
@@ -3064,30 +3135,33 @@ def test_inventory_selection_real_scan_release_view_and_close(tmp_path):
             if registry._tasks[start.task_id].delivered_terminal_record is not None:
                 break
         registry.release_terminal_session(start.task_id, start.session_id)
-        assert registry.open_inventory_view(start.task_id)["selected_file_count"] == 0
+        assert registry.open_inventory_view(start.task_id)["selected_file_count"] == 2
+        cleared = registry.set_inventory_selection(start.task_id, start.request_id,
+            expected_revision=0, node_id=None, selected=False)
+        assert cleared["selected_file_count"] == 0
         result = registry.set_inventory_selection(start.task_id, start.request_id,
-            expected_revision=0, node_id=None, selected=True)
+            expected_revision=1, node_id=None, selected=True)
         assert result["selected_file_count"] == 2 and result["selection"] == "all"
         assert len(scanner.calls) == 1
         assert registry.get_inventory_window(start.task_id,
             expected_revision=0, offset=0, limit=256)["disposition"] == "conflict"
         rows = registry.get_inventory_window(start.task_id,
-            expected_revision=1, offset=0, limit=256)["rows"]
+            expected_revision=2, offset=0, limit=256)["rows"]
         assert all(row["selection"] == "all" for row in rows)
         assert registry.set_inventory_selection(start.task_id, start.request_id,
             expected_revision=0, node_id=None, selected=False)["disposition"] == "conflict"
         folder = next(row for row in rows if row["is_container"])
         highlighted = registry.mutate_inventory_highlight(start.task_id,
-            expected_view_revision=1, expected_highlight_revision=0,
+            expected_view_revision=2, expected_highlight_revision=0,
             gesture="replace", node_id=folder["node_id"])
         assert highlighted["highlighted_count"] == 1 and highlighted["selected_file_count"] == 2
         assert registry.set_inventory_highlighted_selection(start.task_id, start.request_id,
-            expected_revision=1, expected_highlight_revision=0, selected=False)["disposition"] == "conflict"
+            expected_revision=2, expected_highlight_revision=0, selected=False)["disposition"] == "conflict"
         selected = registry.set_inventory_highlighted_selection(start.task_id, start.request_id,
-            expected_revision=1, expected_highlight_revision=1, selected=False)
+            expected_revision=2, expected_highlight_revision=1, selected=False)
         assert selected["selected_file_count"] == 1 and selected["highlighted_count"] == 1
         assert registry.get_inventory_window(start.task_id,
-            expected_revision=2, offset=0, limit=256)["rows"][0]["highlighted"]
+            expected_revision=3, offset=0, limit=256)["rows"][0]["highlighted"]
         registry.close_task(start.task_id, start.session_id)
         assert registry._inventory_views == {}
     finally:
@@ -6850,17 +6924,21 @@ def test_inventory_ordinary_native_selection_results_refresh_and_close(tmp_path,
                 return accept
             return original_start(task_id, request_id, **{**kwargs, "delivery_factory": delivery})
         service.start_task_inventory_integrity = observed_start
+        assert registry.open_inventory_view(first.task_id)["selected_file_count"] == 2
+        cleared = registry.set_inventory_selection(first.task_id, first.request_id,
+            expected_revision=0, node_id=None, selected=False)
+        assert cleared["selected_file_count"] == 0
         with pytest.raises(ValueError, match="selected"):
-            registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=0,
+            registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
                 mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,))
         selected = registry.set_inventory_selection(first.task_id, first.request_id,
-            expected_revision=0, node_id=None, selected=True)
+            expected_revision=1, node_id=None, selected=True)
         assert selected["selected_file_count"] == 2
         if mode == "rebaseline":
             with pytest.raises(ValueError, match="acceptance"):
-                registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+                registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=2,
                     mode=mode, accept_current_evidence=False, command_id="3" * 32, wire_intent=(mode,))
-        second = registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+        second = registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=2,
             mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,))
         finish(second)
         summary = registry.open_inventory_view(first.task_id)
@@ -6872,7 +6950,7 @@ def test_inventory_ordinary_native_selection_results_refresh_and_close(tmp_path,
         assert ordinary["session_id"] == second.session_id and ordinary["request_id"] == second.request_id
         assert ordinary["complete"] and not ordinary["gap"] and len(ordinary["items"]) == 2
         assert {item["result"] for item in ordinary["items"]} == {"baselined"}
-        assert registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+        assert registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=2,
             mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,)) == second
         third = registry.refresh_inventory(first.task_id, second.request_id, expected_revision=summary["view_revision"],
             node_id=None, command_id="4" * 32, wire_intent=("refresh",))
@@ -7102,6 +7180,9 @@ def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_pat
             view = finish(refreshed)
             projection = registry._inventory_views[planned.task_id].projection
             outside = next(node.node_id for node in projection.nodes if node.rel_path == "outside.bin")
+            assert view["selected_file_count"] == 2
+            view = registry.set_inventory_selection(planned.task_id, refreshed.request_id,
+                expected_revision=view["view_revision"], node_id=None, selected=False)
             view = registry.set_inventory_selection(planned.task_id, refreshed.request_id,
                 expected_revision=view["view_revision"], node_id=outside, selected=True)
             assert view["selected_file_count"] == 1
@@ -7359,8 +7440,9 @@ def test_inventory_ordinary_live_control_terminal_repair_and_zero_replacement(tm
         first = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
             command_id="2" * 32, wire_intent=("inventory", str(root)))
         finish(first)
-        registry.set_inventory_selection(first.task_id, first.request_id, expected_revision=0, node_id=None, selected=True)
-        baseline = registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+        selected = registry.set_inventory_selection(first.task_id, first.request_id, expected_revision=0, node_id=None, selected=True)
+        assert selected["disposition"] == "noop" and selected["selected_file_count"] == 1
+        baseline = registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=selected["view_revision"],
             mode="baseline", accept_current_evidence=False, command_id="3" * 32, wire_intent=("baseline",))
         summary = finish(baseline)
         started, release = Event(), Event()

@@ -1036,6 +1036,7 @@ class TaskRegistry:
                     return existing.summary()
                 raise TaskUnavailableError("inventory terminal session is not released")
             identity = (task.session_id, task.request_id, task.generation)
+            scan_activity = task.session_kind == "inventory"
             prior_revision = None if existing is None else existing.view_revision
             task.inventory_view_loading = True
         try:
@@ -1047,6 +1048,13 @@ class TaskRegistry:
                 root_path = details.resolution.root_path
             make_view = InventoryReviewState if existing is None else existing.replacement
             args = (task_id, identity[1]) if existing is None else (identity[1],)
+            selection = {}
+            if (scan_activity and details is not None and details.request_id == identity[1]
+                    and (existing is None or existing.scan_request_id != details.request_id)):
+                selection["selected_row_ids"] = frozenset(
+                    node.row.row_id for node in projection.nodes
+                    if node.row is not None and node.row.entry_kind is not None
+                    and node.row.entry_kind.value == "file")
             view = make_view(*args,
                 projection, root_path,
                 None if details is None else details.complete,
@@ -1055,6 +1063,7 @@ class TaskRegistry:
                 scan_scope=None if details is None else inventory_scan_scope(details),
                 scan_request_id=None if details is None else details.request_id,
                 recall=None if details is None else details.recall,
+                **selection,
             )
         except BaseException:
             with task.condition:

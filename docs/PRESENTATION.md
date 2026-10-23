@@ -210,6 +210,14 @@ Inventory instead fences its file membership with the publication/view and
 highlight revisions; it creates no workflow operation. Inventory Home/End resolve
 the first/last visible row through the same bounded read and highlight queue.
 
+A newly published explicit Inventory scan or Refresh checks every indexed file,
+including files outside the current filter or window; folder checkboxes reflect
+their matching descendants. Warnings and empty folders remain nonselectable.
+Integrity-owned scoped scans and acknowledgement publications retain surviving
+checkbox choices. Failed scans retaining an earlier publication do not reset
+selection. Execution-associated ledger browsing without a scan keeps its empty
+initial selection. Checking a row changes no workflow eligibility or action authority.
+
 Plan and Inventory navigation retain at most one read in flight and one latest
 pending target. Each surface's scrolling, endpoint lookup and highlight refresh share
 read admission. Pointer replacement likewise supersedes unsubmitted navigation;
@@ -419,8 +427,9 @@ Rebaseline consent and ordinary revision/admission fences remain unchanged.
 One existing view revision fences selection, windows and details. A stale request
 or revision changes nothing; selection changes advance the revision. Selection
 requires a current released, clean publication and cannot race admission or a
-pending visibility effect. Replacements retain only surviving exact file row IDs,
-leave new rows unselected, clear highlights and invalidate prior gestures.
+pending visibility effect. Except for an explicit fresh Inventory scan/Refresh,
+replacements retain only surviving exact file row IDs and leave new rows
+unselected. All replacements clear highlights and invalidate prior gestures.
 Compact prefixes of complete selected membership and matching selectable/selected
 files provide constant-time per-row tri-state; hidden counts are computed at selection/view changes, not on
 each window read. Mode eligibility remains workflow-owned and no integrity

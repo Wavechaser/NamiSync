@@ -26,7 +26,7 @@ _COMMANDS = frozenset({"refresh_inventory", "acknowledge_inventory", "restore_in
                        "mutate_inventory_highlight", "start_inventory_integrity", "control_integrity"})
 _READ_COMMANDS = frozenset({"get_inventory_anchor"})
 _FILE_BYTES = b"NamiSync native inventory fixture\r\n"
-_RANGE_STAGES = ("range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear")
+_RANGE_STAGES = ("range-reset", "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear")
 _INTEGRITY_STAGES = ("select-folder", "select-location-clear", "select-location", "baseline",
                      "verify", "follow-go", "pause", "resume", "verify-cancel", "cancel",
                      "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm")
@@ -426,7 +426,7 @@ class _InventoryPhase:
             raise RuntimeError("inventory action identities or actual effects differ")
         self.capture_integrity()
         view = registry.open_inventory_view(initial["task_id"])
-        selections = matching("set_inventory_selection", 3)
+        selections = matching("set_inventory_selection", 4)
         highlighted = matching("set_inventory_highlighted_selection", 2)
         if ([item["selected"] for item in highlighted] != [True, False]
                 or [item["result"]["selected_file_count"] for item in highlighted] != [3, 0]):
@@ -445,8 +445,8 @@ class _InventoryPhase:
         if (view["scan_scope"] != {"kind": "selection", "path": None}
                 or view["scan_request_id"] != starts[-1]["next_request_id"]):
             raise RuntimeError("inventory publication was not replaced")
-        if ([item["node_id"] for item in selections] != [fixture["folder_node_id"], None, None]
-                or [item["selected"] for item in selections] != [True, False, True]
+        if ([item["node_id"] for item in selections] != [None, fixture["folder_node_id"], None, None]
+                or [item["selected"] for item in selections] != [False, True, False, True]
                 or [item["mode"] for item in starts] != ["baseline", "verify", "verify", "rebaseline"]
                 or [item["accept_current_evidence"] for item in starts] != [False, False, False, True]
                 or [item["action"] for item in controls] != ["pause", "resume", "cancel"]
@@ -626,7 +626,7 @@ _PAGE = r"""
       value.getBoundingClientRect().right, tableRows[0].children[index].getBoundingClientRect().left,
       tableRows[0].children[index].getBoundingClientRect().right]),
   };
-  const rangeStages = ['range-anchor', 'range-toggle', 'range-end', 'range-checkbox', 'range-clear'];
+  const rangeStages = ['range-reset', 'range-anchor', 'range-toggle', 'range-end', 'range-checkbox', 'range-clear'];
   const integrityStages = ['select-folder', 'select-location-clear', 'select-location', 'baseline',
     'verify', 'follow-go', 'pause', 'resume', 'verify-cancel', 'cancel',
     'rebaseline-cancel-open', 'rebaseline-cancel', 'rebaseline-open', 'rebaseline-confirm'];
@@ -672,7 +672,7 @@ _PAGE = r"""
         : name === 'range-toggle' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.missing_node_id}"]`
         : name === 'range-end' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.last_node_id}"]`
         : name === 'range-checkbox' || name === 'range-clear' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.last_node_id}"] input[data-action="inventory-select-row"]`
-        : name === 'select-location' || name === 'select-location-clear' ? '[data-action="inventory-select-location"]'
+        : name === 'range-reset' || name === 'select-location' || name === 'select-location-clear' ? '[data-action="inventory-select-location"]'
         : name === 'rebaseline-confirm' ? '#rebaseline-confirmation [data-confirm-execution]'
         : name === 'rebaseline-cancel' ? '#rebaseline-confirmation [data-cancel-execution]'
         : name === 'rebaseline-open' || name === 'rebaseline-cancel-open' ? '[data-action="inventory-rebaseline"]'
@@ -907,6 +907,9 @@ _PAGE = r"""
   const viewport = review.querySelector('.nami-inventory-review__list');
   const rangeRow = id => tree.querySelector(`[data-node-id="${id}"]`);
   const selectionText = () => review.querySelector('[data-inventory-selection-summary]').textContent;
+  if (!selectionText().includes('3 of 3 files selected')) throw new Error('fresh scan must select all files');
+  await stage('range-reset');
+  await until(() => selectionText().includes('0 of 3 files selected'), 'scan-selection-cleared');
   await stage('range-anchor');
   await until(() => rangeRow(fixture.first_node_id)?.dataset.highlighted === 'true', 'range-anchor-settled');
   await stage('range-toggle');
