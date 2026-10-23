@@ -1899,6 +1899,7 @@ def _valid_inventory_panel(value: object) -> bool:
         "headers", "checkbox_count", "switcher", "labels", "checksum", "timestamps",
         "selected_state",
         "item_progress",
+        "reload_actions_top",
         "first_widths", "row_widths", "grown_widths", "manual_before", "manual_after",
         "header_positions", "row_positions", "status_rectangles", "scroll_owners",
         "details", "refresh_on_status", "root_fits", "viewport_height",
@@ -1911,6 +1912,8 @@ def _valid_inventory_panel(value: object) -> bool:
         type(value["headers"]) is list and len(value["headers"]) == 7
         and all(type(text) is str and len(text) <= 32 for text in value["headers"])
         and type(value["checkbox_count"]) is int and 0 <= value["checkbox_count"] <= 257
+        and type(value["reload_actions_top"]) is list and len(value["reload_actions_top"]) == 2
+        and all(type(flag) is bool for flag in value["reload_actions_top"])
         and type(value["selected_state"]) is dict
         and set(value["selected_state"]) == {"stable_columns", "plan_accent", "inventory_accent"}
         and all(type(flag) is bool for flag in value["selected_state"].values())

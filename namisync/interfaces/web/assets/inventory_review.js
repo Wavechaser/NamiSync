@@ -124,7 +124,7 @@ export function createInventoryReviewPanel(callbacks) {
   const reload = button("Reload inventory view", "inventory-reload");
   const statusActions = element("div", "nami-plan-review__actions");
   const actions = element("div", "nami-inventory-review__actions");
-  actions.append(baseline, verify, rebaseline, copiedVerify, pause, resume, cancel, refreshSelected, refresh);
+  actions.append(baseline, verify, rebaseline, copiedVerify, pause, resume, cancel, refreshSelected, refresh, reload);
   statusActions.append(title, actions);
   const statusMeta = element("div", "nami-plan-review__status-meta");
   const detailsToggle = button("Details", "inventory-details");
@@ -136,7 +136,7 @@ export function createInventoryReviewPanel(callbacks) {
   const progressBar = element("div", "nami-progress__bar");
   progress.append(progressBar);
   const recoveryActions = element("div", "nami-inventory-review__actions");
-  recoveryActions.append(check, reload);
+  recoveryActions.append(check);
   summary.append(statusActions, statusMeta, selectionSummary, statusLine, integrityResult, recoveryActions, progress);
 
   const table = element("div", "nami-card nami-plan-review__table-card nami-inventory-review__table");
@@ -776,7 +776,7 @@ export function createInventoryReviewPanel(callbacks) {
     planPane.disabled = !syncTask || value.workPane === "plan";
     verifyPane.disabled = syncTask ? value.workPane === "verify" : false;
     content.hidden = false;
-    reload.hidden = !value.inventoryError && !review?.message;
+    reload.hidden = value.inventoryError ? value.inventoryReloadAvailable !== true : review?.refreshAvailable !== true;
     reload.disabled = value.inventoryLoading || value.closePending;
     const actionBlocked = !available || blocked() || !value.sessionReleased || value.sessionState === "active";
     refresh.disabled = actionBlocked;
@@ -785,7 +785,7 @@ export function createInventoryReviewPanel(callbacks) {
     const recovery = startAttempt?.recovery ?? value.inventoryAction?.recovery;
     check.hidden = recovery?.canCheck !== true;
     check.disabled = recovery?.checking === true || (startAttempt !== null && !startAttempt.running);
-    recoveryActions.hidden = check.hidden && reload.hidden;
+    recoveryActions.hidden = check.hidden;
     renderFilesystemText(rootPath, review?.summary.root_path ?? value.form?.source?.text ?? "");
     rootLine.title = review?.summary.root_path ?? value.form?.source?.text ?? "";
     const ordinary = currentIntegrity();

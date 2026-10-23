@@ -2095,7 +2095,12 @@ the central status scope, item titles and table text retain their existing form.
 These joins use supplied detail facts without filesystem probes.
 Task navigation, view changes and Close retire details before late replies can
 restore them. A failed read normally offers Reload inventory view, which reads
-current publication without starting another scan. If a refused Refresh has no
+current publication without starting another scan. The button appears only for
+explicit delayed, stale or failed read recovery; ordinary loading, selection,
+progress and informational messages do not expose it. An accepted authoritative
+replacement clears that recovery. Both Inventory's Reload and Plan's existing
+Check outcome/Refresh review button live in the top action row, retaining their
+original command-check behavior. If a refused Refresh has no
 current details and retains an earlier publication, guidance instead directs
 the user to check the location/reconnect its drive and use Refresh. Confirmed
 Refresh admission clears its transient action message; the current scan state

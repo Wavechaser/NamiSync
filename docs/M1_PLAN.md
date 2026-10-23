@@ -61,19 +61,29 @@ each unit receives fresh adversarial review before its commit.
 | G3 | Check all selectable files on a new explicit Inventory scan/Refresh publication; folders reflect aggregate selection. Inventory review state/drain and direct review, composition and headed consumers; PRESENTATION/DESKTOP_UI. | Initial/new user scan selects files, integrity-owned internal scan and visibility publication preserve choices, filtered/off-window selection and native journey; one default-selection fix. | Complete; 278 focused, 2,091 interface passes and installed Inventory journey; independently reviewed. Superseded next by G3b per user sequencing. |
 | G3b | User clarification: apply all-selected default only once at the first Inventory publication. Every later scan/Refresh retains checked/unchecked surviving files, removes departed IDs and leaves new files unchecked. Missing ledger rows retain checkbox state, explicitly confirmed by the user. Same adapter/direct consumer population as G3. | Initial all-selected plus checked/unchecked/removal/new-file replacement composition and native journey; separate correction commit after G3 as explicitly requested. | Complete; 279 focused and 6,229 ordinary passes, installed Inventory journey and independent review. |
 | G4 | Put Inventory live integrity results and existing per-item progress in Presence; ordinary present folders have blank Presence, retaining exceptional folder states. Inventory renderer and direct browser/gallery/native result consumers; DESKTOP_UI. | Active/paused/terminal result precedence, supplied progress, missing/reappeared/unsupported folders and notes retention; interface department and installed witness; one Presence rendering fix. | Complete; focused probes, 2,091 interface passes, installed Inventory and light/dark/forced gallery. Independent review caught and confirmed correction of async result/session pairing. |
-| G5 | Narrow Inventory reload visibility to actionable read recovery and place both pages' reload controls in their top action rows. Plan/Inventory renderer, app read-recovery state and direct browser/gallery consumers; DESKTOP_UI. | Loading/refresh/update do not flash recovery, real read failure remains recoverable, both placements; interface department and installed witness; one recovery-control fix. | Pending. |
+| G5 | Narrow Inventory reload visibility to actionable read recovery and place both pages' reload controls in their top action rows. Plan/Inventory renderer, app read-recovery state and direct browser/gallery consumers; DESKTOP_UI. | Loading/refresh/update do not flash recovery, real read failure remains recoverable, both placements; interface department and installed witness; one recovery-control fix. | Complete; focused probes, installed Inventory and gallery, independent review including corrected viewport recovery clearing. Final department result recorded below. |
 
 Preserve filesystem/evidence effects, eligibility, reviewed starts, session/result
 identity, bounded windows, selection authority, accessibility and unavailable
 controls. G2 changes GUI wording only: a new baseline is not a comparison and the
 workflow/CLI `verification-incomplete` classification remains intact. G3b supersedes
-G3's later explicit-Refresh reset after G3 is committed, following the user's
+G3's later explicit-Refresh reset after G3 was committed, following the user's
 in-turn sequencing request. Final selection defaults once, then preserves
 surviving membership; a no-scan execution ledger retains its existing default.
 G4 consumes existing
 progress facts without adding a second reducer. Direct test consumers migrate
-with their production behavior; no wire/schema migration is planned. AGENTS
+with their production behavior; no wire/schema migration was needed. AGENTS
 mandatory and recurrence stops apply. Evidence: `build/gui-followup-20261023/`.
+
+Integrated G1 `8de9a330`, G2 `243b14d2`, G3 `68db0d26`, G4 `cbd27e6f`,
+G3b `5e83201`, and G5 in this closeout commit. Final ordinary gate: 6,229
+passed, four existing privilege skips, 35 headed deselections; 12 import
+contracts passed. The final G5 viewport-recovery correction received renewed
+independent review and affected interface/native reruns: 2,092 interface passes.
+Both installed checks
+passed, covering the Inventory journey and light/dark/forced gallery. Unchanged
+non-interface ordinary evidence remains valid. No unresolved finding, task-owned
+worktree or branch remains; M1-12/release/DOC-2 stay inactive.
 
 ### Recall availability advisory — 2026-10-22
 

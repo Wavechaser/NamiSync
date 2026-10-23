@@ -1,44 +1,41 @@
-# Latest session — recall advisory delivery, 2026-10-22
+# Latest session — Inventory GUI refinement, 2026-10-23
 
-Completed the authorized narrow M1 recall advisory batch on `milestone1` using
-execute-task. No worktrees, push or PR. PO4 remains accepted and unchanged;
-M1-12, release and DOC-2 remain inactive.
+Completed the user-authorized GUI follow-up on `milestone1`, starting at
+`389b4895`, using execute-task with independent review and atomic commits.
+M1-12, release, DOC-2, push and PR remain inactive.
 
 Integrated outcomes:
 
-- `adce88d`: separately commit the user's preexisting toolchain-maintenance
-  documentation; evidence in `build/node-security-20261022/`.
-- `a3aa2e4`: cloud policy, local completion and hydration-boundary documentation.
-- `b3f1c2c`: retain unsupported observed attributes/size without granting execution
-  eligibility or changing the database schema.
-- `ecbeed3`: full-scan recall totals through the bridge, row flags and filters.
-- The GUI commit containing this closeout: accessible Microsoft cloud-arrow-down
-  icons and **Not fully local** filters in Plan/Inventory, plus cloud guidance in
-  expanded Plan details. Aggregate counts/sizes remain bridge-only.
+- `8de9a330`: stable Inventory highlight geometry and selected-disabled
+  Sync/Integrity accent; switcher availability remains unchanged.
+- `243b14d2`: clean Verify baseline creation says **Baseline created** without
+  claiming comparison verification or changing workflow/CLI classifications.
+- `68db0d26`: initial checked Inventory selection, followed by the separately
+  requested clarification in `5e83201`: default all-selected only once, retain
+  surviving checked/unchecked rows including Missing, leave new rows unchecked,
+  and drop IDs absent from the replacement inventory.
+- `cbd27e6f`: live progress and retained results in Presence, diagnostic Notes
+  preserved, ordinary folder Presence blank with exceptional states retained.
+- The commit containing this closeout: actionable reload recovery only, both
+  pages' reload controls in the top action rows, recovery cleared on successful
+  viewport retry without deleting unrelated feedback.
 
-Each atomic outcome received independent review. Final verification: 6,220
-ordinary passes, four existing Windows privilege skips, all four installed GUI
-modes and 12 import contracts. All 540 gate inputs matched before/after and across
-final gates. Icon provenance checked against the pinned Fluent archive. GUI
-evidence verifies filter callbacks/results, accessible labels, installed glyph
-mask and layout; no bitmap of the recall specimens was captured.
+Verification evidence: `build/gui-followup-20261023/`, including `receipts.md`,
+`final-ordinary.txt`, `final-interfaces-r2.txt`, `final-native-r2.txt` and
+`final-imports.txt`. The ordinary suite passed 6,229 tests with four existing
+privilege skips and 35 headed deselections. After the final viewport recovery
+correction, the affected interface department and installed GUI checks were
+rerun: 2,092 interface passes; both installed checks passed (Inventory journey and light/dark/forced
+component gallery). All 12 import contracts passed.
 
-Evidence and failed receipts: `build/recall-advisory-20261022/`, especially
-`reviews.md`, `ra2-receipt.md`, `ra3-receipt.md` and `ra4-receipt.md`.
-The introduced folder-details recall-rollup error was corrected before delivery;
-remaining failures were fixture migrations/authoring errors and an existing
-transition-observation timing seam. No unresolved product finding remains.
+Every outcome received fresh adversarial review. Review caught and confirmed
+correction of async result/session pairing and stale viewport recovery feedback.
+No unresolved product finding remains. Direct frontend/native test consumers
+were migrated with their behavior; no wire/schema or domain-policy migration
+was required. Failed receipts remain available, including sandbox/temp-path
+conditions and stale native assertions; acceptance was not relaxed.
 
-The actual FULL scan of the user OneDrive fixture observed four files, including
-two recall-marked files totaling 79,529,014 logical bytes. Both online allocations
-remained zero and captured metadata stayed unchanged. No content reads, execution
-or user-file writes occurred. This is bounded evidence, not a universal hydration
-guarantee. SCANNER documents runtime metadata fallbacks and the M2 native/provider
-work needed for stronger guarantees.
-
-Recall is advisory, not network authorization or a complete cloud inventory.
-Reviewed local effects retain existing destructive treatment; success means local
-filesystem completion, not provider upload completion or remote verification.
-The user OneDrive folder and prior K: fixture remain untouched. No task-created
-worktrees or branches require cleanup. Future aggregate status-panel placement
-and stronger M2 guarantees require separately activated work.
+Microsoft's Fluent/WinUI references informed selected/disabled states and
+progress presentation; DESKTOP_UI retains the relevant source links. No task
+worktree or branch was created, and no user fixture cleanup is required.
+The GUI corrections do not declare M1 or release acceptance complete.

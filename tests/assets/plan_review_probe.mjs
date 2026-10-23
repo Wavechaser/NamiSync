@@ -1033,6 +1033,7 @@ task.executionControlAttempt = { sessionId: task.sessionId,
 review.pending = "pause";
 panel.render(task);
 const controlCheck = findAction(panel.element, "retry-outcome");
+assert.equal(controlCheck.parentElement.parentElement.classList.contains("nami-plan-review__actions"), true);
 assert.equal(controlCheck.hidden, false);
 assert.equal(controlCheck.disabled, false, "ordinary control Check is available while idle");
 task.executionControlAttempt.recovery.checking = true;

@@ -782,6 +782,7 @@ function adoptTask(summary) {
       inventoryOverlayRunning: false,
       inventoryOverlayDirty: false,
       inventoryError: null,
+      inventoryReloadAvailable: false,
       inventoryAction: null,
       inventoryViewUnconfirmed: false,
       workPane: "plan",
@@ -1574,6 +1575,7 @@ async function replaceInventoryPublication(task, review, summary, action, sessio
   review.summary = authoritative;
   review.window = window;
   task.inventoryViewUnconfirmed = false;
+  review.refreshAvailable = false;
   return true;
 }
 
@@ -1608,7 +1610,10 @@ async function changeInventorySelection(review, nodeId, selected, highlightedSco
     if (replaced) review.message = summary.disposition === "conflict"
       ? highlightedScope ? "Highlight changed. Review the current highlight, then select again."
         : "Selection changed elsewhere. Current selection shown." : null;
-    else review.message = "Selection changed. Reload the inventory view to continue.";
+    else {
+      review.refreshAvailable = true;
+      review.message = "Selection changed. Reload the inventory view to continue.";
+    }
   } catch (_error) {
     if (currentInventoryTask(review) === task && review.actionRevision === action) {
       try {
@@ -1617,7 +1622,9 @@ async function changeInventorySelection(review, nodeId, selected, highlightedSco
         review.message = replaced
           ? "Selection response unavailable. Current authoritative selection shown."
           : "Selection response unavailable. Reload the inventory view to continue.";
+        review.refreshAvailable = !replaced;
       } catch (_reloadError) {
+        review.refreshAvailable = true;
         review.message = "Selection response unavailable. Reload the inventory view to continue.";
       }
     }
@@ -1981,6 +1988,7 @@ async function loadInventoryReview(task, force = false) {
   }
   task.inventoryLoading = true;
   task.inventoryError = null;
+  task.inventoryReloadAvailable = false;
   renderTasks();
   const stillCurrent = () => tasks.get(task.taskId) === task && task.inventoryRevision === request
     && task.sessionId === sessionId && selectedTaskId === task.taskId
@@ -1994,13 +2002,14 @@ async function loadInventoryReview(task, force = false) {
     if (!stillCurrent()) return;
     if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
       task.inventoryError = "Inventory changed. Reload the inventory view to continue.";
+      task.inventoryReloadAvailable = true;
       return;
     }
     const retainedTarget = task.inventoryReview?.activeRefreshTarget;
     const retainActive = retainedTarget?.node_id === window.anchor_node_id
       && Number.isSafeInteger(window.anchor_visible_index);
     task.inventoryReview = {
-      summary, window, pending: null, message: null, queuedSearchQuery: null,
+      summary, window, pending: null, message: null, queuedSearchQuery: null, refreshAvailable: false,
       actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop: 0,
       highlightQueue: Promise.resolve(),
       follow: retainedFollow,
@@ -2011,11 +2020,15 @@ async function loadInventoryReview(task, force = false) {
     inventoryFollow(task, task.inventoryReview);
     task.inventoryViewUnconfirmed = false;
   } catch (error) {
-    if (stillCurrent()) task.inventoryError = error?.code === "task_unavailable"
-      && task.sessionState === "refused" && task.inventoryReview !== null
-      && task.inventoryReview.summary.request_id !== task.requestId
-      ? "Inventory unavailable for the refused scan. Check the location, reconnect its drive if needed, then click Refresh."
-      : "Inventory unavailable. Reload the inventory view to retry.";
+    if (stillCurrent()) {
+      const refusedScan = error?.code === "task_unavailable"
+        && task.sessionState === "refused" && task.inventoryReview !== null
+        && task.inventoryReview.summary.request_id !== task.requestId;
+      task.inventoryReloadAvailable = !refusedScan;
+      task.inventoryError = refusedScan
+        ? "Inventory unavailable for the refused scan. Check the location, reconnect its drive if needed, then click Refresh."
+        : "Inventory unavailable. Reload the inventory view to retry.";
+    }
   } finally {
     if (tasks.get(task.taskId) === task && task.inventoryRevision === request) {
       task.inventoryLoading = false;
@@ -2067,6 +2080,7 @@ async function changeInventoryView(review, patch) {
   try {
     const summary = await updateInventoryView(task.taskId, review.summary.view_revision, gesture, () => {
       if (stillCurrent()) {
+        review.refreshAvailable = true;
         review.message = "View response delayed. Reload the inventory view to read its current state.";
         renderTasks();
       }
@@ -2075,15 +2089,20 @@ async function changeInventoryView(review, patch) {
     const window = await readInventoryWindow(task.taskId, summary.view_revision, 0, 256);
     if (!stillCurrent()) return;
     if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
+      review.refreshAvailable = true;
       review.message = "Inventory changed. Reload the inventory view to continue.";
       return;
     }
     review.summary = summary;
     review.window = window;
     review.scrollTop = 0;
+    review.refreshAvailable = false;
     review.message = summary.disposition === "conflict" ? "View changed. Current inventory view shown." : null;
   } catch (_error) {
-    if (stillCurrent()) review.message = "View response unavailable. Reload the inventory view to retry.";
+    if (stillCurrent()) {
+      review.refreshAvailable = true;
+      review.message = "View response unavailable. Reload the inventory view to retry.";
+    }
   } finally {
     if (tasks.get(task.taskId) === task && task.inventoryReview === review && review.actionRevision === action) {
       review.pending = null;
@@ -2146,13 +2165,24 @@ async function loadInventoryWindow(review, offset) {
     const summary = inventoryWindowSummary(review, window, revision);
     if (window.disposition === "current" && summary !== null) {
       review.summary = summary;
+      const recovering = review.refreshAvailable === true;
+      review.refreshAvailable = false;
+      if (review.windowRecoveryMessage !== undefined && review.message === review.windowRecoveryMessage) {
+        review.message = null;
+      }
+      delete review.windowRecoveryMessage;
+      if (recovering) renderTasks();
       return window;
     }
+    review.refreshAvailable = true;
     review.message = "Inventory changed. Reload the inventory view to continue.";
+    review.windowRecoveryMessage = review.message;
     renderTasks();
   } catch (_error) {
     if (current()) {
+      review.refreshAvailable = true;
       review.message = "Inventory rows unavailable. Reload the inventory view to retry.";
+      review.windowRecoveryMessage = review.message;
       renderTasks();
     }
   } finally {
@@ -2185,6 +2215,7 @@ async function readInventoryDetail(review, nodeId) {
     if (!stillCurrent()) return;
     if (response.disposition === "conflict") {
       retireInventoryDetail(review);
+      review.refreshAvailable = true;
       review.message = "Inventory changed. Reload the inventory view to read current details.";
     } else {
       detail.state = response.disposition;

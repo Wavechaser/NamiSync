@@ -4257,6 +4257,7 @@ def _inventory_panel_sample() -> dict[str, object]:
     return {
         "headers": ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"], "checkbox_count": 65,
         "selected_state": {"stable_columns": True, "plan_accent": True, "inventory_accent": True},
+        "reload_actions_top": [True, True],
         "item_progress": {"value":"60", "ratio":0.6, "height":4.0, "row_retained":True,
                           "focus_retained":True, "notes_clear":True, "result_in_presence":True},
         "switcher": [{"text": "Sync", "selected": "false", "disabled": True},
@@ -4314,6 +4315,7 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert evidence["headers"] == ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"]
     assert evidence["checkbox_count"] == 65
     assert evidence["selected_state"] == {"stable_columns": True, "plan_accent": True, "inventory_accent": True}
+    assert evidence["reload_actions_top"] == [True, True]
     item_progress = evidence["item_progress"]
     assert item_progress["value"] == "60"
     assert item_progress["ratio"] == pytest.approx(0.6, abs=0.02)

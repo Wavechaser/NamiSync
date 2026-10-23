@@ -485,9 +485,9 @@ export function createPlanReviewPanel(callbacks) {
   controls.append(pause, cancel);
   const primary = document.createElement("div");
   primary.className = "nami-plan-review__control-group";
-  primary.append(planAgain, execute);
+  primary.append(planAgain, execute, retryOutcome);
   statusActions.append(statusTitle, controls, primary);
-  statusMeta.append(facts, status, retryOutcome, detailsToggle);
+  statusMeta.append(facts, status, detailsToggle);
   tableCard.append(toolbar, list, floatingControls);
   const content = document.createElement("div");
   content.className = "nami-plan-review__content";

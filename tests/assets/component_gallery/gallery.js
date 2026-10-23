@@ -2371,6 +2371,9 @@ window.addEventListener("unhandledrejection", (event) => {
         selected: value.ariaChecked, disabled: value.disabled })), labels, checksum: checksumEvidence,
       first_widths: firstWidths, row_widths: rowWidths, grown_widths: grownWidths,
       header_positions: headerPositions, row_positions: rowPositions, selected_state: selectedState, item_progress: itemProgress,
+      reload_actions_top: [root.querySelector('[data-action="inventory-reload"]'),
+        planReviewPanel.element.querySelector('[data-action="retry-outcome"]')]
+        .map(control => control.closest('.nami-plan-review__actions') !== null),
       status_rectangles: statusRectangles, setup_heights: setupHeights, status: statusEvidence, scroll_owners: scrollOwners,
       manual_before: manualBefore, manual_after: manualAfter, details: detailEvidence,
       refresh_on_status: [...root.querySelectorAll('[data-action="inventory-refresh"], [data-action="inventory-refresh-selected"]')]

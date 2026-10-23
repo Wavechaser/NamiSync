@@ -234,6 +234,8 @@ explicit, reviewable and regression-backed.
 - Show live per-item integrity progress and retained results in Presence,
   preserving row focus and keeping Notes for diagnostics. Leave ordinary folder
   Presence blank while retaining missing, reappeared and exceptional states.
+- Show Inventory reload only for actionable read recovery, clear it when the
+  read recovers, and place both pages' reload controls in their top action rows.
 
 #### Expose scan-time local availability and clarify cloud behavior (2026-10-22)
 
