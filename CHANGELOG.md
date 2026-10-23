@@ -230,6 +230,9 @@ explicit, reviewable and regression-backed.
   and the underlying workflow/CLI classification.
 - Initialize checked Inventory file selection from published scans, with
   folder aggregate states and unchanged operation eligibility.
+- Show live per-item integrity progress and retained results in Presence,
+  preserving row focus and keeping Notes for diagnostics. Leave ordinary folder
+  Presence blank while retaining missing, reappeared and exceptional states.
 
 #### Expose scan-time local availability and clarify cloud behavior (2026-10-22)
 

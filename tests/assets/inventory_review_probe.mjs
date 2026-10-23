@@ -1198,11 +1198,21 @@ const presentationPane = createInventoryReviewPanel({onViewChange:()=>{}, onDeta
 presentationPane.render(presentationTask);
 const presented = walk(presentationPane.element).filter(value => value.getAttribute("role") === "treeitem");
 assert.deepEqual(presented.map(value => value.querySelector(".nami-file-state-label").textContent),
-  ["Reappeared", "Mismatch", "Missing", "Folder", "Folder"]);
+  ["Reappeared", "Mismatch", "Missing", "", ""]);
 assert.deepEqual(presented.map(value => value.querySelector(".nami-file-row__notes").textContent),
   ["", "", "Acknowledged", "Partial size", "Size overflow"]);
 assert.equal(presented[0].querySelector(".nami-inventory-row__checksum").textContent, real.recorded_checksum.slice(0, 8));
 assert.equal(presented[1].querySelector(".nami-integrity-row__presence").dataset.integrity, "mismatched");
+for (const [patch, expected] of [[{presence:"present", verification_state:"unverified", reappeared:false}, ""],
+  [{presence:"missing"}, "Missing"], [{presence:"present", reappeared:true}, "Reappeared"],
+  [{presence:"unsupported"}, "Unsupported"], [{presence:"present", verification_state:"error", reappeared:false}, "Error"]]) {
+  presentationReview.window = {...presentationReview.window, rows:[{...folderDomain, ...patch}]};
+  presentationPane.render(presentationTask);
+  const state = presentationPane.element.querySelector(".nami-integrity-row__presence");
+  assert.equal(state.querySelector(".nami-file-state-label").textContent, expected);
+}
+presentationReview.window = {...presentationReview.window, rows:presentationRows};
+presentationPane.render(presentationTask);
 for (const [phase, label] of [["baseline", "Baseline"], ["verify", "Verification"], ["rebaseline", "Rebaseline"]]) {
   presentationTask.sessionState = "completed";
   presentationTask.snapshot = {terminal_result: {phases: [{phase}]}};
@@ -1229,14 +1239,58 @@ assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.da
 assert.equal(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityState")).dataset.integrityState,
   "verified");
 assert.ok(walk(presentationPane.element).some(value => value.classList.contains("nami-file-state-label")
-  && value.textContent === "Verification: Verified"));
+  && value.textContent === "Verified"));
+const resultPresence = walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityState"));
+assert.equal(resultPresence.classList.contains("nami-integrity-row__presence"), true);
+assert.equal(resultPresence.parentElement.querySelector(".nami-file-row__notes").children.length, 0);
+presentationReview.window = {...presentationReview.window, integrity:{...overlay, items:[]}};
+presentationTask.snapshot = {session_id:overlay.session_id, session_state:"active", phase:"verify",
+  presentation:{value:25, determinate:true, indeterminate:false, items_done:0, items_total:1}, terminal_result:null};
+presentationTask.progressPresentation = {phase:"verify", itemPercent:25,
+  activeItem:{item_type:"integrity", item_id:`${overlay.location_id}:${real.row_id}`}};
+presentationPane.render(presentationTask);
+const progressRow = walk(presentationPane.element).find(value => value.dataset.nodeId === "presence-return");
+const progressCheckbox = progressRow.querySelector(".nami-checkbox");
+const progressPresence = progressRow.querySelector(".nami-integrity-row__presence");
+progressCheckbox.focus();
+const activeBar = () => progressPresence.querySelector(".nami-progress");
+assert.equal(activeBar().ariaValueNow, "25");
+presentationTask.progressPresentation = {...presentationTask.progressPresentation, itemPercent:70};
+presentationPane.render(presentationTask);
+assert.equal(activeBar().ariaValueNow, "70");
+assertSameNode(progressCheckbox.parentElement.parentElement, progressRow, "progress retains the row");
+assertSameNode(document.activeElement, progressCheckbox, "progress retains checkbox focus");
+for (const patch of [{itemPercent:null}, {activeItem:{item_type:"integrity", item_id:"foreign:row"}}]) {
+  const saved = presentationTask.progressPresentation;
+  presentationTask.progressPresentation = {...saved, ...patch};
+  presentationPane.render(presentationTask);
+  assert.equal(activeBar(), null, "unknown percentage or another item cannot display a determinate bar");
+  if (patch.itemPercent === null) assert.equal(progressPresence.querySelector(".nami-file-state-label").textContent, "Verifying");
+  presentationTask.progressPresentation = saved;
+}
+for (const patch of [{sessionState:"completed"}, {sessionKind:"inventory"},
+  {snapshot:{...presentationTask.snapshot, session_id:"foreign-session"}}]) {
+  const saved = {...presentationTask};
+  Object.assign(presentationTask, patch);
+  presentationPane.render(presentationTask);
+  assert.equal(activeBar(), null, "only the current active integrity session supplies progress");
+  Object.assign(presentationTask, saved);
+}
+presentationReview.window = {...presentationReview.window, integrity:overlay};
+presentationPane.render(presentationTask);
+assert.equal(walk(presentationPane.element).some(value => value.classList.contains("nami-progress--inline")), false,
+  "settled current-session result supersedes an active item sample");
+presentationTask.snapshot = null;
+presentationTask.progressPresentation = null;
 for (const [mode, owner, result] of [["baseline", "Baseline", "baselined"],
   ["rebaseline", "Rebaseline", "baselined"]]) {
   presentationReview.window = {...presentationReview.window,
     integrity:{...overlay, mode, items:[{...overlayItem, result}]}};
   presentationPane.render(presentationTask);
   assert.ok(walk(presentationPane.element).some(value => value.classList.contains("nami-file-state-label")
-    && value.textContent === `${owner}: Baselined`), `${owner} owns its row result label`);
+    && value.textContent === "Baselined"), `${owner} has a compact row result label`);
+  assert.ok(walk(presentationPane.element).some(value => value.dataset.integrityState === "baselined"
+    && value.title.startsWith(`${owner} · Baselined`)), `${owner} remains in the result tooltip`);
 }
 presentationReview.window = {...presentationReview.window, integrity:overlay};
 presentationPane.render(presentationTask);
@@ -1309,6 +1363,35 @@ presentationPane.render(presentationTask);
 presentationAction("pane-plan").click();
 assert.deepEqual(paneChanges.at(-1), [presentationTask, "plan"]);
 presentationPane.dispose();
+
+// An asynchronously committed viewport must use its candidate result session,
+// before the controller publishes that window back to the review owner.
+const settledTailRow = fixture.tail.rows.find(row => !row.is_container && row.row_id !== null);
+const settledTail = {...fixture.tail, integrity:{...overlay,
+  location_id:fixture.views.maximum.summary.location_id, session_id:"current-tail",
+  items:[{...overlayItem, row_id:settledTailRow.row_id}]}};
+const tailReview = {...fixture.views.maximum, pending:null, message:null, detail:null,
+  queuedSearchQuery:null, scrollTop:0, window:{...fixture.views.maximum.window, integrity:null}};
+const tailTask = {...presentationTask, inventoryReview:tailReview, taskKind:"inventory",
+  sessionKind:"verify", sessionId:"current-tail", sessionState:"active", sessionReleased:false,
+  snapshot:{session_id:"current-tail", session_state:"active", presentation:{value:99}},
+  progressPresentation:{itemPercent:99, activeItem:{item_type:"integrity",
+    item_id:`${tailReview.summary.location_id}:${settledTailRow.row_id}`}}};
+const tailPane = createInventoryReviewPanel({onWindow:async()=>settledTail});
+tailPane.render(tailTask);
+const tailViewport = tailPane.element.querySelector(".nami-inventory-review__list");
+tailViewport.scrollTop = 300 * 24;
+tailViewport.dispatch("scroll");
+while (frames.length) frames.shift()();
+await Promise.resolve(); await Promise.resolve();
+assert.equal(tailReview.window, settledTail);
+const settledPresence = walk(tailPane.element).find(value => value.dataset.nodeId === settledTailRow.node_id)
+  .querySelector(".nami-integrity-row__presence");
+assert.equal(settledPresence.querySelector(".nami-progress"), null);
+assert.equal(settledPresence.querySelector(".nami-file-state-label").textContent, "Verified");
+tailPane.render(tailTask);
+assert.equal(settledPresence.querySelector(".nami-file-state-label").textContent, "Verified");
+tailPane.dispose();
 
 // A passive selection receipt keeps the live outer viewport and focused checkbox.
 const highlightCalls = [], highlightedSelections = [], followCalls = [];
@@ -1402,7 +1485,7 @@ alignedReview.window = {...fixture.views.maximum.window,
   integrity:{...overlay, location_id:alignedReview.summary.location_id, items:costItems}};
 alignedPane.render(alignedTask);
 assert.equal(walk(alignedPane.element).filter(value => Object.hasOwn(value.dataset, "integrityState")).length,
-  costItems.length);
+  maximumRows.filter(row => row.row_id !== null && !row.is_container).length);
 const alignedAction = name => walk(alignedPane.element).find(value => value.dataset.action === name);
 assert.equal(alignedAction("inventory-refresh").classList.contains("nami-button--primary"), false);
 assert.equal(alignedAction("verify-copied-files").classList.contains("nami-button--primary"), true);

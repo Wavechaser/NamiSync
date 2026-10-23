@@ -2323,6 +2323,43 @@ window.addEventListener("unhandledrejection", (event) => {
     toggle.click();
     detailEvidence.focus_restored = document.activeElement === toggle && diagnostics.hidden;
     await settled();
+    const retainedWindow = review.window;
+    const retainedFocus = document.activeElement;
+    const liveTask = {...inventoryTask, sessionId:"gallery-integrity", sessionKind:"verify",
+      sessionState:"active", sessionReleased:false,
+      snapshot:{session_id:"gallery-integrity", session_state:"active", phase:"verify", terminal_result:null,
+        presentation:{value:25, determinate:true, indeterminate:false, items_done:0, items_total:1}},
+      progressPresentation:{itemPercent:25, activeItem:{item_type:"integrity",
+        item_id:`${review.summary.location_id}:${rows[0].row_id}`}}};
+    panel.render(liveTask);
+    const liveRow = firstRow();
+    const liveTree = root.querySelector('[role="tree"]');
+    liveTree.focus({preventScroll:true});
+    const liveActiveDescendant = liveTree.getAttribute("aria-activedescendant");
+    liveTask.progressPresentation = {...liveTask.progressPresentation, itemPercent:60};
+    panel.render(liveTask);
+    await settled();
+    const livePresence = liveRow.querySelector(".nami-integrity-row__presence");
+    const inlineProgress = livePresence.querySelector('[role="progressbar"]');
+    const inlineBar = inlineProgress.firstElementChild;
+    inlineBar.style.transition = "none";
+    const itemProgress = {value:inlineProgress.ariaValueNow,
+      ratio:inlineBar.getBoundingClientRect().width / inlineProgress.getBoundingClientRect().width,
+      height:inlineProgress.getBoundingClientRect().height,
+      row_retained:firstRow() === liveRow, focus_retained:document.activeElement === liveTree
+        && liveTree.getAttribute("aria-activedescendant") === liveActiveDescendant,
+      notes_clear:!liveRow.querySelector('.nami-file-row__notes').textContent};
+    review.window = {...review.window, integrity:{location_id:review.summary.location_id,
+      session_id:liveTask.sessionId, mode:"verify", revision:1, complete:true, gap:false,
+      items:[{row_id:rows[0].row_id, result:"verified", reason:null, recording:"ok",
+        record_disposition:null, detail_omitted_count:0}]}};
+    panel.render(liveTask);
+    itemProgress.result_in_presence = firstRow().querySelector('.nami-integrity-row__presence').textContent === "Verified"
+      && !firstRow().querySelector('[role="progressbar"]');
+    review.window = retainedWindow;
+    panel.render(inventoryTask);
+    retainedFocus?.focus({preventScroll:true});
+    await settled();
     const viewportHeight = viewport.clientHeight;
     viewport.scrollTop = 250 * 24;
     viewport.dispatchEvent(new Event("scroll"));
@@ -2333,7 +2370,7 @@ window.addEventListener("unhandledrejection", (event) => {
       appearance, resizing, timestamps, switcher: [...root.querySelectorAll(".nami-segmented__item")].map((value) => ({ text: value.textContent,
         selected: value.ariaChecked, disabled: value.disabled })), labels, checksum: checksumEvidence,
       first_widths: firstWidths, row_widths: rowWidths, grown_widths: grownWidths,
-      header_positions: headerPositions, row_positions: rowPositions, selected_state: selectedState,
+      header_positions: headerPositions, row_positions: rowPositions, selected_state: selectedState, item_progress: itemProgress,
       status_rectangles: statusRectangles, setup_heights: setupHeights, status: statusEvidence, scroll_owners: scrollOwners,
       manual_before: manualBefore, manual_after: manualAfter, details: detailEvidence,
       refresh_on_status: [...root.querySelectorAll('[data-action="inventory-refresh"], [data-action="inventory-refresh-selected"]')]

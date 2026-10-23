@@ -274,6 +274,8 @@ export function createInventoryReviewPanel(callbacks) {
   let activeRefreshTarget = null;
   let rowOrdinaryItems = new Map();
   let rowOrdinaryMode = null;
+  let rowOrdinarySessionId = null;
+  let renderedProgress = null;
   const selectionControls = new Map();
   let selectionFocus = null;
   let searchTimer = null;
@@ -401,6 +403,45 @@ export function createInventoryReviewPanel(callbacks) {
     if (row !== undefined && row.warning === null && !blocked()) callbacks.onVisibility(current, "restore", row.node_id);
   });
 
+  function renderPresence(state, row) {
+    const ordinaryItem = row.is_container ? null : rowOrdinaryItems.get(row.row_id) ?? null;
+    const presentation = task?.progressPresentation;
+    const active = presentation?.activeItem;
+    const live = !row.is_container && row.warning === null && row.row_id !== null
+      && task.sessionState === "active" && task.snapshot?.session_id === task.sessionId
+      && task.snapshot.session_state === "active"
+      && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+      && active?.item_type === "integrity"
+      && active.item_id === `${current.summary.location_id}:${row.row_id}`
+      && !(rowOrdinarySessionId === task.sessionId && ordinaryItem !== null);
+    const stateKey = row.warning !== null || row.row_id === null ? ""
+      : row.presence !== "present" ? row.presence
+      : row.is_container ? row.reappeared ? "reappeared"
+        : ["error", "unsupported"].includes(row.verification_state) ? row.verification_state : ""
+      : row.verification_state === "mismatched" ? "mismatched"
+      : row.reappeared ? "reappeared" : row.verification_state;
+    const owner = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[rowOrdinaryMode] ?? "Integrity";
+    const liveLabel = ({baseline: "Baselining", verify: "Verifying", rebaseline: "Rebaselining"})[task?.sessionKind];
+    const percent = live && Number.isFinite(presentation.itemPercent) ? presentation.itemPercent : undefined;
+    const stateText = live ? liveLabel : ordinaryItem !== null ? integrityLabel(ordinaryItem.result)
+      : row.warning !== null ? "Notice" : integrityLabel(stateKey);
+    const content = createIntegrityCell(document, "", "primary",
+      live ? "" : ordinaryItem?.result ?? stateKey, live && percent !== undefined ? "verifying" : undefined,
+      stateText, percent);
+    state.replaceChildren(...Array.from(content.children));
+    delete state.dataset.integrity;
+    delete state.dataset.lifecycle;
+    delete state.dataset.integrityState;
+    Object.assign(state.dataset, content.dataset);
+    if (!live && ordinaryItem !== null) state.dataset.integrityState = ordinaryItem.result;
+    state.title = live ? stateText : ordinaryItem !== null
+      ? [owner, integrityLabel(ordinaryItem.result), ordinaryItem.reason, ordinaryItem.recording,
+        ordinaryItem.record_disposition, ordinaryItem.detail_omitted_count > 0
+          ? `${ordinaryItem.detail_omitted_count} details omitted` : null].filter(Boolean).join(" · ")
+      : row.is_container || row.row_id === null ? stateText
+        : `${label(row.presence)} · ${label(row.verification_state)}${row.reappeared ? " · Reappeared" : ""}`;
+  }
+
   function decorateRow(rowElement, row) {
     rowElement.classList.add("nami-file-row", "nami-inventory-row");
     rowElement.dataset.folder = String(row.is_container);
@@ -443,19 +484,10 @@ export function createInventoryReviewPanel(callbacks) {
     selectionControls.set(row.node_id, checkbox);
     selection.append(checkbox);
     rowElement.replaceChildren(selection, name);
-    const stateKey = row.warning !== null || row.row_id === null ? ""
-      : row.presence !== "present" ? row.presence
-      : row.verification_state === "mismatched" ? "mismatched"
-      : row.reappeared ? "reappeared" : row.verification_state;
-    const stateText = row.warning !== null ? "Notice" : row.row_id === null ? "Folder"
-      : label(stateKey);
-    const state = createIntegrityCell(document,
-      "nami-inventory-row__state nami-integrity-row__presence", "primary", stateKey, undefined, stateText);
-    state.removeAttribute("role");
+    const state = element("div", "nami-file-row__cell nami-inventory-row__state nami-integrity-row__presence");
+    renderPresence(state, row);
     const checksum = element("div", "nami-file-row__cell nami-inventory-row__checksum nami-integrity-row__checksum", row.recorded_checksum?.slice(0, 8) ?? "—");
     checksum.title = row.recorded_checksum === null ? "No stored baseline evidence" : `Stored baseline checksum: ${row.recorded_checksum}`;
-    state.title = row.row_id === null ? stateText
-      : `${label(row.presence)} · ${label(row.verification_state)}${row.reappeared ? " · Reappeared" : ""}`;
     const sizeText = row.warning !== null ? "" : row.is_container
       ? bytes(row.rollup.size)
       : bytes(row.size);
@@ -473,18 +505,6 @@ export function createInventoryReviewPanel(callbacks) {
     notes.title = notesText;
     rowElement.dataset.highlighted = String(row.highlighted === true);
     rowElement.ariaSelected = String(row.highlighted === true);
-    const ordinaryItem = rowOrdinaryItems.get(row.row_id) ?? null;
-    const ordinaryOwner = ({baseline: "Baseline", verify: "Verification",
-      rebaseline: "Rebaseline"})[rowOrdinaryMode] ?? "Integrity";
-    if (ordinaryItem !== null) {
-      const resultCell = createIntegrityCell(document, "nami-inventory-row__result", "result",
-        ordinaryItem.result, undefined, `${ordinaryOwner}: ${integrityLabel(ordinaryItem.result)}`);
-      resultCell.dataset.integrityState = ordinaryItem.result;
-      resultCell.title = [ordinaryOwner, integrityLabel(ordinaryItem.result), ordinaryItem.reason, ordinaryItem.recording,
-        ordinaryItem.record_disposition, ordinaryItem.detail_omitted_count > 0
-          ? `${ordinaryItem.detail_omitted_count} details omitted` : null].filter(Boolean).join(" · ");
-      notes.append(resultCell);
-    }
     rowElement.append(state, checksum, size, modified, notes);
   }
 
@@ -592,6 +612,7 @@ export function createInventoryReviewPanel(callbacks) {
     const ordinary = matchingIntegrity(window.integrity);
     rowOrdinaryItems = new Map((ordinary?.items ?? []).map((item) => [item.row_id, item]));
     rowOrdinaryMode = ordinary?.mode ?? null;
+    rowOrdinarySessionId = ordinary?.session_id ?? null;
     const accepted = passive ? controller.commitPassiveWindow(generation, window)
       : controller.commitWindow(generation, window, preferredNodeId, reveal);
     if (accepted) {
@@ -708,6 +729,9 @@ export function createInventoryReviewPanel(callbacks) {
     activeNodeId = null;
     activeRefreshTarget = null;
     rowOrdinaryItems.clear();
+    rowOrdinaryMode = null;
+    rowOrdinarySessionId = null;
+    renderedProgress = null;
     selectionControls.clear();
     current = null;
     task = null;
@@ -905,7 +929,8 @@ export function createInventoryReviewPanel(callbacks) {
         if (focused !== undefined) selectionFocus = {nodeId:focused[0], control:focused[1]};
       }
     }
-    if (committedWindow !== review.window || review.keyboardRevealWindow === review.window) {
+    const replacingRows = committedWindow !== review.window || review.keyboardRevealWindow === review.window;
+    if (replacingRows) {
       const focusedCheckbox = [...selectionControls].find(([, control]) => control === document.activeElement)?.[0];
       const scrollTop = review.scrollTop ?? list.scrollTop;
       const keyboard = review.keyboardRevealWindow === review.window;
@@ -923,6 +948,19 @@ export function createInventoryReviewPanel(callbacks) {
       }
       review.keyboardRevealWindow = null;
     }
+    const active = value.progressPresentation?.activeItem;
+    const progressKey = JSON.stringify([value.sessionId, value.sessionKind, value.sessionState,
+      value.snapshot?.session_id, value.snapshot?.session_state, active?.item_type,
+      active?.item_id, value.progressPresentation?.itemPercent]);
+    if (!replacingRows && renderedProgress?.key !== progressKey) {
+      for (const row of review.window.rows) {
+        const itemId = `${review.summary.location_id}:${row.row_id}`;
+        if (itemId !== active?.item_id && itemId !== renderedProgress?.itemId) continue;
+        const rowElement = selectionControls.get(row.node_id)?.parentElement?.parentElement;
+        if (rowElement !== undefined && rowElement !== null) renderPresence(rowElement.children[2], row);
+      }
+    }
+    renderedProgress = {key:progressKey, itemId:active?.item_id};
     if (Number.isSafeInteger(follow?.scrollOffset)) {
       tree.revealPassiveRow(follow.scrollOffset);
       follow.scrollOffset = null;

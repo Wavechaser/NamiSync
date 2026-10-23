@@ -970,7 +970,7 @@ _PAGE = r"""
   }, 'integrity-visible-file');
   const released = async (label, expectedText, expectedState) => until(() => {
     const result = review.querySelector('[data-integrity-result]');
-    const states = [...review.querySelectorAll('.nami-inventory-row__result[data-integrity-state]')]
+    const states = [...review.querySelectorAll('.nami-integrity-row__presence[data-integrity-state]')]
       .map(value => value.dataset.integrityState);
     const expectedStates = expectedState === null ? [] : [expectedState];
     const currentScan = review.querySelector('.nami-inventory-review__status-line').textContent

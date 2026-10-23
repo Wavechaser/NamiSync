@@ -2020,11 +2020,18 @@ foreground window. Stale or uncertain gestures reload instead of replaying.
 Checksum shows eight characters of recorded baseline evidence, with the full
 stored digest in its tooltip; no evidence shows an em dash. Missing, modified or
 reappeared rows retain their stored checksum. A scan does not verify current bytes.
-Presence shows one gallery-style semantic label. Missing and unsupported presence
-retain their labels; for present items, Mismatch overrides Reappeared, then
-the stored verification state supplies Verified, Modified or Unverified.
-Reappeared stands alone without implying fresh verification. Rowless folders
-and scan notices remain neutral Folder and Notice labels. Acknowledgement,
+Presence shows live integrity progress, then retained ordinary per-file results,
+then current ledger state. A settled result from the current integrity session
+supersedes its last progress sample. Progress updates preserve rows, checkboxes,
+focus and the viewport; only the current session's matching item supplies a bar.
+Known percentages use the existing inline bar; unknown progress remains text,
+following Microsoft's [progress guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/progress-controls).
+Missing and unsupported presence retain their ledger labels; for present files,
+Mismatch overrides Reappeared, then the stored verification state supplies
+Verified, Modified or Unverified. Reappeared alone implies no fresh verification.
+Ordinary present and rowless folders have blank Presence cells; missing,
+reappeared, unsupported and error evidence remains visible. Scan notices retain
+the neutral Notice label. Acknowledgement,
 bounded warning details and partial/overflow size qualifiers appear in Notes;
 complete evidence remains in Details and tooltips. Filename alone absorbs
 passive width growth. Manual resizing transfers width from Notes down to its

@@ -1898,6 +1898,7 @@ def _valid_inventory_panel(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "headers", "checkbox_count", "switcher", "labels", "checksum", "timestamps",
         "selected_state",
+        "item_progress",
         "first_widths", "row_widths", "grown_widths", "manual_before", "manual_after",
         "header_positions", "row_positions", "status_rectangles", "scroll_owners",
         "details", "refresh_on_status", "root_fits", "viewport_height",
@@ -1913,6 +1914,12 @@ def _valid_inventory_panel(value: object) -> bool:
         and type(value["selected_state"]) is dict
         and set(value["selected_state"]) == {"stable_columns", "plan_accent", "inventory_accent"}
         and all(type(flag) is bool for flag in value["selected_state"].values())
+        and type(value["item_progress"]) is dict
+        and set(value["item_progress"]) == {"value", "ratio", "height", "row_retained", "focus_retained", "notes_clear", "result_in_presence"}
+        and type(value["item_progress"]["value"]) is str
+        and len(value["item_progress"]["value"]) <= 8
+        and _finite_number_matrix([[value["item_progress"]["ratio"], value["item_progress"]["height"]]], 1, 2)
+        and all(type(value["item_progress"][key]) is bool for key in ("row_retained", "focus_retained", "notes_clear", "result_in_presence"))
         and type(value["switcher"]) is list and len(value["switcher"]) == 2
         and all(type(item) is dict and set(item) == {"text", "selected", "disabled"}
                 and type(item["text"]) is str and item["selected"] in {"true", "false"}

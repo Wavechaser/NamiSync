@@ -4240,7 +4240,7 @@ def _inventory_panel_sample() -> dict[str, object]:
     cases = ("verified", "unverified", "modified", "reappeared", "unsupported", "missing", "mismatched",
              "acknowledged", "reappeared-mismatch", "folder", "child", "notice", "partial", "overflow")
     texts = ("Verified", "Unverified", "Modified", "Reappeared", "Unsupported", "Missing", "Mismatch",
-             "Missing", "Mismatch", "Folder", "Verified", "Notice", "Folder", "Folder")
+             "Missing", "Mismatch", "", "Verified", "Notice", "", "")
     first_widths = [32.0, 272.0, 128.0, 112.0, 80.0, 112.0, 264.0]
     grown_widths = [32.0, 472.0, 128.0, 112.0, 80.0, 112.0, 264.0]
     manual_before = [32.0, 464.0, 128.0, 112.0, 80.0, 112.0, 272.0]
@@ -4257,6 +4257,8 @@ def _inventory_panel_sample() -> dict[str, object]:
     return {
         "headers": ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"], "checkbox_count": 65,
         "selected_state": {"stable_columns": True, "plan_accent": True, "inventory_accent": True},
+        "item_progress": {"value":"60", "ratio":0.6, "height":4.0, "row_retained":True,
+                          "focus_retained":True, "notes_clear":True, "result_in_presence":True},
         "switcher": [{"text": "Sync", "selected": "false", "disabled": True},
                      {"text": "Integrity", "selected": "true", "disabled": False}],
         "labels": [{"case": name, "text": text, "foreground": "rgb(0, 0, 0)",
@@ -4312,6 +4314,11 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert evidence["headers"] == ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"]
     assert evidence["checkbox_count"] == 65
     assert evidence["selected_state"] == {"stable_columns": True, "plan_accent": True, "inventory_accent": True}
+    item_progress = evidence["item_progress"]
+    assert item_progress["value"] == "60"
+    assert item_progress["ratio"] == pytest.approx(0.6, abs=0.02)
+    assert item_progress["height"] == pytest.approx(4, abs=0.5)
+    assert all(item_progress[key] for key in ("row_retained", "focus_retained", "notes_clear", "result_in_presence"))
     assert evidence["switcher"] == [
         {"text": "Sync", "selected": "false", "disabled": True},
         {"text": "Integrity", "selected": "true", "disabled": False},
@@ -4358,7 +4365,7 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert appearance["active_node_id"] == "1"
     for node_id, row in enumerate(evidence["labels"], start=1):
         reference = specimen[_inventory_reference_case(row["case"])]
-        assert row["text"]
+        assert bool(row["text"]) == (row["case"] not in {"folder", "partial", "overflow"})
         expected_foreground = (
             system_colors["HighlightText"]
             if forced and str(node_id) == appearance["active_node_id"] and reference["primary_form"] != "fill"
@@ -4370,7 +4377,7 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
             assert row["height"] == pytest.approx(18, abs=0.5)
     assert [row["text"] for row in evidence["labels"]] == [
         "Verified", "Unverified", "Modified", "Reappeared", "Unsupported", "Missing", "Mismatch",
-        "Missing", "Mismatch", "Folder", "Verified", "Notice", "Folder", "Folder",
+        "Missing", "Mismatch", "", "Verified", "Notice", "", "",
     ]
     assert appearance["active_filled_presence"]["node_id"] == "4"
     if forced:
