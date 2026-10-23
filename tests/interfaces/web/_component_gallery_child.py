@@ -1897,6 +1897,7 @@ def _install_minimum_window_scheduler(
 def _valid_inventory_panel(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "headers", "checkbox_count", "switcher", "labels", "checksum", "timestamps",
+        "selected_state",
         "first_widths", "row_widths", "grown_widths", "manual_before", "manual_after",
         "header_positions", "row_positions", "status_rectangles", "scroll_owners",
         "details", "refresh_on_status", "root_fits", "viewport_height",
@@ -1909,6 +1910,9 @@ def _valid_inventory_panel(value: object) -> bool:
         type(value["headers"]) is list and len(value["headers"]) == 7
         and all(type(text) is str and len(text) <= 32 for text in value["headers"])
         and type(value["checkbox_count"]) is int and 0 <= value["checkbox_count"] <= 257
+        and type(value["selected_state"]) is dict
+        and set(value["selected_state"]) == {"stable_columns", "plan_accent", "inventory_accent"}
+        and all(type(flag) is bool for flag in value["selected_state"].values())
         and type(value["switcher"]) is list and len(value["switcher"]) == 2
         and all(type(item) is dict and set(item) == {"text", "selected", "disabled"}
                 and type(item["text"]) is str and item["selected"] in {"true", "false"}

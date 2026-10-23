@@ -221,6 +221,11 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Refine Inventory and Plan GUI feedback (2026-10-23)
+
+- Keep Inventory highlight geometry stable and retain the selected task-view
+  accent while disabled, preserving existing switcher availability and behavior.
+
 #### Expose scan-time local availability and clarify cloud behavior (2026-10-22)
 
 - Clarify that chosen cloud-synced folders may download source content or

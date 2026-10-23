@@ -18,6 +18,12 @@ archived with the original plans; current bridge evidence has one BRIDGE owner.
 
 ## Purpose
 
+Plan and Inventory highlights paint inside the row without changing column
+geometry. Their selected view segment retains its accent even when disabled;
+existing disabled behavior is preserved. Unselected disabled destinations keep
+their disabled appearance. Selection remains visually distinct, as in Microsoft's
+[Fluent tabs specification](https://github.com/microsoft/fluentui/blob/master/packages/react-components/react-tabs/library/docs/Spec.md).
+
 Plan and Inventory show a Microsoft Fluent cloud-arrow-down beside names with
 positive scan-time recall evidence, independently of operation reasons and
 unsupported state. Its accessible label and tooltip read: “Not fully available

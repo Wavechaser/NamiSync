@@ -472,6 +472,11 @@ body {
   justify-self: start;
 }
 
+.nami-plan-review__view-switcher > .nami-segmented__item:disabled[aria-checked="true"] {
+  background: var(--color-accent-fill);
+  color: var(--color-accent-fill-foreground);
+}
+
 .nami-plan-review__summary,
 .nami-plan-review__table-card {
   padding-block-start: var(--space-5);
@@ -1305,6 +1310,10 @@ body {
 }
 
 @media (forced-colors: active) {
+  .nami-plan-review__view-switcher > .nami-segmented__item:disabled[aria-checked="true"] {
+    forced-color-adjust: none;
+  }
+
   .nami-setup__pair-select:focus-visible {
     outline: none;
   }
@@ -1523,6 +1532,7 @@ body {
 
 .nami-file-list__body > .nami-file-row.nami-file-row--highlighted,
 .nami-inventory-review__rows > .nami-inventory-row[data-highlighted="true"] {
+  border-inline-start: 0;
   background: var(--color-selection-highlight);
   box-shadow: inset 3px 0 var(--color-accent-fill);
 }

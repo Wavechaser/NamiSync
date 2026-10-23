@@ -2149,6 +2149,31 @@ window.addEventListener("unhandledrejection", (event) => {
     const rowWidths = [...firstRow().children].map((value) => Number(value.getBoundingClientRect().width.toFixed(3)));
     const headerPositions = headers.map(rectangle);
     const rowPositions = [...firstRow().children].map(rectangle);
+    const unhighlightedPositions = [...firstRow().children].map(rectangle);
+    firstRow().ariaSelected = "true";
+    firstRow().dataset.highlighted = "true";
+    const highlightedPositions = [...firstRow().children].map(rectangle);
+    firstRow().ariaSelected = "false";
+    firstRow().dataset.highlighted = "false";
+    const accentedSelection = (segment) => {
+      const transition = segment.style.transition;
+      const checked = segment.ariaChecked;
+      try {
+        segment.style.transition = "none";
+        const selected = getComputedStyle(segment).backgroundColor;
+        segment.ariaChecked = "false";
+        const unselected = getComputedStyle(segment).backgroundColor;
+        return selected !== unselected;
+      } finally {
+        segment.ariaChecked = checked;
+        segment.style.transition = transition;
+      }
+    };
+    const selectedState = {
+      stable_columns: JSON.stringify(unhighlightedPositions) === JSON.stringify(highlightedPositions),
+      plan_accent: accentedSelection(planReviewPanel.element.querySelector('[data-action="pane-plan"]')),
+      inventory_accent: accentedSelection(root.querySelector('[data-action="pane-verify"]')),
+    };
     const statusRectangles = [".nami-plan-review__status-title", ".nami-plan-review__actions > .nami-inventory-review__actions",
       ".nami-plan-review__status-summary", '[data-action="inventory-details"]'].map((selector) => rectangle(root.querySelector(selector)));
     const body = root.querySelector(".nami-inventory-review__rows");
@@ -2308,7 +2333,7 @@ window.addEventListener("unhandledrejection", (event) => {
       appearance, resizing, timestamps, switcher: [...root.querySelectorAll(".nami-segmented__item")].map((value) => ({ text: value.textContent,
         selected: value.ariaChecked, disabled: value.disabled })), labels, checksum: checksumEvidence,
       first_widths: firstWidths, row_widths: rowWidths, grown_widths: grownWidths,
-      header_positions: headerPositions, row_positions: rowPositions,
+      header_positions: headerPositions, row_positions: rowPositions, selected_state: selectedState,
       status_rectangles: statusRectangles, setup_heights: setupHeights, status: statusEvidence, scroll_owners: scrollOwners,
       manual_before: manualBefore, manual_after: manualAfter, details: detailEvidence,
       refresh_on_status: [...root.querySelectorAll('[data-action="inventory-refresh"], [data-action="inventory-refresh-selected"]')]

@@ -4256,6 +4256,7 @@ def _inventory_panel_sample() -> dict[str, object]:
         typography[name] = [style, style.copy()]
     return {
         "headers": ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"], "checkbox_count": 65,
+        "selected_state": {"stable_columns": True, "plan_accent": True, "inventory_accent": True},
         "switcher": [{"text": "Sync", "selected": "false", "disabled": True},
                      {"text": "Integrity", "selected": "true", "disabled": False}],
         "labels": [{"case": name, "text": text, "foreground": "rgb(0, 0, 0)",
@@ -4310,6 +4311,7 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert component_gallery_child._valid_inventory_panel(evidence)
     assert evidence["headers"] == ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"]
     assert evidence["checkbox_count"] == 65
+    assert evidence["selected_state"] == {"stable_columns": True, "plan_accent": True, "inventory_accent": True}
     assert evidence["switcher"] == [
         {"text": "Sync", "selected": "false", "disabled": True},
         {"text": "Integrity", "selected": "true", "disabled": False},
