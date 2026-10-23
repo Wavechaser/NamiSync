@@ -696,6 +696,13 @@ Completed subtree refresh reconciles every indexed descendant using a literal
 canonical-path range, while full refresh reconciles the whole location. These
 are separate recorder branches, not a two-valued full/selected shortcut.
 
+Before publishing scan details, Inventory and preliminary integrity scans omit
+a `DISAPPEARED` notice only when its named ledger row is already `missing` with
+a scope token different from the current scan. This also covers folder rows.
+Newly missing rows, unknown subjects, unlocated diagnostics and other warning
+codes retain their notices. The check reads only warning subjects; it changes
+neither scanner diagnostics nor ledger reconciliation or scan completeness.
+
 Folder verification resolves an opaque location-scoped node id to a canonical
 path and freezes all eligible indexed descendants independently of the current
 filter/window. An unreadable frozen subject emits a visible `unsupported`

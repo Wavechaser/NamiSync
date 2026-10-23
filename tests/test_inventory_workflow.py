@@ -36,6 +36,7 @@ from namisync.core.integrity import (
 )
 from namisync.core.models import (
     CapabilityProfile,
+    DirRecord,
     FileIdentity,
     FileRecord,
     IgnoreSet,
@@ -1601,6 +1602,100 @@ def test_first_location_adopts_scan_once_before_registration_and_inventory(
     with LedgerRepository(ledger_path) as repository:
         rows = repository.get_inventory(details[-1].location_id or 0)
     assert tuple(row.rel_path for row in rows) == ("file.txt",)
+
+
+@pytest.mark.parametrize("operation", ("refresh", "verify", "baseline"))
+@pytest.mark.parametrize("folder", (False, True))
+def test_targeted_absence_notice_is_retained_only_for_new_missing_rows(
+    tmp_path: Path, operation: str, folder: bool,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    class Scanner(_Scanner):
+        def __call__(self, *args, **kwargs):
+            scan = super().__call__(*args, **kwargs)
+            if folder and scan.files:
+                row, = scan.files
+                return replace(scan, files=(), directories=(DirRecord(
+                    row.rel_path, row.rel_path_key, row.mtime_ns,
+                    row.metadata, row.file_identity,
+                ),))
+            return scan
+
+    scanner = Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    resolver = _Resolver(mount)
+    deps = _dependencies(ledger_path, scanner, resolver, details)
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=ledger_path, backend=_Backend(root, mount), resolver=resolver,
+    )
+    run_inventory(prepared, _context(), deps)
+    missing = ScanWarning(ScanWarningCode.DISAPPEARED, "file.txt", "raw missing")
+    unknown = ScanWarning(ScanWarningCode.DISAPPEARED, "unknown.txt", "raw unknown")
+    unlocated = ScanWarning(ScanWarningCode.DISAPPEARED, None, "raw unlocated")
+    denied = ScanWarning(ScanWarningCode.ACCESS_DENIED, "file.txt", "raw denied")
+    scanner.records = ()
+    scanner.warnings = (missing, unknown, unlocated, denied)
+    run_inventory(
+        InventoryWorkflowRequest("first-absence", prepared.binding, ("file.txt",)),
+        _context(), deps,
+    )
+    assert details[-1].warnings == scanner.warnings
+    if operation == "refresh":
+        result = run_inventory(
+            InventoryWorkflowRequest("repeat", prepared.binding, ("file.txt",)),
+            _context(), deps,
+        )
+    else:
+        mode = IntegrityMode.VERIFY if operation == "verify" else IntegrityMode.BASELINE
+        def runner(selection, context, recorder):
+            outcomes = []
+            for item in selection.pending:
+                outcome = replace(
+                    _integrity_outcome(item), phase=mode.value,
+                    result=IntegrityResult.MISSING,
+                )
+                context.run.emit(outcome)
+                selection.mark_completed(item.item_id, 0)
+                outcomes.append(outcome)
+            return IntegrityRunResult(tuple(outcomes), RecordingStatus.OK)
+
+        integrity_deps = replace(
+            _integrity_dependencies(deps, _complete_integrity_selection),
+            runners={mode: runner},
+        )
+        result = run_integrity(
+            IntegrityWorkflowRequest("repeat", prepared.binding, mode, ("file.txt",)),
+            _context(), integrity_deps,
+        )
+    assert result.status is SessionState.COMPLETED
+    assert details[-1].warnings == (unknown, unlocated, denied)
+    assert scanner.warnings == (missing, unknown, unlocated, denied)
+    with LedgerRepository(ledger_path) as repository:
+        row, = repository.get_inventory(details[-1].location_id, ("file.txt",))
+    assert row.presence.value == "missing"
+    assert row.scope_token == "first-absence"
+
+
+def test_incomplete_absence_does_not_hide_notice_for_present_row(tmp_path: Path) -> None:
+    prepared, deps = _seeded_integrity_case(tmp_path)
+    warning = ScanWarning(ScanWarningCode.DISAPPEARED, "file.txt", "raw missing")
+    deps.scanner.records = ()
+    deps.scanner.warnings = (warning,)
+    deps.scanner.complete = False
+    details: list[InventoryDetails] = []
+    run_inventory(
+        InventoryWorkflowRequest("incomplete", prepared.binding, ("file.txt",)),
+        _context(), replace(deps, save_details=details.append),
+    )
+    assert details[-1].warnings == (warning,)
+    with LedgerRepository(deps.ledger_path) as repository:
+        row, = repository.get_inventory(details[-1].location_id, ("file.txt",))
+    assert row.presence.value == "present"
+    assert row.scope_token == "seed"
 
 
 def test_incomplete_inventory_retains_typed_scan_warnings(

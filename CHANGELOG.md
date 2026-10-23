@@ -221,6 +221,13 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Avoid repeated notices for known missing Inventory items (2026-10-24)
+
+- Suppress a disappeared notice during refresh or a preliminary integrity scan
+  when the named file or folder is already missing under an earlier scope token.
+  Retain newly missing and unknown-subject notices and preserve raw scanner
+  diagnostics and existing ledger reconciliation.
+
 #### Refine Inventory and Plan GUI feedback (2026-10-23)
 
 - Keep Inventory highlight geometry stable and retain the selected task-view

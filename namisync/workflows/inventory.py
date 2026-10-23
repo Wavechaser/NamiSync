@@ -116,6 +116,7 @@ from namisync.core.session import (
 from namisync.db.recorder import LedgerRecorder
 from namisync.db.contracts import DatabaseConnectionOwner
 from namisync.db.repositories import (
+    InventoryPresence,
     InventorySnapshot,
     LedgerRepository,
     LocationSnapshot,
@@ -1597,7 +1598,7 @@ def run_inventory(
             recorded.missing_count,
             scan.complete,
             request.selected_paths,
-            scan.warnings,
+            _inventory_publication_warnings(scan, location_id, scope_token, deps),
             request.subtree_roots,
             recall=scan_recall_summary(scan),
         )
@@ -1703,7 +1704,7 @@ def run_integrity(
                     recorded.missing_count,
                     scan.complete,
                     request.selected_paths,
-                    scan.warnings,
+                    _inventory_publication_warnings(scan, location_id, scope_token, deps),
                     recall=scan_recall_summary(scan),
                 )
             )
@@ -2680,6 +2681,37 @@ def _register_and_scan(
     if expected_location_id is not None and expected_location_id != location_id:
         raise RuntimeError("resolved location identity changed")
     return host_id, location_id, scan
+
+
+def _inventory_publication_warnings(
+    scan: ScanResult,
+    location_id: int,
+    scope_token: str,
+    deps: InventoryDependencies,
+) -> tuple[ScanWarning, ...]:
+    paths = tuple(
+        warning.rel_path for warning in scan.warnings
+        if warning.code is ScanWarningCode.DISAPPEARED
+        and warning.rel_path is not None
+    )
+    if not paths:
+        return scan.warnings
+    with LedgerRepository(
+        deps.ledger_path, database=None if deps.database is None else deps.database(),
+    ) as repository:
+        previously_missing = {
+            row.rel_path_key for row in repository.get_inventory(location_id, paths)
+            if row.presence is InventoryPresence.MISSING
+            and row.scope_token != scope_token
+        }
+    return tuple(
+        warning for warning in scan.warnings
+        if not (
+            warning.code is ScanWarningCode.DISAPPEARED
+            and warning.rel_path is not None
+            and normalize_relative_path(warning.rel_path) in previously_missing
+        )
+    )
 
 
 def _integrity_rows(
