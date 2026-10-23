@@ -260,6 +260,16 @@ preserves scrolling; explicit keyboard movement reveals the complete target row
 below the header. The outer viewport alone owns the stable vertical gutter and
 header/body column alignment.
 
+Inventory publication reloads preserve a visible non-notice row and its pixel
+offset within the viewport. The existing bounded window anchor lookup resolves
+that identity in the new view before loading its 256-row window; the lookup is
+never rendered. If the row has disappeared or no longer matches the view, the
+old scroll offset is clamped to the new row extent and retained viewport height.
+Viewport restoration is passive: its anchor does not become the active row or
+take focus. The active row retains its separate anchor, and enabled integrity
+Follow remains responsible for revealing current work after load. Task, pane,
+session and reload generations retire late restoration reads.
+
 `table_controller.js` owns the common viewport geometry, coverage, request
 generations, settlement and programmatic reveal. The Plan panel and Inventory's
 tree adapter keep row rendering and focus policy: Plan uses roving grid rows;

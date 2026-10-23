@@ -113,6 +113,17 @@ def _bounded_follow_custody_diagnostic(value: object) -> dict[str, bool] | None:
     return {key: value[key] for key in sorted(keys)}
 
 
+def _bounded_refresh_viewport(value: object) -> dict[str, object] | None:
+    keys = {"setup", "first_arrow", "second_arrow", "before_focus", "after_focus",
+            "before", "after", "minimum", "scroll_height", "client_height"}
+    if type(value) is not dict or set(value) != keys:
+        return None
+    if any(item is not None and (type(item) not in {int, float} or not isfinite(item)
+           or not 0 <= item <= 2**31) for item in value.values()):
+        return None
+    return {key: value[key] for key in sorted(keys)}
+
+
 def _bounded_stage_diagnostic(value: object) -> dict[str, object] | None:
     keys = {"stage", "pending_wait", "listened_control_connected", "popup_open_count", "popup_close_count"}
     if type(value) is not dict or set(value) != keys:
@@ -713,8 +724,10 @@ _PAGE = r"""
       const focusTarget = name === 'context-open' || name === 'selected-activate'
         || ['range-anchor', 'range-toggle', 'range-end'].includes(name)
         ? review.querySelector('.nami-inventory-review__rows') : control;
+      if (name === 'selected-refresh') window.__inventoryRefreshViewport.before_focus = review.querySelector('.nami-inventory-review__list').scrollTop;
       focusTarget.focus({preventScroll:true});
       await new Promise(resolve => requestAnimationFrame(resolve));
+      if (name === 'selected-refresh') window.__inventoryRefreshViewport.after_focus = review.querySelector('.nami-inventory-review__list').scrollTop;
       const hitTarget = control === review.querySelector('.nami-inventory-review__rows')
         ? document.getElementById(control.getAttribute('aria-activedescendant')) : control;
       if (hitTarget === null || !control.contains(hitTarget)) return {point:null, facts:{connected:false}};
@@ -889,22 +902,46 @@ _PAGE = r"""
   if (!diagnostics.hidden) throw new Error('selected Details must remain hidden');
   const cardText = itemCard.textContent;
   await until(() => !selectedFolderRow.isConnected && folder()?.dataset.highlighted === 'true', 'selected-folder-highlight');
+  const viewport = review.querySelector('.nami-inventory-review__list');
+  viewport.scrollTop = 7;
+  const refreshViewport = window.__inventoryRefreshViewport = {setup:viewport.scrollTop,
+    first_arrow:null, second_arrow:null, before_focus:null, after_focus:null,
+    before:null, after:null, minimum:null, scroll_height:viewport.scrollHeight, client_height:viewport.clientHeight};
+  await new Promise(resolve => requestAnimationFrame(resolve));
   await stage('selected-arrow-first');
   await until(() => review.querySelector(`.nami-inventory-review__rows [data-node-id="${fixture.first_node_id}"]`)?.dataset.highlighted === 'true', 'selected-first-highlight');
+  refreshViewport.first_arrow = viewport.scrollTop;
   await stage('selected-arrow-second');
   await until(() => missing()?.dataset.highlighted === 'true', 'selected-missing-highlight');
+  refreshViewport.second_arrow = viewport.scrollTop;
   const selectedRefresh = {details_hidden:diagnostics.hidden,
     card_preserved:itemCard.textContent === cardText,
     active_node_id:review.querySelector('.nami-inventory-review__rows').getAttribute('aria-activedescendant') === missing().id
       ? fixture.missing_node_id : null};
   if (!selectedRefresh.details_hidden || !selectedRefresh.card_preserved
       || selectedRefresh.active_node_id !== fixture.missing_node_id) throw new Error('selected active row differs');
+  selectedRefresh.scroll_before = viewport.scrollTop;
+  selectedRefresh.minimum_scroll = viewport.scrollTop;
+  refreshViewport.before = viewport.scrollTop;
+  let samplingRefresh = true;
+  function sampleRefreshScroll() {
+    if (!samplingRefresh) return;
+    selectedRefresh.minimum_scroll = Math.min(selectedRefresh.minimum_scroll, viewport.scrollTop);
+    refreshViewport.minimum = selectedRefresh.minimum_scroll;
+    requestAnimationFrame(sampleRefreshScroll);
+  }
+  requestAnimationFrame(sampleRefreshScroll);
   await stage('selected-refresh');
   await until(() => !review.querySelector('[data-action="inventory-refresh"]').disabled
     && review.querySelector('.nami-inventory-review__status-line').textContent.includes(`Displayed scan: Item: ${fixture.missing_path}`),
     'selected-item-publication');
+  samplingRefresh = false;
+  selectedRefresh.scroll_after = viewport.scrollTop;
+  refreshViewport.after = viewport.scrollTop;
+  if (!(selectedRefresh.scroll_before > 0 && selectedRefresh.scroll_before < 24)
+      || selectedRefresh.scroll_after !== selectedRefresh.scroll_before
+      || selectedRefresh.minimum_scroll !== selectedRefresh.scroll_before) throw new Error('selected refresh lost its partial-row viewport');
   const tree = review.querySelector('.nami-inventory-review__rows');
-  const viewport = review.querySelector('.nami-inventory-review__list');
   const rangeRow = id => tree.querySelector(`[data-node-id="${id}"]`);
   const selectionText = () => review.querySelector('[data-inventory-selection-summary]').textContent;
   if (!selectionText().includes('3 of 3 files selected')) throw new Error('fresh scan must select all files');
@@ -1119,7 +1156,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                            "click_target": click_target,
                            "owned_handle": owned_handle, "observed_handle": observed_handle,
                            "confirmation_exit": None, "integrity_custody": None, "follow_custody": None,
-                           "stage_facts": None})
+                           "stage_facts": None, "refresh_viewport": None})
 
         def publish(value: object = None) -> None:
             if type(value) is dict:
@@ -1130,6 +1167,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                 diagnostic["follow_custody"] = _bounded_follow_custody_diagnostic(
                     value.get("follow_custody"))
                 diagnostic["stage_facts"] = _bounded_stage_diagnostic(value.get("stage_facts"))
+                diagnostic["refresh_viewport"] = _bounded_refresh_viewport(value.get("refresh_viewport"))
             screenshot.with_name("inventory-failure-site.json").write_text(
                 json.dumps(diagnostic, sort_keys=True), encoding="utf-8",
             )
@@ -1140,6 +1178,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
             timeout:window.__inventoryConfirmationTimeout ?? null},
           integrity_custody:window.__inventoryCustodyFailure ?? null,
           follow_custody:window.__inventoryFollowCustodyFailure ?? null,
+          refresh_viewport:window.__inventoryRefreshViewport ?? null,
           stage_facts:window.__inventoryStageFacts?.() ?? {stage:null,
             pending_wait:window.__inventoryWaiting ?? null, listened_control_connected:null,
             popup_open_count:0, popup_close_count:0},

@@ -2017,6 +2017,11 @@ changes preserve them. A selection reply replaces authoritative summary/window
 state while preserving the live outer scroll position and checkbox focus.
 Passive result refresh cannot reveal a different active row or overwrite a newer
 foreground window. Stale or uncertain gestures reload instead of replaying.
+Full and selected Refresh preserve a visible item or folder at the same viewport
+position, including a partially visible row. The replacement window loads there
+directly; an absent or filtered-out anchor falls back to the old position clamped
+to the new extent. Restoration does not focus or activate its anchor, and enabled
+autoscroll can still follow current integrity work.
 Checksum shows eight characters of recorded baseline evidence, with the full
 stored digest in its tooltip; no evidence shows an em dash. Missing, modified or
 reappeared rows retain their stored checksum. A scan does not verify current bytes.

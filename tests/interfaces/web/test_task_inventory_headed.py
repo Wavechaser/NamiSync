@@ -99,6 +99,14 @@ def test_inventory_stage_diagnostic_names_wait_and_bounds_replacement_facts() ->
                     {**facts, "popup_open_count": 65536}):
         assert child._bounded_stage_diagnostic(invalid) is None
     assert child._bounded_stage_diagnostic(None) is None
+    viewport = {key: None for key in ("setup", "first_arrow", "second_arrow", "before_focus",
+        "after_focus", "before", "after", "minimum", "scroll_height", "client_height")}
+    viewport["setup"] = 7
+    assert child._bounded_refresh_viewport(viewport) == viewport
+    for invalid in ({**viewport, "path": r"C:\private"}, {**viewport, "after": True},
+                    {**viewport, "after": -1}, {**viewport, "after": float("inf")},
+                    {**viewport, "after": 2**31 + 1}):
+        assert child._bounded_refresh_viewport(invalid) is None
 
 
 @pytest.mark.headed
@@ -221,9 +229,14 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert selected_refresh["node_id"] == initial["report"]["fixture"]["missing_node_id"]
         assert selected_refresh["prior_request_id"] == initial["report"]["results"]["refresh"]["request_id"]
         assert selected_refresh["request_id"] != selected_refresh["prior_request_id"]
-        assert initial["report"]["selected_refresh"] == {
+        selected_viewport = initial["report"]["selected_refresh"]
+        assert 0 < selected_viewport["scroll_before"] < 24
+        assert selected_viewport == {
             "details_hidden": True, "card_preserved": True,
             "active_node_id": selected_refresh["node_id"],
+            "scroll_before": selected_viewport["scroll_before"],
+            "scroll_after": selected_viewport["scroll_before"],
+            "minimum_scroll": selected_viewport["scroll_before"],
         }
         commands = initial["report"]["integrity_commands"]
         assert initial["report"]["integrity_journey"]["follow_click_custody"] is True

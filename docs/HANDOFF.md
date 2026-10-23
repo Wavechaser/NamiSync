@@ -1,28 +1,29 @@
-# Latest session — Known-missing Inventory notices, 2026-10-24
+# Latest session — Inventory refresh viewport, 2026-10-24
 
-User-authorized narrow follow-up on `milestone1`, starting at `b243bb71`.
+User-authorized browser improvement on `milestone1`, starting at `b24c66f0`.
 M1-12, release, DOC-2, push and PR remain inactive.
 
-Both Inventory refresh and preliminary integrity scans filter published
-DISAPPEARED notices against the ledger after normal recording. A named row
-must be missing and have a scope token different from this scan. Files and
-folders use the same rule. Newly missing rows and unknown subjects retain
-notices; incomplete-scan reconciliation is unchanged. Original scanner
-results and diagnostics are untouched. No core/db or GUI contract changed.
+Full/selected refresh and publication reloads retain a visible non-notice row,
+its viewport-relative pixel offset, and viewport height. The existing bounded
+Inventory window anchor resolves that row in the replacement view before the
+256-row publication window loads at its restored position. Missing/filtered-out
+anchors fall back to a clamped offset. Active-row identity uses its own final
+window anchor; restoration is passive and does not take focus. Integrity Follow
+remains the final reveal owner. Existing task/session/pane/reload fences reject
+late lookup and publication results. No bridge/backend/core contract changed.
 
-The initial broader reconciliation proposal was superseded by the user's
-narrower instruction. Its historical evidence and disposition are retained in
-`build/target-absence-20261024/reconciliation-design-01.md`.
+Verification: 2 focused browser-composition tests, 2,092 interface tests, all 12
+import contracts, the installed gallery and installed Inventory journey passed.
+The final harness's 3 ordinary tests also passed. The native journey preserves a
+partially visible row through real Refresh and samples painted frames for a jump
+to the top. Fresh independent review approved product and the final harness delta.
+Root owns the final atomic commit and clean-tree check.
 
-Verification: 210 focused workflow/runtime/Inventory review checks passed;
-then the added incomplete-present-row check passed in the 184-case workflow
-neighborhood run. The complete workflow department passed 954 tests. All 12
-import contracts passed. The complete interface department passed 2,092 tests.
-Receipts are in `build/target-absence-20261024/`. Fresh independent review accepted
-the implementation without findings; root owns the final commit and clean-tree
-check. No headed check was required for this workflow-only publication change.
-
-Initial reproducer failed at repeated notice publication for refresh/Verify.
-The Baseline test fixture initially emitted a Verify-phase result; corrected
-that test-only construction before acceptance. No product failure was inferred
-from that fixture error. No recovery refs, stashes or unrelated files changed.
+Two earlier native attempts failed the new test's exact requested-offset oracle:
+Windows scaling represented requested 7 pixels as 6.857142925262451. Setup, both
+arrow gestures, native focus preparation, and pre/post/minimum refresh positions
+were identical. This was a measurement assumption, not a product defect. Final
+acceptance requires a positive partial-row offset and exact observed preservation.
+All failed and passing receipts/captures and their dependency accounting are in
+`build/inventory-refresh-anchor-20261024/verification.md` and neighboring evidence.
+No recovery refs, stashes or unrelated files changed.

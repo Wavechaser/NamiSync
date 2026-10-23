@@ -221,6 +221,14 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Preserve Inventory viewport through refresh (2026-10-24)
+
+- Restore full and selected Refresh around a visible item or folder, retaining
+  its partial-row offset. Load the restored window directly and fall back to
+  the clamped prior position when the anchor leaves the view.
+- Keep viewport restoration separate from active-row identity and focus;
+  enabled integrity Follow retains control, and departed task/view reads retire.
+
 #### Avoid repeated notices for known missing Inventory items (2026-10-24)
 
 - Suppress a disappeared notice during refresh or a preliminary integrity scan

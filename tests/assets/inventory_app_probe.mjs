@@ -1318,4 +1318,67 @@ closingAnchor.resolve({disposition:"current", view_revision:followReview.summary
   node_id:real.node_id, index:40});
 await tick();
 assert.equal(followWindows.length, windowsBeforeRetirement, "retired settings navigation dispatches no Follow window");
+// Refresh restores viewport identity independently of the keyboard/Refresh target.
+const restoreTask = attachReleasedExecutionTask("task-" + "7".repeat(32),
+  "6".repeat(32), "5".repeat(32), "4".repeat(32));
+app.selectTask(restoreTask.taskId); app.switchTaskPane(restoreTask, "verify"); await tick();
+const viewportReads = [];
+let anchorIndex = 320, restoredTotal = 600, heldRestore = null;
+globalThis.inventoryHarness.openInventoryView = () => Promise.resolve({
+  ...fixture.views.maximum.summary, task_id:restoreTask.taskId,
+  request_id:restoreTask.requestId, visible_row_count:restoredTotal,
+});
+globalThis.inventoryHarness.getInventoryWindow = (taskId, revision, offset, limit, anchor) => {
+  if (taskId === restoreTask.taskId) viewportReads.push({offset, limit, anchor});
+  const response = {...fixture.views.maximum.window, view_revision:revision, offset,
+    total:restoredTotal, rows:[], anchor_node_id:anchor,
+    anchor_visible_index:anchor === "viewport-item" ? anchorIndex : 12};
+  return heldRestore?.promise ?? Promise.resolve(response);
+};
+function seedViewport(nodeId = "viewport-item") {
+  Object.assign(restoreTask.inventoryReview, {scrollTop:280 * 24 + 7,
+    viewport:{nodeId, delta:7, height:240, rowHeight:24}, activeNodeId:"keyboard-item",
+    activeRefreshTarget:{node_id:"keyboard-item", viewRevision:0, publication:restoreTask.requestId}});
+}
+seedViewport();
+await app.loadInventoryReview(restoreTask, true);
+assert.deepEqual(viewportReads, [
+  {offset:280, limit:1, anchor:"viewport-item"},
+  {offset:320, limit:256, anchor:"keyboard-item"},
+]);
+assert.equal(restoreTask.inventoryReview.scrollTop, 320 * 24 + 7,
+  "insertions before the viewport preserve the partially visible anchored row");
+assert.equal(restoreTask.inventoryReview.activeNodeId, "keyboard-item");
+assert.equal(restoreTask.inventoryReview.passiveRevealWindow, restoreTask.inventoryReview.window);
+seedViewport(); anchorIndex = null; restoredTotal = 200; viewportReads.length = 0;
+await app.loadInventoryReview(restoreTask, true);
+assert.equal(restoreTask.inventoryReview.scrollTop, 190 * 24,
+  "a deleted or filtered-out anchor falls back to the old offset clamped to the last page");
+assert.equal(viewportReads.at(-1).offset, 190);
+seedViewport(null); restoredTotal = 0; viewportReads.length = 0;
+await app.loadInventoryReview(restoreTask, true);
+assert.equal(restoreTask.inventoryReview.scrollTop, 0);
+assert.deepEqual(viewportReads.map(value => value.limit), [256], "no anchor needs no lookup");
+for (const leave of [() => app.switchTaskPane(restoreTask, "plan"),
+  () => app.selectTask(followTask.taskId)]) {
+  app.selectTask(restoreTask.taskId); app.switchTaskPane(restoreTask, "verify"); await tick();
+  seedViewport(); restoredTotal = 600; heldRestore = defer(); viewportReads.length = 0;
+  const retained = restoreTask.inventoryReview;
+  const pending = app.loadInventoryReview(restoreTask, true); await tick();
+  assertSameNode(restoreTask.inventoryReview, retained, "lookup never publishes a first-page placeholder");
+  leave();
+  heldRestore.resolve({...fixture.views.maximum.window, anchor_node_id:"viewport-item",
+    anchor_visible_index:320});
+  await pending; heldRestore = null;
+  assertSameNode(restoreTask.inventoryReview, retained, "task/pane departure retires restoration");
+  assert.equal(viewportReads.length, 1, "retired lookup cannot launch the restored window");
+}
+app.selectTask(restoreTask.taskId); app.switchTaskPane(restoreTask, "verify"); await tick();
+seedViewport(null); heldRestore = defer();
+const finalReadReview = restoreTask.inventoryReview;
+const finalRead = app.loadInventoryReview(restoreTask, true); await tick();
+app.switchTaskPane(restoreTask, "plan");
+heldRestore.resolve({...fixture.views.maximum.window});
+await finalRead; heldRestore = null;
+assertSameNode(restoreTask.inventoryReview, finalReadReview, "late final-window restoration cannot publish after leaving the pane");
 process.stdout.write("ok\n");

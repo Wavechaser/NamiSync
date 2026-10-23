@@ -18,6 +18,7 @@ const label = (value) => FACETS.find(([key]) => key === value)?.[1] ?? value;
 const integrityLabel = (value) => ({baselined: "Baselined", canceled: "Canceled",
   error: "Error"})[value] ?? label(value);
 const bytes = (value) => value === null ? "Unavailable" : formatByteCount(value);
+const ROW_HEIGHT = 24;
 
 function modifiedTime(value) {
   if (value === null) return "Unavailable";
@@ -281,9 +282,18 @@ export function createInventoryReviewPanel(callbacks) {
   let searchTimer = null;
   let searchDraft = false;
   const rowMenu = createRowMenu(pane);
-  list.addEventListener("scroll", () => {
-    if (current !== null) current.scrollTop = list.scrollTop;
-  }, {passive: true});
+  function saveViewport() {
+    if (current === null) return;
+    current.scrollTop = list.scrollTop;
+    const height = Math.max(0, list.clientHeight - ROW_HEIGHT);
+    const row = current.window.rows.find(value => value.warning === null
+      && (value.visible_index + 1) * ROW_HEIGHT > list.scrollTop
+      && value.visible_index * ROW_HEIGHT < list.scrollTop + height);
+    current.viewport = {nodeId: row?.node_id ?? null,
+      delta: row === undefined ? 0 : list.scrollTop - row.visible_index * ROW_HEIGHT,
+      height, rowHeight:ROW_HEIGHT};
+  }
+  list.addEventListener("scroll", saveViewport, {passive: true});
 
   function blocked() { return task?.closePending || task?.inventoryLoading || current?.pending
     || task?.inventoryAction?.pending || task?.inventoryAction?.accepted; }
@@ -605,7 +615,7 @@ export function createInventoryReviewPanel(callbacks) {
           updateRefreshSelected();
         }
       },
-    }, 24, list, 24);
+    }, ROW_HEIGHT, list, ROW_HEIGHT);
   }
 
   function commitTreeWindow(controller, generation, window, preferredNodeId = null, reveal = true, passive = false) {
@@ -722,7 +732,7 @@ export function createInventoryReviewPanel(callbacks) {
     detailsToggle.ariaExpanded = "false";
     clearTimeout(searchTimer);
     searchTimer = null;
-    if (current !== null) current.scrollTop = list.scrollTop;
+    saveViewport();
     tree?.dispose();
     tree = null;
     committedWindow = null;
@@ -965,6 +975,7 @@ export function createInventoryReviewPanel(callbacks) {
       tree.revealPassiveRow(follow.scrollOffset);
       follow.scrollOffset = null;
     }
+    saveViewport();
     updateRefreshSelected();
     updateSelectionControls();
     if (selectionFocus !== null && review.pending !== "selection") {

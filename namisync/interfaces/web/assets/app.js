@@ -1977,6 +1977,9 @@ async function loadInventoryReview(task, force = false) {
   const sessionId = task.sessionId;
   const navigation = navigationRevision;
   const paneRevision = task.paneRevision;
+  const previousReview = task.inventoryReview;
+  const viewport = previousReview?.viewport;
+  const previousTop = previousReview?.scrollTop ?? 0;
   const retainedFollow = task.inventoryReview?.follow?.sessionId === sessionId ? task.inventoryReview.follow : null;
   if (task.inventoryReview !== null) {
     interruptPlanHighlight(task.inventoryReview);
@@ -1998,7 +2001,25 @@ async function loadInventoryReview(task, force = false) {
   try {
     const summary = await openInventoryView(task.taskId);
     if (!stillCurrent()) return;
-    const window = await readInventoryWindow(task.taskId, summary.view_revision, 0, 256);
+    const rowHeight = viewport?.rowHeight;
+    const maximumTop = viewport === undefined ? 0
+      : Math.max(0, summary.visible_row_count * rowHeight - viewport.height);
+    let scrollTop = Math.min(previousTop, maximumTop);
+    if (viewport?.nodeId != null) {
+      const anchor = await getInventoryWindow(task.taskId, summary.view_revision,
+        Math.floor(scrollTop / rowHeight), 1, viewport.nodeId);
+      if (!stillCurrent()) return;
+      if (anchor.disposition !== "current" || anchor.view_revision !== summary.view_revision) {
+        task.inventoryError = "Inventory changed. Reload the inventory view to continue.";
+        task.inventoryReloadAvailable = true;
+        return;
+      }
+      if (Number.isSafeInteger(anchor.anchor_visible_index)) {
+        scrollTop = Math.max(0, Math.min(anchor.anchor_visible_index * rowHeight + viewport.delta, maximumTop));
+      }
+    }
+    const offset = viewport === undefined ? 0 : Math.floor(scrollTop / rowHeight);
+    const window = await readInventoryWindow(task.taskId, summary.view_revision, offset, 256);
     if (!stillCurrent()) return;
     if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
       task.inventoryError = "Inventory changed. Reload the inventory view to continue.";
@@ -2010,7 +2031,8 @@ async function loadInventoryReview(task, force = false) {
       && Number.isSafeInteger(window.anchor_visible_index);
     task.inventoryReview = {
       summary, window, pending: null, message: null, queuedSearchQuery: null, refreshAvailable: false,
-      actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop: 0,
+      actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop,
+      passiveRevealWindow: previousReview === null ? null : window,
       highlightQueue: Promise.resolve(),
       follow: retainedFollow,
       activeNodeId: retainActive ? retainedTarget.node_id : null,
