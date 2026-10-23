@@ -225,6 +225,9 @@ explicit, reviewable and regression-backed.
 
 - Keep Inventory highlight geometry stable and retain the selected task-view
   accent while disabled, preserving existing switcher availability and behavior.
+- Report clean Verify baseline creation as **Baseline created**, explaining
+  the absence of prior comparison evidence while retaining adverse outcomes
+  and the underlying workflow/CLI classification.
 
 #### Expose scan-time local availability and clarify cloud behavior (2026-10-22)
 

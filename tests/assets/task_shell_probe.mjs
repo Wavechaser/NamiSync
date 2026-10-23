@@ -351,6 +351,36 @@ assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted:
   } } }).title, "Verifying");
 assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "refused" }).title, "Error");
 assert.equal(taskStatusDigest({ form: { source: { text: "source" }, target: { text: "" } } }).targetPath, "-");
+const baselineVerifyResult = {
+  headline: "verification-incomplete", filesystem: "completed", integrity: "baselined",
+  recording: "ok", audit: "ok", disposition: "ran", canceled: false, error: null,
+};
+function ordinaryVerifyDigest(result = baselineVerifyResult, sessionState = "completed") {
+  return taskStatusDigest({taskKind: "inventory", sessionKind: "verify", sessionId: "7".repeat(32),
+    sessionState, snapshot: {session_id: "7".repeat(32), session_state: sessionState,
+      terminal_result: result, phase: "verify", presentation: {value: 1, determinate: true,
+        indeterminate: false, items_done: 1, items_total: 1}}});
+}
+// The classifier supplies this same axis for all-baselined and mixed baselined/verified runs.
+const baselineDigest = ordinaryVerifyDigest();
+assert.equal(baselineDigest.title, "Baseline created");
+assert.equal(baselineDigest.state, "completed");
+assert.equal(baselineDigest.detail, "Files without prior checksums received new baselines, not verification. Any existing baselines matched.");
+for (const axis of ["recording", "audit"]) {
+  assert.equal(ordinaryVerifyDigest({...baselineVerifyResult, [axis]: "degraded"}).state, "degraded",
+    "baseline creation must not conceal recording or audit degradation");
+}
+for (const integrity of ["missing", "modified", "incomplete"]) {
+  assert.equal(ordinaryVerifyDigest({...baselineVerifyResult, integrity}).title, "Verification incomplete");
+}
+assert.equal(ordinaryVerifyDigest({...baselineVerifyResult, headline: "mismatch", integrity: "mismatch"}).title,
+  "Verification needs review");
+assert.equal(ordinaryVerifyDigest({...baselineVerifyResult, headline: "canceled", canceled: true}, "canceled").title,
+  "Verification canceled");
+assert.equal(ordinaryVerifyDigest({...baselineVerifyResult, headline: "refused", disposition: "unrun"}, "refused").title,
+  "Verification did not start");
+assert.equal(ordinaryVerifyDigest({...baselineVerifyResult, headline: "failed", filesystem: "failed"}, "failed").title,
+  "Verification needs review");
 const capacityRailResult = {
   headline: "failed", filesystem: "failed", integrity: "baselined",
   recording: "ok", audit: "ok", disposition: "ran", error: null,

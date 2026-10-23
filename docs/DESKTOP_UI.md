@@ -1940,7 +1940,11 @@ eligibility. It uses the complete nonempty server-owned checkbox selection and
 never runs automatically. Baseline and Rebaseline remain hidden on sync tasks.
 Both Verify scopes share current-session controls and one latest ordinary result;
 neither controls or rewrites the original execution. Missing evidence may be
-baselined and reported incomplete, not verified. Missing/unsupported targets and
+baselined, never verified. A clean ordinary inventory Verify result that creates baselines shows
+**Baseline created** in the task digest and explains that files without prior
+checksums received new baselines while any existing baselines matched. The raw
+verification-incomplete classification remains unchanged; recording/audit
+degradation and adverse outcomes retain their attention state. Missing/unsupported targets and
 scan warnings remain visible without an all-copied-files-verified claim.
 
 Refresh needs no exact-verification-forfeiture warning: the one-shot exact action

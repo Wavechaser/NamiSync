@@ -119,6 +119,11 @@ function ordinaryTerminalDigest(result, fallbackState, mode) {
   if (fallbackState === "failed" || ["failed", "partial", "mismatch"].includes(result?.headline)) {
     return {title: `${label} needs review`, state: "error", detail: result?.error ?? `${label} needs review.`};
   }
+  if (mode === "verify" && result?.headline === "verification-incomplete"
+      && result.integrity === "baselined" && result.recording === "ok" && result.audit === "ok") {
+    return {title: "Baseline created", state: "completed",
+      detail: "Files without prior checksums received new baselines, not verification. Any existing baselines matched."};
+  }
   if (["verification-incomplete", "degraded"].includes(result?.headline)) {
     return {title: `${label} incomplete`, state: "degraded", detail: result?.error ?? `${label} incomplete.`};
   }
