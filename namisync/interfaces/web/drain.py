@@ -1049,8 +1049,8 @@ class TaskRegistry:
             make_view = InventoryReviewState if existing is None else existing.replacement
             args = (task_id, identity[1]) if existing is None else (identity[1],)
             selection = {}
-            if (scan_activity and details is not None and details.request_id == identity[1]
-                    and (existing is None or existing.scan_request_id != details.request_id)):
+            if (existing is None and scan_activity and details is not None
+                    and details.request_id == identity[1]):
                 selection["selected_row_ids"] = frozenset(
                     node.row.row_id for node in projection.nodes
                     if node.row is not None and node.row.entry_kind is not None

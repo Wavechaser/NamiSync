@@ -164,14 +164,31 @@ def test_selection_replacement_retains_exact_files_and_invalidates_old_gestures(
     assert _select(replaced, directory)["disposition"] == "noop"
 
 
-def test_explicit_scan_selection_override_covers_filtered_offwindow_files():
+def test_replacement_retains_checked_unchecked_and_missing_rows_but_drops_removed_ids():
+    rows = (_row("1", "checked.txt"), _row("2", "unchecked.txt"),
+            _row("3", "removed.txt"), _row("4", "missing.txt", presence=InventoryPresence.MISSING))
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, rows), r"C:\root", True, 3, 1,
+        selected_row_ids=frozenset({"1", "3", "4"}))
+    projection = build_inventory_projection(1, (rows[0], rows[1], rows[3], _row("5", "new.txt")))
+    replaced = view.replacement("f" * 32, projection, view.root_path, True, 3, 1,
+        scan_scope=("location", None))
+    assert replaced.selected_row_ids == frozenset({"1", "4"})
+    assert {row["row_id"]: row["selection"] for row in replaced.window(
+        expected_revision=replaced.view_revision, offset=0, limit=256)["rows"]} == {
+        "1": "all", "2": "none", "4": "all", "5": "none",
+    }
+
+
+def test_initial_selection_survives_filtered_offwindow_replacement():
     projection = build_inventory_projection(1, (
         _row(str(i), rf"folder\{i:03}.txt") for i in range(300)))
-    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", True, 300, 0)
-    _update(view, search_query="299.txt")
     all_files = frozenset(projection.node_id_by_row_id)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", True, 300, 0,
+        selected_row_ids=all_files)
+    _update(view, search_query="299.txt")
     fresh = view.replacement("f" * 32, projection, view.root_path, True, 300, 0,
-        scan_scope=("location", None), selected_row_ids=all_files)
+        scan_scope=("location", None))
     assert fresh.selected_row_ids == all_files
     assert fresh.summary()["selected_file_count"] == 300
     assert fresh.summary()["hidden_selected_file_count"] == 299
@@ -179,9 +196,6 @@ def test_explicit_scan_selection_override_covers_filtered_offwindow_files():
     same_scan = fresh.replacement("e" * 32, projection, view.root_path, True, 300, 0,
         scan_scope=("selection", None))
     assert same_scan.selected_row_ids == all_files
-    cleared = same_scan.replacement("d" * 32, projection, view.root_path, True, 300, 0,
-        scan_scope=("location", None), selected_row_ids=frozenset())
-    assert cleared.summary()["selected_file_count"] == 0
 
 
 def test_inventory_highlight_ranges_cross_windows_and_keep_checkbox_membership_separate():

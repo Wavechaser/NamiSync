@@ -228,8 +228,9 @@ explicit, reviewable and regression-backed.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.
-- Initialize checked Inventory file selection from published scans, with
-  folder aggregate states and unchanged operation eligibility.
+- Check every Inventory file only on the first view opened from a scan. Later
+  scans retain checked and unchecked surviving rows, including Missing files;
+  new files start unchecked and departed inventory IDs leave selection.
 - Show live per-item integrity progress and retained results in Presence,
   preserving row focus and keeping Notes for diagnostics. Leave ordinary folder
   Presence blank while retaining missing, reappeared and exceptional states.

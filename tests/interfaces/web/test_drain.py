@@ -3040,15 +3040,15 @@ def test_inventory_selection_requires_current_settled_publication(blocked):
     assert registry._inventory_views[start.task_id].selected_row_ids == frozenset()
 
 
-@pytest.mark.parametrize(("activity", "new_scan", "current_scan", "expected"), [
-    ("inventory", True, True, 1),
-    ("inventory", False, True, 0),
-    ("inventory", True, False, 0),
-    ("verify", True, True, 0),
-    ("baseline", True, True, 0),
-    ("rebaseline", True, True, 0),
+@pytest.mark.parametrize(("activity", "new_scan", "current_scan"), [
+    ("inventory", True, True),
+    ("inventory", False, True),
+    ("inventory", True, False),
+    ("verify", True, True),
+    ("baseline", True, True),
+    ("rebaseline", True, True),
 ])
-def test_inventory_selection_resets_only_for_explicit_current_scan(activity, new_scan, current_scan, expected):
+def test_inventory_selection_initializes_once_and_preserves_empty_choices(activity, new_scan, current_scan):
     registry, service, start, projection = _inventory_read_registry()
     task = registry._tasks[start.task_id]
     task.session_kind = "inventory"
@@ -3066,12 +3066,12 @@ def test_inventory_selection_resets_only_for_explicit_current_scan(activity, new
     task.generation += 1
     task.inventory_view_dirty = True
     published = registry.open_inventory_view(start.task_id)
-    assert published["selected_file_count"] == expected
+    assert published["selected_file_count"] == 0
     assert published["view_revision"] == cleared["view_revision"] + 1
-    assert registry.open_inventory_view(start.task_id)["selected_file_count"] == expected
+    assert registry.open_inventory_view(start.task_id)["selected_file_count"] == 0
 
 
-def test_inventory_real_integrity_preserves_subset_and_refresh_selects_all(tmp_path):
+def test_inventory_real_integrity_and_refresh_preserve_subset_missing_and_new_files(tmp_path):
     from namisync.interfaces.service import NamiSyncService
     from namisync.workflows import LocationCandidate
     root = tmp_path / "files"
@@ -3102,12 +3102,21 @@ def test_inventory_real_integrity_preserves_subset_and_refresh_selects_all(tmp_p
         baselined = finish(baseline)
         assert baselined["scan_request_id"] != summary["scan_request_id"]
         assert baselined["selected_file_count"] == 1
+        (root / "one.bin").unlink()
+        (root / "two.bin").unlink()
+        (root / "new.bin").write_bytes(b"new")
         refresh = registry.refresh_inventory(scan.task_id, baseline.request_id,
             expected_revision=baselined["view_revision"], node_id=None,
             command_id="4" * 32, wire_intent=("refresh",))
         refreshed = finish(refresh)
-        assert refreshed["selected_file_count"] == 2
+        assert refreshed["selected_file_count"] == 1
         assert refreshed["scan_request_id"] == refresh.request_id
+        fresh_rows = registry.get_inventory_window(scan.task_id,
+            expected_revision=refreshed["view_revision"], offset=0, limit=256)["rows"]
+        assert {row["display"]: (row["presence"], row["selection"]) for row in fresh_rows} == {
+            "one.bin": ("missing", "none"), "two.bin": ("missing", "all"),
+            "new.bin": ("present", "none"),
+        }
         registry.close_task(scan.task_id, refresh.session_id)
 
 
@@ -7180,9 +7189,7 @@ def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_pat
             view = finish(refreshed)
             projection = registry._inventory_views[planned.task_id].projection
             outside = next(node.node_id for node in projection.nodes if node.rel_path == "outside.bin")
-            assert view["selected_file_count"] == 2
-            view = registry.set_inventory_selection(planned.task_id, refreshed.request_id,
-                expected_revision=view["view_revision"], node_id=None, selected=False)
+            assert view["selected_file_count"] == 0
             view = registry.set_inventory_selection(planned.task_id, refreshed.request_id,
                 expected_revision=view["view_revision"], node_id=outside, selected=True)
             assert view["selected_file_count"] == 1

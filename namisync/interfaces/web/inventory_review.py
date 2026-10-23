@@ -225,9 +225,8 @@ class InventoryReviewState:
                     observed_count: int | None, missing_count: int | None, *,
                     scan_scope: tuple[str, str | None] | None,
                     scan_request_id: str | None = None,
-                    recall: RecallSummary | None = None,
-                    selected_row_ids: frozenset[str] | None = None) -> InventoryReviewState:
-        """Stage a replacement, retaining choices unless a fresh scan supplies them."""
+                    recall: RecallSummary | None = None) -> InventoryReviewState:
+        """Stage one complete replacement while preserving surviving gestures."""
         revision = next_revision(self.view_revision)
         collapsed = frozenset(
             node_id for node_id in self.collapsed_node_ids
@@ -241,7 +240,7 @@ class InventoryReviewState:
             scan_scope=scan_scope,
             scan_request_id=scan_request_id,
             recall=recall,
-            selected_row_ids=selected_row_ids if selected_row_ids is not None else frozenset(
+            selected_row_ids=frozenset(
                 row_id for row_id in self.selected_row_ids
                 if row_id in projection.node_id_by_row_id
                 and projection.row_for_id(row_id).entry_kind is not None
