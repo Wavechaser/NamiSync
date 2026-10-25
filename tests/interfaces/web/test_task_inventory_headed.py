@@ -21,7 +21,7 @@ _CHILD = Path(__file__).with_name("_task_inventory_headed_child.py")
 _INTEGRITY_INPUT = {name: True for name in (
     "range-reset", "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear",
     "select-folder", "select-location-clear", "select-location", "baseline", "verify", "follow-go", "pause", "resume",
-    "verify-cancel", "cancel", "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm",
+    "verify-cancel", "cancel", "baseline-menu-open", "baseline-menu-close", "baseline-menu-reopen", "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-menu-open", "rebaseline-open", "rebaseline-confirm",
 )}
 
 
@@ -150,7 +150,7 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "context-keyboard-escape": True, "context-menu": True,
             "context-acknowledge": True, "context-restore-details": True, "context-restore": True,
             "selected-activate": True, "selected-arrow-first": True,
-            "selected-arrow-second": True, "selected-refresh": True,
+            "selected-arrow-second": True, "selected-context-menu": True, "selected-refresh": True,
             **_INTEGRITY_INPUT,
         }
         assert initial["report"]["foreground_owned"] == {
@@ -161,7 +161,7 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             "context-keyboard-escape": True, "context-menu": True,
             "context-acknowledge": True, "context-restore-details": True, "context-restore": True,
             "selected-activate": True, "selected-arrow-first": True,
-            "selected-arrow-second": True, "selected-refresh": True,
+            "selected-arrow-second": True, "selected-context-menu": True, "selected-refresh": True,
             **_INTEGRITY_INPUT,
         }
         assert initial["report"]["filter_menu"] == {

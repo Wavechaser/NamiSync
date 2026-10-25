@@ -1170,8 +1170,8 @@ _PAGE = r"""
   scrollDiagnostic.hiddenAfterVerify = scrollFact(rows);
   const exactStart = await until(() => usable(inventory, 'verify-copied-files'), 'copied action');
   const copiedActionVisible = exactStart.isConnected;
-  if (!action(inventory, 'inventory-baseline')?.hidden
-      || !action(inventory, 'inventory-rebaseline')?.hidden) {
+  if (!action(inventory, 'inventory-baseline')?.closest('[hidden]')
+      || !action(inventory, 'inventory-baseline-menu')?.closest('[hidden]')) {
     throw new Error('sync Verify action presentation is invalid');
   }
   exactStart.click();
@@ -1347,8 +1347,8 @@ _PAGE = r"""
       && value.textContent.trim() === 'Verify current state' ? value : null;
   }, 'ordinary fallback control');
   const fallbackVisible = usable(blockedInventory, 'verify-copied-files') !== null
-    && action(blockedInventory, 'inventory-baseline')?.hidden === true
-    && action(blockedInventory, 'inventory-rebaseline')?.hidden === true;
+    && Boolean(action(blockedInventory, 'inventory-baseline')?.closest('[hidden]'))
+    && Boolean(action(blockedInventory, 'inventory-baseline-menu')?.closest('[hidden]'));
   if (!fallbackVisible) throw new Error('copied action was forfeited by Refresh');
   const fallback = await until(() => usable(blockedInventory, 'inventory-verify'), 'ordinary fallback');
   if (fallback !== fallbackControl) throw new Error('ordinary fallback control changed after selection');

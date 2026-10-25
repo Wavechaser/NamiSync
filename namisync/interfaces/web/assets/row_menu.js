@@ -1,20 +1,25 @@
 import { renderText } from "./render.js";
 
-export function createRowMenu(owner) {
+export function createRowMenu(owner, {trigger = null, label = "Item actions"} = {}) {
   const document = owner.ownerDocument;
   const view = document.defaultView;
   const menu = document.createElement("div");
   menu.className = "nami-menu nami-row-menu";
   menu.setAttribute("role", "menu");
-  menu.ariaLabel = "Item actions";
+  menu.ariaLabel = label;
   menu.hidden = true;
   owner.append(menu);
   let current = null;
+  if (trigger !== null) {
+    trigger.ariaHasPopup = "menu";
+    trigger.ariaExpanded = "false";
+  }
 
   function close(restore = false) {
     const previous = current;
     current = null;
     menu.hidden = true;
+    if (trigger !== null) trigger.ariaExpanded = "false";
     document.removeEventListener("pointerdown", outside);
     document.removeEventListener("scroll", scrolled, true);
     document.removeEventListener("visibilitychange", foreground);
@@ -23,7 +28,7 @@ export function createRowMenu(owner) {
     if (restore && previous?.isCurrent()) previous.returnFocus.focus();
   }
   function dismiss() { close(); }
-  function outside(event) { if (!menu.contains(event.target)) close(); }
+  function outside(event) { if (!menu.contains(event.target) && !trigger?.contains(event.target)) close(); }
   function scrolled(event) { if (!menu.contains(event.target)) close(); }
   function foreground() { if (document.hidden) close(); }
   function reconcile() { if (current !== null && !current.isCurrent()) close(); }
@@ -52,6 +57,7 @@ export function createRowMenu(owner) {
       menu.append(item);
     }
     menu.hidden = false;
+    if (trigger !== null) trigger.ariaExpanded = "true";
     const boundary = owner.closest(".nami-work-panel")?.getBoundingClientRect();
     const left = Math.max(8, boundary?.left ?? 8);
     const top = Math.max(8, boundary?.top ?? 8);
@@ -61,7 +67,7 @@ export function createRowMenu(owner) {
     menu.style.setProperty("max-block-size", `${bottom - top}px`);
     const bounds = menu.getBoundingClientRect();
     const rect = anchor.getBoundingClientRect();
-    const keyboard = event.type === "keydown";
+    const keyboard = event.type === "keydown" || trigger !== null;
     const x = keyboard ? rect.left : event.clientX;
     const y = keyboard ? rect.bottom : event.clientY;
     menu.style.setProperty("left", `${Math.max(left, Math.min(x, right - bounds.width))}px`);
@@ -74,7 +80,7 @@ export function createRowMenu(owner) {
     menu.children[0].focus();
   }
   menu.addEventListener("focusout", (event) => {
-    if (!menu.contains(event.relatedTarget)) close();
+    if (!menu.contains(event.relatedTarget) && (trigger === null || event.relatedTarget !== trigger)) close();
   });
   menu.addEventListener("contextmenu", (event) => {
     event.preventDefault();

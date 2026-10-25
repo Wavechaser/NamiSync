@@ -1899,7 +1899,7 @@ def _install_minimum_window_scheduler(
 def _valid_inventory_panel(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "headers", "checkbox_count", "switcher", "labels", "checksum", "timestamps",
-        "selected_state",
+        "selected_state", "toolbar",
         "item_progress",
         "reload_actions_top",
         "first_widths", "row_widths", "grown_widths", "manual_before", "manual_after",
@@ -1919,6 +1919,16 @@ def _valid_inventory_panel(value: object) -> bool:
         and type(value["selected_state"]) is dict
         and set(value["selected_state"]) == {"stable_columns", "plan_accent", "inventory_accent", "plan_interactive", "inventory_interactive"}
         and all(type(flag) is bool for flag in value["selected_state"].values())
+        and type(value["toolbar"]) is dict
+        and set(value["toolbar"]) == {"order", "labels", "names", "primary", "rectangles", "selected_refresh_absent", "refresh_glyph"}
+        and all(type(value["toolbar"][key]) is list and len(value["toolbar"][key]) == 4
+                and all(type(item) is str and len(item) <= 64 for item in value["toolbar"][key])
+                for key in ("order", "labels", "names"))
+        and type(value["toolbar"]["primary"]) is list and len(value["toolbar"]["primary"]) == 4
+        and all(type(flag) is bool for flag in value["toolbar"]["primary"])
+        and _finite_number_matrix(value["toolbar"]["rectangles"], 4, 4)
+        and type(value["toolbar"]["selected_refresh_absent"]) is bool
+        and type(value["toolbar"]["refresh_glyph"]) is str and len(value["toolbar"]["refresh_glyph"]) <= 1024
         and type(value["item_progress"]) is dict
         and set(value["item_progress"]) == {"value", "ratio", "height", "row_retained", "focus_retained", "notes_clear", "result_in_presence"}
         and type(value["item_progress"]["value"]) is str

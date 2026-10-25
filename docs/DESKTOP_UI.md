@@ -2069,8 +2069,13 @@ zebra fill. Folder Size shows
 complete file bytes while its tooltip and Details distinguish own object facts.
 
 The frozen Setup, status and table align with Plan review. The standalone task's
-switcher selects Integrity and disables Sync. Whole and selected Refresh are
-status actions. Setup's path region shares Plan's two-line minimum height while
+switcher selects Integrity and disables Sync. Status actions run left to right:
+ordinary icon-only Refresh inventory (Arrow Clockwise), Baseline split button,
+and accented Verify. Baseline runs directly; its dropdown exposes Rebaseline.
+The dropdown follows the shared menu's keyboard, dismissal and currentness rules,
+and returns focus to its trigger on Escape, action activation or confirmation.
+Outside interaction, scrolling and window blur dismiss it without moving focus.
+Setup's path region shares Plan's two-line minimum height while
 retaining one real Root line. The status card keeps the current activity outcome,
 complete inventory rollup summary and one persistent status paragraph.
 That paragraph marks previous publication, incomplete or scoped coverage and
@@ -2094,14 +2099,16 @@ scan. Baseline, Verify and Rebaseline use the complete server-owned selection.
 An empty selection starts nothing. Rebaseline opens a blocking confirmation
 showing the selected scope and count; Cancel changes nothing, and acceptance
 cannot survive a request or view-revision change. Start recovery observes the
-original command without submitting another operation. Pause, Resume and Cancel
+original command without submitting another operation. Icon-only Pause, Resume and Cancel
+retain accessible action names and tooltips and
 address only the exact current ordinary session, with task status derived from
 that activity's snapshot rather than relabeling every Inventory activity a scan.
 
-Refresh selected follows the tree's retained active file or folder, including
-while it is outside the loaded window and while Details is hidden. Arrows move
-highlight without reading or replacing item details. A cleared active row or an
-active notice disables Refresh selected. Acknowledge missing and Restore visibility
+Refresh selected lives only in the current file or folder's context menu, and
+remains usable while Details is hidden. Arrows move
+highlight without reading or replacing item details. Notices offer no Refresh
+action. Retained active-row identity continues to anchor viewport restoration.
+Acknowledge missing and Restore visibility
 continue to act on the item displayed in the details card.
 
 Activate a row with click or Enter to load its detail selection. Domain subjects load fresh exact

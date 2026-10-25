@@ -29,7 +29,8 @@ _FILE_BYTES = b"NamiSync native inventory fixture\r\n"
 _RANGE_STAGES = ("range-reset", "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear")
 _INTEGRITY_STAGES = ("select-folder", "select-location-clear", "select-location", "baseline",
                      "verify", "follow-go", "pause", "resume", "verify-cancel", "cancel",
-                     "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-open", "rebaseline-confirm")
+                     "baseline-menu-open", "baseline-menu-close", "baseline-menu-reopen",
+                     "rebaseline-cancel-open", "rebaseline-cancel", "rebaseline-menu-open", "rebaseline-open", "rebaseline-confirm")
 _CONFIRMATION_EXIT_FACT_KEYS = frozenset({
     "closed", "app_active", "theme_active", "scroll_restored", "focus_restored",
     "trigger_connected", "trigger_disabled", "trigger_hidden", "active_category",
@@ -640,8 +641,9 @@ _PAGE = r"""
   const rangeStages = ['range-reset', 'range-anchor', 'range-toggle', 'range-end', 'range-checkbox', 'range-clear'];
   const integrityStages = ['select-folder', 'select-location-clear', 'select-location', 'baseline',
     'verify', 'follow-go', 'pause', 'resume', 'verify-cancel', 'cancel',
-    'rebaseline-cancel-open', 'rebaseline-cancel', 'rebaseline-open', 'rebaseline-confirm'];
-  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-refresh', ...rangeStages, ...integrityStages].map(name => [name, false]));
+    'baseline-menu-open', 'baseline-menu-close', 'baseline-menu-reopen',
+    'rebaseline-cancel-open', 'rebaseline-cancel', 'rebaseline-menu-open', 'rebaseline-open', 'rebaseline-confirm'];
+  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-context-menu', 'selected-refresh', ...rangeStages, ...integrityStages].map(name => [name, false]));
   const keyboardInput = [];
   async function stage(name) {
     await until(() => document.hasFocus(), 'document-focus');
@@ -687,6 +689,7 @@ _PAGE = r"""
         : name === 'rebaseline-confirm' ? '#rebaseline-confirmation [data-confirm-execution]'
         : name === 'rebaseline-cancel' ? '#rebaseline-confirmation [data-cancel-execution]'
         : name === 'rebaseline-open' || name === 'rebaseline-cancel-open' ? '[data-action="inventory-rebaseline"]'
+        : ['baseline-menu-open', 'baseline-menu-close', 'baseline-menu-reopen', 'rebaseline-menu-open'].includes(name) ? '[data-action="inventory-baseline-menu"]'
         : name === 'verify-cancel' ? '[data-action="inventory-verify"]'
         : name === 'follow-go' ? '[data-action="go-current-item"]'
         : name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
@@ -695,15 +698,15 @@ _PAGE = r"""
         : name === 'restore-details' || name === 'context-restore-details' ? '[data-action="inventory-details"]'
         : name === 'context-open' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.missing_node_id}"]`
         : name === 'context-escape' || name === 'context-keyboard-escape' ? '.nami-row-menu [data-action="row-details"]'
-        : keyboardMenu ? '.nami-inventory-review__rows'
+        : keyboardMenu || name === 'selected-context-menu' ? '.nami-inventory-review__rows'
         : name === 'selected-activate' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.folder_node_id}"]`
         : name === 'selected-arrow-first' || name === 'selected-arrow-second' ? '.nami-inventory-review__rows'
-        : name === 'selected-refresh' ? '[data-action="inventory-refresh-selected"]'
+        : name === 'selected-refresh' ? '.nami-row-menu [data-action="row-refresh"]'
         : name === 'context-acknowledge' ? '.nami-row-menu [data-action="row-acknowledge"]'
         : name === 'context-restore' ? '[data-action="inventory-restore"]'
         : `[data-action="inventory-${name}"]`;
     const gesture = name === 'context-open' ? 'contextmenu'
-      : ['filter-escape', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'selected-arrow-first', 'selected-arrow-second'].includes(name) ? 'keydown' : 'click';
+      : ['filter-escape', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'selected-context-menu', 'selected-arrow-first', 'selected-arrow-second'].includes(name) ? 'keydown' : 'click';
     let activatedControl = null;
     // Window publications replace row elements; input custody follows their identity.
     const trustedInput = event => {
@@ -719,13 +722,16 @@ _PAGE = r"""
       const control = document.querySelector(selector);
       if (control === null) return {point:null, facts:{connected:false}};
       if (name === 'rebaseline-open' || name === 'rebaseline-cancel-open') {
-        window.__inventoryConfirmationInvoker = control;
+        window.__inventoryConfirmationInvoker = review.querySelector('[data-action="inventory-baseline-menu"]');
       }
       const focusTarget = name === 'context-open' || name === 'selected-activate'
         || ['range-anchor', 'range-toggle', 'range-end'].includes(name)
         ? review.querySelector('.nami-inventory-review__rows') : control;
       if (name === 'selected-refresh') window.__inventoryRefreshViewport.before_focus = review.querySelector('.nami-inventory-review__list').scrollTop;
-      focusTarget.focus({preventScroll:true});
+      // Keep menu focus until the native trigger click moves it, exercising
+      // pointerdown/focusout/click ordering rather than pre-closing the popup.
+      const togglingBaseline = name === 'baseline-menu-close';
+      if (!togglingBaseline) focusTarget.focus({preventScroll:true});
       await new Promise(resolve => requestAnimationFrame(resolve));
       if (name === 'selected-refresh') window.__inventoryRefreshViewport.after_focus = review.querySelector('.nami-inventory-review__list').scrollTop;
       const hitTarget = control === review.querySelector('.nami-inventory-review__rows')
@@ -735,7 +741,10 @@ _PAGE = r"""
       const point = {x:(rect.left+rect.right)/2, y:(rect.top+rect.bottom)/2};
       const hit = document.elementFromPoint(point.x, point.y);
       const facts = {document_focused:document.hasFocus(), connected:control.isConnected,
-        enabled:!control.disabled, visible:!control.hidden, active:document.activeElement === focusTarget,
+        enabled:!control.disabled, visible:!control.hidden,
+        active:togglingBaseline
+          ? control.ariaExpanded === 'true' && document.activeElement === review.querySelector('.nami-row-menu[aria-label="Baseline actions"]').firstElementChild
+          : document.activeElement === focusTarget,
         hit_owned:control.contains(hit) || hit === control, sized:rect.width > 0 && rect.height > 0};
       listenedControl = control;
       return {point, facts};
@@ -931,6 +940,8 @@ _PAGE = r"""
     requestAnimationFrame(sampleRefreshScroll);
   }
   requestAnimationFrame(sampleRefreshScroll);
+  await stage('selected-context-menu');
+  await until(() => !contextPopup.hidden && contextPopup.querySelector('[data-action="row-refresh"]'), 'selected-context-menu-open');
   await stage('selected-refresh');
   await until(() => !review.querySelector('[data-action="inventory-refresh"]').disabled
     && review.querySelector('[data-inventory-scan-facts]').textContent.includes(fixture.missing_path)
@@ -1063,6 +1074,17 @@ _PAGE = r"""
   const canceledPresentation = await released('cancel-terminal',
     'Verification retained results · 0 window results', null);
   const canceledResult = canceledPresentation.text;
+  const baselineTrigger = review.querySelector('[data-action="inventory-baseline-menu"]');
+  const baselinePopup = review.querySelector('.nami-row-menu[aria-label="Baseline actions"]');
+  await stage('baseline-menu-open');
+  await until(() => !baselinePopup.hidden && baselineTrigger.ariaExpanded === 'true'
+    && document.activeElement === baselinePopup.firstElementChild, 'baseline-menu-open');
+  await stage('baseline-menu-close');
+  await until(() => baselinePopup.hidden && baselineTrigger.ariaExpanded === 'false'
+    && document.activeElement === baselineTrigger, 'baseline-menu-toggle-closed');
+  await stage('baseline-menu-reopen');
+  await until(() => !baselinePopup.hidden && baselineTrigger.ariaExpanded === 'true'
+    && document.activeElement === baselinePopup.firstElementChild, 'baseline-menu-reopened');
   await stage('rebaseline-cancel-open');
   const confirmation = document.querySelector('#rebaseline-confirmation');
   await until(() => !confirmation.hidden && confirmation.open, 'rebaseline-confirmation');
@@ -1084,6 +1106,9 @@ _PAGE = r"""
     'rebaseline-cancel-no-effect');
   const cancelConfirmationRestored = confirmationExitReceipt(cancelCloseFacts, cancelInvoker);
   const cancelPreservedResult = review.querySelector('[data-inventory-integrity-facts]').textContent === canceledResult;
+  await stage('rebaseline-menu-open');
+  await until(() => !baselinePopup.hidden && baselineTrigger.ariaExpanded === 'true'
+    && document.activeElement === baselinePopup.firstElementChild, 'rebaseline-menu-open');
   await stage('rebaseline-open');
   await until(() => confirmation.open, 'rebaseline-confirm-again');
   const confirmInvoker = window.__inventoryConfirmationInvoker;
@@ -1141,7 +1166,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
     page_result: dict[str, object] | None = None
     observed_handle: int | None = None
     click_target: dict[str, object] | None = None
-    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)}
+    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-context-menu", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)}
 
     def fail(error: BaseException, task: object | None, step: str, _method: str) -> None:
         nonlocal failed
@@ -1211,7 +1236,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
             publish()
 
     cdp = NativeCdp(native, core, retained, fail)
-    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)
+    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-context-menu", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)
 
     def next_stage(index: int) -> None:
         if index == len(stage_names):
@@ -1259,11 +1284,11 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                         else:
                             raise RuntimeError("native integrity Follow identity differs")
                     wait_anchor()
-                if name in {"filter-escape", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "selected-arrow-first", "selected-arrow-second"}:
+                if name in {"filter-escape", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "selected-context-menu", "selected-arrow-first", "selected-arrow-second"}:
                     keyboard_menu = name == "context-keyboard"
                     key, virtual_key = (("ArrowDown", 40) if name.startswith("selected-arrow-")
                                         else ("F10", 121) if keyboard_menu
-                                        else ("ContextMenu", 93) if name == "context-menu" else ("Escape", 27))
+                                        else ("ContextMenu", 93) if name in {"context-menu", "selected-context-menu"} else ("Escape", 27))
                     shared = {"key": key, "code": key, "windowsVirtualKeyCode": virtual_key,
                               "nativeVirtualKeyCode": virtual_key, "modifiers": 8 if keyboard_menu else 0}
                     def key_up(_value: object) -> None:

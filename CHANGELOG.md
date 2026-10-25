@@ -229,6 +229,10 @@ explicit, reviewable and regression-backed.
 - Hide Plan Again during execution admission and active work. Keep icon-only
   Pause/Resume and Cancel beside the headline in the top action row, with
   accessible names and the existing cancel confirmation gesture.
+- Order Inventory actions as an ordinary clockwise refresh icon, Baseline
+  split button and accented Verify. Rebaseline moves into the dropdown with
+  confirmation preserved; Refresh selected remains in the row context menu.
+  Inventory Pause/Resume and Cancel also use labelled icon-only controls.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.

@@ -105,23 +105,34 @@ export function createInventoryReviewPanel(callbacks) {
   const facts = element("p", "nami-shell__guidance nami-plan-review__status-summary");
   const status = element("p", "nami-shell__guidance nami-plan-review__status");
   status.setAttribute("role", "status");
-  const refresh = button("Refresh inventory", "inventory-refresh");
-  const refreshSelected = button("Refresh selected", "inventory-refresh-selected");
-  refresh.classList.add("nami-button--primary");
+  const refresh = button("", "inventory-refresh");
+  refresh.classList.add("nami-button--icon");
+  refresh.append(createIcon(document, "arrow-clockwise", "sm"));
+  refresh.ariaLabel = refresh.title = "Refresh inventory";
   const baseline = button("Baseline", "inventory-baseline");
+  const baselineMenuTrigger = button("", "inventory-baseline-menu");
+  baselineMenuTrigger.classList.add("nami-button--icon");
+  baselineMenuTrigger.append(createIcon(document, "chevron-down", "sm"));
+  baselineMenuTrigger.ariaLabel = baselineMenuTrigger.title = "More baseline actions";
+  const baselineGroup = element("div", "nami-inventory-review__baseline");
+  baselineGroup.append(baseline, baselineMenuTrigger);
   const verify = button("Verify", "inventory-verify");
   const copiedVerify = button("Verify copied files", "verify-copied-files");
   copiedVerify.classList.add("nami-button--primary");
-  const rebaseline = button("Rebaseline", "inventory-rebaseline");
   verify.classList.add("nami-button--primary");
-  const pause = button("Pause", "inventory-pause");
-  const resume = button("Resume", "inventory-resume");
-  const cancel = button("Cancel", "inventory-cancel");
+  const pause = button("", "inventory-pause");
+  const resume = button("", "inventory-resume");
+  const cancel = button("", "inventory-cancel");
+  for (const [control, icon, label] of [[pause, "pause", "Pause"], [resume, "play", "Resume"], [cancel, "stop", "Cancel"]]) {
+    control.classList.add("nami-button--icon");
+    control.append(createIcon(document, icon, "sm"));
+    control.ariaLabel = control.title = label;
+  }
   const check = button("Check original outcome", "inventory-check-outcome");
   const reload = button("Reload inventory view", "inventory-reload");
   const statusActions = element("div", "nami-plan-review__actions");
   const actions = element("div", "nami-inventory-review__actions");
-  actions.append(baseline, verify, rebaseline, copiedVerify, pause, resume, cancel, refreshSelected, refresh, reload);
+  actions.append(refresh, baselineGroup, verify, copiedVerify, pause, resume, cancel, reload);
   statusActions.append(statusTitle, actions);
   const statusMeta = element("div", "nami-plan-review__status-meta");
   const detailsToggle = button("Details", "inventory-details");
@@ -282,6 +293,7 @@ export function createInventoryReviewPanel(callbacks) {
   let searchTimer = null;
   let searchDraft = false;
   const rowMenu = createRowMenu(pane);
+  const baselineMenu = createRowMenu(pane, {trigger: baselineMenuTrigger, label: "Baseline actions"});
   function saveViewport() {
     if (current === null) return;
     current.scrollTop = list.scrollTop;
@@ -308,17 +320,9 @@ export function createInventoryReviewPanel(callbacks) {
     return blocked() || !task?.sessionReleased || task.sessionState === "active"
       || current?.summary.request_id !== task?.requestId || task?.inventoryViewUnconfirmed;
   }
-  function activeRow() {
-    return current?.window.rows.find((row) => row.node_id === activeNodeId) ?? activeRefreshTarget;
-  }
   function refreshTarget(row) {
     return {node_id:row.node_id, warning:row.warning === null ? null : true,
       viewRevision:current.summary.view_revision, publication:current.summary.request_id};
-  }
-  function updateRefreshSelected() {
-    const row = activeRow();
-    refreshSelected.disabled = row === null || row.warning !== null || Boolean(blocked())
-      || !task?.sessionReleased || task.sessionState === "active";
   }
   function updateSelectionControls() {
     if (headerSelection !== null) {
@@ -386,12 +390,29 @@ export function createInventoryReviewPanel(callbacks) {
     if (task.form?.attempt?.kind === "inventory") callbacks.onCheckStart?.();
     else callbacks.onCheckOutcome(task);
   });
-  refreshSelected.addEventListener("click", () => {
-    updateRefreshSelected();
-    const row = activeRow();
-    if (!refreshSelected.disabled) callbacks.onRefresh(current, row.node_id, refreshSelected);
+  function openBaselineMenu(event) {
+    if (baselineMenuTrigger.disabled || baselineGroup.hidden || current === null) return;
+    if (baselineMenuTrigger.ariaExpanded === "true") { baselineMenu.close(true); return; }
+    const review = current;
+    const owner = task;
+    const publication = review.summary.request_id;
+    const revision = review.summary.view_revision;
+    const actionRevision = review.actionRevision;
+    const sessionId = owner.sessionId;
+    const isCurrent = () => current === review && task === owner && !baselineGroup.hidden
+      && !baselineMenuTrigger.disabled && !blocked()
+      && review.summary.request_id === publication && review.summary.view_revision === revision
+      && review.actionRevision === actionRevision && owner.sessionId === sessionId;
+    rowMenu.close();
+    filterMenu.close();
+    baselineMenu.open(event, baselineMenuTrigger, baselineMenuTrigger,
+      [{id: "inventory-rebaseline", label: "Rebaseline", run: () => callbacks.onStart?.(review, "rebaseline", baselineMenuTrigger)}], isCurrent);
+  }
+  baselineMenuTrigger.addEventListener("click", openBaselineMenu);
+  baselineMenuTrigger.addEventListener("keydown", (event) => {
+    if (["ArrowDown", "ArrowUp"].includes(event.key)) openBaselineMenu(event);
   });
-  for (const [control, mode] of [[baseline, "baseline"], [verify, "verify"], [rebaseline, "rebaseline"]]) {
+  for (const [control, mode] of [[baseline, "baseline"], [verify, "verify"]]) {
     control.addEventListener("click", () => {
       if (current !== null && !control.disabled) callbacks.onStart?.(current, mode, control);
     });
@@ -540,7 +561,6 @@ export function createInventoryReviewPanel(callbacks) {
           current.activeNodeId = nodeId;
           current.activeRefreshTarget = activeRefreshTarget;
         }
-        updateRefreshSelected();
       },
       context: (nodeId, event, rowElement) => {
         event.preventDefault();
@@ -573,7 +593,7 @@ export function createInventoryReviewPanel(callbacks) {
         if (row.warning === null && !actionBlocked) {
           actions.push({ id: "row-refresh", label: "Refresh selected",
             run: () => callbacks.onRefresh(review, nodeId,
-              [...rows.children].find(value => value.dataset.nodeId === nodeId) ?? refreshSelected) });
+              [...rows.children].find(value => value.dataset.nodeId === nodeId) ?? rows) });
           if (row.presence === "missing" && !row.acknowledged
               && review.summary.request_id === owner.requestId && !owner.inventoryViewUnconfirmed) {
             actions.push({ id: "row-acknowledge", label: "Acknowledge missing",
@@ -581,6 +601,7 @@ export function createInventoryReviewPanel(callbacks) {
           }
         }
         filterMenu.close();
+        baselineMenu.close();
         rowMenu.open(event, rowElement, rows, actions, isCurrent);
       },
       toggle: (nodeId, expanded) => {
@@ -612,7 +633,6 @@ export function createInventoryReviewPanel(callbacks) {
         if (commitTreeWindow(controller, generation, window)) {
           owner.window = window;
           committedWindow = window;
-          updateRefreshSelected();
         }
       },
     }, ROW_HEIGHT, list, ROW_HEIGHT);
@@ -724,6 +744,7 @@ export function createInventoryReviewPanel(callbacks) {
     selectionFocus = null;
     if (current !== null) callbacks.onInterrupt?.(current);
     rowMenu.dispose();
+    baselineMenu.dispose();
     filterMenu.dispose();
     columns.dispose();
     resizeObserver.disconnect();
@@ -777,7 +798,6 @@ export function createInventoryReviewPanel(callbacks) {
       && value.executionSessionId != null
       && executionFact?.execution?.session_id === value.executionSessionId
       && executionFact.execution.has_successful_copied_files === false;
-    refresh.classList.toggle("nami-button--primary", !syncTask);
     switcher.ariaLabel = syncTask ? "Task view" : "Task type";
     renderText(planPane, syncTask ? "Plan" : "Sync");
     renderText(verifyPane, syncTask ? "Verify" : "Integrity");
@@ -882,8 +902,8 @@ export function createInventoryReviewPanel(callbacks) {
       for (const { sortButton } of sortHeaders.values()) sortButton.disabled = true;
       rowMenu.close();
       filterMenu.render([], {}, true);
-      refreshSelected.disabled = true;
-      for (const control of [baseline, verify, rebaseline, copiedVerify, pause, resume, cancel]) control.hidden = true;
+      for (const control of [baselineGroup, verify, copiedVerify, pause, resume, cancel]) control.hidden = true;
+      baselineMenu.close();
       updateSelectionControls();
       detailActions.hidden = true;
       return;
@@ -897,10 +917,8 @@ export function createInventoryReviewPanel(callbacks) {
       && ["baseline", "verify", "rebaseline"].includes(value.sessionKind);
     const canStart = value.taskKind === "inventory" && value.sessionReleased && currentPublication
       && review.summary.selected_file_count > 0 && !blocked();
-    for (const control of [baseline, rebaseline]) {
-      control.hidden = syncTask || currentOrdinary;
-      control.disabled = !canStart;
-    }
+    baselineGroup.hidden = syncTask || currentOrdinary;
+    baseline.disabled = baselineMenuTrigger.disabled = !canStart;
     const currentAuxiliary = currentOrdinary;
     verify.hidden = currentOrdinary;
     verify.disabled = !value.sessionReleased || !currentPublication
@@ -990,7 +1008,6 @@ export function createInventoryReviewPanel(callbacks) {
       follow.scrollOffset = null;
     }
     saveViewport();
-    updateRefreshSelected();
     updateSelectionControls();
     if (selectionFocus !== null && review.pending !== "selection") {
       const retained = selectionFocus;
@@ -1005,6 +1022,7 @@ export function createInventoryReviewPanel(callbacks) {
     columns.refresh();
     renderDetails();
     rowMenu.reconcile();
+    baselineMenu.reconcile();
   }
 
   return Object.freeze({ element: pane, render, dispose });

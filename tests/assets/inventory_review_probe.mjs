@@ -250,6 +250,32 @@ pane.render(task);
 assert.equal(action("inventory-baseline").disabled, false);
 action("inventory-baseline").click();
 assert.deepEqual(starts.at(-1).slice(0, 2), [review, "baseline"]);
+const baselineTrigger = action("inventory-baseline-menu");
+const baselinePopup = find(value => value.ariaLabel === "Baseline actions");
+baselineTrigger.click();
+assert.equal(baselineTrigger.ariaExpanded, "true");
+assert.equal(baselinePopup.hidden, false);
+baselinePopup.dispatch("keydown", {key:"Escape"});
+assert.equal(baselineTrigger.ariaExpanded, "false");
+assertSameNode(document.activeElement, baselineTrigger);
+baselineTrigger.dispatch("keydown", {key:"ArrowDown"});
+action("inventory-rebaseline").click();
+assert.deepEqual(starts.at(-1), [review, "rebaseline", baselineTrigger]);
+assert.equal(baselinePopup.hidden, true);
+baselineTrigger.click();
+const staleRebaseline = action("inventory-rebaseline");
+const beforeStaleRebaseline = starts.length;
+review.pending = "selection";
+pane.render(task);
+assert.equal(baselinePopup.hidden, true);
+staleRebaseline.click();
+assert.equal(starts.length, beforeStaleRebaseline);
+review.pending = null;
+pane.render(task);
+assert.equal(action("inventory-refresh").textContent, "");
+assert.equal(action("inventory-refresh").ariaLabel, "Refresh inventory");
+assert.equal(action("inventory-refresh").classList.contains("nami-button--primary"), false);
+assert.equal(action("inventory-verify").classList.contains("nami-button--primary"), true);
 task.sessionId = "b".repeat(32);
 task.sessionKind = "verify";
 task.sessionState = "active";
@@ -259,6 +285,11 @@ review.summary = originalSummary;
 review.window = originalWindow;
 pane.render(task);
 assert.equal(action("inventory-pause").hidden, false);
+for (const [name, label] of [["pause", "Pause"], ["resume", "Resume"], ["cancel", "Cancel"]]) {
+  assert.equal(action(`inventory-${name}`).textContent, "");
+  assert.equal(action(`inventory-${name}`).ariaLabel, label);
+  assert.equal(action(`inventory-${name}`).title, label);
+}
 assert.equal(action("inventory-resume").hidden, true);
 action("inventory-pause").click();
 assert.deepEqual(controls.at(-1), [review, "pause"]);
@@ -401,8 +432,10 @@ review.summary = fixture.views.default.summary;
 review.detail = { row: real, state: "current", response: fixture.detail };
 pane.render(task);
 rowElements().find((value) => value.dataset.nodeId === real.node_id).click();
-action("inventory-refresh-selected").click();
-assert.deepEqual(refreshes.at(-1), [review, real.node_id, action("inventory-refresh-selected")]);
+const refreshRow = rowElements().find(value => value.dataset.nodeId === real.node_id);
+ownedContext(refreshRow, "contextmenu", {clientX:100, clientY:100});
+action("row-refresh").click();
+assert.deepEqual(refreshes.at(-1), [review, real.node_id, refreshRow]);
 const detail = find((value) => value.ariaLabel === "Inventory item details");
 const pathFact = () => {
   const body = detail.children.find((value) => value.tagName === "DL");
@@ -430,7 +463,8 @@ action("inventory-details").click();
 assert.equal(document.activeElement, action("inventory-details"));
 assert.equal(diagnostics.hidden, true);
 action("inventory-details").click();
-assert.equal(action("inventory-refresh-selected").parentElement.parentElement.parentElement.classList.contains("nami-plan-review__summary"), true);
+assert.equal(find(value => value.dataset.action === "inventory-refresh-selected"), undefined,
+  "selected Refresh is available only through the row context menu");
 const modes = walk(pane.element).filter((value) => value.getAttribute("role") === "radio");
 assert.deepEqual(modes.map((value) => [value.textContent, value.ariaChecked, value.disabled]), [["Sync", "false", true], ["Integrity", "true", false]]);
 const checksumCell = realElement.querySelector(".nami-inventory-row__checksum");
@@ -476,7 +510,8 @@ pane.render(task);
 assert.match(text(detail), /read failed/);
 assert.doesNotMatch(text(detail), /Stored digest/);
 rowElements().find((value) => value.dataset.nodeId === notice.node_id).click();
-assert.equal(action("inventory-refresh-selected").disabled, true);
+ownedContext(rowElements().find(value => value.dataset.nodeId === notice.node_id), "contextmenu", {clientX:100, clientY:100});
+assert.equal(find(value => value.ariaLabel === "Item actions").children.some(value => value.dataset.action === "row-refresh"), false);
 assert.equal(action("inventory-acknowledge").hidden, true);
 assert.equal(action("inventory-restore").hidden, true);
 Object.assign(review, fixture.views.acknowledged, { detail: null });
@@ -502,7 +537,7 @@ assert.equal(observers.at(-1).disconnected, true);
 task.inventoryReview = { ...fixture.views.empty, pending: null, message: null, detail: null, queuedSearchQuery: null };
 pane.render(task);
 assert.equal(rowElements().length, 0);
-assert.equal(action("inventory-refresh-selected").disabled, true, "empty windows have no current action target");
+assert.equal(review.activeNodeId, null, "empty windows have no current action target");
 assert.match(text(pane.element), /No items match/);
 const reloadControl = action("inventory-reload");
 assert.equal(reloadControl.parentElement.parentElement.classList.contains("nami-plan-review__actions"), true);
@@ -676,7 +711,7 @@ for (const [key, value] of Object.entries({
   "./execution_confirmation.js": moduleUrl("export const createExecutionConfirmation = () => ({ element: document.createElement('dialog') });"),
   "./rail.js": moduleUrl("export const createTaskRail = () => ({ element: document.createElement('nav'), render() {} });"),
 })) appSource = appSource.replace(key, value);
-appSource += "\nexport { adoptTask, selectTask, panel, startCurrentInventory, loadInventoryReview, acceptTaskUpdate };";
+appSource += "\nexport { adoptTask, selectTask, panel, startCurrentInventory, loadInventoryReview, acceptTaskUpdate, runInventoryAction };";
 const app = await import(moduleUrl(appSource));
 const initialTask = app.adoptTask({task_id: "task-" + "9".repeat(32), session_id: null,
   session_state: null, session_released: false, task_kind: null, request_id: null,
@@ -727,8 +762,7 @@ viewportReply = delayedViewport();
 treeViewport.scrollTop = 300 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(viewportCalls.at(-1)[2], 268);
-assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
-  true, "a viewport gap clears the current toolbar target");
+assert.equal(liveReview.activeNodeId, null, "a viewport gap clears the active target");
 treeViewport.scrollTop = 280 * 24; treeViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(viewportCalls.length, 2, "the second viewport intent waits behind the initial read");
@@ -897,8 +931,7 @@ while (frames.length) frames.shift()();
 viewportReply.resolve(fixture.tail); await settle();
 assertProjectedWindow(liveReview.window, fixture.tail, "accepted viewport reply becomes the retained window");
 assert.equal(firstLiveRow().dataset.nodeId, fixture.tail.rows[0].node_id);
-assert.equal(walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
-  false, "accepted viewport adopts eligibility after its window enters the page owner");
+assert.notEqual(liveReview.activeNodeId, null, "accepted viewport retains active identity");
 const acceptedScroll = treeViewport.scrollTop;
 app.panel.render(liveTask);
 assert.equal(treeViewport.scrollTop, acceptedScroll, "rendering the accepted window preserves scrolling");
@@ -923,8 +956,8 @@ assert.equal(treeRoot.getAttribute("aria-activedescendant"), liveRow(liveFile.no
 assert.equal(liveReview.detail === cardSelection, true, "arrows preserve the card's displayed item");
 assert.equal(liveDetails.length, beforeArrowDetails, "highlight navigation does not read details");
 assert.equal(liveDiagnostics.hidden, true);
-const liveRefreshSelected = walk(app.panel.element).find((value) => value.dataset.action === "inventory-refresh-selected");
-assert.equal(liveRefreshSelected.disabled, false);
+ownedContext(liveRow(liveFile.node_id), "contextmenu", {clientX:100, clientY:100});
+const liveRefreshSelected = walk(app.panel.element).find(value => value.dataset.action === "row-refresh");
 liveRefreshSelected.click();
 liveRefreshSelected.click();
 await settle();
@@ -953,7 +986,7 @@ assert.equal(treeRoot.getAttribute("aria-activedescendant"), null);
 assert.equal(liveReview.activeNodeId, retainedLiveRow.node_id);
 assert.equal(liveReview.detail, retainedCard);
 const beforeRetainedRefresh = liveRefreshes.length;
-liveRefreshSelected.click(); await settle();
+await app.runInventoryAction(liveReview, "refresh", retainedLiveRow.node_id); await settle();
 assert.equal(liveRefreshes.length, beforeRetainedRefresh + 1);
 assert.equal(liveRefreshes.at(-1)[4], retainedLiveRow.node_id,
   "app admission accepts retained off-window active identity independent of the card");
@@ -985,7 +1018,7 @@ liveReview = liveTask.inventoryReview;
 assert.notEqual(liveReview, beforeReloadReview, "explicit reload replaces the review owner");
 assert.equal(liveReview.activeNodeId, beforeReloadNode, "reload retains a node proved visible in its new view");
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), null, "reload may retain an off-window identity without ARIA");
-assert.equal(walk(app.panel.element).find(value => value.dataset.action === "inventory-refresh-selected").disabled, false);
+assert.equal(liveReview.activeRefreshTarget.node_id, beforeReloadNode);
 // A real manual scroll during selection settlement disables app-owned Follow.
 // Its synchronous render and later progress retain the active Refresh target.
 const blockedFollowAnchors = [];
@@ -1038,7 +1071,7 @@ assert.deepEqual(liveReview.activeRefreshTarget, blockedRefreshTarget);
 liveTask.sessionState = "completed";
 liveTask.sessionReleased = true;
 app.panel.render(liveTask);
-assert.equal(walk(app.panel.element).find(value => value.dataset.action === "inventory-refresh-selected").disabled, false);
+assert.equal(liveReview.activeRefreshTarget.node_id, blockedFollowNode);
 app.panel.renderSettings();
 const menuCalls = [];
 const menuPane = createInventoryReviewPanel({
@@ -1099,8 +1132,8 @@ menuPointer(menuNotice);
 assert.deepEqual(menuPopup.children.map((item) => item.textContent), ["Show details"]);
 menuReview.detail = { row: missingRow, state: "current", response: fixture.detail };
 menuPane.render(menuTask);
-assert.equal(menuWalk().find((value) => value.dataset.action === "inventory-refresh-selected").disabled,
-  true, "an active notice disables Refresh even when an eligible card is retained");
+assert.equal(menuPopup.children.some(value => value.dataset.action === "row-refresh"), false,
+  "a notice has no Refresh action even when an eligible card is retained");
 menuPointer(menuFolder);
 menuWalk().find((value) => value.dataset.action === "inventory-acknowledge").click();
 assert.deepEqual(menuCalls.at(-1), ["visibility", menuReview, "acknowledge", missingRow.node_id],
@@ -1110,7 +1143,6 @@ menuPane.render(menuTask);
 menuWalk().find((value) => value.dataset.action === "inventory-restore").click();
 assert.deepEqual(menuCalls.at(-1), ["visibility", menuReview, "restore", missingRow.node_id],
   "Restore retains the card item while a different row is active");
-assert.equal(menuWalk().find((value) => value.dataset.action === "inventory-refresh-selected").disabled, false);
 menuPointer(missingRow);
 const overlayRefresh = menuPopup.children.find(value => value.dataset.action === "row-refresh");
 const overlayInvoker = menuRow(missingRow);
@@ -1369,8 +1401,8 @@ Object.assign(presentationTask, {taskKind:"sync-plan", executionStarted:true, wo
     execution_revision:7, has_successful_copied_files:true}}});
 presentationPane.render(presentationTask);
 const presentationAction = key => walk(presentationPane.element).find(value => value.dataset.action === key);
-assert.equal(presentationAction("inventory-baseline").hidden, true);
-assert.equal(presentationAction("inventory-rebaseline").hidden, true);
+assert.equal(presentationAction("inventory-baseline").parentElement.hidden, true);
+assert.equal(presentationAction("inventory-baseline-menu").parentElement.hidden, true);
 assert.equal(presentationAction("inventory-verify").hidden, false);
 assert.equal(presentationAction("inventory-verify").textContent, "Verify current state");
 assert.equal(presentationAction("verify-copied-files").hidden, false);
@@ -1548,7 +1580,7 @@ const alignedAction = name => walk(alignedPane.element).find(value => value.data
 assert.equal(alignedAction("inventory-refresh").classList.contains("nami-button--primary"), false);
 assert.equal(alignedAction("verify-copied-files").classList.contains("nami-button--primary"), true);
 alignedTask.taskKind = "inventory"; alignedPane.render(alignedTask);
-assert.equal(alignedAction("inventory-refresh").classList.contains("nami-button--primary"), true);
+assert.equal(alignedAction("inventory-refresh").classList.contains("nami-button--primary"), false);
 alignedReview.follow = {hasTarget:true, eligible:true, enabled:false};
 alignedPane.render(alignedTask);
 assert.equal(alignedAction("go-current-item").hidden, false);
@@ -1598,25 +1630,19 @@ const publishPassive = (window, index) => {
 publishPassive(fixture.views.maximum.window, 20);
 assert.ok(alignedViewport.scrollTop > 0, "same-page passive target is revealed");
 assert.equal(alignedTree.getAttribute("aria-activedescendant"), passiveActive);
-assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
-alignedAction("inventory-refresh-selected").click();
-assert.equal(alignedRefreshes.at(-1)[1], passiveNode, "Refresh retains the old active target");
+assert.equal(alignedReview.activeRefreshTarget.node_id, passiveNode);
 const samePageTop = alignedViewport.scrollTop;
 publishPassive(fixture.tail, 280);
 assert.ok(alignedViewport.scrollTop > samePageTop, "off-window passive target is revealed");
 assert.equal(alignedTree.getAttribute("aria-activedescendant"), null);
-assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
-const passiveRefreshes = alignedRefreshes.length;
-alignedAction("inventory-refresh-selected").click();
-assert.equal(alignedRefreshes.length, passiveRefreshes + 1);
-assert.equal(alignedRefreshes.at(-1)[1], passiveNode, "off-window Refresh keeps its identity target");
+assert.equal(alignedReview.activeRefreshTarget.node_id, passiveNode, "off-window active target remains retained");
 alignedReview.window = {...fixture.tail, rows:[...fixture.tail.rows]};
 alignedPane.render(alignedTask);
 alignedViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(alignedTree.getAttribute("aria-activedescendant"), null,
   "ordinary overlay/frame does not attach ARIA to a replacement");
-assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
+assert.equal(alignedReview.activeRefreshTarget.node_id, passiveNode);
 checkPassiveCustody();
 // A later ordinary publication may bring the old row back. Programmatic
 // viewport restoration restores the retained identity's ARIA target.
@@ -1628,7 +1654,7 @@ while (frames.length) frames.shift()();
 assert.ok(alignedRows().some(row => row.dataset.nodeId === passiveNode), "the old row is represented again");
 assert.equal(alignedTree.getAttribute("aria-activedescendant"), passiveActive,
   "ordinary row return/frame restores retained identity's ARIA");
-assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
+assert.equal(alignedReview.activeRefreshTarget.node_id, passiveNode);
 checkPassiveCustody();
 alignedReview.pending = "view";
 alignedPane.render(alignedTask);
@@ -1642,7 +1668,7 @@ alignedReview.scrollTop = 280 * 24;
 alignedPane.render(alignedTask);
 assert.equal(alignedReview.activeNodeId, passiveNode, "new revision's exact off-window anchor retains the row");
 assert.equal(alignedTree.getAttribute("aria-activedescendant"), null, "new anchor window detaches the row");
-assert.equal(alignedAction("inventory-refresh-selected").disabled, false);
+assert.equal(alignedReview.activeRefreshTarget.node_id, passiveNode);
 const replacementWindow = {...alignedReview.window};
 const replacementReview = {...alignedReview, window:replacementWindow, passiveRevealWindow:replacementWindow};
 const replacementFocus = alignedAction("inventory-refresh");
@@ -1659,7 +1685,7 @@ assert.equal(alignedReview.activeNodeId, null, "exact disappearance clears ident
 alignedViewport.dispatch("scroll");
 while (frames.length) frames.shift()();
 assert.equal(alignedReview.activeNodeId, null, "exact disappearance clears identity");
-assert.equal(alignedAction("inventory-refresh-selected").disabled, true);
+assert.equal(alignedReview.activeRefreshTarget, null);
 assert.equal(alignedTree.getAttribute("aria-activedescendant"), null);
 alignedPane.dispose();
 const recallRequests = [];

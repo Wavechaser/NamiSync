@@ -4261,6 +4261,12 @@ def _inventory_panel_sample() -> dict[str, object]:
         "headers": ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"], "checkbox_count": 65,
         "selected_state": {"stable_columns": True, "plan_accent": True, "inventory_accent": True, "plan_interactive": True, "inventory_interactive": True},
         "reload_actions_top": [True, True],
+        "toolbar": {"order": ["inventory-refresh", "inventory-baseline", "inventory-baseline-menu", "inventory-verify"],
+                    "labels": ["", "Baseline", "", "Verify"],
+                    "names": ["Refresh inventory", "Baseline", "More baseline actions", "Verify"],
+                    "primary": [False, False, False, True],
+                    "rectangles": [[500, 0, 532, 32], [540, 0, 620, 32], [619, 0, 651, 32], [659, 0, 729, 32]],
+                    "selected_refresh_absent": True, "refresh_glyph": "arrow_clockwise_16_regular.svg"},
         "item_progress": {"value":"60", "ratio":0.6, "height":4.0, "row_retained":True,
                           "focus_retained":True, "notes_clear":True, "result_in_presence":True},
         "switcher": [{"text": "Sync", "selected": "false", "disabled": True},
@@ -4322,6 +4328,15 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert evidence["checkbox_count"] == 65
     assert evidence["selected_state"] == {"stable_columns": True, "plan_accent": True, "inventory_accent": True, "plan_interactive": True, "inventory_interactive": True}
     assert evidence["reload_actions_top"] == [True, True]
+    toolbar = evidence["toolbar"]
+    toolbar_expected = _inventory_panel_sample()["toolbar"]
+    for key in ("order", "labels", "names", "primary", "selected_refresh_absent"):
+        assert toolbar[key] == toolbar_expected[key], key
+    assert "arrow_clockwise_16_regular.svg" in toolbar["refresh_glyph"]
+    refresh, baseline, dropdown, verify = toolbar["rectangles"]
+    assert refresh[2] <= baseline[0] and dropdown[2] <= verify[0]
+    assert dropdown[0] == pytest.approx(baseline[2] - 1, abs=0.5), "split button stays joined"
+    assert all(bounds[1] == pytest.approx(refresh[1], abs=0.5) for bounds in (baseline, dropdown, verify))
     item_progress = evidence["item_progress"]
     assert item_progress["value"] == "60"
     assert item_progress["ratio"] == pytest.approx(0.6, abs=0.02)

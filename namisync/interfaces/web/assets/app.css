@@ -343,6 +343,21 @@ body {
   gap: var(--space-2);
 }
 
+.nami-inventory-review__baseline {
+  display: inline-flex;
+}
+
+.nami-inventory-review__baseline > :first-child {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.nami-inventory-review__baseline > :last-child {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  margin-inline-start: -1px;
+}
+
 .nami-settings {
   display: grid;
   gap: var(--space-5);

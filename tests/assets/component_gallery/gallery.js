@@ -2192,6 +2192,17 @@ window.addEventListener("unhandledrejection", (event) => {
       plan_interactive: !planReviewPanel.element.querySelector('[data-action="pane-plan"]').disabled,
       inventory_interactive: !root.querySelector('[data-action="pane-verify"]').disabled,
     };
+    const toolbarControls = [...root.querySelector('.nami-plan-review__actions').querySelectorAll('button')]
+      .filter(control => control.closest('[hidden]') === null);
+    const toolbarEvidence = {
+      order: toolbarControls.map(control => control.dataset.action),
+      labels: toolbarControls.map(control => control.textContent),
+      names: toolbarControls.map(control => control.ariaLabel || control.textContent),
+      primary: toolbarControls.map(control => control.classList.contains('nami-button--primary')),
+      rectangles: toolbarControls.map(rectangle),
+      selected_refresh_absent: root.querySelector('[data-action="inventory-refresh-selected"]') === null,
+      refresh_glyph: getComputedStyle(root.querySelector('[data-action="inventory-refresh"] .nami-icon')).maskImage,
+    };
     const statusRectangles = [".nami-plan-review__status-title", ".nami-plan-review__actions > .nami-inventory-review__actions",
       ".nami-plan-review__status-summary", ".nami-plan-review__status", '[data-action="inventory-details"]']
       .map((selector) => rectangle(root.querySelector(selector)));
@@ -2429,10 +2440,9 @@ window.addEventListener("unhandledrejection", (event) => {
       reload_actions_top: [root.querySelector('[data-action="inventory-reload"]'),
         planReviewPanel.element.querySelector('[data-action="retry-outcome"]')]
         .map(control => control.closest('.nami-plan-review__actions') !== null),
-      status_rectangles: statusRectangles, setup_heights: setupHeights, status: statusEvidence, scroll_owners: scrollOwners,
+      status_rectangles: statusRectangles, toolbar: toolbarEvidence, setup_heights: setupHeights, status: statusEvidence, scroll_owners: scrollOwners,
       manual_before: manualBefore, manual_after: manualAfter, details: detailEvidence,
-      refresh_on_status: [...root.querySelectorAll('[data-action="inventory-refresh"], [data-action="inventory-refresh-selected"]')]
-        .every((value) => value.closest(".nami-plan-review__summary") !== null),
+      refresh_on_status: root.querySelector('[data-action="inventory-refresh"]').closest(".nami-plan-review__summary") !== null,
       root_fits: root.scrollHeight <= root.clientHeight + 1,
       viewport_height: viewportHeight, viewport_scroll_height: viewport.scrollHeight,
       adopted_offset: adoptedOffset, window_requests: requests.slice(),
