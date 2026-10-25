@@ -223,8 +223,12 @@ explicit, reviewable and regression-backed.
 
 #### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-25)
 
-- Keep Inventory highlight geometry stable and retain the selected task-view
-  accent while disabled, preserving existing switcher availability and behavior.
+- Keep Inventory highlight geometry stable. Both task-view switchers retain
+  the selected half's accent and hover/click behavior while unavailable
+  destinations stay locked.
+- Hide Plan Again during execution admission and active work. Keep icon-only
+  Pause/Resume and Cancel beside the headline in the top action row, with
+  accessible names and the existing cancel confirmation gesture.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.

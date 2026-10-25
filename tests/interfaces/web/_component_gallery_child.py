@@ -1380,8 +1380,10 @@ def _valid_recent_ui(value: object) -> bool:
     return all(
         type(value[key]) is list and len(value[key]) == count
         and all(
-            type(row) is dict and set(row) == {"label", "primary", "disabled", "mask"}
+            type(row) is dict and set(row) == {"label", "text", "title_alignment", "plan_again_hidden", "primary", "disabled", "mask"}
             and text(row["label"]) and text(row["mask"])
+            and text(row["text"]) and type(row["plan_again_hidden"]) is bool
+            and type(row["title_alignment"]) in (int, float) and math.isfinite(row["title_alignment"])
             and type(row["primary"]) is bool and type(row["disabled"]) is bool
             for row in value[key]
         )
@@ -1915,7 +1917,7 @@ def _valid_inventory_panel(value: object) -> bool:
         and type(value["reload_actions_top"]) is list and len(value["reload_actions_top"]) == 2
         and all(type(flag) is bool for flag in value["reload_actions_top"])
         and type(value["selected_state"]) is dict
-        and set(value["selected_state"]) == {"stable_columns", "plan_accent", "inventory_accent"}
+        and set(value["selected_state"]) == {"stable_columns", "plan_accent", "inventory_accent", "plan_interactive", "inventory_interactive"}
         and all(type(flag) is bool for flag in value["selected_state"].values())
         and type(value["item_progress"]) is dict
         and set(value["item_progress"]) == {"value", "ratio", "height", "row_retained", "focus_retained", "notes_clear", "result_in_presence"}

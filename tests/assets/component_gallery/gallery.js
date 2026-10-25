@@ -2189,6 +2189,8 @@ window.addEventListener("unhandledrejection", (event) => {
       stable_columns: JSON.stringify(unhighlightedPositions) === JSON.stringify(highlightedPositions),
       plan_accent: accentedSelection(planReviewPanel.element.querySelector('[data-action="pane-plan"]')),
       inventory_accent: accentedSelection(root.querySelector('[data-action="pane-verify"]')),
+      plan_interactive: !planReviewPanel.element.querySelector('[data-action="pane-plan"]').disabled,
+      inventory_interactive: !root.querySelector('[data-action="pane-verify"]').disabled,
     };
     const statusRectangles = [".nami-plan-review__status-title", ".nami-plan-review__actions > .nami-inventory-review__actions",
       ".nami-plan-review__status-summary", ".nami-plan-review__status", '[data-action="inventory-details"]']
@@ -3975,7 +3977,12 @@ window.addEventListener("unhandledrejection", (event) => {
   function actionSnapshot(action) {
     const button = controlPanel.element.querySelector(`[data-action="${action}"]`);
     const icon = [...button.querySelectorAll(".nami-icon")].find((glyph) => !glyph.hidden);
-    return { label: button.textContent, primary: button.classList.contains("nami-button--primary"), disabled: button.disabled, mask: getComputedStyle(icon).maskImage };
+    const bounds = button.getBoundingClientRect();
+    const titleBounds = controlPanel.element.querySelector(".nami-plan-review__status-title").getBoundingClientRect();
+    return { label: button.ariaLabel, text: button.textContent,
+      title_alignment: (bounds.top + bounds.bottom - titleBounds.top - titleBounds.bottom) / 2,
+      plan_again_hidden: !controlPanel.element.querySelector('[data-action="plan-again"]').checkVisibility(),
+      primary: button.classList.contains("nami-button--primary"), disabled: button.disabled, mask: getComputedStyle(icon).maskImage };
   }
   const pauseStates = [actionSnapshot("pause")];
   controlPanel.element.querySelector('[data-action="pause"]').click();

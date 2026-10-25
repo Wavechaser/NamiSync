@@ -365,7 +365,7 @@ review.window.rows.push(notice);
 panel.render(task);
 assert.equal(panel.element.dataset.pending, "");
 assert.equal(findAction(panel.element, "pane-plan").ariaChecked, "true");
-assert.equal(findAction(panel.element, "pane-plan").disabled, true);
+assert.equal(findAction(panel.element, "pane-plan").disabled, false);
 assert.equal(findAction(panel.element, "pane-verify").ariaChecked, "false");
 assert.equal(findAction(panel.element, "pane-verify").disabled, true,
   "Verify remains unavailable before an execution exists");
@@ -484,6 +484,10 @@ assert.equal(planAgainButton.children.length, 1);
 assert.equal(planAgainButton.textContent, "");
 assert.equal(planAgainButton.ariaLabel, "Plan again");
 assert.equal(planAgainButton.title, "Plan again");
+task.sessionState = "active";
+panel.render(task);
+assert.equal(planAgainButton.hidden, false, "a ready Plan retains Plan again before execution");
+task.sessionState = "completed";
 review.pending = "plan-again";
 task.form = { attempt: { recovery: fakeRecoveryHandle({ canCheck: true }) } };
 panel.render(task);
@@ -509,6 +513,8 @@ task.executionAttempt = { state: "uncertain", recovery: executionRecovery };
 review.pending = "outcome";
 review.message = "review-owner-sentinel";
 recoveryPanel.render(task);
+assert.equal(findAction(recoveryPanel.element, "plan-again").hidden, true,
+  "unsettled execution admission cannot expose Plan again");
 assert.ok(findText(recoveryFooter, "execution-owner-sentinel"),
   "uncertain Execute shows its own recovery guidance");
 assert.equal(findText(recoveryFooter, "review-owner-sentinel"), false);
@@ -792,11 +798,17 @@ task.executionStarted = true;
 task.sessionKind = "sync-execution";
 task.sessionState = "active";
 panel.render(task);
+assert.equal(planAgainButton.hidden, true, "active execution cannot expose Plan again");
+const beforeHiddenPlanAgain = calls.length;
+planAgainButton.dispatch("click");
+assert.equal(calls.length, beforeHiddenPlanAgain);
 const pauseToggle = findAction(panel.element, "pause");
 assert.ok(pauseToggle.classList.contains("nami-button--secondary"));
 assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, false);
 assert.equal(findByClass(pauseToggle, "nami-icon--play").hidden, true);
-assert.equal(pauseToggle.children.at(-1).textContent, "Pause");
+assert.equal(pauseToggle.textContent, "");
+assert.equal(pauseToggle.ariaLabel, "Pause execution");
+assert.equal(pauseToggle.title, "Pause execution");
 pauseToggle.dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "pause"]);
 task.executionControlState = "pausing";
@@ -809,7 +821,9 @@ panel.render(task);
 assertSameNode(findAction(panel.element, "resume"), pauseToggle,
   "authoritative pause retains the toggle and its focus identity");
 assert.ok(pauseToggle.classList.contains("nami-button--primary"));
-assert.equal(pauseToggle.children.at(-1).textContent, "Resume");
+assert.equal(pauseToggle.textContent, "");
+assert.equal(pauseToggle.ariaLabel, "Resume execution");
+assert.equal(pauseToggle.title, "Resume execution");
 assert.equal(findByClass(pauseToggle, "nami-icon--play").hidden, false);
 assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, true);
 findAction(panel.element, "resume").dispatch("click");
@@ -1036,7 +1050,7 @@ task.executionControlAttempt = { sessionId: task.sessionId,
 review.pending = "pause";
 panel.render(task);
 const controlCheck = findAction(panel.element, "retry-outcome");
-assert.equal(controlCheck.parentElement.parentElement.classList.contains("nami-plan-review__actions"), true);
+assert.ok(statusActions.contains(controlCheck), "control recovery stays in the top action row");
 assert.equal(controlCheck.hidden, false);
 assert.equal(controlCheck.disabled, false, "ordinary control Check is available while idle");
 task.executionControlAttempt.recovery.checking = true;
@@ -1284,6 +1298,7 @@ const paneTask = { ...executionTask, taskKind:"sync-plan", workPane:"plan",
   executionSessionId:executionSummary.session_id, sessionId:executionSummary.session_id,
   sessionKind:"sync-execution", sessionReleased:true };
 executionPanel.render(paneTask);
+assert.equal(findAction(executionPanel.element, "plan-again").hidden, false, "terminal execution restores Plan again");
 const paneCallBase = paneCalls.length;
 findAction(executionPanel.element, "pane-verify").dispatch("click");
 assert.deepEqual(paneCalls.slice(paneCallBase), [[paneTask, "verify"]],

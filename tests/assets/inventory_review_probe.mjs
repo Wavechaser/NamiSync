@@ -1398,6 +1398,18 @@ for (const unknown of [null,
 }
 presentationTask.originalExecutionFact = retainedCopiedFact;
 presentationPane.render(presentationTask);
+assert.equal(presentationAction("pane-verify").disabled, false, "selected Verify retains normal interaction");
+const beforeLockedPane = paneChanges.length;
+presentationTask.sessionKind = "sync-execution";
+presentationTask.sessionReleased = false;
+presentationPane.render(presentationTask);
+assert.equal(presentationAction("pane-plan").disabled, true, "original execution locks the other destination");
+presentationAction("pane-plan").click();
+assert.equal(paneChanges.length, beforeLockedPane);
+presentationAction("pane-verify").click();
+assert.deepEqual(paneChanges.at(-1), [presentationTask, "verify"]);
+presentationTask.sessionReleased = true;
+presentationPane.render(presentationTask);
 presentationAction("pane-plan").click();
 assert.deepEqual(paneChanges.at(-1), [presentationTask, "plan"]);
 presentationPane.dispose();

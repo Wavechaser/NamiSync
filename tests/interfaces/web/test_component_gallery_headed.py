@@ -105,7 +105,8 @@ def test_recall_gallery_report_keeps_shape_separate_from_behavior() -> None:
 
 def _recent_ui_sample() -> dict[str, object]:
     def action(label: str, primary: bool, disabled: bool, glyph: str) -> dict[str, object]:
-        return {"label": label, "primary": primary, "disabled": disabled, "mask": f'url("/{glyph}")'}
+        return {"label": label, "text": "", "title_alignment": 0, "plan_again_hidden": True,
+                "primary": primary, "disabled": disabled, "mask": f'url("/{glyph}")'}
 
     return {
         "refusals": [
@@ -144,12 +145,12 @@ def _recent_ui_sample() -> dict[str, object]:
             "message": f"Gallery preview: destination {_RECENT_MOVE_PATH} revealed. No files were changed.",
         },
         "pause": [
-            action("Pause", False, False, "pause_16_regular.svg"),
-            action("Resume", True, False, "play_16_regular.svg"),
-            action("Pause", False, True, "pause_16_regular.svg"),
+            action("Pause execution", False, False, "pause_16_regular.svg"),
+            action("Resume execution", True, False, "play_16_regular.svg"),
+            action("Pause execution", False, True, "pause_16_regular.svg"),
         ],
         "cancel": [
-            action("Cancel", armed, False, f'stop_16_{"filled" if armed else "regular"}.svg')
+            action("Confirm cancellation" if armed else "Cancel execution", armed, False, f'stop_16_{"filled" if armed else "regular"}.svg')
             for armed in (False, True, False, False)
         ],
         "commands_after_arm": 2, "commands": ["pause", "resume", "cancel"], "retained_panels": 5,
@@ -190,6 +191,8 @@ def _assert_recent_ui(value: dict[str, object], *, forced: bool = False,
         assert _contrast(rest["foreground"], rest["background"]) >= 4.5
     for key in ("pause", "cancel"):
         for observed, sample in zip(value[key], expected[key], strict=True):
+            assert observed["text"] == "" and observed["plan_again_hidden"] is True
+            assert observed["title_alignment"] == pytest.approx(0, abs=1)
             assert {name: observed[name] for name in ("label", "primary", "disabled")} == {
                 name: sample[name] for name in ("label", "primary", "disabled")
             }
@@ -4256,7 +4259,7 @@ def _inventory_panel_sample() -> dict[str, object]:
         typography[name] = [style, style.copy()]
     return {
         "headers": ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"], "checkbox_count": 65,
-        "selected_state": {"stable_columns": True, "plan_accent": True, "inventory_accent": True},
+        "selected_state": {"stable_columns": True, "plan_accent": True, "inventory_accent": True, "plan_interactive": True, "inventory_interactive": True},
         "reload_actions_top": [True, True],
         "item_progress": {"value":"60", "ratio":0.6, "height":4.0, "row_retained":True,
                           "focus_retained":True, "notes_clear":True, "result_in_presence":True},
@@ -4317,7 +4320,7 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert component_gallery_child._valid_inventory_panel(evidence)
     assert evidence["headers"] == ["", "Filename", "Presence", "Checksum", "Size", "Modified", "Notes"]
     assert evidence["checkbox_count"] == 65
-    assert evidence["selected_state"] == {"stable_columns": True, "plan_accent": True, "inventory_accent": True}
+    assert evidence["selected_state"] == {"stable_columns": True, "plan_accent": True, "inventory_accent": True, "plan_interactive": True, "inventory_interactive": True}
     assert evidence["reload_actions_top"] == [True, True]
     item_progress = evidence["item_progress"]
     assert item_progress["value"] == "60"

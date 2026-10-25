@@ -783,8 +783,9 @@ export function createInventoryReviewPanel(callbacks) {
     renderText(verifyPane, syncTask ? "Verify" : "Integrity");
     planPane.ariaChecked = String(!syncTask ? false : value.workPane === "plan");
     verifyPane.ariaChecked = String(!syncTask || value.workPane === "verify");
-    planPane.disabled = !syncTask || value.workPane === "plan";
-    verifyPane.disabled = syncTask ? value.workPane === "verify" : false;
+    planPane.disabled = !syncTask || value.workPane === "plan"
+      || (value.sessionKind === "sync-execution" && !value.sessionReleased);
+    verifyPane.disabled = false;
     content.hidden = false;
     reload.hidden = value.inventoryError ? value.inventoryReloadAvailable !== true : review?.refreshAvailable !== true;
     reload.disabled = value.inventoryLoading || value.closePending;

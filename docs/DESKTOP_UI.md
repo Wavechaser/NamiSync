@@ -25,10 +25,17 @@ controls rather than selectable text. This follows Microsoft's
 [text selection guidance](https://learn.microsoft.com/en-us/windows/apps/develop/input/guidelines-for-textselection).
 
 Plan and Inventory highlights paint inside the row without changing column
-geometry. Their selected view segment retains its accent even when disabled;
-existing disabled behavior is preserved. Unselected disabled destinations keep
-their disabled appearance. Selection remains visually distinct, as in Microsoft's
+geometry. Their selected view segment retains its accent and normal button
+interaction on either page; clicking it keeps the current page. The other
+destination remains disabled until available, including during original execution.
+Unselected disabled destinations keep their disabled appearance. Selection remains visually distinct, as in Microsoft's
 [Fluent tabs specification](https://github.com/microsoft/fluentui/blob/master/packages/react-components/react-tabs/library/docs/Spec.md).
+
+Plan Again is absent during execution or while execution admission has an
+unsettled outcome; existing Check outcome recovery remains available. Execution
+Pause/Resume and Cancel use icon-only buttons with accessible names and tooltips
+in the headline's top action row. Cancel retains its five-second, two-click
+confirmation. This follows Microsoft's [Fluent button guidance](https://fluent2.microsoft.design/components/web/react/core/button/usage/).
 
 Plan and Inventory show a Microsoft Fluent cloud-arrow-down beside names with
 positive scan-time recall evidence, independently of operation reasons and
@@ -1707,11 +1714,12 @@ An accepted pause renders **Pausing…** until custody actually reaches
 remains available. Terminal presentation releases only that exact session while
 review artifacts remain.
 
-Execution uses one stable Pause/Resume button with visible action text and
-Regular Pause/Play artwork. Running Pause is neutral; authoritative Paused
+Execution uses one stable icon-only Pause/Resume button with an accessible
+action name, tooltip and Regular Pause/Play artwork. Running Pause is neutral; authoritative Paused
 switches it to accented Resume. Waiting and pausing keep the button unavailable
-while existing lifecycle feedback remains truthful. Cancel is neutral with
-Regular Stop artwork. Its first click arms an accent fill with Filled Stop for
+while existing lifecycle feedback remains truthful. Cancel is an icon-only
+neutral button with Regular Stop artwork, an accessible name and tooltip.
+Its first click arms an accent fill with Filled Stop for
 five seconds; a second click within that monotonic deadline submits cancellation.
 Arming does not submit a command. Ordinary renders never extend the deadline;
 expiry, task/session replacement, unavailable controls, leaving the panel and

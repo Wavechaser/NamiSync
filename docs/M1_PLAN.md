@@ -47,6 +47,26 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Action-row refinement — 2026-10-25
+
+User authorized the next GUI round from `2dcdc05` on `milestone1`, retaining
+execute-task's independent review and atomic commits. Serialize shared renderers,
+CSS, fixtures and documentation across these outcomes:
+
+| ID | Outcome and finite owners | Verification / commit boundary | Status |
+| --- | --- | --- | --- |
+| A1 | Hide Plan Again while execution/admission is active; put icon-only Pause/Resume and Cancel in the top action row; keep the selected switcher half interactive with hover/click and accent on both pages, while the other half retains destination eligibility. Plan/Inventory renderers, app CSS, direct Plan/Inventory/shell/execution probes and installed layout consumers, DESKTOP_UI. | Active, paused, canceling, admission/recovery and terminal action states; preserved cancel confirmation and pane locks, selected-half same-page clicks; interface department, affected installed gallery/native journeys, fresh review. One controls commit. | Complete; 2,089 unaffected interface passes, six migrated trace-helper passes, all six installed gallery/native cases passed. Independent review. |
+| A2 | Inventory toolbar order: ordinary clockwise refresh icon, Baseline split button with Rebaseline dropdown, accented Verify. Remove toolbar Refresh selected, retain context-menu action. Inventory renderer, existing menu/component styles only as needed, direct browser/gallery/native Inventory consumers, DESKTOP_UI. | Dropdown keyboard/dismissal/currentness, baseline direct action, confirmation-gated rebaseline, context refresh target, toolbar geometry; interface department, affected installed gallery/native journeys, fresh review. One toolbar commit. | Pending A1. |
+| A3 | Task-rail headline uses the main status's semantic color; reuse title projection only where it simplifies ownership without losing state distinctions. Rail/task-status and page renderers only as needed, CSS and direct status/gallery consumers, DESKTOP_UI. | Ready/running/paused/terminal/error/recovery colors and truthful headlines across both surfaces in light/dark/forced colors; interface department, installed gallery and fresh review. One status presentation commit. | Pending A2. |
+
+Preserve domain/bridge contracts, reviewed execution, exact-session controls,
+confirmation, selection, recovery, progress and viewport anchoring. No new
+backend policy or execution authorization. Existing mandatory/recurrence stops
+apply. Parent owns register/changelog/handoff; builder serializes source/tests.
+Evidence: ignored `build/gui-actions-20261025/`. M1-12, release, DOC-2, push and
+PR remain inactive. Microsoft Fluent button guidance and reference repository
+guide split-button and disabled-state details.
+
 ### Status-card refinement — 2026-10-25
 
 User authorized the next GUI round from `98ee15dd` on `milestone1`, continuing

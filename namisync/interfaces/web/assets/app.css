@@ -480,11 +480,6 @@ body {
   justify-self: start;
 }
 
-.nami-plan-review__view-switcher > .nami-segmented__item:disabled[aria-checked="true"] {
-  background: var(--color-accent-fill);
-  color: var(--color-accent-fill-foreground);
-}
-
 .nami-plan-review__summary,
 .nami-plan-review__table-card {
   padding-block-start: var(--space-5);
@@ -622,14 +617,12 @@ body {
   padding-block-start: 0;
 }
 
-.nami-plan-review__summary > .nami-plan-review__actions > .nami-plan-review__control-group:last-child {
+.nami-plan-review__action-buttons {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
   grid-column: 2;
   grid-row: 1;
-  justify-self: end;
-}
-
-.nami-plan-review__summary > .nami-plan-review__actions > .nami-plan-review__control-group:first-of-type {
-  grid-column: 1 / -1;
   justify-self: end;
 }
 
@@ -793,11 +786,6 @@ body {
   padding-block-start: var(--space-3);
 }
 
-.nami-plan-review__actions > .nami-plan-review__control-group:last-child {
-  justify-self: end;
-  grid-column: 3;
-}
-
 .nami-plan-review__actions > .nami-plan-review__status {
   grid-column: 1;
   grid-row: 1;
@@ -891,9 +879,6 @@ body {
     flex-wrap: wrap;
   }
 
-  .nami-plan-review__actions > .nami-plan-review__control-group:last-child {
-    grid-column: 1;
-  }
 }
 
 .nami-setup [hidden] {
@@ -1315,10 +1300,6 @@ body {
 }
 
 @media (forced-colors: active) {
-  .nami-plan-review__view-switcher > .nami-segmented__item:disabled[aria-checked="true"] {
-    forced-color-adjust: none;
-  }
-
   .nami-setup__pair-select:focus-visible {
     outline: none;
   }

@@ -163,12 +163,12 @@ _BRIDGE_COMPLETION_TRACE = r'''  const attempt = commandAttempts.get(message.req
 '''
 
 _PLAN_CLICK = r'''  planAgain.addEventListener("click", () => {
-    if (current !== null) callbacks.onPlanAgain(current);
+    if (current !== null && !planAgain.hidden && !planAgain.disabled) callbacks.onPlanAgain(current);
   });
 '''
 _PLAN_CLICK_TRACE = r'''  planAgain.addEventListener("click", (event) => {
     globalThis.__namiPlanAgainTrace?.record("button-event", `${event.isTrusted ? "trusted" : "untrusted"}-${planAgain.disabled ? "disabled" : "enabled"}-${current === null ? "missing" : "current"}`);
-    if (current !== null) callbacks.onPlanAgain(current);
+    if (current !== null && !planAgain.hidden && !planAgain.disabled) callbacks.onPlanAgain(current);
   });
 '''
 

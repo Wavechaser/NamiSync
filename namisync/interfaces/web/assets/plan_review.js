@@ -454,22 +454,18 @@ export function createPlanReviewPanel(callbacks) {
   planAgain.ariaLabel = "Plan again";
   planAgain.title = "Plan again";
   planAgain.dataset.action = "plan-again";
-  const pause = button("", "nami-button nami-button--secondary");
+  const pause = button("", "nami-button nami-button--secondary nami-button--icon");
   pause.dataset.action = "pause";
   pause.dataset.control = "pause-resume";
   const pauseIcon = createIcon(document, "pause", "sm");
   const playIcon = createIcon(document, "play", "sm");
-  const pauseLabel = document.createElement("span");
-  renderText(pauseLabel, "Pause");
   playIcon.hidden = true;
-  pause.append(pauseIcon, playIcon, pauseLabel);
-  const cancel = button("", "nami-button nami-button--secondary");
+  pause.append(pauseIcon, playIcon);
+  const cancel = button("", "nami-button nami-button--secondary nami-button--icon");
   cancel.dataset.action = "cancel";
   const stopIcon = createIcon(document, "stop", "sm");
   const filledStopIcon = createIcon(document, "stop-filled", "sm");
-  const cancelLabel = document.createElement("span");
-  renderText(cancelLabel, "Cancel");
-  cancel.append(stopIcon, filledStopIcon, cancelLabel);
+  cancel.append(stopIcon, filledStopIcon);
   const status = document.createElement("p");
   status.className = "nami-shell__guidance nami-plan-review__status";
   status.setAttribute("role", "status");
@@ -483,7 +479,10 @@ export function createPlanReviewPanel(callbacks) {
   const primary = document.createElement("div");
   primary.className = "nami-plan-review__control-group";
   primary.append(planAgain, execute, retryOutcome);
-  statusActions.append(statusTitle, controls, primary);
+  const actionButtons = document.createElement("div");
+  actionButtons.className = "nami-plan-review__action-buttons";
+  actionButtons.append(controls, primary);
+  statusActions.append(statusTitle, actionButtons);
   statusMeta.append(facts, status, detailsToggle);
   tableCard.append(toolbar, list, floatingControls);
   const content = document.createElement("div");
@@ -525,7 +524,7 @@ export function createPlanReviewPanel(callbacks) {
   let cancelTimer = null;
   function paintCancel() {
     const armed = cancelDeadline !== null;
-    cancel.className = `nami-button nami-button--${armed ? "primary" : "secondary"}`;
+    cancel.className = `nami-button nami-button--${armed ? "primary" : "secondary"} nami-button--icon`;
     stopIcon.hidden = armed;
     filledStopIcon.hidden = !armed;
     cancel.ariaPressed = String(armed);
@@ -639,7 +638,7 @@ export function createPlanReviewPanel(callbacks) {
     if (current !== null) callbacks.onExecute(current, execute);
   });
   planAgain.addEventListener("click", () => {
-    if (current !== null) callbacks.onPlanAgain(current);
+    if (current !== null && !planAgain.hidden && !planAgain.disabled) callbacks.onPlanAgain(current);
   });
   pause.addEventListener("click", () => {
     if (current !== null && !pause.disabled) callbacks.onControl(current, pause.dataset.action);
@@ -1079,11 +1078,13 @@ export function createPlanReviewPanel(callbacks) {
   function render(task) {
     ensureTable();
     currentTask = task;
+    planAgain.hidden = (task.sessionState === "active" && (task.executionStarted || task.review === null))
+      || task.executionAttempt != null;
     const verifyAvailable = task.taskKind === "sync-plan" && task.executionStarted
       && task.executionSessionId !== null
       && (task.sessionKind !== "sync-execution" || task.sessionReleased);
     planPane.ariaChecked = "true";
-    planPane.disabled = true;
+    planPane.disabled = false;
     verifyPane.ariaChecked = "false";
     verifyPane.disabled = !verifyAvailable;
     if (controlTaskId !== task.taskId || controlSessionId !== task.sessionId) {
@@ -1298,8 +1299,9 @@ export function createPlanReviewPanel(callbacks) {
     controls.hidden = !activeExecution;
     const paused = task.executionControlState === "paused";
     pause.dataset.action = paused ? "resume" : "pause";
-    updateText(pauseLabel, paused ? "Resume" : "Pause");
-    pause.className = `nami-button nami-button--${paused ? "primary" : "secondary"}`;
+    pause.ariaLabel = paused ? "Resume execution" : "Pause execution";
+    pause.title = pause.ariaLabel;
+    pause.className = `nami-button nami-button--${paused ? "primary" : "secondary"} nami-button--icon`;
     pause.ariaPressed = String(paused);
     pauseIcon.hidden = paused;
     playIcon.hidden = !paused;
