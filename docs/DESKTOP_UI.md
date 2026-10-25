@@ -36,8 +36,8 @@ unsupported state. Its accessible label and tooltip read: “Not fully available
 locally. Access may retrieve content through your provider.” Both filter menus
 include “Not fully local”; directories can match on their own evidence. The
 filter count describes matching rows, not scan-wide file bytes. No icon is a
-claim that unmarked files are fully local. Plan Task details includes the general
-source-download, target-propagation and local-completion advisory. Aggregate
+claim that unmarked files are fully local. The per-item advisory carries the
+retrieval explanation without an additional cloud paragraph in Task details. Aggregate
 recall file/byte counters remain available through the bridge for later status
 panel work; there is no new counter or confirmation modal in this delivery.
 
@@ -1405,11 +1405,14 @@ align right alongside the large status title, with an arrow-reset Plan again
 button before Execute. It stays icon-only when used to Check the original
 Plan-again outcome; its accessible name and tooltip follow that current action
 without replacing the icon.
-Concise actionable warnings, errors and in-flight feedback share the second row
-with the status digest; idle and successful messages take no space. Feedback
-shares the digest's caption size and secondary foreground. At ordinary
-widths both texts stay on one line, with full feedback available in its tooltip;
-at narrow card widths both use a stacked, wrapping layout.
+Below the short state headline, supporting facts and explanatory status occupy
+two logical lines to the left of Details. Status remains visible for ordinary
+guidance as well as actionable warnings, errors and in-flight feedback. Both
+use caption size and secondary foreground; long advice wraps without hiding
+important text in a tooltip. This follows Fluent's
+[concise content guidance](https://fluent2.microsoft.design/content-design) and
+[message guidance](https://fluent2.microsoft.design/components/web/react/core/messagebar/usage)
+to keep titles specific and messages readable without truncation.
 The progress track deliberately uses the ordinary button-rest translucent fill
 instead of Microsoft's stronger ProgressBar stroke resource. It composites over
 the card, without opacity on the whole control. Forced colors retain Canvas.
@@ -1820,16 +1823,18 @@ verification, recording and stored-evidence facts. It does not inherit or
 reinterpret the aggregate result. Unknown, stale, generic or mixed aggregate
 failure evidence remains red and never masks an independent operation,
 integrity, recording or audit failure; each row continues to show its own facts.
-The accepted M1-8 closure interaction uses one detailed status line on the
-Plan/execution page: selected a of b, required space and planning-issue count
+Plan/execution and Inventory status cards share `statusTitle`, `facts` and
+`status`: a short state headline, supporting facts, and an explanation or advisory.
+Plan/execution facts show selected a of b, required space and planning-issue count
 before execution; phase, item progress, percent, throughput and ETA during it;
 key terminal outcomes afterward. Execution and terminal information replace
 stale plan facts. Unknown totals/rates/ETA remain unavailable rather than being
 invented; presentation estimates do not become durable execution facts.
 
 The status title and primary action share one row at the native minimum width;
-active controls may occupy the next row. The detailed status line places its
-Details disclosure at the right. Progress follows the status line. The shared
+active controls may occupy the next row. Facts and status occupy two logical
+lines on the left of the Details disclosure. Long advice wraps rather than
+being truncated, including at the native minimum width. Progress follows them. The shared
 card is used by Plan, live and
 terminal execution; the same presentation remains available to a future Verify
 view without implementing that view here. Details starts collapsed. Its optional
@@ -2059,10 +2064,11 @@ The frozen Setup, status and table align with Plan review. The standalone task's
 switcher selects Integrity and disables Sync. Whole and selected Refresh are
 status actions. Setup's path region shares Plan's two-line minimum height while
 retaining one real Root line. The status card keeps the current activity outcome,
-complete inventory rollup summary and one persistent detailed status paragraph.
-That paragraph carries the displayed publication's scope and scan counts, marks
-incomplete coverage, and includes loading, action-result or recovery guidance
-without adding temporary paragraphs. The visible-row count remains a view fact,
+complete inventory rollup summary and one persistent status paragraph.
+That paragraph marks previous publication, incomplete or scoped coverage and
+includes loading, action-result, event-gap or recovery guidance without repeating
+the rollup counts. Complete selection and hidden-selection counts, scan scope
+and counts, and retained window-result counts live in Task details. The visible-row count remains a view fact,
 not a second inventory total. Its shared 8 px progress track remains visible;
 unknown activity totals use the shared indeterminate animation, and terminal
 state stops animation without inventing a completion percentage. Supplied known
@@ -2075,7 +2081,7 @@ selected item's details.
 
 Inventory terminal labels identify baseline, verification and rebaseline when
 those ordinary sessions are observed; the detailed status calls this the current
-activity. Displayed scan scope/counts continue to describe the actual published
+activity. Task-details scan scope/counts continue to describe the actual published
 scan. Baseline, Verify and Rebaseline use the complete server-owned selection.
 An empty selection starts nothing. Rebaseline opens a blocking confirmation
 showing the selected scope and count; Cancel changes nothing, and acceptance

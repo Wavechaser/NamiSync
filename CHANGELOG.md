@@ -238,6 +238,11 @@ explicit, reviewable and regression-backed.
   read recovers, and place both pages' reload controls in their top action rows.
 - Prevent accidental text selection on cards while keeping expanded Task/Item
   details and editable fields selectable.
+- Reduce both status cards to a short headline, supporting facts and one
+  advisory row, with both text rows left of Details. Keep selection and retained
+  result counts in Task details; preserve visible recovery and event-gap advice.
+- Shorten execution guidance and remove the redundant cloud-provider paragraph
+  from Plan details, retaining the per-item remote-file advisory.
 
 #### Preserve Inventory viewport through refresh (2026-10-24)
 

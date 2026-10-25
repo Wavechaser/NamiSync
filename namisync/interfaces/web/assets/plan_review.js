@@ -117,7 +117,7 @@ export function projectExecutionSummary(execution) {
   }
   if (result.disposition === "unrun") return { title: "Execution did not start", status: "error" };
   const capacityOnly = isCapacityOnlyExecution(execution);
-  if (capacityOnly) return { title: "Execution stopped: more target space is needed", status: "attention" };
+  if (capacityOnly) return { title: "Needs target space", status: "attention" };
   const labels = {
     failed: ["Execution failed", "error"], partial: ["Execution needs review", "error"],
     refused: ["Execution did not start", "error"], mismatch: ["Verification mismatch", "error"],
@@ -301,9 +301,6 @@ export function createPlanReviewPanel(callbacks) {
   statusTitle.tabIndex = -1;
   const facts = document.createElement("p");
   facts.className = "nami-shell__guidance nami-plan-review__status-summary";
-  const executionAlert = document.createElement("p");
-  executionAlert.className = "nami-shell__guidance nami-plan-review__execution-alert";
-  executionAlert.hidden = true;
   const statusActions = document.createElement("div");
   statusActions.className = "nami-plan-review__actions";
   const statusMeta = document.createElement("div");
@@ -332,7 +329,7 @@ export function createPlanReviewPanel(callbacks) {
   const detailsToggle = button("Details", "nami-button nami-button--clear nami-plan-review__details-toggle");
   detailsToggle.ariaExpanded = "false";
   detailsToggle.dataset.action = "toggle-execution-details";
-  summary.append(statusActions, statusMeta, executionAlert);
+  summary.append(statusActions, statusMeta);
 
   const tableCard = document.createElement("div");
   tableCard.className = "nami-card nami-plan-review__table-card";
@@ -506,11 +503,8 @@ export function createPlanReviewPanel(callbacks) {
   planBreakdown.className = "nami-plan-review__plan-breakdown";
   const globalStatus = document.createElement("p");
   globalStatus.className = "nami-plan-review__global-status";
-  const cloudAdvisory = document.createElement("p");
-  cloudAdvisory.className = "nami-plan-review__cloud-advisory";
-  renderText(cloudAdvisory, "Reading cloud-backed sources may download content; target changes may sync through your provider. Completion covers local filesystem work only.");
   globalDiagnostics.append(globalTitle, globalStatus, planDiagnostics, planBreakdown,
-    cloudAdvisory, executionReview, executionIssues, executionTrash);
+    executionReview, executionIssues, executionTrash);
   diagnostics.append(globalDiagnostics, detailCard);
   summary.append(progress);
   content.append(tableCard);
@@ -756,8 +750,6 @@ export function createPlanReviewPanel(callbacks) {
         ? `Gap observed at event ${gap.minimum_first_missed_seq}`
         : `Gaps observed from event ${gap.minimum_first_missed_seq} through ${gap.maximum_first_missed_seq}`);
     }
-    updateText(executionAlert, "Execution event history has gaps.", gap !== null);
-    executionAlert.hidden = gap === null;
     updateText(executionAxes, axes.join(" · "));
     updateText(executionIssues, issues.join(" · "));
     executionIssues.hidden = issues.length === 0;
@@ -765,7 +757,7 @@ export function createPlanReviewPanel(callbacks) {
     updateText(executionTrash, trashText, execution.trash_location !== null);
     executionTrash.hidden = execution.trash_location === null;
     updateDiagnostics();
-    return presentation;
+    return { ...presentation, advisory: gap === null ? "" : "Execution event history has gaps." };
   }
 
   function appendDetailFact(label, value, filesystem = false) {
@@ -1135,8 +1127,9 @@ export function createPlanReviewPanel(callbacks) {
       updateText(facts, task.error ?? (task.form?.attempt?.recovery?.message
         ? "Waiting for the original start outcome." : digest.detail));
       const recovery = task.form?.attempt?.recovery;
-      updateText(status, recovery?.message ?? "");
-      status.hidden = !recovery?.message;
+      updateText(status, recovery?.message ?? (task.error ? "Check the task settings and try again."
+        : "Wait for the plan before reviewing changes."));
+      status.hidden = false;
       retryOutcome.hidden = recovery?.canCheck !== true;
       retryOutcome.disabled = recovery?.checking === true || task.form?.attempt?.running !== true;
       updateText(retryOutcome, "Check outcome");
@@ -1158,8 +1151,6 @@ export function createPlanReviewPanel(callbacks) {
       executionReview.hidden = true;
       executionReview.dataset.status = "none";
       diagnostics.dataset.status = "none";
-      updateText(executionAlert, "");
-      executionAlert.hidden = true;
       updateText(executionIssues, "");
       executionIssues.hidden = true;
       updateText(executionTrash, "");
@@ -1227,8 +1218,11 @@ export function createPlanReviewPanel(callbacks) {
       && ["completed", "failed", "refused", "canceled"].includes(executionState);
     const executionPresentation = renderExecution(displayExecution, terminalState,
       task.executionStarted ? snapshot : null);
-    updateText(statusTitle, terminalState && displayExecution.result === null
-      ? `Execution ${executionState}` : executionPresentation.title ?? (task.executionStarted ? "Execution" : digest.title));
+    const controlTitle = task.executionStarted && !terminalState
+      ? ({paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[task.executionControlState]
+      : null;
+    updateText(statusTitle, controlTitle ?? (terminalState && displayExecution.result === null
+      ? `Execution ${executionState}` : executionPresentation.title ?? (task.executionStarted ? "Execution" : digest.title)));
     const executionProgress = snapshot?.presentation ?? null;
     const progressFacts = task.executionStarted && snapshot?.phase != null
       ? [
@@ -1322,12 +1316,20 @@ export function createPlanReviewPanel(callbacks) {
     const primaryRecovery = review.pending === "execute" || task.executionAttempt?.state === "uncertain"
       ? task.executionAttempt?.recovery
       : review.pending === "plan-again" ? task.form?.attempt?.recovery : review.recovery;
-    const actionMessage = [primaryRecovery?.message ?? review.message,
-      independentCancel?.recovery?.message ?? independentCancel?.message].filter(Boolean).join(" ");
+    const controlGuidance = task.executionControlState === "paused" ? "Execution is paused. Resume when ready."
+      : task.executionControlState === "pausing" ? "Pausing at the next safe checkpoint."
+        : task.executionControlState === "canceling" ? "Canceling at the next safe checkpoint." : "Execution is in progress.";
+    const actionMessage = [...new Set([primaryRecovery?.message ?? review.message,
+      independentCancel?.recovery?.message ?? independentCancel?.message,
+      executionPresentation.advisory,
+      controlTitle ? controlGuidance : "",
+      isCapacityOnlyExecution(displayExecution) ? "Free target space, then restart task with Plan Again." : ""].filter(Boolean))].join(" ")
+      || (task.executionStarted ? terminalState ? "Review item results in Details." : controlGuidance
+          : "Review the selected changes before executing.");
     updateText(globalStatus, [facts.textContent, actionMessage].filter(Boolean).join(" · "));
     updateText(status, actionMessage);
     status.title = actionMessage;
-    status.hidden = actionMessage.length === 0;
+    status.hidden = false;
     const checkOutcome = review.recovery?.canCheck || controlAttempt?.recovery?.canCheck;
     retryOutcome.hidden = !checkOutcome && !review.refreshAvailable;
     updateText(retryOutcome, checkOutcome ? "Check outcome" : "Refresh review");

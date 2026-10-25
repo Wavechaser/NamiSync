@@ -170,16 +170,20 @@ const rowSelection = (nodeId) => walk(rowElement(nodeId))
 const text = (root) => [root.textContent, ...root.children.map(text)].join(" ");
 const tick = async () => { await Promise.resolve(); await Promise.resolve(); };
 pane.render(task);
-const statusLine = find((value) => value.classList.contains("nami-inventory-review__status-line"));
+const statusLine = find((value) => value.classList.contains("nami-plan-review__status"));
 const statusSummary = find((value) => value.classList.contains("nami-plan-review__status-summary"));
 const progressTrack = find((value) => value.classList.contains("nami-plan-review__progress"));
+const statusCard = find((value) => value.classList.contains("nami-plan-review__summary"));
+assert.equal(statusLine.parentElement.children.filter(value => value.tagName === "P").length, 2);
+assert.equal(walk(statusCard).some(value => Object.hasOwn(value.dataset, "inventoryTaskFacts")
+  || Object.hasOwn(value.dataset, "inventoryIntegrityFacts")), false, "selection and result counts live only in Details");
 assert.doesNotMatch(statusSummary.textContent, /visible rows/);
 assert.doesNotMatch(statusLine.textContent, /Current scan:|completed/);
 assert.equal(progressTrack.hidden, false, "terminal track remains visible without inventing a percentage");
 assert.equal(progressTrack.classList.contains("nami-progress--indeterminate"), false);
 task.inventoryLoading = true;
 pane.render(task);
-assert.equal(find((value) => value.classList.contains("nami-inventory-review__status-line")), statusLine);
+assert.equal(find((value) => value.classList.contains("nami-plan-review__status")), statusLine);
 assert.match(statusLine.textContent, /Loading inventory view…/);
 task.inventoryLoading = false;
 task.sessionState = "active";
@@ -233,7 +237,7 @@ assert.equal(details.length, detailCount, "checkbox change cannot activate the t
 assert.deepEqual([viewChanges.length, details.length, refreshes.length, visibility.length], beforeSelectionClick);
 assert.match(action("inventory-select-location").ariaLabel, /matching files.*collapsed and off-window/i);
 assert.match(selectableCheckbox.ariaLabel, /matching files.*collapsed and off-window|Select file/);
-assert.match(find((value) => Object.hasOwn(value.dataset, "inventorySelectionSummary")).textContent,
+assert.match(find((value) => Object.hasOwn(value.dataset, "inventoryTaskFacts")).textContent,
   new RegExp(`^${review.summary.selected_file_count} of ${review.summary.selectable_file_count} files selected`));
 assert.equal(action("inventory-baseline").disabled, review.summary.selected_file_count === 0);
 const originalSummary = review.summary;
@@ -300,8 +304,9 @@ for (const [scope, expected] of [
 ]) {
   review.summary = {...review.summary, scan_scope: scope};
   pane.render(task);
-  assert.ok(text(pane.element).includes(`Displayed scan: ${expected} · incomplete`));
-  assert.ok(statusLine.textContent.includes(`Displayed scan: ${expected}`), "status keeps its compact scope");
+  assert.match(statusLine.textContent, /displayed scan is incomplete/);
+  assert.match(statusLine.textContent, /Only the selected scope was rescanned/);
+  assert.doesNotMatch(statusLine.textContent, /observed|notices from this scan|files selected/);
   const globalDetails = find((value) => value.classList.contains("nami-plan-review__global-diagnostics"));
   const fullScope = scope.path === null ? expected : expected.replace(scope.path, `${review.summary.root_path}\\${scope.path}`);
   assert.ok(text(globalDetails).includes(`Displayed scan: ${fullScope}`), "global details join the published root");
@@ -309,7 +314,7 @@ for (const [scope, expected] of [
   task.requestId = "f".repeat(32);
   task.sessionState = "refused";
   pane.render(task);
-  assert.ok(text(pane.element).includes(`Previous published scan: ${expected}`));
+  assert.match(statusLine.textContent, /Showing the previous published scan/);
   assert.ok(text(globalDetails).includes(`Previous published scan: ${fullScope}`));
   assert.match(text(pane.element), /Current activity: refused/);
   task.requestId = fixture.views.default.summary.request_id;
@@ -1251,8 +1256,15 @@ presentationReview.window = {...presentationReview.window, integrity:overlay};
 presentationReview.detail = {row:presentationRows[0], state:"current", response:{...fixture.detail,
   detail:{...fixture.detail.detail, attestation:null}, integrity:overlay}};
 presentationPane.render(presentationTask);
-assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityResult")).textContent,
+assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "inventoryIntegrityFacts")).textContent,
   /Live verification results may be incomplete · 1 window result/);
+assert.match(presentationPane.element.querySelector('.nami-plan-review__status').textContent,
+  /Integrity event history has gaps/);
+presentationPane.render({...presentationTask, executionControlState:"paused"});
+assert.match(presentationPane.element.querySelector('.nami-plan-review__status').textContent,
+  /Activity is paused. Resume when ready/);
+presentationPane.render(presentationTask);
+assert.doesNotMatch(presentationPane.element.querySelector('.nami-plan-review__status').textContent, /paused/);
 assert.equal(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityState")).dataset.integrityState,
   "verified");
 assert.ok(walk(presentationPane.element).some(value => value.classList.contains("nami-file-state-label")
@@ -1323,12 +1335,21 @@ presentationTask.snapshot = {session_id:overlay.session_id, session_state:"compl
   terminal_result:{headline:"partial", disposition:"completed", error:"One result needs review",
     phases:[{phase:"verify"}]}};
 presentationPane.render(presentationTask);
-assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityResult")).textContent,
+assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "inventoryIntegrityFacts")).textContent,
   /Verification retained results · 0 window results/);
 assert.equal(walk(presentationPane.element).some(value => Object.hasOwn(value.dataset, "integrityState")), false,
   "terminal zero-result replacement removes the live subset");
 assert.equal(presentationPane.element.querySelector(".nami-plan-review__status-title").textContent,
   "Verification needs review", "terminal reconciliation is not presented as successful completion");
+assert.match(presentationPane.element.querySelector('.nami-plan-review__status').textContent, /One result needs review/);
+assert.doesNotMatch(presentationPane.element.querySelector('.nami-plan-review__status').textContent, /event history has gaps/);
+presentationPane.render({...presentationTask, snapshot:{...presentationTask.snapshot,
+  terminal_result:{headline:"verification-incomplete", disposition:"completed", integrity:"baselined",
+    recording:"ok", audit:"ok", error:null, phases:[{phase:"verify"}]}}});
+assert.equal(presentationPane.element.querySelector('.nami-plan-review__status-title').textContent, 'Baseline created');
+assert.match(presentationPane.element.querySelector('.nami-plan-review__status').textContent,
+  /new baselines, not verification/);
+presentationPane.render(presentationTask);
 presentationReview.window = {...presentationReview.window,
   integrity:{...overlay, revision:3, complete:true, gap:false}};
 presentationTask.requestId = "e".repeat(32);

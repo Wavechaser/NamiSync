@@ -68,9 +68,9 @@ _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 _RECENT_MOVE_PATH = "projects\\archive\\a-long-relative-destination-that-remains-available-in-the-tooltip"
 _RECENT_MOVE_DISPLAY = "…\\" + _RECENT_MOVE_PATH.rsplit("\\", 1)[-1]
 _RECENT_REFUSAL_MESSAGES = (
-    "Execution preflight refused. The target has insufficient free space. Free space on its drive. A source item changed after review. Resolve these issues, then click Plan again.",
-    "Execution commitment is invalid. Click Plan again and review the new plan before executing.",
-    "Execution was refused before it started. Click Plan again and review the new plan.",
+    "Execution preflight refused. The target has insufficient free space. Free space on its drive. A source item changed after review. Resolve these issues, then restart task with Plan Again.",
+    "Execution commitment is invalid. Restart task with Plan Again.",
+    "Execution did not start. Restart task with Plan Again.",
 )
 
 
@@ -81,7 +81,7 @@ def _recall_sample() -> dict[str, object]:
         "label": label, "title": label, "role": "img", "decorative_child": "true",
         "mask": 'url("/icons/cloud_arrow_down_16_regular.svg")', "width": 16,
         "no_summary_counter": True,
-        "cloud_note": ("Reading cloud-backed sources may download content; target changes may sync through your provider. Completion covers local filesystem work only." if kind == "plan" else ""),
+        "cloud_note": "",
     } for kind in ("plan", "inventory")}
 
 
@@ -4273,9 +4273,10 @@ def _inventory_panel_sample() -> dict[str, object]:
         "grown_widths": grown_widths, "manual_before": manual_before, "manual_after": grown_widths.copy(),
         "header_positions": [[positions[index], 100.0, positions[index + 1], 124.0] for index in range(7)],
         "row_positions": [[positions[index], 124.0, positions[index + 1], 148.0] for index in range(7)],
-        "status_rectangles": [[0.0, 0.0, 400.0, 32.0], [500.0, 0.0, 920.0, 32.0], [0.0, 40.0, 500.0, 64.0], [850.0, 40.0, 920.0, 64.0]],
+        "status_rectangles": [[0.0, 0.0, 400.0, 32.0], [500.0, 0.0, 920.0, 32.0],
+                              [0.0, 40.0, 500.0, 56.0], [0.0, 60.0, 500.0, 76.0], [850.0, 46.0, 920.0, 70.0]],
         "setup_heights": [[74.0, 74.0], [74.0, 74.0]],
-        "status": {"single_line": True, "loading_same_line": True, "active_animation": "nami-progress-indeterminate",
+        "status": {"single_line": True, "two_detail_lines": True, "loading_same_line": True, "active_animation": "nami-progress-indeterminate",
                    "active_indeterminate": True, "terminal_animation": "none", "terminal_track_visible": True,
                    "track_height": 8.0, "terminal_value": "0%"},
         "scroll_owners": {"outer_x": "auto", "outer_y": "auto", "header_position": "sticky", "body_x": "visible", "body_y": "visible"},
@@ -4336,14 +4337,16 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert tail["header"][1] == pytest.approx(tail["viewport"][1], abs=1)
     assert tail["row"][1] >= tail["header"][3] - 1
     assert tail["row"][3] == pytest.approx(tail["viewport"][1] + tail["client_height"], abs=1)
-    title, actions, facts, toggle = evidence["status_rectangles"]
+    title, actions, facts, status_line, toggle = evidence["status_rectangles"]
     assert (title[1] + title[3]) / 2 == pytest.approx((actions[1] + actions[3]) / 2, abs=1)
-    assert (facts[1] + facts[3]) / 2 == pytest.approx((toggle[1] + toggle[3]) / 2, abs=1)
-    assert title[2] <= actions[0] and facts[2] <= toggle[0]
+    assert (facts[1] + status_line[3]) / 2 == pytest.approx((toggle[1] + toggle[3]) / 2, abs=1)
+    assert status_line[1] >= facts[3]
+    assert status_line[0] == pytest.approx(facts[0], abs=1)
+    assert title[2] <= actions[0] and max(facts[2], status_line[2]) <= toggle[0]
     for inventory_height, plan_height in evidence["setup_heights"]:
         assert inventory_height == pytest.approx(plan_height, abs=1)
     status = evidence["status"]
-    for key in ("single_line", "loading_same_line", "active_indeterminate", "terminal_track_visible"):
+    for key in ("single_line", "two_detail_lines", "loading_same_line", "active_indeterminate", "terminal_track_visible"):
         assert status[key] is True
     assert status["active_animation"] == ("none" if reduced else "nami-progress-indeterminate")
     assert status["terminal_animation"] == "none"

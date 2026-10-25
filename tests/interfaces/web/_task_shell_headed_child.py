@@ -146,8 +146,10 @@ function planGeometryFor(review) {
     actionsShareTitleRow: Math.abs(
       (statusTitle.getBoundingClientRect().top + statusTitle.getBoundingClientRect().bottom) / 2
       - (footerButtons.getBoundingClientRect().top + footerButtons.getBoundingClientRect().bottom) / 2) < 1,
-    feedbackSharesDetailRow: footerStatus.hidden || Math.abs(
-      footerStatus.getBoundingClientRect().top - statusDetail.getBoundingClientRect().top) < 1,
+    feedbackBelowFacts: !footerStatus.hidden
+      && footerStatus.getBoundingClientRect().top >= statusDetail.getBoundingClientRect().bottom - 1
+      && [footerStatus, statusDetail].every(line => line.getBoundingClientRect().right
+        <= review.querySelector('.nami-plan-review__details-toggle').getBoundingClientRect().left + 1),
     tableHasNoFooter: !review.querySelector(".nami-plan-review__table-card .nami-plan-review__actions"),
     semanticSettingsVisible: settingRows.length === 2 && settingRows.every((row) =>
       row.textContent.length > 0 && row.getBoundingClientRect().width > 0
@@ -789,24 +791,17 @@ window.addEventListener("error", (event) => {
   feedback.hidden = false;
   statusDetail.textContent = "120000 of 120000 selected · 12.00 GiB required · 120000 planning issues";
   feedback.textContent = "Review preflight failed. Resolve notices and plan again.";
-  const singleLine = (node) => {
-    const range = document.createRange();
-    range.selectNodeContents(node);
-    return getComputedStyle(node).whiteSpace === "nowrap"
-      && range.getBoundingClientRect().height <= parseFloat(getComputedStyle(node).lineHeight) + 1;
-  };
-  if (!singleLine(statusDetail) || !singleLine(feedback)
-    || Math.abs(statusDetail.getBoundingClientRect().top - feedback.getBoundingClientRect().top) > 1) {
-    throw new Error("Default status feedback must share one unwrapped row");
-  }
+  const statusLayout = () => getComputedStyle(statusDetail).whiteSpace === "normal"
+    && getComputedStyle(feedback).whiteSpace === "normal"
+    && Math.abs(statusDetail.getBoundingClientRect().left - feedback.getBoundingClientRect().left) <= 1
+    && feedback.getBoundingClientRect().top >= statusDetail.getBoundingClientRect().bottom
+    && [statusDetail, feedback].every(node => node.getBoundingClientRect().right
+      <= detailsToggle.getBoundingClientRect().left + 1
+      && node.scrollWidth <= node.clientWidth + 1);
+  if (!statusLayout()) throw new Error("Default status must stack and wrap left of Details");
   statusCard.style.inlineSize = "650px";
   await new Promise(requestAnimationFrame);
-  if (getComputedStyle(statusDetail).whiteSpace !== "normal"
-    || getComputedStyle(feedback).whiteSpace !== "normal"
-    || Math.abs(statusDetail.getBoundingClientRect().left - feedback.getBoundingClientRect().left) > 1
-    || feedback.getBoundingClientRect().top < statusDetail.getBoundingClientRect().bottom) {
-    throw new Error("Narrow status feedback must stack and wrap together");
-  }
+  if (!statusLayout()) throw new Error("Narrow status must stack and wrap left of Details");
   statusCard.style.removeProperty("inline-size");
   statusDetail.textContent = savedDetail;
   feedback.textContent = savedFeedback.text;
@@ -1046,7 +1041,7 @@ window.addEventListener("error", (event) => {
     && fresh.querySelector(".nami-plan-review__status")?.textContent
       .includes("The target has insufficient free space. Free space on its drive.")
     && fresh.querySelector(".nami-plan-review__status")?.textContent
-      .includes("Resolve these issues, then click Plan again."),
+      .includes("Resolve these issues, then restart task with Plan Again."),
     "specific preflight refusal guidance");
   const refused = {
     committed: fresh.querySelector('[data-action="execute"]').hidden,

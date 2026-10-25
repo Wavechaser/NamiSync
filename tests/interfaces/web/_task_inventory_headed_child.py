@@ -889,8 +889,8 @@ _PAGE = r"""
   rowMenu.raw_rectangles = contextRawRectangles;
   const summary = review.querySelector('.nami-plan-review__summary');
   const track = summary.querySelector('.nami-plan-review__progress');
-  const status = {feedback_lines:summary.querySelectorAll('.nami-inventory-review__status-line').length,
-    has_scope:summary.querySelector('.nami-inventory-review__status-line').textContent.includes('Displayed scan: Entire location'),
+  const status = {feedback_lines:summary.querySelectorAll('.nami-plan-review__status').length,
+    has_scope:review.querySelector('[data-inventory-scan-facts]').textContent.includes('Displayed scan: Entire location'),
     track_height:track.getBoundingClientRect().height,
     animation:getComputedStyle(track.firstElementChild).animationName,
     value:track.firstElementChild.style.getPropertyValue('--nami-progress-value')};
@@ -933,7 +933,8 @@ _PAGE = r"""
   requestAnimationFrame(sampleRefreshScroll);
   await stage('selected-refresh');
   await until(() => !review.querySelector('[data-action="inventory-refresh"]').disabled
-    && review.querySelector('.nami-inventory-review__status-line').textContent.includes(`Displayed scan: Item: ${fixture.missing_path}`),
+    && review.querySelector('[data-inventory-scan-facts]').textContent.includes(fixture.missing_path)
+    && review.querySelector('.nami-plan-review__status').textContent.includes('Only the selected scope was rescanned.'),
     'selected-item-publication');
   samplingRefresh = false;
   selectedRefresh.scroll_after = viewport.scrollTop;
@@ -943,7 +944,7 @@ _PAGE = r"""
       || selectedRefresh.minimum_scroll !== selectedRefresh.scroll_before) throw new Error('selected refresh lost its partial-row viewport');
   const tree = review.querySelector('.nami-inventory-review__rows');
   const rangeRow = id => tree.querySelector(`[data-node-id="${id}"]`);
-  const selectionText = () => review.querySelector('[data-inventory-selection-summary]').textContent;
+  const selectionText = () => review.querySelector('[data-inventory-task-facts]').textContent;
   if (!selectionText().includes('3 of 3 files selected')) throw new Error('fresh scan must select all files');
   await stage('range-reset');
   await until(() => selectionText().includes('0 of 3 files selected'), 'scan-selection-cleared');
@@ -1006,11 +1007,11 @@ _PAGE = r"""
       && visibleFiles[0].querySelector('.nami-tree-row__label')?.textContent === 'one.txt';
   }, 'integrity-visible-file');
   const released = async (label, expectedText, expectedState) => until(() => {
-    const result = review.querySelector('[data-integrity-result]');
+    const result = review.querySelector('[data-inventory-integrity-facts]');
     const states = [...review.querySelectorAll('.nami-integrity-row__presence[data-integrity-state]')]
       .map(value => value.dataset.integrityState);
     const expectedStates = expectedState === null ? [] : [expectedState];
-    const currentScan = review.querySelector('.nami-inventory-review__status-line').textContent
+    const currentScan = review.querySelector('[data-inventory-scan-facts]').textContent
       .includes('Displayed scan: Selected items');
     return !review.querySelector('[data-action="inventory-verify"]').disabled
       && !result.hidden && result.textContent === expectedText
@@ -1082,7 +1083,7 @@ _PAGE = r"""
     && !cancelInvoker.disabled && document.activeElement === cancelInvoker,
     'rebaseline-cancel-no-effect');
   const cancelConfirmationRestored = confirmationExitReceipt(cancelCloseFacts, cancelInvoker);
-  const cancelPreservedResult = review.querySelector('[data-integrity-result]').textContent === canceledResult;
+  const cancelPreservedResult = review.querySelector('[data-inventory-integrity-facts]').textContent === canceledResult;
   await stage('rebaseline-open');
   await until(() => confirmation.open, 'rebaseline-confirm-again');
   const confirmInvoker = window.__inventoryConfirmationInvoker;
@@ -1101,7 +1102,7 @@ _PAGE = r"""
   const rebaselinePresentation = await released('rebaseline-terminal',
     'Rebaseline retained results · 1 window result', 'baselined');
   const rebaselineResult = rebaselinePresentation.text;
-  const scanText = review.querySelector('.nami-inventory-review__status-line').textContent;
+  const scanText = review.querySelector('[data-inventory-scan-facts]').textContent;
   const scanSelected = scanText.includes('Displayed scan: Selected items');
   const integrityJourney = {checkbox_custody:checkboxCustody, range_custody:rangeCustody,
     follow_click_custody:followClickCustody,

@@ -476,7 +476,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
                 "tableAbsorbsHeight": True,
                 "statusActionsVisible": True,
                 "actionsShareTitleRow": True,
-                "feedbackSharesDetailRow": True,
+                "feedbackBelowFacts": True,
                 "tableHasNoFooter": True,
                 "semanticSettingsVisible": True,
                 "semanticSettingsAligned": True,
@@ -525,7 +525,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     assert plan_review["refused"]["unrun"] is True
     assert "Execution preflight refused." in plan_review["refused"]["message"]
     assert "The target has insufficient free space. Free space on its drive." in plan_review["refused"]["message"]
-    assert "Resolve these issues, then click Plan again." in plan_review["refused"]["message"]
+    assert "Resolve these issues, then restart task with Plan Again." in plan_review["refused"]["message"]
     assert plan_review["refused"]["executionHeader"] == "Execution did not start"
     assert "Disposition: Unrun" in plan_review["refused"]["executionAxes"]
     assert plan_review["planAgainChangedSource"] is True
@@ -560,7 +560,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "tableAbsorbsHeight": True,
         "statusActionsVisible": True,
         "actionsShareTitleRow": True,
-        "feedbackSharesDetailRow": True,
+        "feedbackBelowFacts": True,
         "tableHasNoFooter": True,
         "semanticSettingsVisible": True,
         "semanticSettingsAligned": True,

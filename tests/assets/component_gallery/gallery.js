@@ -1923,12 +1923,18 @@ window.addEventListener("unhandledrejection", (event) => {
         - (actionBounds.top + actionBounds.bottom) / 2) <= Math.max(2, titleBounds.height / 2);
     const statusSummary = planReviewPanel.element.querySelector(".nami-plan-review__status-summary");
     const statusSummaryBounds = statusSummary?.getBoundingClientRect();
+    const statusText = planReviewPanel.element.querySelector(".nami-plan-review__status");
+    const statusTextBounds = statusText.getBoundingClientRect();
     const statusDetailsSameRow = statusSummaryBounds !== undefined
       && statusSummaryBounds.width > 0 && statusSummaryBounds.height > 0
       && disclosureBounds.left >= statusSummaryBounds.right - 1
-      && Math.min(disclosureBounds.bottom, statusSummaryBounds.bottom)
-        - Math.max(disclosureBounds.top, statusSummaryBounds.top)
-        >= Math.min(disclosureBounds.height, statusSummaryBounds.height) / 2;
+      && statusTextBounds.width > 0 && statusTextBounds.height > 0
+      && statusTextBounds.top >= statusSummaryBounds.bottom - 1
+      && statusTextBounds.left === statusSummaryBounds.left
+      && disclosureBounds.left >= statusTextBounds.right - 1
+      && disclosureBounds.top >= statusSummaryBounds.top - 1
+      && disclosureBounds.bottom <= statusTextBounds.bottom + 1
+      && planReviewPanel.element.querySelector(".nami-plan-review__execution-alert") === null;
     const tableState = {
       offset: renderedGalleryTask.review.window.offset,
       scrollTop: viewport.scrollTop,
@@ -2093,6 +2099,10 @@ window.addEventListener("unhandledrejection", (event) => {
     app.append(root);
     panel.render(inventoryTask);
     await settled();
+    const statusLine = root.querySelector(".nami-plan-review__status");
+    const statusCard = root.querySelector(".nami-plan-review__summary");
+    const statusEvidence = { single_line: statusCard.querySelectorAll(".nami-plan-review__status").length === 1 };
+    const statusLayouts = [];
     const setupReference = document.createElement("section");
     setupReference.className = "nami-plan-review";
     setupReference.style.display = "block";
@@ -2106,19 +2116,25 @@ window.addEventListener("unhandledrejection", (event) => {
       await settled();
       setupHeights.push([root, setupReference].map((value) =>
         Number(value.querySelector(".nami-plan-review__plan").getBoundingClientRect().height.toFixed(3))));
+      const factsBounds = statusCard.querySelector('.nami-plan-review__status-summary').getBoundingClientRect();
+      const statusBounds = statusLine.getBoundingClientRect();
+      const toggleBounds = statusCard.querySelector('[data-action="inventory-details"]').getBoundingClientRect();
+      statusLayouts.push(statusBounds.top >= factsBounds.bottom - 1
+        && statusBounds.left === factsBounds.left
+        && toggleBounds.left >= Math.max(statusBounds.right, factsBounds.right) - 1
+        && statusCard.querySelectorAll('.nami-plan-review__status-meta > p').length === 2
+        && statusCard.querySelector('[data-inventory-task-facts], [data-inventory-integrity-facts]') === null);
     }
     setupReference.remove();
     root.style.inlineSize = "1000px";
     await settled();
-    const statusLine = root.querySelector(".nami-inventory-review__status-line");
-    const statusCard = root.querySelector(".nami-plan-review__summary");
     const track = root.querySelector(".nami-plan-review__progress");
-    const statusEvidence = { single_line: statusCard.querySelectorAll(".nami-inventory-review__status-line").length === 1 };
+    statusEvidence.two_detail_lines = statusLayouts.every(Boolean);
     panel.render({ ...inventoryTask, sessionState: "active", sessionReleased: false, inventoryLoading: true });
     await settled();
-    statusEvidence.loading_same_line = root.querySelector(".nami-inventory-review__status-line") === statusLine
+    statusEvidence.loading_same_line = root.querySelector(".nami-plan-review__status") === statusLine
       && statusLine.textContent.includes("Loading inventory view…")
-      && statusCard.querySelectorAll(".nami-inventory-review__status-line").length === 1;
+      && statusCard.querySelectorAll(".nami-plan-review__status").length === 1;
     statusEvidence.active_animation = getComputedStyle(track.firstElementChild).animationName;
     statusEvidence.active_indeterminate = track.classList.contains("nami-progress--indeterminate");
     panel.render(inventoryTask);
@@ -2175,7 +2191,8 @@ window.addEventListener("unhandledrejection", (event) => {
       inventory_accent: accentedSelection(root.querySelector('[data-action="pane-verify"]')),
     };
     const statusRectangles = [".nami-plan-review__status-title", ".nami-plan-review__actions > .nami-inventory-review__actions",
-      ".nami-plan-review__status-summary", '[data-action="inventory-details"]'].map((selector) => rectangle(root.querySelector(selector)));
+      ".nami-plan-review__status-summary", ".nami-plan-review__status", '[data-action="inventory-details"]']
+      .map((selector) => rectangle(root.querySelector(selector)));
     const body = root.querySelector(".nami-inventory-review__rows");
     const scrollOwners = { outer_x: getComputedStyle(viewport).overflowX,
       outer_y: getComputedStyle(viewport).overflowY,
@@ -3775,9 +3792,9 @@ window.addEventListener("unhandledrejection", (event) => {
   }
   // Display-ready messages mirror the app's fixed guidance; no refusal policy runs here.
   const refusalCases = [
-    { origin: "preflight", codes: ["insufficient_space", "source_drift"], message: "Execution preflight refused. The target has insufficient free space. Free space on its drive. A source item changed after review. Resolve these issues, then click Plan again." },
-    { origin: "commitment", codes: [], message: "Execution commitment is invalid. Click Plan again and review the new plan before executing." },
-    { origin: "other", codes: [], message: "Execution was refused before it started. Click Plan again and review the new plan." },
+    { origin: "preflight", codes: ["insufficient_space", "source_drift"], message: "Execution preflight refused. The target has insufficient free space. Free space on its drive. A source item changed after review. Resolve these issues, then restart task with Plan Again." },
+    { origin: "commitment", codes: [], message: "Execution commitment is invalid. Restart task with Plan Again." },
+    { origin: "other", codes: [], message: "Execution did not start. Restart task with Plan Again." },
   ];
   const refusalEvidence = refusalCases.map((fixture) => {
     const task = recentTask();

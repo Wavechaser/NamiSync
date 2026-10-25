@@ -99,16 +99,12 @@ export function createInventoryReviewPanel(callbacks) {
   paths.append(rootLine);
   header.append(switcher, paths);
   const summary = element("div", "nami-card nami-plan-review__summary");
-  const title = element("p", "nami-plan-review__status-title", "Inventory");
-  title.setAttribute("role", "status");
-  title.tabIndex = -1;
+  const statusTitle = element("p", "nami-plan-review__status-title", "Inventory");
+  statusTitle.setAttribute("role", "status");
+  statusTitle.tabIndex = -1;
   const facts = element("p", "nami-shell__guidance nami-plan-review__status-summary");
-  const selectionSummary = element("p", "nami-shell__guidance nami-inventory-review__selection-summary");
-  selectionSummary.dataset.inventorySelectionSummary = "";
-  const statusLine = element("p", "nami-shell__guidance nami-inventory-review__status-line");
-  statusLine.setAttribute("role", "status");
-  const integrityResult = element("div", "nami-shell__guidance nami-inventory-review__integrity-result");
-  integrityResult.dataset.integrityResult = "";
+  const status = element("p", "nami-shell__guidance nami-plan-review__status");
+  status.setAttribute("role", "status");
   const refresh = button("Refresh inventory", "inventory-refresh");
   const refreshSelected = button("Refresh selected", "inventory-refresh-selected");
   refresh.classList.add("nami-button--primary");
@@ -126,19 +122,19 @@ export function createInventoryReviewPanel(callbacks) {
   const statusActions = element("div", "nami-plan-review__actions");
   const actions = element("div", "nami-inventory-review__actions");
   actions.append(baseline, verify, rebaseline, copiedVerify, pause, resume, cancel, refreshSelected, refresh, reload);
-  statusActions.append(title, actions);
+  statusActions.append(statusTitle, actions);
   const statusMeta = element("div", "nami-plan-review__status-meta");
   const detailsToggle = button("Details", "inventory-details");
   detailsToggle.classList.add("nami-button--clear", "nami-plan-review__details-toggle");
   detailsToggle.ariaExpanded = "false";
-  statusMeta.append(facts, detailsToggle);
+  statusMeta.append(facts, status, detailsToggle);
   const progress = element("div", "nami-progress nami-plan-review__progress");
   progress.ariaHidden = "true";
   const progressBar = element("div", "nami-progress__bar");
   progress.append(progressBar);
   const recoveryActions = element("div", "nami-inventory-review__actions");
   recoveryActions.append(check);
-  summary.append(statusActions, statusMeta, selectionSummary, statusLine, integrityResult, recoveryActions, progress);
+  summary.append(statusActions, statusMeta, recoveryActions, progress);
 
   const table = element("div", "nami-card nami-plan-review__table-card nami-inventory-review__table");
   const floatingControls = element("div", "nami-plan-review__floating-controls");
@@ -260,9 +256,13 @@ export function createInventoryReviewPanel(callbacks) {
   globalDetails.tabIndex = 0;
   globalDetails.ariaLabel = "Inventory task details";
   const globalFacts = element("p", "nami-shell__guidance");
+  globalFacts.dataset.inventoryTaskFacts = "";
   const globalScanFacts = element("p", "nami-shell__guidance");
+  globalScanFacts.dataset.inventoryScanFacts = "";
   const globalScanState = element("p", "nami-shell__guidance");
-  globalDetails.append(element("h2", "", "Task details"), globalScanState, globalScanFacts, globalFacts);
+  const globalIntegrity = element("p", "nami-shell__guidance");
+  globalIntegrity.dataset.inventoryIntegrityFacts = "";
+  globalDetails.append(element("h2", "", "Task details"), globalScanState, globalScanFacts, globalFacts, globalIntegrity);
   diagnostics.append(globalDetails, detail);
   pane.append(header, summary, content, diagnostics);
 
@@ -761,7 +761,7 @@ export function createInventoryReviewPanel(callbacks) {
       activeRefreshTarget = review.activeRefreshTarget;
     }
     resizeObserver.observe(list);
-    if (focusInDetails && !detailsExpanded) title.focus();
+    if (focusInDetails && !detailsExpanded) statusTitle.focus();
     detailsToggle.hidden = review === null;
     diagnostics.hidden = review === null || !detailsExpanded;
     const available = review !== null;
@@ -806,9 +806,9 @@ export function createInventoryReviewPanel(callbacks) {
     const digest = taskStatusDigest(value);
     const auxiliarySession = ["baseline", "verify", "rebaseline"].includes(value.sessionKind);
     summary.dataset.status = value.inventoryError ? "attention" : digest.state;
-    renderText(title, auxiliarySession ? digest.title
+    renderText(statusTitle, auxiliarySession ? digest.title
       : startAttempt !== null || value.sessionState === "active" || value.inventoryLoading ? digest.title
-      : value.sessionState === "refused" ? `${activity} did not start`
+      : value.sessionState === "refused" ? `${activity === "Inventory scan" ? "Scan" : activity} did not start`
         : value.sessionState === "failed" ? `${activity} failed`
           : value.sessionState === "canceled" ? `${activity} canceled` : `${activity} completed`);
     progress.className = "nami-progress nami-plan-review__progress"
@@ -820,26 +820,23 @@ export function createInventoryReviewPanel(callbacks) {
     facts.hidden = !available;
     facts.title = available && !review.summary.filters.includes("acknowledged")
       ? `${review.summary.rollup.acknowledged} acknowledged items hidden as matches; folder context may remain. Show them with the Acknowledged filter.` : "";
-    renderText(selectionSummary, available
+    const selectionText = available
       ? `${review.summary.selected_file_count} of ${review.summary.selectable_file_count} files selected`
         + (review.summary.hidden_selected_file_count > 0
           ? ` · ${review.summary.hidden_selected_file_count} hidden by filters or search` : "")
-      : "");
-    selectionSummary.hidden = !available;
+      : "";
     const resultMode = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary?.mode];
-    renderText(integrityResult, ordinary === null ? ""
+    renderText(globalIntegrity, ordinary === null ? ""
       : `${ordinary.complete ? `${resultMode} retained results`
         : ordinary.gap ? `Live ${resultMode.toLowerCase()} results may be incomplete`
           : `Live ${resultMode.toLowerCase()} results`}`
         + ` · ${ordinary.items.length} window result${ordinary.items.length === 1 ? "" : "s"}`);
-    integrityResult.hidden = ordinary === null;
+    globalIntegrity.hidden = ordinary === null;
     const scanScope = review?.summary.scan_scope;
     const hasScan = available && review.summary.scan_request_id !== null;
     const scopeLabel = scanScope?.kind === "location" ? "Entire location"
       : scanScope?.kind === "item" ? `Item: ${scanScope.path}`
       : scanScope?.kind === "folder" ? `Folder: ${scanScope.path} (including subfolders)` : "Selected items";
-    const publication = available
-      ? hasScan ? `${review.summary.scan_request_id === value.requestId ? "Displayed scan" : "Previous published scan"}: ${scopeLabel}` : "Current ledger · No inventory scan" : "";
     const detailScopeLabel = scanScope?.kind === "item" ? `Item: ${formatFilesystemPath(review.summary.root_path, scanScope.path)}`
       : scanScope?.kind === "folder" ? `Folder: ${formatFilesystemPath(review.summary.root_path, scanScope.path)} (including subfolders)` : scopeLabel;
     const detailPublication = available
@@ -848,12 +845,28 @@ export function createInventoryReviewPanel(callbacks) {
       ? `${review.summary.observed_count} observed · ${review.summary.missing_count} missing · ${review.summary.warning_count} notices from this scan.${scanScope.kind === "location" ? "" : " Other inventory items were not rescanned."}` : "";
     const guidance = value.inventoryError ?? startAttempt?.recovery?.message ?? review?.message
       ?? (value.inventoryLoading ? "Loading inventory view…" : "");
-    renderFilesystemText(statusLine, [...new Set([
-      available ? `${publication}${hasScan ? ` · ${review.summary.scan_complete ? "" : "incomplete · "}${scanCounts}` : ""}` : "",
+    const publicationAdvice = !available ? "" : !hasScan ? "Current ledger; refresh to scan this location."
+      : [review.summary.scan_request_id === value.requestId ? "" : "Showing the previous published scan.",
+        review.summary.scan_complete ? "" : "The displayed scan is incomplete.",
+        scanScope.kind === "location" ? "" : "Only the selected scope was rescanned."].filter(Boolean).join(" ");
+    const activityAdvice = auxiliarySession && digest.title === "Baseline created" ? digest.detail
+      : auxiliarySession && value.snapshot?.session_id === value.sessionId && value.snapshot?.terminal_result?.error
+        ? value.snapshot.terminal_result.error : "";
+    const controlAdvice = auxiliarySession && value.sessionState === "active"
+      ? ({paused: "Activity is paused. Resume when ready.", pausing: "Pausing at the next safe checkpoint.",
+        canceling: "Canceling at the next safe checkpoint."})[value.executionControlState] ?? "" : "";
+    renderFilesystemText(status, [...new Set([
+      publicationAdvice, activityAdvice, controlAdvice,
       guidance, value.inventoryAction?.message,
+      ordinary?.gap ? "Integrity event history has gaps; live results may be incomplete." : "",
       available && syncTask && copiedScopeEmpty && value.sessionReleased
         ? "Execution copied no files successfully. Select files and use Verify current state." : "",
-    ].filter(Boolean))].join(" · "));
+    ].filter(Boolean))].join(" ") || (value.sessionState === "active"
+      ? value.executionControlState === "paused" ? "Activity is paused. Resume when ready."
+        : value.executionControlState === "pausing" ? "Pausing at the next safe checkpoint."
+          : value.executionControlState === "canceling" ? "Canceling at the next safe checkpoint."
+            : "Inventory activity is in progress."
+      : "Review items or select files for integrity checks."));
     renderText(globalScanState, `Current activity: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
     renderFilesystemText(globalScanFacts, available
       ? `${detailPublication}${hasScan ? ` · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : ""}` : "");
@@ -875,7 +888,7 @@ export function createInventoryReviewPanel(callbacks) {
       return;
     }
     toolbar.hidden = false;
-    renderText(globalFacts, `${rollupText(review.summary.rollup)}. ${review.summary.rollup.acknowledged} acknowledged items. Stored checksums are baseline evidence; a scan does not verify current bytes.`);
+    renderText(globalFacts, `${selectionText}. ${rollupText(review.summary.rollup)}. ${review.summary.rollup.acknowledged} acknowledged items. Stored checksums are baseline evidence; a scan does not verify current bytes.`);
     const selected = review.detail?.row ?? null;
     const domain = selected !== null && selected.warning === null;
     const currentPublication = review.summary.request_id === value.requestId && !value.inventoryViewUnconfirmed;

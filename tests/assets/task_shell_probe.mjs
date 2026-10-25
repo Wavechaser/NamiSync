@@ -2845,7 +2845,7 @@ for (const [index, refusal, expected] of [
   [10, { origin: "preflight", codes: ["insufficient_space", "root_unavailable"] },
     ["Execution preflight refused.", "insufficient free space", "Reconnect its drive"]],
   [11, { origin: "commitment", codes: [] }, ["Execution commitment is invalid."]],
-  [12, { origin: "other", codes: [] }, ["Execution was refused before it started."]],
+  [12, { origin: "other", codes: [] }, ["Execution did not start."]],
 ]) {
   const refusalTaskId = `task-${index.toString(16).repeat(32)}`;
   const refusalSession = "d".repeat(32);
@@ -2867,7 +2867,7 @@ for (const [index, refusal, expected] of [
   planWindows.at(-1).resolve(planWindow(summary));
   await until(() => task.review !== null);
   for (const message of expected) assert.ok(task.review.message.includes(message));
-  assert.ok(task.review.message.includes("Plan again"));
+  assert.ok(task.review.message.includes("Plan Again"));
   assert.equal(task.review.summary.selection_state, "committed");
   const retainedMessage = task.review.message;
   void globalThis.taskHarness.forceReview(task, true);

@@ -1186,8 +1186,10 @@ _PAGE = r"""
       && value?.inventory_window?.integrity_session_id === value.ordinary.session_id
       && value?.inventory_window?.integrity_complete === true ? value : null;
   }, 'ordinary terminal overlay');
+  const copiedDetails = usable(inventory, 'inventory-details');
+  if (copiedDetails.ariaExpanded !== 'true') copiedDetails.click();
   const copiedResult = await until(() => {
-    const value = inventory.querySelector('[data-integrity-result]');
+    const value = inventory.querySelector('[data-inventory-integrity-facts]');
     return value instanceof HTMLElement && value.closest('[hidden]') === null
       && value.textContent.trim() !== '' ? value : null;
   }, 'ordinary result');
@@ -1362,8 +1364,10 @@ _PAGE = r"""
       && value?.inventory_window?.integrity_session_id === value.ordinary.session_id
       && value?.inventory_window?.integrity_complete === true ? value : null;
   }, 'ordinary terminal overlay');
+  const ordinaryDetails = usable(blockedInventory, 'inventory-details');
+  if (ordinaryDetails.ariaExpanded !== 'true') ordinaryDetails.click();
   const ordinaryResult = await until(() => {
-    const value = blockedInventory.querySelector('[data-integrity-result]');
+    const value = blockedInventory.querySelector('[data-inventory-integrity-facts]');
     return value instanceof HTMLElement && value.closest('[hidden]') === null
       && value.textContent.trim() !== '' ? value : null;
   }, 'ordinary result');

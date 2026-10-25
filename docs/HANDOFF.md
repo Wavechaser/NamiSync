@@ -1,29 +1,42 @@
-# Latest session — Inventory refresh viewport, 2026-10-24
+# Latest session — status-card refinement delivery, 2026-10-25
 
-User-authorized browser improvement on `milestone1`, starting at `b24c66f0`.
-M1-12, release, DOC-2, push and PR remain inactive.
+Completed the user-authorized GUI round on `milestone1`, starting at `98ee15dd`,
+using execute-task with independent reviews and atomic commits. M1-12, release,
+DOC-2, push and PR remain inactive.
 
-Full/selected refresh and publication reloads retain a visible non-notice row,
-its viewport-relative pixel offset, and viewport height. The existing bounded
-Inventory window anchor resolves that row in the replacement view before the
-256-row publication window loads at its restored position. Missing/filtered-out
-anchors fall back to a clamped offset. Active-row identity uses its own final
-window anchor; restoration is passive and does not take focus. Integrity Follow
-remains the final reveal owner. Existing task/session/pane/reload fences reject
-late lookup and publication results. No bridge/backend/core contract changed.
+- `00dfb9d`: card text is unselectable except expanded Task/Item details and
+  editable fields. Paths and hashes retain normal browser selection/copy.
+- The status-card commit containing this closeout: both pages use short
+  `statusTitle`, supporting `facts`, and explanatory/advisory `status` in two
+  logical rows left of Details. Plan gap advice shares status; Inventory selection
+  and retained-result counts move into Task details. Recovery, incomplete
+  coverage and event-gap advice remain central. Paused/stopping states stay
+  accurate and long messages wrap.
+- Removed the redundant Plan Details cloud-provider paragraph at the user's
+  request; the per-item remote-file advisory remains.
 
-Verification: 2 focused browser-composition tests, 2,092 interface tests, all 12
-import contracts, the installed gallery and installed Inventory journey passed.
-The final harness's 3 ordinary tests also passed. The native journey preserves a
-partially visible row through real Refresh and samples painted frames for a jump
-to the top. Fresh independent review approved product and the final harness delta.
-Root owns the final atomic commit and clean-tree check.
+Workflow/bridge contracts, action eligibility, selection authority, shared
+rail digest, progress and refresh anchoring remain unchanged. No backend
+migration or safety-policy change. Microsoft text-selection and Fluent content
+references are linked in DESKTOP_UI. README milestone synopsis is unchanged.
 
-Two earlier native attempts failed the new test's exact requested-offset oracle:
-Windows scaling represented requested 7 pixels as 6.857142925262451. Setup, both
-arrow gestures, native focus preparation, and pre/post/minimum refresh positions
-were identical. This was a measurement assumption, not a product defect. Final
-acceptance requires a positive partial-row offset and exact observed preservation.
-All failed and passing receipts/captures and their dependency accounting are in
-`build/inventory-refresh-anchor-20261024/verification.md` and neighboring evidence.
-No recovery refs, stashes or unrelated files changed.
+Verification: 87 focused tests, 2,092 interface tests, 40 refreshed layout/helper
+tests, all 12 import contracts, installed gallery in light/dark/forced modes,
+Inventory journey, shell recovery at both sizes, and execution review at both
+sizes passed. R3 supplied three installed input passes; R4 supplied the remaining
+two. All 15 final source/test hashes match after integration. Browser selection
+and copy-event evidence does not claim an OS clipboard roundtrip.
+
+Raw evidence, failed receipts, exact commands and review/accounting notes remain
+in `build/gui-status-20261025/receipts.md` and neighboring logs, especially
+`s2-native-r2.txt`, `s2-native-r3.txt`, `s2-native-r4.txt`, `s2-interfaces.txt`,
+`s2-layout-migration.txt`, `s2-imports.txt` and `s2-final-inputs.json`.
+Earlier failures were stale layout/test lookup assumptions and foreign foreground
+windows. Required focus/hit-target/trusted-input/safety checks were preserved.
+Both independent reviewers approved their units and final evidence.
+
+Recovery `a9a6185` was rebuilt into one verified S2 commit after the user confirmed
+desktop readiness and requested integration. The task-created recovery ref is
+removed after exact delta accounting; no unrelated work was absorbed or removed.
+No unresolved finding or remaining test gate. This delivery does not declare
+M1 or release acceptance.

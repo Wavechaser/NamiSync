@@ -164,7 +164,7 @@ for (const integrity of ["not-run", "verified", "baselined"]) {
   assert.deepEqual(projectExecutionSummary(summary(result({
     headline: "failed", filesystem: "failed", integrity,
   }), { failed_operation_count: 1, disk_capacity_failure_count: 1 })), {
-    title: "Execution stopped: more target space is needed", status: "attention",
+    title: "Needs target space", status: "attention",
   });
 }
 assert.equal(projectExecutionSummary(summary(result({

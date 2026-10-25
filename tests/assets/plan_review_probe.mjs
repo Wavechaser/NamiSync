@@ -385,7 +385,7 @@ assert.equal(executeButton.disabled, false);
 const planGap = { session_id: "7".repeat(32), session_state: "completed",
   gap_first_missed_seq: 4 };
 panel.render({ ...task, sessionId: planGap.session_id, snapshot: planGap });
-assert.equal(findByClass(panel.element, "nami-plan-review__execution-alert").hidden, true,
+assert.doesNotMatch(findByClass(panel.element, "nami-plan-review__status").textContent, /event history has gaps/,
   "a Plan-session Gap cannot be labeled as execution history loss");
 assert.equal(findByClass(panel.element, "nami-plan-review__execution").hidden, true);
 panel.render({ ...task, review: null, reviewLoading: true });
@@ -444,6 +444,8 @@ const statusActions = findByClass(panel.element, "nami-plan-review__actions");
 const statusMeta = findByClass(panel.element, "nami-plan-review__status-meta");
 assert.ok(statusActions.parentElement === statusCard, "actions live in the status card");
 assert.ok(statusMeta.parentElement === statusCard, "facts and feedback live in the status card");
+assert.equal(statusMeta.children.filter(value => value.tagName === "P").length, 2,
+  "only facts and status remain beside Details");
 const planDisclosure = findAction(panel.element, "toggle-execution-details");
 const planDiagnostics = findByClass(panel.element, "nami-plan-review__diagnostics");
 const planItemPane = findByClass(panel.element, "nami-plan-review__detail");
@@ -523,7 +525,8 @@ task.executionAttempt = null;
 review.pending = null;
 review.message = null;
 panel.render(task);
-assert.equal(footerMessage.hidden, true, "idle footer text takes no room");
+assert.equal(footerMessage.hidden, false, "idle status keeps review guidance visible");
+assert.equal(footerMessage.textContent, "Review the selected changes before executing.");
 review.message = "Updating this view…";
 panel.render(task);
 assert.equal(footerMessage.hidden, false, "in-flight feedback remains visible");
@@ -1326,7 +1329,7 @@ const globalDiagnostics = findByClass(executionPanel.element, "nami-plan-review_
 const executionDetailCard = findByClass(executionPanel.element, "nami-plan-review__detail");
 const executionStatusCard = findByClass(executionPanel.element, "nami-plan-review__summary");
 const detailsToggle = findAction(executionPanel.element, "toggle-execution-details");
-const executionAlert = findByClass(executionPanel.element, "nami-plan-review__execution-alert");
+const executionStatus = findByClass(executionPanel.element, "nami-plan-review__status");
 assert.ok(executionContent, "table and diagnostics share one bounded content region");
 assert.ok(executionDiagnostics, "variable diagnostics share one explicit grid row");
 assert.ok(findByClass(executionPanel.element, "nami-plan-review__table-card").parentElement === executionContent,
@@ -1343,9 +1346,10 @@ assert.ok(executionDetailCard.parentElement === executionDiagnostics,
   "operation detail remains in the Details pane");
 assert.equal(detailsToggle.ariaExpanded, "false");
 assert.equal(executionDiagnostics.hidden, true, "Details is folded by default");
-assert.equal(executionAlert.hidden, false, "a compact gap warning remains visible while Details is folded");
-assert.ok(executionAlert.parentElement === executionStatusCard,
-  "the compact gap warning belongs to the folded status card");
+assert.equal(executionStatus.hidden, false, "a compact gap warning remains visible while Details is folded");
+assert.match(executionStatus.textContent, /Execution event history has gaps/);
+assert.ok(executionStatusCard.contains(executionStatus), "gap advice belongs to the folded status card");
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__execution-alert"), null);
 detailsToggle.dispatch("click");
 assert.equal(detailsToggle.ariaExpanded, "true");
 assert.equal(executionDiagnostics.hidden, false);
@@ -1570,7 +1574,7 @@ executionPanel.render({
   ...executionTask, review: capacityReview, sessionId: executionSummary.session_id,
   snapshot: terminalPageSnapshot(capacityResult),
 });
-assert.ok(findText(executionPanel.element, "Execution stopped: more target space is needed"));
+assert.ok(findText(executionPanel.element, "Needs target space"));
 executionPanel.render({
   ...executionTask, review: capacityReview, sessionId: "9".repeat(32),
   snapshot: terminalPageSnapshot(terminalResult, {
@@ -1705,6 +1709,17 @@ assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summ
 findAction(livePanel.element, "pause").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", liveReview, "pause"],
   "real composed row leaves controls dispatchable");
+for (const [controlState, headline, advisory] of [
+  ["paused", "Execution paused", "Execution is paused. Resume when ready."],
+  ["pausing", "Pausing execution", "Pausing at the next safe checkpoint."],
+  ["canceling", "Canceling execution", "Canceling at the next safe checkpoint."],
+]) {
+  livePanel.render({...liveTask, executionControlState: controlState});
+  assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, headline);
+  assert.ok(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes(advisory));
+}
+livePanel.render(liveTask);
+assert.doesNotMatch(findByClass(livePanel.element, "nami-plan-review__status").textContent, /paused|Pausing|Canceling/);
 livePanel.dispose();
 
 {
@@ -2189,7 +2204,7 @@ assert.equal(findByClass(recallIndicator, "nami-icon--cloud-arrow-down").ariaHid
 findByDataset(recallPanel.element, "action", "filter-menu").dispatch("click");
 findByDataset(recallPanel.element, "filter", "recall").dispatch("click");
 assert.deepEqual(recallRequests.at(-1), {filters: new Set(["recall"])});
-assert.ok(findByClass(recallPanel.element, "nami-plan-review__cloud-advisory").textContent.includes("local filesystem work only"));
+assert.equal(findByClass(recallPanel.element, "nami-plan-review__cloud-advisory"), null);
 assert.ok(!findByClass(recallPanel.element, "nami-plan-review__plan-breakdown").textContent.includes("Not fully"));
 recallPanel.render(recallTask);
 assert.equal(walk(recallPanel.element).filter((item) => item.classList.contains("nami-file-row__availability")).length, 1);

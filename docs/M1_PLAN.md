@@ -55,7 +55,7 @@ execute-task's independent review and atomic commits. Two serialized outcomes:
 | ID | Outcome and finite owners | Verification / commit boundary | Status |
 | --- | --- | --- | --- |
 | S1 | Card text is unselectable outside the expanded Details column; item paths/hashes and other detail text remain selectable/copyable, and inputs retain editing. Shared component/app CSS, direct installed gallery consumers, DESKTOP_UI. | Real browser text selection/copy and input checks, interface department, independent review; one selection-policy commit. | Complete; 2,091 unaffected interface passes, 40 corrected CSS/gallery consumer passes, installed light/dark/forced gallery and independent review. |
-| S2 | Both status cards use short `statusTitle`, supporting `facts`, and one explanatory/advisory `status`, with the two supporting rows left of Details. Merge Plan execution alert; remove Inventory's separate selection/result paragraphs and repeated facts. Plan/Inventory renderers, shared task-status helpers only as needed, CSS, direct browser/native consumers, DESKTOP_UI. | Loading/ready/running/paused/terminal/error/recovery/Gap cases preserve truthful feedback and controls; installed minimum/default-width layout, interface department and independent review; one status-layout commit. | Pending S1. |
+| S2 | Both status cards use short `statusTitle`, supporting `facts`, and one explanatory/advisory `status`, with the two supporting rows left of Details. Merge Plan execution alert; remove Inventory's separate selection/result paragraphs and repeated facts. Remove the user-identified redundant cloud-provider paragraph from Plan Details while keeping the existing remote-file advisory. Plan/Inventory renderers, shared task-status helpers only as needed, CSS, direct browser/native consumers, DESKTOP_UI. | Loading/ready/running/paused/terminal/error/recovery/Gap cases preserve truthful feedback and controls; installed minimum/default-width layout, interface department and independent review; one status-layout commit. | Complete; 87 focused, 2,092 interface and 40 migrated-helper passes, 12 import contracts, installed gallery plus all five input cases passed. Independent source and final evidence review; integrated in this status-card commit. |
 
 Preserve workflow/bridge contracts, evidence and action eligibility, progress,
 selection authority, read recovery, detail contents and the recent viewport
@@ -63,7 +63,12 @@ anchoring fix. Short headlines need no padding; advisory text may wrap rather
 than lose essential recovery information. No domain behavior, release, M1-12,
 DOC-2, push or PR is activated. Existing mandatory and recurrence stops apply.
 Parent owns delivery/changelog/handoff; one builder serializes shared CSS/tests.
-Evidence belongs in ignored `build/gui-status-20261025/`.
+Evidence belongs in ignored `build/gui-status-20261025/`. S1 is `00dfb9d`;
+S2 is this verified closeout commit. The temporary recovery state was rebuilt
+into S2 after the user confirmed desktop readiness. Final source/test hashes
+match the reviewed and tested candidate. Earlier foreground failures and stale
+layout assertions remain in evidence; no input/safety checks were weakened.
+No unresolved finding or task-created recovery ref remains.
 
 ### Inventory GUI follow-up — 2026-10-23
 

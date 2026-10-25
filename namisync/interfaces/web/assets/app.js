@@ -192,12 +192,12 @@ const PREFLIGHT_REFUSAL_MESSAGES = Object.freeze({
 
 function executionRefusalMessage(refusal) {
   if (refusal?.origin === "preflight") {
-    return `Execution preflight refused. ${refusal.codes.map((code) => PREFLIGHT_REFUSAL_MESSAGES[code]).join(" ")} Resolve these issues, then click Plan again.`;
+    return `Execution preflight refused. ${refusal.codes.map((code) => PREFLIGHT_REFUSAL_MESSAGES[code]).join(" ")} Resolve these issues, then restart task with Plan Again.`;
   }
   if (refusal?.origin === "commitment") {
-    return "Execution commitment is invalid. Click Plan again and review the new plan before executing.";
+    return "Execution commitment is invalid. Restart task with Plan Again.";
   }
-  return "Execution was refused before it started. Click Plan again and review the new plan.";
+  return "Execution did not start. Restart task with Plan Again.";
 }
 
 function executionControlMessage(state) {
