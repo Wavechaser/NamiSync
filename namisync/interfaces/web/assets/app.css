@@ -426,6 +426,14 @@ body {
   overflow: hidden;
 }
 
+.nami-plan-review__diagnostics > .nami-card {
+  user-select: text;
+}
+
+.nami-plan-review__diagnostics :is(button, [role="button"]) {
+  user-select: none;
+}
+
 .nami-plan-review__global-diagnostics {
   align-content: start;
   display: grid;

@@ -1239,7 +1239,12 @@ body {
   color: var(--color-neutral-foreground-disabled);
 }
 
+:is(.nami-card, .nami-task-card) :is(input, textarea, [contenteditable="true"]) {
+  user-select: text;
+}
+
 .nami-card {
+  user-select: none;
   background: var(--color-card-background-solid);
   background: var(--color-card-background);
   background-clip: padding-box;
@@ -1259,6 +1264,7 @@ body {
 }
 
 .nami-task-card {
+  user-select: none;
   background: var(--color-neutral-subtle-background);
   border: 0;
   border-radius: var(--radius-medium);

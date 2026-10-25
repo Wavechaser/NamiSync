@@ -2312,13 +2312,49 @@ window.addEventListener("unhandledrejection", (event) => {
     const detailsBounds = diagnostics.getBoundingClientRect();
     const global = diagnostics.querySelector(".nami-plan-review__global-diagnostics");
     const item = diagnostics.querySelector(".nami-plan-review__detail");
+    const selection = window.getSelection();
+    const selectedText = (node) => {
+      selection.removeAllRanges();
+      const range = document.createRange();
+      range.selectNodeContents(node);
+      selection.addRange(range);
+      return selection.toString();
+    };
+    const detailSpecimen = document.createElement("span");
+    detailSpecimen.textContent = "C:\\Inventory\\photo.jpg · SHA-256: 12ab34cd";
+    item.append(detailSpecimen);
+    const detailSelection = selectedText(detailSpecimen);
+    let copySelection = null;
+    const observeCopy = (event) => {
+      copySelection = selection.toString();
+      event.preventDefault(); // Exercise the copy event without replacing the user's clipboard.
+    };
+    document.addEventListener("copy", observeCopy, { once: true });
+    document.dispatchEvent(new ClipboardEvent("copy", { bubbles: true, cancelable: true }));
+    const input = root.querySelector('input[type="search"]');
+    const previousInput = input.value;
+    input.value = "editable path";
+    input.focus();
+    input.setSelectionRange(0, input.value.length);
+    const inputSelectable = input.value.slice(input.selectionStart, input.selectionEnd) === "editable path"
+      && getComputedStyle(input).userSelect === "text";
+    input.value = previousInput;
+    const textSelection = {
+      card_labels_blocked: selectedText(root.querySelector(".nami-plan-review__status-title")) === "",
+      detail_exact: detailSelection === detailSpecimen.textContent,
+      copy_event_exact: copySelection === detailSpecimen.textContent,
+      editable_input: inputSelectable,
+      task_details_selectable: getComputedStyle(global).userSelect === "text",
+    };
+    selection.removeAllRanges();
+    detailSpecimen.remove();
     const detailEvidence = { initially_hidden: initiallyHidden, expanded: !diagnostics.hidden,
       root_height: rootBounds.height, column_height: detailsBounds.height,
       root_width: rootBounds.width, column_width: detailsBounds.width,
       card_rectangles: [global, item].map(rectangle),
       rem_size: parseFloat(getComputedStyle(document.documentElement).fontSize),
       global_overflow: getComputedStyle(global).overflowY, item_overflow: getComputedStyle(item).overflowY,
-      placeholder: item.textContent.includes("Select an item to see its details.") };
+      placeholder: item.textContent.includes("Select an item to see its details."), text_selection: textSelection };
     item.focus();
     toggle.click();
     detailEvidence.focus_restored = document.activeElement === toggle && diagnostics.hidden;

@@ -18,6 +18,12 @@ archived with the original plans; current bridge evidence has one BRIDGE owner.
 
 ## Purpose
 
+Card labels and file rows do not allow browser text selection. Expanded Task
+and Item details remain selectable and copyable, including paths and hashes;
+editable fields retain normal text selection. Buttons inside details remain
+controls rather than selectable text. This follows Microsoft's
+[text selection guidance](https://learn.microsoft.com/en-us/windows/apps/develop/input/guidelines-for-textselection).
+
 Plan and Inventory highlights paint inside the row without changing column
 geometry. Their selected view segment retains its accent even when disabled;
 existing disabled behavior is preserved. Unselected disabled destinations keep

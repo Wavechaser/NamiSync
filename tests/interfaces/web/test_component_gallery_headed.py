@@ -4285,7 +4285,9 @@ def _inventory_panel_sample() -> dict[str, object]:
         "details": {"initially_hidden": True, "expanded": True, "root_height": 640.0, "column_height": 640.0,
                     "root_width": 1200.0, "column_width": 320.0, "global_overflow": "auto", "item_overflow": "auto",
                     "card_rectangles": [[880.0, 0.0, 1200.0, 251.2], [880.0, 263.2, 1200.0, 640.0]], "rem_size": 16.0,
-                    "placeholder": True, "focus_restored": True},
+                    "placeholder": True, "focus_restored": True,
+                    "text_selection": {"card_labels_blocked": True, "detail_exact": True,
+                                       "copy_event_exact": True, "editable_input": True, "task_details_selectable": True}},
         "refresh_on_status": True, "root_fits": True, "viewport_height": 300.0,
         "viewport_scroll_height": 7200.0, "adopted_offset": 218, "window_requests": [218], "row_height": 24.0,
         "appearance": {"typography": typography, "zebra": ["rgb(250, 250, 250)", "rgb(255, 255, 255)"],
@@ -4424,6 +4426,7 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     details = evidence["details"]
     for key in ("initially_hidden", "expanded", "placeholder", "focus_restored"):
         assert details[key] is True
+    assert all(details["text_selection"].values())
     assert details["column_height"] == pytest.approx(details["root_height"], abs=1)
     assert 0 < details["column_width"] <= min(20 * details["rem_size"], details["root_width"] * 0.4) + 1
     global_card, item_card = details["card_rectangles"]

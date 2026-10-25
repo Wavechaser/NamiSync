@@ -1963,8 +1963,12 @@ def _valid_inventory_panel(value: object) -> bool:
         and type(details) is dict and set(details) == {
             "initially_hidden", "expanded", "root_height", "column_height", "root_width", "column_width",
             "global_overflow", "item_overflow", "placeholder", "focus_restored",
-            "card_rectangles", "rem_size",
+            "card_rectangles", "rem_size", "text_selection",
         }
+        and type(details["text_selection"]) is dict and set(details["text_selection"]) == {
+            "card_labels_blocked", "detail_exact", "copy_event_exact", "editable_input", "task_details_selectable",
+        }
+        and all(type(flag) is bool for flag in details["text_selection"].values())
         and all(type(details[key]) is bool for key in ("initially_hidden", "expanded", "placeholder", "focus_restored"))
         and all(type(details[key]) is str and len(details[key]) <= 32 for key in ("global_overflow", "item_overflow"))
         and _finite_number_matrix([[details[key] for key in ("root_height", "column_height", "root_width", "column_width")]], 1, 4)

@@ -221,22 +221,7 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Preserve Inventory viewport through refresh (2026-10-24)
-
-- Restore full and selected Refresh around a visible item or folder, retaining
-  its partial-row offset. Load the restored window directly and fall back to
-  the clamped prior position when the anchor leaves the view.
-- Keep viewport restoration separate from active-row identity and focus;
-  enabled integrity Follow retains control, and departed task/view reads retire.
-
-#### Avoid repeated notices for known missing Inventory items (2026-10-24)
-
-- Suppress a disappeared notice during refresh or a preliminary integrity scan
-  when the named file or folder is already missing under an earlier scope token.
-  Retain newly missing and unknown-subject notices and preserve raw scanner
-  diagnostics and existing ledger reconciliation.
-
-#### Refine Inventory and Plan GUI feedback (2026-10-23)
+#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-25)
 
 - Keep Inventory highlight geometry stable and retain the selected task-view
   accent while disabled, preserving existing switcher availability and behavior.
@@ -251,6 +236,23 @@ explicit, reviewable and regression-backed.
   Presence blank while retaining missing, reappeared and exceptional states.
 - Show Inventory reload only for actionable read recovery, clear it when the
   read recovers, and place both pages' reload controls in their top action rows.
+- Prevent accidental text selection on cards while keeping expanded Task/Item
+  details and editable fields selectable.
+
+#### Preserve Inventory viewport through refresh (2026-10-24)
+
+- Restore full and selected Refresh around a visible item or folder, retaining
+  its partial-row offset. Load the restored window directly and fall back to
+  the clamped prior position when the anchor leaves the view.
+- Keep viewport restoration separate from active-row identity and focus;
+  enabled integrity Follow retains control, and departed task/view reads retire.
+
+#### Avoid repeated notices for known missing Inventory items (2026-10-24)
+
+- Suppress a disappeared notice during refresh or a preliminary integrity scan
+  when the named file or folder is already missing under an earlier scope token.
+  Retain newly missing and unknown-subject notices and preserve raw scanner
+  diagnostics and existing ledger reconciliation.
 
 #### Expose scan-time local availability and clarify cloud behavior (2026-10-22)
 
