@@ -149,6 +149,28 @@ body {
   padding-inline-end: calc(var(--space-6) + var(--icon-size-sm) - var(--space-3));
 }
 
+@media (forced-colors: none) {
+  .nami-task-card[data-headline-status="completed"] .nami-task-card__title {
+    color: var(--integrity-positive-foreground);
+  }
+
+  .nami-task-card[data-headline-status="error"] .nami-task-card__title {
+    color: var(--integrity-failure-foreground);
+  }
+
+  .nami-task-card:is([data-headline-status="paused"], [data-headline-status="attention"], [data-headline-status="degraded"]) .nami-task-card__title {
+    color: var(--lifecycle-attention-foreground);
+  }
+
+  .nami-task-card[data-headline-status="canceled"] .nami-task-card__title {
+    color: var(--lifecycle-canceled-foreground);
+  }
+
+  .nami-task-card:is([data-headline-status="executing"], [data-headline-status="verifying"]) .nami-task-card__title {
+    color: var(--lifecycle-active-foreground);
+  }
+}
+
 .nami-task-card__status {
   color: var(--color-neutral-foreground-secondary);
   font-size: var(--font-size-caption);

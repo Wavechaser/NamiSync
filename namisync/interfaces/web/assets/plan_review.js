@@ -1243,7 +1243,8 @@ export function createPlanReviewPanel(callbacks) {
       ? [statusFacts, "Some progress updates were inconsistent."].filter(Boolean).join(" · ")
       : statusFacts);
     summary.dataset.status = terminalState && displayExecution.result === null
-      ? "error" : executionPresentation.status ?? (task.executionStarted ? "executing" : digest.state);
+      ? "error" : task.executionStarted && !terminalState && task.executionControlState === "paused"
+        ? "paused" : executionPresentation.status ?? (task.executionStarted ? "executing" : digest.state);
     const progressValue = executionProgress?.value ?? 0;
     progress.dataset.lifecycle = executionState ?? "completed";
     if (executionProgress?.indeterminate) {

@@ -106,6 +106,7 @@ def test_recall_gallery_report_keeps_shape_separate_from_behavior() -> None:
 def _recent_ui_sample() -> dict[str, object]:
     def action(label: str, primary: bool, disabled: bool, glyph: str) -> dict[str, object]:
         return {"label": label, "text": "", "title_alignment": 0, "plan_again_hidden": True,
+                "headline_color": "rgb(0, 0, 0)", "main_color": "rgb(0, 0, 0)", "card_color": "rgb(0, 0, 0)",
                 "primary": primary, "disabled": disabled, "mask": f'url("/{glyph}")'}
 
     return {
@@ -192,6 +193,7 @@ def _assert_recent_ui(value: dict[str, object], *, forced: bool = False,
     for key in ("pause", "cancel"):
         for observed, sample in zip(value[key], expected[key], strict=True):
             assert observed["text"] == "" and observed["plan_again_hidden"] is True
+            assert observed["headline_color"] == observed["card_color" if forced else "main_color"]
             assert observed["title_alignment"] == pytest.approx(0, abs=1)
             assert {name: observed[name] for name in ("label", "primary", "disabled")} == {
                 name: sample[name] for name in ("label", "primary", "disabled")

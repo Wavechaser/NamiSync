@@ -3984,12 +3984,20 @@ window.addEventListener("unhandledrejection", (event) => {
       controlPanel.render(controlTask);
     },
   });
+  const controlRail = createTaskRail(Object.fromEntries(
+    ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])));
+  recentSection.append(controlRail.element);
   function actionSnapshot(action) {
+    controlRail.render([controlTask], controlTask.taskId, null);
+    const railCard = controlRail.element.querySelector('.nami-task-rail__row .nami-task-card');
     const button = controlPanel.element.querySelector(`[data-action="${action}"]`);
     const icon = [...button.querySelectorAll(".nami-icon")].find((glyph) => !glyph.hidden);
     const bounds = button.getBoundingClientRect();
     const titleBounds = controlPanel.element.querySelector(".nami-plan-review__status-title").getBoundingClientRect();
     return { label: button.ariaLabel, text: button.textContent,
+      headline_color: getComputedStyle(railCard.querySelector('.nami-task-card__title')).color,
+      main_color: getComputedStyle(controlPanel.element.querySelector('.nami-plan-review__status-title')).color,
+      card_color: getComputedStyle(railCard).color,
       title_alignment: (bounds.top + bounds.bottom - titleBounds.top - titleBounds.bottom) / 2,
       plan_again_hidden: !controlPanel.element.querySelector('[data-action="plan-again"]').checkVisibility(),
       primary: button.classList.contains("nami-button--primary"), disabled: button.disabled, mask: getComputedStyle(icon).maskImage };
@@ -4018,6 +4026,7 @@ window.addEventListener("unhandledrejection", (event) => {
     cancel: cancelStates, commands_after_arm: commandsAfterArm,
     commands: [...localCommands], retained_panels: recentSection.querySelectorAll(".nami-plan-review").length,
   };
+  controlRail.element.remove();
   localCommands.length = 0;
   controlTask.review.message = "Gallery preview only: Pause switches to Resume. Click Cancel twice within five seconds to preview cancellation.";
   controlPanel.render(controlTask);

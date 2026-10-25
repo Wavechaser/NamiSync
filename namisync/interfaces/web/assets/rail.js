@@ -1,6 +1,6 @@
 import { createIcon } from "./icons.js";
 import { renderFilesystemText, renderText } from "./render.js";
-import { taskStatusDigest } from "./task_status.js";
+import { selectTaskExecution, taskStatusDigest } from "./task_status.js";
 
 export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, onSettings }) {
   if (![onCreate, onSelect, onClose, onRetryUpdates, onSettings].every((callback) => typeof callback === "function")) {
@@ -134,6 +134,17 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       entry.select.dataset.taskLabel = task.label;
       entry.select.ariaLabel = `${task.label}: ${digest.title}`;
       entry.select.dataset.status = closeUnavailable ? "unavailable" : digest.state;
+      let headlineStatus = digest.state;
+      if (task.taskKind === "inventory" || task.workPane === "verify") {
+        if (task.inventoryError) headlineStatus = "attention";
+      } else if (task.review == null) {
+        if (task.error) headlineStatus = "attention";
+      } else if (task.executionStarted && task.sessionKind === "sync-execution") {
+        const {sessionState, execution} = selectTaskExecution(task);
+        if (["completed", "failed", "refused", "canceled"].includes(sessionState)
+            && execution.result === null) headlineStatus = "error";
+      }
+      entry.select.dataset.headlineStatus = closeUnavailable ? "unavailable" : headlineStatus;
       if (typeof entry.progress.classList.toggle === "function") {
         entry.progress.classList.toggle("nami-progress--indeterminate", digest.progress.indeterminate);
       }

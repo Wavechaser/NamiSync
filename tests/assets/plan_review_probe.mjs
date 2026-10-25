@@ -818,6 +818,7 @@ assert.equal(findByDataset(panel.element, "action", "resume"), null);
 assert.equal(findAction(panel.element, "cancel").disabled, false);
 task.executionControlState = "paused";
 panel.render(task);
+assert.equal(statusCard.dataset.status, "paused", "paused execution headline uses the attention color");
 assertSameNode(findAction(panel.element, "resume"), pauseToggle,
   "authoritative pause retains the toggle and its focus identity");
 assert.ok(pauseToggle.classList.contains("nami-button--primary"));

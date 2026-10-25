@@ -1,42 +1,50 @@
-# Latest session — status-card refinement delivery, 2026-10-25
+# Latest session — action-row refinement, 2026-10-25
 
-Completed the user-authorized GUI round on `milestone1`, starting at `98ee15dd`,
-using execute-task with independent reviews and atomic commits. M1-12, release,
-DOC-2, push and PR remain inactive.
+User-authorized GUI round from `2dcdc05f` on `milestone1`, using execute-task,
+independent review and three serialized atomic outcomes. M1-12, release, DOC-2,
+push and PR remain inactive.
 
-- `00dfb9d`: card text is unselectable except expanded Task/Item details and
-  editable fields. Paths and hashes retain normal browser selection/copy.
-- The status-card commit containing this closeout: both pages use short
-  `statusTitle`, supporting `facts`, and explanatory/advisory `status` in two
-  logical rows left of Details. Plan gap advice shares status; Inventory selection
-  and retained-result counts move into Task details. Recovery, incomplete
-  coverage and event-gap advice remain central. Paused/stopping states stay
-  accurate and long messages wrap.
-- Removed the redundant Plan Details cloud-provider paragraph at the user's
-  request; the per-item remote-file advisory remains.
+- `058a6b85`: hide Plan Again during execution admission and active work;
+  icon-only Pause/Resume and Cancel share the top action row. Existing cancel
+  confirmation remains. The user clarified that the selected switcher half
+  must remain interactive: both pages keep its accent and hover/click,
+  while unavailable destinations stay locked.
+- `ba905d0`: Inventory actions are ordinary clockwise refresh, Baseline split
+  button and accented Verify. Rebaseline is in the dropdown with unchanged
+  confirmation. Refresh selected lives in the row context menu; retained
+  active-row metadata still supports viewport restoration. Inventory control
+  buttons also use icons with accessible names and tooltips.
+- The final status-color unit: task-rail headlines use matching main-status
+  semantic colors, and paused Plan headlines use attention color. Forced-color
+  rail titles inherit system foreground for selected/hovered card contrast.
+  Surface-specific wording and current-session versus retained-execution
+  identity remain distinct; digest/progress/domain semantics are unchanged.
 
-Workflow/bridge contracts, action eligibility, selection authority, shared
-rail digest, progress and refresh anchoring remain unchanged. No backend
-migration or safety-policy change. Microsoft text-selection and Fluent content
-references are linked in DESKTOP_UI. README milestone synopsis is unchanged.
+No workflow or bridge contract changed. Baseline/Rebaseline/Verify policy,
+reviewed execution, selection, exact-session controls, recovery, refresh
+anchoring and Details behavior remain intact. Updated direct browser, gallery,
+native-input and diagnostic-helper consumers rather than removing their
+underlying action/effect assertions. Microsoft Fluent button references remain
+in DESKTOP_UI. README milestone synopsis is unchanged.
 
-Verification: 87 focused tests, 2,092 interface tests, 40 refreshed layout/helper
-tests, all 12 import contracts, installed gallery in light/dark/forced modes,
-Inventory journey, shell recovery at both sizes, and execution review at both
-sizes passed. R3 supplied three installed input passes; R4 supplied the remaining
-two. All 15 final source/test hashes match after integration. Browser selection
-and copy-event evidence does not claim an OS clipboard roundtrip.
+A1: 2,089 unaffected interface passes, six refreshed diagnostic-helper passes,
+all six installed gallery/native cases. A2: 2,092 interface passes and all six
+installed cases. Its two shell cases first refused input at a foreground
+ownership deadline; both passed unchanged after the user confirmed readiness.
+A3: three focused tests, 2,092 interface tests and installed light/dark/forced
+gallery passed. All three independent reviews approved their source and final
+evidence. The final unit changes headline colors only; earlier toolbar/native
+input results remain evidence for their unchanged mechanisms.
 
-Raw evidence, failed receipts, exact commands and review/accounting notes remain
-in `build/gui-status-20261025/receipts.md` and neighboring logs, especially
-`s2-native-r2.txt`, `s2-native-r3.txt`, `s2-native-r4.txt`, `s2-interfaces.txt`,
-`s2-layout-migration.txt`, `s2-imports.txt` and `s2-final-inputs.json`.
-Earlier failures were stale layout/test lookup assumptions and foreign foreground
-windows. Required focus/hit-target/trusted-input/safety checks were preserved.
-Both independent reviewers approved their units and final evidence.
+Evidence and failed receipts: `build/gui-actions-20261025/receipts.md`,
+`a1-interfaces.txt`, `a1-trace.txt`, `a1-native.txt`, `a2-interfaces.txt`,
+`a2-native.txt`, `a2-shell-r2.txt`, `a3-focused.txt`, `a3-native.txt`,
+and `a3-interfaces.txt`. Native raw receipts live under the corresponding
+`namisync-actions-*` directories in the normal external Temp directory.
+Sandbox temporary-directory setup errors and stale diagnostic anchors remain
+recorded. No focus, trusted-input, confirmation or effect checks were weakened.
 
-Recovery `a9a6185` was rebuilt into one verified S2 commit after the user confirmed
-desktop readiness and requested integration. The task-created recovery ref is
-removed after exact delta accounting; no unrelated work was absorbed or removed.
-No unresolved finding or remaining test gate. This delivery does not declare
-M1 or release acceptance.
+No task-created branch/worktree or recovery state; no unrelated changes absorbed.
+All requested outcomes are complete in the three atomic commits, including the
+status-color commit containing this handoff. No remaining test gate or finding.
+This GUI round does not declare M1 or release acceptance.

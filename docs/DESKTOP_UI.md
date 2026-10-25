@@ -274,8 +274,11 @@ evidence records the exact installed pairs and measured ratios.
 
 Status (2026-09-10): the 15-token palette, channel-scoped aliases and
 components, static projected fixtures, and gallery evidence implement this
-contract. The task rail uses neutral lifecycle text; production workflow and
-file-list color consumers remain dormant.
+contract. The task rail headline uses the main status headline's semantic color,
+including attention, paused and terminal states. Its supporting text and progress
+retain their own roles. Forced-color rail headlines inherit the card's system
+foreground, preserving contrast on selected and hovered cards. Headline wording
+remains specific to the current activity or retained execution being presented.
 
 Intentions and information are never conveyed through color or form alone.
 Hue answers **what class** a signal belongs to; form answers **how much the

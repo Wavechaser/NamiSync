@@ -408,6 +408,31 @@ const railSource = (await readFile(process.argv[3], "utf8"))
   .replace("./icons.js", iconsUrl)
   .replace("./render.js", renderUrl)
   .replace("./task_status.js", taskStatusUrl);
+const {createTaskRail} = await import(moduleUrl(railSource));
+const headlineRail = createTaskRail(Object.fromEntries(
+  ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])));
+const headlineTask = {taskId:"headline", label:"Headline", taskKind:"sync-plan", workPane:"plan",
+  sessionId:"8".repeat(32), sessionKind:"sync-execution", sessionState:"active",
+  executionStarted:true, executionControlState:"running", error:null,
+  review:{window:{execution:{session_id:"8".repeat(32), result:null}}}};
+for (const [patch, expected] of [
+  [{}, "executing"],
+  [{executionControlState:"paused"}, "paused"],
+  [{sessionState:"completed"}, "error"],
+  [{sessionState:"canceled"}, "error"],
+  [{review:null, error:"Review unavailable"}, "attention"],
+  [{taskKind:"inventory", inventoryError:"Inventory unavailable"}, "attention"],
+  [{workPane:"verify", inventoryError:"Inventory unavailable"}, "attention"],
+  [{sessionKind:"verify", sessionState:"completed"}, "completed"],
+  [{closeRecovery:{state:"fixed-unknown"}}, "unavailable"],
+]) {
+  const value = {...headlineTask, ...patch};
+  headlineRail.render([value], value.taskId, null);
+  const card = walk(headlineRail.element).find(element => element.dataset?.taskLabel === "Headline");
+  assert.equal(card.dataset.headlineStatus, expected);
+  assert.equal(card.dataset.status, patch.closeRecovery ? "unavailable" : taskStatusDigest(value).state,
+    "headline color never changes progress/lifecycle ownership");
+}
 const panelSource = (await readFile(process.argv[4], "utf8"))
   .replace("./render.js", renderUrl);
 const setupUrl = moduleUrl(`

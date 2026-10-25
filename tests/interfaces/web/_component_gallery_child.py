@@ -1380,8 +1380,9 @@ def _valid_recent_ui(value: object) -> bool:
     return all(
         type(value[key]) is list and len(value[key]) == count
         and all(
-            type(row) is dict and set(row) == {"label", "text", "title_alignment", "plan_again_hidden", "primary", "disabled", "mask"}
+            type(row) is dict and set(row) == {"label", "text", "headline_color", "main_color", "card_color", "title_alignment", "plan_again_hidden", "primary", "disabled", "mask"}
             and text(row["label"]) and text(row["mask"])
+            and all(text(row[key]) for key in ("headline_color", "main_color", "card_color"))
             and text(row["text"]) and type(row["plan_again_hidden"]) is bool
             and type(row["title_alignment"]) in (int, float) and math.isfinite(row["title_alignment"])
             and type(row["primary"]) is bool and type(row["disabled"]) is bool

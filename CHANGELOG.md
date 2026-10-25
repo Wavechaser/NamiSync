@@ -233,6 +233,8 @@ explicit, reviewable and regression-backed.
   split button and accented Verify. Rebaseline moves into the dropdown with
   confirmation preserved; Refresh selected remains in the row context menu.
   Inventory Pause/Resume and Cancel also use labelled icon-only controls.
+- Match task-rail headline colors to the main status's semantic colors, including
+  paused and unavailable states, while preserving system high-contrast text.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.
