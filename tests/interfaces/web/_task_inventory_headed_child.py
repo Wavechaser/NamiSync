@@ -643,7 +643,7 @@ _PAGE = r"""
     'verify', 'follow-go', 'pause', 'resume', 'verify-cancel', 'cancel',
     'baseline-menu-open', 'baseline-menu-close', 'baseline-menu-reopen',
     'rebaseline-cancel-open', 'rebaseline-cancel', 'rebaseline-menu-open', 'rebaseline-open', 'rebaseline-confirm'];
-  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore-details', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore-details', 'context-restore', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-context-menu', 'selected-refresh', ...rangeStages, ...integrityStages].map(name => [name, false]));
+  const nativeClicks = Object.fromEntries(['refresh', 'filter-open', 'filter-present', 'filter-escape', 'filter-reopen', 'filter-all', 'details', 'acknowledge', 'restore', 'context-open', 'context-escape', 'context-keyboard', 'context-keyboard-escape', 'context-menu', 'context-acknowledge', 'context-restore', 'selected-hide-details', 'selected-activate', 'selected-arrow-first', 'selected-arrow-second', 'selected-context-menu', 'selected-refresh', ...rangeStages, ...integrityStages].map(name => [name, false]));
   const keyboardInput = [];
   async function stage(name) {
     await until(() => document.hasFocus(), 'document-focus');
@@ -695,7 +695,7 @@ _PAGE = r"""
         : name === 'filter-open' || name === 'filter-reopen' ? '[data-action="filter-menu"]'
         : name === 'filter-present' || name === 'filter-escape' ? '.nami-filter-menu__popup [data-filter="present"]'
         : name === 'filter-all' ? '.nami-filter-menu__popup [data-filter="all"]'
-        : name === 'restore-details' || name === 'context-restore-details' ? '[data-action="inventory-details"]'
+        : name === 'selected-hide-details' ? '[data-action="inventory-details"]'
         : name === 'context-open' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.missing_node_id}"]`
         : name === 'context-escape' || name === 'context-keyboard-escape' ? '.nami-row-menu [data-action="row-details"]'
         : keyboardMenu || name === 'selected-context-menu' ? '.nami-inventory-review__rows'
@@ -850,7 +850,9 @@ _PAGE = r"""
   await until(() => !missing() && folder()
     && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'acknowledged-hidden');
   await activateFolder('restore-folder-settled');
-  await stage('restore-details');
+  if (review.querySelector('[data-action="inventory-details"]').ariaExpanded !== 'true') {
+    throw new Error('acknowledge replacement collapsed Inventory Details');
+  }
   await until(() => {
     const control = review.querySelector('[data-action="inventory-restore"]');
     return control && !control.hidden && !control.disabled ? control : null;
@@ -885,7 +887,9 @@ _PAGE = r"""
   await stage('context-acknowledge');
   await until(() => !missing() && !review.querySelector('[data-action="inventory-refresh"]').disabled, 'context-acknowledged-hidden');
   await activateFolder('context-restore-folder-settled');
-  await stage('context-restore-details');
+  if (review.querySelector('[data-action="inventory-details"]').ariaExpanded !== 'true') {
+    throw new Error('context acknowledge replacement collapsed Inventory Details');
+  }
   await until(() => !review.querySelector('[data-action="inventory-restore"]').disabled, 'context-restore-ready');
   await stage('context-restore');
   await until(() => missing()?.querySelector('[data-integrity="missing"]')
@@ -903,6 +907,7 @@ _PAGE = r"""
     track_height:track.getBoundingClientRect().height,
     animation:getComputedStyle(track.firstElementChild).animationName,
     value:track.firstElementChild.style.getPropertyValue('--nami-progress-value')};
+  await stage('selected-hide-details');
   const selectedFolderRow = await stage('selected-activate');
   const itemCard = review.querySelector('.nami-inventory-review__detail');
   await until(() => itemHeading()?.textContent === fixture.folder_display
@@ -1166,7 +1171,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
     page_result: dict[str, object] | None = None
     observed_handle: int | None = None
     click_target: dict[str, object] | None = None
-    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-context-menu", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)}
+    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore", "selected-hide-details", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-context-menu", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)}
 
     def fail(error: BaseException, task: object | None, step: str, _method: str) -> None:
         nonlocal failed
@@ -1236,7 +1241,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
             publish()
 
     cdp = NativeCdp(native, core, retained, fail)
-    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore-details", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore-details", "context-restore", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-context-menu", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)
+    stage_names = ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore", "selected-hide-details", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-context-menu", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)
 
     def next_stage(index: int) -> None:
         if index == len(stage_names):

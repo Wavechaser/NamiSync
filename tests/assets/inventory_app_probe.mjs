@@ -188,6 +188,7 @@ const bridgeUrl = url(bridgeNames.map((name) => /^[A-Z]/.test(name)
     ? `(...args) => globalThis.inventoryHarness.${name}(...args)` : "() => Promise.reject(new Error('unused bridge command'))")};`).join("\n"));
 const renderUrl = url(await readFile(join(process.argv[2], "render.js"), "utf8"));
 const taskStatusUrl = url((await readFile(join(process.argv[2], "task_status.js"), "utf8")).replace("./render.js", renderUrl));
+const { taskStatusDigest } = await import(taskStatusUrl);
 const replacements = {
   "./bridge.js": bridgeUrl,
   "./render.js": renderUrl,
@@ -227,6 +228,109 @@ assert.equal(task.executionStarted, false);
 assert.ok(task.inventoryReview);
 assert.deepEqual(calls[1], ["window", taskId, 0, 0, 256]);
 let review = task.inventoryReview;
+const cleanOpenCount = calls.filter(([name]) => name === "open").length;
+const cleanWindowCount = calls.filter(([name]) => name === "window").length;
+app.selectTask(taskId); await tick();
+app.showSettings(); app.selectTask(taskId); await tick();
+assertSameNode(task.inventoryReview, review, "clean navigation reuses the exact retained Inventory publication");
+assert.equal(calls.filter(([name]) => name === "open").length, cleanOpenCount);
+assert.equal(calls.filter(([name]) => name === "window").length, cleanWindowCount);
+delayedOpen = defer();
+const navigatingOpen = delayedOpen;
+const navigatingRead = app.loadInventoryReview(task, true);
+app.showSettings(); app.selectTask(taskId); await tick();
+assert.equal(calls.filter(([name]) => name === "open").length, cleanOpenCount + 1,
+  "returning before a pending read settles cannot overlap full reads");
+delayedOpen = null;
+navigatingOpen.resolve(summary()); await navigatingRead; await tick();
+assert.equal(calls.filter(([name]) => name === "open").length, cleanOpenCount + 2,
+  "a retired full read preserves one current navigation reread");
+assert.equal(task.inventoryLoading, false);
+assert.equal(task.inventoryViewUnconfirmed, false);
+review = task.inventoryReview;
+delayedOpen = defer();
+const coalescedOpen = delayedOpen;
+const coalescedRead = app.loadInventoryReview(task, true);
+const readingDigest = taskStatusDigest(task);
+assert.equal(readingDigest.title, "Inventory scan completed", "a read cannot relabel terminal work as Scanning");
+assert.equal(readingDigest.progress.indeterminate, false);
+const beforeCoalesced = calls.filter(([name]) => name === "open").length;
+void app.loadInventoryReview(task, true);
+void app.loadInventoryReview(task, true);
+await tick();
+assert.equal(calls.filter(([name]) => name === "open").length, beforeCoalesced);
+delayedOpen = null;
+coalescedOpen.resolve(summary()); await coalescedRead; await tick();
+assert.equal(calls.filter(([name]) => name === "open").length, beforeCoalesced + 1,
+  "multiple later invalidations coalesce behind one full read");
+review = task.inventoryReview;
+const gapReads = calls.filter(([name]) => name === "open").length;
+delayedOpen = defer();
+const beforeGap = delayedOpen;
+const gapRead = app.loadInventoryReview(task, true);
+const gapSnapshot = {session_id:sessionId, session_state:"completed", control_state:"running",
+  phase:"inventory", active_item:null, gap_first_missed_seq:1,
+  presentation:{value:100, determinate:true, indeterminate:false, item_percent:null}};
+app.acceptTaskUpdate(task, sessionId, null, gapSnapshot);
+const gapInvalidation = task.inventoryInvalidationRevision;
+app.acceptTaskUpdate(task, sessionId, null, {...gapSnapshot});
+assert.equal(task.inventoryInvalidationRevision, gapInvalidation,
+  "the same retained Gap is one uncertainty event");
+delayedOpen = null;
+beforeGap.resolve(summary()); await gapRead; await tick();
+assert.equal(calls.filter(([name]) => name === "open").length, gapReads + 2,
+  "an older full read cannot consume a later Gap invalidation");
+assert.equal(task.inventoryViewUnconfirmed, false);
+task.snapshot = null;
+review = task.inventoryReview;
+app.showSettings();
+const hiddenReleaseOpens = calls.filter(([name]) => name === "open").length;
+app.acceptTaskRelease(task, sessionId); await tick();
+assert.equal(calls.filter(([name]) => name === "open").length, hiddenReleaseOpens);
+assert.equal(task.inventoryViewUnconfirmed, true, "hidden terminal release invalidates the retained view");
+app.selectTask(taskId); await tick();
+assert.equal(calls.filter(([name]) => name === "open").length, hiddenReleaseOpens + 1);
+review = task.inventoryReview;
+delayedOpen = defer();
+const obsoleteSessionOpen = delayedOpen;
+const obsoleteSessionRead = app.loadInventoryReview(task, true);
+delayedOpen = null;
+app.adoptTask({...taskSnapshot, session_id:"6".repeat(32), session_state:"completed", session_released:true});
+await tick();
+const replacementSessionReview = task.inventoryReview;
+obsoleteSessionOpen.reject(new Error("retired session read")); await obsoleteSessionRead;
+assertSameNode(task.inventoryReview, replacementSessionReview, "a retired session read cannot replace fresh rows");
+assert.equal(task.inventoryReviewSessionId, "6".repeat(32));
+assert.equal(task.inventoryViewUnconfirmed, false);
+app.adoptTask({...taskSnapshot, session_state:"completed", session_released:true}); await tick();
+review = task.inventoryReview;
+const retainedDrain = drains.at(-1);
+app.showSettings();
+task.sessionState = "active";
+retainedDrain[3](new Error("updates unavailable"), () => {});
+assert.equal(task.inventoryViewUnconfirmed, true, "suspended delivery invalidates retained freshness");
+task.sessionState = "completed";
+retainedDrain[6](taskId, task.sessionId);
+const suspendedOpens = calls.filter(([name]) => name === "open").length;
+app.selectTask(taskId); await tick();
+assert.equal(calls.filter(([name]) => name === "open").length, suspendedOpens + 1);
+review = task.inventoryReview;
+delayedView = defer();
+const retiredViewCommand = delayedView;
+const retiredViewChange = app.changeInventoryView(review, {searchQuery:"settled-after-navigation"});
+app.showSettings(); app.selectTask(taskId); await tick();
+const publicationBeforeLateView = task.inventoryReview;
+delayedView = null;
+viewRevision += 1; query = "settled-after-navigation";
+retiredViewCommand.resolve(summary()); await retiredViewChange; await tick();
+assert.notEqual(task.inventoryReview, publicationBeforeLateView,
+  "settlement after navigation rereads even when an earlier navigation read already finished");
+assert.equal(task.inventoryReview.summary.search_query, query);
+assert.equal(calls.filter(([name]) => name === "view").length, 1,
+  "freshness reconciliation cannot replay the original view command");
+viewRevision = 0; query = "";
+await app.loadInventoryReview(task, true);
+review = task.inventoryReview;
 delayedOpen = defer();
 const retainedOpen = delayedOpen;
 const oldOpen = app.loadInventoryReview(task, true);
@@ -410,6 +514,18 @@ retainedView.onDelayed();
 assert.equal(review.refreshAvailable, true, "a delayed read offers explicit recovery");
 await app.changeInventoryView(review, { searchQuery: "two" });
 assert.equal(review.queuedSearchQuery, "two");
+const pendingViewOpens = calls.filter(([name]) => name === "open").length;
+const pendingViewList = globalThis.inventoryHarness.listTasks;
+globalThis.inventoryHarness.listTasks = () => Promise.resolve({tasks:[{
+  task_id:taskId, session_id:task.sessionId, session_state:task.sessionState,
+  session_released:task.sessionReleased, task_kind:task.taskKind, request_id:task.requestId,
+  plan_request_id:task.planRequestId, session_kind:task.sessionKind,
+}]});
+await app.refreshTasks();
+globalThis.inventoryHarness.listTasks = pendingViewList;
+assertSameNode(task.inventoryReview, review, "unrelated task-list observation preserves foreground view custody");
+assert.equal(review.queuedSearchQuery, "two", "background refresh preserves the latest typed search");
+assert.equal(calls.filter(([name]) => name === "open").length, pendingViewOpens);
 delayedView = null; viewRevision += 1; query = "one";
 retainedView.resolve(summary()); await firstQuery; await tick();
 assert.equal(review.summary.search_query, "two");
@@ -451,6 +567,8 @@ assert.equal(review.detail, null, "changed session invalidates old details");
 task.sessionState = "completed";
 task.sessionReleased = true;
 task.requestId = review.summary.request_id;
+await app.loadInventoryReview(task);
+review = task.inventoryReview;
 const acknowledgedRow = fixture.views.acknowledged.window.rows.find((row) => row.row_id === "2");
 review.detail = { row: acknowledgedRow, state: "current", response: null };
 delayedVisibility = defer();
@@ -554,6 +672,7 @@ for (const observation of ["failed", "stale"]) {
 app.adoptTask({ task_id: taskId, session_id: "b".repeat(32), session_state: "completed",
   session_released: true, task_kind: "inventory", request_id: fixture.views.default.summary.request_id,
   plan_request_id: null, session_kind: "inventory" });
+await tick();
 delayedRefresh = defer();
 const lateRefresh = delayedRefresh;
 const heldRefreshCount = calls.filter(([name]) => name === "refresh").length;
@@ -597,6 +716,7 @@ globalThis.inventoryHarness.listTasks = originalListTasks;
 app.adoptTask({ task_id: taskId, session_id: "c".repeat(32), session_state: "refused",
   session_released: true, task_kind: "inventory", request_id: "d".repeat(32),
   plan_request_id: null, session_kind: "inventory" });
+await tick();
 const retainedBeforeRefusal = task.inventoryReview;
 delayedOpen = defer();
 const refusedOpen = app.loadInventoryReview(task, true);
@@ -654,7 +774,7 @@ const syncReview = { ...review, summary: { ...review.summary, task_id: syncTaskI
 syncTask.inventoryReview = syncReview;
 globalThis.inventoryCallbacks.onPaneChange(syncTask, "verify");
 await tick();
-await app.runInventoryAction(syncReview, "refresh", null, new HTMLElement("button"));
+await app.runInventoryAction(syncTask.inventoryReview, "refresh", null, new HTMLElement("button"));
 await tick();
 assert.equal(syncTask.taskKind, "sync-plan", "ordinary auxiliary Refresh keeps the sync task kind");
 assert.equal(syncTask.planRequestId, syncPlanRequestId,
@@ -799,6 +919,7 @@ assert.equal(d1Task.requestId, "e".repeat(32),
 assert.equal(d1Task.sessionId, "d".repeat(32));
 globalThis.inventoryHarness.listTasks = originalListTasks;
 const controlsBefore = calls.filter(([name]) => name === "integrity-control").length;
+d1Review = d1Task.inventoryReview;
 delayedIntegrityControl = defer();
 const heldIntegrityControl = delayedIntegrityControl;
 const pausedIntegrity = app.controlInventoryIntegrity(d1Review, "pause");
@@ -890,6 +1011,8 @@ function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId
   owner = app.adoptTask({task_id:taskId, session_id:currentSessionId,
     session_state:"completed", session_released:true, task_kind:"sync-plan",
     request_id:requestId, plan_request_id:requestId, session_kind:"inventory"});
+  owner.inventoryReviewSessionId = currentSessionId;
+  owner.inventoryViewUnconfirmed = false;
   taskSnapshot = {task_id:taskId, session_id:currentSessionId, session_state:"completed",
     session_released:true, task_kind:"sync-plan", request_id:requestId,
     plan_request_id:requestId, session_kind:"inventory"};
@@ -939,6 +1062,8 @@ const controlsBase = calls.filter(([name]) => name === "integrity-control").leng
 await app.controlInventoryIntegrity(copiedTask.inventoryReview, "pause");
 assert.equal(calls.filter(([name]) => name === "integrity-control").length, controlsBase + 1);
 copiedTask.sessionState = "completed"; copiedTask.sessionReleased = true;
+copiedTask.inventoryReview.summary = {...copiedTask.inventoryReview.summary,
+  selected_file_count:0, hidden_selected_file_count:0};
 copiedTask.inventoryAction = null;
 copiedTask.inventoryReview.summary = {...copiedTask.inventoryReview.summary, request_id:copiedTask.requestId};
 const selectedStartBase = calls.filter(([name]) => name === "integrity-start").length;
@@ -1019,7 +1144,7 @@ let authoritativeHighlight = {...fixture.views.maximum.summary, task_id:alignedI
   highlight_anchor_node_id:endpoint(250), highlight_focus_node_id:endpoint(250),
   highlight_focus_visible_index:250, highlighted_count:1};
 const alignedWindow = (offset, summary = authoritativeHighlight) => ({...fixture.views.maximum.window,
-  highlight_revision:summary.highlight_revision, offset,
+  view_revision:summary.view_revision, highlight_revision:summary.highlight_revision, offset,
   rows:completeRows.filter(row => row.visible_index >= offset && row.visible_index < offset + 256)
     .map(row => ({...row, highlighted:row.node_id === summary.highlight_focus_node_id}))});
 const alignedReview = {summary:authoritativeHighlight, window:alignedWindow(0), pending:null, message:null,
@@ -1220,6 +1345,58 @@ await retiredOverlayWork; await tick();
 assert.equal(rowReads.length, retiredOverlayReads, "retired navigation cannot resurrect invalidated overlay demand");
 assert.equal(alignedReview.window.integrity.revision, retiredOverlayRevision);
 
+// A renderer interruption can retire paint while the admitted highlight still
+// changes the server. Navigation must reconcile both known and lost receipts.
+app.selectTask(alignedId); await tick();
+for (const outcome of ["receipt", "lost"]) {
+  const interruptedReview = alignedTask.inventoryReview;
+  heldHighlight = defer();
+  const interruptedMutation = heldHighlight;
+  const interruptedWork = app.queueRowHighlight(interruptedReview, "move_down", null, true);
+  await tick();
+  const mutationCount = rowMutations.length;
+  globalThis.inventoryCallbacks.onInterrupt(interruptedReview);
+  heldHighlight = null;
+  if (outcome === "receipt") interruptedMutation.resolve(interruptedMutation.receipt);
+  else interruptedMutation.reject(new Error("interrupted highlight response unavailable"));
+  await interruptedWork;
+  assert.notEqual(interruptedReview.summary.highlight_revision, authoritativeHighlight.highlight_revision);
+  const searchResponse = defer();
+  let searchCommands = 0;
+  const previousUpdate = globalThis.inventoryHarness.updateInventoryView;
+  const previousList = globalThis.inventoryHarness.listTasks;
+  globalThis.inventoryHarness.updateInventoryView = (taskId, revision, gesture) => {
+    searchCommands += 1;
+    authoritativeHighlight = {...authoritativeHighlight, view_revision:revision + 1,
+      search_query:gesture.searchQuery};
+    return searchCommands === 1 ? searchResponse.promise : Promise.resolve(authoritativeHighlight);
+  };
+  globalThis.inventoryHarness.listTasks = () => Promise.resolve({tasks:[{
+    task_id:alignedId, session_id:alignedTask.sessionId, session_state:alignedTask.sessionState,
+    session_released:alignedTask.sessionReleased, task_kind:alignedTask.taskKind,
+    request_id:alignedTask.requestId, plan_request_id:null, session_kind:alignedTask.sessionKind,
+  }]});
+  const firstSearch = app.changeInventoryView(interruptedReview, {searchQuery:"first"});
+  await tick();
+  await app.changeInventoryView(interruptedReview, {searchQuery:"latest"});
+  await app.refreshTasks();
+  assertSameNode(alignedTask.inventoryReview, interruptedReview,
+    `${outcome}: pending foreground custody does not depend on a confirmed cache`);
+  assert.equal(interruptedReview.queuedSearchQuery, "latest");
+  searchResponse.resolve(authoritativeHighlight); await firstSearch; await tick();
+  assert.equal(interruptedReview.summary.search_query, "latest");
+  assert.equal(searchCommands, 2, "the latest queued query receives exactly its own command");
+  globalThis.inventoryHarness.updateInventoryView = previousUpdate;
+  globalThis.inventoryHarness.listTasks = previousList;
+  app.showSettings(); app.selectTask(alignedId); await tick();
+  assert.notEqual(alignedTask.inventoryReview, interruptedReview,
+    `${outcome}: navigation replaces unresolved highlight presentation`);
+  assert.equal(alignedTask.inventoryReview.summary.highlight_revision, authoritativeHighlight.highlight_revision);
+  assert.equal(rowMutations.length, mutationCount, "freshness recovery observes without another highlight mutation");
+}
+authoritativeHighlight = {...authoritativeHighlight,
+  view_revision:fixture.views.maximum.summary.view_revision, search_query:""};
+
 // Refresh starts directly; it no longer forfeits a copied-file opportunity.
 const refreshOwner = attachReleasedExecutionTask("task-" + "9".repeat(32),
   "a".repeat(32), "b".repeat(32), "c".repeat(32));
@@ -1242,6 +1419,8 @@ app.adoptTask({task_id:followTask.taskId, session_id:"b".repeat(32), request_id:
 followTask.inventoryReview = {...currentD1Review, detail:null, pending:null, actionRevision:0,
   summary:{...fixture.views.maximum.summary, task_id:followTask.taskId, request_id:followTask.requestId},
   window:fixture.views.maximum.window, follow:null};
+followTask.inventoryReviewSessionId = followTask.sessionId;
+followTask.inventoryViewUnconfirmed = false;
 const followAnchors = [], followWindows = [];
 let heldFollowAnchor = defer();
 globalThis.inventoryHarness.getInventoryItemAnchor = (taskId, sessionId, revision, itemId) => {

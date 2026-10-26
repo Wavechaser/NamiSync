@@ -177,7 +177,7 @@ export function taskStatusDigest(task) {
   const checkingFolders = attempt?.running === true && !attempt.dispatched;
   const scanning = task?.inventoryError == null && (task?.sessionKind === "inventory"
       || (task?.taskKind === "inventory" && task?.sessionKind == null) || attempt?.kind === "inventory")
-    && (executionState === "active" || task?.inventoryLoading === true
+    && (executionState === "active"
       || (attempt?.running === true && attempt.dispatched));
   // Planning has no item-level progress, but the shell can still tell us that
   // it is underway. Keep the task rail animated while the start request is

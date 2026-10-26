@@ -221,7 +221,7 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-26)
+#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-27)
 
 - Keep Inventory highlight geometry stable. Both task-view switchers retain
   the selected half's accent and hover/click behavior while unavailable
@@ -242,6 +242,9 @@ explicit, reviewable and regression-backed.
 - Open one blank task at startup when no tasks exist. Closing the last task
   leaves the app empty, with a task-card-sized ordinary New Task button;
   the existing top create button remains available.
+- Reuse confirmed Inventory views on navigation, refreshing for session changes
+  and uncertain or invalidated state. View reads no longer masquerade as scans;
+  rereads preserve the mounted pane, table controller and expanded Details.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.

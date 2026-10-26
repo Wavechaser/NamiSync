@@ -772,7 +772,20 @@ export function createInventoryReviewPanel(callbacks) {
   function render(value) {
     const focusInDetails = diagnostics.contains(document.activeElement);
     const review = value.inventoryReview ?? null;
-    if (current !== review || task?.taskId !== value.taskId) dispose();
+    if (task?.taskId !== value.taskId) dispose();
+    if (current !== review) {
+      rowMenu.close();
+      baselineMenu.close();
+      clearTimeout(searchTimer);
+      searchTimer = null;
+      activeNodeId = review?.activeNodeId ?? null;
+      activeRefreshTarget = review?.activeRefreshTarget ?? null;
+      rowOrdinaryItems.clear();
+      rowOrdinaryMode = null;
+      rowOrdinarySessionId = null;
+      renderedProgress = null;
+      searchDraft = false;
+    }
     task = value;
     const first = current !== review;
     current = review;
@@ -830,7 +843,7 @@ export function createInventoryReviewPanel(callbacks) {
     const ordinaryScan = !value.inventoryError && value.sessionKind === "inventory"
       && !["baseline", "verify", "rebaseline"].includes(activityKind);
     renderText(statusTitle, auxiliarySession || ordinaryScan ? digest.title
-      : startAttempt !== null || value.sessionState === "active" || value.inventoryLoading ? digest.title
+      : startAttempt !== null || value.sessionState === "active" ? digest.title
       : value.sessionState === "refused" ? `${activity === "Inventory scan" ? "Scan" : activity} did not start`
         : value.sessionState === "failed" ? `${activity} failed`
           : value.sessionState === "canceled" ? `${activity} canceled` : `${activity} completed`);

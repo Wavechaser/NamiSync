@@ -47,6 +47,39 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Inventory view reuse and control refinement — 2026-10-27
+
+User-authorized GUI round from `c7868abd` on `milestone1`, following execute-task
+with independent review and serialized atomic commits.
+
+| ID | Outcome and finite owners | Verification / commit boundary | Status |
+| --- | --- | --- | --- |
+| V1 | Reuse confirmed Inventory views on navigation; reread on invalidation, uncertain freshness or session changes. Separate view reads from task activity and preserve the mounted pane during rereads. App, Inventory renderer, task-status helper, direct Inventory browser/native consumers and DESKTOP_UI. | Delayed/stale/session/invalidation reads, navigation reuse, stable headline/pane and preserved selection/action custody; interface department and affected installed Inventory/shell/execution journeys, fresh review. One view-lifecycle commit. | Complete: 2,098 interface tests and all five installed Inventory/shell/execution cases pass; independent review confirms both race corrections. |
+| V2 | Smaller, better-spaced filename cloud glyph; filled Resume play glyph; icon-only opaque Go-current (eye) and autoscroll (location-ripple) buttons. Plan/Inventory renderers, shared CSS, fixed icon catalog/generated assets, direct browser/gallery/native consumers and DESKTOP_UI/TOOLS. | Icon provenance, accessible action names, button/row geometry and opaque surfaces in installed gallery; affected interface/tool checks and native journeys, fresh review. One visual-control commit after V1. | Pending. |
+
+Preserve exact session/publication identity, selection, stale-response retirement,
+bounded reads, reviewed effects, confirmation and action custody. No backend,
+bridge, recents, M1-12, release, DOC-2, push or PR work. Inventory recents remain
+shelved. Existing mandatory and recurrence stops apply. Parent owns this register,
+CHANGELOG and HANDOFF; shared source/test writers serialize. Evidence belongs in
+ignored `build/gui-inventory-reuse-20261027/`.
+
+V1 review found interrupted-highlight freshness loss and a repeated foreground
+custody mechanism. The recurrence pause was adjudicated by the user on
+2026-10-27: protect foreground work using its own captured session, navigation
+and invalidation identity, independently of cached-view freshness; verify both
+triggers and continue V1/V2. No scope or effect authority expands.
+
+| Trigger / consequence | Owner and common correction |
+| --- | --- |
+| An unrelated task-list refresh during a pending search discards its queued latest query. | App full-view loader must defer to current foreground ownership. |
+| An interrupted highlight marks the cache stale; the same background refresh then bypasses that guard and again loses queued search. | Same loader guard must use the foreground operation's session identity, not cache confirmation. Existing selection/highlight custody remains. |
+
+Direct consumers are the Inventory app probe and installed Inventory driver.
+The driver must explicitly establish hidden Details for its selected-Refresh
+scenario; it must also assert retained expanded Details across acknowledgement.
+The native input, effect, foreground and hit-target assertions remain required.
+
 ### Headline and startup refinement — 2026-10-26
 
 User-authorized GUI round from `7015596a` on `milestone1`, with execute-task,

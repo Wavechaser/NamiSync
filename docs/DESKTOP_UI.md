@@ -58,6 +58,16 @@ replays the refresh at the accepted window, while navigation, Settings,
 and stale or failed receipts remain inert toward visible result/detail facts.
 A replacement document retires the window's authority and requires reopening.
 
+Inventory navigation reuses the task's confirmed view for its exact session.
+Session replacement, terminal release, uncertain delivery or a pending view
+change requires a current bounded read; returning to a still-running read
+keeps one latest reread behind it. Background task-list observations preserve
+foreground view edits and their latest queued search. Reading a view does not
+change the task's scan or integrity activity status. An explicit reread keeps
+the mounted pane, tree focus, expanded Task details and anchored scroll position
+while replacing its rows. Prior item evidence is retired before the new
+publication is adopted.
+
 The Stage 6 target is a `pywebview` host forced to Edge Chromium/WebView2 with
 packaged web assets. The earlier PySide6 proof-of-concept is historical input,
 not the implementation target or test contract. `ui_mockup/mockup.html` is the

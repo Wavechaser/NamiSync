@@ -185,6 +185,8 @@ task.inventoryLoading = true;
 pane.render(task);
 assert.equal(find((value) => value.classList.contains("nami-plan-review__status")), statusLine);
 assert.match(statusLine.textContent, /Loading inventory view…/);
+assert.equal(progressTrack.classList.contains("nami-progress--indeterminate"), false,
+  "reading a retained view does not animate completed task work");
 task.inventoryLoading = false;
 task.sessionState = "active";
 pane.render(task);
@@ -1008,14 +1010,28 @@ await liveReview.highlightQueue;
 assert.deepEqual(liveHighlights.at(-1), ["replace", fixture.views.maximum.window.rows[12].node_id]);
 const beforeReloadReview = liveReview;
 const beforeReloadNode = liveReview.activeNodeId;
+const liveDetailsToggle = walk(app.panel.element).find(value => value.dataset.action === "inventory-details");
+liveDetailsToggle.click();
+assert.equal(liveDetailsToggle.ariaExpanded, "true");
+const retainedKeyboardListener = treeRoot.listeners.get("keydown")[0];
+treeRoot.focus();
 viewportReply = delayedViewport();
 const reloadingReview = app.loadInventoryReview(liveTask, true);
 await settle();
+assert.equal(liveDetailsToggle.ariaExpanded, "true", "a reread keeps expanded task details mounted");
+assertSameNode(document.activeElement, treeRoot, "a reread keeps tree focus");
 viewportReply.resolve({...fixture.tail});
 await reloadingReview;
 viewportReply = null;
 liveReview = liveTask.inventoryReview;
 assert.notEqual(liveReview, beforeReloadReview, "explicit reload replaces the review owner");
+assertSameNode(walk(app.panel.element).find(value => value.getAttribute("role") === "tree"), treeRoot,
+  "replacement publishes into the mounted tree");
+assertSameNode(treeRoot.listeners.get("keydown")[0], retainedKeyboardListener,
+  "replacement keeps the live tree controller");
+assert.equal(liveDetailsToggle.ariaExpanded, "true", "replacement preserves details expansion");
+assertSameNode(document.activeElement, treeRoot, "replacement cannot reclaim focus");
+assert.equal(liveReview.detail, null, "replacement retires the old selected evidence");
 assert.equal(liveReview.activeNodeId, beforeReloadNode, "reload retains a node proved visible in its new view");
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), null, "reload may retain an off-window identity without ARIA");
 assert.equal(liveReview.activeRefreshTarget.node_id, beforeReloadNode);
