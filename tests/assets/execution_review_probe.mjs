@@ -101,7 +101,7 @@ const pausedDigest = taskStatusDigest({
     ...unknownSnapshot.presentation, indeterminate: false,
   } },
 });
-assert.equal(pausedDigest.title, "Paused");
+assert.equal(pausedDigest.title, "Execution paused");
 assert.equal(pausedDigest.progress.indeterminate, false);
 const result = (patch = {}) => ({
   headline: "success", filesystem: "completed", integrity: "verified",
@@ -155,6 +155,25 @@ assert.deepEqual(projectExecutionSummary(summary(null)), {
 assert.deepEqual(projectExecutionSummary(summary(result())), {
   title: "Execution completed", status: "completed",
 }, "a successful zero-byte run is completed, not unrun");
+for (const [headline, expected, state] of [
+  ["success", "Execution completed", "completed"],
+  ["all-noop", "Execution completed", "completed"],
+  ["failed", "Execution failed", "error"],
+  ["partial", "Execution needs review", "error"],
+  ["refused", "Execution did not start", "error"],
+  ["mismatch", "Verification mismatch", "error"],
+  ["canceled", "Execution canceled", "canceled"],
+  ["verification-incomplete", "Verification incomplete", "degraded"],
+  ["degraded", "Execution completed with issues", "degraded"],
+]) {
+  const terminal = result({headline});
+  const digest = taskStatusDigest({sessionKind:"sync-execution", sessionId:digestSession,
+    sessionState:"completed", executionStarted:true,
+    review:{window:{execution:summary(terminal, {session_id:digestSession})}}});
+  assert.equal(digest.title, expected);
+  assert.equal(projectExecutionSummary(summary(terminal)).title, expected);
+  assert.equal(digest.state, state, "wording does not change the rail's semantic state");
+}
 assert.equal(projectExecutionSummary(summary(result({ headline: "partial", filesystem: "failed" }))).status, "error");
 assert.equal(projectExecutionSummary(summary(result({ headline: "canceled", filesystem: "canceled", canceled: true }))).title, "Execution canceled");
 assert.equal(projectExecutionSummary(summary(result({
@@ -300,7 +319,7 @@ for (const staleResult of [
     snapshot: terminalSnapshot(staleResult),
     review: { window: { execution: railCapacityExecution } },
   });
-  assert.equal(staleTask.title, "Failed", "stale capacity counts cannot recolor a newer failure");
+  assert.equal(staleTask.title, "Execution failed", "stale capacity counts cannot recolor a newer failure");
   assert.equal(staleTask.state, "error");
 }
 const mismatchedCapacityTask = taskStatusDigest({
@@ -310,7 +329,7 @@ const mismatchedCapacityTask = taskStatusDigest({
   snapshot: terminalSnapshot({ ...railCapacityResult }, "9".repeat(32)),
   review: { window: { execution: railCapacityExecution } },
 });
-assert.equal(mismatchedCapacityTask.title, "Failed", "a prior session's capacity counts have no rail authority");
+assert.equal(mismatchedCapacityTask.title, "Execution failed", "a prior session's capacity counts have no rail authority");
 const matchingCapacityTask = taskStatusDigest({
   sessionKind: "sync-execution",
   sessionId: railCapacityExecution.session_id, sessionState: "active",
@@ -326,7 +345,7 @@ const activeAgainstTerminalWindow = taskStatusDigest({
   snapshot: { ...activeSnapshot, session_id: railCapacityExecution.session_id },
   review: { window: { execution: railCapacityExecution } },
 });
-assert.equal(activeAgainstTerminalWindow.title, "Executing",
+assert.equal(activeAgainstTerminalWindow.title, "Execution in progress",
   "an active snapshot does not inherit a retained terminal result");
 const inconsistentTask = taskStatusDigest({
   sessionKind: "sync-execution",
@@ -372,7 +391,7 @@ const mixedRail = taskStatusDigest({
   review: { window: mixedWindow },
 });
 assert.deepEqual({ title: mixedRail.title, state: mixedRail.state }, {
-  title: "Mismatch", state: "error",
+  title: "Verification mismatch", state: "error",
 }, "the rail uses the same active mixed terminal result");
 const [mismatchedRow, mixedCapacityRow] = mixedWindow.rows.map(projectExecutionRow);
 assert.equal(mismatchedRow.lifecycle, "completed");
@@ -392,7 +411,7 @@ const terminalTask = taskStatusDigest({
     recording_degraded_items: 1 }), digestSession), session_state: "completed" },
   review: null, form: null,
 });
-assert.equal(terminalTask.title, "Degraded", "known terminal degradation cannot stay green");
+assert.equal(terminalTask.title, "Execution completed with issues", "known terminal degradation cannot stay green");
 assert.equal(terminalTask.state, "degraded");
 const copiedTerminal = taskStatusDigest({
   taskKind: "sync-plan", sessionKind: "verify", executionStarted: true,

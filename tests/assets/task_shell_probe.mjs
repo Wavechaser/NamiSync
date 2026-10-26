@@ -323,7 +323,7 @@ assert.equal(taskStatusDigest({ sessionState: "completed", review: { summary: {
   filter_counts: { all: 2 }, required_bytes: "1024", operation_count: 2,
 } } }).title, "Plan ready");
 assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "active",
-  executionControlState: "paused" }).title, "Paused");
+  executionControlState: "paused" }).title, "Execution paused");
 assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "active",
   sessionId: "8".repeat(32),
   snapshot: { wire_version: 2, session_id: "8".repeat(32),
@@ -349,7 +349,7 @@ assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted:
     items_done: null, items_total: null,
     throughput_bytes_per_second: null, eta_seconds: null,
   } } }).title, "Verifying");
-assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "refused" }).title, "Error");
+assert.equal(taskStatusDigest({ sessionKind: "sync-execution", executionStarted: true, sessionState: "refused" }).title, "Execution did not start");
 assert.equal(taskStatusDigest({ form: { source: { text: "source" }, target: { text: "" } } }).targetPath, "-");
 const baselineVerifyResult = {
   headline: "verification-incomplete", filesystem: "completed", integrity: "baselined",
@@ -365,6 +365,13 @@ function ordinaryVerifyDigest(result = baselineVerifyResult, sessionState = "com
 const baselineDigest = ordinaryVerifyDigest();
 assert.equal(baselineDigest.title, "Baseline created");
 assert.equal(baselineDigest.state, "completed");
+assert.equal(ordinaryVerifyDigest({...baselineVerifyResult, headline:"success", integrity:"verified"}).title,
+  "Verification completed");
+for (const [sessionState, expected] of [["completed", "Inventory scan completed"],
+  ["failed", "Inventory scan failed"], ["refused", "Inventory scan did not start"],
+  ["canceled", "Inventory scan canceled"]]) {
+  assert.equal(taskStatusDigest({taskKind:"inventory", sessionKind:"inventory", sessionState}).title, expected);
+}
 assert.equal(baselineDigest.detail, "Files without prior checksums received new baselines, not verification. Any existing baselines matched.");
 for (const axis of ["recording", "audit"]) {
   assert.equal(ordinaryVerifyDigest({...baselineVerifyResult, [axis]: "degraded"}).state, "degraded",
@@ -403,7 +410,7 @@ assert.equal(taskStatusDigest({
       items_done: null, items_total: null, throughput_bytes_per_second: null,
       eta_seconds: null }, phase: null, progress_inconsistent: false },
   review: { window: { execution: { ...capacityRailWindow, session_id: "8".repeat(32) } } },
-}).title, "Failed", "the snapshot's independent failure axis remains decisive");
+}).title, "Execution failed", "the snapshot's independent failure axis remains decisive");
 const railSource = (await readFile(process.argv[3], "utf8"))
   .replace("./icons.js", iconsUrl)
   .replace("./render.js", renderUrl)
@@ -432,6 +439,33 @@ for (const [patch, expected] of [
   assert.equal(card.dataset.headlineStatus, expected);
   assert.equal(card.dataset.status, patch.closeRecovery ? "unavailable" : taskStatusDigest(value).state,
     "headline color never changes progress/lifecycle ownership");
+}
+const longError = "Execution preflight refused. ".repeat(30);
+for (const [patch, expected] of [
+  [{error:longError}, longError],
+  [{inventoryError:longError}, longError],
+  [{releaseRecovery:{message:longError}}, longError],
+  [{releaseRecovery:{message:longError, canCheck:true}}, "Use Check outcome."],
+  [{releaseRecovery:{message:longError, canCheck:true}, inventoryError:"Other inventory error"}, "Use Check outcome."],
+  [{closePending:true, closeRecovery:{message:longError, canCheck:true}}, "Use Close to check outcome."],
+  [{closePending:true, closeManualReady:true, closeMessage:longError}, "Use Retry close to check cleanup."],
+  [{closePending:true, closeRecovery:{message:longError, state:"fixed-unknown"}}, longError],
+  [{closeBlockReason:longError}, longError],
+  [{review:{window:{execution:{session_id:headlineTask.sessionId,
+    result:{headline:"refused", disposition:"unrun", error:longError}}}}}, "Plan again to retry."],
+  [{review:{window:{execution:{session_id:headlineTask.sessionId,
+    result:{headline:"failed", disposition:"ran", error:longError}}}}}, "Select task to review issues."],
+]) {
+  const value = {...headlineTask, ...patch};
+  headlineRail.render([value], value.taskId, null);
+  const status = walk(headlineRail.element).find(element => element.classList.values.has("nami-task-card__status"));
+  assert.equal(status.textContent, expected);
+  assert.equal(status.title, expected === "Plan again to retry."
+    ? "Execution did not start. Plan again is available." : longError);
+  assert.equal(value.closeRecovery?.message ?? value.closeMessage ?? value.closeBlockReason
+    ?? value.releaseRecovery?.message ?? value.error ?? value.inventoryError
+    ?? value.review.window.execution.result.error, longError,
+    "compact rail text preserves the task's full explanatory state");
 }
 const panelSource = (await readFile(process.argv[4], "utf8"))
   .replace("./render.js", renderUrl);
@@ -872,6 +906,7 @@ assertSameNode(firstLoadingSurface, beforeReleaseSurface, "release retains the s
 assert.ok(firstLoadingSurface, "selected task shows the retained review while loading");
 planOpens[0].reject(new Error("simulated initial plan open failure"));
 await until(() => byText("Plan unavailable. Select the task to retry.") !== undefined);
+assert.equal(reviewRenders.at(-1).error, "Plan unavailable. Select the task to retry.");
 assert.ok(byText("Loading task setup…") === undefined);
 assertSameNode(byText("Plan review test surface"), firstLoadingSurface,
   "failed initial open retains the admitted Plan shell");
@@ -883,6 +918,7 @@ planOpens[1].resolve(planSummary());
 await until(() => planWindows.length === 1);
 planWindows[0].reject(new Error("simulated initial plan window failure"));
 await until(() => byText("Plan unavailable. Select the task to retry.") !== undefined);
+assert.equal(reviewRenders.at(-1).error, "Plan unavailable. Select the task to retry.");
 assert.ok(byText("Loading task setup…") === undefined);
 assertSameNode(byText("Plan review test surface"), firstLoadingSurface,
   "an admitted Plan retains its shell after an initial review read fails");
@@ -1308,7 +1344,7 @@ await until(() => calls.some(
 const executionDrain = drains.get(TASK_G);
 assert.equal(reviewRenders.at(-1).snapshot, null,
   "execution admission retires the Plan session's presentation");
-assert.equal(taskStatusDigest(reviewRenders.at(-1)).title, "Executing",
+assert.equal(taskStatusDigest(reviewRenders.at(-1)).title, "Execution in progress",
   "the rail cannot report the Plan terminal state for active execution");
 assert.notEqual(executionDrain, planDrain, "execution replaces the released plan drain");
 assert.equal(planExecutions.length, 2, "navigation cannot duplicate execution admission");
@@ -2864,7 +2900,7 @@ failedExecutionDrain.acceptUpdate({ update_type: "record", record: {
 assert.equal(failedTask.sessionState, "failed",
   "the new execution's lower revision cannot suppress its failed terminal record");
 assert.equal(failedTask.snapshot.terminal_result, terminalFailureResult);
-assert.equal(taskStatusDigest(failedTask).title, "Failed");
+assert.equal(taskStatusDigest(failedTask).title, "Execution failed");
 
 for (const [index, refusal, expected] of [
   [10, { origin: "preflight", codes: ["insufficient_space", "root_unavailable"] },

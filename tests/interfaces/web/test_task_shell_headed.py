@@ -391,14 +391,14 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
 
     first = report["terminal_first"]
     assert first["count"] == 47
-    assert first["status"] == "Completed"
+    assert first["status"] == "Inventory scan completed"
     assert first["before"]["terminal_present"] is True
     assert first["before"]["session_released"] is False
     assert first["before"]["release_waiting"] is True
 
     second = report["terminal_second"]
     assert second["count_before_close"] == 47
-    assert second["status_before_close"] == "Completed"
+    assert second["status_before_close"] == "Inventory scan completed"
     assert second["retained"]["release_calls"] == first["before"]["release_calls"]
     assert second["retained"]["terminal_present"] is True
     assert second["retained"]["session_released"] is False

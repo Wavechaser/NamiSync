@@ -7,6 +7,7 @@ import { createRowMenu } from "./row_menu.js";
 import { createIcon } from "./icons.js";
 import { formatByteCount, formatFilesystemPath, formatLocalDateTime, renderFilesystemText, renderText } from "./render.js";
 import {
+  executionHeadline,
   isCapacityOnlyExecution,
   projectActiveOperationProgress,
   selectTaskExecution,
@@ -115,19 +116,15 @@ export function projectExecutionSummary(execution) {
       ? { title: null, status: null }
       : { title: "Execution in progress", status: "executing" };
   }
-  if (result.disposition === "unrun") return { title: "Execution did not start", status: "error" };
+  if (result.disposition === "unrun") return { title: executionHeadline(result), status: "error" };
   const capacityOnly = isCapacityOnlyExecution(execution);
-  if (capacityOnly) return { title: "Needs target space", status: "attention" };
+  if (capacityOnly) return { title: executionHeadline(result, capacityOnly), status: "attention" };
   const labels = {
-    failed: ["Execution failed", "error"], partial: ["Execution needs review", "error"],
-    refused: ["Execution did not start", "error"], mismatch: ["Verification mismatch", "error"],
-    canceled: ["Execution canceled", "canceled"],
-    "verification-incomplete": ["Verification incomplete", "attention"],
-    degraded: ["Execution completed with issues", "attention"],
-    "all-noop": ["Execution completed", "completed"], success: ["Execution completed", "completed"],
+    failed: "error", partial: "error", refused: "error", mismatch: "error",
+    canceled: "canceled", "verification-incomplete": "attention", degraded: "attention",
+    "all-noop": "completed", success: "completed",
   };
-  const [title, status] = labels[result.headline] ?? ["Execution needs review", "error"];
-  return { title, status };
+  return { title: executionHeadline(result), status: labels[result.headline] ?? "error" };
 }
 
 function button(label, className = "nami-button") {
@@ -1223,7 +1220,7 @@ export function createPlanReviewPanel(callbacks) {
       ? ({paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[task.executionControlState]
       : null;
     updateText(statusTitle, controlTitle ?? (terminalState && displayExecution.result === null
-      ? `Execution ${executionState}` : executionPresentation.title ?? (task.executionStarted ? "Execution" : digest.title)));
+      ? digest.title : executionPresentation.title ?? (task.executionStarted ? "Execution" : digest.title)));
     const executionProgress = snapshot?.presentation ?? null;
     const progressFacts = task.executionStarted && snapshot?.phase != null
       ? [

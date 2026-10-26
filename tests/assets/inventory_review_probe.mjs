@@ -1267,6 +1267,17 @@ for (const [patch, expected] of [[{presence:"present", verification_state:"unver
 }
 presentationReview.window = {...presentationReview.window, rows:presentationRows};
 presentationPane.render(presentationTask);
+const scanTitleTask = {...presentationTask, taskKind:"inventory", sessionKind:"inventory",
+  inventoryError:null, snapshot:null};
+for (const [sessionState, title] of [["completed", "Inventory scan completed"],
+  ["refused", "Inventory scan did not start"], ["failed", "Inventory scan failed"],
+  ["canceled", "Inventory scan canceled"], ["active", "Scanning"]]) {
+  presentationPane.render({...scanTitleTask, sessionState});
+  assert.equal(presentationPane.element.querySelector(".nami-plan-review__status-title").textContent, title);
+}
+presentationPane.render({...scanTitleTask, sessionState:"refused", inventoryError:task.inventoryError});
+assert.equal(presentationPane.element.querySelector(".nami-plan-review__status-title").textContent,
+  "Scan did not start", "retained inventory errors keep their distinct headline");
 for (const [phase, label] of [["baseline", "Baseline"], ["verify", "Verification"], ["rebaseline", "Rebaseline"]]) {
   presentationTask.sessionState = "completed";
   presentationTask.snapshot = {terminal_result: {phases: [{phase}]}};

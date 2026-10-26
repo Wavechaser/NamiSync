@@ -2048,6 +2048,17 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "selected_pill_background": "rgb(0, 120, 212)",
             },
             "task_rail": {
+                "samples": [["Execution in progress", "executing"], ["Plan ready", "plan"],
+                            ["Execution completed with issues", "degraded"]],
+                "headline_layout": [
+                    {"layout": layout, "title": title, "rail_width": 288.0,
+                     "title_lines": 2, "font_size": 14.0, "fits": True,
+                     "card_height": 128.0, "baseline_card_height": 108.0,
+                     "title_height": 40.0, "detail_height": 16.0}
+                    for layout in ("catalog", "minimum")
+                    for title in ("Execution completed with issues", "Inventory scan completed",
+                                  "Verification needs review", "Verification completed")
+                ],
                 "card_count": 4,
                 "outside_content_card": True,
                 "left_of_work": True,
@@ -4627,7 +4638,19 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
     }
     combobox = report["control_contract"]["combobox"]
     task_rail = report["control_contract"]["task_rail"]
+    headline_layout = task_rail["headline_layout"]
+    assert [(row["layout"], row["title"]) for row in headline_layout] == [
+        (layout, title) for layout in ("catalog", "minimum")
+        for title in ("Execution completed with issues", "Inventory scan completed",
+                      "Verification needs review", "Verification completed")
+    ]
+    assert all(row["font_size"] == 14 and row["title_lines"] >= 1
+               and row["fits"]
+               for row in headline_layout)
     assert task_rail == {
+        "samples": [["Execution in progress", "executing"], ["Plan ready", "plan"],
+                    ["Execution completed with issues", "degraded"]],
+        "headline_layout": headline_layout,
         "card_count": 4,
         "outside_content_card": True,
         "left_of_work": True,

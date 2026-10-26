@@ -175,6 +175,9 @@ body {
   color: var(--color-neutral-foreground-secondary);
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nami-task-card__paths {

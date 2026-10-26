@@ -278,7 +278,12 @@ contract. The task rail headline uses the main status headline's semantic color,
 including attention, paused and terminal states. Its supporting text and progress
 retain their own roles. Forced-color rail headlines inherit the card's system
 foreground, preserving contrast on selected and hovered cards. Headline wording
-remains specific to the current activity or retained execution being presented.
+matches the ordinary status card and names the current operation, including
+Execution completed, Inventory scan completed, Verification completed and
+Execution completed with issues. Task errors, release recovery, unknown Close
+outcomes, inventory errors, and manual or linked verification after sync may
+present different headlines when they describe different facts or retained
+activities. These exceptions preserve the current activity and execution identities.
 
 Intentions and information are never conveyed through color or form alone.
 Hue answers **what class** a signal belongs to; form answers **how much the
@@ -685,6 +690,10 @@ without a temporary data channel to preserve or remove.
 The gallery keeps the rail, Plan review controls, status card, and row fixtures
 visually and semantically parallel with production; its gallery-only callbacks
 perform no domain-backend writes and its plan data remains presentation-owned.
+Its task rail retains three representative production-rendered specimens:
+running execution, a ready plan, and execution completed with issues, plus
+Settings. Their headlines and semantic states come from the ordinary renderer;
+the gallery does not add a task-state matrix or simulate backend actions.
 Persistent production Plan panels show preflight, commitment and other refusal
 guidance, expandable prior-location contents with a destination-reveal preview,
 and interactive Pause/Resume plus two-click Cancel. Their callbacks only update
@@ -1861,7 +1870,15 @@ while Details is hidden. This
 uses the supplemental, simultaneous-interaction pattern in Microsoft's
 [inline drawer guidance](https://fluent2.microsoft.design/components/web/react/core/drawer/usage).
 The task rail keeps its 18rem cap and narrows in smaller windows while retaining
-tab, path-label and close-control alignment. The
+tab, path-label and close-control alignment. Rail detail stays on one line with
+ellipsis for overflow; selecting the task exposes ordinary status and Details.
+Execution refusal uses concise retry guidance in the rail. Recovery guidance
+points to its actual rail control when a short instruction is known; otherwise
+the original message remains, with its full text in the detail tooltip.
+Headline text may wrap at its normal font size. Installed gallery observations
+at 14px show all four sampled headlines on one line in a 288px rail; at the
+238.429px native-minimum rail, “Execution completed with issues” wraps to two
+lines. Detail stays on one line at both widths. The
 item pane always exists while expanded and prompts for a highlight when none is
 active. The server-owned highlight focus, including the last focus in a range,
 chooses the item; a row click does not force a deliberately collapsed pane open.

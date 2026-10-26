@@ -1693,6 +1693,8 @@ def _valid_control_contract(value: object) -> bool:
         and set(task_rail)
         == {
             "card_count",
+            "samples",
+            "headline_layout",
             "outside_content_card",
             "left_of_work",
             "selected_count",
@@ -1707,6 +1709,24 @@ def _valid_control_contract(value: object) -> bool:
             "selected_marker_background",
         }
         and task_rail["card_count"] == 4
+        and task_rail["samples"] == [["Execution in progress", "executing"], ["Plan ready", "plan"],
+                                     ["Execution completed with issues", "degraded"]]
+        and type(task_rail["headline_layout"]) is list
+        and len(task_rail["headline_layout"]) == 8
+        and all(
+            type(row) is dict
+            and set(row) == {"layout", "title", "rail_width", "title_lines", "font_size",
+                             "card_height", "baseline_card_height", "title_height", "detail_height",
+                             "fits"}
+            and row["layout"] in {"catalog", "minimum"}
+            and row["title"] in {"Execution completed with issues", "Inventory scan completed",
+                                  "Verification needs review", "Verification completed"}
+            and all(type(row[key]) in {int, float} and row[key] > 0
+                    for key in ("rail_width", "title_lines", "font_size", "card_height",
+                                "baseline_card_height", "title_height", "detail_height"))
+            and row["fits"] is True
+            for row in task_rail["headline_layout"]
+        )
         and task_rail["outside_content_card"] is True
         and task_rail["left_of_work"] is True
         and task_rail["selected_count"] == 1

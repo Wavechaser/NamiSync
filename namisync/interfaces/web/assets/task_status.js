@@ -78,31 +78,38 @@ export function selectTaskExecution(task) {
   };
 }
 
+export function executionHeadline(result, capacityOnly = false) {
+  if (result.disposition === "unrun") return "Execution did not start";
+  if (capacityOnly) return "Needs target space";
+  return ({
+    failed: "Execution failed", partial: "Execution needs review",
+    refused: "Execution did not start", mismatch: "Verification mismatch",
+    canceled: "Execution canceled", "verification-incomplete": "Verification incomplete",
+    degraded: "Execution completed with issues", "all-noop": "Execution completed",
+    success: "Execution completed",
+  })[result.headline] ?? "Execution needs review";
+}
+
 function terminalDigest(result, fallbackState, capacityOnly) {
   if (result === null || typeof result !== "object") return null;
   if (result.disposition === "unrun") {
-    return { title: "Execution did not start", state: "error", detail: "Execution did not start. Plan again is available." };
+    return { title: executionHeadline(result), state: "error", detail: "Execution did not start. Plan again is available." };
   }
   if (capacityOnly) {
     return {
-      title: "Needs target space",
+      title: executionHeadline(result, capacityOnly),
       state: "degraded",
       detail: "Execution stopped: more target space is needed.",
       fallbackState,
     };
   }
   const labels = {
-    failed: ["Failed", "error"],
-    partial: ["Needs review", "error"],
-    refused: ["Execution did not start", "error"],
-    mismatch: ["Mismatch", "error"],
-    canceled: ["Canceled", "canceled"],
-    "verification-incomplete": ["Verification incomplete", "degraded"],
-    degraded: ["Degraded", "degraded"],
-    "all-noop": ["Completed", "completed"],
-    success: ["Completed", "completed"],
+    failed: "error", partial: "error", refused: "error", mismatch: "error",
+    canceled: "canceled", "verification-incomplete": "degraded", degraded: "degraded",
+    "all-noop": "completed", success: "completed",
   };
-  const [title, state] = labels[result.headline] ?? ["Needs review", "error"];
+  const title = executionHeadline(result);
+  const state = labels[result.headline] ?? "error";
   const detail = result.error ?? `${title}.`;
   return { title, state, detail, fallbackState };
 }
@@ -225,12 +232,16 @@ export function taskStatusDigest(task) {
   else if (summary !== null && !task?.executionStarted && task?.sessionKind !== "inventory") [title, state] = ["Plan ready", "plan"];
   else if (terminal !== null) ({ title, state } = terminal);
   else if (ordinaryTerminal !== null) ({ title, state } = ordinaryTerminal);
-  else if (executionState === "completed") [title, state] = ["Completed", "completed"];
-  else if (executionState === "failed" || executionState === "refused") [title, state] = ["Error", "error"];
-  else if (executionState === "canceled") [title, state] = ["Canceled", "canceled"];
+  else if (["completed", "failed", "refused", "canceled"].includes(executionState)) {
+    const operation = currentExecution ? "Execution" : task?.taskKind === "inventory" ? "Inventory scan" : null;
+    title = operation === null ? ({completed: "Completed", canceled: "Canceled"})[executionState] ?? "Error"
+      : `${operation} ${executionState === "refused" ? "did not start" : executionState}`;
+    state = ({completed: "completed", canceled: "canceled"})[executionState] ?? "error";
+  }
   else if (task?.executionStarted && currentExecution) {
-    title = task.executionControlState === "paused" ? "Paused" : progress.phase === "verify" ? "Verifying" : "Executing";
-    state = title.toLowerCase();
+    title = ({paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[task.executionControlState]
+      ?? (progress.phase === "verify" ? "Verifying" : "Execution in progress");
+    state = task.executionControlState === "paused" ? "paused" : progress.phase === "verify" ? "verifying" : "executing";
   } else if (executionState === "active" && ["inventory", "baseline", "verify", "rebaseline"].includes(task?.sessionKind)) {
     const activeLabel = ({inventory: "Scanning", baseline: "Baselining", verify: "Verifying",
       rebaseline: "Rebaselining"})[task.sessionKind];

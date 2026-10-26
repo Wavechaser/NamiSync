@@ -827,7 +827,9 @@ export function createInventoryReviewPanel(callbacks) {
     const digest = taskStatusDigest(value);
     const auxiliarySession = ["baseline", "verify", "rebaseline"].includes(value.sessionKind);
     summary.dataset.status = value.inventoryError ? "attention" : digest.state;
-    renderText(statusTitle, auxiliarySession ? digest.title
+    const ordinaryScan = !value.inventoryError && value.sessionKind === "inventory"
+      && !["baseline", "verify", "rebaseline"].includes(activityKind);
+    renderText(statusTitle, auxiliarySession || ordinaryScan ? digest.title
       : startAttempt !== null || value.sessionState === "active" || value.inventoryLoading ? digest.title
       : value.sessionState === "refused" ? `${activity === "Inventory scan" ? "Scan" : activity} did not start`
         : value.sessionState === "failed" ? `${activity} failed`

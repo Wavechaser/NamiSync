@@ -221,7 +221,7 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-25)
+#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-26)
 
 - Keep Inventory highlight geometry stable. Both task-view switchers retain
   the selected half's accent and hover/click behavior while unavailable
@@ -235,6 +235,10 @@ explicit, reviewable and regression-backed.
   Inventory Pause/Resume and Cancel also use labelled icon-only controls.
 - Match task-rail headline colors to the main status's semantic colors, including
   paused and unavailable states, while preserving system high-contrast text.
+- Share explicit operation headlines between task tabs and ordinary status
+  cards, preserving recovery and retained-result exceptions. Keep task-tab
+  details concise and on one line; full advice remains in task details or
+  the rail tooltip. Include three representative task tabs in the gallery.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.

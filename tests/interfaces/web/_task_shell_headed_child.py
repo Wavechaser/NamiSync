@@ -471,7 +471,7 @@ _BUSY_SCRIPT = _COMMON_JS + r"""
 _TERMINAL_FIRST_SCRIPT = _COMMON_JS + r"""
 (async () => {
   await submitInventory("Task 51");
-  await until(() => rows().length === 47 && statusFor("Task 51") === "Completed", "terminal presentation");
+  await until(() => rows().length === 47 && statusFor("Task 51") === "Inventory scan completed", "terminal presentation");
   await untilAsync(async () => (await control("status")).release_waiting === true, "blocked terminal release");
   const before = await control("status");
   await control("record", { terminal_first: { count: rows().length, status: statusFor("Task 51"), before } });
@@ -482,7 +482,7 @@ _TERMINAL_FIRST_SCRIPT = _COMMON_JS + r"""
 
 _TERMINAL_SECOND_SCRIPT = _COMMON_JS + r"""
 (async () => {
-  await until(() => rows().length === 47 && statusFor("Task 51") === "Completed", "terminal presentation");
+  await until(() => rows().length === 47 && statusFor("Task 51") === "Inventory scan completed", "terminal presentation");
   await untilAsync(async () => (await control("status")).release_waiting === true, "held terminal release");
   const retained = await control("status");
   await control("release_cleanup");
@@ -494,7 +494,7 @@ _TERMINAL_SECOND_SCRIPT = _COMMON_JS + r"""
   const report = {
     terminal_second: {
       count_before_close: 47,
-      status_before_close: "Completed",
+      status_before_close: "Inventory scan completed",
       retained,
       released,
       closed,
@@ -1184,9 +1184,9 @@ window.addEventListener("error", (event) => {
   controlsAppearance.cancelArmed = cancelControl.classList.contains("nami-button--primary")
     && !cancelControl.querySelector(".nami-icon--stop-filled").hidden;
   controlsAppearance.firstClickDidNotCancel = live.dataset.pending === ""
-    && !cancelControl.disabled && statusFor("Task 54") === "Executing";
+    && !cancelControl.disabled && statusFor("Task 54") === "Execution in progress";
   cancelControl.click();
-  await until(() => statusFor("Task 54") === "Canceled", "canceled execution");
+  await until(() => statusFor("Task 54") === "Execution canceled", "canceled execution");
   await until(
     () => live.querySelector(".nami-plan-review__execution")?.textContent.includes("Filesystem: Canceled"),
     "canceled execution review",
@@ -1231,7 +1231,7 @@ window.addEventListener("error", (event) => {
       paused: paused.length > 0,
       resumed,
       controlsAppearance,
-      canceled: statusFor("Task 54") === "Canceled",
+      canceled: statusFor("Task 54") === "Execution canceled",
       canceledExecutionHeader,
       followNavigation,
       emptyPlanGeometry,

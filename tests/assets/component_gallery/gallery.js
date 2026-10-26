@@ -587,7 +587,7 @@ window.addEventListener("unhandledrejection", (event) => {
       sessionId: "1".repeat(32), executionSessionId: "1".repeat(32),
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
       sessionState: "active", executionStarted: true, executionControlState: "running",
-      snapshot: { session_id: "1".repeat(32), session_state: "active", phase: "sync", presentation: {
+      snapshot: { session_id: "1".repeat(32), session_state: "active", phase: "execute", presentation: {
         value: 40, determinate: true, indeterminate: false,
         items_done: 4, items_total: 10,
         throughput_bytes_per_second: null, eta_seconds: null,
@@ -595,27 +595,30 @@ window.addEventListener("unhandledrejection", (event) => {
       error: null, closePending: false, executionAttempt: null,
     },
     {
-      taskId: "task-gallery-paused", label: "Paused verification", review: null,
+      taskId: "task-gallery-ready", label: "Ready sync",
+      review: {summary: {source_path:"C:\\source", target_path:"D:\\target",
+        selected_operation_count:3, filter_counts:{all:3}, required_bytes:"1024"}},
       taskKind: "sync-plan", requestId: "4".repeat(32),
-      planRequestId: "2".repeat(32), sessionKind: "sync-execution",
+      planRequestId: "2".repeat(32), sessionKind: "sync-plan",
       sessionId: "2".repeat(32), executionSessionId: "2".repeat(32),
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
-      sessionState: "active", executionStarted: true, executionControlState: "paused",
-      snapshot: { session_id: "2".repeat(32), session_state: "active", phase: "verify", presentation: {
-        value: 70, determinate: true, indeterminate: false,
-        items_done: 7, items_total: 10,
-        throughput_bytes_per_second: null, eta_seconds: null,
-      } },
+      sessionState: "completed", executionStarted: false, executionControlState: "running",
+      snapshot: null,
       error: null, closePending: false, executionAttempt: null,
     },
     {
-      taskId: "task-gallery-canceled", label: "Canceled sync", review: null,
+      taskId: "task-gallery-issues", label: "Completed sync with issues", review: null,
       taskKind: "sync-plan", requestId: "3".repeat(32),
       planRequestId: "3".repeat(32), sessionKind: "sync-execution",
       sessionId: "3".repeat(32), executionSessionId: "3".repeat(32),
       form: { source: { text: "C:\\source" }, target: { text: "D:\\target" } },
-      sessionState: "canceled", executionStarted: true, executionControlState: "running",
-      snapshot: null, error: null, closePending: false, executionAttempt: null,
+      sessionState: "completed", executionStarted: true, executionControlState: "running",
+      snapshot: {session_id:"3".repeat(32), session_state:"completed", phase:"execute",
+        terminal_result:{headline:"degraded", disposition:"ran", integrity:"not-run",
+          recording:"degraded", audit:"ok", error:null},
+        presentation:{value:100, determinate:true, indeterminate:false,
+          items_done:10, items_total:10, throughput_bytes_per_second:null, eta_seconds:null}},
+      error: null, closePending: false, executionAttempt: null,
     },
   ], "task-gallery-executing", false);
   galleryRail.element.querySelector('.nami-task-card[aria-current="page"]')
@@ -3513,6 +3516,12 @@ window.addEventListener("unhandledrejection", (event) => {
   galleryMeasurementStep = "task_rail_layout";
   galleryFailureReason = "task_rail_invariant";
   const taskCards = [...galleryRail.element.querySelectorAll(".nami-task-card")];
+  const taskSamples = [...galleryRail.element.querySelectorAll(".nami-task-rail__row .nami-task-card")]
+    .map(card => [card.querySelector(".nami-task-card__title").textContent, card.dataset.headlineStatus]);
+  if (JSON.stringify(taskSamples) !== JSON.stringify([
+    ["Execution in progress", "executing"], ["Plan ready", "plan"],
+    ["Execution completed with issues", "degraded"],
+  ])) throw new Error("representative task specimens are invalid");
   for (const card of galleryRail.element.querySelectorAll(".nami-task-rail__row .nami-task-card")) {
     if (getComputedStyle(card.querySelector(".nami-task-card__paths")).color !== tertiaryColor) {
       throw new Error("task paths must use tertiary text");
@@ -3540,6 +3549,48 @@ window.addEventListener("unhandledrejection", (event) => {
     throw new TypeError("gallery selected task specimens are unavailable");
   }
   const taskRailBounds = galleryRail.element.getBoundingClientRect();
+  function railHeadlineLayout(layout) {
+    const title = selectedTaskCard.querySelector(".nami-task-card__title");
+    const detail = selectedTaskCard.querySelector(".nami-task-card__status");
+    const savedTitle = title.textContent;
+    const savedDetail = detail.textContent;
+    const baselineCardHeight = selectedTaskCard.getBoundingClientRect().height;
+    const observations = [];
+    for (const headline of ["Execution completed with issues", "Inventory scan completed",
+      "Verification needs review", "Verification completed"]) {
+      renderText(title, headline);
+      renderText(detail, "Execution preflight refused. ".repeat(20));
+      const titleStyle = getComputedStyle(title);
+      const detailStyle = getComputedStyle(detail);
+      const bounds = title.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(title);
+      const lines = [...range.getClientRects()];
+      const observation = {
+        layout, title: headline,
+        rail_width: Number(galleryRail.element.getBoundingClientRect().width.toFixed(3)),
+        title_lines: lines.length, font_size: parseFloat(titleStyle.fontSize),
+        card_height: Number(selectedTaskCard.getBoundingClientRect().height.toFixed(3)),
+        baseline_card_height: Number(baselineCardHeight.toFixed(3)),
+        title_height: Number(bounds.height.toFixed(3)),
+        detail_height: Number(detail.getBoundingClientRect().height.toFixed(3)),
+        fits: lines.length > 0 && lines.every(line => line.left >= bounds.left - 0.5
+          && line.right <= bounds.right - parseFloat(titleStyle.paddingRight) + 0.5)
+          && title.scrollHeight <= title.clientHeight + 1
+          && detail.getBoundingClientRect().height <= parseFloat(detailStyle.lineHeight) + 1
+          && detailStyle.whiteSpace === "nowrap" && detail.scrollWidth > detail.clientWidth
+          && detailStyle.textOverflow === "ellipsis" && detailStyle.overflow === "hidden",
+      };
+      if (!observation.fits) {
+        throw new Error("task headline or detail layout is invalid");
+      }
+      observations.push(observation);
+    }
+    renderText(title, savedTitle);
+    renderText(detail, savedDetail);
+    return observations;
+  }
+  const headlineLayout = railHeadlineLayout("catalog");
   const planBounds = planSection.getBoundingClientRect();
   const accentTokens = Object.fromEntries([
     ["fill", "--color-accent-fill"],
@@ -3619,6 +3670,7 @@ window.addEventListener("unhandledrejection", (event) => {
   minimumWorkBody.append(planReviewPanel.element);
   app.append(minimumHeader, minimumRail, minimumWork);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  headlineLayout.push(...railHeadlineLayout("minimum"));
   const minimumLayoutEvidence = [
     await diagnosticLayout("minimum-folded-empty", null, false, false),
     await diagnosticLayout("minimum-folded-populated", null, false, true),
@@ -4147,6 +4199,8 @@ window.addEventListener("unhandledrejection", (event) => {
     })(),
     combobox: comboboxEvidence,
     task_rail: {
+      samples: taskSamples,
+      headline_layout: headlineLayout,
       card_count: taskCards.length,
       outside_content_card: taskCards.every(
         (task) => task.closest(".nami-card") === null,

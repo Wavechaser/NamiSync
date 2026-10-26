@@ -121,11 +121,28 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       const closeUnavailable = task.closeRecovery?.state === "fixed-unknown";
       renderText(entry.title, closeUnavailable ? "Outcome unavailable" : digest.title);
       const closeReason = typeof task.closeBlockReason === "string" ? task.closeBlockReason : null;
+      const result = task.sessionKind === "sync-execution" ? selectTaskExecution(task).execution.result
+        : task.snapshot?.session_id === task.sessionId ? task.snapshot?.terminal_result : null;
+      const checkRelease = task.releaseRecovery?.canCheck === true;
+      const checkClose = task.closePending && task.closeRecovery?.canCheck === true;
+      const detail = task.releaseRecovery?.message
+        ? checkRelease ? task.releaseRecovery.checking ? "Checking outcome…" : "Use Check outcome."
+          : task.releaseRecovery.message
+        : task.error || task.inventoryError ? task.error ?? task.inventoryError
+          : task.executionStarted && task.sessionKind === "sync-execution" && result?.disposition === "unrun"
+            ? "Plan again to retry."
+            : result?.error ? "Select task to review issues."
+              : digest.title === "Baseline created" ? "Review baseline details." : digest.detail;
       const closeStatus = task.closePending
-        ? task.closeRecovery?.message ?? task.closeMessage
-          ?? (task.sessionId === null ? "Closing…" : "Canceling and closing…")
-        : closeReason ?? digest.detail;
+        ? checkClose ? task.closeRecovery.checking ? "Checking Close outcome…" : "Use Close to check outcome."
+          : task.closeManualReady ? "Use Retry close to check cleanup."
+            : task.closeRecovery?.message ?? task.closeMessage
+              ?? (task.sessionId === null ? "Closing…" : "Canceling and closing…")
+        : closeReason ?? detail;
       renderText(entry.status, closeStatus);
+      entry.status.title = task.closePending
+        ? task.closeRecovery?.message ?? task.closeMessage ?? closeStatus
+        : closeReason ?? task.releaseRecovery?.message ?? task.error ?? task.inventoryError ?? digest.detail;
       renderFilesystemText(entry.source, digest.sourcePath);
       renderFilesystemText(entry.target, digest.targetPath);
       entry.source.title = digest.sourcePath;
@@ -151,7 +168,6 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       if (digest.progress.indeterminate) entry.progress.removeAttribute?.("aria-valuenow");
       else entry.progress.ariaValueNow = String(digest.progress.value);
       entry.progress.style?.setProperty("--nami-progress-value", `${digest.progress.value}%`);
-      const checkRelease = task.releaseRecovery?.canCheck === true;
       entry.retry.hidden = (!checkRelease && typeof task.recoveryRetry !== "function")
         || task.closeRecovery?.canCheck === true;
       entry.retry.disabled = task.recoveryRunning || task.releaseRecovery?.checking === true;
@@ -159,7 +175,6 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
         : task.recoveryRunning ? "Retrying updates…" : "Retry updates");
       entry.retry.ariaLabel = `${checkRelease ? "Check release outcome for"
         : task.recoveryRunning ? "Retrying updates for" : "Retry updates for"} ${task.label}`;
-      const checkClose = task.closePending && task.closeRecovery?.canCheck === true;
       entry.close.disabled = closeReason !== null && (!checkClose || task.closeRecovery.checking);
       entry.close.ariaLabel = checkClose ? `Check Close outcome for ${task.label}` : closeReason ?? `${closeUnavailable ? "Retry close outcome for"
         : task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;

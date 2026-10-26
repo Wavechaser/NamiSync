@@ -47,6 +47,24 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Headline and startup refinement — 2026-10-26
+
+User-authorized GUI round from `7015596a` on `milestone1`, with execute-task,
+fresh independent review and serialized atomic commits. Domain/bridge contracts,
+current-session versus retained-result identity, recovery, selection, exact
+controls and reviewed filesystem effects remain unchanged.
+
+| ID | Outcome and finite owners | Verification / commit boundary | Status |
+| --- | --- | --- | --- |
+| H1 | Align ordinary rail/card headlines with explicit operation names; preserve user-listed error/recovery/retained-result exceptions. Keep rail detail concise and single-line. Ratify a few representative production-rendered task tabs in the gallery, without an exhaustive state catalog. Task-status, rail, Plan/Inventory renderers, CSS, direct browser/gallery/native text consumers and DESKTOP_UI. | Focused state matrix, interface department, affected installed gallery/native checks including the three longest headline candidates; independent review. One presentation commit. | Complete: 2,091 unaffected interface passes plus the corrected ordinary Inventory pane fixture pass; all six installed obligations pass. All three examples fit one line at normal width; longest uses two at minimum width without shrinking text. Full exceptional recovery guidance remains in rail text/tooltip. |
+| H2 | Create one empty task at startup only when the initial task list is empty. Replace the empty rail placeholder with a task-card-sized ordinary New Task button using add-square-multiple; preserve top create and normal uncertain-create recovery. App startup, rail/CSS, direct startup/shell/gallery/setup/native consumers and DESKTOP_UI. | Empty/existing startup, creation recovery/races, no recreation after last close, button action/accessibility/layout; interface department and affected installed witnesses; independent review. One startup/empty-state commit after H1. | Pending. |
+| H3 | Investigate Inventory paths in Setup recents without implementation. Existing recent-query/persistence, inventory admission/scan and Setup consumers. | Trace policy, schema/API consequences and direct tests; report bounded future scope. | Investigation complete: current dropdowns derive from sync runs. Observed-location queries need no schema change but include integrity and post-registration recording failures; exact admitted Inventory-start hints need explicit bounded persistence ownership and potentially a new bridge hint representation. No implementation authorized. |
+
+Parent owns this register, CHANGELOG and HANDOFF; product/test writers serialize
+shared files. Existing mandatory and recurrence stops apply. Evidence lives in
+ignored `build/gui-headlines-startup-20261026/`. No M1-12, release, DOC-2, push,
+PR, recent-path behavior or persistence migration is activated.
+
 ### Action-row refinement — 2026-10-25
 
 User authorized the next GUI round from `2dcdc05` on `milestone1`, retaining
