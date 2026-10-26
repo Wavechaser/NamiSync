@@ -625,7 +625,18 @@ def test_sh_g_11_tokens_route_authored_lights_only_to_new_semantic_roles() -> No
     }
 
     assert palette == AUTHORED_PALETTE
-    assert "color-mix(" not in source
+    color_mixes = [
+        (name, value.strip())
+        for name, value in VARIABLE.findall(source)
+        if re.search(r"\bcolor-mix\s*\(", value, re.IGNORECASE)
+    ]
+    assert color_mixes == [
+        ("--color-floating-accent-fill-hover",
+         "color-mix(in srgb, var(--color-accent-fill) 90%, var(--color-neutral-surface))"),
+        ("--color-floating-accent-fill-pressed",
+         "color-mix(in srgb, var(--color-accent-fill) 80%, var(--color-neutral-surface))"),
+    ]
+    assert len(re.findall(r"\bcolor-mix\s*\(", source, re.IGNORECASE)) == len(color_mixes)
     assert not re.search(r"\b(?:hsl|hsla|hwb|lab|lch|oklab|oklch)\(", source)
 
     actual_literals = {

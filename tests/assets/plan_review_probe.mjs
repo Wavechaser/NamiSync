@@ -805,7 +805,7 @@ assert.equal(calls.length, beforeHiddenPlanAgain);
 const pauseToggle = findAction(panel.element, "pause");
 assert.ok(pauseToggle.classList.contains("nami-button--secondary"));
 assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, false);
-assert.equal(findByClass(pauseToggle, "nami-icon--play").hidden, true);
+assert.equal(findByClass(pauseToggle, "nami-icon--play-filled").hidden, true);
 assert.equal(pauseToggle.textContent, "");
 assert.equal(pauseToggle.ariaLabel, "Pause execution");
 assert.equal(pauseToggle.title, "Pause execution");
@@ -825,7 +825,7 @@ assert.ok(pauseToggle.classList.contains("nami-button--primary"));
 assert.equal(pauseToggle.textContent, "");
 assert.equal(pauseToggle.ariaLabel, "Resume execution");
 assert.equal(pauseToggle.title, "Resume execution");
-assert.equal(findByClass(pauseToggle, "nami-icon--play").hidden, false);
+assert.equal(findByClass(pauseToggle, "nami-icon--play-filled").hidden, false);
 assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, true);
 findAction(panel.element, "resume").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", review, "resume"]);
@@ -978,6 +978,16 @@ assert.equal(
 
 review.follow = { anchorIndex: 10, hasTarget: true, eligible: true, enabled: true };
 panel.render(task);
+for (const [action, label, glyph] of [
+  ["go-current-operation", "Go to current operation", "eye"],
+  ["enable-operation-follow", "Turn on autoscroll", "location-ripple"],
+]) {
+  const control = findAction(panel.element, action);
+  assert.equal(control.textContent, "");
+  assert.equal(control.ariaLabel, label);
+  assert.equal(control.title, label);
+  assert.equal(findByClass(control, `nami-icon--${glyph}`).ariaHidden, "true");
+}
 const overrideCount = calls.filter(([name]) => name === "onFollowOverride").length;
 viewport.dispatch("wheel");
 viewport.scrollTop = ROW_HEIGHT * 10 + 1;

@@ -172,6 +172,8 @@
   --color-accent-fill-hover: #0067C0E6;
   --color-accent-fill-pressed: #0067C0CC;
   --color-accent-fill-foreground: #FFFFFF;
+  --color-floating-accent-fill-hover: color-mix(in srgb, var(--color-accent-fill) 90%, var(--color-neutral-surface));
+  --color-floating-accent-fill-pressed: color-mix(in srgb, var(--color-accent-fill) 80%, var(--color-neutral-surface));
   --color-focus-ring: #000000;
   --color-focus-inner: #ffffff;
   --color-main-fill-foreground: var(--color-neutral-foreground);

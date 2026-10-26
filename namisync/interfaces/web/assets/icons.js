@@ -43,6 +43,7 @@ const GLYPH_CLASSES = Object.freeze({
   "pin-off": "nami-icon--pin-off",
   "play": "nami-icon--play",
   "play-circle": "nami-icon--play-circle",
+  "play-filled": "nami-icon--play-filled",
   "prohibited": "nami-icon--prohibited",
   "question-circle": "nami-icon--question-circle",
   "record-stop": "nami-icon--record-stop",

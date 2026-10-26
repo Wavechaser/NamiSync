@@ -1073,6 +1073,12 @@ body {
   --nami-icon-mask-lg: url("./icons/play_circle_24_regular.svg");
 }
 
+.nami-icon--play-filled {
+  --nami-icon-mask-sm: url("./icons/play_16_filled.svg");
+  --nami-icon-mask-md: url("./icons/play_20_filled.svg");
+  --nami-icon-mask-lg: url("./icons/play_24_filled.svg");
+}
+
 .nami-icon--prohibited {
   --nami-icon-mask-sm: url("./icons/prohibited_16_regular.svg");
   --nami-icon-mask-md: url("./icons/prohibited_20_regular.svg");

@@ -37,9 +37,10 @@ Pause/Resume and Cancel use icon-only buttons with accessible names and tooltips
 in the headline's top action row. Cancel retains its five-second, two-click
 confirmation. This follows Microsoft's [Fluent button guidance](https://fluent2.microsoft.design/components/web/react/core/button/usage/).
 
-Plan and Inventory show a Microsoft Fluent cloud-arrow-down beside names with
-positive scan-time recall evidence, independently of operation reasons and
-unsupported state. Its accessible label and tooltip read: “Not fully available
+Plan and Inventory show a 12px Microsoft Fluent cloud-arrow-down with a 6px
+gap after names with positive scan-time recall evidence, independently of
+operation reasons and unsupported state. This compact advisory scales the native
+16px artwork within its own row slot. Its accessible label and tooltip read: “Not fully available
 locally. Access may retrieve content through your provider.” Both filter menus
 include “Not fully local”; directories can match on their own evidence. The
 filter count describes matching rows, not scan-wide file bytes. No icon is a
@@ -399,7 +400,17 @@ erase a stronger confirmed mismatch or error.
 
 A future hardcoded or derived color value is possible only after an explicit
 product-author design decision and a same-change contract/token/evidence update; it is
-not silently synthesized by a renderer. `tokens.css` also owns channel-scoped
+not silently synthesized by a renderer. The requested opaque floating controls
+authorize exactly two derived tokens in `tokens.css`:
+`--color-floating-accent-fill-hover` mixes 90% of the current accent fill with
+10% of the opaque neutral surface, and `--color-floating-accent-fill-pressed`
+mixes 80% accent with 20% neutral, both in sRGB. Scoped floating-button aliases
+use these for autoscroll's accent states; Go uses the existing opaque neutral
+surface states. This preserves native accent changes without letting rows show
+through hover or press. The installed gallery observes both panes' glyphs,
+square targets and primary emphasis, plus the shared opaque interaction states
+and absent backdrop filter in light, dark and forced colors. This exception
+does not authorize other color derivation. `tokens.css` also owns channel-scoped
 intent, lifecycle, and integrity aliases; neutral roles use a
 pinned Microsoft Fluent light/dark subset. Native appearance retains the
 observed Windows `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1`
@@ -717,9 +728,9 @@ Lifecycle cases do not become file rows. All fixtures pass exact display-ready
 presentation values directly to production components/renderers; they do not
 derive planner, dispatcher, or verifier meaning.
 
-The icon foundation includes the selected Regular glyph vocabulary and the
-explicit Filled Stop alias used only for armed execution cancellation, vendored
-locally from `@fluentui/svg-icons@1.1.334` with exact package/file URLs,
+The icon foundation includes the selected Regular glyph vocabulary and explicit
+Filled Play and Stop aliases used for Resume and armed execution cancellation,
+vendored locally from `@fluentui/svg-icons@1.1.334` with exact package/file URLs,
 per-file SHA-256 hashes, and license. A frozen
 `icons.js` registry maps visual glyph names to fixed component classes; the
 classes use fixed local CSS masks painted with `currentColor`. `tokens.css`
@@ -1374,6 +1385,10 @@ the viewport; explicit Go still jumps to it.
 Float **Go to current operation** (Plan), **Go to current item** (Inventory), and
 **Turn on autoscroll** over the rows at
 the viewport's lower-right, reusing existing floating-control conventions. Go
+uses the eye icon and autoscroll uses location-ripple. Both are icon-only square
+buttons with accessible action names and tooltips. Go keeps its ordinary neutral
+surface and autoscroll keeps its accent emphasis; both stay opaque at rest,
+hover and press, without blur or acrylic. Go
 performs a one-time jump in the current view, without enabling follow or changing
 sort/filters. If the target and ancestors are excluded, report that fact. Enable
 appears only when follow is eligible and off. With no active target, controls
@@ -1744,8 +1759,8 @@ remains available. Terminal presentation releases only that exact session while
 review artifacts remain.
 
 Execution uses one stable icon-only Pause/Resume button with an accessible
-action name, tooltip and Regular Pause/Play artwork. Running Pause is neutral; authoritative Paused
-switches it to accented Resume. Waiting and pausing keep the button unavailable
+action name, tooltip, Regular Pause and Filled Play artwork. Running Pause is
+neutral; authoritative Paused switches it to accented Resume. Waiting and pausing keep the button unavailable
 while existing lifecycle feedback remains truthful. Cancel is an icon-only
 neutral button with Regular Stop artwork, an accessible name and tooltip.
 Its first click arms an accent fill with Filled Stop for

@@ -332,9 +332,13 @@ export function createPlanReviewPanel(callbacks) {
   tableCard.className = "nami-card nami-plan-review__table-card";
   const floatingControls = document.createElement("div");
   floatingControls.className = "nami-plan-review__floating-controls";
-  const goCurrent = button("Go to current operation", "nami-button nami-button--secondary");
+  const goCurrent = button("", "nami-button nami-button--secondary nami-button--icon");
+  goCurrent.ariaLabel = goCurrent.title = "Go to current operation";
+  goCurrent.append(createIcon(document, "eye", "sm"));
   goCurrent.dataset.action = "go-current-operation";
-  const enableFollow = button("Turn on autoscroll", "nami-button nami-button--primary");
+  const enableFollow = button("", "nami-button nami-button--primary nami-button--icon");
+  enableFollow.ariaLabel = enableFollow.title = "Turn on autoscroll";
+  enableFollow.append(createIcon(document, "location-ripple", "sm"));
   enableFollow.dataset.action = "enable-operation-follow";
   floatingControls.append(goCurrent, enableFollow);
 
@@ -455,7 +459,7 @@ export function createPlanReviewPanel(callbacks) {
   pause.dataset.action = "pause";
   pause.dataset.control = "pause-resume";
   const pauseIcon = createIcon(document, "pause", "sm");
-  const playIcon = createIcon(document, "play", "sm");
+  const playIcon = createIcon(document, "play-filled", "sm");
   playIcon.hidden = true;
   pause.append(pauseIcon, playIcon);
   const cancel = button("", "nami-button nami-button--secondary nami-button--icon");

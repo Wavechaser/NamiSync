@@ -345,6 +345,11 @@ def _expected_pseudo_targets(mode: str) -> list[dict[str, object]]:
         raise ValueError("component gallery mode is invalid")
     return [
         *_EXPECTED_PSEUDO_TARGETS,
+        *(
+            {"selector": f"#gallery-navigation-{action}-{state}", "classes": classes}
+            for action in ("go-current-operation", "enable-operation-follow")
+            for state, classes in (("hover", ["hover"]), ("pressed", ["hover", "active"]))
+        ),
         {"selector": "#gallery-move-pill-hover", "classes": ["hover"]},
         {"selector": "#gallery-move-pill-pressed", "classes": ["hover", "active"]},
         {"selector": "#gallery-move-pill-focused", "classes": ["focus", "focus-visible"]},
@@ -1398,14 +1403,34 @@ def _valid_recall_advisory(value: object) -> bool:
     for row in value.values():
         if type(row) is not dict or set(row) != {
             "before_count", "after_count", "requested_filter", "matching_row", "label", "title",
-            "role", "decorative_child", "mask", "width", "no_summary_counter", "cloud_note",
+            "role", "decorative_child", "mask", "width", "height", "gap", "no_summary_counter", "cloud_note",
         }:
             return False
         if not (all(type(row[key]) is str for key in ("requested_filter", "label", "title", "role", "decorative_child", "mask", "cloud_note"))
                 and all(type(row[key]) is int and row[key] >= 0 for key in ("before_count", "after_count"))
                 and all(type(row[key]) is bool for key in ("matching_row", "no_summary_counter"))
-                and type(row["width"]) in (int, float) and math.isfinite(row["width"])):
+                and all(type(row[key]) in (int, float) and math.isfinite(row[key]) for key in ("width", "height", "gap"))):
             return False
+    return True
+
+
+def _valid_review_controls(value: object) -> bool:
+    if type(value) is not dict or set(value) != {"plan", "inventory", "states"}:
+        return False
+    states = value["states"]
+    if not (type(states) is list and len(states) == 2
+            and all(type(control) is list and len(control) == 3
+                    and all(type(state) is list and len(state) == 2
+                            and all(type(item) is str for item in state) for state in control) for control in states)):
+        return False
+    for navigation in (value["plan"], value["inventory"]):
+        if type(navigation) is not list or len(navigation) != 2:
+            return False
+        for control in navigation:
+            if not (type(control) is list and len(control) == 4
+                    and type(control[0]) is str and type(control[3]) is bool
+                    and all(type(item) in (int, float) and math.isfinite(item) for item in control[1:3])):
+                return False
     return True
 
 
@@ -2729,10 +2754,12 @@ def _valid_icon_evidence(value: object) -> bool:
         "mask_images",
         "mask_loads",
         "system_colors",
+        "review_controls",
     }:
         return False
     return (
-        all(
+        _valid_review_controls(value["review_controls"])
+        and all(
             type(value[name]) is bool
             for name in (
                 "registry_frozen",

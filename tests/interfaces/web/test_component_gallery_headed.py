@@ -79,18 +79,23 @@ def _recall_sample() -> dict[str, object]:
     return {kind: {
         "before_count": 2, "after_count": 1, "requested_filter": "recall", "matching_row": True,
         "label": label, "title": label, "role": "img", "decorative_child": "true",
-        "mask": 'url("/icons/cloud_arrow_down_16_regular.svg")', "width": 16,
+        "mask": 'url("/icons/cloud_arrow_down_16_regular.svg")', "width": 12, "height": 12, "gap": 6,
         "no_summary_counter": True,
         "cloud_note": "",
     } for kind in ("plan", "inventory")}
 
 
 def _assert_recall_advisory(value: dict[str, object]) -> None:
-    for kind, expected in _recall_sample().items():
-        assert {key: item for key, item in value[kind].items() if key != "mask"} == {
-            key: item for key, item in expected.items() if key != "mask"
+    samples = _recall_sample()
+    for kind in ("plan", "inventory"):
+        expected = samples[kind]
+        variable = {"mask", "width", "height", "gap"}
+        assert {key: item for key, item in value[kind].items() if key not in variable} == {
+            key: item for key, item in expected.items() if key not in variable
         }
         assert "cloud_arrow_down_16_regular.svg" in value[kind]["mask"]
+        for dimension in ("width", "height", "gap"):
+            assert value[kind][dimension] == pytest.approx(expected[dimension], abs=0.1)
 
 
 def test_recall_gallery_report_keeps_shape_separate_from_behavior() -> None:
@@ -101,6 +106,48 @@ def test_recall_gallery_report_keeps_shape_separate_from_behavior() -> None:
     assert component_gallery_child._valid_recall_advisory(sample)
     with pytest.raises(AssertionError):
         _assert_recall_advisory(sample)
+    sample = _recall_sample()
+    sample["inventory"]["gap"] = 2
+    assert component_gallery_child._valid_recall_advisory(sample)
+    with pytest.raises(AssertionError):
+        _assert_recall_advisory(sample)
+
+
+def _review_controls_sample() -> dict[str, object]:
+    # Glyph filename, width, height, primary; names/text belong to pane probes.
+    value = {kind: [[f"{glyph}_16_regular.svg", 32, 32, index == 1]
+                    for index, glyph in enumerate(("eye", "location_ripple"))]
+             for kind in ("plan", "inventory")}
+    # Go and Follow, each at rest, hover, press: background and backdrop filter.
+    value["states"] = [[[background, "none"] for background in
+                        ("rgb(255, 255, 255)", "rgb(245, 245, 245)", "rgb(224, 224, 224)")]
+                       for _ in range(2)]
+    return value
+
+
+def _assert_review_controls(value: dict[str, object], *, forced: bool = False) -> None:
+    samples = _review_controls_sample()
+    for kind in ("plan", "inventory"):
+        for control, sample in zip(value[kind], samples[kind], strict=True):
+            assert control[0] == sample[0]
+            assert control[1:3] == pytest.approx(sample[1:3], abs=0.1)
+            assert control[3] is sample[3]
+    for states in value["states"]:
+        for background, backdrop in states:
+            assert _opaque_color(background) or re.fullmatch(r"color\(srgb [\d.]+ [\d.]+ [\d.]+\)", background)
+            assert backdrop == "none"
+        if not forced:
+            assert len({state[0] for state in states}) == 3
+
+
+def test_review_navigation_report_keeps_shape_separate_from_behavior() -> None:
+    sample = _review_controls_sample()
+    assert component_gallery_child._valid_review_controls(sample)
+    _assert_review_controls(sample)
+    sample["states"][0][1][0] = "rgba(255, 255, 255, 0.7)"
+    assert component_gallery_child._valid_review_controls(sample)
+    with pytest.raises(AssertionError):
+        _assert_review_controls(sample)
 
 
 def _recent_ui_sample() -> dict[str, object]:
@@ -147,7 +194,7 @@ def _recent_ui_sample() -> dict[str, object]:
         },
         "pause": [
             action("Pause execution", False, False, "pause_16_regular.svg"),
-            action("Resume execution", True, False, "play_16_regular.svg"),
+            action("Resume execution", True, False, "play_16_filled.svg"),
             action("Pause execution", False, True, "pause_16_regular.svg"),
         ],
         "cancel": [
@@ -2087,6 +2134,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "indeterminate_iteration_count": "infinite",
         },
         "icons": {
+            "review_controls": _review_controls_sample(),
             "registry_frozen": True,
             "registry_names": ["checkmark-circle", "dismiss-circle", "warning", "info"],
             "all_registry_created": True,
@@ -4946,6 +4994,7 @@ def _assert_icon_registry_evidence(
     controls: list[dict[str, str]],
     forced: bool,
 ) -> None:
+    _assert_review_controls(icons["review_controls"], forced=forced)
     assert icons["registry_frozen"] is True
     expected_names = set(ICON_GLYPHS)
     assert set(icons["registry_names"]) == expected_names

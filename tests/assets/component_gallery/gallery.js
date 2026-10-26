@@ -2599,12 +2599,34 @@ window.addEventListener("unhandledrejection", (event) => {
   optionStatePopup.append(hoveredThemeOption, pressedThemeOption);
   document.body.append(optionStatePopup);
 
+  const navigationPreview = planReviewPanel.element.querySelector(".nami-plan-review__floating-controls").cloneNode(false);
+  navigationPreview.hidden = false;
+  navigationPreview.setAttribute("aria-hidden", "true");
+  navigationPreview.style.position = "fixed";
+  navigationPreview.style.insetInlineEnd = "-10000px";
+  const navigationStates = {};
+  for (const action of ["go-current-operation", "enable-operation-follow"]) {
+    navigationStates[action] = ["rest", "hover", "pressed"].map((state) => {
+      const control = planReviewPanel.element.querySelector(`[data-action="${action}"]`).cloneNode(true);
+      control.id = `gallery-navigation-${action}-${state}`;
+      control.hidden = false;
+      control.disabled = false;
+      navigationPreview.append(control);
+      return { state, control };
+    });
+  }
+  document.body.append(navigationPreview);
+
   const pseudoTargets = CONTROL_CASES.flatMap((definition) => [
     { selector: `#gallery-control-${definition.key}-hover`, classes: ["hover"] },
     { selector: `#gallery-control-${definition.key}-pressed`, classes: ["hover", "active"] },
     { selector: `#gallery-control-${definition.key}-focused`, classes: ["focus", "focus-visible"] },
   ]);
   pseudoTargets.push(
+    ...Object.keys(navigationStates).flatMap((action) => [
+      { selector: `#gallery-navigation-${action}-hover`, classes: ["hover"] },
+      { selector: `#gallery-navigation-${action}-pressed`, classes: ["hover", "active"] },
+    ]),
     { selector: "#gallery-move-pill-hover", classes: ["hover"] },
     { selector: "#gallery-move-pill-pressed", classes: ["hover", "active"] },
     { selector: "#gallery-move-pill-focused", classes: ["focus", "focus-visible"] },
@@ -4096,9 +4118,13 @@ window.addEventListener("unhandledrejection", (event) => {
     rows: [...panel.querySelectorAll("[data-node-id]")].map(rectangle),
   }));
   const recallEvidence = {};
+  const reviewControls = { states: Object.values(navigationStates).map((states) => states.map(({control}) => [
+    getComputedStyle(control).backgroundColor, getComputedStyle(control).backdropFilter,
+  ])) };
   for (const kind of ["plan", "inventory"]) {
     const fixture = globalThis.__namiGalleryRecall[kind];
-    const review = { ...fixture.default, pending: null, message: "", detail: null, queuedSearchQuery: null };
+    const review = { ...fixture.default, pending: null, message: "", detail: null, queuedSearchQuery: null,
+      follow: {hasTarget: true, eligible: true, enabled: false} };
     if (kind === "plan") review.window = { ...review.window,
       execution: planReviewTask.review.window.execution,
       rows: review.window.rows.map((row) => ({ ...row, execution: row.operation_id === null
@@ -4144,10 +4170,20 @@ window.addEventListener("unhandledrejection", (event) => {
       label: indicator.ariaLabel, title: indicator.title, role: indicator.getAttribute("role"),
       decorative_child: icon.ariaHidden, mask: getComputedStyle(icon).maskImage,
       width: icon.getBoundingClientRect().width,
+      height: icon.getBoundingClientRect().height,
+      gap: indicator.getBoundingClientRect().left - indicator.previousElementSibling.getBoundingClientRect().right,
       no_summary_counter: !panel.element.querySelector(".nami-plan-review__summary").textContent.includes("Not fully"),
       cloud_note: note?.textContent ?? "",
     };
+    reviewControls[kind] = [...panel.element.querySelectorAll(".nami-plan-review__floating-controls > button")].map((control) => {
+      const glyph = control.querySelector(".nami-icon");
+      const mask = /^url\(["']?([^"')]+)["']?\)$/.exec(getComputedStyle(glyph).maskImage);
+      return [mask === null ? "" : new URL(mask[1], document.baseURI).pathname.split("/").at(-1),
+        control.getBoundingClientRect().width, control.getBoundingClientRect().height,
+        control.classList.contains("nami-button--primary")];
+    });
   }
+  iconEvidence.review_controls = reviewControls;
   const controlContract = {
     recall_advisory: recallEvidence,
     recent_ui: recentUiEvidence,

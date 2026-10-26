@@ -850,7 +850,18 @@ body {
 }
 
 .nami-plan-review__floating-controls > .nami-button {
+  --color-button-fill: var(--color-neutral-surface);
+  --color-button-fill-hover: var(--color-neutral-surface-hover);
+  --color-button-fill-pressed: var(--color-neutral-surface-pressed);
+  --color-button-fill-disabled: var(--color-neutral-disabled-background);
+  --color-accent-fill-hover: var(--color-floating-accent-fill-hover);
+  --color-accent-fill-pressed: var(--color-floating-accent-fill-pressed);
+  block-size: 2rem;
+  box-sizing: border-box;
   box-shadow: var(--shadow-4);
+  inline-size: 2rem;
+  justify-content: center;
+  padding: 0;
   pointer-events: auto;
 }
 
@@ -1621,6 +1632,12 @@ body {
   display: inline-flex;
   flex: none;
   align-items: center;
+  margin-inline-start: var(--space-2);
+}
+
+.nami-file-row__availability > .nami-icon {
+  block-size: 12px;
+  inline-size: 12px;
 }
 
 .nami-plan-move-pill {

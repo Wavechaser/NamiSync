@@ -123,7 +123,7 @@ export function createInventoryReviewPanel(callbacks) {
   const pause = button("", "inventory-pause");
   const resume = button("", "inventory-resume");
   const cancel = button("", "inventory-cancel");
-  for (const [control, icon, label] of [[pause, "pause", "Pause"], [resume, "play", "Resume"], [cancel, "stop", "Cancel"]]) {
+  for (const [control, icon, label] of [[pause, "pause", "Pause"], [resume, "play-filled", "Resume"], [cancel, "stop", "Cancel"]]) {
     control.classList.add("nami-button--icon");
     control.append(createIcon(document, icon, "sm"));
     control.ariaLabel = control.title = label;
@@ -149,8 +149,14 @@ export function createInventoryReviewPanel(callbacks) {
 
   const table = element("div", "nami-card nami-plan-review__table-card nami-inventory-review__table");
   const floatingControls = element("div", "nami-plan-review__floating-controls");
-  const goCurrent = button("Go to current item", "go-current-item");
-  const enableFollow = button("Turn on autoscroll", "enable-item-follow");
+  const goCurrent = button("", "go-current-item");
+  goCurrent.classList.add("nami-button--icon");
+  goCurrent.ariaLabel = goCurrent.title = "Go to current item";
+  goCurrent.append(createIcon(document, "eye", "sm"));
+  const enableFollow = button("", "enable-item-follow");
+  enableFollow.classList.add("nami-button--icon");
+  enableFollow.ariaLabel = enableFollow.title = "Turn on autoscroll";
+  enableFollow.append(createIcon(document, "location-ripple", "sm"));
   enableFollow.classList.add("nami-button--primary");
   floatingControls.append(goCurrent, enableFollow);
   goCurrent.addEventListener("click", () => {

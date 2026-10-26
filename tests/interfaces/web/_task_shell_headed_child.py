@@ -1172,7 +1172,7 @@ window.addEventListener("error", (event) => {
   const paused = live.querySelector(".nami-plan-review__status").textContent;
   controlsAppearance.sameToggle = live.querySelector('[data-action="resume"]') === executionToggle;
   controlsAppearance.pausedAccent = executionToggle.classList.contains("nami-button--primary");
-  controlsAppearance.playRegular = !executionToggle.querySelector(".nami-icon--play").hidden;
+  controlsAppearance.playFilled = !executionToggle.querySelector(".nami-icon--play-filled").hidden;
   executionToggle.click();
   await until(() => live.querySelector('[data-action="pause"]')?.disabled === false, "resumed execution");
   const resumed = executionToggle.dataset.action === "pause";

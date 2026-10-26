@@ -601,15 +601,30 @@
       "upstream_sha256": "0250ccaf32427c44231653142b80ba3acf4895a44f9e61f135cd07bacd9ffdcf",
       "packaged_sha256": "da1356b2d7a65f50ab963106cf3a29f2d78e45f03c2d740748eff90f5c27d01e"
     },
+    "play_16_filled.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/play_16_filled.svg",
+      "upstream_sha256": "a3f4988aa3d3ae97c10bc22f50c76b52decdb39e802b8118613bf9fffb973634",
+      "packaged_sha256": "8dce4fa989c9b4220fd19b143c36ae2d7a63b9d62bf9120d54514ee18d0140e6"
+    },
     "play_16_regular.svg": {
       "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/play_16_regular.svg",
       "upstream_sha256": "0dfede58d08ee51f82ca7be94410ffe397b81b750e2fa027feb92fe6c72b31a4",
       "packaged_sha256": "c8678ba0acf33f87a54b939a66190112d8b26e297cdc49579414a4824830ad48"
     },
+    "play_20_filled.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/play_20_filled.svg",
+      "upstream_sha256": "28e0afb4fa39f0db0fe16cbe35b497588d8c107766c9a1bf234da6deddb87c75",
+      "packaged_sha256": "8480ce42dd5c8da9bb637be5fe72542a6eafa42c055c7da1ea0525c83ade5cdd"
+    },
     "play_20_regular.svg": {
       "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/play_20_regular.svg",
       "upstream_sha256": "7dca63b23232a0791eb3ae3bba1c6ea1dbeb85f7fada013b5c56c6e496f2022a",
       "packaged_sha256": "9f866d8b16ca48447dd3ad5799ee175d354fb90944c2e6c6077aa27fe5a78142"
+    },
+    "play_24_filled.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/play_24_filled.svg",
+      "upstream_sha256": "9c376cbf735c466c5b1db2c213294d07c8349895de614080af2a7deb791837ee",
+      "packaged_sha256": "7ba0b6398b8fe84aadfed6ee32041cd9e315caa356403593503c78522836e0bc"
     },
     "play_24_regular.svg": {
       "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/play_24_regular.svg",

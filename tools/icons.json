@@ -50,6 +50,7 @@
     "pin-off",
     "play",
     "play-circle",
+    "play-filled",
     "prohibited",
     "question-circle",
     "record-stop",
@@ -67,6 +68,7 @@
     "warning"
   ],
   "filled": {
+    "play-filled": "play",
     "stop-filled": "stop"
   },
   "fallbacks": {

@@ -309,6 +309,7 @@ assert.equal(action("inventory-resume").hidden, true,
 task.executionControlState = "paused";
 pane.render(task);
 assert.equal(action("inventory-resume").hidden, false);
+assert.equal(walk(action("inventory-resume")).find(value => value.classList.contains("nami-icon--play-filled")).ariaHidden, "true");
 action("inventory-resume").click();
 assert.deepEqual(controls.at(-1), [review, "resume"]);
 action("inventory-cancel").click();
@@ -1612,6 +1613,17 @@ alignedReview.follow = {hasTarget:true, eligible:true, enabled:false};
 alignedPane.render(alignedTask);
 assert.equal(alignedAction("go-current-item").hidden, false);
 assert.equal(alignedAction("enable-item-follow").hidden, false);
+for (const [action, label, glyph] of [
+  ["go-current-item", "Go to current item", "eye"],
+  ["enable-item-follow", "Turn on autoscroll", "location-ripple"],
+]) {
+  const control = alignedAction(action);
+  assert.equal(control.textContent, "");
+  assert.equal(control.ariaLabel, label);
+  assert.equal(control.title, label);
+  assert.equal(walk(control).find(value => value.classList.contains(`nami-icon--${glyph}`)).ariaHidden, "true");
+}
+assert.equal(alignedAction("enable-item-follow").classList.contains("nami-button--primary"), true);
 alignedAction("go-current-item").click();
 alignedAction("enable-item-follow").click();
 assert.deepEqual(followCalls, [[alignedReview, false], [alignedReview, true]]);

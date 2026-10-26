@@ -245,6 +245,9 @@ explicit, reviewable and regression-backed.
 - Reuse confirmed Inventory views on navigation, refreshing for session changes
   and uncertain or invalidated state. View reads no longer masquerade as scans;
   rereads preserve the mounted pane, table controller and expanded Details.
+- Render filename cloud indicators at 12 px with more spacing. Use Filled Play
+  for Resume and icon-only eye/location-ripple controls for Go and autoscroll,
+  with opaque backgrounds and retained accessible names and action emphasis.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.
