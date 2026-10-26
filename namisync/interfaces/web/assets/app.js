@@ -4228,7 +4228,12 @@ async function finishStartup() {
     );
   }
   markBridgeOperational();
+  const startupMutationBaseline = taskMutationRevision;
   await refreshTasks();
+  if (taskMutationRevision === startupMutationBaseline
+      && tasks.size === 0 && createAttempt === null) {
+    void createBlankTask();
+  }
   void loadDefaultSetup();
   void theme.open(appliedPresentationRevision);
   if (status.textContent === "Starting...") {

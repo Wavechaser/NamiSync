@@ -85,7 +85,8 @@ _ASSETS = (
 _INITIAL_PROBE = r"""
 (async () => {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    if (document.querySelector("#host-status")?.textContent === "Ready") {
+    if (document.querySelector("#host-status")?.textContent === "Ready"
+        && document.querySelector("#setup-source-path") !== null) {
       break;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 50));
@@ -101,6 +102,24 @@ _INITIAL_PROBE = r"""
   if (status.textContent !== "Ready") {
     throw new Error("production bridge readiness is unavailable");
   }
+  const card = rail.querySelector(".nami-task-rail__row .nami-task-card");
+  if (card === null) throw new Error("startup blank task is unavailable");
+  const cardRect = card.getBoundingClientRect();
+  const startup = {
+    count: rail.querySelectorAll(".nami-task-rail__row").length,
+    label: card.dataset.taskLabel,
+    headline: card.querySelector(".nami-task-card__title").textContent,
+    selected: card.ariaCurrent,
+    editable_setup: document.querySelector("#setup-source-path")?.disabled === false,
+    size: [cardRect.width, cardRect.height],
+  };
+  globalThis.__namiStartupCardSize = startup.size;
+  rail.querySelector(".nami-task-rail__close").click();
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (rail.querySelector(".nami-task-rail__empty-slot") !== null) break;
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+  }
+  await new Promise((resolve) => window.setTimeout(resolve, 100));
   const railRect = rail.getBoundingClientRect();
   const workRect = work.getBoundingClientRect();
   if (document.activeElement instanceof HTMLElement) {
@@ -114,7 +133,8 @@ _INITIAL_PROBE = r"""
     status_live: status.getAttribute("aria-live"),
     rail_label: rail.getAttribute("aria-label"),
     rail_heading: rail.querySelector("h2")?.textContent,
-    rail_empty: rail.querySelector(".nami-shell__empty")?.textContent,
+    rail_empty: rail.querySelector(".nami-task-rail__empty-slot")?.textContent,
+    startup,
     work_label: work.getAttribute("aria-label"),
     work_heading: work.querySelector("h2")?.textContent ?? null,
     work_empty: work.querySelector(".nami-shell__empty")?.textContent,
@@ -133,6 +153,78 @@ _INITIAL_PROBE = r"""
       work_bottom: workRect.bottom,
     },
   };
+})()
+"""
+
+_EMPTY_CONTROL_PROBE = r"""
+(() => {
+  const button = document.querySelector(".nami-task-rail__empty-slot");
+  const icon = button.querySelector(".nami-icon");
+  const text = button.querySelector("span:not(.nami-icon)");
+  const bounds = button.getBoundingClientRect();
+  const iconBounds = icon.getBoundingClientRect();
+  const textBounds = text.getBoundingClientRect();
+  const style = getComputedStyle(button);
+  const topStyle = getComputedStyle(document.querySelector(".nami-task-rail__create"));
+  const tokenProbe = document.createElement("button");
+  tokenProbe.classList.add("nami-button");
+  tokenProbe.type = "button";
+  document.body.append(tokenProbe);
+  const ordinaryStyle = getComputedStyle(tokenProbe);
+  const result = {
+    tag: button.tagName, type: button.type, label: button.ariaLabel,
+    text: button.textContent, disabled: button.disabled,
+    size: [bounds.width, bounds.height],
+    centered: [
+      (iconBounds.left + textBounds.right - bounds.left - bounds.right) / 2,
+      (iconBounds.top + iconBounds.bottom - bounds.top - bounds.bottom) / 2,
+      (textBounds.top + textBounds.bottom - bounds.top - bounds.bottom) / 2,
+    ],
+    ordinary: style.backgroundColor === ordinaryStyle.backgroundColor
+      && style.borderRadius === ordinaryStyle.borderRadius
+      && style.boxShadow === ordinaryStyle.boxShadow,
+    top_transparent: topStyle.backgroundColor === "rgba(0, 0, 0, 0)",
+    icon: getComputedStyle(icon).maskImage,
+    point: {x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2},
+  };
+  tokenProbe.remove();
+  return result;
+})()
+"""
+
+_EMPTY_CREATE_PROBE = r"""
+(async () => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (document.querySelector(".nami-task-rail__row .nami-task-card")?.dataset.taskLabel === __LABEL__
+        && document.querySelector("#setup-source-path")?.disabled === false) break;
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+  }
+  const card = document.querySelector(".nami-task-rail__row .nami-task-card");
+  const created = card?.dataset.taskLabel ?? null;
+  document.querySelector(".nami-task-rail__close")?.click();
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    if (document.querySelector(".nami-task-rail__empty-slot") !== null) break;
+    await new Promise((resolve) => window.setTimeout(resolve, 25));
+  }
+  const button = document.querySelector(".nami-task-rail__empty-slot");
+  button?.focus();
+  return {created, remaining: document.querySelectorAll(".nami-task-rail__row").length,
+    empty_label: button?.ariaLabel ?? null};
+})()
+"""
+
+_EMPTY_FORCED_FOCUS_PROBE = r"""
+(() => {
+  const priorFocus = document.activeElement;
+  const button = document.querySelector(".nami-task-rail__empty-slot");
+  button.focus();
+  const style = getComputedStyle(button);
+  const bounds = button.getBoundingClientRect();
+  const result = {focused: document.activeElement === button, forced: matchMedia("(forced-colors: active)").matches,
+    outline_style: style.outlineStyle, outline_width: parseFloat(style.outlineWidth),
+    visible: bounds.width > 0 && bounds.height > 0 && bounds.left >= 0 && bounds.right <= innerWidth};
+  priorFocus?.focus();
+  return result;
 })()
 """
 
@@ -1107,6 +1199,8 @@ def _begin_probe(
             "Input.dispatchKeyEvent",
             {
                 "type": event_type,
+                **({"text": "\r", "unmodifiedText": "\r"}
+                   if name == "Enter" and event_type == "keyDown" else {}),
                 "key": name,
                 "code": code,
                 "windowsVirtualKeyCode": virtual_key,
@@ -1122,7 +1216,7 @@ def _begin_probe(
         callback: Callable[[object], None],
     ) -> None:
         key(
-            "rawKeyDown",
+            "keyDown" if name == "Enter" else "rawKeyDown",
             name,
             code,
             virtual_key,
@@ -1211,6 +1305,24 @@ def _begin_probe(
 
     def after_initial(value: object) -> None:
         page["initial"] = value
+        move({"x": 0, "y": 0}, lambda _value: evaluate(_EMPTY_CONTROL_PROBE, after_empty_control))
+
+    def after_empty_control(value: object) -> None:
+        page["empty_control"] = value
+        click(value.get("point"), after_empty_pointer)
+
+    def after_empty_pointer(_value: object) -> None:
+        evaluate(_EMPTY_CREATE_PROBE.replace("__LABEL__", json.dumps("Task 2")), after_empty_created)
+
+    def after_empty_created(value: object) -> None:
+        page["empty_create"] = value
+        press("Enter", "Enter", 13, after_empty_enter)
+
+    def after_empty_enter(_value: object) -> None:
+        evaluate(_EMPTY_CREATE_PROBE.replace("__LABEL__", json.dumps("Task 3")), after_empty_keyboard)
+
+    def after_empty_keyboard(value: object) -> None:
+        page["empty_keyboard"] = value
         expression = _KEYBOARD_TREE_PROBE.replace(
             "__TREE_FIXTURE_TEXT__",
             json.dumps(fixture_text),
@@ -1314,6 +1426,10 @@ def _begin_probe(
         )
 
     def after_media(_value: object) -> None:
+        evaluate(_EMPTY_FORCED_FOCUS_PROBE, after_empty_forced_focus)
+
+    def after_empty_forced_focus(value: object) -> None:
+        page["empty_forced_focus"] = value
         expression = (
             _FINAL_PROBE.replace(
                 "__LAYOUT_SOURCE__", json.dumps(_LAYOUT_SOURCE)

@@ -453,6 +453,19 @@ def test_process_live_task_shell_transitions_use_production_modules() -> None:
     assert completed.returncode == 0, completed.stderr
 
 
+@pytest.mark.parametrize("scenario", ("empty", "manual-pending", "manual-close", "failed", "recovery", "fixed-unknown"))
+def test_startup_creates_only_one_blank_task_without_replenishing(scenario: str) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the startup task witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe([
+        str(node), str(PROJECT_ROOT / "tests/assets/task_shell_probe.mjs"),
+        str(assets / "app.js"), str(assets / "rail.js"), str(assets / "panels.js"), scenario,
+    ], timeout=10)
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
 def test_plan_review_component_keeps_actions_bounded_and_generation_safe() -> None:
     node = _node_executable()
     assert node is not None, "Node.js is required for the plan-review witness"
@@ -1277,8 +1290,8 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert '<main id="app" aria-live=' not in index
     assert 'ariaLabel = "Task navigation";' in rail
     assert 'renderText(heading, "Tasks");' in rail
-    assert 'renderText(empty, "No tasks are available.");' in rail
-    assert 'emptySlot.classList.add("nami-card", "nami-task-rail__empty-slot");' in rail
+    assert 'renderText(emptyText, "New Task");' in rail
+    assert 'emptySlot.classList.add("nami-button", "nami-task-rail__empty-slot");' in rail
     assert 'panel.ariaLabel = task === null ? "Work area" : `Work area — ${task.label}`;' in panels
     assert 'panel.setAttribute("role", "region");' in panels
     assert 'renderText(empty, "No task selected.");' in panels

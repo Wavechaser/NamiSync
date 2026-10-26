@@ -839,7 +839,7 @@ def _run_execution_review(
         milestone, initial = wait_for_initial_evidence(reader, process, deadline=deadline)
         if milestone == "ready":
             wait_for_accessible_text(
-                window, "No tasks are available.", python=installed.python, deadline=deadline,
+                window, "No task selected.", python=installed.python, deadline=deadline,
             )
         close_window(window)
         closed = True

@@ -249,6 +249,7 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "rail_label",
         "rail_heading",
         "rail_empty",
+        "startup",
         "work_label",
         "work_heading",
         "work_empty",
@@ -258,7 +259,7 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "active_tag",
         "layout",
     }
-    assert {name: value for name, value in initial.items() if name != "layout"} == {
+    assert {name: value for name, value in initial.items() if name not in {"layout", "startup"}} == {
         "status": "Ready",
         "status_hidden": True,
         "app_live": None,
@@ -266,7 +267,7 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "status_live": "polite",
         "rail_label": "Task navigation",
         "rail_heading": "Tasks",
-        "rail_empty": "No tasks are available.",
+        "rail_empty": "New Task",
         "work_label": "Work area",
         "work_heading": None,
         "work_empty": "No task selected.",
@@ -275,6 +276,26 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "initial_session_ids": 0,
         "active_tag": "BODY",
     }
+    startup = initial["startup"]
+    assert {key: value for key, value in startup.items() if key != "size"} == {
+        "count": 1, "label": "Task 1", "headline": "New task", "selected": "page",
+        "editable_setup": True,
+    }
+    empty_control = page["empty_control"]
+    assert {key: empty_control[key] for key in ("tag", "type", "label", "text", "disabled", "ordinary", "top_transparent")} == {
+        "tag": "BUTTON", "type": "button", "label": "New task", "text": "New Task",
+        "disabled": False, "ordinary": True, "top_transparent": True,
+    }
+    assert empty_control["size"] == pytest.approx(startup["size"], abs=0.5)
+    assert empty_control["centered"] == pytest.approx([0, 0, 0], abs=0.5)
+    assert "add_square_multiple_24_regular.svg" in empty_control["icon"]
+    for name, label in (("empty_create", "Task 2"), ("empty_keyboard", "Task 3")):
+        assert page[name] == {"created": label, "remaining": 0, "empty_label": "New task"}
+    assert page["empty_forced_focus"] == {
+        "focused": True, "forced": True, "outline_style": "solid",
+        "outline_width": page["empty_forced_focus"]["outline_width"], "visible": True,
+    }
+    assert page["empty_forced_focus"]["outline_width"] > 0
     layout = initial["layout"]
     assert set(layout) == {
         "rail_left",
@@ -645,6 +666,10 @@ def _assert_report_schema(result: object) -> None:
     }
     assert set(result["page"]) == {
         "initial",
+        "empty_control",
+        "empty_create",
+        "empty_keyboard",
+        "empty_forced_focus",
         "keyboard_tree",
         "theme_focus",
         "create_focus",
@@ -668,6 +693,7 @@ def _assert_report_schema(result: object) -> None:
         "rail_label",
         "rail_heading",
         "rail_empty",
+        "startup",
         "work_label",
         "work_heading",
         "work_empty",
@@ -676,6 +702,16 @@ def _assert_report_schema(result: object) -> None:
         "initial_session_ids",
         "active_tag",
         "layout",
+    }
+    assert set(initial["startup"]) == {"count", "label", "headline", "selected", "editable_setup", "size"}
+    assert set(result["page"]["empty_control"]) == {
+        "tag", "type", "label", "text", "disabled", "size", "centered", "ordinary",
+        "top_transparent", "icon", "point",
+    }
+    for name in ("empty_create", "empty_keyboard"):
+        assert set(result["page"][name]) == {"created", "remaining", "empty_label"}
+    assert set(result["page"]["empty_forced_focus"]) == {
+        "focused", "forced", "outline_style", "outline_width", "visible",
     }
     assert set(initial["layout"]) == {
         "rail_left",

@@ -262,11 +262,9 @@ body {
 }
 
 .nami-task-rail__empty-slot {
-  min-block-size: 5rem;
-}
-
-.nami-task-rail__empty-slot .nami-shell__empty {
-  margin-block-start: 0;
+  inline-size: 100%;
+  min-block-size: calc(3 * var(--space-4) + var(--line-height-body)
+    + 3 * var(--line-height-caption) + 2 * var(--space-1) + var(--space-2));
 }
 
 .nami-task-rail__specimens {

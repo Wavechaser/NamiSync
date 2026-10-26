@@ -35,12 +35,13 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
   settings.addEventListener("click", onSettings);
   rail.append(header, list, settings);
   const entries = new Map();
-  const emptySlot = document.createElement("div");
-  emptySlot.classList.add("nami-card", "nami-task-rail__empty-slot");
-  const empty = document.createElement("p");
-  empty.classList.add("nami-shell__empty");
-  renderText(empty, "No tasks are available.");
-  emptySlot.append(empty);
+  const emptySlot = document.createElement("button");
+  emptySlot.classList.add("nami-button", "nami-task-rail__empty-slot");
+  emptySlot.type = "button";
+  const emptyText = document.createElement("span");
+  renderText(emptyText, "New Task");
+  emptySlot.append(createIcon(document, "add-square-multiple", "lg"), emptyText);
+  emptySlot.addEventListener("click", onCreate);
 
   function render(tasks, selectedTaskId, createAttempt, settingsVisible = false) {
     const checkCreate = createAttempt?.recovery?.canCheck === true;
@@ -48,6 +49,9 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       || (createAttempt?.running === true && (!checkCreate || createAttempt.recovery.checking));
     create.ariaLabel = checkCreate ? "Check new task outcome" : "New task";
     create.title = create.ariaLabel;
+    emptySlot.disabled = create.disabled;
+    emptySlot.ariaLabel = create.ariaLabel;
+    emptySlot.title = create.title;
     settings.ariaCurrent = settingsVisible ? "page" : "false";
     if (tasks.length === 0) {
       for (const entry of entries.values()) {

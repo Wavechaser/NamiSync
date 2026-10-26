@@ -90,8 +90,17 @@ _EDITABLE_SCRIPT = r"""
     return style.backgroundImage !== "none" && style.backgroundImage !== idleImage;
   };
   await until(() => document.querySelector("#host-status")?.textContent === "Ready", "host readiness");
-  document.querySelector(".nami-task-rail__header .nami-button")?.click();
-  const source = await until(() => document.querySelector("#setup-source-path"), "editable source input");
+  const source = await until(() => {
+    const selected = document.querySelector('.nami-task-rail__row .nami-task-card[aria-current="page"]');
+    const input = document.querySelector("#setup-source-path");
+    const recent = document.querySelector("#setup-source-recent-trigger");
+    return selected?.dataset.taskLabel === "Task 1"
+      && document.querySelector(".nami-work-panel")?.ariaLabel === "Work area — Task 1"
+      && input instanceof HTMLInputElement && !input.disabled
+      && recent instanceof HTMLButtonElement && !recent.disabled
+      && document.querySelectorAll('#setup-source-recent-popup [role="option"]').length === 2
+      ? input : null;
+  }, "startup task and seeded recent folders");
   const setup = source.closest(".nami-setup");
   const target = document.querySelector("#setup-target-path");
   const options = document.querySelector(".nami-setup__options");

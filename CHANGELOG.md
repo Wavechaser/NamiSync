@@ -239,6 +239,9 @@ explicit, reviewable and regression-backed.
   cards, preserving recovery and retained-result exceptions. Keep task-tab
   details concise and on one line; full advice remains in task details or
   the rail tooltip. Include three representative task tabs in the gallery.
+- Open one blank task at startup when no tasks exist. Closing the last task
+  leaves the app empty, with a task-card-sized ordinary New Task button;
+  the existing top create button remains available.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.

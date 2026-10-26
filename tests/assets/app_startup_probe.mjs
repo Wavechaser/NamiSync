@@ -59,6 +59,7 @@ const echoAttempts = [];
 let operationalMarks = 0;
 let themeOpens = 0;
 let themeRefreshes = 0;
+let taskCreates = 0;
 let rawApiReady = false;
 let resolveRawApiReadiness;
 const rawApiReadiness = new Promise((resolve) => {
@@ -92,6 +93,10 @@ function emitChallenge(challenge) {
 }
 
 globalThis.startupHarness = {
+  createTask() {
+    taskCreates += 1;
+    return Promise.resolve({ task_id: "task-" + "1".repeat(32) });
+  },
   whenBridgeApiReady() {
     return rawApiReady ? Promise.resolve() : rawApiReadiness;
   },
@@ -131,7 +136,7 @@ const bridgeStub = moduleUrl(`
   export const acknowledgeShellReady = () => globalThis.startupHarness.acknowledgeShell();
   export const echoReadiness = (challenge) => globalThis.startupHarness.echo(challenge);
   export const markBridgeOperational = () => { globalThis.startupHarness.markOperational(); };
-  export const createTask = () => Promise.reject(new Error("unused"));
+  export const createTask = () => globalThis.startupHarness.createTask();
   export const closeTask = () => Promise.reject(new Error("unused"));
   export const listTasks = () => Promise.resolve({ tasks: [] });
   export const getExecutionDetail = () => Promise.reject(new Error("unused"));
@@ -271,6 +276,7 @@ echoAttempts[1].resolve({ acknowledged: true });
 for (let turn = 0; turn < 8; turn += 1) await Promise.resolve();
 assert.equal(status.textContent, "Ready");
 assert.equal(operationalMarks, 1);
+assert.equal(taskCreates, 1, "empty startup creates one real blank task");
 assert.equal(themeOpens, 1, "post-OPEN cosmetic initialization is fire-and-forget");
 
 for (const callback of listeners.get("pywebviewready") ?? []) callback();
@@ -280,5 +286,6 @@ assert.equal(shellAcknowledgements.length, 1, "a second ready event cannot resta
 assert.equal(echoAttempts.length, 2);
 assert.equal(operationalMarks, 1);
 assert.equal(themeOpens, 1);
+assert.equal(taskCreates, 1, "a second ready event cannot create another task");
 
 process.stdout.write("ok");

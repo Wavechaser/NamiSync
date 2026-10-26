@@ -751,6 +751,101 @@ function planWindow(summary, offset = 0) {
 
 const imported = import(moduleUrl(appSource));
 await until(() => lists.length === 1);
+const startupScenario = process.argv[5];
+if (startupScenario !== undefined) {
+  const emptyButton = () => walk(app).find((element) =>
+    element.classList.values.has("nami-task-rail__empty-slot"));
+  await imported;
+  assert.equal(creates.length, 0, "startup must wait for its initial task list");
+  let outcomeChecks = 0;
+  if (startupScenario === "manual-pending" || startupScenario === "manual-close") {
+    createButton().click();
+    await until(() => creates.length === 1);
+    if (startupScenario === "manual-pending") {
+      creates[0].recovery.check = async () => { outcomeChecks += 1; };
+      creates[0].notify({ state: "unavailable", canCheck: true, message: "Check the original creation" });
+    }
+    if (startupScenario === "manual-close") {
+      creates[0].resolve({ task_id: TASK_A });
+      await until(() => taskButtons().length === 1);
+      await turns();
+      walk(app).find((element) => element.ariaLabel === "Close Task 1").click();
+      await until(() => closes.length === 1);
+      closes[0].resolve({ task_id: TASK_A, session_id: null, disposition: "closed" });
+      await until(() => taskButtons().length === 0);
+    }
+  }
+  lists[0].resolve({ tasks: [] });
+  await turns();
+  assert.equal(emptyButton().tagName, "BUTTON");
+  assert.equal(emptyButton().type, "button");
+  assert.ok(emptyButton().classList.values.has("nami-button"));
+  assert.equal(emptyButton().children[1].textContent, "New Task");
+  if (startupScenario === "manual-close") {
+    await until(() => lists.length === 2);
+    lists[1].resolve({ tasks: [] });
+    await turns();
+    assert.equal(creates.length, 1, "an early manual close must not be replenished");
+  } else {
+    await until(() => creates.length === 1);
+    if (startupScenario !== "manual-pending") {
+      assert.equal(emptyButton().disabled, true, "both Create controls share pending state");
+      assert.equal(createButton().disabled, true);
+      emptyButton().click();
+      assert.equal(creates.length, 1, "pending creation cannot submit a second command");
+    }
+    if (startupScenario === "failed") {
+      creates[0].reject(new Error("capacity refusal"));
+      await turns();
+      assert.match(status.textContent, /could not be created/);
+      assert.equal(emptyButton().disabled, false);
+    } else if (startupScenario === "fixed-unknown") {
+      creates[0].notify({ state: "fixed-unknown", canCheck: false, message: "Original outcome unavailable" });
+      creates[0].reject(new (await import(bridgeUrl)).TaskCreateUncertainError(null, false));
+      await turns();
+      assert.equal(emptyButton().disabled, true);
+      assert.equal(createButton().disabled, true);
+      assert.equal(status.textContent, "Original outcome unavailable");
+    } else {
+      if (startupScenario === "recovery" || startupScenario === "manual-pending") {
+        if (startupScenario === "recovery") {
+          creates[0].recovery.check = async () => { outcomeChecks += 1; };
+          creates[0].notify({ state: "unavailable", canCheck: true, message: "Check the original creation" });
+        }
+        await turns();
+        assert.equal(outcomeChecks, 0, "startup does not Check a pending manual creation");
+        assert.equal(emptyButton().ariaLabel, "Check new task outcome");
+        emptyButton().click();
+        await turns();
+        assert.equal(outcomeChecks, 1);
+        assert.equal(creates.length, 1, "Check observes the original command");
+      }
+      creates[0].resolve({ task_id: TASK_A });
+      await until(() => taskButtons().length === 1);
+      await turns();
+      assert.equal(taskButton("Task 1").ariaCurrent, "page");
+      walk(app).find((element) => element.ariaLabel === "Close Task 1").click();
+      await until(() => closes.length === 1);
+      closes[0].resolve({ task_id: TASK_A, session_id: null, disposition: "closed" });
+      await until(() => taskButtons().length === 0);
+    }
+  }
+  void globalThis.taskHarness.refreshTasks();
+  const lastList = lists.at(-1);
+  lastList.resolve({ tasks: [] });
+  await turns();
+  assert.equal(creates.length, 1, "later empty reads never auto-create");
+  assert.ok(emptyButton());
+  if (startupScenario === "empty") {
+    emptyButton().click();
+    await until(() => creates.length === 2);
+    creates[1].resolve({ task_id: TASK_B });
+    await until(() => taskButtons().length === 1);
+    assert.ok(taskButton("Task 2"), "empty button uses ordinary Create");
+  }
+  process.stdout.write("ok");
+  process.exit(0);
+}
 lists[0].resolve({ tasks: [
   { task_id: TASK_A, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
   { task_id: TASK_B, session_id: null, session_state: null, session_released: false, task_kind: null, request_id: null, plan_request_id: null, session_kind: null },
@@ -759,6 +854,7 @@ lists[0].resolve({ tasks: [
 await imported;
 await turns();
 
+assert.equal(creates.length, 0, "existing startup tasks prevent automatic creation");
 assert.equal(taskButton("Task 3")?.ariaCurrent, "page");
 assert.deepEqual(
   taskButtons().map((button) => button.dataset.taskLabel),

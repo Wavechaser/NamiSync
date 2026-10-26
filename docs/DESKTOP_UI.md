@@ -1288,7 +1288,14 @@ no presentation command or placeholder plan, inventory, history, or control
 surface. The page exposes labelled
 task navigation and a work region with truthful empty states under the standard
 native title frame. `rail.js` and `panels.js` own that accessible frame; they
-do not create fake task or session data.
+do not create fake task or session data. After the initial authoritative task
+list, the app creates one real blank task only if none exist, no task mutation
+has overtaken that read, and no creation attempt remains. This runs once per document;
+closing the last task later leaves the work area's empty state. The empty rail
+offers an ordinary **New Task** button, with the add-square-multiple icon and
+label centered together in a standard task-card footprint. It shares the top
+Create control's pending and original-outcome recovery state; neither control
+replays an uncertain creation. The top icon-only Create remains available.
 
 Plan and the `tree.js` adapter share `table_controller.js` for viewport geometry,
 window generations, coverage, settlement and reveal. Their row and focus policies
