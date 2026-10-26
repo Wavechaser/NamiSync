@@ -1,61 +1,71 @@
-# Latest session — headline and startup refinement, 2026-10-26
+# Latest session — Inventory reuse and visual controls, 2026-10-27
 
-User-authorized GUI round from `7015596a` on `milestone1`, using execute-task,
-independent review and two serialized atomic outcomes. M1-12, release, DOC-2,
-push and PR remain inactive. No task-created branch/worktree or recovery ref.
+Work is on `milestone1`, from `c7868abd`, using execute-task, GPT-6.1 Sol
+builders and fresh independent reviews. No worktree/recovery ref, push or PR.
+M1-12, release and DOC-2 remain inactive. Inventory recents remain shelved.
 
-- H1 `fdc0e839`: ordinary rail/card headlines name the operation and share
-  execution wording, while error/recovery and current-versus-retained activity
-  exceptions remain. Rail details stay single-line; concise normal guidance
-  and full exceptional text/tooltips preserve the available recovery actions.
-  The gallery has three representative production-rendered task tabs: execution
-  in progress, ready plan and execution completed with issues.
-- H2: startup initiates one blank task after an empty initial list only if no
-  task mutation overtook that read and no creation attempt remains. It reuses
-  the existing creation/recovery path without blocking theme/default Setup
-  initialization. Closing all tasks later leaves the app empty. Its ordinary
-  New Task button uses the existing add-square-multiple icon, centered content
-  and standard task-card dimensions; the top icon-only control remains.
+- `d5b4a25` reuses confirmed Inventory views on navigation, invalidates on
+  session/freshness changes, separates reads from scan activity, and retains
+  the mounted table and expanded Details during replacement. Review found
+  interrupted-highlight freshness and foreground queued-search races; the
+  user approved the recurrence reorganization. Foreground ownership now uses
+  its own session/navigation/invalidation, independently of cache freshness.
+- `637a4d6` renders cloud indicators at 12 px with a 6 px filename gap, uses
+  pinned Fluent Filled Play for Resume, and makes Go/Follow opaque icon-only
+  eye/location-ripple controls. Existing action emphasis, accessible names,
+  tooltips and forced colors remain. Exactly two documented dynamic-accent
+  blends implement opaque hover/press states; other token restrictions remain.
 
-No workflow/bridge/domain contract changed. Exact task creation/recovery,
-current-session identity, reviewed effects, selection and controls remain.
-No recent-path behavior changed. README milestone synopsis remains unchanged.
+V1: final 2,098 interface tests and all five installed Inventory/shell/execution
+checks pass. V2: 45 focused checks, 2,505 department passes and three existing
+skips, then all 12 owning token-policy tests pass after its narrow checker
+migration; these counts overlap, not sum. All seven final installed checks pass,
+including gallery light/dark/forced/reduced modes. Pinned icon archive and diff
+checks pass. Independent reviews approve both implementations. Earlier native
+Details-fixture mismatches, foreground refusals, report-size and token-owner
+failures remain in evidence; no input, effect, or report-size guard was relaxed.
 
-H1: 2,091 unaffected interface tests plus the corrected full Inventory pane
-probe pass; all six installed obligations pass across native r2/r3. Independent
-review approved. The three requested long headlines fit one line at 288 px rail
-width and 14 px font; at the minimum 238.429 px rail, Execution completed with
-issues uses two lines (132 px card versus 112 px). Other examples remain one
-line; details remain one 16 px line. This preserves wording without shrinking
-text. Failed legacy text expectations and inherited-error test-fixture receipts
-remain in evidence; no product issue was inferred from those failed tests.
+## Read-only queued-input investigation
 
-H2: eight focused startup cases pass. All five installed obligations pass:
-initial gallery, Setup and execution default/larger in r2, shell in r3. Real
-startup and empty button both measure 278.2857 by 112 px; centered icon/text,
-native pointer and Enter creation, no replenishment after Close, 200% reflow
-and forced-color focus pass. The final interface gate passes all 2,098 tests;
-independent source, correction, native-evidence and documentation review approves
-both units. H2 is the startup/empty-state commit containing this handoff.
-Test-driver corrections preserve existing assertions: wait for seeded Setup
-recents, use the established Enter input sequence, observe the unchanged empty
-work accessible text, and restore focus after the added button focus probe.
-Sandbox Temp/packaging setup errors and all failed native attempts are retained.
+V3 inspected committed `637a4d6` after the visual update. Nine bounded
+production-app probes used controlled bridge/panel seams; no production or
+tracked-test changes followed. Counts below exclude the initial view load.
 
-H3 read-only scope: Setup recents currently derive from sync runs. Inventory
-locations persist but share registration with integrity and may survive later
-recording failure. Querying observed locations needs no schema change but
-broadens suggestions beyond Inventory use. Exact admitted Inventory-start hints
-need an explicit bounded persistence/representation policy; current cosmetic
-state deliberately excludes recents and newly admitted roots may lack durable
-location IDs. A dedicated hint policy can avoid inventing Inventory run records.
-Recent pairs can remain sync-only; all selected hints still need fresh admission.
-No option is implemented or approved by this investigation.
+| Sequence | Observation |
+| --- | --- |
+| Stale cache, held search, newer queued search, ordinary background refresh | Latest query survives; two search commands, no full opens. |
+| Active, unreleased Verify receives a Gap during search, followed by background refresh | Unsent latest query is cleared; one search command, two full opens and three windows (including overlay); final query is the first submitted query. |
+| Settings/return, or explicit Reload during delayed search | Queued latest query is retired; one search command and two opens. If the first command applies after Reload reads, its settlement triggers the necessary later observation. |
+| Session replacement | New session/publication survives late browser receipt; old queued intent is retired. This mocked-host case does not prove native cancellation/isolation. |
 
-Evidence: `build/gui-headlines-startup-20261026/receipts.md` and neighboring
-focused/native/interface logs. Raw installed receipts are in external Temp
-`namisync-headlines-h1-*` and `namisync-headlines-h2-*` directories. The owning
-M1_PLAN row tracks final review/commit status; no native input guard was relaxed.
-All requested GUI changes are complete; the recents item remains investigation-only.
-No outstanding test gate, finding or task-created checkout remains.
-This round does not declare M1 or release acceptance.
+The common full-load path clears pending/queued presentation state when it
+supersedes foreground work. Submitted-command custody and unsent user intent
+are different: no mutation replay or durable loss was demonstrated. Genuine
+invalidation plus background refresh can silently lose newer same-context
+unsent input. Navigation/session retirement is context-bound; explicit Reload's
+queued-input policy needs a decision.
+
+A small Inventory full-refresh decision coordinator on existing `tableReadOwner`
+is a bounded option for a future round, not an established necessity. First decide
+whether each reason preserves or explicitly retires queued input; a local change
+may suffice. If coordination remains split across callers, a small shared decision
+could centralize background invalidation, Reload, context retirement and
+post-command observation. Do not turn the generic reader into a mutation queue
+or remove later observation merely to reduce read counts. No coordinator, policy
+implementation, or new public contract is authorized this round.
+
+Review corrected the original released-scan Gap premise: released scans do not
+normally receive a new Gap. Three earlier released-state Gap/selection probes
+are conditional mechanism controls, not supported live interactions. The added
+active-Verify probe establishes the reachable app-callback premise and includes
+its deferred overlay, with bridge transport and server replies still mocked.
+Real host FIFO/refusal timing, combined lost responses, broader live overlay
+interleavings and actual renderer draft/focus remain unverified. The report
+names the finite next-round proposal and preserves session/navigation/publication/
+effect guarantees.
+
+Evidence: ignored `build/gui-inventory-reuse-20261027/receipts.md`;
+`v1-native-r3.txt`, `v1-interfaces-r2.txt`, `v2-native-r2.txt`,
+`v2-departments.txt`, `v2-token-authority.txt`, and `v3-findings.md` with nine
+`v3-*.txt` raw receipts and reproducible bounded scripts. No headed test remains
+running. Investigation is read-only; await the user's next-round direction.

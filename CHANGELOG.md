@@ -248,6 +248,9 @@ explicit, reviewable and regression-backed.
 - Render filename cloud indicators at 12 px with more spacing. Use Filled Play
   for Resume and icon-only eye/location-ripple controls for Go and autoscroll,
   with opaque backgrounds and retained accessible names and action emphasis.
+- Investigate queued input across refresh, invalidation, navigation and Reload.
+  Record current retirement behavior and assess a bounded full-refresh
+  coordinator as a later option; no coordinator or input-policy change follows.
 - Report clean Verify baseline creation as **Baseline created**, explaining
   the absence of prior comparison evidence while retaining adverse outcomes
   and the underlying workflow/CLI classification.
