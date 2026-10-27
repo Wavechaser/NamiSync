@@ -4714,6 +4714,7 @@ def test_supported_long_paths_remain_readable_through_production_plan_window(cas
     notice_case = case == "notices-cjk"
     operations = tuple(
         operation(OperationKind.MOVE,
+                  source_path=prefix + f"Source{index:03}.txt", source=file_stat(),
                   target_path=prefix + f"d{index:03}\\f.txt" if group_case else f"new\\f{index:03}.txt",
                   prior_target_path=f"old{index:03}.txt" if group_case else prefix + f"f{index:03}.txt",
                   target=file_stat())
@@ -4798,6 +4799,7 @@ def test_supported_long_paths_remain_readable_through_production_plan_window(cas
         detail = registry.get_plan_detail(started.task_id, expected_revision=revision,
                                           node_id=operation_row["node_id"])
         assert detail["detail"]["prior_path"].startswith(prefix)
+        assert detail["detail"]["source_path"].startswith(prefix)
     stale = registry.get_plan_detail(started.task_id, expected_revision=revision + 1,
                                      node_id=rows[0]["node_id"])
     assert stale["disposition"] == "conflict" and stale["detail"] is None

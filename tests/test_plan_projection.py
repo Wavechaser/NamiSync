@@ -131,6 +131,37 @@ def test_projection_keeps_original_spelling_and_notice_path_origin() -> None:
     assert inferred.display == "SURVIVING"  # Existing raw search/display fact stays intact.
 
 
+def test_real_planner_source_paths_require_observed_source_and_keep_spelling() -> None:
+    from _db_fixtures import _file, _scan
+    from namisync.core.models import UnsupportedRecord, UnsupportedReason
+    from namisync.core.planning import MappingSnapshot, Scope, SyncOptions
+    from namisync.interfaces.web.plan_review import PlanReviewState
+    from namisync.modules.planner import plan as build_plan
+
+    source = _scan(None, (_file("KEEP.txt", 1),))
+    base = plan(())
+    target = replace(source, root=base.target_root, volume_id=base.target_volume_id,
+        volume_evidence=base.target_volume_evidence, files=(_file("keep.txt", 2), _file("old.bin", 3)),
+        unsupported=(UnsupportedRecord("cloud.bin", "CLOUD.BIN", UnsupportedReason.PLACEHOLDER, EntryKind.FILE),))
+    reviewed = build_plan(source, target, MappingSnapshot.empty(source.volume_id, target.volume_id),
+                          SyncOptions(), Scope.everything())
+    artifact = PlanArtifact(PlanRequest(REQUEST_ID, source.root.path, target.root.path),
+                            source, target, reviewed, Verdict(True, (), SimpleNamespace()))
+    projection = build_plan_projection(REQUEST_ID, artifact)
+    state = PlanReviewState("task-" + "2" * 32, REQUEST_ID, projection, 0, "reviewing",
+                            source.root.path, target.root.path)
+    expected = {"keep.txt": "KEEP.txt", "old.bin": None, "cloud.bin": None}
+    for operation in reviewed.operations:
+        node_id = projection.operation_node_id_by_id[str(operation.op_id)]
+        detail = state.detail(expected_revision=0, node_id=node_id)["detail"]
+        assert detail["path"] == operation.target_rel_path
+        assert detail["source_path"] == expected[operation.target_rel_path]
+    unsupported = next(item for item in reviewed.operations if item.target_rel_path == "cloud.bin")
+    assert unsupported.source_rel_path == "cloud.bin" and unsupported.source_expected is None
+    rebound = apply_plan_projection_selection(projection, selected_operation_ids=frozenset(), exclusion_reasons={})
+    assert [node.source_path for node in rebound.nodes] == [node.source_path for node in projection.nodes]
+
+
 def test_plan_projection_preserves_groups_selection_and_move_old_path_ancestry() -> None:
     copied = operation(
         OperationKind.COPY,

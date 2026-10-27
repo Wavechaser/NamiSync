@@ -1,71 +1,73 @@
-# Latest session — Inventory reuse and visual controls, 2026-10-27
+# Latest session — Details and Inventory truth, 2026-10-27
 
-Work is on `milestone1`, from `c7868abd`, using execute-task, GPT-6.1 Sol
+Work is on `milestone1`, from `95576a4b`, using execute-task, GPT-6.1 Sol
 builders and fresh independent reviews. No worktree/recovery ref, push or PR.
-M1-12, release and DOC-2 remain inactive. Inventory recents remain shelved.
 
-- `d5b4a25` reuses confirmed Inventory views on navigation, invalidates on
-  session/freshness changes, separates reads from scan activity, and retains
-  the mounted table and expanded Details during replacement. Review found
-  interrupted-highlight freshness and foreground queued-search races; the
-  user approved the recurrence reorganization. Foreground ownership now uses
-  its own session/navigation/invalidation, independently of cache freshness.
-- `637a4d6` renders cloud indicators at 12 px with a 6 px filename gap, uses
-  pinned Fluent Filled Play for Resume, and makes Go/Follow opaque icon-only
-  eye/location-ripple controls. Existing action emphasis, accessible names,
-  tooltips and forced colors remain. Exactly two documented dynamic-accent
-  blends implement opaque hover/press states; other token restrictions remain.
+## Delivered
 
-V1: final 2,098 interface tests and all five installed Inventory/shell/execution
-checks pass. V2: 45 focused checks, 2,505 department passes and three existing
-skips, then all 12 owning token-policy tests pass after its narrow checker
-migration; these counts overlap, not sum. All seven final installed checks pass,
-including gallery light/dark/forced/reduced modes. Pinned icon archive and diff
-checks pass. Independent reviews approve both implementations. Earlier native
-Details-fixture mismatches, foreground refusals, report-size and token-owner
-failures remain in evidence; no input, effect, or report-size guard was relaxed.
+- `38deb2d`: ordinary Go/Follow buttons on opaque backing wrappers; remove the
+  two derived-color tokens and restore the blanket prohibition. Plain 12px
+  cloud artwork and Remote files filter labels retain icon provenance,
+  spacing, accessible names and ordinary action emphasis.
+- `8ffe976`: newer Inventory scan publications show current ledger row state
+  instead of an older retained verification label. Current session outcomes
+  and failed-Refresh publication retention remain; prior results stay in Details.
+- The details commit containing this handoff adds full-width paths/digests,
+  action/reason-first Plan facts and available execution outcomes, compact
+  applicable Inventory evidence, bottom Acknowledge/Restore actions, and a 1:2
+  task/item height split. One work-panel-owned disclosure flag follows Plan,
+  Inventory, task/Settings navigation and new tasks until manually changed;
+  new app sessions start closed and item facts retain their retirement rules.
 
-## Read-only queued-input investigation
+The user approved one nullable exact-detail `source_path` field. It preserves
+original source spelling only with reviewed source observations, reuses target
+path formatting/joining, and omits unknown or target-only sources. Exact bridge
+validation and direct consumers migrated atomically; windows, events, persistent
+schemas and filesystem effects are unchanged.
 
-V3 inspected committed `637a4d6` after the visual update. Nine bounded
-production-app probes used controlled bridge/panel seams; no production or
-tracked-test changes followed. Counts below exclude the initial view load.
+D2 review found that a detail result could be combined with table-owned result
+context. The user approved the recurrence reorganization: item, owning session
+and mode now travel together through the shared Presence renderer. Tests cover
+newer window results, newer exact-detail results, live progress suppression,
+correct tooltip ownership and retained historical evidence.
 
-| Sequence | Observation |
-| --- | --- |
-| Stale cache, held search, newer queued search, ordinary background refresh | Latest query survives; two search commands, no full opens. |
-| Active, unreleased Verify receives a Gap during search, followed by background refresh | Unsent latest query is cleared; one search command, two full opens and three windows (including overlay); final query is the first submitted query. |
-| Settings/return, or explicit Reload during delayed search | Queued latest query is retired; one search command and two opens. If the first command applies after Reload reads, its settlement triggers the necessary later observation. |
-| Session replacement | New session/publication survives late browser receipt; old queued intent is retired. This mocked-host case does not prove native cancellation/isolation. |
+## Verification
 
-The common full-load path clears pending/queued presentation state when it
-supersedes foreground work. Submitted-command custody and unsent user intent
-are different: no mutation replay or durable loss was demonstrated. Genuine
-invalidation plus background refresh can silently lose newer same-context
-unsent input. Navigation/session retirement is context-bound; explicit Reload's
-queued-input policy needs a decision.
+D1: 56 focused, 2,506 interface/tool passes and three existing skips, all seven
+installed cases, icon provenance and independent review. D3: intended renderer
+red/green, native changed-mtime reproduction, 15 focused and 2,100 interface
+passes, final canonical-reason probe and installed Inventory pass; review approved.
 
-A small Inventory full-refresh decision coordinator on existing `tableReadOwner`
-is a bounded option for a future round, not an established necessity. First decide
-whether each reason preserves or explicitly retires queued input; a local change
-may suffice. If coordination remains split across callers, a small shared decision
-could centralize background invalidation, Reload, context retirement and
-post-command observation. Do not turn the generic reader into a mutation queue
-or remove later observation merely to reduce read counts. No coordinator, policy
-implementation, or new public contract is authorized this round.
+D2: 417 focused checks and 12 import contracts pass. The ordinary run recorded
+6,244 passes/four existing skips and one obsolete synthetic 2:3 gallery fixture
+failure; that fixture was corrected to 1:2 and its owning checks pass. After the
+approved renderer correction, all 2,100 interface checks pass. The final
+execution-driver-only migration passes its 26 owning ordinary checks.
+These populations overlap and are not additive.
 
-Review corrected the original released-scan Gap premise: released scans do not
-normally receive a new Gap. Three earlier released-state Gap/selection probes
-are conditional mechanism controls, not supported live interactions. The added
-active-Verify probe establishes the reachable app-callback premise and includes
-its deferred overlay, with bridge transport and server replies still mocked.
-Real host FIFO/refusal timing, combined lost responses, broader live overlay
-interleavings and actual renderer draft/focus remain unverified. The report
-names the finite next-round proposal and preserves session/navigation/publication/
-effect guarantees.
+All seven installed obligations are accounted for: default shell from the first
+run, gallery light/dark/forced/reduced modes plus Inventory and larger shell
+from the second run, and both execution sizes from the final run. Evidence reuse
+was independently reviewed: unchanged Plan/default-shell and Python/import
+seams retain their passes; changed Inventory/header and driver seams were rerun.
+No foreground, native-input, identity, filesystem-effect or response-bound guard
+was weakened. Earlier foreground refusals and incomplete driver migrations remain
+in evidence. Gallery checks use connected path/hash selections and real work-panel
+composition; screenshots alone are not Windows compositor proof.
 
-Evidence: ignored `build/gui-inventory-reuse-20261027/receipts.md`;
-`v1-native-r3.txt`, `v1-interfaces-r2.txt`, `v2-native-r2.txt`,
-`v2-departments.txt`, `v2-token-authority.txt`, and `v3-findings.md` with nine
-`v3-*.txt` raw receipts and reproducible bounded scripts. No headed test remains
-running. Investigation is read-only; await the user's next-round direction.
+## Dispositions and evidence
+
+The reported subset warning was clarified to a mixed ordinary/missing selection.
+Native probes show ordinary-file subsets complete in all three modes; selecting
+a missing file yields `verification-incomplete` / `integrity=missing`. That
+truthful warning remains. Same-task stale Verified was presentation-only;
+refreshed durable evidence already reported Modified.
+
+Primary ignored evidence: `build/gui-details-20261027/receipts.md`,
+`d1-builder-handoff.md`, `inventory-investigation.md`,
+`d2-builder-verification.md`, the `d1-*`/`d3-*`/`d2-*` receipts and native fixtures.
+Final native roots are under `%LOCALAPPDATA%/Temp/namisync-details-*`.
+
+Inventory recents and the prior queued-input/coordinator study remain shelved;
+no such behavior changed. M1-12, release and DOC-2 remain inactive. No headed
+process remains running and no further foreground attendance is needed.

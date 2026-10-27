@@ -286,13 +286,13 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         assert "2 hidden by filters or search" in journey["hidden_selection"]
         assert "3" in journey["confirmation_text"] and "2" in journey["confirmation_text"]
         assert journey["terminal_presentations"] == [
-            {"text": "Baseline retained results · 1 window result",
+            {"text": "Baseline incomplete",
              "states": ["baselined"], "current_scan": True},
-            {"text": "Verification retained results · 1 window result",
+            {"text": "Verification incomplete",
              "states": ["verified"], "current_scan": True},
-            {"text": "Verification retained results · 0 window results",
+            {"text": "Verification canceled",
              "states": [], "current_scan": True},
-            {"text": "Rebaseline retained results · 1 window result",
+            {"text": "Rebaseline incomplete",
              "states": ["baselined"], "current_scan": True},
         ]
         results = initial["report"]["integrity_results"]

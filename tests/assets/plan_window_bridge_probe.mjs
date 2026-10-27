@@ -320,12 +320,15 @@ for (const patch of [{ display: "x".repeat(301) }, { notice: "x".repeat(301) },
 }
 const planDetail = { disposition: "current", view_revision: 0, node_id: baseRow.node_id,
   detail: { path: "Case\\Current.txt", prior_path: "Case\\Previous.txt",
-    move_destination_path: null, path_origin: "target", notice: null } };
+    move_destination_path: null, path_origin: "target", source_path: "SourceCase\\Original.txt", notice: null } };
 responseResult = planDetail;
 const detailResult = await bridge.getPlanDetail(taskId, 0, baseRow.node_id);
 if (detailResult.detail.prior_path !== planDetail.detail.prior_path
     || requests.at(-1).command !== "get_plan_detail") throw new Error("planned full paths were not preserved");
 for (const invalid of [{ ...planDetail, node_id: groupRow.move_peer_id },
+  { ...planDetail, detail: { ...planDetail.detail, source_path: "x".repeat(32768) } },
+  { ...planDetail, detail: { ...planDetail.detail, source_path: "\ud800" } },
+  { ...planDetail, detail: { ...planDetail.detail, source_path: undefined } },
   { ...planDetail, detail: { ...planDetail.detail, path_origin: null } },
   { ...planDetail, detail: { ...planDetail.detail, path: null } },
   { ...planDetail, detail: { ...planDetail.detail, prior_path: "x".repeat(32768) } },
@@ -342,10 +345,10 @@ for (const invalid of [{ ...planDetail, node_id: groupRow.move_peer_id },
   }
 }
 responseResult = { ...planDetail, detail: { ...planDetail.detail,
-  path: "😀".repeat(16383) + "x", notice: "full diagnostic ".repeat(1000) } };
+  source_path: "😀".repeat(16383) + "x", path: "😀".repeat(16383) + "x", notice: "full diagnostic ".repeat(1000) } };
 await bridge.getPlanDetail(taskId, 0, baseRow.node_id);
 responseResult = { ...planDetail, detail: { ...planDetail.detail,
-  path: null, prior_path: null, move_destination_path: "", path_origin: null } };
+  path: null, source_path: null, prior_path: null, move_destination_path: "", path_origin: null } };
 await bridge.getPlanDetail(taskId, 0, baseRow.node_id);
 responseResult = { ...planDetail, disposition: "conflict", detail: null };
 await bridge.getPlanDetail(taskId, 0, baseRow.node_id);

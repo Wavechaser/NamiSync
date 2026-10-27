@@ -212,7 +212,7 @@ function addGroupDisclosure(element, row, onCollapse) {
   spacer.replaceWith(disclosure);
 }
 
-export function createPlanReviewPanel(callbacks) {
+export function createPlanReviewPanel(callbacks, detailsState = { expanded: false }) {
   const required = [
     "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
     "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove",
@@ -519,7 +519,6 @@ export function createPlanReviewPanel(callbacks) {
   let current = null;
   let currentTask = null;
   const rowMenu = createRowMenu(element);
-  let detailsExpanded = false;
   let focusedPlanRow = null;
   let focusedPlanRequestId = null;
   let searchTimer = null;
@@ -667,9 +666,9 @@ export function createPlanReviewPanel(callbacks) {
     else if (!retryOutcome.disabled) callbacks.onCheckStart?.();
   });
   detailsToggle.addEventListener("click", () => {
-    detailsExpanded = !detailsExpanded;
-    detailsToggle.ariaExpanded = String(detailsExpanded);
-    if (!detailsExpanded && diagnostics.contains(document.activeElement)) detailsToggle.focus?.();
+    detailsState.expanded = !detailsState.expanded;
+    detailsToggle.ariaExpanded = String(detailsState.expanded);
+    if (!detailsState.expanded && diagnostics.contains(document.activeElement)) detailsToggle.focus?.();
     updateDiagnostics();
   });
   goCurrent.addEventListener("click", () => current !== null && callbacks.onNavigateCurrent(current, false));
@@ -677,8 +676,8 @@ export function createPlanReviewPanel(callbacks) {
 
   function updateDiagnostics() {
     detailsToggle.hidden = current === null;
-    detailsToggle.ariaExpanded = String(detailsExpanded);
-    diagnostics.hidden = current === null || !detailsExpanded;
+    detailsToggle.ariaExpanded = String(detailsState.expanded);
+    diagnostics.hidden = current === null || !detailsState.expanded;
   }
 
   function openRowMenu(event, rowElement, review, row) {
@@ -696,7 +695,7 @@ export function createPlanReviewPanel(callbacks) {
       && !owner?.closePending && owner?.closeRecovery == null
       && element.contains(rowElement);
     const actions = [{ id: "row-details", label: "Show details", run: () => {
-      detailsExpanded = true;
+      detailsState.expanded = true;
       updateDiagnostics();
       callbacks.onHighlight(review, "replace", row.node_id);
     } }];
@@ -766,13 +765,21 @@ export function createPlanReviewPanel(callbacks) {
     return { ...presentation, advisory: gap === null ? "" : "Execution event history has gaps." };
   }
 
-  function appendDetailFact(label, value, filesystem = false) {
+  function appendDetailFact(label, value, { filesystem = false, fullWidth = filesystem, block = false } = {}) {
     const term = document.createElement("dt");
     renderText(term, label);
     const definition = document.createElement("dd");
+    if (fullWidth) {
+      term.className = definition.className = "nami-detail-full";
+    }
+    if (block) {
+      term.classList.add("nami-detail-block");
+      if (!fullWidth) definition.classList.add("nami-detail-block");
+    }
     if (filesystem) renderFilesystemText(definition, value);
     else renderText(definition, value);
     detailBody.append(term, definition);
+    return definition;
   }
 
   function renderDetail(detail, row) {
@@ -784,8 +791,42 @@ export function createPlanReviewPanel(callbacks) {
       updateDiagnostics();
       return;
     }
-    appendDetailFact("Planned action", displayLabel(row.operation_kind ?? row.row_kind));
-    if (row.size !== null) appendDetailFact("Size", formatByteCount(row.size));
+    const response = detail?.operationId === row.operation_id && detail.state === "current" ? detail.response : null;
+    const operation = response?.operation ?? row.execution?.operation ?? null;
+    const action = rowView({ ...row, execution: response ?? row.execution }, false, false, currentTask?.executionPresentation);
+    const actionFact = appendDetailFact(operation === null ? "Planned action" : "Operation", "");
+    actionFact.classList.add("nami-plan-row__intent");
+    if (action.lifecycleKey !== undefined) actionFact.dataset.lifecycle = action.lifecycleKey;
+    else if (action.intentKey !== "") actionFact.dataset.intent = action.intentKey;
+    const actionLabel = document.createElement("span");
+    actionLabel.className = "nami-file-state-label";
+    renderText(actionLabel, operation === null ? action.intentText
+      : `${executionLabel(operation.result)} · ${displayLabel(operation.kind ?? row.operation_kind)}`);
+    actionFact.append(actionLabel);
+    if (row.reason !== null) appendDetailFact("Reason", reasonLabel(row.reason));
+    if (row.blocked_reason !== null) appendDetailFact("Blocked", reasonLabel(row.blocked_reason));
+    if (row.selection_exclusion_reason !== null) appendDetailFact("Excluded", reasonLabel(row.selection_exclusion_reason));
+    if (operation?.reason != null) appendDetailFact("Result reason", executionLabel(operation.reason));
+    if (operation !== null) appendDetailFact("Operation recording", `${executionLabel(operation.recording)}${operation.recording_reason == null ? "" : ` · ${executionLabel(operation.recording_reason)}`}${operation.recording_detail == null ? "" : ` · ${operation.recording_detail}`}`);
+    const planned = current.planDetail;
+    let plannedStatus = "Planned details are unavailable.";
+    if (planned?.nodeId === row.node_id) {
+      plannedStatus = planned.state === "loading" ? "Loading planned details…"
+        : planned.state === "error" ? planned.message : "";
+      if (planned.state === "current") {
+        const paths = planned.response.detail;
+        const root = paths.path_origin === "source" ? current.summary.source_path : current.summary.target_path;
+        if (paths.source_path !== null) appendDetailFact("Source path", formatFilesystemPath(current.summary.source_path, paths.source_path), { filesystem: true, block: true });
+        if (paths.path !== null) appendDetailFact(paths.path_origin === "source" ? "Source path" : "Target path", formatFilesystemPath(root, paths.path), { filesystem: true, block: paths.source_path === null });
+        if (paths.prior_path !== null) appendDetailFact("Previous path", formatFilesystemPath(current.summary.target_path, paths.prior_path), { filesystem: true });
+        if (paths.move_destination_path !== null) appendDetailFact("Move destination", formatFilesystemPath(current.summary.target_path, paths.move_destination_path), { filesystem: true });
+        if (paths.notice !== null) appendDetailFact("Notice", paths.notice);
+      }
+    }
+    if (row.notice !== null && !(planned?.nodeId === row.node_id && planned.state === "current")) {
+      appendDetailFact("Notice", row.notice);
+    }
+    if (row.size !== null) appendDetailFact("Size", formatByteCount(row.size), { block: true });
     if (row.mtime_ns !== null) appendDetailFact("Modified", modifiedText(row.mtime_ns));
     if (row.dependency_count > 0) appendDetailFact("Dependencies", String(row.dependency_count));
     if (row.is_container) {
@@ -795,26 +836,6 @@ export function createPlanReviewPanel(callbacks) {
       appendDetailFact("Selection", row.selection === "selected" ? "Selected" : "Not selected");
     }
     if (row.risk !== "none") appendDetailFact("Risk", executionLabel(row.risk));
-    if (row.reason !== null) appendDetailFact("Reason", reasonLabel(row.reason));
-    if (row.blocked_reason !== null) appendDetailFact("Blocked", reasonLabel(row.blocked_reason));
-    if (row.selection_exclusion_reason !== null) appendDetailFact("Excluded", reasonLabel(row.selection_exclusion_reason));
-    const planned = current.planDetail;
-    let plannedStatus = "Planned details are unavailable.";
-    if (planned?.nodeId === row.node_id) {
-      plannedStatus = planned.state === "loading" ? "Loading planned details…"
-        : planned.state === "error" ? planned.message : "";
-      if (planned.state === "current") {
-        const paths = planned.response.detail;
-        const root = paths.path_origin === "source" ? current.summary.source_path : current.summary.target_path;
-        if (paths.path !== null) appendDetailFact("Planned path", formatFilesystemPath(root, paths.path), true);
-        if (paths.prior_path !== null) appendDetailFact("Previous path", formatFilesystemPath(current.summary.target_path, paths.prior_path), true);
-        if (paths.move_destination_path !== null) appendDetailFact("Move destination", formatFilesystemPath(current.summary.target_path, paths.move_destination_path), true);
-        if (paths.notice !== null) appendDetailFact("Notice", paths.notice);
-      }
-    }
-    if (row.notice !== null && !(planned?.nodeId === row.node_id && planned.state === "current")) {
-      appendDetailFact("Notice", row.notice);
-    }
     if (row.operation_id === null || current.window.execution.session_id === null) {
       updateText(detailStatus, plannedStatus);
       detailStatus.hidden = plannedStatus === "";
@@ -836,32 +857,28 @@ export function createPlanReviewPanel(callbacks) {
       updateDiagnostics();
       return;
     }
-    const response = detail.response;
-    const operation = response.operation;
     if (operation !== null) {
-      appendDetailFact("Operation", `${executionLabel(operation.result)} · ${executionLabel(operation.kind)}${operation.reason === null ? "" : ` · ${executionLabel(operation.reason)}`}`);
-      appendDetailFact("Path", formatFilesystemPath(current.summary.target_path, operation.path), true);
-      appendDetailFact("Operation recording", `${executionLabel(operation.recording)}${operation.recording_reason === null ? "" : ` · ${executionLabel(operation.recording_reason)}`}${operation.recording_detail === null ? "" : ` · ${operation.recording_detail}`}`);
+      appendDetailFact("Execution path", formatFilesystemPath(current.summary.target_path, operation.path), { filesystem: true, block: true });
       for (const [key, value] of Object.entries(operation.detail)) {
         const text = Array.isArray(value) ? value.join(", ") : String(value);
         const filesystem = key.endsWith("_path") || key === "mutation_destination";
         const targetPath = ["backup_path", "mutation_destination", "prior_path", "published_path", "trash_path"].includes(key);
-        appendDetailFact(executionLabel(key), targetPath ? formatFilesystemPath(current.summary.target_path, text) : text, filesystem);
+        appendDetailFact(executionLabel(key), targetPath ? formatFilesystemPath(current.summary.target_path, text) : text, { filesystem });
       }
       if (operation.detail_omitted_count > 0) appendDetailFact("Operation details omitted", String(operation.detail_omitted_count));
-    } else appendDetailFact("Operation", "Unknown");
+    }
     const automatic = response.automatic_verification;
     if (automatic !== null) {
-      appendDetailFact("Automatic verification", `${executionLabel(automatic.result)}${automatic.reason === null ? "" : ` · ${executionLabel(automatic.reason)}`}`);
-      appendDetailFact("Verification path", formatFilesystemPath(current.summary.target_path, automatic.path), true);
+      appendDetailFact("Automatic verification", `${executionLabel(automatic.result)}${automatic.reason === null ? "" : ` · ${executionLabel(automatic.reason)}`}`, { block: true });
+      appendDetailFact("Verification path", formatFilesystemPath(current.summary.target_path, automatic.path), { filesystem: true });
       if (automatic.detail !== null) appendDetailFact("Verification detail", automatic.detail);
       appendDetailFact("Verification recording", executionLabel(automatic.recording));
       if (automatic.detail_omitted_count > 0) appendDetailFact("Verification details omitted", String(automatic.detail_omitted_count));
     } else appendDetailFact("Automatic verification", "Unknown");
     const evidence = response.evidence;
-    appendDetailFact("Stored evidence", evidence === null ? "Unknown" : executionLabel(evidence.state));
+    appendDetailFact("Stored evidence", evidence === null ? "Unknown" : executionLabel(evidence.state), { block: true });
     if (evidence?.content !== null && evidence?.content !== undefined) {
-      appendDetailFact("Evidence digest", evidence.content.digest);
+      appendDetailFact("Evidence digest", evidence.content.digest, { fullWidth: true });
       appendDetailFact("Evidence size", formatByteCount(evidence.content.size));
       appendDetailFact("Evidence provenance", executionLabel(evidence.content.provenance));
     }
@@ -1111,14 +1128,13 @@ export function createPlanReviewPanel(callbacks) {
       searchTimer = null;
       table.reset();
       table.setScrollTop((task.review?.window.offset ?? 0) * ROW_HEIGHT);
-      detailsExpanded = false;
       focusedPlanRow = null;
       focusedPlanRequestId = null;
     }
     const previousWindow = renderedRows?.window ?? null;
     current = task.review;
     rowMenu.reconcile();
-    if (focusInDetails && (current === null || !detailsExpanded)) {
+    if (focusInDetails && (current === null || !detailsState.expanded)) {
       (current === null ? statusTitle : detailsToggle).focus?.();
     }
     if (current === null) {

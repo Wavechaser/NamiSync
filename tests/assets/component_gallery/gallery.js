@@ -308,7 +308,7 @@ window.addEventListener("unhandledrejection", (event) => {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule, { renderPlanRow }, { createIntegrityCell }, { renderFileRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }, { createInventoryReviewPanel }] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }, { createIntegrityCell }, { renderFileRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }, { createInventoryReviewPanel }, { createWorkPanel }] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
@@ -319,6 +319,7 @@ window.addEventListener("unhandledrejection", (event) => {
     import("/execution_confirmation.js"),
     import("/plan_review.js"),
     import("/inventory_review.js"),
+    import("/panels.js"),
   ]);
   const { createIcon, ICON_NAMES } = iconModule;
   if (
@@ -1286,7 +1287,8 @@ window.addEventListener("unhandledrejection", (event) => {
     };
     planReviewPanel.render(renderedGalleryTask);
   };
-  const planReviewPanel = createPlanReviewPanel(planReviewCallbacks);
+  const galleryDetailsState = {expanded:false};
+  const planReviewPanel = createPlanReviewPanel(planReviewCallbacks, galleryDetailsState);
   planReviewPanel.element.dataset.gallerySection = "plan_review_controls";
   planReviewPanel.element.style.blockSize = "480px";
   planReviewPanel.element.style.gridColumn = "1 / -1";
@@ -1601,7 +1603,9 @@ window.addEventListener("unhandledrejection", (event) => {
         detail_omitted_count: 0,
       },
       automatic_verification: null,
-      evidence: { state: "unrecorded", content: null },
+      evidence: { state: "recorded-copy", content: {algorithm:"xxh3_128",
+        digest:"0123456789abcdef0123456789abcdef", size:"4096", provenance:"copy",
+        observed_at:"2026-09-23T08:00:04+00:00"} },
     },
   };
 
@@ -1657,6 +1661,10 @@ window.addEventListener("unhandledrejection", (event) => {
     review.summary.highlight_revision = (review.summary.highlight_revision ?? 0) + 1;
     for (const item of review.window.rows) item.highlighted = item.node_id === row.node_id;
     review.executionDetail = longExecutionDetail;
+    review.planDetail = {nodeId:row.node_id, state:"current", response:{detail:{
+      path:"TargetCase\\" + "long-directory\\".repeat(12) + "long-diagnostic.bin", path_origin:"target",
+      source_path:"SourceCase\\" + "original-directory\\".repeat(12) + "long-diagnostic.bin",
+      prior_path:null, move_destination_path:null, notice:null}}};
     planReviewPanel.render(renderedGalleryTask);
   };
 
@@ -1855,6 +1863,14 @@ window.addEventListener("unhandledrejection", (event) => {
     );
     const detailContentComplete = !expanded || !populated || (
       detailRegion.textContent.includes(longDiagnostic)
+      && ["Source path", "Target path", "Evidence digest"].every((label) => {
+        const term = [...detailBody.querySelectorAll("dt")].find(value => value.textContent === label);
+        const value = term?.nextElementSibling;
+        return value instanceof HTMLElement && value.textContent.length >= 32
+          && getComputedStyle(term).gridColumn === "1 / -1"
+          && getComputedStyle(value).gridColumn === "1 / -1"
+          && value.scrollWidth <= value.clientWidth + 1;
+      })
     );
     issueRegion.scrollTop = issueRegion.scrollHeight;
     trashRegion.scrollTop = trashRegion.scrollHeight;
@@ -2093,7 +2109,7 @@ window.addEventListener("unhandledrejection", (event) => {
       onWindow: async (_owner, offset) => { requests.push(offset); return windowAt(offset); },
       onDetail() {}, onViewChange() {}, onRefresh() {}, onReload() {}, onCheckOutcome() {}, onVisibility() {},
       onSelect() {}, onStart() {}, onControl() {},
-    });
+    }, galleryDetailsState);
     const root = panel.element;
     root.dataset.gallerySection = "inventory_panel";
     root.style.gridColumn = "1 / -1";
@@ -2353,9 +2369,37 @@ window.addEventListener("unhandledrejection", (event) => {
       selection.addRange(range);
       return selection.toString();
     };
-    const detailSpecimen = document.createElement("span");
-    detailSpecimen.textContent = "C:\\Inventory\\photo.jpg · SHA-256: 12ab34cd";
-    item.append(detailSpecimen);
+    const placeholderPresent = item.textContent.includes("Select an item to see its details.");
+    review.detail = {row:rows[0], state:"current", response:{detail:{...specimen.detail,
+      row:{...specimen.detail.row, path:"LongCase\\" + "original-directory\\".repeat(12) + "evidence-0.txt"}}}};
+    panel.render(inventoryTask);
+    await settled();
+    const detailTerm = (label) => [...item.querySelectorAll("dt")].find(term => term.textContent === label);
+    let detailSpecimen = detailTerm("Path").nextElementSibling;
+    const displayedPath = review.detail.response.detail.row.path;
+    const digestValue = detailTerm("Stored digest").nextElementSibling;
+    if (![detailSpecimen, digestValue].every(value => getComputedStyle(value).gridColumn === "1 / -1"
+      && value.scrollWidth <= value.clientWidth + 1)
+        || !detailSpecimen.textContent.includes("LongCase\\original-directory")
+        || digestValue.textContent !== specimen.detail.attestation.content.digest
+        || getComputedStyle(item.querySelector("dl")).fontSize !== getComputedStyle(item.querySelector(".nami-plan-review__detail-status")).fontSize) {
+      throw new Error("Inventory mixed details lost complete paths, hashes or shared body typography");
+    }
+    for (const state of ["missing", "unsupported", "mismatched", "error"]) {
+      review.detail.response.detail.row = {...specimen.detail.row,
+        presence:state === "missing" ? "missing" : "present", verification_state:state};
+      panel.render(inventoryTask);
+      const header = item.querySelector(".nami-plan-review__detail-status");
+      const stateLabel = header.querySelector(".nami-file-state-label");
+      if (getComputedStyle(stateLabel).backgroundColor === "rgba(0, 0, 0, 0)"
+          || stateLabel.getBoundingClientRect().height < 16) {
+        throw new Error("Inventory exceptional detail status lost its shared filled label");
+      }
+    }
+    review.detail.response.detail.row = {...specimen.detail.row, path:displayedPath};
+    panel.render(inventoryTask);
+    detailSpecimen = detailTerm("Path").nextElementSibling;
+    if (!item.contains(detailSpecimen)) throw new Error("copy witness lost its connected path value");
     const detailSelection = selectedText(detailSpecimen);
     let copySelection = null;
     const observeCopy = (event) => {
@@ -2380,18 +2424,60 @@ window.addEventListener("unhandledrejection", (event) => {
       task_details_selectable: getComputedStyle(global).userSelect === "text",
     };
     selection.removeAllRanges();
-    detailSpecimen.remove();
+    planReviewPanel.render({...planReviewTask, review:{...planReviewTask.review,
+      summary:{...planReviewTask.review.summary, highlight_focus_node_id:null}}});
+    const planToggle = planReviewPanel.element.querySelector('[data-action="toggle-execution-details"]');
+    if (planToggle.ariaExpanded !== "true") throw new Error("Plan did not inherit Inventory disclosure");
+    planToggle.click();
+    panel.render(inventoryTask);
+    if (toggle.ariaExpanded !== "false") throw new Error("manual Details close did not reach Inventory");
+    toggle.click();
+    review.detail = null;
+    panel.render(inventoryTask);
     const detailEvidence = { initially_hidden: initiallyHidden, expanded: !diagnostics.hidden,
       root_height: rootBounds.height, column_height: detailsBounds.height,
       root_width: rootBounds.width, column_width: detailsBounds.width,
       card_rectangles: [global, item].map(rectangle),
       rem_size: parseFloat(getComputedStyle(document.documentElement).fontSize),
       global_overflow: getComputedStyle(global).overflowY, item_overflow: getComputedStyle(item).overflowY,
-      placeholder: item.textContent.includes("Select an item to see its details."), text_selection: textSelection };
+      placeholder: placeholderPresent && item.textContent.includes("Select an item to see its details."), text_selection: textSelection };
     item.focus();
     toggle.click();
     detailEvidence.focus_restored = document.activeElement === toggle && diagnostics.hidden;
     await settled();
+    const workCallbacks = {onWindow:async () => null, onDetail() {}, onViewChange() {}, onRefresh() {},
+      onReload() {}, onCheckOutcome() {}, onVisibility() {}, onSelect() {}, onStart() {}, onControl() {}};
+    const setupCallbacks = Object.fromEntries(["onEdit", "onValidate", "onPick", "onRecent", "onRecentPair",
+      "onRefreshRecents", "onMode", "onOption", "onAddFilter", "onRemoveFilter", "onMount", "onPlanAgainMount",
+      "onStartPlan", "onStartInventory", "onAddPair", "onRemoveBatchRow", "onClearBatchResults", "onStartBatch",
+      "onPlanAgain"].map(name => [name, () => {}]));
+    const newWorkPanel = () => createWorkPanel(setupCallbacks,
+      {...planReviewCallbacks, onWindow:async () => null}, document.createElement("section"), workCallbacks);
+    const work = newWorkPanel();
+    work.element.style.blockSize = "640px";
+    app.append(work.element);
+    work.render(planReviewTask);
+    const workToggle = (action) => work.element.querySelector(`[data-action="${action}"]`);
+    if (workToggle("toggle-execution-details").ariaExpanded !== "false") throw new Error("new work panel starts open");
+    workToggle("toggle-execution-details").click();
+    work.render(inventoryTask);
+    if (workToggle("inventory-details").ariaExpanded !== "true") throw new Error("work panel did not share Plan disclosure");
+    work.renderSettings();
+    work.render({...inventoryTask, taskId:"gallery-fresh-inventory", inventoryReview:{...review, detail:null}});
+    if (workToggle("inventory-details").ariaExpanded !== "true"
+        || work.element.querySelector(".nami-plan-review__detail-body").children.length !== 0) {
+      throw new Error("new task lost disclosure or reused another task's item facts");
+    }
+    workToggle("inventory-details").click();
+    work.render(planReviewTask);
+    if (workToggle("toggle-execution-details").ariaExpanded !== "false") throw new Error("manual close did not reach Plan");
+    const restarted = newWorkPanel();
+    app.append(restarted.element);
+    restarted.render(inventoryTask);
+    if (restarted.element.querySelector('[data-action="inventory-details"]').ariaExpanded !== "false") {
+      throw new Error("new app work panel retained prior disclosure");
+    }
+    for (const instance of [work, restarted]) { instance.render(null); instance.element.remove(); }
     const retainedWindow = review.window;
     const retainedFocus = document.activeElement;
     const liveTask = {...inventoryTask, sessionId:"gallery-integrity", sessionKind:"verify",

@@ -2007,8 +2007,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                     "completion_local": True,
                     "details_rectangles": [[0, 0, 600, 50], [0, 60, 600, 140],
                         [0, 150, 600, block_size], [612, 0, 932, block_size],
-                        [612, 0, 932, (block_size - 12) * 0.4],
-                        [612, (block_size - 12) * 0.4 + 12, 932, block_size]],
+                        [612, 0, 932, (block_size - 12) / 3],
+                        [612, (block_size - 12) / 3 + 12, 932, block_size]],
                     "central_widths": [[996, 996, 996], [600, 600, 600]],
                     "card_scroll_positions": [[0, 0, 9600, 0], [120, 0, 9600, 0], [120, 120, 9600, 0]],
                     "rem_size": 16,
@@ -4284,7 +4284,7 @@ def _assert_diagnostic_layout(diagnostic_layout: list[dict[str, object]]) -> Non
             assert global_card[0] == pytest.approx(item_card[0], abs=1)
             assert global_card[2] == pytest.approx(item_card[2], abs=1)
             assert item_card[3] - item_card[1] == pytest.approx(
-                (global_card[3] - global_card[1]) * 1.5, abs=1,
+                (global_card[3] - global_card[1]) * 2, abs=1,
             )
             if case["populated"]:
                 issue_height, issue_scroll, trash_height, trash_scroll, issue_end, trash_start = case["global_content_rows"]
@@ -4339,7 +4339,7 @@ def _inventory_panel_sample() -> dict[str, object]:
                     "background": "rgba(0, 0, 0, 0)", "height": 18.0}
                    for name, text in zip(cases, texts, strict=True)],
         "checksum": {"text": "01234567", "title": "Stored baseline checksum: 0123456789abcdef0123456789abcdef", "absent": "—"},
-        "timestamps": {"modified": "1970-01-01 00:00", "subject": "1970-01-01 00:00 (1000000000 ns)",
+        "timestamps": {"modified": "1970-01-01 00:00", "subject": "1970-01-01 00:00",
                        "observed": "2026-12-31 23:04", "expected_modified": "1970-01-01 00:00",
                        "expected_observed": "2026-12-31 23:04"},
         "first_widths": first_widths, "row_widths": first_widths.copy(),
@@ -4358,7 +4358,7 @@ def _inventory_panel_sample() -> dict[str, object]:
                           "scroll_top": 6924.0, "columns_aligned": True},
         "details": {"initially_hidden": True, "expanded": True, "root_height": 640.0, "column_height": 640.0,
                     "root_width": 1200.0, "column_width": 320.0, "global_overflow": "auto", "item_overflow": "auto",
-                    "card_rectangles": [[880.0, 0.0, 1200.0, 251.2], [880.0, 263.2, 1200.0, 640.0]], "rem_size": 16.0,
+                    "card_rectangles": [[880.0, 0.0, 1200.0, 628 / 3], [880.0, 628 / 3 + 12, 1200.0, 640.0]], "rem_size": 16.0,
                     "placeholder": True, "focus_restored": True,
                     "text_selection": {"card_labels_blocked": True, "detail_exact": True,
                                        "copy_event_exact": True, "editable_input": True, "task_details_selectable": True}},
@@ -4445,7 +4445,7 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     assert evidence["checksum"] == _inventory_panel_sample()["checksum"]
     timestamps = evidence["timestamps"]
     assert timestamps["modified"] == timestamps["expected_modified"]
-    assert timestamps["subject"] == f'{timestamps["expected_modified"]} (1000000000 ns)'
+    assert timestamps["subject"] == timestamps["expected_modified"]
     assert timestamps["observed"] == timestamps["expected_observed"]
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", timestamps["modified"])
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}", timestamps["observed"])
@@ -4517,7 +4517,7 @@ def _assert_inventory_panel(evidence: dict[str, object], integrity: dict[str, ob
     global_card, item_card = details["card_rectangles"]
     assert global_card[3] < item_card[1]
     assert item_card[3] - item_card[1] == pytest.approx(
-        (global_card[3] - global_card[1]) * 1.5, abs=1,
+        (global_card[3] - global_card[1]) * 2, abs=1,
     )
     assert details["global_overflow"] == details["item_overflow"] == "auto"
     assert evidence["refresh_on_status"] is True and evidence["root_fits"] is True

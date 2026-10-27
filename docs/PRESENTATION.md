@@ -137,8 +137,11 @@ sort and reveal retain the immutable complete server facts. Plan scan notices
 retain the scanned side and warning code while bounding the path and explanation
 separately. Inventory window labels use basenames; flat scan notices use a warning
 code plus bounded path tail, and omit the repeated full warning path. Exact Plan details
-preserve original path spelling and a source/target discriminator for the path;
-they do not infer a warning's root from operation metadata. The read is one
+preserve original path spelling and a source/target discriminator for the path.
+Canonical operation details additionally carry an exact source-relative path
+only when their reviewed source observation exists. Unsupported placeholders,
+target-only operations and structural/prior nodes do not infer source paths.
+They do not infer a warning's root from operation metadata. The read is one
 node-id lookup under the current task/view revision, without filesystem or ledger
 I/O. Execution detail remains separately guarded by its execution revision.
 The browser joins these relative facts to established summary roots only for

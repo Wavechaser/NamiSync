@@ -44,7 +44,7 @@ function rollupText(rollup) {
     + (rollup.size_overflow ? " (size overflow)" : rollup.size_partial ? " (partial size)" : "");
 }
 
-export function createInventoryReviewPanel(callbacks) {
+export function createInventoryReviewPanel(callbacks, detailsState = { expanded: false }) {
   const pane = element("section", "nami-inventory-review");
   pane.ariaLabel = "Inventory review";
   for (const name of ["pointerdown", "wheel", "touchstart", "input", "contextmenu"]) {
@@ -260,15 +260,15 @@ export function createInventoryReviewPanel(callbacks) {
   const detailTitle = element("h2", "", "Item details");
   const detailHeader = element("div", "nami-plan-review__detail-header");
   detailHeader.append(detailTitle);
-  const detailStatus = element("p", "nami-shell__guidance");
+  const detailStatus = element("p", "nami-shell__guidance nami-plan-review__detail-status nami-integrity-row__presence");
   detailStatus.setAttribute("role", "status");
   const detailActions = element("div", "nami-inventory-review__actions");
-  const acknowledge = button("Acknowledge missing", "inventory-acknowledge");
-  const restore = button("Restore visibility", "inventory-restore");
+  const acknowledge = button("Acknowledge", "inventory-acknowledge");
+  const restore = button("Restore", "inventory-restore");
   detailActions.append(acknowledge, restore);
   const scopeHint = element("p", "nami-shell__guidance");
   const detailBody = element("dl", "nami-plan-review__detail-body");
-  detail.append(detailHeader, detailStatus, detailActions, scopeHint, detailBody);
+  detail.append(detailHeader, detailStatus, detailBody, detailActions, scopeHint);
   const content = element("div", "nami-inventory-review__content");
   content.append(table);
   const diagnostics = element("div", "nami-plan-review__diagnostics nami-inventory-review__diagnostics");
@@ -281,13 +281,10 @@ export function createInventoryReviewPanel(callbacks) {
   const globalScanFacts = element("p", "nami-shell__guidance");
   globalScanFacts.dataset.inventoryScanFacts = "";
   const globalScanState = element("p", "nami-shell__guidance");
-  const globalIntegrity = element("p", "nami-shell__guidance");
-  globalIntegrity.dataset.inventoryIntegrityFacts = "";
-  globalDetails.append(element("h2", "", "Task details"), globalScanState, globalScanFacts, globalFacts, globalIntegrity);
+  globalDetails.append(element("h2", "", "Task details"), globalScanState, globalScanFacts, globalFacts);
   diagnostics.append(globalDetails, detail);
   pane.append(header, summary, content, diagnostics);
 
-  let detailsExpanded = false;
   let current = null;
   let task = null;
   let tree = null;
@@ -382,10 +379,10 @@ export function createInventoryReviewPanel(callbacks) {
     });
   }
   detailsToggle.addEventListener("click", () => {
-    detailsExpanded = !detailsExpanded;
-    detailsToggle.ariaExpanded = String(detailsExpanded);
-    if (!detailsExpanded && diagnostics.contains(document.activeElement)) detailsToggle.focus();
-    diagnostics.hidden = !detailsExpanded;
+    detailsState.expanded = !detailsState.expanded;
+    detailsToggle.ariaExpanded = String(detailsState.expanded);
+    if (!detailsState.expanded && diagnostics.contains(document.activeElement)) detailsToggle.focus();
+    diagnostics.hidden = !detailsState.expanded;
   });
   const resizeObserver = new window.ResizeObserver(() => {
     if (current !== null) { columns.freeze(); columns.refresh(); }
@@ -444,8 +441,11 @@ export function createInventoryReviewPanel(callbacks) {
     if (row !== undefined && row.warning === null && !blocked()) callbacks.onVisibility(current, "restore", row.node_id);
   });
 
-  function renderPresence(state, row) {
-    const ordinaryItem = row.is_container ? null : rowOrdinaryItems.get(row.row_id) ?? null;
+  function renderPresence(state, row, ordinary = {
+    item: row.is_container ? null : rowOrdinaryItems.get(row.row_id) ?? null,
+    mode: rowOrdinaryMode, sessionId: rowOrdinarySessionId,
+  }) {
+    const ordinaryItem = ordinary.item;
     const presentation = task?.progressPresentation;
     const active = presentation?.activeItem;
     const live = !row.is_container && row.warning === null && row.row_id !== null
@@ -454,14 +454,14 @@ export function createInventoryReviewPanel(callbacks) {
       && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)
       && active?.item_type === "integrity"
       && active.item_id === `${current.summary.location_id}:${row.row_id}`
-      && !(rowOrdinarySessionId === task.sessionId && ordinaryItem !== null);
+      && !(ordinary.sessionId === task.sessionId && ordinaryItem !== null);
     const stateKey = row.warning !== null || row.row_id === null ? ""
       : row.presence !== "present" ? row.presence
       : row.is_container ? row.reappeared ? "reappeared"
         : ["error", "unsupported"].includes(row.verification_state) ? row.verification_state : ""
       : row.verification_state === "mismatched" ? "mismatched"
       : row.reappeared ? "reappeared" : row.verification_state;
-    const owner = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[rowOrdinaryMode] ?? "Integrity";
+    const owner = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode] ?? "Integrity";
     const liveLabel = ({baseline: "Baselining", verify: "Verifying", rebaseline: "Rebaselining"})[task?.sessionKind];
     const percent = live && Number.isFinite(presentation.itemPercent) ? presentation.itemPercent : undefined;
     const stateText = live ? liveLabel : ordinaryItem !== null ? integrityLabel(ordinaryItem.result)
@@ -591,7 +591,7 @@ export function createInventoryReviewPanel(callbacks) {
           && !blocked() && owner.closeRecovery == null;
         const actionBlocked = !owner.sessionReleased || owner.sessionState === "active";
         const actions = [{ id: "row-details", label: "Show details", run: () => {
-          detailsExpanded = true;
+          detailsState.expanded = true;
           detailsToggle.ariaExpanded = "true";
           diagnostics.hidden = false;
           callbacks.onDetail(review, nodeId);
@@ -650,8 +650,7 @@ export function createInventoryReviewPanel(callbacks) {
 
   function commitTreeWindow(controller, generation, window, preferredNodeId = null, reveal = true, passive = false) {
     const retained = matchingIntegrity(window.integrity);
-    const ordinary = retained !== null && (retained.session_id === task?.sessionId
-      || retained.request_id === current.summary.scan_request_id) ? retained : null;
+    const ordinary = isCurrentIntegrity(retained) ? retained : null;
     rowOrdinaryItems = new Map((ordinary?.items ?? []).map((item) => [item.row_id, item]));
     rowOrdinaryMode = ordinary?.mode ?? null;
     rowOrdinarySessionId = ordinary?.session_id ?? null;
@@ -670,21 +669,36 @@ export function createInventoryReviewPanel(callbacks) {
     return accepted;
   }
 
-  function appendDetail(key, value, filesystem = false) {
+  function isCurrentIntegrity(value) {
+    const latest = currentIntegrity();
+    return value !== null && (value.session_id === task?.sessionId
+      || value.request_id === current.summary.scan_request_id)
+      && !(latest !== null && latest.session_id === value.session_id
+        && latest.request_id === value.request_id && latest.revision > value.revision);
+  }
+
+  function appendDetail(key, value, { filesystem = false, fullWidth = filesystem, block = false } = {}) {
     const term = element("dt", "", key);
     const description = element("dd");
+    if (fullWidth) term.className = description.className = "nami-detail-full";
+    if (block) {
+      term.classList.add("nami-detail-block");
+      if (!fullWidth) description.classList.add("nami-detail-block");
+    }
     (filesystem ? renderFilesystemText : renderText)(description, value ?? "Unavailable");
     detailBody.append(term, description);
   }
   function subjectDetails(prefix, subject) {
-    appendDetail(`${prefix} kind`, subject?.kind ?? null);
-    appendDetail(`${prefix} size`, subject === null ? null : `${bytes(subject.size)} (${subject.size} bytes)`);
-    appendDetail(`${prefix} modified`, subject === null ? null : `${modifiedTime(subject.mtime_ns)} (${subject.mtime_ns} ns)`);
+    appendDetail(`${prefix} size`, subject === null ? null : `${bytes(subject.size)} (${subject.size} bytes)`, { block: true });
+    appendDetail(`${prefix} modified`, subject === null ? null : modifiedTime(subject.mtime_ns));
     appendDetail(`${prefix} identity`, subject?.file_identity === null || subject === null ? null
       : `${subject.file_identity.volume_serial}:${subject.file_identity.file_index}`);
   }
   function renderDetails() {
     detailBody.replaceChildren();
+    delete detailStatus.dataset.integrity;
+    delete detailStatus.dataset.lifecycle;
+    delete detailStatus.dataset.integrityState;
     const selected = current?.detail ?? null;
     if (selected === null) {
       renderText(detailTitle, "Item details");
@@ -695,58 +709,63 @@ export function createInventoryReviewPanel(callbacks) {
     renderText(detailStatus, selected.state === "loading" ? "Loading current evidence…"
       : selected.state === "unavailable" ? "This item has no current ledger row. Select another item."
       : selected.state === "error" ? "Details unavailable. Select the item again to retry."
-      : selected.row.warning !== null ? "Scan notice" : selected.row.row_id === null ? "Folder summary" : "Current ledger evidence");
+      : selected.row.warning !== null ? "Scan notice" : selected.row.row_id === null ? "Folder summary" : "");
     const row = selected.row;
     if (row.warning !== null) {
       appendDetail("Notice", row.warning.code);
       if (selected.state === "current") {
-        appendDetail("Path at scan time", formatFilesystemPath(current.summary.root_path, selected.response.snapshot.path), true);
+        appendDetail("Path at scan time", formatFilesystemPath(current.summary.root_path, selected.response.snapshot.path), { filesystem: true });
         appendDetail("Details", selected.response.snapshot.warning.detail);
       }
       return;
     }
     if (row.is_container) {
       appendDetail("Complete folder scope", rollupText(row.rollup));
-      for (const [key, text] of FACETS) {
-        if (key !== "notice" && key !== "recall") appendDetail(`Folder ${text.toLowerCase()}`, String(row.rollup[key]));
-      }
+      if (row.rollup.missing > 0) appendDetail("Missing items", String(row.rollup.missing));
+      if (row.rollup.acknowledged > 0) appendDetail("Acknowledged items", String(row.rollup.acknowledged));
     }
     if (row.row_id === null) {
       if (row.is_container && selected.state === "current") {
-        appendDetail("Path at scan time", formatFilesystemPath(current.summary.root_path, selected.response.snapshot.path), true);
+        appendDetail("Path at scan time", formatFilesystemPath(current.summary.root_path, selected.response.snapshot.path), { filesystem: true });
       }
       return;
     }
     if (selected.state !== "current") return;
     const value = selected.response.detail;
-    appendDetail("Path", formatFilesystemPath(current.summary.root_path, value.row.path), true);
-    appendDetail("Presence", label(value.row.presence));
-    appendDetail("Verification state", label(value.row.verification_state));
-    subjectDetails("Observed", value.observed);
-    appendDetail("Last observed", formatLocalDateTime(value.row.last_observed_at));
-    appendDetail("Last verified", formatLocalDateTime(value.row.last_verified_at));
-    appendDetail("Missing since", formatLocalDateTime(value.row.missing_since));
-    appendDetail("Acknowledged", formatLocalDateTime(value.row.acknowledged_at));
-    appendDetail("Reappeared", formatLocalDateTime(value.row.reappeared_at));
-    appendDetail("Verification invalidated", formatLocalDateTime(value.row.verification_invalidated_at));
-    appendDetail("Invalidation reason", value.row.verification_invalidated_reason);
-    appendDetail("Unsupported reason", value.row.unsupported_reason);
-
     const ordinary = matchingIntegrity(selected.response.integrity) ?? currentIntegrity();
     const ordinaryItem = ordinary?.items.find((item) => item.row_id === row.row_id) ?? null;
+    renderPresence(detailStatus, { ...row, presence: value.row.presence,
+      verification_state: value.row.verification_state, reappeared: value.row.reappeared_at !== null },
+    !row.is_container && isCurrentIntegrity(ordinary)
+      ? {item:ordinaryItem, mode:ordinary.mode, sessionId:ordinary.session_id} : undefined);
+    const stateLabel = detailStatus.querySelector(".nami-file-state-label");
+    if (!row.is_container && value.row.presence === "present" && stateLabel !== null) {
+      renderText(stateLabel, `Present · ${stateLabel.textContent}`);
+    }
+    appendDetail("Path", formatFilesystemPath(current.summary.root_path, value.row.path), { filesystem: true });
+    subjectDetails("Observed", value.observed);
+    appendDetail("Last observed", formatLocalDateTime(value.row.last_observed_at));
+    for (const [key, date] of [["Missing since", value.row.missing_since], ["Acknowledged", value.row.acknowledged_at],
+      ["Reappeared", value.row.reappeared_at]]) {
+      if (date !== null) appendDetail(key, formatLocalDateTime(date));
+    }
+    if (value.row.unsupported_reason !== null) appendDetail("Unsupported reason", value.row.unsupported_reason);
+    if (row.is_container) return;
+    if (value.row.last_verified_at !== null) appendDetail("Last verified", formatLocalDateTime(value.row.last_verified_at), { block: true });
+    if (value.row.verification_invalidated_at !== null) appendDetail("Verification invalidated", formatLocalDateTime(value.row.verification_invalidated_at));
+    if (value.row.verification_invalidated_reason !== null) appendDetail("Invalidation reason", value.row.verification_invalidated_reason);
     if (ordinaryItem !== null) {
-      appendDetail(`${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result`, integrityLabel(ordinaryItem.result));
-      appendDetail("Result reason", ordinaryItem.reason);
+      appendDetail(`${isCurrentIntegrity(ordinary) ? "" : "Previous "}${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result`, integrityLabel(ordinaryItem.result));
+      if (ordinaryItem.reason !== null) appendDetail("Result reason", ordinaryItem.reason);
       appendDetail("Recording", ordinaryItem.recording);
-      appendDetail("Record disposition", ordinaryItem.record_disposition);
-      appendDetail("Omitted result details", String(ordinaryItem.detail_omitted_count));
+      if (ordinaryItem.record_disposition !== null) appendDetail("Record disposition", ordinaryItem.record_disposition);
+      if (ordinaryItem.detail_omitted_count > 0) appendDetail("Omitted result details", String(ordinaryItem.detail_omitted_count));
     }
     if (value.attestation === null) {
-      appendDetail("Stored digest", "No baseline evidence");
+      appendDetail("Stored digest", "No baseline evidence", { fullWidth: true, block: true });
       return;
     }
-    appendDetail("Stored digest", value.attestation.content.digest);
-    appendDetail("Algorithm", value.attestation.content.algorithm);
+    appendDetail("Stored digest", value.attestation.content.digest, { fullWidth: true, block: true });
     appendDetail("Provenance", value.attestation.content.provenance);
     appendDetail("Evidence observed", formatLocalDateTime(value.attestation.content.observed_at));
     subjectDetails("Attested", value.attestation.subject);
@@ -760,9 +779,8 @@ export function createInventoryReviewPanel(callbacks) {
     filterMenu.dispose();
     columns.dispose();
     resizeObserver.disconnect();
-    detailsExpanded = false;
     diagnostics.hidden = true;
-    detailsToggle.ariaExpanded = "false";
+    detailsToggle.ariaExpanded = String(detailsState.expanded);
     clearTimeout(searchTimer);
     searchTimer = null;
     saveViewport();
@@ -807,9 +825,10 @@ export function createInventoryReviewPanel(callbacks) {
       activeRefreshTarget = review.activeRefreshTarget;
     }
     resizeObserver.observe(list);
-    if (focusInDetails && !detailsExpanded) statusTitle.focus();
+    if (focusInDetails && !detailsState.expanded) statusTitle.focus();
     detailsToggle.hidden = review === null;
-    diagnostics.hidden = review === null || !detailsExpanded;
+    detailsToggle.ariaExpanded = String(detailsState.expanded);
+    diagnostics.hidden = review === null || !detailsState.expanded;
     const available = review !== null;
     const follow = review?.follow;
     goCurrent.hidden = !available || follow?.hasTarget !== true;
@@ -875,13 +894,6 @@ export function createInventoryReviewPanel(callbacks) {
         + (review.summary.hidden_selected_file_count > 0
           ? ` · ${review.summary.hidden_selected_file_count} hidden by filters or search` : "")
       : "";
-    const resultMode = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary?.mode];
-    renderText(globalIntegrity, ordinary === null ? ""
-      : `${ordinary.complete ? `${resultMode} retained results`
-        : ordinary.gap ? `Live ${resultMode.toLowerCase()} results may be incomplete`
-          : `Live ${resultMode.toLowerCase()} results`}`
-        + ` · ${ordinary.items.length} window result${ordinary.items.length === 1 ? "" : "s"}`);
-    globalIntegrity.hidden = ordinary === null;
     const scanScope = review?.summary.scan_scope;
     const hasScan = available && review.summary.scan_request_id !== null;
     const scopeLabel = scanScope?.kind === "location" ? "Entire location"
@@ -938,7 +950,7 @@ export function createInventoryReviewPanel(callbacks) {
       return;
     }
     toolbar.hidden = false;
-    renderText(globalFacts, `${selectionText}. ${rollupText(review.summary.rollup)}. ${review.summary.rollup.acknowledged} acknowledged items. Stored checksums are baseline evidence; a scan does not verify current bytes.`);
+    renderText(globalFacts, `${selectionText}. ${rollupText(review.summary.rollup)}. ${review.summary.rollup.acknowledged} acknowledged items.`);
     const selected = review.detail?.row ?? null;
     const domain = selected !== null && selected.warning === null;
     const currentPublication = review.summary.request_id === value.requestId && !value.inventoryViewUnconfirmed;
@@ -971,7 +983,7 @@ export function createInventoryReviewPanel(callbacks) {
     restore.hidden = !domain || acknowledgedCount === 0;
     restore.disabled = actionBlocked || !currentPublication;
     renderText(scopeHint, domain && selected.is_container
-      ? "Folder actions include all missing items below it, including hidden and off-window items. Restore visibility does not restore files."
+      ? "Includes all missing items below this folder, even hidden items. Restore changes visibility only."
       : domain && acknowledgedCount > 0 ? "Restore visibility does not restore the missing file." : "");
     scopeHint.hidden = scopeHint.textContent === "";
     const counts = Object.fromEntries(FACETS.map(([key]) => [key,

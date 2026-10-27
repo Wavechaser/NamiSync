@@ -134,13 +134,13 @@ def test_plan_detail_keeps_original_paths_and_refuses_stale_or_root_reads() -> N
     assert detail["detail"] == {
         "path": r"New\Mixed.txt", "prior_path": r"Old\Mixed.txt",
         "move_destination_path": None, "path_origin": "target",
-        "notice": None,
+        "notice": None, "source_path": None,
     }
     group = next(node for node in state.projection.nodes if node.row_kind == "prior-group")
     assert state.detail(expected_revision=0, node_id=group.node_id)["detail"] == {
         "path": None, "prior_path": None,
         "move_destination_path": "New", "path_origin": None,
-        "notice": None,
+        "notice": None, "source_path": None,
     }
     prior = next(node for node in state.projection.nodes if node.row_kind == "prior-operation")
     assert state.detail(expected_revision=0, node_id=prior.node_id)["detail"]["path"] == r"Old\Mixed.txt"

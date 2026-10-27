@@ -128,6 +128,7 @@ class PlanProjectionNode:
     prior_path: str | None = None
     path: str | None = None
     path_origin: str | None = None
+    source_path: str | None = None
     scan_warning: ScanWarning | None = None
     recall: bool = False
 
@@ -266,6 +267,7 @@ class _PlanProjectionDraft:
     prior_path: str | None = None
     path: str | None = None
     path_origin: str | None = None
+    source_path: str | None = None
     scan_warning: ScanWarning | None = None
     recall: bool = False
 
@@ -984,6 +986,8 @@ def _operation_draft(
         operation_kind=None if operation is None else operation.kind.value,
         presentation_kind=None if operation is None else _presentation_kind(operation),
         prior_path=None if operation is None or prior else operation.prior_target_rel_path,
+        source_path=(None if operation is None or prior or operation.source_expected is None
+                     else operation.source_rel_path),
         reason=None if operation is None else operation.reason.value,
         blocked_reason=(
             None
@@ -1105,6 +1109,7 @@ def _materialize_projection(
             prior_path=draft.prior_path,
             path=draft.path,
             path_origin=draft.path_origin,
+            source_path=draft.source_path,
         ))
         drafts[index] = None  # type: ignore[list-item]
     frozen_nodes = tuple(nodes)

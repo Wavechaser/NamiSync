@@ -1886,14 +1886,18 @@ lines on the left of the Details disclosure. Long advice wraps rather than
 being truncated, including at the native minimum width. Progress follows them. The shared
 card is used by Plan, live and
 terminal execution; the same presentation remains available to a future Verify
-view without implementing that view here. Details starts collapsed. Its optional
+view without implementing that view here. Details starts collapsed on a new app
+launch. One work-panel-owned disclosure flag is shared across Plan and Inventory,
+task navigation, Settings and new tasks until the user changes it. It is not
+persisted; sharing visibility never shares item facts or bypasses their retirement.
+Its optional
 right column spans Setup, status and table, capped at 20rem and 40% of the
 available width. Hiding it returns that width to all three central cards.
 Two stacked cards scroll independently: global plan/execution diagnostics,
 the supplied detailed status and action messages, nonzero canonical plan-action
 counts, issues, omissions and trash location above the highlighted item's facts.
-The item card receives three parts of the available card height to the global
-card's two, preserving independent scrolling.
+The item card receives two parts of the available card height to the global
+card's one, preserving independent scrolling.
 Action recovery and Gap guidance also remain visible in the central status card
 while Details is hidden. This
 uses the supplemental, simultaneous-interaction pattern in Microsoft's
@@ -1913,9 +1917,15 @@ active. The server-owned highlight focus, including the last focus in a range,
 chooses the item; a row click does not force a deliberately collapsed pane open.
 Checkbox selection remains independent. Planned facts include supplied size,
 Modified time, positive dependency count and applicable selection/folder totals;
-they never infer a missing planned path. Planned facts appear before execution;
-later the one retained operation response adds distinct operation, automatic
-verification and stored-evidence truth. Ordinary detail omits the operation ID
+they never infer a missing planned path. Action and reason lead the item facts;
+available operation outcomes and recording replace the leading planned claim.
+Distinct automatic verification and stored-evidence facts remain below. Paths
+and complete digests occupy full-width label/value rows; other metadata stays
+columned, with space between blocks. Source and target paths share the same
+formatting and joining infrastructure. Only reviewed source observations supply
+an operation source path, preserving its spelling independently of target casing
+or normalization; target-only, unsupported-without-source-evidence, structural
+and prior-location subjects do not infer one. Ordinary detail omits the operation ID
 and has no sticky shaded title or per-row Details/Close buttons. The whole area
 collapses while retaining the table view, selection, highlight and scroll, and
 focus returns to the disclosure when hidden content held it. No separate card
@@ -1928,8 +1938,8 @@ null or invalid timing is omitted, and overlapping error categories are never
 summed into an invented total.
 UI dates use local `yyyy-MM-DD HH:mm` consistently for Plan/Verify modified
 times, terminal completion and detail dates. Missing dates retain their existing
-blank, omitted or Unavailable presentation. Raw nanoseconds and operation
-diagnostics retain their machine values; sorting and elapsed time use the
+blank, omitted or Unavailable presentation. Raw nanoseconds stay out of Inventory
+detail text; machine values and operation diagnostics remain unchanged. Sorting and elapsed time use the
 original facts rather than the minute-resolution display.
 The default/minimum windows remain 1280×800/1024×640; Details preserves the
 bounded table viewport and its virtual scrolling at both sizes. The global and
@@ -2130,16 +2140,30 @@ complete inventory rollup summary and one persistent status paragraph.
 That paragraph marks previous publication, incomplete or scoped coverage and
 includes loading, action-result, event-gap or recovery guidance without repeating
 the rollup counts. Complete selection and hidden-selection counts, scan scope
-and counts, and retained window-result counts live in Task details. The visible-row count remains a view fact,
+and counts live in Task details. The stored-checksum disclaimer and retained-window
+result paragraph are omitted. The visible-row count remains a view fact,
 not a second inventory total. Its shared 8 px progress track remains visible;
 unknown activity totals use the shared indeterminate animation, and terminal
 state stops animation without inventing a completion percentage. Supplied known
-progress retains the task snapshot's value. Details starts hidden and opens a full-height optional right
+progress retains the task snapshot's value. Details shares the app-session disclosure
+state described above and opens a full-height optional right
 column using Plan's two independently scrolling cards: task facts above and item
 details below, with a selection placeholder. Hiding Details restores focus when
-it was inside that column. The shared 20rem/40% cap, 2:3 global/item allocation and minimum-size chain
+it was inside that column. The shared 20rem/40% cap, 1:2 global/item allocation and minimum-size chain
 preserve table scrolling. Acknowledgement and restore controls remain with the
 selected item's details.
+
+Inventory detail body text uses Plan's caption typography with unchanged titles.
+The leading file status combines presence and the table's current integrity
+presentation; newer same-owner window results supersede older exact-detail
+results there. Superseded activity results remain labelled Previous in the body.
+Only supplied applicable abnormal dates and reasons appear. File evidence keeps
+actual Last verified dates and the complete baseline digest, provenance and
+attested metadata; algorithm, observed kind and the current-ledger heading are
+omitted. Folder details show path, observed object facts and complete scope totals,
+with nonzero missing/acknowledged counts, without verification fields. Short
+**Acknowledge** and **Restore** buttons follow the facts with a small folder-scope
+advisory; their visibility and complete server-owned action scope remain unchanged.
 
 Inventory terminal labels identify baseline, verification and rebaseline when
 those ordinary sessions are observed; the detailed status calls this the current

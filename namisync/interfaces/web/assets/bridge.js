@@ -3412,8 +3412,8 @@ function validatePlanDetail(value) {
       || !isNonnegativeInteger(value.view_revision) || !isNodeId(value.node_id)) return false;
   if (value.disposition === "conflict") return value.detail === null;
   const detail = value.detail;
-  return isExactObject(detail, ["path", "prior_path", "move_destination_path", "path_origin", "notice"])
-    && [detail.path, detail.prior_path, detail.move_destination_path].every(
+  return isExactObject(detail, ["path", "prior_path", "move_destination_path", "path_origin", "source_path", "notice"])
+    && [detail.path, detail.prior_path, detail.move_destination_path, detail.source_path].every(
       (path) => path === null || path === "" || isBoundedPath(path),
     ) && [null, "source", "target"].includes(detail.path_origin)
     && ((detail.path === null) === (detail.path_origin === null))

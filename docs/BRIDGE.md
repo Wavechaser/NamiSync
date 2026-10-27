@@ -803,8 +803,8 @@ operation and presentation kinds are null together. The Plan filter and count ca
 `recase` is no longer an admitted Plan filter. Selection and execution continue
 using original operation identities and kinds.
 
-`PlanNodeDetail` is exactly `{path,prior_path,move_destination_path,path_origin,notice}`.
-The three path fields are nullable original-spelling root-relative paths, bounded
+`PlanNodeDetail` is exactly `{path,prior_path,move_destination_path,path_origin,source_path,notice}`.
+The four path fields are nullable original-spelling root-relative paths, bounded
 by the existing 32,767 UTF-16-unit path contract (empty denotes root).
 `path_origin` is `source|target|null` and is null exactly when `path` is null.
 Canonical operations and prior-location nodes use target paths; scan notices
@@ -817,6 +817,11 @@ response admission and explicitly refuses an oversized response.
 The read admits one opaque node id from the current immutable Plan projection,
 refuses the synthetic root, and returns null detail on a view-revision conflict.
 It performs no filesystem or ledger read and is available during planning.
+`source_path` carries a canonical operation's exact source-relative spelling only
+when its reviewed `source_expected` observation is present. Target-only,
+unsupported-without-source-evidence, synthetic and prior-location nodes carry
+null; target-relative paths never stand in for source facts. It uses the same
+nullable path admission and display joining as the existing target paths.
 
 `PlanViewSummary` also carries `highlight_revision`,
 `highlight_anchor_node_id`, `highlight_focus_node_id`,

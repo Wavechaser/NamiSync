@@ -1278,7 +1278,7 @@ assert.equal(planDetails.length, plannedReadsBeforeHighlight + 2,
 const plannedNodeId = firstReview.summary.highlight_focus_node_id;
 const plannedReply = { disposition: "current", view_revision: firstReview.summary.view_revision,
   node_id: plannedNodeId, detail: { path: "Case\\Current.txt",
-    prior_path: "Case\\Previous.txt", move_destination_path: null, path_origin: "target", notice: null } };
+    prior_path: "Case\\Previous.txt", move_destination_path: null, path_origin: "target", source_path: null, notice: null } };
 planDetails.at(-1).resolve(plannedReply);
 await until(() => firstReview.planDetail?.state === "current");
 retiredPlannedRead.reject(new Error("late obsolete planned detail"));

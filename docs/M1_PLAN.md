@@ -55,7 +55,7 @@ serialized builders and fresh independent review per atomic outcome.
 | ID | Outcome / owners | Verification and boundary | Status |
 | --- | --- | --- | --- |
 | D1 | Ordinary Go/Follow buttons on opaque wrappers; remove derived-color exception. Plain cloud glyph and Remote files label. Plan/Inventory renderers, CSS/tokens, icon catalog/generated assets, direct browser/gallery/token/icon consumers, DESKTOP_UI/TOOLS. | Focused renderer/token/icon checks, interface/tools departments and affected installed gallery/journeys. Preserve action emphasis, names, keyboard and forced colors. One controls commit. | Complete: 56 focused, 2,506 interface/tool passes and three existing skips; all seven installed cases pass across the retained five journeys and corrected gallery rerun; independent review. |
-| D2 | Mixed full-width path/hash and columned metadata details; action/reason before Plan metadata and available execution outcomes; concise applicable Inventory evidence/actions; 1:2 task/item pane. Shared work-panel-session disclosure state. App/panels/Plan/Inventory/CSS and direct browser/gallery/native consumers; approved nullable exact source-path migration through plan_projection, plan_review and bridge validator, direct projection/detail/drain/bridge fixtures; DESKTOP_UI/PRESENTATION/BRIDGE. | Long values, exact observed source provenance and absent unknown/target-only sources, file/folder/missing/error/execution facts, copyability, navigation/new tasks/manual close, stale detail retirement; focused, ordinary/import and installed journeys; independent review. One details commit after D3. | User approved narrow source-path extension; implementation pending. |
+| D2 | Mixed full-width path/hash and columned metadata details; action/reason before Plan metadata and available execution outcomes; concise applicable Inventory evidence/actions; 1:2 task/item pane. Shared work-panel-session disclosure state. App/panels/Plan/Inventory/CSS and direct browser/gallery/native consumers; approved nullable exact source-path migration through plan_projection, plan_review and bridge validator, direct projection/detail/drain/bridge fixtures; DESKTOP_UI/PRESENTATION/BRIDGE. | Long values, exact observed source provenance and absent unknown/target-only sources, file/folder/missing/error/execution facts, copyability, navigation/new tasks/manual close, stale detail retirement; focused, ordinary/import and installed journeys; independent review. One details commit after D3. | Complete: 417 focused checks; 6,244 ordinary passes and four existing skips with the stale ratio fixture corrected; 2,100 final interface and 26 final driver checks; 12 imports and all seven installed cases accounted by dependency. Independent review. |
 | D3 | Same-session refreshed Inventory must not present stale verified evidence after changed observation. Inventory renderer primary state, direct pane/native service fixtures and DESKTOP_UI. Retain historical activity evidence separately. | Native reproduction and bounded production-renderer witness; current-session results, fresh publication, failed refresh/retained publication, view changes; interface and installed Inventory gate, independent review. One freshness-presentation commit after D1. | Complete: native and renderer reproduction, 15 focused and 2,100 interface passes; installed Inventory rerun passes after foreground interruption; fresh review. |
 
 The reported subset headline was clarified to mixed ordinary/missing files on
@@ -72,6 +72,24 @@ No queued-input coordinator, recents, domain effect change, M1-12, release,
 DOC-2, push or PR is activated. Existing mandatory/recurrence stops apply.
 Parent owns M1_PLAN, CHANGELOG and HANDOFF. Shared production/test writers
 serialize. Evidence belongs in ignored `build/gui-details-20261027/`.
+
+D2 review paused new product corrections under the recurrence rule: the new
+detail header can supply an exact item while its shared renderer still consumes
+table-owned session/mode context. The finite review found three calls in
+`inventory_review.js` (row creation, live repaint, exact detail header).
+
+| Context mismatch | Consequence / bounded correction |
+| --- | --- |
+| Older exact detail versus newer same-owner window result | Header initially retained the old result; corrected fallback uses the newer window item. |
+| New current-session exact result versus older table session/mode | Tooltip can name the previous mode and live progress can cover an already settled item. Pass item, owning session and mode as one coherent context. |
+
+The implemented reorganization changed only that renderer and existing direct
+probes, with table defaults retaining their bounded map and the header selecting
+one admitted context. Freshness, history, progress, wire and effect rules remain
+intact. Both timing cases and existing refreshed-state/navigation cases passed;
+affected ordinary/native evidence was refreshed. The user explicitly approved
+this narrow reorganization on 2026-10-27. Checker migrations stayed within the
+named population; correction and independent verification are complete.
 
 ### Inventory view reuse and control refinement — 2026-10-27
 

@@ -462,6 +462,7 @@ class PlanReviewState:
                 "path": node.path, "prior_path": node.prior_path,
                 "move_destination_path": node.move_destination_path,
                 "path_origin": node.path_origin,
+                "source_path": node.source_path,
                 "notice": node.notice,
             }
             return response

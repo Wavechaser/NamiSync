@@ -265,6 +265,12 @@ explicit, reviewable and regression-backed.
 - After a newer Inventory scan, show current row evidence instead of an older
   retained verification label. Preserve the previous result in item details;
   selected missing files still correctly make integrity work incomplete.
+- Share Details visibility across task pages for the app session. Give item
+  details more height, full-width paths and hashes, and compact metadata blocks.
+  Plan leads with action and reason, then actual execution outcomes where known;
+  exact source paths reuse target-path display infrastructure. Inventory combines
+  current presence/integrity, omits inapplicable evidence and folder verification
+  fields, and places shorter Acknowledge/Restore actions below the facts.
 - Show Inventory reload only for actionable read recovery, clear it when the
   read recovers, and place both pages' reload controls in their top action rows.
 - Prevent accidental text selection on cards while keeping expanded Task/Item

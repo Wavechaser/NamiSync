@@ -14,8 +14,9 @@ export function createWorkPanel(setupCallbacks, planReviewCallbacks, settings, i
   body.classList.add("nami-work-panel__body");
   panel.append(body);
   const setup = createSetupPanel(setupCallbacks);
-  const review = createPlanReviewPanel({ ...planReviewCallbacks, onCheckStart: setupCallbacks.onStartPlan });
-  const inventory = createInventoryReviewPanel({ ...inventoryCallbacks, onCheckStart: setupCallbacks.onStartInventory });
+  const detailsState = { expanded: false };
+  const review = createPlanReviewPanel({ ...planReviewCallbacks, onCheckStart: setupCallbacks.onStartPlan }, detailsState);
+  const inventory = createInventoryReviewPanel({ ...inventoryCallbacks, onCheckStart: setupCallbacks.onStartInventory }, detailsState);
   settings.remove();
   settings.hidden = false;
   let content = null;

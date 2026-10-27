@@ -1104,7 +1104,7 @@ _PAGE = r"""
     observeDisconnection();
     const value = review.querySelector('.nami-plan-review__detail');
     return value instanceof HTMLElement && !value.hidden && !value.textContent.includes('Loading')
-      && [...value.querySelectorAll('dt')].some(term => term.textContent === 'Path') ? value : null;
+      && [...value.querySelectorAll('dt')].some(term => term.textContent === 'Execution path') ? value : null;
   }, 'detail');
   window.__executionReviewProgress.detailObserved = true;
   const adoptedRow = await until(() => {
@@ -1189,12 +1189,16 @@ _PAGE = r"""
   const copiedDetails = usable(inventory, 'inventory-details');
   if (copiedDetails.ariaExpanded !== 'true') copiedDetails.click();
   const copiedResult = await until(() => {
-    const value = inventory.querySelector('[data-inventory-integrity-facts]');
+    const value = inventory.querySelector('.nami-plan-review__status-title');
     return value instanceof HTMLElement && value.closest('[hidden]') === null
-      && value.textContent.trim() !== '' ? value : null;
+      && value.textContent === 'Verification completed'
+      && visibleFact(inventory, '.nami-inventory-review__rows [data-integrity-state="verified"]') !== null
+      && usable(inventory, 'inventory-pause') === null
+      && usable(inventory, 'inventory-resume') === null
+      && inventory.querySelector('[data-inventory-integrity-facts]') === null ? value : null;
   }, 'ordinary result');
   const copiedResultVisible = copiedResult.isConnected;
-  const copiedRow = visibleFact(inventory, '[data-integrity-state]');
+  const copiedRow = visibleFact(inventory, '.nami-inventory-review__rows [data-integrity-state="verified"]');
   const copiedRowVisible = copiedRow !== null;
 
   const planPane = usable(inventory, 'pane-plan');
@@ -1367,12 +1371,16 @@ _PAGE = r"""
   const ordinaryDetails = usable(blockedInventory, 'inventory-details');
   if (ordinaryDetails.ariaExpanded !== 'true') ordinaryDetails.click();
   const ordinaryResult = await until(() => {
-    const value = blockedInventory.querySelector('[data-inventory-integrity-facts]');
+    const value = blockedInventory.querySelector('.nami-plan-review__status-title');
     return value instanceof HTMLElement && value.closest('[hidden]') === null
-      && value.textContent.trim() !== '' ? value : null;
+      && value.textContent === 'Verification completed'
+      && visibleFact(blockedInventory, '.nami-inventory-review__rows [data-integrity-state="verified"]') !== null
+      && usable(blockedInventory, 'inventory-pause') === null
+      && usable(blockedInventory, 'inventory-resume') === null
+      && blockedInventory.querySelector('[data-inventory-integrity-facts]') === null ? value : null;
   }, 'ordinary result');
   const ordinaryResultVisible = ordinaryResult.isConnected;
-  const ordinaryRow = visibleFact(blockedInventory, '[data-integrity-state]');
+  const ordinaryRow = visibleFact(blockedInventory, '.nami-inventory-review__rows [data-integrity-state="verified"]');
   const ordinaryRowVisible = ordinaryRow !== null;
   const blockedClose = blockedCard.parentElement?.querySelector('.nami-task-rail__close');
   if (!(blockedClose instanceof HTMLButtonElement) || blockedClose.disabled) throw new Error('blocked Close unavailable');
@@ -1551,7 +1559,7 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
           const bounds=toggle.getBoundingClientRect();
           return {{selectedTask:selected?.dataset.taskLabel??null,...{constants},
             rowName:row?.querySelector('.nami-file-row__name-text')?.textContent??null,
-            operationPath:fact('Path'),rowHighlighted:row?.dataset.highlighted==='true',
+            operationPath:fact('Execution path'),rowHighlighted:row?.dataset.highlighted==='true',
             detailVisible:d.hidden===false,disclosureVisible:bounds.width>0&&bounds.height>0,
             disclosureExpanded:toggle.getAttribute('aria-expanded')==='true',
             operationFactPresent:!!fact('Operation'),recordingFactPresent:!!fact('Operation recording'),

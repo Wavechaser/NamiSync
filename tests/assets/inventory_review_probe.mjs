@@ -475,13 +475,14 @@ assert.equal(checksumCell.textContent, real.recorded_checksum.slice(0, 8));
 assert.ok(checksumCell.title.includes(real.recorded_checksum));
 assert.match(text(detail), new RegExp(fixture.detail.detail.attestation.content.digest));
 assert.match(text(detail), new RegExp(`Provenance ${fixture.detail.detail.attestation.content.provenance}`));
-assert.match(text(detail), /Observed modified 2262-04-11 23:47 \(9223372036854775807 ns\)/);
-assert.match(text(detail), /Attested modified 2262-04-11 23:47 \(9223372036854775807 ns\)/);
+assert.match(text(detail), /Observed modified 2262-04-11 23:47/);
+assert.match(text(detail), /Attested modified 2262-04-11 23:47/);
+assert.doesNotMatch(text(detail), /\bns\b|Algorithm|Observed kind|Current ledger evidence/);
 for (const key of ["Last observed", "Last verified", "Evidence observed"]) {
   assert.ok(text(detail).includes(`${key} 2026-01-02 03:04`));
 }
 for (const key of ["Missing since", "Acknowledged", "Reappeared", "Verification invalidated"]) {
-  assert.ok(text(detail).includes(`${key} Unavailable`));
+  assert.ok(!text(detail).includes(key), `${key} is omitted when inapplicable`);
 }
 const dateKeys = ["last_observed_at", "last_verified_at", "missing_since", "acknowledged_at",
   "reappeared_at", "verification_invalidated_at"];
@@ -497,7 +498,7 @@ assert.match(text(detail), /Observed modified 2262-04-12 07:47/);
 process.env.TZ = "UTC";
 review.detail.response = fixture.invalidated_detail;
 pane.render(task);
-assert.match(text(detail), /Verification state Mismatch/);
+assert.match(text(detail), /Present · Mismatch/);
 assert.match(text(detail), /Invalidation reason hash-mismatch/);
 assert.match(text(detail), new RegExp(fixture.invalidated_detail.detail.attestation.content.digest));
 const notice = fixture.views.default.window.rows.find((row) => row.warning !== null);
@@ -576,7 +577,7 @@ assert.equal(checks.at(-1), task);
 assert.equal(action("inventory-refresh").disabled, true);
 pane.dispose();
 const setupUrl = moduleUrl("export const createSetupPanel = () => ({ element: document.createElement('div'), render() {} });");
-const planUrl = moduleUrl("export const createPlanReviewPanel = () => ({ element: document.createElement('div'), render() {}, dispose() {} });");
+const planUrl = moduleUrl("export const createPlanReviewPanel = (callbacks, detailsState) => { globalThis.workDetailsState = detailsState; return { element: document.createElement('div'), render() {}, dispose() {} }; };");
 const panelSource = (await readFile(join(assetRoot, "panels.js"), "utf8"))
   .replace("./render.js", renderUrl).replace("./inventory_review.js", moduleUrl(source))
   .replace("./setup.js", setupUrl).replace("./plan_review.js", planUrl);
@@ -588,8 +589,20 @@ const work = createWorkPanel({onStartInventory: () => { startChecks += 1; }}, {}
 task.sessionReleased = true; task.review = null;
 work.render(task);
 assert.ok(walk(work.element).some((value) => value.ariaLabel === "Inventory review"));
+const workToggle = () => walk(work.element).find(value => value.dataset.action === "inventory-details");
+assert.equal(workDetailsState.expanded, false, "new work panels start closed");
+workToggle().click();
+assert.equal(workDetailsState.expanded, true, "both renderer instances receive the work-panel flag");
 work.renderSettings();
 assert.ok(!walk(work.element).some((value) => value.ariaLabel === "Inventory review"));
+const nextTask = {...task, taskId:"new-inventory-task", inventoryReview:{...fixture.views.default, detail:null}};
+work.render(nextTask);
+assert.equal(workToggle().ariaExpanded, "true", "Settings and a new task preserve disclosure");
+assert.doesNotMatch(text(walk(work.element).find(value => value.ariaLabel === "Inventory item details")), /Stored digest/,
+  "sharing disclosure never reuses another task's item facts");
+workToggle().click();
+work.render(task);
+assert.equal(workToggle().ariaExpanded, "false", "manual close propagates back to another task");
 const pendingInventory = { taskId: "pending-inventory", label: "Pending", taskKind: null,
   sessionState: null, sessionReleased: false, inventoryReview: null, review: null,
   form: { source: {text: "C:\\pending"}, attempt: { kind: "inventory", running: true, dispatched: false } } };
@@ -1249,6 +1262,15 @@ assert.deepEqual(folderCalls, [[folderReview, "acknowledge", folderDomain.node_i
 folderReview.detail = {row: folderDomain, state: "loading"};
 folderPane.render(folderTask);
 assert.doesNotMatch(text(folderPane.element), /Folder not fully local|undefined/);
+folderReview.detail = {row:folderDomain, state:"current", response:{detail:{...fixture.detail.detail,
+  row:{...fixture.detail.detail.row, presence:"missing", missing_since:"2026-01-02T03:04:00+00:00"},
+  observed:{...fixture.detail.detail.observed, kind:"directory"}}}};
+folderPane.render(folderTask);
+const folderDetails = walk(folderPane.element).find(value => value.ariaLabel === "Inventory item details");
+assert.match(text(folderDetails), /Complete folder scope.*Observed size.*Last observed/);
+assert.doesNotMatch(text(folderDetails), /verified|Verification|Stored digest|Attested|Algorithm/i);
+assert.equal(folderDetails.children.at(-2).children[0].textContent, "Acknowledge");
+assert.equal(folderDetails.children.at(-2).children[1].textContent, "Restore");
 folderPane.dispose();
 const presentationRows = [
   {...real, node_id:"presence-return", reappeared:true, verification_state:"unverified"},
@@ -1316,8 +1338,8 @@ presentationReview.window = {...presentationReview.window, integrity:overlay};
 presentationReview.detail = {row:presentationRows[0], state:"current", response:{...fixture.detail,
   detail:{...fixture.detail.detail, attestation:null}, integrity:overlay}};
 presentationPane.render(presentationTask);
-assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "inventoryIntegrityFacts")).textContent,
-  /Live verification results may be incomplete · 1 window result/);
+assert.equal(walk(presentationPane.element).some(value => Object.hasOwn(value.dataset, "inventoryIntegrityFacts")), false,
+  "task details omit the retained-window result paragraph");
 assert.match(presentationPane.element.querySelector('.nami-plan-review__status').textContent,
   /Integrity event history has gaps/);
 presentationPane.render({...presentationTask, executionControlState:"paused"});
@@ -1395,8 +1417,7 @@ presentationTask.snapshot = {session_id:overlay.session_id, session_state:"compl
   terminal_result:{headline:"partial", disposition:"completed", error:"One result needs review",
     phases:[{phase:"verify"}]}};
 presentationPane.render(presentationTask);
-assert.match(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "inventoryIntegrityFacts")).textContent,
-  /Verification retained results · 0 window results/);
+assert.equal(walk(presentationPane.element).some(value => Object.hasOwn(value.dataset, "inventoryIntegrityFacts")), false);
 assert.equal(walk(presentationPane.element).some(value => Object.hasOwn(value.dataset, "integrityState")), false,
   "terminal zero-result replacement removes the live subset");
 assert.equal(presentationPane.element.querySelector(".nami-plan-review__status-title").textContent,
@@ -1461,8 +1482,8 @@ for (const [result, expected] of [["verified", "Verified"], ["baselined", "Basel
   assert.equal(state().dataset.integrity, "modified");
   assert.equal(Object.hasOwn(state().dataset, "integrityState"), false);
   const detailText = text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details"));
-  assert.match(detailText, /Verification state Modified/);
-  assert.ok(detailText.includes(`Verification result ${expected}`), "historical outcome stays separate in item details");
+  assert.match(detailText, /Present · Modified/);
+  assert.ok(detailText.includes(`Previous Verification result ${expected}`), "historical outcome stays separate in item details");
   if (result === "error") assert.match(detailText, /Result reason read-error.*Recording degraded/);
   const rowElement = state().parentElement;
   presentationReview.summary = {...presentationReview.summary,
@@ -1472,6 +1493,45 @@ for (const [result, expected] of [["verified", "Verified"], ["baselined", "Basel
     "selection and view revisions cannot restore superseded evidence");
   assertSameNode(state().parentElement, rowElement, "freshness publication retains the mounted row");
 }
+presentationReview.summary = savedFreshnessSummary;
+for (const [result, expected] of [["mismatched", "Mismatch"], ["error", "Error"]]) {
+  presentationReview.window = {...savedFreshnessWindow, rows:[{...changedRow, reappeared:false}],
+    integrity:{...overlay, revision:4, items:[{...overlayItem, result}]}};
+  presentationReview.detail = {row:{...changedRow, verification_state:"verified"}, state:"current",
+    response:{...changedDetail, integrity:overlay}};
+  presentationTask.sessionId = overlay.session_id;
+  presentationPane.render(presentationTask);
+  const header = presentationPane.element.querySelector(".nami-plan-review__detail-status");
+  assert.equal(header.querySelector(".nami-file-state-label").textContent, `Present · ${expected}`,
+    "newer window results replace an older exact-detail result in the leading status");
+  assert.equal(header.dataset.integrity, result);
+  assert.match(text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details")),
+    /Previous Verification result Verified/);
+}
+presentationReview.detail = {row:{...changedRow, verification_state:"verified"}, state:"current", response:changedDetail};
+presentationReview.window = {...savedFreshnessWindow, rows:[changedRow], integrity:null};
+presentationPane.render(presentationTask);
+assert.equal(presentationPane.element.querySelector(".nami-plan-review__detail-status").querySelector(".nami-file-state-label").textContent,
+  "Present · Modified", "fresh ledger evidence replaces a stale selected-row status");
+const previousBaseline = {...overlay, request_id:"previous-baseline-request", session_id:"previous-baseline-session",
+  mode:"baseline", revision:9, items:[{...overlayItem, result:"baselined"}]};
+presentationReview.summary = {...savedFreshnessSummary, scan_request_id:previousBaseline.request_id};
+presentationReview.window = {...savedFreshnessWindow, rows:[changedRow], integrity:previousBaseline};
+presentationReview.detail = {row:changedRow, state:"current", response:{...changedDetail, integrity:overlay}};
+Object.assign(presentationTask, {sessionId:overlay.session_id, sessionKind:"verify", sessionState:"active",
+  snapshot:{session_id:overlay.session_id, session_state:"active", phase:"verify", terminal_result:null,
+    presentation:{value:25, determinate:true, indeterminate:false, items_done:0, items_total:1}},
+  progressPresentation:{itemPercent:25, activeItem:{item_type:"integrity", item_id:`${overlay.location_id}:${real.row_id}`}}});
+presentationPane.render(presentationTask);
+const settledHeader = presentationPane.element.querySelector(".nami-plan-review__detail-status");
+assert.equal(settledHeader.querySelector(".nami-file-state-label").textContent, "Present · Verified",
+  "the exact current-session result suppresses progress using its own session");
+assert.ok(settledHeader.title.startsWith("Verification · Verified"),
+  "the chosen result supplies its own activity name rather than the older window's Baseline");
+assert.equal(settledHeader.querySelector(".nami-progress"), null);
+assert.equal(presentationPane.element.querySelector(".nami-integrity-row__presence").querySelector(".nami-progress").ariaValueNow,
+  "25", "the table retains its own earlier publication and live progress context");
+presentationTask.progressPresentation = null;
 presentationReview.summary = savedFreshnessSummary;
 presentationReview.window = savedFreshnessWindow;
 presentationReview.detail = savedFreshnessDetail;

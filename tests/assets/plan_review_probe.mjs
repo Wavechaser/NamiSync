@@ -244,7 +244,8 @@ const callbacks = Object.fromEntries([
   "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onNavigationInterrupt",
   "onPaneChange",
 ].map((name) => [name, (...args) => calls.push([name, ...args])]));
-const panel = createPlanReviewPanel(callbacks);
+const sharedDetailsState = {expanded:false};
+const panel = createPlanReviewPanel(callbacks, sharedDetailsState);
 const planAgainButton = findAction(panel.element, "plan-again");
 const planAgainIcon = planAgainButton.children[0];
 assert.ok(planAgainIcon?.classList.contains("nami-icon--arrow-reset"));
@@ -907,11 +908,14 @@ task.drainUnavailable = true;
 panel.render(task);
 assert.equal(cancelButton.ariaPressed, "false", "a stopped drain disarms");
 task.drainUnavailable = false;
-const disposalPanel = createPlanReviewPanel(callbacks);
+const disposalPanel = createPlanReviewPanel(callbacks, sharedDetailsState);
 disposalPanel.render(task);
+assert.equal(findAction(disposalPanel.element, "toggle-execution-details").ariaExpanded, String(sharedDetailsState.expanded));
+const disclosureBeforeDispose = sharedDetailsState.expanded;
 const disposalCancel = findAction(disposalPanel.element, "cancel");
 disposalCancel.dispatch("click");
 disposalPanel.dispose();
+assert.equal(sharedDetailsState.expanded, disclosureBeforeDispose, "disposing a page never closes app-session Details");
 assert.equal(disposalCancel.ariaPressed, "false", "leaving the panel disarms");
 assert.equal(cancelTimeout, null);
 panel.render(task);
@@ -1278,7 +1282,7 @@ const executionReviewState = {
   executionDetail: null,
   planDetail: { nodeId: executionRow.node_id, state: "current", response: { detail: {
     path: `Case\\${hostile}`, prior_path: "Previous\\OriginalCase.txt",
-    move_destination_path: null, path_origin: "target", notice: hostile,
+    move_destination_path: null, path_origin: "target", source_path: "SourceCase\\Original.txt", notice: hostile,
   } } },
 };
 executionPanel.render({ ...task, review: { ...executionReviewState,
@@ -1297,11 +1301,11 @@ for (const [origin, path, expected] of [
 ]) {
   executionReviewState.planDetail = { ...targetPlannedDetail, response: { detail: {
     path, path_origin: origin, prior_path: "Previous\\OriginalCase.txt",
-    move_destination_path: "", notice: null,
+    move_destination_path: "", source_path: null, notice: null,
   } } };
   executionPanel.render({ ...task, review: { ...executionReviewState,
     window: { ...executionReviewState.window, execution: { ...executionSummary, session_id: null } } } });
-  assert.equal(detailFact(executionPanel.element, "Planned path"), expected, `${origin} planned path uses its established root`);
+  assert.equal(detailFact(executionPanel.element, origin === "source" ? "Source path" : "Target path"), expected, `${origin} planned path uses its established root`);
   assert.equal(detailFact(executionPanel.element, "Previous path"), "D:\\target\\Previous\\OriginalCase.txt");
   assert.equal(detailFact(executionPanel.element, "Move destination"), "D:\\target", "root destination uses the target root");
 }
@@ -1403,7 +1407,7 @@ assert.ok(findText(executionPanel.element, "Automatic verification: Mismatch"));
 assert.ok(findText(executionPanel.element, "Stored evidence: Superseded"));
 assertSameNode(findByClass(executionPanel.element, "nami-plan-review__detail-button"), null,
   "rows use authoritative highlight instead of a separate detail button");
-assert.ok(findText(executionDetailCard, "Planned action"));
+assert.ok(findText(executionDetailCard, "Operation"));
 assert.ok(findText(executionDetailCard, "zero-byte.bin"));
 assert.equal(detailCalls.length, 0, "rendering a focused row does not bypass the highlight controller");
 executionReviewState.executionDetail = {
@@ -1433,7 +1437,7 @@ executionReviewState.executionDetail = {
 };
 executionPanel.render(executionTask);
 const detailBody = findByClass(executionPanel.element, "nami-plan-review__detail-body");
-for (const [label, path] of [["Path", `OperationCase\\${hostile}`], ["Verification path", `VerificationCase\\${hostile}`],
+for (const [label, path] of [["Execution path", `OperationCase\\${hostile}`], ["Verification path", `VerificationCase\\${hostile}`],
   ["Backup path", ".synctrash\\backup.txt"], ["Mutation destination", "Moved\\Destination.txt"],
   ["Prior path", "Previous\\Original.txt"], ["Published path", "Published\\Current.txt"],
   ["Trash path", ".synctrash\\removed.txt"]]) {
@@ -1465,7 +1469,7 @@ const retainedResponse = executionReviewState.executionDetail.response;
 executionReviewState.executionDetail = null;
 executionPanel.render(executionTask);
 assert.equal(executionDetailCard.hidden, false, "item pane remains with planned facts after detail retirement");
-assert.ok(findText(executionDetailCard, "Planned action"));
+assert.ok(findText(executionDetailCard, "Operation"));
 
 executionReviewState.executionDetail = {
   operationId, executionRevision: 9, state: "loading", response: null, message: null,
@@ -1520,7 +1524,7 @@ for (const issuesVisible of [false, true]) {
       assert.equal(globalDiagnostics.hidden, false, "secondary execution facts keep the global column available");
       if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
       assert.equal(executionDiagnostics.hidden, false);
-      assert.ok(findText(executionDetailCard, "Planned action"));
+      assert.ok(findText(executionDetailCard, "Operation"));
   }
 }
 

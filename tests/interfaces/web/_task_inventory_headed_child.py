@@ -1023,21 +1023,22 @@ _PAGE = r"""
       && visibleFiles[0].querySelector('.nami-tree-row__label')?.textContent === 'one.txt';
   }, 'integrity-visible-file');
   const released = async (label, expectedText, expectedState) => until(() => {
-    const result = review.querySelector('[data-inventory-integrity-facts]');
-    const states = [...review.querySelectorAll('.nami-integrity-row__presence[data-integrity-state]')]
+    const result = review.querySelector('.nami-plan-review__status-title');
+    const states = [...review.querySelectorAll('.nami-inventory-review__rows .nami-integrity-row__presence[data-integrity-state]')]
       .map(value => value.dataset.integrityState);
     const expectedStates = expectedState === null ? [] : [expectedState];
     const currentScan = review.querySelector('[data-inventory-scan-facts]').textContent
       .includes('Displayed scan: Selected items');
     return !review.querySelector('[data-action="inventory-verify"]').disabled
-      && !result.hidden && result.textContent === expectedText
+      && result.textContent === expectedText
+      && !review.querySelector('[data-inventory-integrity-facts]')
       && states.length === expectedStates.length
       && states.every((value, index) => value === expectedStates[index])
       && currentScan ? {text:result.textContent, states, current_scan:currentScan} : null;
   }, label);
   await stage('baseline');
   const baselinePresentation = await released('baseline-terminal',
-    'Baseline retained results · 1 window result', 'baselined');
+    'Baseline incomplete', 'baselined');
   const baselineResult = baselinePresentation.text;
   await stage('verify');
   await until(() => !review.querySelector('[data-action="inventory-pause"]').disabled, 'verify-active');
@@ -1071,13 +1072,13 @@ _PAGE = r"""
   await until(() => !review.querySelector('[data-action="inventory-resume"]').disabled, 'verify-paused');
   await stage('resume');
   const verifyPresentation = await released('verify-terminal',
-    'Verification retained results · 1 window result', 'verified');
+    'Verification incomplete', 'verified');
   const verifyResult = verifyPresentation.text;
   await stage('verify-cancel');
   await until(() => !review.querySelector('[data-action="inventory-cancel"]').disabled, 'cancel-active');
   await stage('cancel');
   const canceledPresentation = await released('cancel-terminal',
-    'Verification retained results · 0 window results', null);
+    'Verification canceled', null);
   const canceledResult = canceledPresentation.text;
   const baselineTrigger = review.querySelector('[data-action="inventory-baseline-menu"]');
   const baselinePopup = review.querySelector('.nami-row-menu[aria-label="Baseline actions"]');
@@ -1110,7 +1111,7 @@ _PAGE = r"""
     && !cancelInvoker.disabled && document.activeElement === cancelInvoker,
     'rebaseline-cancel-no-effect');
   const cancelConfirmationRestored = confirmationExitReceipt(cancelCloseFacts, cancelInvoker);
-  const cancelPreservedResult = review.querySelector('[data-inventory-integrity-facts]').textContent === canceledResult;
+  const cancelPreservedResult = review.querySelector('.nami-plan-review__status-title').textContent === canceledResult;
   await stage('rebaseline-menu-open');
   await until(() => !baselinePopup.hidden && baselineTrigger.ariaExpanded === 'true'
     && document.activeElement === baselinePopup.firstElementChild, 'rebaseline-menu-open');
@@ -1130,7 +1131,7 @@ _PAGE = r"""
   }
   const confirmationRestored = confirmationExitReceipt(confirmCloseFacts, confirmInvoker);
   const rebaselinePresentation = await released('rebaseline-terminal',
-    'Rebaseline retained results · 1 window result', 'baselined');
+    'Rebaseline incomplete', 'baselined');
   const rebaselineResult = rebaselinePresentation.text;
   const scanText = review.querySelector('[data-inventory-scan-facts]').textContent;
   const scanSelected = scanText.includes('Displayed scan: Selected items');
