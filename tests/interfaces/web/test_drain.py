@@ -6972,6 +6972,62 @@ def test_inventory_ordinary_native_selection_results_refresh_and_close(tmp_path,
         assert registry._start_responses == {}
 
 
+def test_inventory_refresh_publishes_modified_evidence_and_retains_prior_verified_result(tmp_path):
+    import os
+    from namisync.workflows import LocationCandidate
+
+    root = tmp_path / "files"
+    root.mkdir()
+    path = root / "one.bin"
+    path.write_bytes(b"unchanged bytes")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+            summary = registry.open_inventory_view(start.task_id)
+            window = registry.get_inventory_window(start.task_id,
+                expected_revision=summary["view_revision"], offset=0, limit=256)
+            return summary, window
+
+        shell = registry.create_task_shell(next(ids))
+        first = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id=next(ids), wire_intent=("inventory", str(root)))
+        summary, _ = finish(first)
+        current = first
+        for mode in ("baseline", "verify"):
+            current = registry.start_inventory_integrity(first.task_id, current.request_id,
+                expected_revision=summary["view_revision"], mode=mode,
+                accept_current_evidence=False, command_id=next(ids), wire_intent=(mode,))
+            summary, window = finish(current)
+        assert summary["scan_request_id"] == current.request_id
+        assert window["rows"][0]["verification_state"] == "verified"
+        prior_result = window["integrity"]
+        assert prior_result["items"][0]["result"] == "verified"
+        before = path.stat()
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 2_000_000_000))
+        refreshed = registry.refresh_inventory(first.task_id, current.request_id,
+            expected_revision=summary["view_revision"], node_id=None,
+            command_id=next(ids), wire_intent=("refresh",))
+        summary, window = finish(refreshed)
+        assert summary["scan_request_id"] == refreshed.request_id
+        assert window["rows"][0]["verification_state"] == "modified"
+        assert window["integrity"] == prior_result
+        assert service.list_inventory(int(summary["location_id"]))[0].verification_state == "modified"
+        fresh_shell = registry.create_task_shell(next(ids))
+        fresh = registry.start_setup_inventory(fresh_shell.task_id, LocationCandidate.literal(str(root)),
+            command_id=next(ids), wire_intent=("fresh-inventory", str(root)))
+        _, fresh_window = finish(fresh)
+        assert fresh_window["rows"][0]["verification_state"] == "modified"
+        assert "integrity" not in fresh_window
+        registry.close_task(first.task_id, refreshed.session_id)
+        registry.close_task(fresh.task_id, fresh.session_id)
+
+
 @pytest.mark.parametrize("available", [True, False, "close"])
 def test_execution_inventory_real_ledger_read_selection_and_close(tmp_path, monkeypatch, available):
     from namisync.interfaces.service import NamiSyncService

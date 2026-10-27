@@ -2201,7 +2201,12 @@ suffix. An uncertain original action retains Check original outcome across task
 navigation. Visibility needs a confirmed current publication; Refresh can recover
 from a prior publication after a failed rebuild. Notices have no action controls.
 Latest ordinary-integrity outcomes appear separately from stored ledger evidence
-in rows and Details. Their request/session/location identity fences late replies;
+in rows and Details. The primary row uses an outcome belonging to the current
+session or the displayed scan; a newer successful scan instead shows its current
+ledger state. Retained activity details, including errors and recording issues,
+remain inspectable. A pending or failed Refresh keeps the prior publication;
+selection and view changes do not make older outcomes current again.
+Their request/session/location identity fences late replies;
 terminal replacement repairs live gaps, including an empty result, without
 leaving missing result rows apparently pending.
 

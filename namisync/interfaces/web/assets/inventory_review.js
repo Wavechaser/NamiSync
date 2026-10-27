@@ -649,7 +649,9 @@ export function createInventoryReviewPanel(callbacks) {
   }
 
   function commitTreeWindow(controller, generation, window, preferredNodeId = null, reveal = true, passive = false) {
-    const ordinary = matchingIntegrity(window.integrity);
+    const retained = matchingIntegrity(window.integrity);
+    const ordinary = retained !== null && (retained.session_id === task?.sessionId
+      || retained.request_id === current.summary.scan_request_id) ? retained : null;
     rowOrdinaryItems = new Map((ordinary?.items ?? []).map((item) => [item.row_id, item]));
     rowOrdinaryMode = ordinary?.mode ?? null;
     rowOrdinarySessionId = ordinary?.session_id ?? null;

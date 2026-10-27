@@ -262,6 +262,9 @@ explicit, reviewable and regression-backed.
 - Show live per-item integrity progress and retained results in Presence,
   preserving row focus and keeping Notes for diagnostics. Leave ordinary folder
   Presence blank while retaining missing, reappeared and exceptional states.
+- After a newer Inventory scan, show current row evidence instead of an older
+  retained verification label. Preserve the previous result in item details;
+  selected missing files still correctly make integrity work incomplete.
 - Show Inventory reload only for actionable read recovery, clear it when the
   read recovers, and place both pages' reload controls in their top action rows.
 - Prevent accidental text selection on cards while keeping expanded Task/Item

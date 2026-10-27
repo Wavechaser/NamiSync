@@ -421,7 +421,12 @@ window is indexed once; detail retains generation and row identity checks.
 Terminal normalization repairs a live Gap and retains outcomes completed before
 pause, including a truthful empty result. Ledger state stays separate from
 ordinary outcomes; baselined is not verified. A scan supplies its own provenance
-and may supersede execution-relative evidence. There is no separate manual
+and may supersede execution-relative evidence. An ordinary outcome supplies the
+primary row state only for the current session or its displayed scan request.
+A newer successful publication shows current ledger state while retaining prior
+activity results separately in Details; a pending or failed Refresh preserves
+the prior publication. View and selection revisions do not change that provenance.
+There is no separate manual
 result slot, readiness read or first-attempt claim.
 
 Plan/Verify navigation retains pane state while retiring pending reads from the

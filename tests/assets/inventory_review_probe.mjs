@@ -1412,6 +1412,7 @@ assert.match(presentationPane.element.querySelector('.nami-plan-review__status')
 presentationPane.render(presentationTask);
 presentationReview.window = {...presentationReview.window,
   integrity:{...overlay, revision:3, complete:true, gap:false}};
+presentationReview.summary = {...presentationReview.summary, scan_request_id:overlay.request_id};
 presentationTask.requestId = "e".repeat(32);
 presentationTask.sessionId = "f".repeat(32);
 presentationTask.sessionKind = "inventory";
@@ -1420,7 +1421,60 @@ presentationTask.sessionReleased = false;
 presentationTask.snapshot = null;
 presentationPane.render(presentationTask);
 assert.equal(walk(presentationPane.element).find(value => Object.hasOwn(value.dataset, "integrityState")).dataset.integrityState,
-  "verified", "a later Refresh retains the latest ordinary result generation");
+  "verified", "a pending or failed Refresh retains the prior publication and its result");
+presentationTask.sessionState = "failed";
+presentationTask.sessionReleased = true;
+presentationPane.render(presentationTask);
+assert.equal(presentationPane.element.querySelector(".nami-integrity-row__presence").dataset.integrityState,
+  "verified", "a failed Refresh cannot supersede the last published evidence");
+
+const savedFreshnessSummary = presentationReview.summary;
+const savedFreshnessWindow = presentationReview.window;
+const savedFreshnessDetail = presentationReview.detail;
+const changedRow = {...presentationRows[0], reappeared:false, verification_state:"modified"};
+const changedDetail = {...fixture.detail,
+  detail:{...fixture.detail.detail, row:{...fixture.detail.detail.row, verification_state:"modified"}}};
+for (const [result, expected] of [["verified", "Verified"], ["baselined", "Baselined"],
+  ["mismatched", "Mismatch"], ["error", "Error"]]) {
+  const retained = {...overlay, complete:true, gap:false,
+    items:[{...overlayItem, result, recording:result === "error" ? "degraded" : "ok",
+      reason:result === "error" ? "read-error" : null}]};
+  presentationReview.window = {...savedFreshnessWindow, rows:[changedRow], integrity:retained};
+  presentationReview.detail = {row:changedRow, state:"current", response:{...changedDetail, integrity:retained}};
+  presentationReview.summary = {...savedFreshnessSummary, scan_request_id:"newer-scan"};
+  Object.assign(presentationTask, {sessionId:overlay.session_id, sessionKind:"verify", sessionState:"active"});
+  presentationPane.render(presentationTask);
+  const state = () => presentationPane.element.querySelector(".nami-integrity-row__presence");
+  assert.equal(state().querySelector(".nami-file-state-label").textContent, expected,
+    "current-session results remain visible over the previous ledger publication");
+  presentationTask.sessionState = "completed";
+  presentationPane.render(presentationTask);
+  assert.equal(state().querySelector(".nami-file-state-label").textContent, expected,
+    "current terminal results retain their result and recording truth");
+  Object.assign(presentationTask, {sessionId:"newer-scan-session", sessionKind:"inventory",
+    requestId:"newer-scan", sessionState:"completed", sessionReleased:true});
+  presentationReview.summary = {...presentationReview.summary, request_id:"newer-scan"};
+  presentationReview.window = {...presentationReview.window};
+  presentationPane.render(presentationTask);
+  assert.equal(state().querySelector(".nami-file-state-label").textContent, "Modified",
+    "a newer scan publication supersedes the historical result in the primary row");
+  assert.equal(state().dataset.integrity, "modified");
+  assert.equal(Object.hasOwn(state().dataset, "integrityState"), false);
+  const detailText = text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details"));
+  assert.match(detailText, /Verification state Modified/);
+  assert.ok(detailText.includes(`Verification result ${expected}`), "historical outcome stays separate in item details");
+  if (result === "error") assert.match(detailText, /Result reason read-error.*Recording degraded/);
+  const rowElement = state().parentElement;
+  presentationReview.summary = {...presentationReview.summary,
+    view_revision:presentationReview.summary.view_revision+1, selected_file_count:0};
+  presentationPane.render(presentationTask);
+  assert.equal(state().querySelector(".nami-file-state-label").textContent, "Modified",
+    "selection and view revisions cannot restore superseded evidence");
+  assertSameNode(state().parentElement, rowElement, "freshness publication retains the mounted row");
+}
+presentationReview.summary = savedFreshnessSummary;
+presentationReview.window = savedFreshnessWindow;
+presentationReview.detail = savedFreshnessDetail;
 
 Object.assign(presentationTask, {taskKind:"sync-plan", executionStarted:true, workPane:"verify",
   sessionKind:"inventory", sessionState:"completed", sessionReleased:true, snapshot:null,
@@ -1600,7 +1654,8 @@ alignedTask.taskKind = "sync-plan";
 alignedTask.executionStarted = true;
 alignedTask.workPane = "verify";
 alignedReview.window = {...fixture.views.maximum.window,
-  integrity:{...overlay, location_id:alignedReview.summary.location_id, items:costItems}};
+  integrity:{...overlay, request_id:alignedTask.requestId, session_id:alignedTask.sessionId,
+    location_id:alignedReview.summary.location_id, items:costItems}};
 alignedPane.render(alignedTask);
 assert.equal(walk(alignedPane.element).filter(value => Object.hasOwn(value.dataset, "integrityState")).length,
   maximumRows.filter(row => row.row_id !== null && !row.is_container).length);
