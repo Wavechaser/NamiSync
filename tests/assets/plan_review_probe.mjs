@@ -986,6 +986,9 @@ for (const [action, label, glyph] of [
   assert.equal(control.textContent, "");
   assert.equal(control.ariaLabel, label);
   assert.equal(control.title, label);
+  assert.ok(control.parentElement.classList.contains("nami-plan-review__floating-control"));
+  assert.equal(control.parentElement.hidden, control.hidden);
+  assert.equal(control.classList.contains("nami-button--primary"), action === "enable-operation-follow");
   assert.equal(findByClass(control, `nami-icon--${glyph}`).ariaHidden, "true");
 }
 const overrideCount = calls.filter(([name]) => name === "onFollowOverride").length;
@@ -2226,8 +2229,9 @@ const recallIndicator = findByClass(recallPanel.element, "nami-file-row__availab
 assert.equal(recallIndicator.attributes.get("role"), "img");
 assert.equal(recallIndicator.ariaLabel, "Not fully available locally. Access may retrieve content through your provider.");
 assert.equal(recallIndicator.title, recallIndicator.ariaLabel);
-assert.equal(findByClass(recallIndicator, "nami-icon--cloud-arrow-down").ariaHidden, "true");
+assert.equal(findByClass(recallIndicator, "nami-icon--cloud").ariaHidden, "true");
 findByDataset(recallPanel.element, "action", "filter-menu").dispatch("click");
+assert.equal(findByDataset(recallPanel.element, "filter", "recall").children[1].textContent, "Remote files");
 findByDataset(recallPanel.element, "filter", "recall").dispatch("click");
 assert.deepEqual(recallRequests.at(-1), {filters: new Set(["recall"])});
 assert.equal(findByClass(recallPanel.element, "nami-plan-review__cloud-advisory"), null);

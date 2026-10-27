@@ -911,10 +911,10 @@ body {
   --nami-icon-mask-lg: url("./icons/clipboard_paste_24_regular.svg");
 }
 
-.nami-icon--cloud-arrow-down {
-  --nami-icon-mask-sm: url("./icons/cloud_arrow_down_16_regular.svg");
-  --nami-icon-mask-md: url("./icons/cloud_arrow_down_20_regular.svg");
-  --nami-icon-mask-lg: url("./icons/cloud_arrow_down_24_regular.svg");
+.nami-icon--cloud {
+  --nami-icon-mask-sm: url("./icons/cloud_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/cloud_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/cloud_24_regular.svg");
 }
 
 .nami-icon--copy {

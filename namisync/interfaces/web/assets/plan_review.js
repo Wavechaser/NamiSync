@@ -26,7 +26,7 @@ const DISPLAY_LABELS = Object.freeze({
   error: "Error", noop: "No change", notice: "Notice", mkdir: "Create folder",
   recase: "Recase", rename: "Rename", move_update: "Move + update", trash: "Move to trash",
   delete: "Delete", unsupported: "Unsupported", blocked: "Blocked",
-  recall: "Not fully local",
+  recall: "Remote files",
 });
 const REASON_LABELS = Object.freeze({
   source_only: "Only in source", metadata_match: "Metadata matches",
@@ -340,7 +340,13 @@ export function createPlanReviewPanel(callbacks) {
   enableFollow.ariaLabel = enableFollow.title = "Turn on autoscroll";
   enableFollow.append(createIcon(document, "location-ripple", "sm"));
   enableFollow.dataset.action = "enable-operation-follow";
-  floatingControls.append(goCurrent, enableFollow);
+  const goCurrentSurface = document.createElement("div");
+  goCurrentSurface.className = "nami-plan-review__floating-control";
+  goCurrentSurface.append(goCurrent);
+  const enableFollowSurface = document.createElement("div");
+  enableFollowSurface.className = "nami-plan-review__floating-control";
+  enableFollowSurface.append(enableFollow);
+  floatingControls.append(goCurrentSurface, enableFollowSurface);
 
   const detailCard = document.createElement("section");
   detailCard.className = "nami-card nami-plan-review__detail";
@@ -957,7 +963,7 @@ export function createPlanReviewPanel(callbacks) {
         availability.setAttribute("role", "img");
         availability.ariaLabel = "Not fully available locally. Access may retrieve content through your provider.";
         availability.title = availability.ariaLabel;
-        availability.append(createIcon(document, "cloud-arrow-down", "sm"));
+        availability.append(createIcon(document, "cloud", "sm"));
         element.querySelector(".nami-file-row__name").append(availability);
       }
       element.insertBefore(element.querySelector(".nami-file-row__size"),
@@ -1177,6 +1183,8 @@ export function createPlanReviewPanel(callbacks) {
     goCurrent.hidden = follow?.hasTarget !== true;
     enableFollow.hidden = follow?.hasTarget !== true
       || follow?.eligible !== true || follow?.enabled === true;
+    goCurrentSurface.hidden = goCurrent.hidden;
+    enableFollowSurface.hidden = enableFollow.hidden;
     floatingControls.hidden = goCurrent.hidden && enableFollow.hidden;
     if (review.window !== previousWindow) table.setWindow(review.window);
     element.dataset.pending = review.pending ?? "";

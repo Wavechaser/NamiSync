@@ -9,7 +9,7 @@ their behavior; measurement output remains subject to the authority rules below.
 
 ## Icon maintenance
 
-The recall advisory uses the pinned catalog's `cloud-arrow-down` glyph with
+The recall advisory uses the pinned catalog's plain `cloud` glyph with
 native 16/20/24 px artwork, generated through the same offline provenance path.
 
 `namisync/interfaces/web/assets/icons/` contains fixed local monochrome SVGs

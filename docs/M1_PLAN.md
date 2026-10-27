@@ -47,6 +47,32 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Details and Inventory truth refinement — 2026-10-27
+
+User-authorized follow-up from `95576a4b` on `milestone1`, using execute-task,
+serialized builders and fresh independent review per atomic outcome.
+
+| ID | Outcome / owners | Verification and boundary | Status |
+| --- | --- | --- | --- |
+| D1 | Ordinary Go/Follow buttons on opaque wrappers; remove derived-color exception. Plain cloud glyph and Remote files label. Plan/Inventory renderers, CSS/tokens, icon catalog/generated assets, direct browser/gallery/token/icon consumers, DESKTOP_UI/TOOLS. | Focused renderer/token/icon checks, interface/tools departments and affected installed gallery/journeys. Preserve action emphasis, names, keyboard and forced colors. One controls commit. | Complete: 56 focused, 2,506 interface/tool passes and three existing skips; all seven installed cases pass across the retained five journeys and corrected gallery rerun; independent review. |
+| D2 | Mixed full-width path/hash and columned metadata details; action/reason before Plan metadata and available execution outcomes; concise applicable Inventory evidence/actions; 1:2 task/item pane. Shared work-panel-session disclosure state. App/panels/Plan/Inventory/CSS and direct browser/gallery/native consumers; approved nullable exact source-path migration through plan_projection, plan_review and bridge validator, direct projection/detail/drain/bridge fixtures; DESKTOP_UI/PRESENTATION/BRIDGE. | Long values, exact observed source provenance and absent unknown/target-only sources, file/folder/missing/error/execution facts, copyability, navigation/new tasks/manual close, stale detail retirement; focused, ordinary/import and installed journeys; independent review. One details commit after D3. | User approved narrow source-path extension; implementation pending. |
+| D3 | Same-session refreshed Inventory must not present stale verified evidence after changed observation. Inventory renderer primary state, direct pane/native service fixtures and DESKTOP_UI. Retain historical activity evidence separately. | Native reproduction and bounded production-renderer witness; current-session results, fresh publication, failed refresh/retained publication, view changes; interface and installed Inventory gate, independent review. One freshness-presentation commit after D1. | Confirmed renderer precedence defect; native current row is Modified. |
+
+The reported subset headline was clarified to mixed ordinary/missing files on
+`b243bb71`. Native ordinary-only subsets complete for all three modes; including
+a selected missing file produces `verification-incomplete` / `integrity=missing`.
+User accepts missing-file incompleteness; retain that truthful behavior. No
+terminal-classification change is needed. D2's approved source field preserves
+the exact operation source spelling only with supplied `source_expected` facts;
+unknown/synthetic/target-only subjects remain null. No window, event, persistent
+schema or execution-effect contract changes. Source paths reuse the existing
+target-path joining, formatting and full-width rendering infrastructure.
+
+No queued-input coordinator, recents, domain effect change, M1-12, release,
+DOC-2, push or PR is activated. Existing mandatory/recurrence stops apply.
+Parent owns M1_PLAN, CHANGELOG and HANDOFF. Shared production/test writers
+serialize. Evidence belongs in ignored `build/gui-details-20261027/`.
+
 ### Inventory view reuse and control refinement — 2026-10-27
 
 User-authorized GUI round from `c7868abd` on `milestone1`, following execute-task

@@ -37,12 +37,12 @@ Pause/Resume and Cancel use icon-only buttons with accessible names and tooltips
 in the headline's top action row. Cancel retains its five-second, two-click
 confirmation. This follows Microsoft's [Fluent button guidance](https://fluent2.microsoft.design/components/web/react/core/button/usage/).
 
-Plan and Inventory show a 12px Microsoft Fluent cloud-arrow-down with a 6px
+Plan and Inventory show a 12px Microsoft Fluent plain cloud with a 6px
 gap after names with positive scan-time recall evidence, independently of
 operation reasons and unsupported state. This compact advisory scales the native
 16px artwork within its own row slot. Its accessible label and tooltip read: “Not fully available
 locally. Access may retrieve content through your provider.” Both filter menus
-include “Not fully local”; directories can match on their own evidence. The
+include “Remote files”; directories can match on their own evidence. The
 filter count describes matching rows, not scan-wide file bytes. No icon is a
 claim that unmarked files are fully local. The per-item advisory carries the
 retrieval explanation without an additional cloud paragraph in Task details. Aggregate
@@ -400,17 +400,13 @@ erase a stronger confirmed mismatch or error.
 
 A future hardcoded or derived color value is possible only after an explicit
 product-author design decision and a same-change contract/token/evidence update; it is
-not silently synthesized by a renderer. The requested opaque floating controls
-authorize exactly two derived tokens in `tokens.css`:
-`--color-floating-accent-fill-hover` mixes 90% of the current accent fill with
-10% of the opaque neutral surface, and `--color-floating-accent-fill-pressed`
-mixes 80% accent with 20% neutral, both in sRGB. Scoped floating-button aliases
-use these for autoscroll's accent states; Go uses the existing opaque neutral
-surface states. This preserves native accent changes without letting rows show
-through hover or press. The installed gallery observes both panes' glyphs,
-square targets and primary emphasis, plus the shared opaque interaction states
-and absent backdrop filter in light, dark and forced colors. This exception
-does not authorize other color derivation. `tokens.css` also owns channel-scoped
+not silently synthesized by a renderer. `tokens.css` contains no `color-mix()`
+derivations. Floating Go and autoscroll use ordinary button fills over individual
+opaque neutral wrappers, preserving native accent changes and ordinary interaction
+states without letting rows show through. The installed gallery observes both
+panes' glyphs, square targets and primary emphasis, plus opaque wrappers, ordinary
+button interaction colors and absent backdrop filters in light, dark and forced
+colors. `tokens.css` also owns channel-scoped
 intent, lifecycle, and integrity aliases; neutral roles use a
 pinned Microsoft Fluent light/dark subset. Native appearance retains the
 observed Windows `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1`
@@ -1387,8 +1383,9 @@ Float **Go to current operation** (Plan), **Go to current item** (Inventory), an
 the viewport's lower-right, reusing existing floating-control conventions. Go
 uses the eye icon and autoscroll uses location-ripple. Both are icon-only square
 buttons with accessible action names and tooltips. Go keeps its ordinary neutral
-surface and autoscroll keeps its accent emphasis; both stay opaque at rest,
-hover and press, without blur or acrylic. Go
+button styling and autoscroll keeps its primary accent emphasis. Each button sits
+on its own opaque neutral wrapper at rest, hover and press, without blur or
+acrylic; button interaction fills follow the ordinary shared styles. Go
 performs a one-time jump in the current view, without enabling follow or changing
 sort/filters. If the target and ancestors are excluded, report that fact. Enable
 appears only when follow is eligible and off. With no active target, controls

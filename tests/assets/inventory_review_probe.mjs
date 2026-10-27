@@ -1621,6 +1621,9 @@ for (const [action, label, glyph] of [
   assert.equal(control.textContent, "");
   assert.equal(control.ariaLabel, label);
   assert.equal(control.title, label);
+  assert.ok(control.parentElement.classList.contains("nami-plan-review__floating-control"));
+  assert.equal(control.parentElement.hidden, control.hidden);
+  assert.equal(control.classList.contains("nami-button--primary"), action === "enable-item-follow");
   assert.equal(walk(control).find(value => value.classList.contains(`nami-icon--${glyph}`)).ariaHidden, "true");
 }
 assert.equal(alignedAction("enable-item-follow").classList.contains("nami-button--primary"), true);
@@ -1630,9 +1633,11 @@ assert.deepEqual(followCalls, [[alignedReview, false], [alignedReview, true]]);
 alignedReview.follow.enabled = true;
 alignedPane.render(alignedTask);
 assert.equal(alignedAction("enable-item-follow").hidden, true);
+assert.equal(alignedAction("enable-item-follow").parentElement.hidden, true);
 alignedReview.follow.hasTarget = false;
 alignedPane.render(alignedTask);
 assert.equal(alignedAction("go-current-item").hidden, true);
+assert.equal(alignedAction("go-current-item").parentElement.hidden, true);
 
 // The production Inventory panel routes passive publication and reveal through
 // its real tree, including the next programmatic frame and ordinary overlay.
@@ -1744,7 +1749,9 @@ assert.equal(recallIndicator.getAttribute("role"), "img");
 assert.equal(recallIndicator.ariaLabel, "Not fully available locally. Access may retrieve content through your provider.");
 assert.equal(recallIndicator.title, recallIndicator.ariaLabel);
 assert.equal(recallIndicator.children[0].ariaHidden, "true");
+assert.ok(recallIndicator.children[0].classList.contains("nami-icon--cloud"));
 walk(recallPane.element).find((item) => item.dataset.action === "filter-menu").click();
+assert.equal(walk(recallPane.element).find((item) => item.dataset.filter === "recall").children[1].textContent, "Remote files");
 walk(recallPane.element).find((item) => item.dataset.filter === "recall").click();
 assert.deepEqual(recallRequests.at(-1), {filters: ["recall"]});
 const recallTask = { taskId: "recall", requestId: recallReview.summary.request_id,

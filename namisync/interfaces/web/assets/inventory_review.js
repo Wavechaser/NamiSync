@@ -12,7 +12,7 @@ const FACETS = Object.freeze([
   ["present", "Present"], ["unverified", "Unverified"], ["verified", "Verified"],
   ["modified", "Modified"], ["reappeared", "Reappeared"], ["unsupported", "Unsupported"],
   ["missing", "Missing"], ["mismatched", "Mismatch"], ["acknowledged", "Acknowledged"],
-  ["notice", "Notice"], ["recall", "Not fully local"],
+  ["notice", "Notice"], ["recall", "Remote files"],
 ]);
 const label = (value) => FACETS.find(([key]) => key === value)?.[1] ?? value;
 const integrityLabel = (value) => ({baselined: "Baselined", canceled: "Canceled",
@@ -158,7 +158,11 @@ export function createInventoryReviewPanel(callbacks) {
   enableFollow.ariaLabel = enableFollow.title = "Turn on autoscroll";
   enableFollow.append(createIcon(document, "location-ripple", "sm"));
   enableFollow.classList.add("nami-button--primary");
-  floatingControls.append(goCurrent, enableFollow);
+  const goCurrentSurface = element("div", "nami-plan-review__floating-control");
+  goCurrentSurface.append(goCurrent);
+  const enableFollowSurface = element("div", "nami-plan-review__floating-control");
+  enableFollowSurface.append(enableFollow);
+  floatingControls.append(goCurrentSurface, enableFollowSurface);
   goCurrent.addEventListener("click", () => {
     if (current !== null && !goCurrent.disabled) callbacks.onNavigateCurrent?.(current, false);
   });
@@ -496,7 +500,7 @@ export function createInventoryReviewPanel(callbacks) {
       availability.setAttribute("role", "img");
       availability.ariaLabel = "Not fully available locally. Access may retrieve content through your provider.";
       availability.title = availability.ariaLabel;
-      availability.append(createIcon(document, "cloud-arrow-down", "sm"));
+      availability.append(createIcon(document, "cloud", "sm"));
       name.append(availability);
     }
     const selection = element("div", "nami-file-row__cell nami-file-row__selection");
@@ -808,6 +812,8 @@ export function createInventoryReviewPanel(callbacks) {
     const follow = review?.follow;
     goCurrent.hidden = !available || follow?.hasTarget !== true;
     enableFollow.hidden = goCurrent.hidden || follow?.eligible !== true || follow?.enabled === true;
+    goCurrentSurface.hidden = goCurrent.hidden;
+    enableFollowSurface.hidden = enableFollow.hidden;
     goCurrent.disabled = Boolean(blocked());
     enableFollow.disabled = goCurrent.disabled;
     floatingControls.hidden = goCurrent.hidden && enableFollow.hidden;

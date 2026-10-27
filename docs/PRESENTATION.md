@@ -613,8 +613,8 @@ missing inventory rows never present old availability as current. The server's
 overlapping `recall` filter keeps parent context without changing operation
 eligibility. Its item count differs from the bridge's file-only scan aggregate;
 the latter is fixed across view gestures and is not an execution download estimate.
-Plan and Inventory expose this fact through cloud-arrow-down row indicators and
-the **Not fully local** filter. Aggregate status-panel placement remains deferred.
+Plan and Inventory expose this fact through plain cloud row indicators and
+the **Remote files** filter. Aggregate status-panel placement remains deferred.
 
 The planning page distinguishes execution preflight refusal, an invalid
 execution commitment and another unrun refusal. It explains each closed

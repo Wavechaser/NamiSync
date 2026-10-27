@@ -2611,8 +2611,13 @@ window.addEventListener("unhandledrejection", (event) => {
       control.id = `gallery-navigation-${action}-${state}`;
       control.hidden = false;
       control.disabled = false;
-      navigationPreview.append(control);
-      return { state, control };
+      const surface = planReviewPanel.element.querySelector(`[data-action="${action}"]`).parentElement.cloneNode(false);
+      surface.hidden = false;
+      surface.append(control);
+      const ordinary = control.cloneNode(true);
+      ordinary.id = `gallery-navigation-${action}-${state}-ordinary`;
+      navigationPreview.append(surface, ordinary);
+      return { state, control, surface, ordinary };
     });
   }
   document.body.append(navigationPreview);
@@ -2626,6 +2631,8 @@ window.addEventListener("unhandledrejection", (event) => {
     ...Object.keys(navigationStates).flatMap((action) => [
       { selector: `#gallery-navigation-${action}-hover`, classes: ["hover"] },
       { selector: `#gallery-navigation-${action}-pressed`, classes: ["hover", "active"] },
+      { selector: `#gallery-navigation-${action}-hover-ordinary`, classes: ["hover"] },
+      { selector: `#gallery-navigation-${action}-pressed-ordinary`, classes: ["hover", "active"] },
     ]),
     { selector: "#gallery-move-pill-hover", classes: ["hover"] },
     { selector: "#gallery-move-pill-pressed", classes: ["hover", "active"] },
@@ -4118,8 +4125,9 @@ window.addEventListener("unhandledrejection", (event) => {
     rows: [...panel.querySelectorAll("[data-node-id]")].map(rectangle),
   }));
   const recallEvidence = {};
-  const reviewControls = { states: Object.values(navigationStates).map((states) => states.map(({control}) => [
-    getComputedStyle(control).backgroundColor, getComputedStyle(control).backdropFilter,
+  const reviewControls = { states: Object.values(navigationStates).map((states) => states.map(({control, surface, ordinary}) => [
+    getComputedStyle(surface).backgroundColor, getComputedStyle(surface).backdropFilter,
+    ["backgroundColor", "color", "borderColor"].every((property) => getComputedStyle(control)[property] === getComputedStyle(ordinary)[property]),
   ])) };
   for (const kind of ["plan", "inventory"]) {
     const fixture = globalThis.__namiGalleryRecall[kind];
@@ -4175,7 +4183,7 @@ window.addEventListener("unhandledrejection", (event) => {
       no_summary_counter: !panel.element.querySelector(".nami-plan-review__summary").textContent.includes("Not fully"),
       cloud_note: note?.textContent ?? "",
     };
-    reviewControls[kind] = [...panel.element.querySelectorAll(".nami-plan-review__floating-controls > button")].map((control) => {
+    reviewControls[kind] = [...panel.element.querySelectorAll(".nami-plan-review__floating-control > button")].map((control) => {
       const glyph = control.querySelector(".nami-icon");
       const mask = /^url\(["']?([^"')]+)["']?\)$/.exec(getComputedStyle(glyph).maskImage);
       return [mask === null ? "" : new URL(mask[1], document.baseURI).pathname.split("/").at(-1),

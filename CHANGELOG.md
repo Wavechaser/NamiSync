@@ -247,7 +247,9 @@ explicit, reviewable and regression-backed.
   rereads preserve the mounted pane, table controller and expanded Details.
 - Render filename cloud indicators at 12 px with more spacing. Use Filled Play
   for Resume and icon-only eye/location-ripple controls for Go and autoscroll,
-  with opaque backgrounds and retained accessible names and action emphasis.
+  with opaque backing wrappers and ordinary button colors, retaining accessible
+  names and action emphasis. Use the simpler cloud glyph and Remote files
+  filter label; restore the blanket restriction on derived palette colors.
 - Investigate queued input across refresh, invalidation, navigation and Reload.
   Record current retirement behavior and assess a bounded full-refresh
   coordinator as a later option; no coordinator or input-policy change follows.

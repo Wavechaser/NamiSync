@@ -346,8 +346,9 @@ def _expected_pseudo_targets(mode: str) -> list[dict[str, object]]:
     return [
         *_EXPECTED_PSEUDO_TARGETS,
         *(
-            {"selector": f"#gallery-navigation-{action}-{state}", "classes": classes}
+            {"selector": f"#gallery-navigation-{action}-{state}{suffix}", "classes": classes}
             for action in ("go-current-operation", "enable-operation-follow")
+            for suffix in ("", "-ordinary")
             for state, classes in (("hover", ["hover"]), ("pressed", ["hover", "active"]))
         ),
         {"selector": "#gallery-move-pill-hover", "classes": ["hover"]},
@@ -1420,8 +1421,9 @@ def _valid_review_controls(value: object) -> bool:
     states = value["states"]
     if not (type(states) is list and len(states) == 2
             and all(type(control) is list and len(control) == 3
-                    and all(type(state) is list and len(state) == 2
-                            and all(type(item) is str for item in state) for state in control) for control in states)):
+                    and all(type(state) is list and len(state) == 3
+                            and all(type(item) is str for item in state[:2])
+                            and type(state[2]) is bool for state in control) for control in states)):
         return False
     for navigation in (value["plan"], value["inventory"]):
         if type(navigation) is not list or len(navigation) != 2:
