@@ -9,7 +9,7 @@ compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; the standalone
 desktop now exposes those actions and live controls. Signed-64 totals, exact event v5, and full-width native
-identity are active. Deferred Verify copied files reuses ordinary scoped integrity;
+identity are active. Deferred Verify copied reuses ordinary scoped integrity;
 ledger-current execution classification and same-task attachment remain separate.
 Fresh rebaseline admits
 eligible selected rows with or without prior evidence after explicit acceptance.
@@ -310,7 +310,7 @@ and envelope limits are owned by
 state needed to continue the same admitted work.
 
 Ordinary verification is location-scoped and needs only the target location.
-Deferred **Verify copied files** supplies successful byte-producing target paths
+Deferred **Verify copied** supplies successful byte-producing target paths
 from a retained execution to that same ordinary workflow. It refreshes those
 paths and compares current evidence; it does not attest against the original
 copy's evidence or require an unmodified execution scope token. Repeated actions

@@ -1074,6 +1074,24 @@ copiedTask.inventoryReview.summary = {...copiedTask.inventoryReview.summary, sel
 await app.startInventoryIntegrityAction(copiedTask.inventoryReview, "verify", trigger);
 assert.equal(calls.findLast(([name]) => name === "integrity-start").at(-1), "selected");
 
+for (const mode of ["baseline", "rebaseline"]) {
+  copiedTask.sessionState = "completed";
+  copiedTask.sessionReleased = true;
+  copiedTask.inventoryAction = null;
+  copiedTask.inventoryReview.summary = {...copiedTask.inventoryReview.summary,
+    request_id:copiedTask.requestId, selected_file_count:1};
+  await app.startInventoryIntegrityAction(copiedTask.inventoryReview, mode, trigger);
+  if (mode === "rebaseline") {
+    const confirmation = globalThis.inventoryConfirmations.at(-1).request;
+    assert.equal(confirmation.destructiveOperationCount, 1);
+    confirmation.onConfirm();
+    await tick();
+  }
+  const started = calls.findLast(([name]) => name === "integrity-start");
+  assert.ok(started.includes(mode), `${mode} is admitted on a linked Verify page`);
+  assert.equal(started.at(-1), "selected", `${mode} does not inherit copied scope`);
+}
+
 // Auxiliary scans supersede current evidence without changing execution truth.
 const cacheOwner = attachReleasedExecutionTask("task-" + "5".repeat(32),
   "6".repeat(32), "7".repeat(32), "8".repeat(32));

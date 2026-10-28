@@ -413,6 +413,8 @@ class _ExecutionReviewPhase:
         if name == "open_inventory_view" and self.release is not None:
             if type(result) is not dict or result.get("task_id") != self.plan["task_id"]:
                 raise ValueError("inventory view changed task identity")
+            if self.branch == "exact" and result.get("selected_file_count") != 0:
+                raise ValueError("initial linked inventory selection is not empty")
             self.inventory_open = {
                 "admitted": admitted, "completed": completed,
                 "request_id": result.get("request_id"),
@@ -1104,7 +1106,7 @@ _PAGE = r"""
     observeDisconnection();
     const value = review.querySelector('.nami-plan-review__detail');
     return value instanceof HTMLElement && !value.hidden && !value.textContent.includes('Loading')
-      && [...value.querySelectorAll('dt')].some(term => term.textContent === 'Execution path') ? value : null;
+      && [...value.querySelectorAll('dt')].some(term => term.textContent === 'Target path') ? value : null;
   }, 'detail');
   window.__executionReviewProgress.detailObserved = true;
   const adoptedRow = await until(() => {
@@ -1170,8 +1172,11 @@ _PAGE = r"""
   scrollDiagnostic.hiddenAfterVerify = scrollFact(rows);
   const exactStart = await until(() => usable(inventory, 'verify-copied-files'), 'copied action');
   const copiedActionVisible = exactStart.isConnected;
-  if (!action(inventory, 'inventory-baseline')?.closest('[hidden]')
-      || !action(inventory, 'inventory-baseline-menu')?.closest('[hidden]')) {
+  if (!["inventory-baseline", "inventory-baseline-menu"].every(name => {
+    const control = action(inventory, name);
+    return control instanceof HTMLButtonElement && control.isConnected
+      && control.closest('[hidden]') === null && control.disabled;
+  })) {
     throw new Error('sync Verify action presentation is invalid');
   }
   exactStart.click();
@@ -1348,11 +1353,11 @@ _PAGE = r"""
     const value = action(blockedInventory, 'inventory-verify');
     return value instanceof HTMLButtonElement && value.isConnected && !value.hidden
       && value.closest('[hidden]') === null && !value.disabled
-      && value.textContent.trim() === 'Verify current state' ? value : null;
+      && value.textContent.trim() === 'Verify selected' ? value : null;
   }, 'ordinary fallback control');
   const fallbackVisible = usable(blockedInventory, 'verify-copied-files') !== null
-    && Boolean(action(blockedInventory, 'inventory-baseline')?.closest('[hidden]'))
-    && Boolean(action(blockedInventory, 'inventory-baseline-menu')?.closest('[hidden]'));
+    && usable(blockedInventory, 'inventory-baseline') !== null
+    && usable(blockedInventory, 'inventory-baseline-menu') !== null;
   if (!fallbackVisible) throw new Error('copied action was forfeited by Refresh');
   const fallback = await until(() => usable(blockedInventory, 'inventory-verify'), 'ordinary fallback');
   if (fallback !== fallbackControl) throw new Error('ordinary fallback control changed after selection');
@@ -1441,7 +1446,7 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
       const booleans = {
         verifyVisible: inventory instanceof HTMLElement && inventory.isConnected
           && inventory.closest('[hidden]') === null,
-        fallbackLabelCurrent: fallback?.textContent.trim() === 'Verify current state',
+        fallbackLabelCurrent: fallback?.textContent.trim() === 'Verify selected',
         fallbackVisible: fallback instanceof HTMLButtonElement && fallback.isConnected
           && !fallback.hidden && fallback.closest('[hidden]') === null,
         fallbackDisabled: fallback instanceof HTMLButtonElement && fallback.disabled,
@@ -1559,7 +1564,7 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
           const bounds=toggle.getBoundingClientRect();
           return {{selectedTask:selected?.dataset.taskLabel??null,...{constants},
             rowName:row?.querySelector('.nami-file-row__name-text')?.textContent??null,
-            operationPath:fact('Execution path'),rowHighlighted:row?.dataset.highlighted==='true',
+            operationPath:fact('Target path'),rowHighlighted:row?.dataset.highlighted==='true',
             detailVisible:d.hidden===false,disclosureVisible:bounds.width>0&&bounds.height>0,
             disclosureExpanded:toggle.getAttribute('aria-expanded')==='true',
             operationFactPresent:!!fact('Operation'),recordingFactPresent:!!fact('Operation recording'),

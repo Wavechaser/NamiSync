@@ -298,7 +298,7 @@ classification; adapters only forward that result. Current-state evidence
 cannot silently become execution evidence. Later task failure does not revoke
 an independently committed item receipt.
 
-Deferred Verify copied files uses the ordinary selected-path scan and integrity
+Deferred Verify copied uses the ordinary selected-path scan and integrity
 reader. The former complete-population manual-handoff reader is retired; the
 bounded atomic execution-evidence reader remains unchanged. An inventory scan
 can supersede execution-relative evidence even when bytes are unchanged. Current

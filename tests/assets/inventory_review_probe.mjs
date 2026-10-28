@@ -241,6 +241,10 @@ assert.match(action("inventory-select-location").ariaLabel, /matching files.*col
 assert.match(selectableCheckbox.ariaLabel, /matching files.*collapsed and off-window|Select file/);
 assert.match(find((value) => Object.hasOwn(value.dataset, "inventoryTaskFacts")).textContent,
   new RegExp(`^${review.summary.selected_file_count} of ${review.summary.selectable_file_count} files selected`));
+const taskFacts = find((value) => Object.hasOwn(value.dataset, "inventoryTaskFacts")).textContent;
+assert.ok(taskFacts.includes(`${review.summary.rollup.domain_count} items`));
+assert.equal((taskFacts.match(/\bfiles\b/g) ?? []).length, 1, "task facts omit only the repeated file count");
+assert.ok(taskFacts.includes(" · "), "task facts retain the item/size rollup");
 assert.equal(action("inventory-baseline").disabled, review.summary.selected_file_count === 0);
 const originalSummary = review.summary;
 const originalWindow = review.window;
@@ -350,7 +354,7 @@ for (const [scope, expected] of [
   pane.render(task);
   assert.match(statusLine.textContent, /Showing the previous published scan/);
   assert.ok(text(globalDetails).includes(`Previous published scan: ${fullScope}`));
-  assert.match(text(pane.element), /Current activity: refused/);
+  assert.doesNotMatch(text(pane.element), /Current activity:/);
   task.requestId = fixture.views.default.summary.request_id;
   task.sessionState = "completed";
 }
@@ -474,7 +478,7 @@ const checksumCell = realElement.querySelector(".nami-inventory-row__checksum");
 assert.equal(checksumCell.textContent, real.recorded_checksum.slice(0, 8));
 assert.ok(checksumCell.title.includes(real.recorded_checksum));
 assert.match(text(detail), new RegExp(fixture.detail.detail.attestation.content.digest));
-assert.match(text(detail), new RegExp(`Provenance ${fixture.detail.detail.attestation.content.provenance}`));
+assert.doesNotMatch(text(detail), /Provenance/);
 assert.match(text(detail), /Observed modified 2262-04-11 23:47/);
 assert.match(text(detail), /Attested modified 2262-04-11 23:47/);
 assert.doesNotMatch(text(detail), /\bns\b|Algorithm|Observed kind|Current ledger evidence/);
@@ -558,7 +562,7 @@ task.inventoryError = "Inventory unavailable. Reload the inventory view to retry
 task.inventoryReloadAvailable = true;
 task.requestId = "f".repeat(32); task.sessionState = "refused";
 pane.render(task); action("inventory-reload").click();
-assert.match(text(pane.element), /Current activity: refused/);
+assert.doesNotMatch(text(pane.element), /Current activity:/);
 assert.match(text(pane.element), /Previous published scan/);
 assert.equal(reloads.at(-1), task);
 assert.equal(action("inventory-refresh").disabled, false, "prior publication may refresh current task");
@@ -1173,6 +1177,17 @@ menuPane.render(menuTask);
 menuWalk().find((value) => value.dataset.action === "inventory-restore").click();
 assert.deepEqual(menuCalls.at(-1), ["visibility", menuReview, "restore", missingRow.node_id],
   "Restore retains the card item while a different row is active");
+menuReview.window = {...menuReview.window, rows:menuReview.window.rows.map(row =>
+  row.node_id === missingRow.node_id ? {...row, acknowledged:true} : row)};
+menuPane.render(menuTask);
+menuPointer(missingRow);
+const restoreMissing = menuPopup.children.find(value => value.dataset.action === "row-restore");
+assert.equal(restoreMissing.textContent, "Restore missing");
+restoreMissing.click();
+assert.deepEqual(menuCalls.at(-1), ["visibility", menuReview, "restore", missingRow.node_id]);
+menuReview.window = {...menuReview.window, rows:menuReview.window.rows.map(row =>
+  row.node_id === missingRow.node_id ? {...row, acknowledged:false} : row)};
+menuPane.render(menuTask);
 menuPointer(missingRow);
 const overlayRefresh = menuPopup.children.find(value => value.dataset.action === "row-refresh");
 const overlayInvoker = menuRow(missingRow);
@@ -1269,8 +1284,8 @@ folderPane.render(folderTask);
 const folderDetails = walk(folderPane.element).find(value => value.ariaLabel === "Inventory item details");
 assert.match(text(folderDetails), /Complete folder scope.*Observed size.*Last observed/);
 assert.doesNotMatch(text(folderDetails), /verified|Verification|Stored digest|Attested|Algorithm/i);
-assert.equal(folderDetails.children.at(-2).children[0].textContent, "Acknowledge");
-assert.equal(folderDetails.children.at(-2).children[1].textContent, "Restore");
+assert.equal(folderDetails.children.at(-2).children[0].textContent, "Acknowledge all");
+assert.equal(folderDetails.children.at(-2).children[1].textContent, "Restore all");
 folderPane.dispose();
 const presentationRows = [
   {...real, node_id:"presence-return", reappeared:true, verification_state:"unverified"},
@@ -1296,7 +1311,7 @@ assert.deepEqual(presented.map(value => value.querySelector(".nami-file-row__not
   ["", "", "Acknowledged", "Partial size", "Size overflow"]);
 assert.equal(presented[0].querySelector(".nami-inventory-row__checksum").textContent, real.recorded_checksum.slice(0, 8));
 assert.equal(presented[1].querySelector(".nami-integrity-row__presence").dataset.integrity, "mismatched");
-for (const [patch, expected] of [[{presence:"present", verification_state:"unverified", reappeared:false}, ""],
+for (const [patch, expected] of [[{presence:"present", verification_state:"unverified", reappeared:false}, "Present"],
   [{presence:"missing"}, "Missing"], [{presence:"present", reappeared:true}, "Reappeared"],
   [{presence:"unsupported"}, "Unsupported"], [{presence:"present", verification_state:"error", reappeared:false}, "Error"]]) {
   presentationReview.window = {...presentationReview.window, rows:[{...folderDomain, ...patch}]};
@@ -1543,10 +1558,10 @@ Object.assign(presentationTask, {taskKind:"sync-plan", executionStarted:true, wo
     execution_revision:7, has_successful_copied_files:true}}});
 presentationPane.render(presentationTask);
 const presentationAction = key => walk(presentationPane.element).find(value => value.dataset.action === key);
-assert.equal(presentationAction("inventory-baseline").parentElement.hidden, true);
-assert.equal(presentationAction("inventory-baseline-menu").parentElement.hidden, true);
+assert.equal(presentationAction("inventory-baseline").parentElement.hidden, false);
+assert.equal(presentationAction("inventory-baseline-menu").parentElement.hidden, false);
 assert.equal(presentationAction("inventory-verify").hidden, false);
-assert.equal(presentationAction("inventory-verify").textContent, "Verify current state");
+assert.equal(presentationAction("inventory-verify").textContent, "Verify selected");
 assert.equal(presentationAction("verify-copied-files").hidden, false);
 presentationAction("verify-copied-files").click();
 assert.deepEqual(copiedStarts, [[presentationReview]]);
@@ -1558,7 +1573,7 @@ presentationPane.render(presentationTask);
 assert.equal(presentationAction("verify-copied-files").disabled, true);
 presentationAction("verify-copied-files").click();
 assert.equal(copiedStarts.length, 1, "a known-empty copied scope cannot start");
-assert.match(text(presentationPane.element), /Execution copied no files successfully\. Select files and use Verify current state\./);
+assert.match(text(presentationPane.element), /Execution copied no files successfully\. Select files and use Verify selected\./);
 assert.equal(presentationAction("inventory-verify").disabled, false, "selected Verify stays independent");
 for (const unknown of [null,
   {...retainedCopiedFact, execution:{...retainedCopiedFact.execution, has_successful_copied_files:null}},

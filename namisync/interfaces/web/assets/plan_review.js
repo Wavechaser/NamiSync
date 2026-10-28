@@ -68,6 +68,7 @@ const executionLabel = (value) => Object.prototype.hasOwnProperty.call(EXECUTION
   : typeof value === "string"
     ? value.replaceAll("_", " ").replaceAll("-", " ").replace(/^./, (first) => first.toUpperCase())
     : "Unknown";
+const isNoChange = (operation) => operation?.result === "skipped" && operation.reason === "noop";
 
 function operationLifecycle(operation) {
   if (operation === null) return null;
@@ -89,7 +90,8 @@ export function projectExecutionRow(execution) {
   const lifecycle = operationLifecycle(operation);
   const notes = [];
   if (operation !== null) {
-    notes.push(`Operation: ${executionLabel(operation.result)}${operation.reason === null ? "" : ` (${executionLabel(operation.reason)})`}`);
+    notes.push(isNoChange(operation) ? "Operation: No change"
+      : `Operation: ${executionLabel(operation.result)}${operation.reason === null ? "" : ` (${executionLabel(operation.reason)})`}`);
     if (operation.recording !== "ok") {
       notes.push(`Recording: ${executionLabel(operation.recording)}${operation.recording_reason === null ? "" : ` (${executionLabel(operation.recording_reason)})`}`);
     }
@@ -103,7 +105,8 @@ export function projectExecutionRow(execution) {
   if (evidence !== null) notes.push(`Stored evidence: ${executionLabel(evidence.state)}`);
   return {
     lifecycle,
-    intent: operation === null ? null : lifecycle === "completed" ? "Completed" : executionLabel(operation.result),
+    intent: operation === null ? null : isNoChange(operation) ? "No change"
+      : lifecycle === "completed" ? "Completed" : executionLabel(operation.result),
     checksum: evidence?.content?.digest?.slice(0, 8) ?? "",
     notes,
   };
@@ -801,12 +804,13 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const actionLabel = document.createElement("span");
     actionLabel.className = "nami-file-state-label";
     renderText(actionLabel, operation === null ? action.intentText
-      : `${executionLabel(operation.result)} · ${displayLabel(operation.kind ?? row.operation_kind)}`);
+      : isNoChange(operation) ? "No change"
+        : `${executionLabel(operation.result)} · ${displayLabel(operation.kind ?? row.operation_kind)}`);
     actionFact.append(actionLabel);
     if (row.reason !== null) appendDetailFact("Reason", reasonLabel(row.reason));
     if (row.blocked_reason !== null) appendDetailFact("Blocked", reasonLabel(row.blocked_reason));
     if (row.selection_exclusion_reason !== null) appendDetailFact("Excluded", reasonLabel(row.selection_exclusion_reason));
-    if (operation?.reason != null) appendDetailFact("Result reason", executionLabel(operation.reason));
+    if (operation?.reason != null && !isNoChange(operation)) appendDetailFact("Result reason", executionLabel(operation.reason));
     if (operation !== null) appendDetailFact("Operation recording", `${executionLabel(operation.recording)}${operation.recording_reason == null ? "" : ` · ${executionLabel(operation.recording_reason)}`}${operation.recording_detail == null ? "" : ` · ${operation.recording_detail}`}`);
     const planned = current.planDetail;
     let plannedStatus = "Planned details are unavailable.";
@@ -858,7 +862,6 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       return;
     }
     if (operation !== null) {
-      appendDetailFact("Execution path", formatFilesystemPath(current.summary.target_path, operation.path), { filesystem: true, block: true });
       for (const [key, value] of Object.entries(operation.detail)) {
         const text = Array.isArray(value) ? value.join(", ") : String(value);
         const filesystem = key.endsWith("_path") || key === "mutation_destination";

@@ -1640,6 +1640,7 @@ body {
 }
 
 [data-integrity]:is(
+  [data-integrity="present"],
   [data-integrity="verified"],
   [data-integrity="baselined"]
 ) {
@@ -1832,6 +1833,7 @@ body {
 
 [data-lifecycle="completed"] .nami-state-cue::before,
 [data-integrity]:is(
+  [data-integrity="present"],
   [data-integrity="verified"],
   [data-integrity="baselined"]
 ) .nami-state-cue::before {

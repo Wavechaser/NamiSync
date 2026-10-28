@@ -756,7 +756,7 @@ body {
 }
 
 .nami-plan-review__detail-body > dt {
-  color: var(--color-neutral-foreground-secondary);
+  color: var(--color-neutral-foreground-tertiary);
   overflow-wrap: anywhere;
 }
 

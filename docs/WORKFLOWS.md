@@ -40,7 +40,7 @@ the current live record's opaque checkpoint, and its separate metadata-store
 projection never persists it.
 This is not whole-process reference erasure; the scope and M2 protected
 recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store).
-Deferred Verify copied files uses the ordinary location-integrity workflow.
+Deferred Verify copied uses the ordinary location-integrity workflow.
 The retained execution supplies target paths for successful selected
 COPY, UPDATE and MOVE_UPDATE outcomes; no-op, failed and absent outcomes add no
 paths. An empty copied population refuses rather than becoming whole-location
@@ -717,7 +717,7 @@ freshly inventories and guards those remaining rows without adding a newly
 appeared row. Inventory and plan register pause unsupported and remain
 cooperatively cancelable. The production interface registry includes these
 workflow kinds. The CLI reaches standalone and reviewed-sync activities through
-the shared service; deferred Verify copied files derives successful target paths
+the shared service; deferred Verify copied derives successful target paths
 from the task's retained execution binding and reuses ordinary Verify.
 
 After integrity selection, running cancellation or ordinary failure derives

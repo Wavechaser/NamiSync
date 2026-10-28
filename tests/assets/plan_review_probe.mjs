@@ -1437,7 +1437,8 @@ executionReviewState.executionDetail = {
 };
 executionPanel.render(executionTask);
 const detailBody = findByClass(executionPanel.element, "nami-plan-review__detail-body");
-for (const [label, path] of [["Execution path", `OperationCase\\${hostile}`], ["Verification path", `VerificationCase\\${hostile}`],
+assert.equal(detailFact(executionPanel.element, "Execution path"), null);
+for (const [label, path] of [["Verification path", `VerificationCase\\${hostile}`],
   ["Backup path", ".synctrash\\backup.txt"], ["Mutation destination", "Moved\\Destination.txt"],
   ["Prior path", "Previous\\Original.txt"], ["Published path", "Published\\Current.txt"],
   ["Trash path", ".synctrash\\removed.txt"]]) {

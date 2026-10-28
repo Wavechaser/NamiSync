@@ -47,6 +47,24 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Selection, navigation and detail refinement — 2026-10-28
+
+User approved this three-commit batch from `10b59e78` on `milestone1`.
+Execute-task builders and fresh independent reviewers serialize shared owners.
+
+| ID | Outcome / finite owners | Verification and boundary | Status |
+| --- | --- | --- | --- |
+| N1 | Requested control labels, selected-scope Baseline/Rebaseline on the sync task's Inventory page, Restore context action and folder action names; green ordinary folder presence, concise details, muted labels and No change display. app/inventory_review/plan_review JS, app CSS, direct renderer/gallery/native consumers and DESKTOP_UI/PRESENTATION. | Focused probes, interface suite and affected installed gallery/Inventory/execution checks; preserve current-publication guards, confirmation, raw outcomes and native identity witnesses. One presentation commit. | Complete: 114 focused, 2,100 interface and final count/driver checks pass; all seven installed checks pass across retained five and corrected execution rerun; independent review. |
+| N2 | Keyboard highlight drives fresh details; same-task Inventory refresh retains surviving highlight and appropriate focus. Inventory state and app/tree/renderers as needed, direct state/drain/browser/native consumers; PRESENTATION/INTERFACES/DESKTOP_UI. | Keyboard and off-window navigation, partial/full replacement, removed identities, stale detail responses, navigation/session replacement and no focus stealing; owning suites and installed input witnesses. One navigation commit after N1. | Pending. |
+| N3 | Both tables' multi-highlight checkbox actions use only highlighted rows' direct contributions; singleton/outside-range folder clicks remain recursive and tri-state aggregates remain authoritative. Plan/Inventory selection owners, direct projection/drain/renderer/native consumers and PRESENTATION/DESKTOP_UI. | Cross-folder/collapsed/unloaded ranges, singleton/outside-range gestures, authoritative mixed states, stale revision rejection and unchanged Plan dependency closure; owning suites and installed input witnesses. One selection commit after N2. | Pending. |
+
+Baseline/Rebaseline on either page means ordinary selected-file scope. The
+infrastructure's linked activity capability does not authorize a separate
+copied-file baseline product action; copied scope remains Verify-only. No new
+wire shape, filesystem effect policy, persistence, queued-input coordinator or
+recents work is authorized. The user approved migration of documented highlight
+replacement and highlighted-selection behavior; AGENTS stop rules remain.
+
 ### Details and Inventory truth refinement — 2026-10-27
 
 User-authorized follow-up from `95576a4b` on `milestone1`, using execute-task,

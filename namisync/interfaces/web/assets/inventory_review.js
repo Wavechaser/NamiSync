@@ -39,8 +39,8 @@ function button(text, action) {
   return value;
 }
 
-function rollupText(rollup) {
-  return `${rollup.domain_count} items · ${rollup.file_count} files · ${bytes(rollup.size)}`
+function rollupText(rollup, includeFileCount = true) {
+  return `${rollup.domain_count} items · ${includeFileCount ? `${rollup.file_count} files · ` : ""}${bytes(rollup.size)}`
     + (rollup.size_overflow ? " (size overflow)" : rollup.size_partial ? " (partial size)" : "");
 }
 
@@ -117,7 +117,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
   const baselineGroup = element("div", "nami-inventory-review__baseline");
   baselineGroup.append(baseline, baselineMenuTrigger);
   const verify = button("Verify", "inventory-verify");
-  const copiedVerify = button("Verify copied files", "verify-copied-files");
+  const copiedVerify = button("Verify copied", "verify-copied-files");
   copiedVerify.classList.add("nami-button--primary");
   verify.classList.add("nami-button--primary");
   const pause = button("", "inventory-pause");
@@ -280,8 +280,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
   globalFacts.dataset.inventoryTaskFacts = "";
   const globalScanFacts = element("p", "nami-shell__guidance");
   globalScanFacts.dataset.inventoryScanFacts = "";
-  const globalScanState = element("p", "nami-shell__guidance");
-  globalDetails.append(element("h2", "", "Task details"), globalScanState, globalScanFacts, globalFacts);
+  globalDetails.append(element("h2", "", "Task details"), globalScanFacts, globalFacts);
   diagnostics.append(globalDetails, detail);
   pane.append(header, summary, content, diagnostics);
 
@@ -458,7 +457,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     const stateKey = row.warning !== null || row.row_id === null ? ""
       : row.presence !== "present" ? row.presence
       : row.is_container ? row.reappeared ? "reappeared"
-        : ["error", "unsupported"].includes(row.verification_state) ? row.verification_state : ""
+        : ["error", "unsupported"].includes(row.verification_state) ? row.verification_state : "present"
       : row.verification_state === "mismatched" ? "mismatched"
       : row.reappeared ? "reappeared" : row.verification_state;
     const owner = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode] ?? "Integrity";
@@ -608,6 +607,11 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
               && review.summary.request_id === owner.requestId && !owner.inventoryViewUnconfirmed) {
             actions.push({ id: "row-acknowledge", label: "Acknowledge missing",
               run: () => callbacks.onVisibility(review, "acknowledge", nodeId) });
+          }
+          if (row.presence === "missing" && row.acknowledged
+              && review.summary.request_id === owner.requestId && !owner.inventoryViewUnconfirmed) {
+            actions.push({ id: "row-restore", label: "Restore missing",
+              run: () => callbacks.onVisibility(review, "restore", nodeId) });
           }
         }
         filterMenu.close();
@@ -766,7 +770,6 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       return;
     }
     appendDetail("Stored digest", value.attestation.content.digest, { fullWidth: true, block: true });
-    appendDetail("Provenance", value.attestation.content.provenance);
     appendDetail("Evidence observed", formatLocalDateTime(value.attestation.content.observed_at));
     subjectDetails("Attested", value.attestation.subject);
   }
@@ -922,14 +925,13 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       guidance, value.inventoryAction?.message,
       ordinary?.gap ? "Integrity event history has gaps; live results may be incomplete." : "",
       available && syncTask && copiedScopeEmpty && value.sessionReleased
-        ? "Execution copied no files successfully. Select files and use Verify current state." : "",
+        ? "Execution copied no files successfully. Select files and use Verify selected." : "",
     ].filter(Boolean))].join(" ") || (value.sessionState === "active"
       ? value.executionControlState === "paused" ? "Activity is paused. Resume when ready."
         : value.executionControlState === "pausing" ? "Pausing at the next safe checkpoint."
           : value.executionControlState === "canceling" ? "Canceling at the next safe checkpoint."
             : "Inventory activity is in progress."
       : "Review items or select files for integrity checks."));
-    renderText(globalScanState, `Current activity: ${value.sessionState === "active" ? "in progress" : value.sessionState}.`);
     renderFilesystemText(globalScanFacts, available
       ? `${detailPublication}${hasScan ? ` · ${review.summary.scan_complete ? "complete" : "incomplete"} · ${scanCounts}` : ""}` : "");
     if (!available) {
@@ -950,21 +952,21 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       return;
     }
     toolbar.hidden = false;
-    renderText(globalFacts, `${selectionText}. ${rollupText(review.summary.rollup)}. ${review.summary.rollup.acknowledged} acknowledged items.`);
+    renderText(globalFacts, `${selectionText}. ${rollupText(review.summary.rollup, false)}. ${review.summary.rollup.acknowledged} acknowledged items.`);
     const selected = review.detail?.row ?? null;
     const domain = selected !== null && selected.warning === null;
     const currentPublication = review.summary.request_id === value.requestId && !value.inventoryViewUnconfirmed;
     const currentOrdinary = value.sessionState === "active"
       && ["baseline", "verify", "rebaseline"].includes(value.sessionKind);
-    const canStart = value.taskKind === "inventory" && value.sessionReleased && currentPublication
+    const canStart = value.sessionReleased && currentPublication
       && review.summary.selected_file_count > 0 && !blocked();
-    baselineGroup.hidden = syncTask || currentOrdinary;
+    baselineGroup.hidden = currentOrdinary;
     baseline.disabled = baselineMenuTrigger.disabled = !canStart;
     const currentAuxiliary = currentOrdinary;
     verify.hidden = currentOrdinary;
     verify.disabled = !value.sessionReleased || !currentPublication
       || review.summary.selected_file_count === 0 || Boolean(blocked());
-    renderText(verify, syncTask ? "Verify current state" : "Verify");
+    renderText(verify, syncTask ? "Verify selected" : "Verify");
     copiedVerify.hidden = !syncTask || currentAuxiliary;
     copiedVerify.disabled = copiedScopeEmpty || !value.sessionReleased || !currentPublication || Boolean(blocked());
     pause.hidden = !currentAuxiliary || value.executionControlState === "paused";
@@ -978,6 +980,8 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     const acknowledgedCount = selected?.is_container ? selected.rollup.acknowledged
       : selected?.presence === "missing" && selected.acknowledged ? 1 : 0;
     detailActions.hidden = !domain;
+    renderText(acknowledge, selected?.is_container ? "Acknowledge all" : "Acknowledge");
+    renderText(restore, selected?.is_container ? "Restore all" : "Restore");
     acknowledge.hidden = !domain || missingCount === 0;
     acknowledge.disabled = actionBlocked || !currentPublication;
     restore.hidden = !domain || acknowledgedCount === 0;

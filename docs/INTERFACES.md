@@ -300,7 +300,7 @@ validation. Browser whole-batch refusal remains for transport, ordering,
 lifecycle, and snapshot admission failures, with clean replay of previously unaccepted
 updates.
 
-Verify copied files reads successful copied paths from the task's retained
+Verify copied reads successful copied paths from the task's retained
 execution binding and uses the existing ordinary-integrity route. It has ordinary
 session/history identity, bounded latest results and current-session controls.
 There is no manual runtime kind or first-attempt receipt. Its result never

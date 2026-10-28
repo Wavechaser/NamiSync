@@ -221,8 +221,14 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-27)
+#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-28)
 
+- Offer ordinary selected-file Baseline/Rebaseline on the sync task's Inventory
+  page, with Verify selected and Verify copied labels. Keep copied scope
+  exclusive to verification and preserve Rebaseline confirmation. Add Restore
+  for eligible missing items to the context menu and explicit folder-wide labels.
+- Show green Present for ordinary observed folders, simplify repetitive details,
+  mute metadata labels and describe unchanged execution items as No change.
 - Keep Inventory highlight geometry stable. Both task-view switchers retain
   the selected half's accent and hover/click behavior while unavailable
   destinations stay locked.

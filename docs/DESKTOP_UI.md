@@ -614,9 +614,10 @@ and presentation keys `copy`, `mkdir`, `move`, `rename`, `recase`, `update`, `mo
 `delete`, and `noop`, or exact exception keys `error`, `unsupported`, and
 `blocked`. A projected execution row may instead supply an admitted lifecycle
 key. Actual no-op completion (`skipped` result with `noop` reason) displays green
-**Completed**; other skipped results, including a deselected no-op, display
-neutral **Skipped** through the row-only `skipped` key. Operation notes retain
-the supplied result and reason. An `executing` row additionally requires a finite,
+**No change**; other skipped results, including a deselected no-op, display
+neutral **Skipped** through the row-only `skipped` key. Operation notes also use
+No change for that no-op outcome and retain other supplied results and reasons.
+An `executing` row additionally requires a finite,
 already-projected `progressPercent` from 0 through 100 and renders a 4 logical
 px mini progress bar across the cell's content width, preserving the standard
 8 px inset on both sides; supplied text such as “Copying” becomes its
@@ -1837,7 +1838,7 @@ task or resume promise; later work starts from fresh observation and review.
 
 Normally completed linked execution/verification retains read-only file lists,
 item status, and each phase's aggregate status. Retained executions with successful
-copied targets may start ordinary Verify copied files after release. Non-stopping
+copied targets may start ordinary Verify copied after release. Non-stopping
 degradation retains that same review experience with visible issue axes, without
 item retries. Canceled or otherwise abnormally terminated sessions retain their
 terminal truth for review and close, without resume, retry, or session cleanup.
@@ -2002,7 +2003,7 @@ starting a scan or hash. Returning to Plan retains its selection, details,
 follow setting and viewport. Pane changes retire pending navigation reads;
 late replies cannot replace the other pane's state or feedback.
 
-**Verify copied files** starts ordinary Verify on server-derived successful
+**Verify copied** starts ordinary Verify on server-derived successful
 copy targets from the retained execution. It scans those paths and checks current
 evidence, without changing Inventory checkbox selection. The action can repeat
 with a new command after release, including successful work in a partial or
@@ -2010,12 +2011,14 @@ linked execution. Empty copied scope starts nothing. Each uncertain command
 retains Check original outcome; Check never submits another operation.
 When the original execution summary confirms that no copied file succeeded, the
 button stays visible but disabled, with guidance to select files and use Verify
-current state. An unavailable summary does not imply an empty population; server
+selected. An unavailable summary does not imply an empty population; server
 admission remains decisive without a new readiness check.
 
-Selected **Verify current state** is an ordinary action independent of copied-file
+**Verify selected** is an ordinary action independent of copied-file
 eligibility. It uses the complete nonempty server-owned checkbox selection and
-never runs automatically. Baseline and Rebaseline remain hidden on sync tasks.
+never runs automatically. Baseline and Rebaseline also use the ordinary selected
+files scope on linked Verify pages. Infrastructure supports linked baseline and
+rebaseline, but the product exposes no separate linked/copied-scope baseline action.
 Both Verify scopes share current-session controls and one latest ordinary result;
 neither controls or rewrites the original execution. Missing evidence may be
 baselined, never verified. A clean ordinary inventory Verify result that creates baselines shows
@@ -2112,7 +2115,8 @@ following Microsoft's [progress guidance](https://learn.microsoft.com/en-us/wind
 Missing and unsupported presence retain their ledger labels; for present files,
 Mismatch overrides Reappeared, then the stored verification state supplies
 Verified, Modified or Unverified. Reappeared alone implies no fresh verification.
-Ordinary present and rowless folders have blank Presence cells; missing,
+Ordinary present folders show green Present; rowless folders retain blank Presence
+cells. Missing,
 reappeared, unsupported and error evidence remains visible. Scan notices retain
 the neutral Notice label. Acknowledgement,
 bounded warning details and partial/overflow size qualifiers appear in Notes;
@@ -2154,16 +2158,23 @@ preserve table scrolling. Acknowledgement and restore controls remain with the
 selected item's details.
 
 Inventory detail body text uses Plan's caption typography with unchanged titles.
+Both detail panes use tertiary neutral foreground for fact labels. Execution
+NOOP outcomes say No change, while genuine skipped operations remain Skipped;
+the target path is shown once rather than repeated as Execution path.
+Inventory task details omit the status card's activity and duplicate file total.
 The leading file status combines presence and the table's current integrity
 presentation; newer same-owner window results supersede older exact-detail
 results there. Superseded activity results remain labelled Previous in the body.
 Only supplied applicable abnormal dates and reasons appear. File evidence keeps
-actual Last verified dates and the complete baseline digest, provenance and
+actual Last verified dates and the complete baseline digest and
 attested metadata; algorithm, observed kind and the current-ledger heading are
 omitted. Folder details show path, observed object facts and complete scope totals,
 with nonzero missing/acknowledged counts, without verification fields. Short
-**Acknowledge** and **Restore** buttons follow the facts with a small folder-scope
+**Acknowledge** and **Restore** buttons (Acknowledge all and Restore all for
+folders) follow the facts with a small folder-scope
 advisory; their visibility and complete server-owned action scope remain unchanged.
+Eligible acknowledged missing rows also expose Restore missing in their context
+menu, under the same current-publication and released-session guards.
 
 Inventory terminal labels identify baseline, verification and rebaseline when
 those ordinary sessions are observed; the detailed status calls this the current
@@ -2185,7 +2196,7 @@ Acknowledge missing and Restore visibility
 continue to act on the item displayed in the details card.
 
 Activate a row with click or Enter to load its detail selection. Domain subjects load fresh exact
-ledger evidence with observed and attested facts, full digest, provenance,
+ledger evidence with observed and attested facts, full digest,
 evidence observation time, verification freshness and invalidation. Synthetic
 folders show complete rollups and their path; notices show their informational warning only.
 Window labels are bounded basenames, and flat notices show a code plus bounded
@@ -2276,7 +2287,7 @@ The standalone integrity surface presents ledger-derived verification state
 separately from its latest ordinary-integrity overlay, including copied-file
 verification. Folder rollups exclude warnings and do not change when acknowledged
 rows are hidden. Overflow is displayed as unavailable, never a clamped total.
-Details label current digest provenance/currentness/invalidation and render
+Details label current digest currentness/invalidation and render
 times without floating-point authority. Exact inventory view, filter, overlay,
 rollup, scalar, warning-identity, and replacement rules remain bridge/domain
 authority.

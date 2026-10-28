@@ -10,7 +10,7 @@ actions remain Stage 6. Shared location-candidate admission and bounded
 remembered-location reads are implemented workflow services. Desktop Setup
 starts standalone inventory on a typed, picked or remembered root; cached
 desktop projections and ledger-current presentation are implemented. Deferred
-Verify copied files uses ordinary scoped integrity and its current-state results.
+Verify copied uses ordinary scoped integrity and its current-state results.
 
 ## Purpose
 
@@ -320,7 +320,7 @@ accumulation reports overflow rather than clamping.
 Each inventory row keeps two orthogonal facts: ledger-derived
 `verification_state` and the latest ordinary-integrity overlay. Replacing that
 generation cannot rewrite original execution or automatic post-copy results.
-Selected-scope outcomes bind exact admitted row IDs. Verify copied files instead
+Selected-scope outcomes bind exact admitted row IDs. Verify copied instead
 freezes normalized execution target paths so a fresh scan can create previously
 unrecorded rows; result admission checks path/location/mode and one-to-one
 path/row binding before retaining outcomes. Unknown or conflicting subjects

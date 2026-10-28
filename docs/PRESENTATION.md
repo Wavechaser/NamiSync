@@ -404,7 +404,7 @@ current activity. Reconstruction gets original execution identity from the Plan
 summary, never from a current auxiliary session. Auxiliary progress cannot drive
 Plan follow or replace its terminal result.
 
-**Verify copied files** supplies successful execution copy-target paths to
+**Verify copied** supplies successful execution copy-target paths to
 ordinary Verify without changing Inventory checkbox selection. It is repeatable,
 includes successful work in partial or linked executions, and refuses an empty
 copied population. The server freezes copied paths under current-task admission;

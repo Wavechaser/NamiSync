@@ -1661,7 +1661,7 @@ function inventoryIntegrityEligible(task, review, mode, allowedAttempt = null, s
     && (task.inventoryAction === null || task.inventoryAction === allowedAttempt
       || (!task.inventoryAction.pending && !task.inventoryAction.accepted))
     && review.pending === null
-    && (task.taskKind === "inventory" || (task.taskKind === "sync-plan" && mode === "verify"))
+    && (task.taskKind === "inventory" || task.taskKind === "sync-plan")
     && (scope !== "copied" || (task.taskKind === "sync-plan" && task.executionStarted
       && originalExecution(task)?.has_successful_copied_files !== false))
     && task.sessionReleased && task.sessionState !== "active" && !task.inventoryViewUnconfirmed
@@ -1757,7 +1757,7 @@ async function submitInventoryIntegrity(task, attempt) {
       attempt.pending = false;
       attempt.recovery = null;
       attempt.message = attempt.scope === "copied"
-        ? "Verification did not start. This action needs successful copied files and an available target. You can select files and use Verify current state."
+        ? "Verification did not start. This action needs successful copied files and an available target. You can select files and use Verify selected."
         : "Integrity work did not start. Try again when you are ready.";
       review.message = attempt.message;
       task.inventoryAction = null;

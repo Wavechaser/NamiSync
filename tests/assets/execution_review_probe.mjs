@@ -239,7 +239,7 @@ assert.ok(row.notes.includes("3 verification details omitted"));
 assert.ok(row.notes.includes("Stored evidence: Recorded copy"));
 
 const operationPresentations = [
-  ["skipped", "noop", "noop", "completed", "Completed"],
+  ["skipped", "noop", "noop", "completed", "No change"],
   ["skipped", "user-deselected", "noop", "skipped", "Skipped"],
   ["skipped", "user-deselected", "copy", "skipped", "Skipped"],
   ["succeeded", null, "copy", "completed", "Completed"],
@@ -256,7 +256,8 @@ const operationPresentations = [
   });
   assert.equal(projected.lifecycle, lifecycle, `${result}/${reason}/${kind} lifecycle`);
   assert.equal(projected.intent, intent, `${result}/${reason}/${kind} label`);
-  assert.ok(projected.notes.includes(`Operation: ${result === "succeeded" ? "Completed" : result[0].toUpperCase() + result.slice(1)}${reason === null ? "" : ` (${reason === "user-deselected" ? "User deselected" : reason === "disk-capacity" ? "Disk capacity" : "Noop"})`}`));
+  assert.ok(projected.notes.includes(result === "skipped" && reason === "noop" ? "Operation: No change"
+    : `Operation: ${result === "succeeded" ? "Completed" : result[0].toUpperCase() + result.slice(1)}${reason === null ? "" : ` (${reason === "user-deselected" ? "User deselected" : reason === "disk-capacity" ? "Disk capacity" : "Noop"})`}`));
   assert.ok(projected.notes.includes("Automatic verification: Mismatch"));
   assert.ok(projected.notes.includes("Stored evidence: Unrecorded"));
   return projected;
