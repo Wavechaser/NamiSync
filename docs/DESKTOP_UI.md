@@ -1436,13 +1436,7 @@ the table's two-axis viewport scrolls. Search is a narrower right-aligned
 box with inset submit and Clear icons styled like Setup path-box controls.
 Clear restores input focus and immediately clears the query. Plan and Inventory
 share one ordinary-sized Filter button with regular Filter and chevron icons.
-An adjacent caption reads `192/256 items shown` from the authoritative matching
-and total synthetic-row counts. Matching includes folded and offscreen matches
-and their structural ancestors; both counts exclude the hidden root. It is
-separate from the trigger's active-category badge and menu category counts.
-The toolbar responds to the table card's width, so Search moves below Filter
-and its counter when the details pane narrows the table, without overlap.
-The trigger's category count includes zero and counts selected canonical categories only,
+Its visible count includes zero and counts selected canonical categories only,
 excluding All and search. It stays neutral at zero and uses the accent fill when
 categories are active. The popup reuses the existing menu surface and follows
 Microsoft's [checkbox menu guidance](https://fluent2.microsoft.design/components/web/react/core/menu/usage)

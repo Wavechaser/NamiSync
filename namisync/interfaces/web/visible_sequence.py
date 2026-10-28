@@ -84,7 +84,6 @@ class VisibleSequence(Generic[_VisibleNodeT]):
     retained_direct_child_counts: Sequence[int]
     collapsed_node_ids: frozenset[str]
     filtered_item_count: int | None
-    retained_node_count: int
 
     def __post_init__(self) -> None:
         nodes = tuple(self.nodes)
@@ -189,9 +188,6 @@ class VisibleSequence(Generic[_VisibleNodeT]):
                 self.filtered_item_count,
                 "filtered_item_count",
             )
-        _require_exact_nonnegative_int(self.retained_node_count, "retained_node_count")
-        if not len(positions) <= self.retained_node_count <= len(nodes):
-            raise ValueError("retained node count is inconsistent")
 
         object.__setattr__(self, "nodes", nodes)
         object.__setattr__(self, "visible_source_positions", positions)
@@ -225,7 +221,6 @@ class VisibleSequence(Generic[_VisibleNodeT]):
             ("retained_direct_child_counts", self.retained_direct_child_counts),
             ("collapsed_node_ids", self.collapsed_node_ids),
             ("filtered_item_count", self.filtered_item_count),
-            ("retained_node_count", self.retained_node_count),
         ):
             object.__setattr__(rebound, name, value)
         return rebound
@@ -510,7 +505,6 @@ def _derive_visible_sequence_from_validated(
         ("retained_direct_child_counts", CompactUnsignedIntegers(retained_direct_child_counts, maximum=max(retained_direct_child_counts, default=0))),
         ("collapsed_node_ids", parameters.collapsed_node_ids),
         ("filtered_item_count", filtered_item_count),
-        ("retained_node_count", len(original_nodes) if all_nodes_retained else len(retained_positions)),
     ):
         object.__setattr__(sequence, name, value)
     return sequence

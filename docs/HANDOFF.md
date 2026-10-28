@@ -1,50 +1,61 @@
-# Latest session — Navigation context and filter counter, 2026-10-28
+# Latest session — Selection, navigation and details, 2026-10-28
 
-Completed the approved P1–P3 GUI batch on milestone1 from b8a2aabb.
+Completed the user-approved N1–N3 batch on `milestone1` from `10b59e78`,
+using execute-task builders and fresh independent GPT-6.1 Sol reviews.
+No worktree, recovery ref, push or PR was created.
 
 ## Delivered
 
-- 7ab4b52: pinned Microsoft Go/Follow glyphs, 16px floating insets and square
-  compact action controls, preserving ordinary styles and opaque wrappers.
-- b185f48b: shared four-row leading context for Go/Follow/move jumps, preserving
-  target identity, keyboard focus and refresh viewport.
-- The counter commit containing this handoff: matching/total synthetic rows
-  beside Filter on both pages. Matching includes folded/offscreen search/filter
-  matches and retained structural ancestors. Both counts exclude the hidden
-  root. Cached derivation, exact summary validators and consumers are migrated.
-  Toolbars respond to actual table width and stack Search when needed.
+- `5d8e13de`: ordinary selected-file Baseline/Rebaseline on the sync task's
+  Inventory page; Verify selected/Verify copied labels; eligible Restore context
+  action, explicit folder-wide action labels, green ordinary folder presence,
+  concise details and No change for successful NOOP outcomes. Infrastructure
+  supports linked activities, but no separate copied-scope baseline product
+  feature was added. Rebaseline confirmation and copied Verify remain distinct.
+- `791a6a03`: Inventory keyboard highlights drive fresh details. Refresh retains
+  surviving exact highlights within the location, prunes removed identities,
+  and rereads current details. A bounded one-row lookup supports off-window
+  focus without moving the visible viewport. Hidden focus has no stale details;
+  session/view/navigation fences and focus ownership remain intact.
+- The selection commit containing this handoff limits multi-highlight checkbox
+  changes to direct highlighted contributions on both tables. Singleton and
+  outside-range folder actions stay recursive. Aggregate folder checkbox states,
+  stale revision rejection and Plan workflow dependency closure remain intact.
+  Accessible labels describe the current scope.
 
 ## Verification
 
-Independent execute-task review approved each atomic outcome.
-P1: 2,511 interface/tool passes (three existing skips), focused checks and all
-seven installed checks. P2: 2,104 interface passes, focused probes and native
-Inventory/default/larger Plan passes.
-P3: 6,250 ordinary passes, four existing skips, 12 import contracts. After the
-layout correction, 2,105 interface passes; focused layout94, gallery driver29.
-Final native-r4.txt: all nine installed checks pass, 70 deselected, 132.52s.
-Reviewer inspected raw exits and minimum-window screenshots; literal counts,
-Search separation and all five move-specimen rows are verified.
+Final integrated ordinary suite: 6,249 passed, four existing skips, 35 headed
+checks deselected. All 12 import contracts pass. Focused reproduction tests
+failed under the prior behavior and passed after correction. Each atomic unit
+received independent source, consumer and evidence review before commit.
 
-## Evidence and recovery accounting
+N1: 2,100 interface passes plus focused/driver checks; all seven installed
+checks accounted for across five initial passes and both execution reruns.
+N2: 2,102 interface passes plus focused/race/driver checks; both Plan shells
+and the corrected Inventory rerun pass. N3: 134 owner/registry and 116 renderer
+checks, the full ordinary suite, default Plan shell, and final Inventory/larger
+shell reruns pass. Counts overlap; do not sum them.
 
-Evidence remains under build/gui-position-20261028/, build/gui-context-20261028/
-and build/gui-filter-count-20261028/. Native roots use matching namisync prefixes
-under C:/Users/Spectrum/AppData/Local/Temp/. Final root:
-namisync-filtercount28-native-r4.
+Retained failed receipts include an N1 wheel source-drift rejection, stale
+native checker assumptions about empty selection, an N2 heading fixture using
+full relative path instead of basename, and N3 report counts still expecting
+an earlier two-command journey. Final checkers retain exact identity, path,
+command-order, selection-count and native-input assertions. One larger-shell
+attempt refused input after another window took foreground; user readiness
+preceded its successful rerun. No product effect/safety defect was inferred
+from those harness/environment failures. A misleadingly green-named N2 XML
+contains a failed fixture run; `n2-offwindow-green-r2.xml` is the actual pass.
 
-Failed receipts remain: native P2 expectations assumed first-row navigation;
-P3 gallery manual summaries omitted counts and its initial oracle echoed the
-bad fixture. Corrected complete fixture population, independent literal counts,
-Search nonoverlap and actual-width containment. The resulting wrapped toolbar
-required a test-only move specimen height512px to fit five rows; strict
-all-rows-visible assertion stayed intact. Foreground refusals sent no input at
-the rejected stages. Final user-ready run passes all gates.
+## Evidence and exclusions
 
-Recovery278e0b77 preserved P3 while the user waited. Its reviewed delta was rebuilt
-on b185f48b without merging/cherry-picking the WIP. Product/test bytes match the
-verified candidate; recovery-only handoff/status prose was replaced. Recovery
-branch may be removed after final commit accounting. No worktrees, PR or push.
+Ignored evidence: `build/gui-controls-20261028/`,
+`build/gui-navigation-20261028/`, `build/gui-selection-20261028/`.
+Native roots are under `C:/Users/Spectrum/AppData/Local/Temp/` with prefixes
+`namisync-controls28-`, `namisync-navigation28-`, `namisync-selection28-`.
+Final selection rerun is `namisync-selection28-native-r2`.
 
-No pending batch work. Recents, queued-input coordinator, M1-12, release and
-DOC-2 remain inactive. No domain effects, selection or persistence changed.
+No wire shape, domain effect policy, persistence or authorization changed.
+Inventory recents, the queued-input coordinator, M1-12, release and DOC-2 remain
+inactive. All accepted batch outcomes are complete; no further foreground
+attendance is needed. Test hosts exited through their normal cleanup paths.

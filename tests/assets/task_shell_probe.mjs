@@ -685,7 +685,6 @@ function planSummary(overrides = {}) {
     irreversible_update_count: 0,
     required_bytes: "0",
     visible_row_count: 1,
-    matching_row_count: 1, total_row_count: 1,
     search_query: "",
     filters: [],
     sort_column: "path",

@@ -1303,7 +1303,6 @@ window.addEventListener("unhandledrejection", (event) => {
         source_path: "C:\\source",
         target_path: "D:\\target",
         selected_operation_count: 12,
-        visible_row_count: 1, matching_row_count: 1, total_row_count: 1,
         selectable_operation_count: 21,
         preflight_ready: true,
         preflight_refusal_count: 0,
@@ -1692,8 +1691,6 @@ window.addEventListener("unhandledrejection", (event) => {
         ...planReviewTask.review,
         summary: {
           ...planReviewTask.review.summary, selection_state: "committed",
-          visible_row_count: populated ? 1000 : 0,
-          matching_row_count: populated ? 1000 : 0, total_row_count: populated ? 1000 : 0,
           highlight_focus_node_id: null, highlight_focus_visible_index: null,
           highlight_revision: 0,
         },
@@ -2136,19 +2133,6 @@ window.addEventListener("unhandledrejection", (event) => {
       root.style.inlineSize = `${width}px`;
       setupReference.style.inlineSize = `${width}px`;
       await settled();
-      const inventoryCounter = root.querySelector(".nami-filter-menu__shown-count");
-      const inventoryFilter = root.querySelector('[data-action="filter-menu"]');
-      const inventoryToolbar = inventoryCounter.closest(".nami-plan-review__toolbar");
-      const inventoryCounterBounds = inventoryCounter.getBoundingClientRect();
-      const inventorySearchBounds = root.querySelector(".nami-plan-review__search").getBoundingClientRect();
-      if (inventoryCounter.textContent !== "300/300 items shown"
-          || inventoryCounterBounds.left < inventoryFilter.getBoundingClientRect().right
-          || inventoryCounterBounds.right > inventoryToolbar.getBoundingClientRect().right
-          || !(inventoryCounterBounds.right <= inventorySearchBounds.left
-            || inventoryCounterBounds.bottom <= inventorySearchBounds.top)
-          || inventoryToolbar.scrollWidth > inventoryToolbar.clientWidth) {
-        throw new Error(`Inventory synthetic counter must follow summary and fit beside Filter at ${width}px`);
-      }
       setupHeights.push([root, setupReference].map((value) =>
         Number(value.querySelector(".nami-plan-review__plan").getBoundingClientRect().height.toFixed(3))));
       const factsBounds = statusCard.querySelector('.nami-plan-review__status-summary').getBoundingClientRect();
@@ -3811,18 +3795,6 @@ window.addEventListener("unhandledrejection", (event) => {
   diagnosticLayoutEvidence.push(...minimumLayoutEvidence);
   const minimumFilterTrigger = planReviewPanel.element.querySelector('[data-action="filter-menu"]');
   const minimumFilterPopup = planReviewPanel.element.querySelector('.nami-filter-menu__popup');
-  const minimumShownCount = planReviewPanel.element.querySelector('.nami-filter-menu__shown-count');
-  const counterBounds = minimumShownCount.getBoundingClientRect();
-  const counterToolbar = minimumShownCount.closest('.nami-plan-review__toolbar');
-  const counterToolbarBounds = counterToolbar.getBoundingClientRect();
-  const counterSearchBounds = planReviewPanel.element.querySelector(".nami-plan-review__search").getBoundingClientRect();
-  if (minimumShownCount.textContent !== "1000/1000 items shown"
-      || counterBounds.left < minimumFilterTrigger.getBoundingClientRect().right
-      || counterBounds.right > counterToolbarBounds.right
-      || !(counterBounds.right <= counterSearchBounds.left || counterBounds.bottom <= counterSearchBounds.top)
-      || counterToolbar.scrollWidth > counterToolbar.clientWidth) {
-    throw new Error("synthetic item counter must follow summary and fit beside Filter at minimum width");
-  }
   minimumFilterTrigger.click();
   minimumFilterPopup.dispatchEvent(new KeyboardEvent('keydown', {key:'Home', bubbles:true}));
   await new Promise(resolve => requestAnimationFrame(resolve));
@@ -3992,8 +3964,7 @@ window.addEventListener("unhandledrejection", (event) => {
       reviewSessionId: "6".repeat(32),
       review: {
         ...planReviewTask.review, message: "",
-        summary: { ...planReviewTask.review.summary, filters: [], highlight_focus_node_id: null,
-          visible_row_count: rows.length, matching_row_count: rows.length, total_row_count: rows.length },
+        summary: { ...planReviewTask.review.summary, filters: [], highlight_focus_node_id: null },
         window: { ...planReviewTask.review.window, total: rows.length, rows },
       },
     };
@@ -4076,9 +4047,6 @@ window.addEventListener("unhandledrejection", (event) => {
       renamedRow,
     ].map((row, index) => ({ ...row, visible_index: index }));
     moveTask.review.window = { ...moveTask.review.window, rows, total: rows.length };
-    Object.assign(moveTask.review.summary, {
-      visible_row_count: rows.length, matching_row_count: 5, total_row_count: 5,
-    });
     moveTask.review.summary.highlight_focus_node_id = revealed ? destinationRow.node_id : null;
     moveTask.review.summary.highlight_revision = (moveTask.review.summary.highlight_revision ?? 0) + 1;
     movePanel.render(moveTask);
@@ -4094,8 +4062,6 @@ window.addEventListener("unhandledrejection", (event) => {
       renderMoveRows(expanded, revealedNode !== null);
     },
   });
-  // Keep all five expanded appearance rows in view below the wrapped toolbar.
-  movePanel.element.style.blockSize = "512px";
   renderMoveRows(false, false);
   const movePill = movePanel.element.querySelector(".nami-plan-move-pill");
   const initialCollapsed = movePanel.element.querySelector(".nami-file-row__disclosure").ariaExpanded === "false";

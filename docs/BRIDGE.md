@@ -595,10 +595,6 @@ ancestors and on notices. It remains stored baseline evidence for modified,
 missing and reappeared rows and never claims verification of current bytes.
 The source-owned exact
 shapes are serialized by `inventory_review.py` and validated by `bridge.js`.
-Both Inventory and Plan summaries also carry matching and total synthetic-row
-counts. Matching covers the search/filter-retained population before collapse;
-total covers the entire projection. Both exclude the internal root, and the
-exact validators require visible rows <= matching rows <= total rows.
 `InventoryFilter` admits present, unverified, verified, modified, reappeared,
 unsupported, missing, mismatched, acknowledged and notice. Path sort is ascending
 only; reset is an explicit path/ascending gesture. Windows contain at most 256
@@ -728,8 +724,7 @@ prior revision. Capacity refusal gives the fixed Close-a-task guidance.
 `requires_destructive_confirmation`, `irreversible_update_count`,
 `destructive_operation_count`, `destructive_operation_counts`,
 `irreversible_operation_count`, `required_bytes`,
-`visible_row_count`, `matching_row_count`, `total_row_count`, `search_query`,
-`filters`, `sort_column`, `sort_direction`,
+`visible_row_count`, `search_query`, `filters`, `sort_column`, `sort_direction`,
 `collapsed_count`, and `execution`. The view disposition is `opened|current|applied|noop|conflict|in-flight|frozen`;
 selection state is `reviewing|committing|committed`. `PlanWindowRow` is the exact
 source-owned projection row serialized by `commands.py`; all scalar counts and

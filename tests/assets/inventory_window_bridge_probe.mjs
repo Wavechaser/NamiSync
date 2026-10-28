@@ -17,16 +17,6 @@ bridge.markBridgeOperational();
 const task = fixture.summary.task_id;
 response = fixture.summary;
 assert.deepEqual(await bridge.openInventoryView(task), fixture.summary);
-for (const counts of [
-  {matching_row_count: undefined}, {total_row_count: undefined},
-  {matching_row_count: -1}, {total_row_count: -1},
-  {matching_row_count: fixture.summary.visible_row_count - 1},
-  {total_row_count: fixture.summary.matching_row_count - 1},
-]) {
-  response = {...fixture.summary, ...counts};
-  await assert.rejects(bridge.openInventoryView(task));
-}
-response = fixture.summary;
 for (const recall of [null, {file_count: -1, size: "0", size_overflow: false, size_partial: false},
   {file_count: 1, size: null, size_overflow: false, size_partial: false},
   {file_count: 1, size: "1", size_overflow: false, size_partial: false, extra: true}]) {

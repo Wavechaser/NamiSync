@@ -195,8 +195,6 @@ class PlanReviewState:
             ),
             "required_bytes": self.required_bytes,
             "visible_row_count": max(0, len(self._view.visible.visible_positions) - 1),
-            "matching_row_count": max(0, self._view.visible.retained_node_count - 1),
-            "total_row_count": len(self.projection.nodes) - 1,
             "search_query": self.search_query,
             "filters": sorted(self.filters),
             "sort_column": self.sort_column.value,

@@ -995,7 +995,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     const counts = Object.fromEntries(FACETS.map(([key]) => [key,
       key === "notice" ? review.summary.warning_count
         : key === "recall" ? review.summary.recall_item_count : review.summary.rollup[key]]));
-    filterMenu.render(review.summary.filters, counts, Boolean(blocked()), review.summary);
+    filterMenu.render(review.summary.filters, counts, Boolean(blocked()));
     if (first || (!searchDraft && review.pending !== "view")) search.value = review.summary.search_query;
     if (review.queuedSearchQuery === null && review.pending === null && search.value === review.summary.search_query) searchDraft = false;
     search.disabled = value.closePending || value.inventoryLoading;
