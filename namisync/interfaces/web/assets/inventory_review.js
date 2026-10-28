@@ -152,11 +152,11 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
   const goCurrent = button("", "go-current-item");
   goCurrent.classList.add("nami-button--icon");
   goCurrent.ariaLabel = goCurrent.title = "Go to current item";
-  goCurrent.append(createIcon(document, "eye", "sm"));
+  goCurrent.append(createIcon(document, "navigation-location-target", "sm"));
   const enableFollow = button("", "enable-item-follow");
   enableFollow.classList.add("nami-button--icon");
   enableFollow.ariaLabel = enableFollow.title = "Turn on autoscroll";
-  enableFollow.append(createIcon(document, "location-ripple", "sm"));
+  enableFollow.append(createIcon(document, "location-arrow", "sm"));
   enableFollow.classList.add("nami-button--primary");
   const goCurrentSurface = element("div", "nami-plan-review__floating-control");
   goCurrentSurface.append(goCurrent);

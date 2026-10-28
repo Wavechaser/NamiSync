@@ -1416,8 +1416,20 @@ def _valid_recall_advisory(value: object) -> bool:
 
 
 def _valid_review_controls(value: object) -> bool:
-    if type(value) is not dict or set(value) != {"plan", "inventory", "states"}:
+    if type(value) is not dict or set(value) != {"plan", "inventory", "states", "insets", "actions"}:
         return False
+    for key in ("insets", "actions"):
+        if type(value[key]) is not dict or set(value[key]) != {"plan", "inventory"}:
+            return False
+    for kind in ("plan", "inventory"):
+        actions = value["actions"][kind]
+        names = {"pause", "resume", "cancel"} | ({"refresh", "baseline-menu"} if kind == "inventory" else set())
+        if type(actions) is not dict or set(actions) != names:
+            return False
+        for pair in [value["insets"][kind], *actions.values()]:
+            if not (type(pair) is list and len(pair) == 2
+                    and all(type(item) in (int, float) and math.isfinite(item) for item in pair)):
+                return False
     states = value["states"]
     if not (type(states) is list and len(states) == 2
             and all(type(control) is list and len(control) == 3

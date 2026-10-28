@@ -219,7 +219,9 @@ body {
   white-space: nowrap;
 }
 
-.nami-plan-review [data-action="plan-again"] {
+.nami-plan-review [data-action="plan-again"],
+.nami-plan-review__control-group > .nami-button--icon,
+.nami-inventory-review__actions .nami-button--icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -858,8 +860,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  inset-block-end: var(--space-4);
-  inset-inline-end: var(--space-4);
+  inset-block-end: var(--space-5);
+  inset-inline-end: var(--space-5);
   pointer-events: none;
   position: absolute;
   z-index: 2;

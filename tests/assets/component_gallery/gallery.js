@@ -4154,12 +4154,14 @@ window.addEventListener("unhandledrejection", (event) => {
   const controlRail = createTaskRail(Object.fromEntries(
     ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])));
   recentSection.append(controlRail.element);
+  const actionGeometry = { plan: {}, inventory: {} };
   function actionSnapshot(action) {
     controlRail.render([controlTask], controlTask.taskId, null);
     const railCard = controlRail.element.querySelector('.nami-task-rail__row .nami-task-card');
     const button = controlPanel.element.querySelector(`[data-action="${action}"]`);
     const icon = [...button.querySelectorAll(".nami-icon")].find((glyph) => !glyph.hidden);
     const bounds = button.getBoundingClientRect();
+    actionGeometry.plan[action] = [bounds.width, bounds.height];
     const titleBounds = controlPanel.element.querySelector(".nami-plan-review__status-title").getBoundingClientRect();
     return { label: button.ariaLabel, text: button.textContent,
       headline_color: getComputedStyle(railCard.querySelector('.nami-task-card__title')).color,
@@ -4211,7 +4213,7 @@ window.addEventListener("unhandledrejection", (event) => {
     rows: [...panel.querySelectorAll("[data-node-id]")].map(rectangle),
   }));
   const recallEvidence = {};
-  const reviewControls = { states: Object.values(navigationStates).map((states) => states.map(({control, surface, ordinary}) => [
+  const reviewControls = { insets: {}, actions: actionGeometry, states: Object.values(navigationStates).map((states) => states.map(({control, surface, ordinary}) => [
     getComputedStyle(surface).backgroundColor, getComputedStyle(surface).backdropFilter,
     ["backgroundColor", "color", "borderColor"].every((property) => getComputedStyle(control)[property] === getComputedStyle(ordinary)[property]),
   ])) };
@@ -4269,6 +4271,8 @@ window.addEventListener("unhandledrejection", (event) => {
       no_summary_counter: !panel.element.querySelector(".nami-plan-review__summary").textContent.includes("Not fully"),
       cloud_note: note?.textContent ?? "",
     };
+    const floatingStyle = getComputedStyle(panel.element.querySelector(".nami-plan-review__floating-controls"));
+    reviewControls.insets[kind] = [parseFloat(floatingStyle.insetBlockEnd), parseFloat(floatingStyle.insetInlineEnd)];
     reviewControls[kind] = [...panel.element.querySelectorAll(".nami-plan-review__floating-control > button")].map((control) => {
       const glyph = control.querySelector(".nami-icon");
       const mask = /^url\(["']?([^"')]+)["']?\)$/.exec(getComputedStyle(glyph).maskImage);
@@ -4276,6 +4280,22 @@ window.addEventListener("unhandledrejection", (event) => {
         control.getBoundingClientRect().width, control.getBoundingClientRect().height,
         control.classList.contains("nami-button--primary")];
     });
+    if (kind === "inventory") {
+      const capture = (action) => {
+        const bounds = panel.element.querySelector(`[data-action="inventory-${action}"]`).getBoundingClientRect();
+        actionGeometry.inventory[action] = [bounds.width, bounds.height];
+      };
+      capture("refresh");
+      capture("baseline-menu");
+      panel.render({...task, sessionState: "active", sessionKind: "verify", sessionReleased: false,
+        executionControlState: "running"});
+      capture("pause");
+      capture("cancel");
+      panel.render({...task, sessionState: "active", sessionKind: "verify", sessionReleased: false,
+        executionControlState: "paused"});
+      capture("resume");
+      panel.render(task);
+    }
   }
   iconEvidence.review_controls = reviewControls;
   const controlContract = {

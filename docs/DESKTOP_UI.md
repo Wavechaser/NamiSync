@@ -1381,8 +1381,8 @@ the viewport; explicit Go still jumps to it.
 
 Float **Go to current operation** (Plan), **Go to current item** (Inventory), and
 **Turn on autoscroll** over the rows at
-the viewport's lower-right, reusing existing floating-control conventions. Go
-uses the eye icon and autoscroll uses location-ripple. Both are icon-only square
+the viewport's lower-right with 16px logical insets, reusing existing floating-control conventions. Go
+uses navigation-location-target and autoscroll uses location-arrow. Both are icon-only square
 buttons with accessible action names and tooltips. Go keeps its ordinary neutral
 button styling and autoscroll keeps its primary accent emphasis. Each button sits
 on its own opaque neutral wrapper at rest, hover and press, without blur or
@@ -1758,6 +1758,9 @@ An accepted pause renders **Pausing…** until custody actually reaches
 **Paused**; repeat pause/resume is disabled during the drain and cancellation
 remains available. Terminal presentation releases only that exact session while
 review artifacts remain.
+
+Pause/Resume, Cancel, Inventory Refresh and the Baseline dropdown use square
+32px targets with centered glyphs.
 
 Execution uses one stable icon-only Pause/Resume button with an accessible
 action name, tooltip, Regular Pause and Filled Play artwork. Running Pause is

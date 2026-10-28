@@ -337,11 +337,11 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
   floatingControls.className = "nami-plan-review__floating-controls";
   const goCurrent = button("", "nami-button nami-button--secondary nami-button--icon");
   goCurrent.ariaLabel = goCurrent.title = "Go to current operation";
-  goCurrent.append(createIcon(document, "eye", "sm"));
+  goCurrent.append(createIcon(document, "navigation-location-target", "sm"));
   goCurrent.dataset.action = "go-current-operation";
   const enableFollow = button("", "nami-button nami-button--primary nami-button--icon");
   enableFollow.ariaLabel = enableFollow.title = "Turn on autoscroll";
-  enableFollow.append(createIcon(document, "location-ripple", "sm"));
+  enableFollow.append(createIcon(document, "location-arrow", "sm"));
   enableFollow.dataset.action = "enable-operation-follow";
   const goCurrentSurface = document.createElement("div");
   goCurrentSurface.className = "nami-plan-review__floating-control";

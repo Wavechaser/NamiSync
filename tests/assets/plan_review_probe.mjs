@@ -993,8 +993,8 @@ assert.equal(
 review.follow = { anchorIndex: 10, hasTarget: true, eligible: true, enabled: true };
 panel.render(task);
 for (const [action, label, glyph] of [
-  ["go-current-operation", "Go to current operation", "eye"],
-  ["enable-operation-follow", "Turn on autoscroll", "location-ripple"],
+  ["go-current-operation", "Go to current operation", "navigation-location-target"],
+  ["enable-operation-follow", "Turn on autoscroll", "location-arrow"],
 ]) {
   const control = findAction(panel.element, action);
   assert.equal(control.textContent, "");

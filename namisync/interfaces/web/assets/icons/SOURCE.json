@@ -481,6 +481,21 @@
       "upstream_sha256": "ba8f9513468cf4f321c9b9cabcc8be6ccd96699f92e85a9e02bae74ff89b25b6",
       "packaged_sha256": "5a00d5dc1a2a4980e60d43d14f23a961b4c62884e9d3becde612c6d1f0f23697"
     },
+    "location_arrow_16_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/location_arrow_16_regular.svg",
+      "upstream_sha256": "207f3a83463d202966986c0177cd067d121aa6a36bf201926ec43c5585334ff6",
+      "packaged_sha256": "6e5f8c9555ecf2b25ae8483a14d65be5c7adf7ff499e3f9b8a9054ed59eb72ab"
+    },
+    "location_arrow_20_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/location_arrow_20_regular.svg",
+      "upstream_sha256": "fd92113bf127d28ed66d5a9cd79f6627fe7b5adad45f5d510731326ded73d463",
+      "packaged_sha256": "e23f7d9a7bf21894eed7bfd05551a4bdf91c45a3b1167e8486dcaf0ef68c2eab"
+    },
+    "location_arrow_24_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/location_arrow_24_regular.svg",
+      "upstream_sha256": "d102edc183830271430dccb84a48a24c206d1c3b98669e9d4bb56bf4e412d61f",
+      "packaged_sha256": "8b72dbd2a3ed53ff0d3bfd1f722e86aceba486b01d61c7d9e39a311eb7b80d2b"
+    },
     "location_ripple_16_regular.svg": {
       "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/location_ripple_16_regular.svg",
       "upstream_sha256": "5859d7a18d176200c905fc2e9b3865bf3ea025bfc0259b2c81de21eaeafda5bb",
@@ -540,6 +555,11 @@
       "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/navigation_24_regular.svg",
       "upstream_sha256": "4ead8bda235ac9b65d5e36b3d780d1983ed16568ff782bdc188cedb98c686fbf",
       "packaged_sha256": "58f464a5856ab656fca6fc50aa4cb315a58dd8563974c8356e795a83c384c108"
+    },
+    "navigation_location_target_20_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/navigation_location_target_20_regular.svg",
+      "upstream_sha256": "f91d24977004d2ded53c0bc960691bc24bf368b7c8b666d91a23066fe3b53a3c",
+      "packaged_sha256": "dfefa1803c2005982a94fbcdbb195b227604dc7e83146daa1ae6d31222d9e784"
     },
     "pause_16_regular.svg": {
       "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/pause_16_regular.svg",

@@ -223,6 +223,8 @@ explicit, reviewable and regression-backed.
 
 #### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-28)
 
+- Use Microsoft navigation-target and location-arrow glyphs for Go/Follow,
+  with 16px floating insets and square compact action controls on both pages.
 - Offer ordinary selected-file Baseline/Rebaseline on the sync task's Inventory
   page, with Verify selected and Verify copied labels. Keep copied scope
   exclusive to verification and preserve Rebaseline confirmation. Add Restore

@@ -1757,8 +1757,8 @@ alignedPane.render(alignedTask);
 assert.equal(alignedAction("go-current-item").hidden, false);
 assert.equal(alignedAction("enable-item-follow").hidden, false);
 for (const [action, label, glyph] of [
-  ["go-current-item", "Go to current item", "eye"],
-  ["enable-item-follow", "Turn on autoscroll", "location-ripple"],
+  ["go-current-item", "Go to current item", "navigation-location-target"],
+  ["enable-item-follow", "Turn on autoscroll", "location-arrow"],
 ]) {
   const control = alignedAction(action);
   assert.equal(control.textContent, "");

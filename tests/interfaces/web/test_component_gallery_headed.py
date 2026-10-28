@@ -115,9 +115,13 @@ def test_recall_gallery_report_keeps_shape_separate_from_behavior() -> None:
 
 def _review_controls_sample() -> dict[str, object]:
     # Glyph filename, width, height, primary; names/text belong to pane probes.
-    value = {kind: [[f"{glyph}_16_regular.svg", 32, 32, index == 1]
-                    for index, glyph in enumerate(("eye", "location_ripple"))]
+    value = {kind: [[f"{glyph}_{20 if index == 0 else 16}_regular.svg", 32, 32, index == 1]
+                    for index, glyph in enumerate(("navigation_location_target", "location_arrow"))]
              for kind in ("plan", "inventory")}
+    value["insets"] = {kind: [16, 16] for kind in ("plan", "inventory")}
+    value["actions"] = {kind: {name: [32, 32] for name in
+        (("pause", "resume", "cancel") if kind == "plan" else
+         ("pause", "resume", "cancel", "refresh", "baseline-menu"))} for kind in ("plan", "inventory")}
     # Go and Follow at rest/hover/press: wrapper fill, backdrop and ordinary styles.
     value["states"] = [[["rgb(255, 255, 255)", "none", True] for _ in range(3)]
                        for _ in range(2)]
@@ -131,6 +135,10 @@ def _assert_review_controls(value: dict[str, object]) -> None:
             assert control[0] == sample[0]
             assert control[1:3] == pytest.approx(sample[1:3], abs=0.1)
             assert control[3] is sample[3]
+    for kind in ("plan", "inventory"):
+        assert value["insets"][kind] == pytest.approx([16, 16], abs=0.1)
+        for dimensions in value["actions"][kind].values():
+            assert dimensions == pytest.approx([32, 32], abs=0.1)
     for states in value["states"]:
         for background, backdrop, ordinary_styles in states:
             assert _opaque_color(background)
@@ -151,6 +159,14 @@ def test_review_navigation_report_keeps_shape_separate_from_behavior() -> None:
     assert component_gallery_child._valid_review_controls(sample)
     with pytest.raises(AssertionError):
         _assert_review_controls(sample)
+
+    for key, name in (("insets", None), ("actions", "pause")):
+        sample = _review_controls_sample()
+        pair = sample[key]["plan"] if name is None else sample[key]["plan"][name]
+        pair[0] = 12 if name is None else 40
+        assert component_gallery_child._valid_review_controls(sample)
+        with pytest.raises(AssertionError):
+            _assert_review_controls(sample)
 
 
 def _recent_ui_sample() -> dict[str, object]:

@@ -40,10 +40,12 @@
     "history",
     "info",
     "location",
+    "location-arrow",
     "location-ripple",
     "more-horizontal",
     "more-vertical",
     "navigation",
+    "navigation-location-target",
     "pause",
     "pause-circle",
     "pin",
@@ -72,6 +74,10 @@
     "stop-filled": "stop"
   },
   "fallbacks": {
+    "navigation-location-target": {
+      "sm": 20,
+      "lg": 20
+    },
     "arrow-reset": {
       "sm": 20
     },
