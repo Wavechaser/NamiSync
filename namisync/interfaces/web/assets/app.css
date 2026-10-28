@@ -873,8 +873,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  inset-block-end: var(--space-5);
-  inset-inline-end: var(--space-5);
+  inset-block-end: calc(var(--space-5) + var(--space-4));
+  inset-inline-end: calc(var(--space-5) + var(--space-4));
   pointer-events: none;
   position: absolute;
   z-index: 2;
@@ -1662,13 +1662,17 @@ body {
 .nami-file-row__availability {
   display: inline-flex;
   flex: none;
-  align-items: center;
+  align-items: start;
+  block-size: 12px;
+  inline-size: 16px;
   margin-inline-start: var(--space-2);
+  overflow: hidden;
+  transform: translateY(-1px);
 }
 
 .nami-file-row__availability > .nami-icon {
-  block-size: 12px;
-  inline-size: 12px;
+  block-size: 16px;
+  inline-size: 16px;
 }
 
 .nami-plan-move-pill {

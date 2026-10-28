@@ -47,6 +47,16 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Alignment closeout — 2026-10-29
+
+Review and commit the user's existing shared cloud/floating-control CSS edits:
+native 16px cloud in a 16x12px slot shifted up 1px, and 28px Go/Follow insets.
+Preserve the supplied CSS, accessible labels, hit targets and behavior. Migrate
+existing gallery geometry expectations and subject docs; interface department,
+four installed gallery modes and independent review close this single CSS commit.
+Complete: 2,105 interface tests and four installed gallery modes pass;
+independent review found no issues. Evidence: `build/gui-alignment-20261029/`.
+
 ### Item detail grouping — 2026-10-29
 
 Rearrange Plan and Inventory item details into the user's divider-separated

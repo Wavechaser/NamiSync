@@ -1,33 +1,15 @@
-# Latest session — Item detail grouping, 2026-10-29
+# Latest session — Alignment closeout, 2026-10-29
 
-One presentation outcome on milestone1 from 2cf04ad2. Plan and Inventory item
-details now use divider-separated blocks and 1:1.5 metadata columns. Plan keeps
-action/reason/recording before full paths and metadata. Inventory files group
-presence, path, checksum/result/combined recording, attested facts, observed
-facts and dates. Folders omit observed size; the scope advisory is visible only
-alongside eligible acknowledge/restore actions. Conditional exceptional evidence,
-current/previous outcome identity, action scope and copyability remain intact.
-No bridge, domain, persistence, selection or lifecycle changes.
+Reviewed the user's existing app.css edits on milestone1 after 688910dc. The
+cloud uses native 16px artwork in a 16x12px clipped slot, shifted upward 1px;
+the pinned SVG ink fits inside that slot. Shared Go/Follow floating controls
+use 28px logical bottom/end insets. User CSS is preserved unchanged. Accessible
+labels, hit targets, action behavior and opaque normal-button wrappers remain.
 
-## Verification
+Migrated existing gallery icon/inset geometry expectations and updated
+DESKTOP_UI/CHANGELOG. No new tests, contracts or domain behavior. Independent
+source review found no actionable issue. All 2,105 interface tests and four
+installed gallery modes pass; evidence: build/gui-alignment-20261029/.
 
-Evidence lives in build/gui-detail-groups-20261029/. Focused rendering probes
-pass; gallery fixtures now assert the column ratio and divider presence, complete
-paths/checksums and folder fact/advisory gating. Initial interfaces run passed
-2,104 tests with one failure: new divider setAttribute calls violated the existing
-packaged-asset sink guard. Replaced both with the established ariaHidden property;
-the guard/allowlist remains unchanged. Corrected focused/static run passes 64.
-An earlier sandboxed focused wheel build hit pip temporary-file permission
-errors; the escalated rerun passed. All failed receipts are retained.
-
-Initial nine installed checks passed. Final interfaces-r2 passes 2,105 tests.
-Native-r2 passes eight cases; default Plan-shell stopped at the Plan Again stage
-and passed unchanged in native-r3. The retained failure shows a fresh task row,
-but does not establish the exact cause of the stage timeout. All nine final
-installed cases are accounted for without relaxing assertions. Independent
-source and correction review found no remaining issue. Gallery geometry checks
-cover full-width paths/hashes, 1:1.5 columns and dividers in all display modes;
-native captures were inspected with their existing transparent-surface limits.
-
-No new worktree, recovery branch, push or PR. Inventory recents, queued-input
+No worktree, recovery branch, push or PR. Inventory recents, queued-input
 coordinator, M1-12, release and DOC-2 remain inactive.

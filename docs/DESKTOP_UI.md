@@ -37,10 +37,10 @@ Pause/Resume and Cancel use icon-only buttons with accessible names and tooltips
 in the headline's top action row. Cancel retains its five-second, two-click
 confirmation. This follows Microsoft's [Fluent button guidance](https://fluent2.microsoft.design/components/web/react/core/button/usage/).
 
-Plan and Inventory show a 12px Microsoft Fluent plain cloud with a 6px
+Plan and Inventory show a 16px Microsoft Fluent plain cloud with a 6px
 gap after names with positive scan-time recall evidence, independently of
-operation reasons and unsupported state. This compact advisory scales the native
-16px artwork within its own row slot. Its accessible label and tooltip read: “Not fully available
+operation reasons and unsupported state. The native artwork sits in a 16px-wide,
+12px-high clipped slot shifted up 1px for optical alignment. Its accessible label and tooltip read: “Not fully available
 locally. Access may retrieve content through your provider.” Both filter menus
 include “Remote files”; directories can match on their own evidence. The
 filter count describes matching rows, not scan-wide file bytes. No icon is a
@@ -1385,7 +1385,7 @@ clamp near its end. Refreshes preserve the existing viewport wherever possible.
 
 Float **Go to current operation** (Plan), **Go to current item** (Inventory), and
 **Turn on autoscroll** over the rows at
-the viewport's lower-right with 16px logical insets, reusing existing floating-control conventions. Go
+the viewport's lower-right with 28px logical insets, reusing existing floating-control conventions. Go
 uses navigation-location-target and autoscroll uses location-arrow. Both are icon-only square
 buttons with accessible action names and tooltips. Go keeps its ordinary neutral
 button styling and autoscroll keeps its primary accent emphasis. Each button sits

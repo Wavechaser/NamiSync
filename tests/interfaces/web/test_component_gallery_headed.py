@@ -79,7 +79,7 @@ def _recall_sample() -> dict[str, object]:
     return {kind: {
         "before_count": 2, "after_count": 1, "requested_filter": "recall", "matching_row": True,
         "label": label, "title": label, "role": "img", "decorative_child": "true",
-        "mask": 'url("/icons/cloud_16_regular.svg")', "width": 12, "height": 12, "gap": 6,
+        "mask": 'url("/icons/cloud_16_regular.svg")', "width": 16, "height": 16, "gap": 6,
         "no_summary_counter": True,
         "cloud_note": "",
     } for kind in ("plan", "inventory")}
@@ -118,7 +118,7 @@ def _review_controls_sample() -> dict[str, object]:
     value = {kind: [[f"{glyph}_{20 if index == 0 else 16}_regular.svg", 32, 32, index == 1]
                     for index, glyph in enumerate(("navigation_location_target", "location_arrow"))]
              for kind in ("plan", "inventory")}
-    value["insets"] = {kind: [16, 16] for kind in ("plan", "inventory")}
+    value["insets"] = {kind: [28, 28] for kind in ("plan", "inventory")}
     value["actions"] = {kind: {name: [32, 32] for name in
         (("pause", "resume", "cancel") if kind == "plan" else
          ("pause", "resume", "cancel", "refresh", "baseline-menu"))} for kind in ("plan", "inventory")}
@@ -136,7 +136,7 @@ def _assert_review_controls(value: dict[str, object]) -> None:
             assert control[1:3] == pytest.approx(sample[1:3], abs=0.1)
             assert control[3] is sample[3]
     for kind in ("plan", "inventory"):
-        assert value["insets"][kind] == pytest.approx([16, 16], abs=0.1)
+        assert value["insets"][kind] == pytest.approx([28, 28], abs=0.1)
         for dimensions in value["actions"][kind].values():
             assert dimensions == pytest.approx([32, 32], abs=0.1)
     for states in value["states"]:
