@@ -776,7 +776,7 @@ _PAGE = r"""
   review.append(colorReference);
   await new Promise(resolve => setTimeout(resolve, 150));
   const neutralStyle = getComputedStyle(filterTrigger);
-  const neutral = filterTrigger.children[2].textContent === '0' && filterTrigger.dataset.active === 'false'
+  const neutral = filterTrigger.children[2].textContent === '304/304' && filterTrigger.dataset.active === 'false'
     && neutralStyle.backgroundColor === getComputedStyle(colorReference).backgroundColor
     && neutralStyle.color === getComputedStyle(colorReference).color;
   const neutralColors = [neutralStyle.backgroundColor, neutralStyle.color];
@@ -802,7 +802,7 @@ _PAGE = r"""
     && menuGeometry.popup[3] <= menuGeometry.work[3]
     && menuGeometry.popup[0] >= menuGeometry.work[0] && menuGeometry.popup[2] <= menuGeometry.work[2];
   await stage('filter-present');
-  await until(() => filterTrigger.children[2].textContent === '1'
+  await until(() => filterTrigger.children[2].textContent === '303/304'
     && filterPopup.querySelector('[data-filter="present"]').ariaChecked === 'true', 'filter-settled');
   const staysOpen = !filterPopup.hidden;
   colorReference.style.backgroundColor = 'var(--color-accent-fill)';
@@ -818,14 +818,15 @@ _PAGE = r"""
   await until(() => filterPopup.hidden && document.activeElement === filterTrigger, 'filter-Escape');
   await stage('filter-reopen');
   await stage('filter-all');
-  await until(() => filterTrigger.children[2].textContent === '0'
+  await until(() => filterTrigger.children[2].textContent === '304/304'
     && filterPopup.querySelector('[data-filter="all"]').ariaChecked === 'true', 'filter-reset');
   const allKeepsOpen = !filterPopup.hidden;
-  const allNoCount = filterPopup.querySelector('[data-filter="all"] .nami-filter-count').hidden;
+  const allCount = filterPopup.querySelector('[data-filter="all"] .nami-filter-count');
+  const allCountMatches = !allCount.hidden && allCount.textContent === '304';
   filterTrigger.focus();
   review.querySelector('[data-action="inventory-search"]').focus();
   const focusAwayClosed = filterPopup.hidden;
-  const filterMenu = {neutral, staysOpen, accented, escapeFocus:true, allKeepsOpen, allNoCount, focusAwayClosed,
+  const filterMenu = {neutral, staysOpen, accented, escapeFocus:true, allKeepsOpen, allCountMatches, focusAwayClosed,
     firstReachable:menuGeometry.first.hit, lastReachable:menuGeometry.last.hit, popupInside};
   if (Object.values(filterMenu).some(value => value !== true)) throw new Error('filter menu contract failed');
   const fixture = window.__inventoryFixture;

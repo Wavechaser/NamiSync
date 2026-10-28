@@ -90,6 +90,20 @@ def test_row_anchor_resolves_current_ancestor_and_never_changes_the_view():
     assert view.row_anchor(expected_revision=2, row_id="new-scan-row")["index"] is None
 
 
+def test_filter_item_count_includes_notices_but_not_context_or_hidden_acknowledged():
+    view = _view()
+    assert view.summary()["matched_item_count"] == 3
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    assert view.summary()["matched_item_count"] == 3
+    _update(view, filters=frozenset({"acknowledged"}))
+    assert view.summary()["matched_item_count"] == 1
+    _update(view, filters=frozenset({"present", "unverified"}), search_query="z.txt")
+    assert view.summary()["matched_item_count"] == 1
+    _update(view, search_query="absent")
+    assert view.summary()["matched_item_count"] == 0
+
+
 def test_window_nominated_node_reports_exact_visibility_without_ancestor_fallback():
     view = _view()
     folder = view.projection.nodes[view.projection.position_by_path_key["A"]]

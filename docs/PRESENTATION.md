@@ -575,6 +575,14 @@ Focused checks must catch the failures that small fixtures conceal: scope-qualif
 
 The implemented Plan review surface lets users inspect a complete stable view of immutable review facts, inert notices, current server-owned selection and destructive intent without letting stale UI actions acquire authority. It preserves prior-path ancestry and paired move annotations, while operation groups remain non-folder membership containers. Its renderer retains only the current `1..256` row window and uses exact 24 px rows and matching virtual spacers. The inventory renderer retains the same bounded window with an explicit 24 px invocation of the generic `tree.js` foundation, whose default remains 28 px. Its Refresh and visibility controls pass server-owned node identities, never visible-row or browser-derived path scope. Refresh selected retains the active file or folder's node target across passive off-window publication; accepted arrow navigation updates highlighting and reads current item details, including a bounded off-window row lookup when needed. Actual removal from the current view clears the target and disables the action. Item-card visibility actions retain the card's displayed row independently.
 
+Both review summaries expose `matched_item_count`, cached during the existing
+query-scope pass independently of folding and windowing. Plan counts direct
+operations (including mkdir) and notices matching search/filter, using
+`filter_counts.all` as its total; ordinary structural/prior context is excluded.
+Inventory counts matching domain rows and notices; its total is domain rows plus
+notices, including acknowledged rows. All's normal visibility excludes those
+acknowledged rows, while an explicit acknowledged filter includes them.
+
 The Plan summary displays workflow-derived selected/eligible counts, selected
 required bytes, and planning issues (preflight refusals plus scan notices).
 The short task-tab digest uses selected operations, not scanned items; zero
@@ -593,13 +601,13 @@ category filter is active; clicking it clears category filters without changing
 search, sort, or selection. Activating any other filter deactivates All. The
 shared Filter menu exposes every canonical category independently, including
 zero counts. Selecting a category adds/removes only its canonical key; there are
-no aggregate group toggles. The trigger always shows the number of selected
-canonical categories, including zero, excluding All and search. It is accented
-only with active categories. Plan's All item retains the complete-plan counter.
+no aggregate group toggles. The trigger shows matching/total items and is accented
+only with active categories. Plan's total reuses its complete-plan All counter.
 Inventory reuses the menu with its existing ten facets and authoritative
-rollup/notice counts; those categories overlap and are never summed into an All
-counter. Inventory's All clears its category settings and retains the default
-acknowledged-row visibility policy. Menu interaction changes no selection,
+rollup/notice counts; those categories overlap and must not be summed. Inventory's
+total is domain rows plus notices, including acknowledged rows. Its All item
+shows that total minus acknowledged rows, clears category settings and retains
+default acknowledged-row hiding. Menu interaction changes no selection,
 effect scope or server query semantics. Search keeps its 150 ms trailing debounce;
 Enter or the inset search button submits immediately with a shared 150 ms guard
 against repeated manual gestures. Pending refreshes retain the newest query.

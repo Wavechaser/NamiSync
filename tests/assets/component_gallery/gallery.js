@@ -1310,6 +1310,7 @@ window.addEventListener("unhandledrejection", (event) => {
         required_bytes: "5368709120",
         search_query: "",
         filters: ["update", "move_update"],
+        matched_item_count: 3,
         filter_counts: {
           all: 21, copy: 4, mkdir: 1, move: 3, rename: 1, update: 2,
           move_update: 1, trash: 2, delete: 1, noop: 2, error: 0,
@@ -1496,8 +1497,8 @@ window.addEventListener("unhandledrejection", (event) => {
   }
   galleryMeasurementStep = "plan_review_filter_menu";
   const filterTrigger = planReviewPanel.element.querySelector('[data-action="filter-menu"]');
-  if (filterTrigger.children[2].textContent !== "2" || filterTrigger.dataset.active !== "true") {
-    throw new Error("Filter trigger must count canonical categories");
+  if (filterTrigger.children[2].textContent !== "3/21" || filterTrigger.dataset.active !== "true") {
+    throw new Error("Filter trigger must show matching and total items");
   }
   filterTrigger.scrollIntoView({block: "center"});
   await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
@@ -1545,10 +1546,12 @@ window.addEventListener("unhandledrejection", (event) => {
   planReviewTask.review.pending = null;
   planReviewPanel.render(planReviewTask);
   const savedFilters = planReviewTask.review.summary.filters;
+  const savedMatchedItems = planReviewTask.review.summary.matched_item_count;
   planReviewTask.review.summary.filters = [];
+  planReviewTask.review.summary.matched_item_count = 21;
   planReviewPanel.render(planReviewTask);
-  if (filterTrigger.children[2].textContent !== "0" || filterTrigger.dataset.active !== "false") {
-    throw new Error("inactive Filter counter must remain visible");
+  if (filterTrigger.children[2].textContent !== "21/21" || filterTrigger.dataset.active !== "false") {
+    throw new Error("All must retain a neutral Filter item counter");
   }
   await settleFilterTransition();
   filterColorReference.style.backgroundColor = "var(--color-button-fill)";
@@ -1560,6 +1563,7 @@ window.addEventListener("unhandledrejection", (event) => {
   const inactiveFilterFill = inactiveFilterStyle.backgroundColor;
   filterColorReference.remove();
   planReviewTask.review.summary.filters = savedFilters;
+  planReviewTask.review.summary.matched_item_count = savedMatchedItems;
   planReviewPanel.render(planReviewTask);
 
   const longDiagnostic = `literal terminal diagnostic ${"x".repeat(1600)}`;
@@ -1691,6 +1695,7 @@ window.addEventListener("unhandledrejection", (event) => {
         ...planReviewTask.review,
         summary: {
           ...planReviewTask.review.summary, selection_state: "committed",
+          matched_item_count: populated ? 3 : 0,
           highlight_focus_node_id: null, highlight_focus_visible_index: null,
           highlight_revision: 0,
         },
@@ -2135,6 +2140,13 @@ window.addEventListener("unhandledrejection", (event) => {
       await settled();
       setupHeights.push([root, setupReference].map((value) =>
         Number(value.querySelector(".nami-plan-review__plan").getBoundingClientRect().height.toFixed(3))));
+      const itemFilter = root.querySelector('[data-action="filter-menu"]');
+      const searchBounds = root.querySelector('.nami-plan-review__search').getBoundingClientRect();
+      const filterBounds = itemFilter.getBoundingClientRect();
+      if (itemFilter.children[2].textContent !== "300/300"
+          || !(filterBounds.right <= searchBounds.left + 1 || filterBounds.bottom <= searchBounds.top + 1)) {
+        throw new Error("Inventory Filter item count or Search separation is invalid");
+      }
       const factsBounds = statusCard.querySelector('.nami-plan-review__status-summary').getBoundingClientRect();
       const statusBounds = statusLine.getBoundingClientRect();
       const toggleBounds = statusCard.querySelector('[data-action="inventory-details"]').getBoundingClientRect();
@@ -3794,6 +3806,13 @@ window.addEventListener("unhandledrejection", (event) => {
   ];
   diagnosticLayoutEvidence.push(...minimumLayoutEvidence);
   const minimumFilterTrigger = planReviewPanel.element.querySelector('[data-action="filter-menu"]');
+  const minimumSearchBounds = planReviewPanel.element.querySelector('.nami-plan-review__search').getBoundingClientRect();
+  const minimumFilterBounds = minimumFilterTrigger.getBoundingClientRect();
+  if (minimumFilterTrigger.children[2].textContent !== "3/21"
+      || Math.abs(minimumFilterBounds.bottom - minimumSearchBounds.bottom) > 1
+      || minimumFilterBounds.right > minimumSearchBounds.left + 1) {
+    throw new Error("Plan Filter item count or original inline Search layout is invalid");
+  }
   const minimumFilterPopup = planReviewPanel.element.querySelector('.nami-filter-menu__popup');
   minimumFilterTrigger.click();
   minimumFilterPopup.dispatchEvent(new KeyboardEvent('keydown', {key:'Home', bubbles:true}));
@@ -3964,7 +3983,7 @@ window.addEventListener("unhandledrejection", (event) => {
       reviewSessionId: "6".repeat(32),
       review: {
         ...planReviewTask.review, message: "",
-        summary: { ...planReviewTask.review.summary, filters: [], highlight_focus_node_id: null },
+        summary: { ...planReviewTask.review.summary, filters: [], matched_item_count: 0, highlight_focus_node_id: null },
         window: { ...planReviewTask.review.window, total: rows.length, rows },
       },
     };
@@ -4032,6 +4051,7 @@ window.addEventListener("unhandledrejection", (event) => {
   moveTask.review.summary.scope_selected_operation_count = 2;
   moveTask.review.summary.scope_selectable_operation_count = 2;
   moveTask.review.summary.required_bytes = "8192";
+  moveTask.review.summary.matched_item_count = 2;
   moveTask.review.summary.filter_counts = {
     all: 2, copy: 0, mkdir: 0, move: 1, rename: 1, update: 0, move_update: 0,
     trash: 0, delete: 0, noop: 0, error: 0, unsupported: 0, blocked: 0, notice: 0,

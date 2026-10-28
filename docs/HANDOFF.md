@@ -1,61 +1,41 @@
-# Latest session — Selection, navigation and details, 2026-10-28
+# Latest session — Revised Filter button counter, 2026-10-28
 
-Completed the user-approved N1–N3 batch on `milestone1` from `10b59e78`,
-using execute-task builders and fresh independent GPT-6.1 Sol reviews.
-No worktree, recovery ref, push or PR was created.
+User rejected the standalone counter/layout containment in269736f6. Exact revert
+2a8d1843 restored the b185f48b tree after independent review. The revised counter
+commit containing this handoff implements the approved replacement on milestone1.
 
 ## Delivered
 
-- `5d8e13de`: ordinary selected-file Baseline/Rebaseline on the sync task's
-  Inventory page; Verify selected/Verify copied labels; eligible Restore context
-  action, explicit folder-wide action labels, green ordinary folder presence,
-  concise details and No change for successful NOOP outcomes. Infrastructure
-  supports linked activities, but no separate copied-scope baseline product
-  feature was added. Rebaseline confirmation and copied Verify remain distinct.
-- `791a6a03`: Inventory keyboard highlights drive fresh details. Refresh retains
-  surviving exact highlights within the location, prunes removed identities,
-  and rereads current details. A bounded one-row lookup supports off-window
-  focus without moving the visible viewport. Hidden focus has no stale details;
-  session/view/navigation fences and focus ownership remain intact.
-- The selection commit containing this handoff limits multi-highlight checkbox
-  changes to direct highlighted contributions on both tables. Singleton and
-  outside-range folder actions stay recursive. Aggregate folder checkbox states,
-  stale revision rejection and Plan workflow dependency closure remain intact.
-  Accessible labels describe the current scope.
+Filter displays matching/total items inside its existing button. No standalone
+caption or CSS/containment change. Existing All-neutral/active-category accent,
+menu interaction and Search layout remain. Plan reuses filter_counts.all,
+including mkdir and notices while excluding ordinary structural/prior context.
+Inventory All/default excludes acknowledged rows; denominator includes them;
+explicit acknowledged views can match them. The dropdown now displays All count.
+
+One exact matched_item_count field per summary is accumulated in the existing
+scope pass. Selection prefixes are unchanged. Validators, producers and fixtures
+migrated. No synthetic retained-count machinery restored. The previous icon,
+square-control and leading-navigation-context commits remain intact.
 
 ## Verification
 
-Final integrated ordinary suite: 6,249 passed, four existing skips, 35 headed
-checks deselected. All 12 import contracts pass. Focused reproduction tests
-failed under the prior behavior and passed after correction. Each atomic unit
-received independent source, consumer and evidence review before commit.
+6,250 ordinary tests passed, four existing skips; all12 import contracts pass.
+Focused116, count-owner81 and migrated driver33 pass. Initial native run passed
+both Plan and execution sizes; four gallery checks and Inventory stopped on old
+category-badge/hidden-All assertions. Product source was unchanged while the
+finite gallery/native/report consumers were migrated. Final native-r2 passes
+all five affected checks. Together all nine installed gates pass.
 
-N1: 2,100 interface passes plus focused/driver checks; all seven installed
-checks accounted for across five initial passes and both execution reruns.
-N2: 2,102 interface passes plus focused/race/driver checks; both Plan shells
-and the corrected Inventory rerun pass. N3: 134 owner/registry and 116 renderer
-checks, the full ordinary suite, default Plan shell, and final Inventory/larger
-shell reruns pass. Counts overlap; do not sum them.
+Parent and independent reviewer viewed the actual minimum-window capture:
+Filter3/21 inside the accented button, Search beside it on the same line.
+NeutralAll21/21 and Inventory304/304→303/304→304/304 interactions retain styling,
+exact identity, counts and positive All-dropdown agreement checks.
 
-Retained failed receipts include an N1 wheel source-drift rejection, stale
-native checker assumptions about empty selection, an N2 heading fixture using
-full relative path instead of basename, and N3 report counts still expecting
-an earlier two-command journey. Final checkers retain exact identity, path,
-command-order, selection-count and native-input assertions. One larger-shell
-attempt refused input after another window took foreground; user readiness
-preceded its successful rerun. No product effect/safety defect was inferred
-from those harness/environment failures. A misleadingly green-named N2 XML
-contains a failed fixture run; `n2-offwindow-green-r2.xml` is the actual pass.
+Evidence: build/gui-filter-button-20261028/ (red, focused, counts, ordinary,
+native and native-r2 plus driver-r3). Retained initial failures document stale
+fixtures/assertions; they were not product-effect failures. Native roots under
+C:/Users/Spectrum/AppData/Local/Temp/namisync-filterbutton28-native[-r2].
 
-## Evidence and exclusions
-
-Ignored evidence: `build/gui-controls-20261028/`,
-`build/gui-navigation-20261028/`, `build/gui-selection-20261028/`.
-Native roots are under `C:/Users/Spectrum/AppData/Local/Temp/` with prefixes
-`namisync-controls28-`, `namisync-navigation28-`, `namisync-selection28-`.
-Final selection rerun is `namisync-selection28-native-r2`.
-
-No wire shape, domain effect policy, persistence or authorization changed.
-Inventory recents, the queued-input coordinator, M1-12, release and DOC-2 remain
-inactive. All accepted batch outcomes are complete; no further foreground
-attendance is needed. Test hosts exited through their normal cleanup paths.
+No pending batch work, recovery branch, worktree, push or PR. Recents,
+queued-input coordinator, M1-12, release and DOC-2 remain inactive.

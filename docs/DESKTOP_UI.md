@@ -1436,13 +1436,16 @@ the table's two-axis viewport scrolls. Search is a narrower right-aligned
 box with inset submit and Clear icons styled like Setup path-box controls.
 Clear restores input focus and immediately clears the query. Plan and Inventory
 share one ordinary-sized Filter button with regular Filter and chevron icons.
-Its visible count includes zero and counts selected canonical categories only,
-excluding All and search. It stays neutral at zero and uses the accent fill when
-categories are active. The popup reuses the existing menu surface and follows
+Its inline counter shows matching/total items from the accepted summary, using
+the same population as All rather than counting active categories. Search affects
+the numerator; folding and scrolling do not. It stays neutral at All and uses
+the accent fill when categories are active. The popup reuses the existing menu surface and follows
 Microsoft's [checkbox menu guidance](https://fluent2.microsoft.design/components/web/react/core/menu/usage)
 for multiple filter criteria. Every canonical category has a checkmark and its
 authoritative count, including zero; All clears category settings. Inventory's
-All has no counter and retains its acknowledged-item default visibility policy.
+All shows its default-visible item count, excluding acknowledged items; the
+button denominator includes acknowledged items so explicitly filtering for them
+retains the same total. The original toolbar/Search layout is unchanged.
 Stable items keep the popup open and focused through pending/settled updates;
 pending guards refuse another gesture without introducing a query queue.
 The popup has a bounded scrollable height within its owning work panel and

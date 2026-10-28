@@ -2977,7 +2977,7 @@ function validateRecallSummary(value) {
 function validateInventorySummary(value) {
   return isExactObject(value, ["disposition", "task_id", "request_id", "location_id", "view_revision",
     "root_path", "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count", "warning_count", "rollup", "recall", "recall_item_count",
-    "visible_row_count", "search_query", "filters", "sort_column", "sort_direction", "collapsed_count",
+    "visible_row_count", "matched_item_count", "search_query", "filters", "sort_column", "sort_direction", "collapsed_count",
     "selected_file_count", "selectable_file_count", "hidden_selected_file_count", "selection",
     "scope_selectable_file_count", "scope_selected_file_count", "highlight_revision",
     "highlight_anchor_node_id", "highlight_focus_node_id", "highlight_focus_visible_index", "highlighted_count"])
@@ -2985,7 +2985,7 @@ function validateInventorySummary(value) {
     && typeof value.task_id === "string" && TASK_PATTERN.test(value.task_id)
     && typeof value.request_id === "string" && ID_PATTERN.test(value.request_id)
     && isScalar64(value.location_id) && value.location_id !== "0"
-    && ["view_revision", "warning_count", "visible_row_count", "collapsed_count"]
+    && ["view_revision", "warning_count", "visible_row_count", "matched_item_count", "collapsed_count"]
       .every((key) => isNonnegativeInteger(value[key]))
     && (value.root_path === null || isBoundedPath(value.root_path))
     && (value.scan_request_id === null
@@ -2998,6 +2998,7 @@ function validateInventorySummary(value) {
       : ["item", "folder"].includes(value.scan_scope.kind) && isBoundedPath(value.scan_scope.path))
     && typeof value.scan_complete === "boolean" && validateRecallSummary(value.recall)) && validateInventoryRollup(value.rollup)
     && isNonnegativeInteger(value.recall_item_count)
+    && value.matched_item_count <= value.rollup.domain_count + value.warning_count
     && [value.selected_file_count, value.selectable_file_count, value.hidden_selected_file_count].every(isNonnegativeInteger)
     && [value.scope_selectable_file_count, value.scope_selected_file_count,
       value.highlight_revision, value.highlighted_count].every(isNonnegativeInteger)
@@ -3151,7 +3152,7 @@ function validatePlanViewSummary(value) {
     "requires_destructive_confirmation", "destructive_operation_count",
     "destructive_operation_counts", "irreversible_operation_count",
     "irreversible_update_count", "required_bytes",
-    "visible_row_count", "search_query", "filters", "sort_column",
+    "visible_row_count", "matched_item_count", "search_query", "filters", "sort_column",
     "sort_direction", "collapsed_count", "execution",
   ])
     && ["opened", "current", "applied", "noop", "conflict", "in-flight", "frozen"]
@@ -3162,7 +3163,7 @@ function validatePlanViewSummary(value) {
       value.highlight_revision, value.highlighted_count,
       value.selected_operation_count, value.selectable_operation_count,
       value.operation_count, value.scope_selected_operation_count,
-      value.scope_selectable_operation_count, value.visible_row_count,
+      value.scope_selectable_operation_count, value.visible_row_count, value.matched_item_count,
       value.collapsed_count]
       .every(isNonnegativeInteger)
     && (value.highlight_anchor_node_id === null || isNodeId(value.highlight_anchor_node_id))
@@ -3177,6 +3178,7 @@ function validatePlanViewSummary(value) {
       "trash", "delete", "noop", "blocked", "error", "unsupported", "notice", "recall",
     ])
     && Object.values(value.filter_counts).every(isNonnegativeInteger)
+    && value.matched_item_count <= value.filter_counts.all
     && value.filter_counts.all === Object.entries(value.filter_counts)
       .filter(([category]) => category !== "all" && category !== "recall")
       .reduce((total, [, count]) => total + count, 0)

@@ -23,6 +23,7 @@ class ScopeCounts:
     selectable: array
     selected: array
     selected_total: int
+    matched_item_count: int
 
     @property
     def hidden_selected(self) -> int:
@@ -33,15 +34,17 @@ class ScopeCounts:
                 self.selected[end] - self.selected[position])
 
 
-def count_scope(contributions: Iterable[tuple[bool, int, int]]) -> ScopeCounts:
+def count_scope(contributions: Iterable[tuple[bool, int, int, bool]]) -> ScopeCounts:
     """Accumulate direct domain contributions, independently of visible windows."""
     selectable, selected = array("Q", [0]), array("Q", [0])
     selected_total = 0
-    for matched, available, chosen in contributions:
+    matched_item_count = 0
+    for matched, available, chosen, item_match in contributions:
         selectable.append(selectable[-1] + (available if matched else 0))
         selected.append(selected[-1] + (chosen if matched else 0))
         selected_total += chosen
-    return ScopeCounts(selectable, selected, selected_total)
+        matched_item_count += item_match
+    return ScopeCounts(selectable, selected, selected_total, matched_item_count)
 
 
 def covered_positions(count: int, ranges: Iterable[tuple[int, int]]) -> Iterator[int]:

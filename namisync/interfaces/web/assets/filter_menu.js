@@ -109,13 +109,13 @@ export function createFilterMenu(categories, onChange) {
     }
   });
 
-  function render(filters, counts, pending) {
+  function render(filters, counts, pending, matched = null, total = counts.all) {
     selected = new Set(filters);
     disabled = pending;
     trigger.ariaDisabled = String(disabled);
     trigger.dataset.active = String(selected.size > 0);
-    trigger.ariaLabel = `Filter ${selected.size} active categories`;
-    renderText(activeCount, String(selected.size));
+    trigger.ariaLabel = matched === null ? "Filter" : `Filter ${matched} of ${total} items`;
+    renderText(activeCount, matched === null ? "" : `${matched}/${total}`);
     for (const [key, item] of items) {
       item.ariaChecked = String(key === "all" ? selected.size === 0 : selected.has(key));
       item.ariaDisabled = String(disabled);

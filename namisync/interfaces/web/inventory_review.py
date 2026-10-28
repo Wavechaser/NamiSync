@@ -107,8 +107,9 @@ class InventoryReviewState:
             for node in self.projection.nodes:
                 file = (node.row is not None and node.row.entry_kind is not None
                         and node.row.entry_kind.value == "file")
-                yield (file and self._matches(node, query, filters), int(file),
-                       int(file and node.row.row_id in selected))
+                matched = self._matches(node, query, filters)
+                yield (file and matched, int(file),
+                       int(file and node.row.row_id in selected), matched)
         return count_scope(contributions())
 
     def _matches(self, node: InventoryProjectionNode, query: str,
@@ -209,6 +210,7 @@ class InventoryReviewState:
             "scan_scope": None if self.scan_scope is None else {"kind": self.scan_scope[0], "path": self.scan_scope[1]},
             "missing_count": self.missing_count, "warning_count": self.projection.warning_count,
             "rollup": inventory_rollup_wire(self.projection.nodes[0].rollup),
+            "matched_item_count": self._view.scope.matched_item_count,
             "visible_row_count": max(0, len(self._view.visible.visible_positions) - 1),
             "search_query": self.search_query, "filters": sorted(self.filters),
             "sort_column": self.sort_column.value, "sort_direction": self.sort_direction.value,

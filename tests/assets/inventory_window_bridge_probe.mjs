@@ -53,6 +53,11 @@ for (const scan_scope of [
 }
 response = fixture.summary;
 const gesture = {searchQuery: "", filters: [], sortColumn: "path", sortDirection: "ascending", collapseNodeId: null, collapsed: null};
+for (const matched_item_count of [undefined, -1, true, fixture.summary.rollup.domain_count + fixture.summary.warning_count + 1]) {
+  response = {...fixture.summary, matched_item_count};
+  await assert.rejects(bridge.openInventoryView(task));
+}
+response = fixture.summary;
 assert.deepEqual(await bridge.updateInventoryView(task, 0, gesture), fixture.summary);
 assert.deepEqual(await bridge.setInventorySelection(task, fixture.summary.request_id, 0, null, true), fixture.summary);
 assert.deepEqual(requests.at(-1).payload, {task_id: task, request_id: fixture.summary.request_id,

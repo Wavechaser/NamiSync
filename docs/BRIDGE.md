@@ -716,6 +716,10 @@ inert. A failed visibility rebuild blocks another visibility effect until whole
 reload confirms the publication; Refresh remains eligible from the retained
 prior revision. Capacity refusal gives the fixed Close-a-task guidance.
 
+Plan and Inventory summaries include a nonnegative `matched_item_count`, bounded
+by their complete All population. It follows search/filter independently of
+collapse/window; population semantics are owned by PRESENTATION.
+
 `PlanViewSummary` has exactly `disposition`, `task_id`, `request_id`,
 `view_revision`, `selection_revision`, `selection_state`, `source_path`,
 `target_path`, `selected_operation_count`, `selectable_operation_count`,
@@ -724,7 +728,7 @@ prior revision. Capacity refusal gives the fixed Close-a-task guidance.
 `requires_destructive_confirmation`, `irreversible_update_count`,
 `destructive_operation_count`, `destructive_operation_counts`,
 `irreversible_operation_count`, `required_bytes`,
-`visible_row_count`, `search_query`, `filters`, `sort_column`, `sort_direction`,
+`visible_row_count`, `matched_item_count`, `search_query`, `filters`, `sort_column`, `sort_direction`,
 `collapsed_count`, and `execution`. The view disposition is `opened|current|applied|noop|conflict|in-flight|frozen`;
 selection state is `reviewing|committing|committed`. `PlanWindowRow` is the exact
 source-owned projection row serialized by `commands.py`; all scalar counts and

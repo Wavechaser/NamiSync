@@ -224,7 +224,7 @@ const revealSummary = {
   requires_destructive_confirmation: false, destructive_operation_count: 0,
   destructive_operation_counts: { update: 0, move_update: 0, trash: 0, delete: 0 },
   irreversible_operation_count: 0, irreversible_update_count: 0, required_bytes: "0",
-  visible_row_count: 600, search_query: "", filters: [], sort_column: "path", sort_direction: "ascending",
+  visible_row_count: 600, matched_item_count: 1, search_query: "", filters: [], sort_column: "path", sort_direction: "ascending",
   collapsed_count: 0, execution,
 };
 responseResult = { summary: revealSummary, node_id: groupRow.move_peer_id, index: 400 };
@@ -244,6 +244,13 @@ for (const recall of [null, {source: revealSummary.recall.source},
   responseResult = {...revealed, summary: {...revealSummary, recall}};
   if (await bridge.revealPlanMove(taskId, 0, groupRow.node_id).then(() => null, error => error) === null) {
     throw new Error("invalid plan recall summary accepted");
+  }
+}
+responseResult = revealed;
+for (const matched_item_count of [undefined, -1, true, revealSummary.filter_counts.all + 1]) {
+  responseResult = {...revealed, summary: {...revealSummary, matched_item_count}};
+  if (await bridge.revealPlanMove(taskId, 0, groupRow.node_id).then(() => null, error => error) === null) {
+    throw new Error("invalid plan matched item count accepted");
   }
 }
 responseResult = revealed;

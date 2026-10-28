@@ -166,7 +166,7 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         }
         assert initial["report"]["filter_menu"] == {
             "neutral": True, "staysOpen": True, "accented": True, "escapeFocus": True,
-            "allKeepsOpen": True, "allNoCount": True, "focusAwayClosed": True,
+            "allKeepsOpen": True, "allCountMatches": True, "focusAwayClosed": True,
             "firstReachable": True, "lastReachable": True, "popupInside": True,
         }
         assert initial["report"]["results"]["refresh"]["request_id"] != initial["report"]["initial"]["request_id"]

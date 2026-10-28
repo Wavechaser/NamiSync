@@ -181,6 +181,7 @@ class PlanReviewState:
             "scope_selected_operation_count": self._view.scope.selected[-1],
             "operation_count": root.operation_count,
             "filter_counts": dict(self._filter_counts),
+            "matched_item_count": self._view.scope.matched_item_count,
             "recall": {"source": recall_summary_wire(self.projection.source_recall),
                        "target": recall_summary_wire(self.projection.target_recall)},
             "preflight_ready": self.projection.preflight_ready,
@@ -699,7 +700,11 @@ def _scope_prefixes(
     return count_scope(
         (_matches_scope_query(node, query, filters),
          node.selectable_operation_count - child_selectable[node.position],
-         node.selected_operation_count - child_selected[node.position])
+         node.selected_operation_count - child_selected[node.position],
+         (node.row_kind == "notice" or node.operation_id is not None)
+         and not node.row_kind.startswith("prior-")
+         and (not filters or bool(_direct_filter_count(node, filters)))
+         and (not query or query in node.display.casefold()))
         for node in nodes
     )
 

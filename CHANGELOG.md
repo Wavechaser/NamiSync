@@ -223,6 +223,10 @@ explicit, reviewable and regression-backed.
 
 #### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-28)
 
+- Replace the standalone counter with a matching/total badge inside Filter,
+  restoring the prior Search layout. Reuse Plan All-item counts including mkdir;
+  Inventory All excludes acknowledged rows while the denominator includes them.
+  Keep filter emphasis tied to active categories and add Inventory's All count.
 - Use Microsoft navigation-target and location-arrow glyphs for Go/Follow,
   with 16px floating insets and square compact action controls on both pages.
 - Keep four preceding rows of context for Go, Follow and move jumps where

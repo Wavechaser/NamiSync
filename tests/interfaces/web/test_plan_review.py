@@ -122,6 +122,7 @@ def test_recall_filter_overlaps_actions_retains_directory_and_excludes_prior_cou
         window = state.window(expected_revision=state.view_revision, offset=0, limit=256)
         assert any(row["display"] == "New" and row["recall"] for row in window["rows"])
         assert state.summary()["recall"] == original["recall"]
+        assert state.summary()["matched_item_count"] == 1, "overlapping recall/context rows do not inflate All population"
     assert original["recall"]["target"]["file_count"] == 1
 
 
@@ -593,6 +594,7 @@ def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
         "recall": 0,
     }
     assert state.summary()["filter_counts"] == expected
+    assert state.summary()["matched_item_count"] == expected["all"]
     for revision, (category, expected_node) in enumerate(
         (("blocked", nodes[2].node_id), ("unsupported", nodes[3].node_id), ("error", None))
     ):
@@ -609,6 +611,7 @@ def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
         matching = [row["node_id"] for row in window["rows"] if row["operation_id"] is not None]
         assert matching == ([] if expected_node is None else [expected_node])
         assert state.summary()["filter_counts"] == expected
+        assert state.summary()["matched_item_count"] == int(expected_node is not None)
     state.update(
         expected_revision=3,
         search_query="does-not-match",
@@ -619,6 +622,7 @@ def test_plan_summary_filter_counts_are_complete_direct_categories() -> None:
         collapsed=True,
     )
     assert state.summary()["filter_counts"] == expected
+    assert state.summary()["matched_item_count"] == 0
 
 
 def test_plan_selection_scope_follows_query_not_collapse_sort_or_navigation() -> None:
@@ -657,6 +661,7 @@ def test_plan_selection_scope_follows_query_not_collapse_sort_or_navigation() ->
     )
     assert state.summary()["selected_operation_count"] == 1
     assert state.summary()["scope_selected_operation_count"] == 0
+    assert state.summary()["matched_item_count"] == 1, "selection rebind preserves query item count"
     assert state.window(expected_revision=2, offset=0, limit=1)["rows"][0]["selection"] == "unselected"
     state.update(expected_revision=2, search_query="", filters=frozenset(),
                  sort_column=PlanSortColumn.PATH,
@@ -886,6 +891,8 @@ def test_multi_highlight_contributes_only_direct_operations(folder_operation):
         collapse_node_id="folder", collapsed=True)
     scope = lambda: state.highlighted_selection_scope(expected_view_revision=state.view_revision,
         expected_highlight_revision=state.highlight_revision, expected_selection_revision=0)
+    assert state.summary()["matched_item_count"] == count + int(folder_operation)
+    assert state.summary()["filter_counts"]["all"] == count + int(folder_operation)
     assert scope() == (("f" * 32,) if folder_operation else ()) + (f"{count:032x}",)
     assert set(state.selection_scope(expected_view_revision=state.view_revision,
         expected_selection_revision=0, node_id="folder")) == set(operations)

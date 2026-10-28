@@ -310,6 +310,7 @@ const summary = {
   irreversible_update_count: 1,
   required_bytes: "4096",
   visible_row_count: 1000,
+  matched_item_count: 180,
   search_query: "",
   filters: [],
   filter_counts: { all: 180, copy: 100, move: 10, update: 5, trash: 2,
@@ -652,7 +653,7 @@ assert.equal(allFilter.ariaChecked, "true");
 assert.equal(allFilter.ariaLabel, "All 180");
 assert.equal(filterItem("copy").ariaLabel, "Copy 100");
 assert.equal(filterItem("mkdir").ariaLabel, "Create folder 0");
-assert.equal(filterTrigger.children[2].textContent, "0");
+assert.equal(filterTrigger.children[2].textContent, "180/180");
 assert.equal(filterTrigger.dataset.active, "false");
 assert.equal(filterPopup.children.length, 15);
 const beforeOpen = calls.length;
@@ -679,7 +680,7 @@ for (const key of ["copy", "mkdir", "move", "rename", "update", "move_update", "
   assert.equal(item.ariaChecked, "true");
   assertSameNode(document.activeElement, item, "settlement retains category focus");
 }
-assert.equal(filterTrigger.children[2].textContent, "13");
+assert.equal(filterTrigger.children[2].textContent, "180/180", "category count never replaces item count");
 assert.equal(filterTrigger.dataset.active, "true");
 filterItem("copy").dispatch("click");
 assert.deepEqual(calls.at(-1)[2].filters, new Set(review.summary.filters.filter((key) => key !== "copy")));
@@ -688,7 +689,7 @@ assert.deepEqual(calls.at(-1)[2].filters, new Set());
 assert.equal(filterPopup.hidden, false, "All also keeps the menu open");
 review.summary = { ...summary, search_query: "literal search", filters: [] };
 panel.render(task);
-assert.equal(filterTrigger.children[2].textContent, "0", "search never counts as a category");
+assert.equal(filterTrigger.children[2].textContent, "180/180", "the accepted summary owns item count");
 filterPopup.dispatch("keydown", { key: "End" });
 assertSameNode(document.activeElement, filterItem("recall"));
 filterPopup.dispatch("keydown", { key: "Home" });
@@ -1108,7 +1109,7 @@ panel.render(task);
 document.defaultView.flushAnimationFrame();
 assert.equal(calls.length, beforeDispose, "tall viewport does not refetch the same bounded window");
 task.review = { ...review, window: { ...review.window, total: 0, rows: [] },
-  summary: { ...summary, filter_counts: { ...summary.filter_counts, all: 0 } } };
+  summary: { ...summary, matched_item_count: 0, filter_counts: { ...summary.filter_counts, all: 0 } } };
 panel.render(task);
 assert.ok(findText(panel.element, "Plan is empty"));
 task.review = { ...review, window: { ...review.window, total: 0, rows: [] } };
