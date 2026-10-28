@@ -1378,6 +1378,10 @@ choice; task navigation cannot silently re-enable it. Follow never changes
 selection or keyboard focus, and stale replies cannot undo manual navigation.
 Repeated progress for the same target in the loaded window does not reposition
 the viewport; explicit Go still jumps to it.
+Go, Follow and move-destination jumps share a four-row leading context: fetch
+and scroll from `max(0, target index - 4)`, retaining the actual target identity
+and index. Apply the scroll after the new rows/spacers exist; the viewport may
+clamp near its end. Refreshes preserve the existing viewport wherever possible.
 
 Float **Go to current operation** (Plan), **Go to current item** (Inventory), and
 **Turn on autoscroll** over the rows at

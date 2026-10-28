@@ -578,10 +578,22 @@ window.addEventListener("error", (event) => {
     && viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`)?.ariaExpanded === "true",
     "expanded prior contents");
   viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-plan-move-pill`).click();
+  const canonicalParent = () => [...viewport.querySelectorAll('[data-node-id]')]
+    .find(row => row.querySelector('.nami-file-row__name-text')?.textContent === parentName);
   await until(() => review.dataset.pending === ""
-    && viewport.querySelector("[data-node-id] .nami-file-row__name-text")?.textContent === parentName,
+    && canonicalParent() !== undefined,
     "exact canonical destination parent");
-  movePill.revealedParent = viewport.querySelector("[data-node-id] .nami-file-row__name-text").textContent;
+  const parentRow = canonicalParent();
+  const parentIndex = Number(parentRow.ariaRowIndex) - 2;
+  const parentContextTop = Math.max(0, parentIndex - 4) * 24;
+  const parentBounds = parentRow.getBoundingClientRect();
+  const parentViewportBounds = viewport.getBoundingClientRect();
+  if (Math.abs(viewport.scrollTop - parentContextTop) > 1 / devicePixelRatio
+      || parentBounds.top < parentViewportBounds.top + 24 - 1 / devicePixelRatio
+      || parentBounds.bottom > parentViewportBounds.bottom + 1 / devicePixelRatio) {
+    throw new Error('canonical destination parent lacks visible leading context');
+  }
+  movePill.revealedParent = parentRow.querySelector('.nami-file-row__name-text').textContent;
   const searchMove = review.querySelector('[data-action="plan-search"]');
   searchMove.value = "moved to root";
   searchMove.dispatchEvent(new Event("input", {bubbles: true}));
@@ -1130,8 +1142,9 @@ window.addEventListener("error", (event) => {
   focusBeforeFollow.focus();
   const selectionBeforeFollow = await control('follow_snapshot');
   const followAnchor = await control('follow_anchor');
+  const followContextTop = Math.max(0, followAnchor.index - 4) * 24;
   const followTargetVisible = () => liveViewport.querySelector(`[data-node-id="${followAnchor.node_id}"]`) !== null
-    && Math.abs(liveViewport.scrollTop - followAnchor.index * 24) <= pixelTolerance;
+    && Math.abs(liveViewport.scrollTop - followContextTop) <= pixelTolerance;
   const titleBeforeFollow = selectedTitle();
   await control('release_follow_progress');
   await until(followTargetVisible, 'automatic current-operation movement');
@@ -1153,7 +1166,7 @@ window.addEventListener("error", (event) => {
   enableFollow.click();
   await until(() => enableFollow.hidden, 'explicit follow enable');
   const followNavigation = {
-    automaticMoved: Math.abs(automaticOffset - followAnchor.index * 24) <= pixelTolerance
+    automaticMoved: Math.abs(automaticOffset - followContextTop) <= pixelTolerance
       && offWindowOffset > automaticOffset + 24,
     nativeOverride: manualOffset > 24 && trustedFollowWheels > 0,
     goStayedManual, explicitEnable: enableFollow.hidden,

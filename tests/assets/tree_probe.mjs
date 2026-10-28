@@ -1324,7 +1324,7 @@ const passiveActive = passiveRoot.getAttribute("aria-activedescendant");
 const passiveNode = treeItems(passiveRoot).find(row => row.id === passiveActive).dataset.nodeId;
 const passiveChangeCount = passiveChanges.length;
 passiveTree.commitPassiveWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
-passiveTree.revealPassiveRow(2);
+passiveTree.setPassiveScrollOffset(2);
 passiveRoot.dispatch("scroll");
 passiveDocument.defaultView.flushAnimationFrame();
 assert.equal(passiveRoot.getAttribute("aria-activedescendant"), passiveActive);
@@ -1333,7 +1333,7 @@ passiveRoot.dispatch("focus");
 assert.equal(passiveRoot.scrollTop, retainedPassiveTop,
   "passive focus restoration cannot undo a current-item reveal");
 passiveTree.commitPassiveWindow(passiveTree.beginWindowRequest(), fixtureWindow(200, 4));
-passiveTree.revealPassiveRow(200);
+passiveTree.setPassiveScrollOffset(200);
 passiveRoot.dispatch("scroll");
 passiveDocument.defaultView.flushAnimationFrame();
 assert.equal(passiveRoot.getAttribute("aria-activedescendant"), null);
@@ -1376,7 +1376,7 @@ const blockedTree = createTree(blockedRoot, {
 blockedTree.commitWindow(blockedTree.beginWindowRequest(), fixtureWindow(0, 4));
 const blockedActive = blockedRoot.getAttribute("aria-activedescendant");
 blockedTree.commitPassiveWindow(blockedTree.beginWindowRequest(), fixtureWindow(0, 4));
-blockedTree.revealPassiveRow(2);
+blockedTree.setPassiveScrollOffset(2);
 blockedRoot.dispatch("scroll");
 blockedDocument.defaultView.flushAnimationFrame();
 assert.deepEqual(blockedScrolls, [], "programmatic reveal never reports manual override");

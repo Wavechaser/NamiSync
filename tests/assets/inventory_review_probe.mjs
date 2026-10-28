@@ -1815,7 +1815,7 @@ const publishPassive = (window, index) => {
   checkPassiveCustody();
 };
 publishPassive(fixture.views.maximum.window, 20);
-assert.ok(alignedViewport.scrollTop > 0, "same-page passive target is revealed");
+assert.equal(alignedViewport.scrollTop, 20 * 24, "passive navigation uses the requested context offset");
 assert.equal(alignedTree.getAttribute("aria-activedescendant"), passiveActive);
 assert.equal(alignedReview.activeRefreshTarget.node_id, passiveNode);
 const samePageTop = alignedViewport.scrollTop;

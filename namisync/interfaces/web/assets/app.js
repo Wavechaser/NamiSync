@@ -623,6 +623,8 @@ function queuePlanFollow(review, enableFollow = false, explicit = false) {
   queueReviewFollow(review, PLAN_FOLLOW, enableFollow, explicit);
 }
 
+function navigationWindowOffset(index) { return Math.max(0, index - 4); }
+
 function queueReviewFollow(review, adapter, enableFollow = false, explicit = false) {
   const task = adapter.owner(review);
   if (task === null || task.closePending || adapter.loading(task) || review.pending !== null
@@ -645,8 +647,9 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
   const anchorKey = `${sessionId}:${viewRevision}:${operationId}`;
   if (review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
       && review.follow.anchorIndex >= review.window.offset
-      && review.follow.anchorIndex < review.window.offset + review.window.rows.length) {
-    if (explicit) { review.follow.scrollOffset = review.follow.anchorIndex; renderTasks(); }
+      && review.follow.anchorIndex < review.window.offset + review.window.rows.length
+      && (!explicit || navigationWindowOffset(review.follow.anchorIndex) >= review.window.offset)) {
+    if (explicit) { review.follow.scrollOffset = navigationWindowOffset(review.follow.anchorIndex); renderTasks(); }
     return;
   }
   if (review.followRead?.key === anchorKey && review.followRead.generation === followGeneration) return;
@@ -665,7 +668,7 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
       : await adapter.anchor(task.taskId, sessionId, viewRevision, operationId);
     if (!stillCurrent()) return null;
     if (anchor.disposition !== "current" || anchor.index === null) return {anchor, window: null};
-    const window = await adapter.window(task.taskId, viewRevision, anchor.index, 256);
+    const window = await adapter.window(task.taskId, viewRevision, navigationWindowOffset(anchor.index), 256);
     return {anchor, window};
   });
   const request = {key: anchorKey, generation: followGeneration, job};
@@ -681,7 +684,7 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
           || !adapter.adopt(review, window)) return;
       review.follow.anchorKey = anchorKey;
       review.follow.anchorIndex = anchor.index;
-      review.follow.scrollOffset = anchor.index;
+      review.follow.scrollOffset = navigationWindowOffset(anchor.index);
       review.follow.message = null;
       if ([`No ${adapter.subject} is active.`, `The current ${adapter.subject} is excluded from this view.`,
         `Current ${adapter.subject} navigation is unavailable. Try again.`].includes(review.message)) review.message = null;
@@ -2773,7 +2776,8 @@ async function revealPlanMoveDestination(review, nodeId) {
       }
     });
     if (!stillCurrent()) return;
-    const window = await getPlanWindow(task.taskId, result.summary.view_revision, result.index ?? 0, 256);
+    const window = await getPlanWindow(task.taskId, result.summary.view_revision,
+      navigationWindowOffset(result.index ?? 0), 256);
     if (!stillCurrent()) return;
     if (window.disposition !== "current"
         || window.view_revision !== result.summary.view_revision
@@ -2786,7 +2790,7 @@ async function revealPlanMoveDestination(review, nodeId) {
     adoptExecutionWindow(review, window);
     review.refreshAvailable = false;
     review.follow.eligible = followEligible(review);
-    review.moveScrollOffset = result.index ?? window.offset;
+    review.moveScrollOffset = result.index === null ? window.offset : navigationWindowOffset(result.index);
     review.message = result.summary.disposition === "conflict"
       ? "View changed. Click the move destination again." : null;
   } catch (_error) {

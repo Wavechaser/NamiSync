@@ -1840,12 +1840,12 @@ await until(() => planViewUpdates.length === moveUpdateBase + 1);
 assert.equal(liveReview.pending, "view");
 planViewUpdates[moveUpdateBase].resolve({ summary: moveSummary, node_id: `node-${"8".repeat(32)}`, index: 400 });
 await until(() => planWindows.length === moveWindowBase + 1);
-assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, moveSummary.view_revision, 400, 256]);
-planWindows[moveWindowBase].resolve(executionWindow(moveSummary, 400, 6));
+assert.deepEqual(calls.at(-1), ["plan-window", TASK_G, moveSummary.view_revision, 396, 256]);
+planWindows[moveWindowBase].resolve(executionWindow(moveSummary, 396, 6));
 await until(() => liveReview.pending === null);
 assert.equal(liveReview.summary, moveSummary);
 assert.equal(liveReview.follow.enabled, false);
-assert.equal(liveReview.moveScrollOffset, 400);
+assert.equal(liveReview.moveScrollOffset, 396);
 assert.equal(readsFor(liveReview).foregroundReaders, 0);
 const moveWindowBeforeStale = liveReview.window;
 globalThis.planReviewHarness.callbacks.onRevealMove(liveReview, `node-${"9".repeat(32)}`);
@@ -1960,8 +1960,14 @@ assert.equal(
 );
 planAnchors[followAnchorBase + 1].resolve({ disposition: "current", index: 1280 });
 await until(() => planWindows.length === followWindowBase + 1);
-planWindows[followWindowBase].resolve(executionWindow(liveReview.summary, 1280, 6));
-await until(() => liveReview.follow.scrollOffset === 1280);
+const contextExecutionWindow = () => {
+  const window = executionWindow(liveReview.summary, 1276, 6);
+  const target = window.rows[0];
+  return {...window, rows: Array.from({length:5}, (_, index) => ({...target,
+    visible_index:1276 + index, node_id:index === 4 ? target.node_id : `context-${index}`}))};
+};
+planWindows[followWindowBase].resolve(contextExecutionWindow());
+await until(() => liveReview.follow.scrollOffset === 1276);
 deferAnchor = false;
 planAnchors.splice(followAnchorBase);
 planWindows.splice(followWindowBase);
@@ -1975,15 +1981,23 @@ assert.equal(liveReview.follow.scrollOffset, null,
 assert.equal(planAnchors.length, sameTargetAnchorBase,
   "the cached visible target needs no new anchor lookup");
 await until(() => planWindows.length === sameTargetWindowBase + 1);
-planWindows[sameTargetWindowBase].resolve(executionWindow(liveReview.summary, 1280, 6));
+planWindows[sameTargetWindowBase].resolve(contextExecutionWindow());
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveReview.follow.scrollOffset, null,
   "ordinary window refresh still preserves the user's within-window scroll");
 globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, false);
-assert.equal(liveReview.follow.scrollOffset, 1280,
+assert.equal(liveReview.follow.scrollOffset, 1276,
   "explicit Go to current jumps to the cached target");
 assert.equal(planAnchors.length, sameTargetAnchorBase,
   "explicit cached Go does not launch an anchor lookup");
+const contextWindow = liveReview.window;
+liveReview.follow.anchorIndex = 2;
+liveReview.window = {...contextWindow, offset:0};
+globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, false);
+assert.equal(liveReview.follow.scrollOffset, 0, "targets near the start clamp context to row zero");
+assert.equal(liveReview.follow.anchorIndex, 2, "clamping does not rewrite the active target");
+liveReview.follow.anchorIndex = 1280;
+liveReview.window = contextWindow;
 globalThis.planReviewHarness.callbacks.onFollowOverride(liveReview, 1280, 1289);
 assert.equal(liveReview.follow.enabled, true, "manual travel within the target viewport preserves Follow");
 planWindows.splice(sameTargetWindowBase);

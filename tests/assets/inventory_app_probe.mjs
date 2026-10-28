@@ -1471,9 +1471,19 @@ oldFollow.resolve({disposition:"current", view_revision:followTask.inventoryRevi
 await tick();
 assert.equal(followAnchors.length, 2);
 assert.deepEqual(followAnchors.map(value => value.itemId), ["1:1", "1:2"]);
-assert.ok(followWindows.includes(300));
+assert.ok(followWindows.includes(296), "Follow requests four rows of context before the target");
 assert.equal(followWindows.includes(40), false, "a retired item anchor cannot dispatch its window");
 let followReview = followTask.inventoryReview;
+assert.equal(followReview.follow.anchorIndex, 300, "context offset never replaces the target index");
+followReview.window = followWindow(followReview.summary.view_revision, 300);
+const beforeContextGo = followWindows.length;
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false); await tick();
+assert.ok(followWindows.length > beforeContextGo,
+  "a cached target at the loaded boundary fetches its missing leading context");
+assert.ok(followWindows.slice(beforeContextGo).every(offset => offset === 296),
+  "the explicit read and any pending background refresh use the context window");
+assert.equal(followReview.follow.scrollOffset, 296);
+assert.equal(followAnchors.length, 2, "cached target context needs no second anchor lookup");
 followReview.follow.scrollOffset = null;
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
 await tick();

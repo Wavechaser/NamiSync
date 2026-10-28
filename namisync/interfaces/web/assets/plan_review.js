@@ -1200,10 +1200,6 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     if (previousWindow !== null && previousWindow.view_revision !== review.window.view_revision) {
       table.resetTravel();
     }
-    if (Number.isSafeInteger(review.follow?.scrollOffset)) {
-      table.setScrollTop(review.follow.scrollOffset * ROW_HEIGHT);
-      review.follow.scrollOffset = null;
-    }
     const follow = review.follow ?? null;
     goCurrent.hidden = follow?.hasTarget !== true;
     enableFollow.hidden = follow?.hasTarget !== true
@@ -1372,6 +1368,10 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     updateText(retryOutcome, checkOutcome ? "Check outcome" : "Refresh review");
     retryOutcome.disabled = review.recovery?.checking === true || controlAttempt?.recovery?.checking === true;
     renderRows(review, task);
+    if (Number.isSafeInteger(review.follow?.scrollOffset)) {
+      table.setScrollTop(review.follow.scrollOffset * ROW_HEIGHT);
+      review.follow.scrollOffset = null;
+    }
     if (Number.isSafeInteger(review.moveScrollOffset)) {
       // Query removal can grow the spacers; scroll only after their new height exists.
       table.setScrollTop(review.moveScrollOffset * ROW_HEIGHT);

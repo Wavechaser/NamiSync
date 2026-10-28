@@ -1051,7 +1051,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     }
     renderedProgress = {key:progressKey, itemId:active?.item_id};
     if (Number.isSafeInteger(follow?.scrollOffset)) {
-      tree.revealPassiveRow(follow.scrollOffset);
+      tree.setPassiveScrollOffset(follow.scrollOffset);
       follow.scrollOffset = null;
     }
     saveViewport();

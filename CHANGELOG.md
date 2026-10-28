@@ -225,6 +225,8 @@ explicit, reviewable and regression-backed.
 
 - Use Microsoft navigation-target and location-arrow glyphs for Go/Follow,
   with 16px floating insets and square compact action controls on both pages.
+- Keep four preceding rows of context for Go, Follow and move jumps where
+  available, while retaining the existing viewport during refresh.
 - Offer ordinary selected-file Baseline/Rebaseline on the sync task's Inventory
   page, with Verify selected and Verify copied labels. Keep copied scope
   exclusive to verification and preserve Rebaseline confirmation. Add Restore

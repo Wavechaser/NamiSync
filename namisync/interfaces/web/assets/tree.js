@@ -401,16 +401,16 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   function commitPassiveWindow(generation, window) {
     return commitWindow(generation, window, null, false, true);
   }
-  function revealPassiveRow(index) {
+  function setPassiveScrollOffset(offset) {
     passiveReveal = true;
-    table.revealRow(index);
+    table.setScrollTop(offset * rowHeight);
   }
   function cancelNavigation() {
     table.cancelNavigation();
   }
 
   return Object.freeze({beginWindowRequest: table.beginWindowRequest, commitWindow,
-    commitPassiveWindow, revealPassiveRow,
+    commitPassiveWindow, setPassiveScrollOffset,
     finishWindowRequest: table.finishWindowRequest, cancelNavigation, dispose});
 }
 
