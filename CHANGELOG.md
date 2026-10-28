@@ -229,6 +229,9 @@ explicit, reviewable and regression-backed.
   for eligible missing items to the context menu and explicit folder-wide labels.
 - Show green Present for ordinary observed folders, simplify repetitive details,
   mute metadata labels and describe unchanged execution items as No change.
+- Follow accepted Inventory keyboard highlights in Details. Preserve surviving
+  highlights through refresh and reload current details, including off-window
+  items, without moving the viewport or taking focus from another control.
 - Keep Inventory highlight geometry stable. Both task-view switchers retain
   the selected half's accent and hover/click behavior while unavailable
   destinations stay locked.

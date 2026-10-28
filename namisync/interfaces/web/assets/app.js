@@ -2092,6 +2092,7 @@ async function loadInventoryReview(task, force = false) {
     if (tasks.get(task.taskId) === task && task.inventoryRevision === request) {
       task.inventoryLoading = false;
       renderTasks();
+      if (stillCurrent() && task.inventoryReview !== previousReview) syncInventoryDetail(task.inventoryReview);
       followInventory(task);
       if (selectedTaskId === task.taskId && !settingsVisible
           && (task.taskKind === "inventory" || task.workPane === "verify")
@@ -2265,18 +2266,30 @@ async function loadInventoryWindow(review, offset) {
   return null;
 }
 
+function syncInventoryDetail(review) {
+  const nodeId = review?.summary.highlight_focus_node_id;
+  if (nodeId == null || review.summary.highlight_focus_visible_index === null) {
+    if (review?.detail != null) retireInventoryDetail(review);
+  } else if (review.detail?.row.node_id !== nodeId) {
+    retireInventoryDetail(review);
+    void readInventoryDetail(review, nodeId);
+  }
+}
+
 async function readInventoryDetail(review, nodeId) {
   const task = currentInventoryTask(review);
   if (task === null || task.inventoryLoading || review.pending !== null) return;
-  const row = review.window.rows.find((value) => value.node_id === nodeId);
-  if (row === undefined) return;
+  let row = review.window.rows.find((value) => value.node_id === nodeId);
+  const focusIndex = review.summary.highlight_focus_node_id === nodeId
+    ? review.summary.highlight_focus_visible_index : null;
+  if (row === undefined && !Number.isSafeInteger(focusIndex)) return;
   const request = ++review.detailRevision;
   const action = review.actionRevision;
   const sessionId = task.sessionId;
   const publication = review.summary.request_id;
   const revision = review.summary.view_revision;
   const navigation = navigationRevision;
-  const detail = { row, state: "loading", response: null };
+  let detail = row === undefined ? null : { row, state: "loading", response: null };
   review.detail = detail;
   renderTasks();
   const stillCurrent = () => currentInventoryTask(review) === task && review.detailRevision === request
@@ -2284,6 +2297,17 @@ async function readInventoryDetail(review, nodeId) {
     && review.summary.request_id === publication && review.summary.view_revision === revision
     && navigationRevision === navigation;
   try {
+    if (row === undefined) {
+      const window = await getInventoryWindow(task.taskId, revision, focusIndex, 1);
+      if (!stillCurrent()) return;
+      row = window.rows.find(value => value.node_id === nodeId);
+      if (window.disposition !== "current" || window.view_revision !== revision || row === undefined) {
+        throw new Error("Focused inventory row is unavailable");
+      }
+      detail = {row, state: "loading", response: null};
+      review.detail = detail;
+      renderTasks();
+    }
     const response = await getInventoryDetail(task.taskId, revision, nodeId);
     if (!stillCurrent()) return;
     if (response.disposition === "conflict") {
@@ -2295,7 +2319,10 @@ async function readInventoryDetail(review, nodeId) {
       detail.response = response;
     }
   } catch (_error) {
-    if (stillCurrent()) detail.state = "error";
+    if (stillCurrent()) {
+      if (detail !== null) detail.state = "error";
+      else review.message = "Details unavailable. Select the item again to retry.";
+    }
   } finally {
     if (currentInventoryTask(review) === task && review.detailRevision === request
         && navigationRevision === navigation) renderTasks();
@@ -3130,6 +3157,7 @@ function queueRowHighlight(review, gesture, nodeId, inventory = false) {
         review.message = summary.disposition === "conflict"
           ? "Highlight changed while navigation finished. Review the current highlight, then try again." : null;
         const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);
+        if (inventory) syncInventoryDetail(review);
         if (!inventory && focusedRow !== undefined && review.planDetail?.state === "error") void readPlanDetail(review, focusedRow);
         if (!inventory && focusedRow?.operation_id === review.executionDetail?.operationId
             && review.executionDetail?.state === "error") void readExecutionDetail(review, focusedRow);

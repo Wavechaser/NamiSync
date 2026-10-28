@@ -973,8 +973,8 @@ const beforeArrowDetails = liveDetails.length;
 treeRoot.dispatch("keydown", {key: "ArrowDown"});
 await liveReview.highlightQueue;
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), liveRow(liveFile.node_id).id);
-assert.equal(liveReview.detail === cardSelection, true, "arrows preserve the card's displayed item");
-assert.equal(liveDetails.length, beforeArrowDetails, "highlight navigation does not read details");
+assert.equal(liveReview.detail.row.node_id, liveFile.node_id, "arrows update the card's displayed item");
+assert.equal(liveDetails.length, beforeArrowDetails + 1, "accepted highlight reads current details");
 assert.equal(liveDiagnostics.hidden, true);
 ownedContext(liveRow(liveFile.node_id), "contextmenu", {clientX:100, clientY:100});
 const liveRefreshSelected = walk(app.panel.element).find(value => value.dataset.action === "row-refresh");
@@ -1053,6 +1053,17 @@ assert.equal(liveReview.detail, null, "replacement retires the old selected evid
 assert.equal(liveReview.activeNodeId, beforeReloadNode, "reload retains a node proved visible in its new view");
 assert.equal(treeRoot.getAttribute("aria-activedescendant"), null, "reload may retain an off-window identity without ARIA");
 assert.equal(liveReview.activeRefreshTarget.node_id, beforeReloadNode);
+treeRoot.focus();
+viewportReply = delayedViewport();
+const focusMovedReload = app.loadInventoryReview(liveTask, true);
+await settle();
+const searchDuringReload = walk(app.panel.element).find(value => value.type === "search");
+searchDuringReload.focus();
+viewportReply.resolve({...fixture.tail});
+await focusMovedReload; viewportReply = null;
+liveReview = liveTask.inventoryReview;
+assertSameNode(document.activeElement, searchDuringReload,
+  "refresh completion does not steal DOM focus after the user moves to search");
 // A real manual scroll during selection settlement disables app-owned Follow.
 // Its synchronous render and later progress retain the active Refresh target.
 const blockedFollowAnchors = [];

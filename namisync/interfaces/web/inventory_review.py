@@ -233,6 +233,8 @@ class InventoryReviewState:
             if node_id in projection.position_by_node_id
             and projection.node_for_id(node_id).is_container
         )
+        retained = (projection.position_by_node_id
+                    if projection.location_id == self.projection.location_id else {})
         return InventoryReviewState(
             self.task_id, request_id, projection, root_path, scan_complete,
             observed_count, missing_count, revision,
@@ -240,6 +242,12 @@ class InventoryReviewState:
             scan_scope=scan_scope,
             scan_request_id=scan_request_id,
             recall=recall,
+            highlight_revision=next_revision(self.highlight_revision),
+            highlighted_node_ids=self.highlighted_node_ids.intersection(retained),
+            highlight_anchor_node_id=(self.highlight_anchor_node_id
+                if self.highlight_anchor_node_id in retained else None),
+            highlight_focus_node_id=(self.highlight_focus_node_id
+                if self.highlight_focus_node_id in retained else None),
             selected_row_ids=frozenset(
                 row_id for row_id in self.selected_row_ids
                 if row_id in projection.node_id_by_row_id

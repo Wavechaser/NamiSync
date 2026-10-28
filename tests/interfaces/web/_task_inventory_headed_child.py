@@ -256,7 +256,7 @@ class _InventoryPhase:
         fixture = {"folder_node_id": folder.node_id, "missing_node_id": missing.node_id,
                    "first_node_id": first.node_id, "last_node_id": last.node_id,
                    "first_item_id": f"{first.row.location_id}:{first.row.row_id}",
-                   "folder_display": folder.display, "missing_display": missing.display,
+                   "folder_display": folder.display, "missing_display": Path(missing.rel_path).name,
                    "folder_path": str(self.source / "folder"), "missing_path": missing.rel_path,
                    "domain_count": projection.nodes[0].rollup.domain_count}
         if not folder.is_container or missing.row is None:
@@ -914,7 +914,6 @@ _PAGE = r"""
     && itemCard.textContent.includes(fixture.folder_path), 'selected-folder-detail');
   const diagnostics = review.querySelector('.nami-inventory-review__diagnostics');
   if (!diagnostics.hidden) throw new Error('selected Details must remain hidden');
-  const cardText = itemCard.textContent;
   await until(() => !selectedFolderRow.isConnected && folder()?.dataset.highlighted === 'true', 'selected-folder-highlight');
   const viewport = review.querySelector('.nami-inventory-review__list');
   viewport.scrollTop = 7;
@@ -927,12 +926,14 @@ _PAGE = r"""
   refreshViewport.first_arrow = viewport.scrollTop;
   await stage('selected-arrow-second');
   await until(() => missing()?.dataset.highlighted === 'true', 'selected-missing-highlight');
+  await until(() => itemHeading()?.textContent === fixture.missing_display
+    && itemCard.textContent.includes(fixture.missing_path), 'selected-keyboard-detail');
   refreshViewport.second_arrow = viewport.scrollTop;
   const selectedRefresh = {details_hidden:diagnostics.hidden,
-    card_preserved:itemCard.textContent === cardText,
+    detail_followed:itemHeading()?.textContent === fixture.missing_display,
     active_node_id:review.querySelector('.nami-inventory-review__rows').getAttribute('aria-activedescendant') === missing().id
       ? fixture.missing_node_id : null};
-  if (!selectedRefresh.details_hidden || !selectedRefresh.card_preserved
+  if (!selectedRefresh.details_hidden || !selectedRefresh.detail_followed
       || selectedRefresh.active_node_id !== fixture.missing_node_id) throw new Error('selected active row differs');
   selectedRefresh.scroll_before = viewport.scrollTop;
   selectedRefresh.minimum_scroll = viewport.scrollTop;
@@ -952,6 +953,10 @@ _PAGE = r"""
     && review.querySelector('[data-inventory-scan-facts]').textContent.includes(fixture.missing_path)
     && review.querySelector('.nami-plan-review__status').textContent.includes('Only the selected scope was rescanned.'),
     'selected-item-publication');
+  await until(() => missing()?.dataset.highlighted === 'true'
+    && itemHeading()?.textContent === fixture.missing_display
+    && itemCard.textContent.includes(fixture.missing_path), 'selected-refreshed-detail');
+  selectedRefresh.refresh_focus_retained = true;
   samplingRefresh = false;
   selectedRefresh.scroll_after = viewport.scrollTop;
   refreshViewport.after = viewport.scrollTop;

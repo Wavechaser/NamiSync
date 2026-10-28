@@ -534,7 +534,8 @@ rebaseline eligibility. Folder/header/highlighted-range gestures respect current
 search/facets, including collapsed and off-window matches. Total selection still
 includes hidden files; starts freeze that complete selection. Independent
 revisioned highlights reuse Plan's range reducer, without its operation policy.
-Replacement retains only surviving exact file row IDs and clears highlights.
+Replacement retains surviving exact file selection and highlighted node identities,
+including anchor/focus, within the same location; advancing revisions reject old gestures.
 Inventory tasks also admit ordinary baseline, verify and confirmed rebaseline
 sessions after exact prior release. They retain task kind `inventory` and have no
 Plan token. `task-integrity` associations can be followed by another ordinary

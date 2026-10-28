@@ -448,7 +448,10 @@ One existing view revision fences selection, windows and details. A stale reques
 or revision changes nothing; selection changes advance the revision. Selection
 requires a current released, clean publication and cannot race admission or a
 pending visibility effect. Replacements retain only surviving exact file row IDs and leave new rows
-unselected. All replacements clear highlights and invalidate prior gestures.
+unselected. Replacements retain surviving exact highlighted node identities,
+anchor and focus within the same location, and invalidate prior gestures through
+advancing revisions. Removed identities are pruned. A retained focus suppressed
+by the current filter/collapse has no visible index and shows no stale details.
 Compact prefixes of complete selected membership and matching selectable/selected
 files provide constant-time per-row tri-state; hidden counts are computed at selection/view changes, not on
 each window read. Mode eligibility remains workflow-owned and no integrity

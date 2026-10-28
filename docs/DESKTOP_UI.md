@@ -2093,8 +2093,9 @@ hidden-by-filter counts expose the complete retained selection used by starts.
 Warnings and folders with no matching files are inert. Ctrl/Shift clicks and
 Shift+arrows use Plan's server-owned highlight/range mechanics; clicking a
 highlighted checkbox applies to matching files in that range. Search/filter
-changes and a new publication clear highlights; sort/collapse and checkbox
-changes preserve them. A selection reply replaces authoritative summary/window
+changes clear highlights; sort/collapse, checkbox changes and refreshed publications
+preserve surviving highlight identities. Removed rows are pruned; a filtered or
+collapsed focus does not display stale item details. A selection reply replaces authoritative summary/window
 state while preserving the live outer scroll position and checkbox focus.
 Passive result refresh cannot reveal a different active row or overwrite a newer
 foreground window. Stale or uncertain gestures reload instead of replaying.
@@ -2189,8 +2190,11 @@ address only the exact current ordinary session, with task status derived from
 that activity's snapshot rather than relabeling every Inventory activity a scan.
 
 Refresh selected lives only in the current file or folder's context menu, and
-remains usable while Details is hidden. Arrows move
-highlight without reading or replacing item details. Notices offer no Refresh
+remains usable while Details is hidden. Accepted keyboard highlights read current
+details for the focused row, including off-window navigation. Refresh rereads
+that surviving focused item's evidence under the new view; old responses cannot
+replace it. Neither detail loading nor refresh takes DOM focus from another
+control. Notices offer no Refresh
 action. Retained active-row identity continues to anchor viewport restoration.
 Acknowledge missing and Restore visibility
 continue to act on the item displayed in the details card.

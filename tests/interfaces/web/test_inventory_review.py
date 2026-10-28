@@ -248,8 +248,45 @@ def test_inventory_highlighted_overlapping_folders_match_files_even_when_collaps
     assert result["selected_file_count"] == 2 and view.selected_row_ids == frozenset({"1", "2"})
     replaced = view.replacement("f" * 32, view.projection, view.root_path, True, 2, 0,
         scan_scope=("location", None))
-    assert replaced.summary()["highlighted_count"] == 0
+    assert replaced.highlighted_node_ids == view.highlighted_node_ids
+    assert replaced.highlight_focus_node_id == leaf.node_id
+    assert replaced.highlight_anchor_node_id == folder.node_id
     assert replaced.selected_row_ids == view.selected_row_ids
+
+
+def test_inventory_replacement_prunes_missing_highlights_and_rejects_old_gestures():
+    view = _view()
+    first, second = (view.projection.node_id_by_row_id[key] for key in ("1", "2"))
+    for gesture, node_id in (("replace", first), ("toggle", second)):
+        view.mutate_highlight(expected_view_revision=0,
+            expected_highlight_revision=view.highlight_revision, gesture=gesture, node_id=node_id)
+    projection = build_inventory_projection(1, (_row("1", r"a\z.txt"),))
+    replaced = view.replacement("f" * 32, projection, view.root_path, True, 1, 0,
+        scan_scope=("location", None))
+    assert replaced.highlighted_node_ids == frozenset({first})
+    assert replaced.highlight_anchor_node_id == first
+    assert replaced.highlight_focus_node_id is None
+    assert replaced.mutate_highlight(expected_view_revision=0,
+        expected_highlight_revision=view.highlight_revision, gesture="replace",
+        node_id=first)["disposition"] == "conflict"
+    _update(replaced, search_query="z.txt")
+    assert not replaced.highlighted_node_ids
+
+
+def test_inventory_replacement_retains_suppressed_identity_without_visible_focus():
+    view = _view()
+    _update(view, filters=frozenset({"present"}))
+    node_id = view.projection.node_id_by_row_id["1"]
+    view.mutate_highlight(expected_view_revision=view.view_revision,
+        expected_highlight_revision=0, gesture="replace", node_id=node_id)
+    projection = build_inventory_projection(1, (
+        _row("1", r"a\z.txt", presence=InventoryPresence.MISSING),))
+    replaced = view.replacement("f" * 32, projection, view.root_path, True, 0, 1,
+        scan_scope=("location", None))
+    assert replaced.highlighted_node_ids == frozenset({node_id})
+    assert replaced.highlight_focus_node_id == node_id
+    assert replaced.summary()["highlight_focus_visible_index"] is None
+    assert not replaced.window(expected_revision=replaced.view_revision, offset=0, limit=256)["rows"]
 
 
 def test_ledger_publication_preserves_absent_scan_provenance_through_gestures_and_replacement():

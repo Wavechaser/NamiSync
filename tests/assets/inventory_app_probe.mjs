@@ -1215,6 +1215,9 @@ assert.equal(rowMutations[1].nodeId, endpoint(271));
 assert.equal(alignedReview.summary.highlight_focus_visible_index, 271);
 assert.equal(alignedReview.window.offset, 239, "off-window highlight retains 32 leading rows");
 assert.ok(rowReads.every(read => read.limit === 256));
+await tick();
+assert.equal(alignedReview.detail?.row.node_id, endpoint(271),
+  "accepted off-window keyboard highlight reads the focused item details");
 
 heldHighlight = defer();
 highlightWork = app.queueRowHighlight(alignedReview, "move_down", null, true);
@@ -1578,4 +1581,72 @@ app.switchTaskPane(restoreTask, "plan");
 heldRestore.resolve({...fixture.views.maximum.window});
 await finalRead; heldRestore = null;
 assertSameNode(restoreTask.inventoryReview, finalReadReview, "late final-window restoration cannot publish after leaving the pane");
+
+// A genuine refreshed publication retains the host's highlight and rereads its
+// evidence. The older detail completion cannot cross that publication boundary.
+{
+const detailFile = fixture.views.default.window.rows.find(row => row.row_id !== null);
+const detailRows = [detailFile, fixture.views.default.window.rows.find(row => row.node_id !== detailFile.node_id)];
+let detailSummary = {...fixture.views.default.summary, task_id:alignedTask.taskId,
+  request_id:alignedTask.requestId, view_revision:80, highlight_revision:10,
+  highlight_focus_node_id:detailRows[0].node_id,
+  highlight_focus_visible_index:detailRows[0].visible_index, highlighted_count:1};
+let heldEvidence = null;
+const evidenceReads = [];
+globalThis.inventoryHarness.openInventoryView = () => Promise.resolve(detailSummary);
+globalThis.inventoryHarness.getInventoryWindow = (_taskId, revision, offset) => Promise.resolve({
+  ...fixture.views.default.window, view_revision:revision, highlight_revision:detailSummary.highlight_revision,
+  offset, rows:fixture.views.default.window.rows.map(row => ({...row,
+    highlighted:row.node_id === detailSummary.highlight_focus_node_id})),
+});
+globalThis.inventoryHarness.getInventoryDetail = (_taskId, revision, nodeId) => {
+  evidenceReads.push({revision, nodeId});
+  return heldEvidence?.promise ?? Promise.resolve({...fixture.detail, view_revision:revision, node_id:nodeId});
+};
+app.selectTask(alignedTask.taskId); await tick();
+await app.loadInventoryReview(alignedTask, true); await tick();
+assert.equal(alignedTask.inventoryReview.detail.row.node_id, detailRows[0].node_id);
+const priorDetailReview = alignedTask.inventoryReview;
+heldEvidence = defer();
+const olderEvidence = app.readInventoryDetail(priorDetailReview, detailRows[0].node_id);
+detailSummary = {...detailSummary, view_revision:81, highlight_revision:11};
+const oldEvidenceReply = heldEvidence; heldEvidence = null;
+await app.loadInventoryReview(alignedTask, true); await tick();
+const refreshedDetail = alignedTask.inventoryReview.detail;
+assert.equal(refreshedDetail.response.view_revision, 81);
+assert.equal(refreshedDetail.row.node_id, detailRows[0].node_id);
+oldEvidenceReply.resolve({...fixture.detail, view_revision:80}); await olderEvidence;
+assertSameNode(alignedTask.inventoryReview.detail, refreshedDetail, "old detail cannot overwrite refreshed evidence");
+assert.ok(evidenceReads.some(read => read.revision === 81 && read.nodeId === detailRows[0].node_id));
+let heldMetadata = null;
+const metadataReads = [];
+globalThis.inventoryHarness.getInventoryWindow = (_taskId, revision, offset, limit) => {
+  const rows = limit === 1 ? [detailRows[0]] : [detailRows[1]];
+  if (limit === 1) metadataReads.push({revision, offset, limit});
+  const response = {...fixture.views.default.window, view_revision:revision, offset,
+    highlight_revision:detailSummary.highlight_revision, rows};
+  return limit === 1 && heldMetadata !== null ? heldMetadata.promise : Promise.resolve(response);
+};
+const beforeOffwindowReload = alignedTask.inventoryReview;
+await app.loadInventoryReview(alignedTask, true); await tick();
+assert.notEqual(alignedTask.inventoryReview, beforeOffwindowReload);
+assert.equal(alignedTask.inventoryReview.detail?.row.node_id, detailRows[0].node_id,
+  "refresh rereads off-window focused item metadata without replacing the displayed window");
+assert.equal(alignedTask.inventoryReview.window.rows[0].node_id, detailRows[1].node_id);
+assert.deepEqual(metadataReads.at(-1), {revision:81, offset:detailRows[0].visible_index, limit:1});
+heldMetadata = defer();
+const metadataReview = alignedTask.inventoryReview;
+const delayedMetadata = app.readInventoryDetail(metadataReview, detailRows[0].node_id);
+await tick();
+metadataReview.summary = {...metadataReview.summary, highlight_focus_node_id:detailRows[1].node_id,
+  highlight_focus_visible_index:detailRows[1].visible_index};
+await app.readInventoryDetail(metadataReview, detailRows[1].node_id);
+const newerFocusDetail = metadataReview.detail;
+heldMetadata.resolve({...fixture.views.default.window, view_revision:81,
+  rows:[detailRows[0]]}); await delayedMetadata; heldMetadata = null;
+assertSameNode(metadataReview.detail, newerFocusDetail, "delayed metadata cannot overwrite newer focus details");
+detailSummary = {...detailSummary, view_revision:82, highlight_focus_visible_index:null};
+await app.loadInventoryReview(alignedTask, true); await tick();
+assert.equal(alignedTask.inventoryReview.detail, null, "a filter-suppressed focus has no stale details or invented neighbor");
+}
 process.stdout.write("ok\n");

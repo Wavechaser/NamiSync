@@ -232,7 +232,7 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
         selected_viewport = initial["report"]["selected_refresh"]
         assert 0 < selected_viewport["scroll_before"] < 24
         assert selected_viewport == {
-            "details_hidden": True, "card_preserved": True,
+            "details_hidden": True, "detail_followed": True, "refresh_focus_retained": True,
             "active_node_id": selected_refresh["node_id"],
             "scroll_before": selected_viewport["scroll_before"],
             "scroll_after": selected_viewport["scroll_before"],
