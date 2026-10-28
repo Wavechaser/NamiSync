@@ -461,6 +461,16 @@ assert.ok(findText(planItemPane, "Highlight an item"), "unfocused Plan has an it
 review.summary = { ...summary, highlight_focus_node_id: row.node_id, highlight_revision: 1 };
 panel.render(task);
 assert.ok(findText(planItemPane, "Planned action"), "focused Plan row reveals planned facts");
+row.highlighted = true;
+review.summary = {...review.summary, highlighted_count:2, highlight_revision:2};
+panel.render(task);
+const scopedCheckbox = findByClass(panel.element, "nami-plan-review__rows").children
+  .find(value => value.dataset.nodeId === row.node_id).querySelector(".nami-checkbox");
+assert.equal(scopedCheckbox.ariaLabel, "Select highlighted operations only");
+review.summary = {...review.summary, highlighted_count:1, highlight_revision:3};
+panel.render(task);
+assert.equal(scopedCheckbox.ariaLabel, `Select ${row.display}`, "singleton scope restores the row label");
+row.highlighted = false;
 assert.ok(findText(planItemPane, hostile.replace("\u202e", "⟦U+202E⟧")));
 assert.ok(findText(planItemPane, "Dependencies"));
 assert.ok(findText(planItemPane, "1 of 2 selected"));

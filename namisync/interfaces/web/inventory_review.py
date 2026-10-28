@@ -169,7 +169,8 @@ class InventoryReviewState:
         if type(selected) is not bool:
             raise TypeError("inventory selection must be a boolean")
         nodes = self.projection.nodes
-        ranges = ((node.position, node.subtree_end) for node in (
+        recursive = len(self.highlighted_node_ids) == 1
+        ranges = ((node.position, node.subtree_end if recursive else node.position + 1) for node in (
             self.projection.node_for_id(node_id) for node_id in self.highlighted_node_ids))
         scope = frozenset(nodes[position].row.row_id
             for position in covered_positions(len(nodes), ranges)

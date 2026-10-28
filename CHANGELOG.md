@@ -232,6 +232,10 @@ explicit, reviewable and regression-backed.
 - Follow accepted Inventory keyboard highlights in Details. Preserve surviving
   highlights through refresh and reload current details, including off-window
   items, without moving the viewport or taking focus from another control.
+- Limit multi-highlight checkbox changes to highlighted rows' own selectable
+  items. Single-folder and outside-range folder actions remain recursive;
+  folder checkboxes still summarize their contents, and Plan dependencies remain
+  workflow-owned.
 - Keep Inventory highlight geometry stable. Both task-view switchers retain
   the selected half's accent and hover/click behavior while unavailable
   destinations stay locked.

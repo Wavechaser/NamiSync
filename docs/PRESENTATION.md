@@ -196,7 +196,8 @@ An off-window endpoint is resolved through a revisioned window read. This is
 not a deselection gesture, and Python continues to own range membership.
 The browser sends only a compact gesture endpoint with expected view/highlight revisions. Python
 resolves ranges against the full ordered visible view, including off-window rows;
-highlighted folders supply their matching descendants to checkbox gestures.
+multiple highlighted rows contribute only their directly associated file or
+operation. A single highlighted folder retains matching descendant scope.
 When a target is outside the retained window, the
 browser requests that window before painting the returned focus/highlight flags.
 An off-window moving highlight requests up to 32 leading rows before the
@@ -372,7 +373,11 @@ Inventory checkboxes start empty and retain exact file row IDs independently of
 row highlights and the active/detail row. Folder and header gestures apply to
 files matching the current search/facets in their complete server-owned scope,
 including collapsed and off-window matches. A checkbox in a highlighted range
-applies to matching files covered by that range. Changing the view alone does
+applies only to directly highlighted matching files when multiple rows are
+highlighted; highlighted folders do not add unhighlighted descendants. A singly
+highlighted folder, or a folder checkbox outside the highlighted set, retains
+recursive matching scope. Folder checkboxes still aggregate descendant membership.
+Changing the view alone does
 not change membership; selected totals still include hidden files. Warnings are
 informational and directories provide membership only. Labels disclose matching
 scope; selected/hidden-by-filter counts disclose retained hidden membership.

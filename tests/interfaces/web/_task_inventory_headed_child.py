@@ -26,7 +26,7 @@ _COMMANDS = frozenset({"refresh_inventory", "acknowledge_inventory", "restore_in
                        "mutate_inventory_highlight", "start_inventory_integrity", "control_integrity"})
 _READ_COMMANDS = frozenset({"get_inventory_anchor"})
 _FILE_BYTES = b"NamiSync native inventory fixture\r\n"
-_RANGE_STAGES = ("range-reset", "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear")
+_RANGE_STAGES = ("range-folder", "range-file-toggle", "range-file-checkbox", "range-file-recheck", "range-reset", "range-anchor", "range-toggle", "range-end", "range-checkbox", "range-clear")
 _INTEGRITY_STAGES = ("select-folder", "select-location-clear", "select-location", "baseline",
                      "verify", "follow-go", "pause", "resume", "verify-cancel", "cancel",
                      "baseline-menu-open", "baseline-menu-close", "baseline-menu-reopen",
@@ -439,9 +439,9 @@ class _InventoryPhase:
         self.capture_integrity()
         view = registry.open_inventory_view(initial["task_id"])
         selections = matching("set_inventory_selection", 4)
-        highlighted = matching("set_inventory_highlighted_selection", 2)
-        if ([item["selected"] for item in highlighted] != [True, False]
-                or [item["result"]["selected_file_count"] for item in highlighted] != [3, 0]):
+        highlighted = matching("set_inventory_highlighted_selection", 4)
+        if ([item["selected"] for item in highlighted] != [False, True, True, False]
+                or [item["result"]["selected_file_count"] for item in highlighted] != [2, 3, 3, 0]):
             raise RuntimeError("native integrity command identity or control differs")
         starts = matching("start_inventory_integrity", 4)
         controls = matching("control_integrity", 3)
@@ -638,7 +638,7 @@ _PAGE = r"""
       value.getBoundingClientRect().right, tableRows[0].children[index].getBoundingClientRect().left,
       tableRows[0].children[index].getBoundingClientRect().right]),
   };
-  const rangeStages = ['range-reset', 'range-anchor', 'range-toggle', 'range-end', 'range-checkbox', 'range-clear'];
+  const rangeStages = ['range-folder', 'range-file-toggle', 'range-file-checkbox', 'range-file-recheck', 'range-reset', 'range-anchor', 'range-toggle', 'range-end', 'range-checkbox', 'range-clear'];
   const integrityStages = ['select-folder', 'select-location-clear', 'select-location', 'baseline',
     'verify', 'follow-go', 'pause', 'resume', 'verify-cancel', 'cancel',
     'baseline-menu-open', 'baseline-menu-close', 'baseline-menu-reopen',
@@ -681,7 +681,9 @@ _PAGE = r"""
       listened_control_connected:listenedControl?.isConnected ?? null,
       popup_open_count:popupOpenCount, popup_close_count:popupCloseCount});
     const selector = name === 'select-folder' ? `.nami-inventory-review__rows > .nami-tree-row[role="treeitem"][data-node-id="${window.__inventoryFixture.folder_node_id}"] input[data-action="inventory-select-row"]`
-        : name === 'range-anchor' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.first_node_id}"]`
+        : name === 'range-folder' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.folder_node_id}"]`
+        : name === 'range-file-checkbox' || name === 'range-file-recheck' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.first_node_id}"] input[data-action="inventory-select-row"]`
+        : name === 'range-anchor' || name === 'range-file-toggle' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.first_node_id}"]`
         : name === 'range-toggle' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.missing_node_id}"]`
         : name === 'range-end' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.last_node_id}"]`
         : name === 'range-checkbox' || name === 'range-clear' ? `.nami-inventory-review__rows [data-node-id="${window.__inventoryFixture.last_node_id}"] input[data-action="inventory-select-row"]`
@@ -725,7 +727,7 @@ _PAGE = r"""
         window.__inventoryConfirmationInvoker = review.querySelector('[data-action="inventory-baseline-menu"]');
       }
       const focusTarget = name === 'context-open' || name === 'selected-activate'
-        || ['range-anchor', 'range-toggle', 'range-end'].includes(name)
+        || ['range-folder', 'range-file-toggle', 'range-anchor', 'range-toggle', 'range-end'].includes(name)
         ? review.querySelector('.nami-inventory-review__rows') : control;
       if (name === 'selected-refresh') window.__inventoryRefreshViewport.before_focus = review.querySelector('.nami-inventory-review__list').scrollTop;
       // Keep menu focus until the native trigger click moves it, exercising
@@ -967,6 +969,19 @@ _PAGE = r"""
   const rangeRow = id => tree.querySelector(`[data-node-id="${id}"]`);
   const selectionText = () => review.querySelector('[data-inventory-task-facts]').textContent;
   if (!selectionText().includes('3 of 3 files selected')) throw new Error('fresh scan must select all files');
+  await stage('range-folder');
+  await until(() => rangeRow(fixture.folder_node_id)?.dataset.highlighted === 'true', 'folder-range-anchor');
+  await stage('range-file-toggle');
+  await until(() => rangeRow(fixture.folder_node_id)?.dataset.highlighted === 'true'
+    && rangeRow(fixture.first_node_id)?.dataset.highlighted === 'true', 'folder-range-file');
+  await stage('range-file-checkbox');
+  await until(() => selectionText().includes('2 of 3 files selected')
+    && rangeRow(fixture.first_node_id)?.querySelector('input').checked === false
+    && rangeRow(fixture.folder_node_id)?.querySelector('input').indeterminate === true,
+    'folder-range-does-not-expand');
+  await stage('range-file-recheck');
+  await until(() => selectionText().includes('3 of 3 files selected')
+    && rangeRow(fixture.folder_node_id)?.querySelector('input').indeterminate === false, 'folder-range-restored');
   await stage('range-reset');
   await until(() => selectionText().includes('0 of 3 files selected'), 'scan-selection-cleared');
   await stage('range-anchor');
@@ -1314,7 +1329,7 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                     cdp.call("Input.dispatchKeyEvent", {"type": "rawKeyDown", **shared}, key_down, f"{name}-down")
                     return
                 mouse_button = "right" if name == "context-open" else "left"
-                modifiers = 8 if name == "range-end" else 2 if name == "range-toggle" else 0
+                modifiers = 8 if name == "range-end" else 2 if name in {"range-toggle", "range-file-toggle"} else 0
                 cdp.call("Input.dispatchMouseEvent", {"type": "mousePressed", "button": mouse_button,
                     "buttons": 2 if mouse_button == "right" else 1, "clickCount": 1, "modifiers": modifiers, **point},
                     lambda _value: cdp.call("Input.dispatchMouseEvent", {"type": "mouseReleased",

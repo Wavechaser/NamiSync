@@ -937,6 +937,9 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
           if (rendered === undefined) continue;
           setHighlighted(rendered, row.highlighted === true);
           rendered.ariaSelected = String(row.highlighted === true);
+          const checkbox = renderedRows.checkboxes[index];
+          if (checkbox !== null && checkbox !== undefined) checkbox.ariaLabel = row.highlighted && review.summary.highlighted_count > 1
+            ? "Select highlighted operations only" : `Select ${row.display}`;
           rendered.tabIndex = row.node_id === (focusNodeId ?? review.window.rows[0]?.node_id) ? 0 : -1;
         }
         if (focusedRow) {
@@ -994,6 +997,9 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       element.ariaSelected = String(row.highlighted === true);
       setHighlighted(element, row.highlighted === true);
       const checkbox = element.querySelector(".nami-checkbox");
+      if (checkbox !== null && row.highlighted && review.summary.highlighted_count > 1) {
+        checkbox.ariaLabel = "Select highlighted operations only";
+      }
       checkboxes.push(checkbox ?? null);
       checkbox?.addEventListener("change", (event) => {
         if (element.dataset.highlighted === "true") {

@@ -4873,14 +4873,16 @@ def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() 
         def get_plan_projection(self, request_id):
             self.projection_calls += 1
             root = PlanProjectionNode(
-                "node-" + "0" * 32, "Plan", "", 0, 0, None, 3, True,
+                "node-" + "0" * 32, "Plan", "", 0, 0, None, 4, True,
                 "folder", None, None, None, None, "selected", 2, 2, 2,
                 None, None, 0, "none",
             )
+            folder = replace(root, node_id="folder", display="Folder", position=1,
+                             depth=1, parent_index=0)
             leaves = tuple(
                 PlanProjectionNode(
-                    "node-" + str(index) * 32, name, name, index, 1, 0,
-                    index + 1, False, "operation", str(index) * 32, kind,
+                    "node-" + str(index) * 32, name, name, index + 1, 2, 1,
+                    index + 2, False, "operation", str(index) * 32, kind,
                     None, None, "selected", 1, 1, 1, None, None, 0, "none",
                     presentation_kind=kind,
                 )
@@ -4888,7 +4890,7 @@ def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() 
                     (("copy.txt", "copy"), ("delete.txt", "delete")), start=1
                 )
             )
-            nodes = (root, *leaves)
+            nodes = (root, folder, *leaves)
             projection = PlanProjection(
                 request_id, nodes, {node.node_id: node.position for node in nodes},
                 {node.operation_id: node.node_id for node in leaves},
@@ -5009,6 +5011,20 @@ def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() 
     assert service.mutations[-1] == ((), ("1" * 32,), "d" * 32)
     assert service.selected == {"1" * 32, "2" * 32}
     assert restored["highlighted_count"] == 1
+    together = registry.mutate_plan_highlight(
+        start.task_id, expected_view_revision=restored["view_revision"],
+        expected_highlight_revision=restored["highlight_revision"],
+        gesture="toggle", node_id="folder")
+    changed = registry.mutate_plan_highlighted_selection(
+        start.task_id, expected_view_revision=together["view_revision"],
+        expected_highlight_revision=together["highlight_revision"],
+        expected_selection_revision=together["selection_revision"],
+        selected=False, command_id="e" * 32)
+    assert service.mutations[-1] == (("1" * 32,), (), "e" * 32)
+    assert service.selected == {"2" * 32}, "the adapter does not add an unhighlighted descendant"
+    rows = registry.get_plan_window(start.task_id, expected_revision=changed["view_revision"],
+                                    offset=0, limit=256)["rows"]
+    assert next(row for row in rows if row["node_id"] == "folder")["selection"] == "mixed"
 
 
 def test_m1_7_execution_publication_failure_restores_released_plan_delivery() -> None:

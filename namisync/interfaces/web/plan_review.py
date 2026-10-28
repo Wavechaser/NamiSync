@@ -242,10 +242,9 @@ class PlanReviewState:
     ) -> tuple[str, ...] | None:
         """Resolve highlighted rows to the current selectable operation scope.
 
-        Highlighted containers contribute their complete descendant range, while
-        the active query and filters still decide which operation rows qualify.
-        The difference array makes overlapping highlighted ranges linear in the
-        projection size plus the number of highlighted rows.
+        Multiple highlighted rows contribute only their own operations. A single
+        highlighted container retains recursive scope. The active query and
+        filters still decide which operation rows qualify.
         """
 
         with self._lock:
@@ -256,8 +255,9 @@ class PlanReviewState:
             ):
                 return None
             nodes = self.projection.nodes
+            recursive = len(self.highlighted_node_ids) == 1
             ranges = (
-                (nodes[position].position, nodes[position].subtree_end)
+                (position, nodes[position].subtree_end if recursive else position + 1)
                 for node_id in self.highlighted_node_ids
                 if (position := self.projection.position_by_node_id.get(node_id)) is not None
             )

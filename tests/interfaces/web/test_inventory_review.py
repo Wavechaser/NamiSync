@@ -234,7 +234,7 @@ def test_inventory_highlight_ranges_cross_windows_and_keep_checkbox_membership_s
     assert _select(view, selected=False)["selected_file_count"] == 299
 
 
-def test_inventory_highlighted_overlapping_folders_match_files_even_when_collapsed():
+def test_inventory_multi_highlight_does_not_expand_folder_but_single_folder_does():
     view = _view()
     folder = view.projection.nodes[1]
     leaf = view.projection.node_for_id(view.projection.node_id_by_row_id["2"])
@@ -245,11 +245,24 @@ def test_inventory_highlighted_overlapping_folders_match_files_even_when_collaps
     assert view.summary()["highlighted_count"] == 2
     result = view.set_highlighted_selection(request_id=view.request_id, expected_revision=1,
         expected_highlight_revision=2, selected=True)
-    assert result["selected_file_count"] == 2 and view.selected_row_ids == frozenset({"1", "2"})
+    assert result["selected_file_count"] == 1 and view.selected_row_ids == frozenset({"2"})
+    assert view.window(expected_revision=view.view_revision, offset=0, limit=256)["rows"][0]["selection"] == "partial"
+    _select(view, node_id=folder.node_id)
+    assert view.selected_row_ids == frozenset({"1", "2"})
+    view.set_highlighted_selection(request_id=view.request_id, expected_revision=view.view_revision,
+        expected_highlight_revision=view.highlight_revision, selected=False)
+    assert view.selected_row_ids == frozenset({"1"}), "unchecking the range preserves other descendants"
+    view.mutate_highlight(expected_view_revision=view.view_revision,
+        expected_highlight_revision=view.highlight_revision, gesture="replace", node_id=folder.node_id)
+    for selected, expected in ((True, frozenset({"1", "2"})), (False, frozenset())):
+        view.set_highlighted_selection(request_id=view.request_id, expected_revision=view.view_revision,
+            expected_highlight_revision=view.highlight_revision, selected=selected)
+        assert view.selected_row_ids == expected
+        assert view.window(expected_revision=view.view_revision, offset=0, limit=256)["rows"][0]["selection"] == ("all" if selected else "none")
     replaced = view.replacement("f" * 32, view.projection, view.root_path, True, 2, 0,
         scan_scope=("location", None))
     assert replaced.highlighted_node_ids == view.highlighted_node_ids
-    assert replaced.highlight_focus_node_id == leaf.node_id
+    assert replaced.highlight_focus_node_id == folder.node_id
     assert replaced.highlight_anchor_node_id == folder.node_id
     assert replaced.selected_row_ids == view.selected_row_ids
 

@@ -847,6 +847,7 @@ def test_highlighted_selection_scope_rejects_stale_revisions_and_empty_is_noop()
         expected_highlight_revision=1,
         expected_selection_revision=0,
     ) is None
+
     assert state.highlighted_selection_scope(
         expected_view_revision=0,
         expected_highlight_revision=0,
@@ -857,6 +858,40 @@ def test_highlighted_selection_scope_rejects_stale_revisions_and_empty_is_noop()
         expected_highlight_revision=1,
         expected_selection_revision=1,
     ) is None
+
+
+@pytest.mark.parametrize("folder_operation", [False, True])
+def test_multi_highlight_contributes_only_direct_operations(folder_operation):
+    count = 300
+    aggregate = dict(selection="selected", selectable_operation_count=count + int(folder_operation),
+                     selected_operation_count=count + int(folder_operation), operation_count=count + int(folder_operation))
+    nodes = (
+        replace(_node("root", "Plan", 0, None, count + 2, container=True), **aggregate),
+        replace(_node("folder", "Folder", 1, 0, count + 2, container=True,
+              operation_id="f" * 32 if folder_operation else None,
+              kind="mkdir" if folder_operation else None), **aggregate),
+        *(_node(f"file-{i}", f"{i:03}.txt", i + 2, 1, i + 3,
+                operation_id=f"{i + 1:032x}", kind="copy") for i in range(count)),
+    )
+    operations = {node.operation_id: node.node_id for node in nodes if node.operation_id is not None}
+    projection = PlanProjection("a" * 32, nodes,
+        {node.node_id: node.position for node in nodes}, operations, frozenset(operations))
+    state = PlanReviewState("task-" + "1" * 32, "a" * 32, projection,
+                           0, "reviewing", "source", "target")
+    for gesture, node_id in (("replace", "folder"), ("toggle", "file-299")):
+        state.mutate_highlight(expected_view_revision=state.view_revision,
+            expected_highlight_revision=state.highlight_revision, gesture=gesture, node_id=node_id)
+    state.update(expected_revision=0, search_query="", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id="folder", collapsed=True)
+    scope = lambda: state.highlighted_selection_scope(expected_view_revision=state.view_revision,
+        expected_highlight_revision=state.highlight_revision, expected_selection_revision=0)
+    assert scope() == (("f" * 32,) if folder_operation else ()) + (f"{count:032x}",)
+    assert set(state.selection_scope(expected_view_revision=state.view_revision,
+        expected_selection_revision=0, node_id="folder")) == set(operations)
+    state.mutate_highlight(expected_view_revision=state.view_revision,
+        expected_highlight_revision=state.highlight_revision, gesture="replace", node_id="folder")
+    assert set(scope()) == set(operations), "a singly highlighted folder retains recursive scope"
 
 
 def test_plan_highlight_arrow_gestures_seed_and_preserve_range() -> None:

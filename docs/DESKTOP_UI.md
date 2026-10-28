@@ -1582,8 +1582,11 @@ Planned-detail loading or failure stays visible alongside execution-detail statu
 Row highlighting is distinct from execution selection. Pointer and keyboard
 gestures replace, toggle, extend, or add ranges in the complete server-owned
 ordered view; the visible 256-row window merely paints returned highlight flags.
-Checkboxes preserve a highlight and apply to its whole range when the checked
-row is inside that range. Search/filter changes clear highlighting, while
+Checkboxes preserve a highlight and apply only to direct row contributions when
+the checked row belongs to a multi-highlight set. A singleton highlighted folder
+or a folder outside that set retains recursive scope; folder checkbox states
+continue to aggregate descendants. Plan dependency and safety closure remains
+workflow-owned. Search/filter changes clear highlighting, while
 scrolling, sorting and disclosure changes do not. The bridge carries compact
 gesture endpoints and expected revisions rather than row or operation arrays.
 The status tier says neutral **Plan ready** for every built, unexecuted plan.
@@ -2092,7 +2095,9 @@ unloaded matches. Accessible labels disclose that scope, while selected and
 hidden-by-filter counts expose the complete retained selection used by starts.
 Warnings and folders with no matching files are inert. Ctrl/Shift clicks and
 Shift+arrows use Plan's server-owned highlight/range mechanics; clicking a
-highlighted checkbox applies to matching files in that range. Search/filter
+highlighted checkbox applies only to matching highlighted files in a multi-row
+set, without expanding highlighted folders. Singleton and outside-set folders
+remain recursive. Search/filter
 changes clear highlights; sort/collapse, checkbox changes and refreshed publications
 preserve surviving highlight identities. Removed rows are pruned; a filtered or
 collapsed focus does not display stale item details. A selection reply replaces authoritative summary/window

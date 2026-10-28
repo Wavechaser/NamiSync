@@ -50,13 +50,16 @@ consolidation do not execute, close or authorize DOC-2 history rewriting.
 ### Selection, navigation and detail refinement — 2026-10-28
 
 User approved this three-commit batch from `10b59e78` on `milestone1`.
+N1 shipped as `5d8e13de`; N2 as `791a6a03`; N3 is the selection commit
+containing this completed register. Evidence: `build/gui-controls-20261028/`,
+`build/gui-navigation-20261028/` and `build/gui-selection-20261028/`.
 Execute-task builders and fresh independent reviewers serialize shared owners.
 
 | ID | Outcome / finite owners | Verification and boundary | Status |
 | --- | --- | --- | --- |
 | N1 | Requested control labels, selected-scope Baseline/Rebaseline on the sync task's Inventory page, Restore context action and folder action names; green ordinary folder presence, concise details, muted labels and No change display. app/inventory_review/plan_review JS, app CSS, direct renderer/gallery/native consumers and DESKTOP_UI/PRESENTATION. | Focused probes, interface suite and affected installed gallery/Inventory/execution checks; preserve current-publication guards, confirmation, raw outcomes and native identity witnesses. One presentation commit. | Complete: 114 focused, 2,100 interface and final count/driver checks pass; all seven installed checks pass across retained five and corrected execution rerun; independent review. |
 | N2 | Keyboard highlight drives fresh details; same-task Inventory refresh retains surviving highlight and appropriate focus. Inventory state and app/tree/renderers as needed, direct state/drain/browser/native consumers; PRESENTATION/INTERFACES/DESKTOP_UI. | Keyboard and off-window navigation, partial/full replacement, removed identities, stale detail responses, navigation/session replacement and no focus stealing; owning suites and installed input witnesses. One navigation commit after N1. | Complete: 2,102 interface passes, focused delayed/off-window and driver checks, both installed Plan shells and corrected Inventory rerun pass; independent review. |
-| N3 | Both tables' multi-highlight checkbox actions use only highlighted rows' direct contributions; singleton/outside-range folder clicks remain recursive and tri-state aggregates remain authoritative. Plan/Inventory selection owners, direct projection/drain/renderer/native consumers and PRESENTATION/DESKTOP_UI. | Cross-folder/collapsed/unloaded ranges, singleton/outside-range gestures, authoritative mixed states, stale revision rejection and unchanged Plan dependency closure; owning suites and installed input witnesses. One selection commit after N2. | Pending. |
+| N3 | Both tables' multi-highlight checkbox actions use only highlighted rows' direct contributions; singleton/outside-range folder clicks remain recursive and tri-state aggregates remain authoritative. Plan/Inventory selection owners, direct projection/drain/renderer/native consumers and PRESENTATION/DESKTOP_UI. | Cross-folder/collapsed/unloaded ranges, singleton/outside-range gestures, authoritative mixed states, stale revision rejection and unchanged Plan dependency closure; owning suites and installed input witnesses. One selection commit after N2. | Complete: 6,249 ordinary passes and four existing skips, 12 import contracts, focused owner/renderer checks and all three installed journeys accounted for; independent review. |
 
 Baseline/Rebaseline on either page means ordinary selected-file scope. The
 infrastructure's linked activity capability does not authorize a separate

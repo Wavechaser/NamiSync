@@ -509,7 +509,9 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     checkbox.checked = row.selection === "all";
     checkbox.indeterminate = row.selection === "partial";
     checkbox.disabled = !row.selectable || selectionBlocked();
-    checkbox.ariaLabel = row.is_container
+    checkbox.ariaLabel = row.highlighted && current.summary.highlighted_count > 1
+      ? "Select highlighted files only"
+      : row.is_container
       ? `Select matching files in folder ${row.display}, including collapsed and off-window files`
       : `Select file ${row.display}`;
     for (const eventName of ["pointerdown", "click", "change"]) {
