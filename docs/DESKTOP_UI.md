@@ -1935,7 +1935,16 @@ they never infer a missing planned path. Action and reason lead the item facts;
 available operation outcomes and recording replace the leading planned claim.
 Distinct automatic verification and stored-evidence facts remain below. Paths
 and complete digests occupy full-width label/value rows; other metadata stays
-columned, with space between blocks. Source and target paths share the same
+columned at a 1:1.5 label/value ratio. Thin neutral dividers follow Microsoft's
+[Fluent divider guidance](https://fluent2.microsoft.design/components/web/react/core/divider/usage)
+and separate the title,
+action/reason/recording block, paths and remaining metadata. Inventory files group
+presence, path, checksum/observation/result/combined recording, attested facts,
+observed facts and observation/verification dates in that order. Conditional
+missing, acknowledged, reappeared, unsupported and invalidation facts remain
+visible when applicable. Folders put path before complete scope and observed
+metadata, omit observed size and file-verification facts, and show the scope
+advisory only alongside eligible Acknowledge all/Restore all actions. Source and target paths share the same
 formatting and joining infrastructure. Only reviewed source observations supply
 an operation source path, preserving its spelling independently of target casing
 or normalization; target-only, unsupported-without-source-evidence, structural

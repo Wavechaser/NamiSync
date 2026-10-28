@@ -479,10 +479,20 @@ assert.equal(checksumCell.textContent, real.recorded_checksum.slice(0, 8));
 assert.ok(checksumCell.title.includes(real.recorded_checksum));
 assert.match(text(detail), new RegExp(fixture.detail.detail.attestation.content.digest));
 assert.doesNotMatch(text(detail), /Provenance/);
+const detailLabels = () => detail.children.find(value => value.tagName === "DL").children
+  .filter(value => value.tagName === "DT").map(value => value.textContent);
+assert.deepEqual(detailLabels(), ["Path", "Checksum", "Observation time", "Attested size", "Attested modified",
+  "Attested identity", "Observed size", "Observed modified", "Observed identity", "Last observed", "Last verified"]);
+const detailGroups = detail.children.find(value => value.tagName === "DL").children;
+assert.deepEqual(detailGroups.filter(value => value.classList.contains("nami-detail-divider"))
+  .map(value => detailGroups[detailGroups.indexOf(value) + 1].textContent),
+["Checksum", "Attested size", "Observed size", "Last observed"]);
+assert.ok(detailGroups.filter(value => value.classList.contains("nami-detail-divider"))
+  .every(value => value.ariaHidden === "true"));
 assert.match(text(detail), /Observed modified 2262-04-11 23:47/);
 assert.match(text(detail), /Attested modified 2262-04-11 23:47/);
 assert.doesNotMatch(text(detail), /\bns\b|Algorithm|Observed kind|Current ledger evidence/);
-for (const key of ["Last observed", "Last verified", "Evidence observed"]) {
+for (const key of ["Last observed", "Last verified", "Observation time"]) {
   assert.ok(text(detail).includes(`${key} 2026-01-02 03:04`));
 }
 for (const key of ["Missing since", "Acknowledged", "Reappeared", "Verification invalidated"]) {
@@ -516,7 +526,7 @@ assert.equal(pathFact(), "Unavailable", "a nullable warning path never becomes a
 review.detail = { row: notice, state: "current", response: fixture.snapshots[notice.node_id] };
 pane.render(task);
 assert.match(text(detail), /read failed/);
-assert.doesNotMatch(text(detail), /Stored digest/);
+assert.doesNotMatch(text(detail), /Checksum/);
 rowElements().find((value) => value.dataset.nodeId === notice.node_id).click();
 ownedContext(rowElements().find(value => value.dataset.nodeId === notice.node_id), "contextmenu", {clientX:100, clientY:100});
 assert.equal(find(value => value.ariaLabel === "Item actions").children.some(value => value.dataset.action === "row-refresh"), false);
@@ -602,7 +612,7 @@ assert.ok(!walk(work.element).some((value) => value.ariaLabel === "Inventory rev
 const nextTask = {...task, taskId:"new-inventory-task", inventoryReview:{...fixture.views.default, detail:null}};
 work.render(nextTask);
 assert.equal(workToggle().ariaExpanded, "true", "Settings and a new task preserve disclosure");
-assert.doesNotMatch(text(walk(work.element).find(value => value.ariaLabel === "Inventory item details")), /Stored digest/,
+assert.doesNotMatch(text(walk(work.element).find(value => value.ariaLabel === "Inventory item details")), /Checksum/,
   "sharing disclosure never reuses another task's item facts");
 workToggle().click();
 work.render(task);
@@ -1293,8 +1303,16 @@ folderReview.detail = {row:folderDomain, state:"current", response:{detail:{...f
   observed:{...fixture.detail.detail.observed, kind:"directory"}}}};
 folderPane.render(folderTask);
 const folderDetails = walk(folderPane.element).find(value => value.ariaLabel === "Inventory item details");
-assert.match(text(folderDetails), /Complete folder scope.*Observed size.*Last observed/);
-assert.doesNotMatch(text(folderDetails), /verified|Verification|Stored digest|Attested|Algorithm/i);
+assert.match(text(folderDetails), /Folder scope.*Observed modified.*Last observed/);
+assert.doesNotMatch(text(folderDetails), /verified|Verification|Checksum|Attested|Algorithm|Observed size/i);
+assert.equal(folderDetails.children.at(-1).hidden, false, "folder advisory accompanies eligible actions");
+const savedFolderRollup = folderDomain.rollup;
+folderReview.detail.row = {...folderDomain, rollup:{...savedFolderRollup, missing:0, acknowledged:0}};
+folderPane.render(folderTask);
+assert.equal(folderDetails.children.at(-2).hidden, true);
+assert.equal(folderDetails.children.at(-1).hidden, true, "folder advisory hides with all actions");
+folderReview.detail.row = folderDomain;
+folderPane.render(folderTask);
 assert.equal(folderDetails.children.at(-2).children[0].textContent, "Acknowledge all");
 assert.equal(folderDetails.children.at(-2).children[1].textContent, "Restore all");
 folderPane.dispose();
@@ -1432,8 +1450,17 @@ for (const [mode, owner, result] of [["baseline", "Baseline", "baselined"],
 presentationReview.window = {...presentationReview.window, integrity:overlay};
 presentationPane.render(presentationTask);
 assert.match(text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details")),
-  /Verification result Verified.*Stored digest No baseline evidence/,
+  /Checksum No baseline evidence.*Verification result Verified/,
   "ordinary detail remains visible when ledger attestation is absent");
+const ordinaryDetailText = text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details"));
+assert.match(ordinaryDetailText, /Recording OK/);
+presentationReview.window = {...presentationReview.window,
+  integrity:{...overlay, items:[{...overlayItem, record_disposition:"applied"}]}};
+presentationReview.detail.response = {...presentationReview.detail.response, integrity:presentationReview.window.integrity};
+presentationPane.render(presentationTask);
+assert.match(text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details")), /Recording OK · applied/);
+presentationReview.detail.response = {...presentationReview.detail.response, integrity:overlay};
+assert.doesNotMatch(ordinaryDetailText, /Record disposition/);
 presentationReview.window = {...presentationReview.window,
   integrity:{...overlay, revision:2, complete:true, gap:false, items:[]}};
 presentationTask.sessionState = "completed";

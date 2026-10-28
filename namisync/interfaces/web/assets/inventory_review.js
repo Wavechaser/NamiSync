@@ -687,18 +687,24 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     const term = element("dt", "", key);
     const description = element("dd");
     if (fullWidth) term.className = description.className = "nami-detail-full";
-    if (block) {
-      term.classList.add("nami-detail-block");
-      if (!fullWidth) description.classList.add("nami-detail-block");
+    if (block && detailBody.children.length > 0) {
+      const divider = element("dd", "nami-detail-divider");
+      divider.ariaHidden = "true";
+      detailBody.append(divider);
     }
     (filesystem ? renderFilesystemText : renderText)(description, value ?? "Unavailable");
     detailBody.append(term, description);
   }
-  function subjectDetails(prefix, subject) {
-    appendDetail(`${prefix} size`, subject === null ? null : `${bytes(subject.size)} (${subject.size} bytes)`, { block: true });
-    appendDetail(`${prefix} modified`, subject === null ? null : modifiedTime(subject.mtime_ns));
+  function subjectDetails(prefix, subject, folder = false) {
+    if (!folder) appendDetail(`${prefix} size`, subject === null ? null : `${bytes(subject.size)} (${subject.size} bytes)`, { block: true });
+    appendDetail(`${prefix} modified`, subject === null ? null : modifiedTime(subject.mtime_ns), { block: folder });
     appendDetail(`${prefix} identity`, subject?.file_identity === null || subject === null ? null
       : `${subject.file_identity.volume_serial}:${subject.file_identity.file_index}`);
+  }
+  function appendFolderScope(row) {
+    appendDetail("Folder scope", rollupText(row.rollup)
+      + (row.rollup.missing > 0 ? ` · ${row.rollup.missing} missing` : "")
+      + (row.rollup.acknowledged > 0 ? ` · ${row.rollup.acknowledged} acknowledged` : ""), { block: true });
   }
   function renderDetails() {
     detailBody.replaceChildren();
@@ -725,15 +731,11 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       }
       return;
     }
-    if (row.is_container) {
-      appendDetail("Complete folder scope", rollupText(row.rollup));
-      if (row.rollup.missing > 0) appendDetail("Missing items", String(row.rollup.missing));
-      if (row.rollup.acknowledged > 0) appendDetail("Acknowledged items", String(row.rollup.acknowledged));
-    }
     if (row.row_id === null) {
       if (row.is_container && selected.state === "current") {
         appendDetail("Path at scan time", formatFilesystemPath(current.summary.root_path, selected.response.snapshot.path), { filesystem: true });
       }
+      if (row.is_container) appendFolderScope(row);
       return;
     }
     if (selected.state !== "current") return;
@@ -749,31 +751,30 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       renderText(stateLabel, `Present · ${stateLabel.textContent}`);
     }
     appendDetail("Path", formatFilesystemPath(current.summary.root_path, value.row.path), { filesystem: true });
-    subjectDetails("Observed", value.observed);
-    appendDetail("Last observed", formatLocalDateTime(value.row.last_observed_at));
+    if (row.is_container) appendFolderScope(row);
+    else {
+      appendDetail("Checksum", value.attestation?.content.digest ?? "No baseline evidence", { fullWidth: true, block: true });
+      if (value.attestation !== null) appendDetail("Observation time", formatLocalDateTime(value.attestation.content.observed_at));
+      if (ordinaryItem !== null) {
+        appendDetail(`${isCurrentIntegrity(ordinary) ? "" : "Previous "}${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result`, integrityLabel(ordinaryItem.result));
+        if (ordinaryItem.reason !== null) appendDetail("Result reason", ordinaryItem.reason);
+        appendDetail("Recording", `${ordinaryItem.recording === "ok" ? "OK" : ordinaryItem.recording}${ordinaryItem.record_disposition === null ? "" : ` · ${ordinaryItem.record_disposition}`}`);
+        if (ordinaryItem.detail_omitted_count > 0) appendDetail("Omitted result details", String(ordinaryItem.detail_omitted_count));
+      }
+      if (value.attestation !== null) subjectDetails("Attested", value.attestation.subject);
+    }
+    subjectDetails("Observed", value.observed, row.is_container);
+    appendDetail("Last observed", formatLocalDateTime(value.row.last_observed_at), { block: !row.is_container });
+    if (!row.is_container && value.row.last_verified_at !== null) appendDetail("Last verified", formatLocalDateTime(value.row.last_verified_at));
     for (const [key, date] of [["Missing since", value.row.missing_since], ["Acknowledged", value.row.acknowledged_at],
       ["Reappeared", value.row.reappeared_at]]) {
       if (date !== null) appendDetail(key, formatLocalDateTime(date));
     }
     if (value.row.unsupported_reason !== null) appendDetail("Unsupported reason", value.row.unsupported_reason);
-    if (row.is_container) return;
-    if (value.row.last_verified_at !== null) appendDetail("Last verified", formatLocalDateTime(value.row.last_verified_at), { block: true });
-    if (value.row.verification_invalidated_at !== null) appendDetail("Verification invalidated", formatLocalDateTime(value.row.verification_invalidated_at));
-    if (value.row.verification_invalidated_reason !== null) appendDetail("Invalidation reason", value.row.verification_invalidated_reason);
-    if (ordinaryItem !== null) {
-      appendDetail(`${isCurrentIntegrity(ordinary) ? "" : "Previous "}${({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[ordinary.mode]} result`, integrityLabel(ordinaryItem.result));
-      if (ordinaryItem.reason !== null) appendDetail("Result reason", ordinaryItem.reason);
-      appendDetail("Recording", ordinaryItem.recording);
-      if (ordinaryItem.record_disposition !== null) appendDetail("Record disposition", ordinaryItem.record_disposition);
-      if (ordinaryItem.detail_omitted_count > 0) appendDetail("Omitted result details", String(ordinaryItem.detail_omitted_count));
+    if (!row.is_container) {
+      if (value.row.verification_invalidated_at !== null) appendDetail("Verification invalidated", formatLocalDateTime(value.row.verification_invalidated_at));
+      if (value.row.verification_invalidated_reason !== null) appendDetail("Invalidation reason", value.row.verification_invalidated_reason);
     }
-    if (value.attestation === null) {
-      appendDetail("Stored digest", "No baseline evidence", { fullWidth: true, block: true });
-      return;
-    }
-    appendDetail("Stored digest", value.attestation.content.digest, { fullWidth: true, block: true });
-    appendDetail("Evidence observed", formatLocalDateTime(value.attestation.content.observed_at));
-    subjectDetails("Attested", value.attestation.subject);
   }
 
   function dispose() {
@@ -951,6 +952,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       baselineMenu.close();
       updateSelectionControls();
       detailActions.hidden = true;
+      scopeHint.hidden = true;
       return;
     }
     toolbar.hidden = false;
@@ -981,7 +983,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       : selected?.presence === "missing" && !selected.acknowledged ? 1 : 0;
     const acknowledgedCount = selected?.is_container ? selected.rollup.acknowledged
       : selected?.presence === "missing" && selected.acknowledged ? 1 : 0;
-    detailActions.hidden = !domain;
+    detailActions.hidden = !domain || (missingCount === 0 && acknowledgedCount === 0);
     renderText(acknowledge, selected?.is_container ? "Acknowledge all" : "Acknowledge");
     renderText(restore, selected?.is_container ? "Restore all" : "Restore");
     acknowledge.hidden = !domain || missingCount === 0;
@@ -991,7 +993,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     renderText(scopeHint, domain && selected.is_container
       ? "Includes all missing items below this folder, even hidden items. Restore changes visibility only."
       : domain && acknowledgedCount > 0 ? "Restore visibility does not restore the missing file." : "");
-    scopeHint.hidden = scopeHint.textContent === "";
+    scopeHint.hidden = detailActions.hidden || scopeHint.textContent === "";
     const counts = Object.fromEntries(FACETS.map(([key]) => [key,
       key === "notice" ? review.summary.warning_count
         : key === "recall" ? review.summary.recall_item_count : review.summary.rollup[key]]));

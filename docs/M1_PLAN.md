@@ -47,6 +47,26 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Item detail grouping — 2026-10-29
+
+Rearrange Plan and Inventory item details into the user's divider-separated
+blocks, using 1:1.5 metadata columns. Plan puts operation/reason/recording before
+paths and metadata; Inventory groups presence, path, checksum/result/recording,
+attested facts, observed facts and timestamps. Folder details omit observed size
+and show their scope advisory only alongside eligible acknowledge/restore actions.
+One atomic presentation commit owns the two renderers, shared detail CSS, direct
+browser/gallery/native consumers and DESKTOP_UI. Preserve evidence currentness,
+conditional diagnostics, action scope, copyability and all bridge/domain contracts.
+Gate: focused detail probes, interfaces department, affected installed galleries
+and Plan/Inventory/execution checks, visual inspection and independent review.
+Status: complete in the detail-grouping commit from `2cf04ad2`; 2,105 interface
+tests, 64 focused/static checks and all nine installed cases pass (eight final-run
+passes plus the unchanged default Plan-shell rerun). Independent review found no
+remaining issue. Evidence: `build/gui-detail-groups-20261029/`, including retained
+sink-guard failure/correction and the transient Plan-again stage failure.
+Recurrence/mandatory stops remain binding;
+no lifecycle, selection, verifier, persistence or public-contract changes.
+
 ### Navigation context and compact controls — 2026-10-28
 
 User approved three atomic outcomes from `b8a2aabb` on `milestone1`.

@@ -221,8 +221,12 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
-#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-28)
+#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-29)
 
+- Group item details with divider lines and 1:1.5 metadata columns. Put Plan
+  actions before paths and metadata; group Inventory checksum/results, attested
+  facts, observed facts and dates. Combine recording/disposition, omit folder
+  size and show the folder advisory only with its available actions.
 - Replace the standalone counter with a matching/total badge inside Filter,
   restoring the prior Search layout. Reuse Plan All-item counts including mkdir;
   Inventory All excludes acknowledged rows while the denominator includes them.

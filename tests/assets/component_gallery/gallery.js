@@ -1866,8 +1866,11 @@ window.addEventListener("unhandledrejection", (event) => {
     const trashContentComplete = !expanded || !populated || (
       trashRegion.textContent === `Trash location: ${longTrashLocation}`
     );
+    const detailColumns = getComputedStyle(detailBody).gridTemplateColumns.split(" ").map(parseFloat);
     const detailContentComplete = !expanded || !populated || (
-      detailRegion.textContent.includes(longDiagnostic)
+      Math.abs(detailColumns[1] / detailColumns[0] - 1.5) < 0.02
+      && detailBody.querySelector(".nami-detail-divider") !== null
+      && detailRegion.textContent.includes(longDiagnostic)
       && ["Source path", "Target path", "Evidence digest"].every((label) => {
         const term = [...detailBody.querySelectorAll("dt")].find(value => value.textContent === label);
         const value = term?.nextElementSibling;
@@ -2389,7 +2392,7 @@ window.addEventListener("unhandledrejection", (event) => {
     const detailTerm = (label) => [...item.querySelectorAll("dt")].find(term => term.textContent === label);
     let detailSpecimen = detailTerm("Path").nextElementSibling;
     const displayedPath = review.detail.response.detail.row.path;
-    const digestValue = detailTerm("Stored digest").nextElementSibling;
+    const digestValue = detailTerm("Checksum").nextElementSibling;
     if (![detailSpecimen, digestValue].every(value => getComputedStyle(value).gridColumn === "1 / -1"
       && value.scrollWidth <= value.clientWidth + 1)
         || !detailSpecimen.textContent.includes("LongCase\\original-directory")
@@ -2397,6 +2400,20 @@ window.addEventListener("unhandledrejection", (event) => {
         || getComputedStyle(item.querySelector("dl")).fontSize !== getComputedStyle(item.querySelector(".nami-plan-review__detail-status")).fontSize) {
       throw new Error("Inventory mixed details lost complete paths, hashes or shared body typography");
     }
+    const columns = getComputedStyle(item.querySelector("dl")).gridTemplateColumns.split(" ").map(parseFloat);
+    if (Math.abs(columns[1] / columns[0] - 1.5) > 0.02
+        || !item.querySelector(".nami-detail-divider")) {
+      throw new Error("Inventory detail groups lost divider or 1:1.5 columns");
+    }
+    const fileDetail = review.detail;
+    review.detail = {row:{...rows[0], is_container:true, rollup:{...rows[0].rollup, missing:0, acknowledged:0}},
+      state:"current", response:{detail:{...specimen.detail, row:{...specimen.detail.row, presence:"present"}}}};
+    panel.render(inventoryTask);
+    if (detailTerm("Observed size") || detailTerm("Checksum") || !detailTerm("Folder scope")
+        || !item.querySelector(".nami-inventory-review__actions").hidden
+        || !item.lastElementChild.hidden) throw new Error("Folder details expose file facts or orphaned advisory");
+    review.detail = fileDetail;
+    panel.render(inventoryTask);
     for (const state of ["missing", "unsupported", "mismatched", "error"]) {
       review.detail.response.detail.row = {...specimen.detail.row,
         presence:state === "missing" ? "missing" : "present", verification_state:state};

@@ -1,41 +1,33 @@
-# Latest session — Revised Filter button counter, 2026-10-28
+# Latest session — Item detail grouping, 2026-10-29
 
-User rejected the standalone counter/layout containment in269736f6. Exact revert
-2a8d1843 restored the b185f48b tree after independent review. The revised counter
-commit containing this handoff implements the approved replacement on milestone1.
-
-## Delivered
-
-Filter displays matching/total items inside its existing button. No standalone
-caption or CSS/containment change. Existing All-neutral/active-category accent,
-menu interaction and Search layout remain. Plan reuses filter_counts.all,
-including mkdir and notices while excluding ordinary structural/prior context.
-Inventory All/default excludes acknowledged rows; denominator includes them;
-explicit acknowledged views can match them. The dropdown now displays All count.
-
-One exact matched_item_count field per summary is accumulated in the existing
-scope pass. Selection prefixes are unchanged. Validators, producers and fixtures
-migrated. No synthetic retained-count machinery restored. The previous icon,
-square-control and leading-navigation-context commits remain intact.
+One presentation outcome on milestone1 from 2cf04ad2. Plan and Inventory item
+details now use divider-separated blocks and 1:1.5 metadata columns. Plan keeps
+action/reason/recording before full paths and metadata. Inventory files group
+presence, path, checksum/result/combined recording, attested facts, observed
+facts and dates. Folders omit observed size; the scope advisory is visible only
+alongside eligible acknowledge/restore actions. Conditional exceptional evidence,
+current/previous outcome identity, action scope and copyability remain intact.
+No bridge, domain, persistence, selection or lifecycle changes.
 
 ## Verification
 
-6,250 ordinary tests passed, four existing skips; all12 import contracts pass.
-Focused116, count-owner81 and migrated driver33 pass. Initial native run passed
-both Plan and execution sizes; four gallery checks and Inventory stopped on old
-category-badge/hidden-All assertions. Product source was unchanged while the
-finite gallery/native/report consumers were migrated. Final native-r2 passes
-all five affected checks. Together all nine installed gates pass.
+Evidence lives in build/gui-detail-groups-20261029/. Focused rendering probes
+pass; gallery fixtures now assert the column ratio and divider presence, complete
+paths/checksums and folder fact/advisory gating. Initial interfaces run passed
+2,104 tests with one failure: new divider setAttribute calls violated the existing
+packaged-asset sink guard. Replaced both with the established ariaHidden property;
+the guard/allowlist remains unchanged. Corrected focused/static run passes 64.
+An earlier sandboxed focused wheel build hit pip temporary-file permission
+errors; the escalated rerun passed. All failed receipts are retained.
 
-Parent and independent reviewer viewed the actual minimum-window capture:
-Filter3/21 inside the accented button, Search beside it on the same line.
-NeutralAll21/21 and Inventory304/304→303/304→304/304 interactions retain styling,
-exact identity, counts and positive All-dropdown agreement checks.
+Initial nine installed checks passed. Final interfaces-r2 passes 2,105 tests.
+Native-r2 passes eight cases; default Plan-shell stopped at the Plan Again stage
+and passed unchanged in native-r3. The retained failure shows a fresh task row,
+but does not establish the exact cause of the stage timeout. All nine final
+installed cases are accounted for without relaxing assertions. Independent
+source and correction review found no remaining issue. Gallery geometry checks
+cover full-width paths/hashes, 1:1.5 columns and dividers in all display modes;
+native captures were inspected with their existing transparent-surface limits.
 
-Evidence: build/gui-filter-button-20261028/ (red, focused, counts, ordinary,
-native and native-r2 plus driver-r3). Retained initial failures document stale
-fixtures/assertions; they were not product-effect failures. Native roots under
-C:/Users/Spectrum/AppData/Local/Temp/namisync-filterbutton28-native[-r2].
-
-No pending batch work, recovery branch, worktree, push or PR. Recents,
-queued-input coordinator, M1-12, release and DOC-2 remain inactive.
+No new worktree, recovery branch, push or PR. Inventory recents, queued-input
+coordinator, M1-12, release and DOC-2 remain inactive.

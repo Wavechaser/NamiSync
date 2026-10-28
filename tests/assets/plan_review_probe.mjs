@@ -1448,6 +1448,13 @@ executionReviewState.executionDetail = {
 };
 executionPanel.render(executionTask);
 const detailBody = findByClass(executionPanel.element, "nami-plan-review__detail-body");
+const planLabels = detailBody.children.filter(value => value.tagName === "DT").map(value => value.textContent);
+assert.ok(planLabels.indexOf("Operation recording") < planLabels.indexOf("Target path"));
+assert.ok(planLabels.indexOf("Target path") < planLabels.indexOf("Selection"));
+assert.ok(planLabels.indexOf("Selection") < planLabels.indexOf("Auto verification"));
+assert.ok(planLabels.indexOf("Auto verification") < planLabels.indexOf("Stored evidence"));
+assert.ok(detailBody.children.filter(value => value.classList.contains("nami-detail-divider"))
+  .every(value => value.ariaHidden === "true"));
 assert.equal(detailFact(executionPanel.element, "Execution path"), null);
 for (const [label, path] of [["Verification path", `VerificationCase\\${hostile}`],
   ["Backup path", ".synctrash\\backup.txt"], ["Mutation destination", "Moved\\Destination.txt"],

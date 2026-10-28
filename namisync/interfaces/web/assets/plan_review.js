@@ -775,9 +775,11 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     if (fullWidth) {
       term.className = definition.className = "nami-detail-full";
     }
-    if (block) {
-      term.classList.add("nami-detail-block");
-      if (!fullWidth) definition.classList.add("nami-detail-block");
+    if (block && detailBody.children.length > 0) {
+      const divider = document.createElement("dd");
+      divider.className = "nami-detail-divider";
+      divider.ariaHidden = "true";
+      detailBody.append(divider);
     }
     if (filesystem) renderFilesystemText(definition, value);
     else renderText(definition, value);
@@ -831,13 +833,13 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       appendDetailFact("Notice", row.notice);
     }
     if (row.size !== null) appendDetailFact("Size", formatByteCount(row.size), { block: true });
-    if (row.mtime_ns !== null) appendDetailFact("Modified", modifiedText(row.mtime_ns));
-    if (row.dependency_count > 0) appendDetailFact("Dependencies", String(row.dependency_count));
+    if (row.mtime_ns !== null) appendDetailFact("Modified", modifiedText(row.mtime_ns), { block: row.size === null });
+    if (row.dependency_count > 0) appendDetailFact("Dependencies", String(row.dependency_count), { block: row.size === null && row.mtime_ns === null });
     if (row.is_container) {
-      appendDetailFact("Operations", String(row.operation_count));
+      appendDetailFact("Operations", String(row.operation_count), { block: row.size === null && row.mtime_ns === null && row.dependency_count === 0 });
       appendDetailFact("Selection", `${row.selected_operation_count} of ${row.selectable_operation_count} selected`);
     } else if (row.selection === "selected" || row.selection === "unselected") {
-      appendDetailFact("Selection", row.selection === "selected" ? "Selected" : "Not selected");
+      appendDetailFact("Selection", row.selection === "selected" ? "Selected" : "Not selected", { block: row.size === null && row.mtime_ns === null && row.dependency_count === 0 });
     }
     if (row.risk !== "none") appendDetailFact("Risk", executionLabel(row.risk));
     if (row.operation_id === null || current.window.execution.session_id === null) {
@@ -872,14 +874,14 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     }
     const automatic = response.automatic_verification;
     if (automatic !== null) {
-      appendDetailFact("Automatic verification", `${executionLabel(automatic.result)}${automatic.reason === null ? "" : ` · ${executionLabel(automatic.reason)}`}`, { block: true });
+      appendDetailFact("Auto verification", `${executionLabel(automatic.result)}${automatic.reason === null ? "" : ` · ${executionLabel(automatic.reason)}`}`);
       appendDetailFact("Verification path", formatFilesystemPath(current.summary.target_path, automatic.path), { filesystem: true });
       if (automatic.detail !== null) appendDetailFact("Verification detail", automatic.detail);
       appendDetailFact("Verification recording", executionLabel(automatic.recording));
       if (automatic.detail_omitted_count > 0) appendDetailFact("Verification details omitted", String(automatic.detail_omitted_count));
-    } else appendDetailFact("Automatic verification", "Unknown");
+    } else appendDetailFact("Auto verification", "Unknown");
     const evidence = response.evidence;
-    appendDetailFact("Stored evidence", evidence === null ? "Unknown" : executionLabel(evidence.state), { block: true });
+    appendDetailFact("Stored evidence", evidence === null ? "Unknown" : executionLabel(evidence.state));
     if (evidence?.content !== null && evidence?.content !== undefined) {
       appendDetailFact("Evidence digest", evidence.content.digest, { fullWidth: true });
       appendDetailFact("Evidence size", formatByteCount(evidence.content.size));
