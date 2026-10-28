@@ -310,6 +310,7 @@ const summary = {
   irreversible_update_count: 1,
   required_bytes: "4096",
   visible_row_count: 1000,
+  matching_row_count: 1000, total_row_count: 1000,
   search_query: "",
   filters: [],
   filter_counts: { all: 180, copy: 100, move: 10, update: 5, trash: 2,
@@ -645,6 +646,8 @@ assert.deepEqual(calls.at(-1), ["onViewChange", review,
   { sortColumn: "path", sortDirection: "ascending" }]);
 
 const filterTrigger = findAction(panel.element, "filter-menu");
+const shownCounter = findByClass(panel.element, "nami-filter-menu__shown-count");
+assert.equal(shownCounter.textContent, "1000/1000 items shown");
 const filterPopup = findByClass(panel.element, "nami-filter-menu__popup");
 const filterItem = (key) => findByDataset(filterPopup, "filter", key);
 const allFilter = filterItem("all");
@@ -686,8 +689,10 @@ assert.deepEqual(calls.at(-1)[2].filters, new Set(review.summary.filters.filter(
 allFilter.dispatch("click");
 assert.deepEqual(calls.at(-1)[2].filters, new Set());
 assert.equal(filterPopup.hidden, false, "All also keeps the menu open");
-review.summary = { ...summary, search_query: "literal search", filters: [] };
+review.summary = { ...summary, search_query: "literal search", filters: [],
+  visible_row_count: 4, matching_row_count: 192, total_row_count: 256 };
 panel.render(task);
+assert.equal(shownCounter.textContent, "192/256 items shown", "folded/offscreen matches still count");
 assert.equal(filterTrigger.children[2].textContent, "0", "search never counts as a category");
 filterPopup.dispatch("keydown", { key: "End" });
 assertSameNode(document.activeElement, filterItem("recall"));

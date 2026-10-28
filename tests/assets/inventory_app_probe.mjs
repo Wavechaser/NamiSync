@@ -1537,6 +1537,7 @@ let anchorIndex = 320, restoredTotal = 600, heldRestore = null;
 globalThis.inventoryHarness.openInventoryView = () => Promise.resolve({
   ...fixture.views.maximum.summary, task_id:restoreTask.taskId,
   request_id:restoreTask.requestId, visible_row_count:restoredTotal,
+  matching_row_count:restoredTotal, total_row_count:restoredTotal,
 });
 globalThis.inventoryHarness.getInventoryWindow = (taskId, revision, offset, limit, anchor) => {
   if (taskId === restoreTask.taskId) viewportReads.push({offset, limit, anchor});

@@ -210,6 +210,8 @@ class InventoryReviewState:
             "missing_count": self.missing_count, "warning_count": self.projection.warning_count,
             "rollup": inventory_rollup_wire(self.projection.nodes[0].rollup),
             "visible_row_count": max(0, len(self._view.visible.visible_positions) - 1),
+            "matching_row_count": max(0, self._view.visible.retained_node_count - 1),
+            "total_row_count": len(self.projection.nodes) - 1,
             "search_query": self.search_query, "filters": sorted(self.filters),
             "sort_column": self.sort_column.value, "sort_direction": self.sort_direction.value,
             "collapsed_count": len(self.collapsed_node_ids),

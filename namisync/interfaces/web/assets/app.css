@@ -522,6 +522,7 @@ body {
 
 .nami-plan-review__summary,
 .nami-plan-review__table-card {
+  container-type: inline-size;
   padding-block-start: var(--space-5);
 }
 

@@ -224,7 +224,8 @@ const revealSummary = {
   requires_destructive_confirmation: false, destructive_operation_count: 0,
   destructive_operation_counts: { update: 0, move_update: 0, trash: 0, delete: 0 },
   irreversible_operation_count: 0, irreversible_update_count: 0, required_bytes: "0",
-  visible_row_count: 600, search_query: "", filters: [], sort_column: "path", sort_direction: "ascending",
+  visible_row_count: 600, matching_row_count: 600, total_row_count: 600,
+  search_query: "", filters: [], sort_column: "path", sort_direction: "ascending",
   collapsed_count: 0, execution,
 };
 responseResult = { summary: revealSummary, node_id: groupRow.move_peer_id, index: 400 };
@@ -232,6 +233,17 @@ const revealStart = requests.length;
 const revealed = await bridge.revealPlanMove(taskId, 0, groupRow.node_id);
 if (revealed.index !== 400 || requests.length !== revealStart + 1
     || requests.at(-1).command !== "reveal_plan_move") throw new Error("move reveal did not use one compact command");
+for (const counts of [
+  {matching_row_count: undefined}, {total_row_count: undefined},
+  {matching_row_count: -1}, {total_row_count: -1},
+  {matching_row_count: 599}, {total_row_count: 599},
+]) {
+  responseResult = {summary: {...revealSummary, ...counts}, node_id: groupRow.move_peer_id, index: 400};
+  await bridge.revealPlanMove(taskId, 0, groupRow.node_id).then(() => {
+    throw new Error("invalid synthetic row counts accepted");
+  }, () => {});
+}
+responseResult = {summary: revealSummary, node_id: groupRow.move_peer_id, index: 400};
 responseResult = {...responseResult, summary: {...revealSummary,
   filter_counts: {...revealSummary.filter_counts, recall: 2},
   recall: {...revealSummary.recall, source: {file_count: 1, size: "9007199254740993", size_overflow: false, size_partial: false}}}};

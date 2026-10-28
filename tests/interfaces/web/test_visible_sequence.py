@@ -156,6 +156,7 @@ def test_br_g_34_empty_workflow_projection_keeps_its_single_root() -> None:
     assert _ids(sequence) == (tree.root_node_id,)
     assert tree.nodes[0].display == "All items"
     assert tuple(sequence.retained_direct_child_counts) == (0,)
+    assert sequence.retained_node_count == 1
     assert window_visible_sequence(
         sequence,
         offset=0,
@@ -603,6 +604,7 @@ def test_br_g_34_filter_retention_precedes_collapse_and_counting() -> None:
 
     assert _ids(sequence) == ("root", "alpha", "beta", "literal")
     assert sequence.filtered_item_count == 5
+    assert sequence.retained_node_count == 5
     assert sequence.visible_index_by_source_position[2] == len(sequence.nodes)
     assert sequence.source_position_by_node_id["street"] == 2
 
@@ -619,8 +621,10 @@ def test_br_g_34_sparse_filter_and_search_are_conjunctive() -> None:
     assert no_filter.filtered_item_count is None
     assert _ids(empty_filter) == ()
     assert empty_filter.filtered_item_count == 0
+    assert empty_filter.retained_node_count == 0
     assert _ids(filtered) == ("root", "alpha", "street")
     assert filtered.filtered_item_count == 2
+    assert filtered.retained_node_count == 3
 
 
 def test_br_g_34_sparse_derivation_matches_independent_reference() -> None:

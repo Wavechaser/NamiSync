@@ -269,6 +269,14 @@ body {
 .nami-filter-menu {
   position: relative;
   display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.nami-filter-menu__shown-count {
+  color: var(--color-neutral-foreground-secondary);
+  font-size: var(--font-size-caption);
+  white-space: nowrap;
 }
 
 .nami-filter-menu__trigger {

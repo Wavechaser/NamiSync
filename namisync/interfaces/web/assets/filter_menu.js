@@ -21,7 +21,9 @@ export function createFilterMenu(categories, onChange) {
   menu.setAttribute("role", "menu");
   menu.ariaLabel = "Filter categories";
   menu.hidden = true;
-  root.append(trigger, menu);
+  const shownCount = document.createElement("span");
+  shownCount.className = "nami-filter-menu__shown-count";
+  root.append(trigger, shownCount, menu);
   const items = new Map();
   let selected = new Set();
   let disabled = true;
@@ -109,13 +111,16 @@ export function createFilterMenu(categories, onChange) {
     }
   });
 
-  function render(filters, counts, pending) {
+  function render(filters, counts, pending, summary = null) {
     selected = new Set(filters);
     disabled = pending;
     trigger.ariaDisabled = String(disabled);
     trigger.dataset.active = String(selected.size > 0);
     trigger.ariaLabel = `Filter ${selected.size} active categories`;
     renderText(activeCount, String(selected.size));
+    shownCount.hidden = summary === null;
+    renderText(shownCount, summary === null ? ""
+      : `${summary.matching_row_count}/${summary.total_row_count} items shown`);
     for (const [key, item] of items) {
       item.ariaChecked = String(key === "all" ? selected.size === 0 : selected.has(key));
       item.ariaDisabled = String(disabled);

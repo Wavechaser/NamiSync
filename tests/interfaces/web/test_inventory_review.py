@@ -46,6 +46,26 @@ def _select(view, node_id=None, selected=True, **changes):
     return view.set_selection(**values)
 
 
+def test_filter_counter_includes_folded_matches_and_structural_ancestors():
+    view = _view()
+    total = len(view.projection.nodes) - 1
+    _update(view, search_query="b.txt")
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    assert view.summary()["matching_row_count"] == 2
+    assert view.summary()["total_row_count"] == total
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    assert view.summary()["visible_row_count"] == 1
+    assert view.summary()["matching_row_count"] == 2
+    assert view.summary()["total_row_count"] == total
+    _update(view, search_query="no-match")
+    assert view.summary()["matching_row_count"] == 0
+    assert view.summary()["total_row_count"] == total
+    empty = view.replacement("f" * 32, build_inventory_projection(1, ()),
+                             view.root_path, True, 0, 0, scan_scope=("location", None))
+    assert empty.summary()["matching_row_count"] == 0
+    assert empty.summary()["total_row_count"] == 0
+
+
 def test_recall_filter_uses_current_positive_items_and_scan_totals_stay_fixed():
     from namisync.core.models import MetadataSnapshot
     from namisync.workflows import RecallSummary

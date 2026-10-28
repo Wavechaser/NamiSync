@@ -1296,7 +1296,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       down.hidden = direction !== "descending";
       sortButton.disabled = review.pending !== null;
     }
-    filterMenu.render(review.summary.filters, review.summary.filter_counts, review.pending !== null);
+    filterMenu.render(review.summary.filters, review.summary.filter_counts, review.pending !== null, review.summary);
     if (scopeCheckbox instanceof HTMLInputElement) {
       const scopeSelectable = review.summary.scope_selectable_operation_count;
       const scopeSelected = review.summary.scope_selected_operation_count;

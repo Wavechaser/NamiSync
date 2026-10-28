@@ -468,6 +468,8 @@ def test_plan_review_state_derives_revisioned_filters_windows_and_anchor() -> No
         r"D:\target",
     )
     assert state.summary()["visible_row_count"] == 3
+    assert state.summary()["matching_row_count"] == 3
+    assert state.summary()["total_row_count"] == 3
     assert state.summary()["preflight_ready"] is True
     assert state.summary()["preflight_refusal_count"] == 0
     assert state.summary()["warning_count"] == 0
@@ -1361,6 +1363,7 @@ def test_plan_review_selection_rebinds_cached_orders_with_one_projection_clone(m
     assert state.current_order.projection is state.projection
     assert state.canonical_order.projection is state.projection
     assert state.current_sequence.nodes is state.projection.nodes
+    assert state.summary()["matching_row_count"] == state.summary()["total_row_count"] == 3
 
 
 def test_plan_review_selection_transform_failure_preserves_complete_view(monkeypatch) -> None:

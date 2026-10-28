@@ -596,6 +596,12 @@ zero counts. Selecting a category adds/removes only its canonical key; there are
 no aggregate group toggles. The trigger always shows the number of selected
 canonical categories, including zero, excluding All and search. It is accented
 only with active categories. Plan's All item retains the complete-plan counter.
+Beside the trigger, both pages show matching/total synthetic items. Matching
+counts the complete search/filter-retained tree, including structural ancestors,
+folded descendants and offscreen rows; total counts the full projection. Both
+exclude the internal root. Collapse and viewport changes do not change these
+counts. The existing view derivation caches its retained population once;
+summary reads do not traverse the tree again.
 Inventory reuses the menu with its existing ten facets and authoritative
 rollup/notice counts; those categories overlap and are never summed into an All
 counter. Inventory's All clears its category settings and retains the default
