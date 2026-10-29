@@ -298,7 +298,7 @@ classification; adapters only forward that result. Current-state evidence
 cannot silently become execution evidence. Later task failure does not revoke
 an independently committed item receipt.
 
-Deferred Verify copied uses the ordinary selected-path scan and integrity
+Verify copied uses the ordinary selected-path scan and integrity
 reader. The former complete-population manual-handoff reader is retired; the
 bounded atomic execution-evidence reader remains unchanged. An inventory scan
 can supersede execution-relative evidence even when bytes are unchanged. Current
@@ -321,7 +321,7 @@ state is interface-owned and never shares this file.
 
 ## Implemented Foundation
 
-`schema.py` creates a version-4 ledger and version-6 history schema. The ledger
+`schema.py` creates a version-4 ledger and version-7 history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
 correspondence, run/operation tokens, generic annotations, and nullable hardlink
@@ -382,7 +382,7 @@ integrity, and mapping-pair statements use at most the batch size plus two
 parameters, row-ID statements use at most the batch size plus one, and
 two-column identity statements use at most twice the batch size plus one.
 
-History version 6 creates a provisional `history_runs` row at the first durable
+History version 7 creates a provisional `history_runs` row at the first durable
 window and appends disposition-bound reliable receipts to `history_events`.
 Canonical and exact-duplicate rows retain their envelopes; a supported
 oversized event retains only bounded metadata, reason, and its original payload
@@ -522,7 +522,7 @@ The initial schema reserves the expensive identity/evidence bones:
   independent of plan or interface view state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
-At the active epoch-6 persistence boundary, file-index columns and repository
+At the active epoch-7 persistence boundary, file-index columns and repository
 binds use canonical `FileIndex128` text rather than SQLite numeric affinity.
 The exact identity domain and native-source rule remain owned by `BRIDGE.md`
 and `DEFENSE.md` §1.3.

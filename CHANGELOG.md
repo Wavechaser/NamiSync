@@ -214,6 +214,10 @@ behavioral evidence.
   maxima 1.649 s/2.289 s on the recorded Python 3.13.17 reference profile.
   Retained exact raw/validation bytes, original failures and recovery evidence;
   M1-12 and release remain separate pending work.
+- Corrected the four deferred subject-document status mismatches: current
+  history schema/epoch, active desktop Setup, null-evidence rebaseline and
+  same-task manual post-copy Verify. Preserved historical cutovers and future
+  policy boundaries; source, link and independent documentation review apply.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

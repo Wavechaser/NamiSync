@@ -1,7 +1,7 @@
 # Planner Module
 
 The deterministic paired-sync planner, signed-64 boundary and independent
-planning-source admission are active. Desktop Setup remains unrealized. The
+planning-source admission and desktop Setup are active. The
 100,000-operation shape is a performance fixture, not a production maximum;
 DEFENSE owns active admission and PRESENTATION owns focused review-scale checks.
 

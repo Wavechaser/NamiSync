@@ -9,7 +9,7 @@ location inventory and integrity starts through the shared service; desktop
 actions remain Stage 6. Shared location-candidate admission and bounded
 remembered-location reads are implemented workflow services. Desktop Setup
 starts standalone inventory on a typed, picked or remembered root; cached
-desktop projections and ledger-current presentation are implemented. Deferred
+desktop projections and ledger-current presentation are implemented.
 Verify copied uses ordinary scoped integrity and its current-state results.
 
 ## Purpose
@@ -92,9 +92,9 @@ revalidate exact base types and bounded paths.
 The production dispatcher registry contains inventory (pause unsupported) and
 baseline/verify/rebaseline (pause supported), and the CLI reaches all four only
 through the shared service. In the current implementation, a fresh baseline
-selection admits eligible non-directory rows without evidence; a fresh
-rebaseline selection admits only
-rows with evidence; verify retains both. Integrity continuation stores the
+selection admits eligible non-directory rows without evidence; fresh
+rebaseline and verify selections admit eligible rows with or without evidence.
+Integrity continuation stores the
 exact admitted inventory row ids plus completed ids/bytes. A resume always
 refreshes physical inventory but reconstructs the original ordered candidate
 set without reapplying those mode filters, so evidence drift cannot drop
@@ -161,12 +161,12 @@ canonicalize with their established semantics after that raw-shape charge.
 Resolution detail follows complete-value omission at 1,024 UTF-8 bytes; it is
 never truncated into misleading recovery guidance.
 
-The accepted but unrealized policy admits eligible null-evidence files to fresh
+The implemented policy admits eligible null-evidence files to fresh
 rebaseline as well. It remains explicit acceptance of current content: always
 hash and conditionally replace/create evidence, even on a genuine match, and clear
 verification freshness. Compare-and-accept is deferred beyond M1. The
 [verifier policy table](VERIFIER.md#accepted-standalone-operation-policy)
-distinguishes the three operations and current versus accepted behavior.
+distinguishes the three operations and their evidence and freshness effects.
 
 Desktop rebaseline requires explicit acknowledgement of current evidence;
 baseline and verify do not. The bridge owns the exact receipted request shape

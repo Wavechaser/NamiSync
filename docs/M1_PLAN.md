@@ -177,6 +177,13 @@ source/prose and active link/anchor checks, diff check and fresh independent
 review. No executable contract/test-authority change or product test rerun is
 authorized merely by condensation. Commit after R1; CLOSE remains distinct.
 
+The separately authorized 2026-10-30 documentation follow-up corrects those four
+owners' current-status claims: history v7/data epoch 7, active desktop Setup,
+implemented null-evidence rebaseline and same-task manual post-copy Verify.
+Historical cutovers and deferred compare-and-accept/terminal subset retry remain
+unchanged. Verification is source consistency, active links, diff checks and
+independent review; no product or test-authority change is included.
+
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and
 historical JSON evidence. No native flush, safety/selection/custody guard,
