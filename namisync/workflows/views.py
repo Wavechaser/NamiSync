@@ -322,6 +322,9 @@ class SemanticSettingsPatchView:
     trash_on_update: bool | None = None
     preservation: PreservationSettingsView | None = None
     propagate_source_casing: bool | None = None
+    verify_after_execute: bool | None = None
+    preserve_created: bool | None = None
+    preserve_acl: bool | None = None
 
     def __post_init__(self) -> None:
         if self.filters is not None:
@@ -345,6 +348,14 @@ class SemanticSettingsPatchView:
                 self.propagate_source_casing,
                 "propagate_source_casing",
             )
+        for field_name in ("verify_after_execute", "preserve_created", "preserve_acl"):
+            value = getattr(self, field_name)
+            if value is not None:
+                _require_exact_bool(value, field_name)
+        if self.preservation is not None and (
+            self.preserve_created is not None or self.preserve_acl is not None
+        ):
+            raise ValueError("full and partial preservation patches cannot be combined")
 
 
 def _require_exact_bool(value: object, field_name: str) -> None:

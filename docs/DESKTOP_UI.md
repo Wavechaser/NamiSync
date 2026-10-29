@@ -8,7 +8,7 @@ retained execution-result review is active in that Plan pane. Inventory has a
 separate bounded read pane with search, facets, sibling sorting and current
 evidence details, Refresh, missing-item visibility, complete file selection and
 ordinary integrity controls and deferred ordinary copied-file verification.
-History and full settings remain pending. Current v5 item
+History remains pending. Settings exposes explicit Setup defaults and theme preferences. Current v5 item
 progress and detailed result rows are reduced by the bridge for bounded display.
 
 This document owns visual/user interaction behavior. BRIDGE owns exact transport,
@@ -84,7 +84,7 @@ Stage 6 delivers:
   later M1 surface outside the accepted second-half reslice;
 - desktop actions for reviewed sync, inventory, baseline, verify, rebaseline,
   per-task Setup overrides, and pause/resume/cancel where the registered
-  activity supports them; global semantic-settings mutation remains deferred;
+  activity supports them, plus explicit Save defaults for new tasks;
   and
 - the WebView2 bridge, static-asset packaging, security controls, and frontend
   tests needed to make those views safe to use with hostile filesystem names.
@@ -1038,7 +1038,9 @@ authority.
 Semantic settings and UI state are deliberately separate. Existing service/CLI
 callers may read and partially commit semantic settings. Desktop
 Setup reads them only as initial values and freezes per-task overrides without
-writing the file. The ratified `ui_state.py` replacement owns a strict,
+writing the file. Settings alone exposes explicit partial Save defaults, including
+automatic execution verification; existing drafts and Plan again retain their captured choices.
+The ratified `ui_state.py` replacement owns a strict,
 section-versioned cosmetic document; schema v1 contains only the appearance
 override. Recents are not a future cosmetic section: they derive from ledger
 runs and current workflow probing. Geometry, columns, treegrid
@@ -1718,13 +1720,22 @@ beside the Tasks heading. Live task text has a 20 px leading inset, while the
 Settings control keeps its own 16 px inset. Task text has additional left
 padding.
 
-Settings is an ordinary work-area page, not a modal. Its Settings card contains
-the existing Theme selector; About initially contains `0.1.0 "Gertrud"`.
+Settings is an ordinary scrollable work-area page with three cards: Setup defaults,
+Appearance and About. Setup defaults exposes the existing supported task options,
+including automatic execution verification, with unavailable ADS preservation
+disabled. Exclude filters use individual Add/Remove actions and preserve each
+pattern's exact spelling. Only explicit Save defaults writes the changed fields;
+unchanged fields are omitted from the patch. Reading the page retains unsaved
+fields while refreshing untouched defaults. Reads and saves are serialized and
+disable editing until they settle. A delayed save stays pending; an unconfirmed
+save offers Read current defaults before another explicit save and never replays
+the earlier write. A successful current-state read does not claim that the earlier
+save succeeded. Existing task drafts and captured plan choices remain unchanged.
+Appearance contains only the existing Theme selector; About initially contains `0.1.0 "Gertrud"`.
 About/license/third-party links remain to be populated with their actual content.
 Opening Settings preserves task identities, drafts, activity and closure state.
 Background task updates do not navigate away from Settings. Clicking a task
 returns to it; an unraced successful New task action opens its new task.
-Global semantic-settings mutation remains deferred.
 
 The rail itself is a Mica seam: it has no card background, border, or shadow.
 A resting unselected task card is fully transparent. Hover and selected/current
@@ -2475,7 +2486,7 @@ Contrast and no-color-only signaling remain requirements in every theme.
   never HTML or executable content; generic Unicode and identity stay exact.
 - Plan and inventory consume facade views only and remain semantically separate;
   Setup reads defaults but commits no global setting, and UI cosmetics never
-  change a plan's captured options. The deferred history/settings pages cannot
+  change a plan's captured options. Settings and the deferred history page cannot
   be a hidden dependency of task review.
 - Busy, pausing, paused, canceled, refused, partial, degraded, mismatch, and compound
   verification outcomes are truthful and distinguishable without parsing

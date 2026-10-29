@@ -525,7 +525,11 @@ class LocalWorkflowRuntime:
         """Project task-local desktop defaults without mutating settings."""
 
         self._require_open()
-        value = self._settings_store.read().to_sync_options()
+        settings = self._settings_store.read()
+        return self._setup_defaults_view(settings)
+
+    def _setup_defaults_view(self, settings: SemanticSettings) -> SetupOptionsView:
+        value = settings.to_sync_options()
         projected = SyncOptions(
             deletion_policy=value.deletion_policy,
             preservation=PreservationPolicy(
@@ -537,7 +541,23 @@ class LocalWorkflowRuntime:
             trash_on_update=value.trash_on_update,
             propagate_source_casing=value.propagate_source_casing,
         )
-        return _setup_options_view(projected, verify_after_execute=False)
+        return _setup_options_view(
+            projected, verify_after_execute=settings.verify_after_execute
+        )
+
+    def commit_setup_defaults(
+        self, patch: SemanticSettingsPatchView,
+    ) -> SetupOptionsView:
+        """Commit dirty desktop defaults while preserving unavailable ADS state."""
+        self._require_open()
+        if type(patch) is not SemanticSettingsPatchView:
+            raise TypeError("Setup defaults require exact SemanticSettingsPatchView")
+        patch.__post_init__()
+        if patch.preservation is not None:
+            raise ValueError("Setup defaults require individual preservation switches")
+        return self._setup_defaults_view(
+            self._settings_store.commit(_semantic_settings_patch(patch))
+        )
 
     def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView:
         """Canonicalize a complete task-local Setup snapshot."""
@@ -2173,6 +2193,9 @@ def _semantic_settings_patch(
             )
         ),
         propagate_source_casing=value.propagate_source_casing,
+        verify_after_execute=value.verify_after_execute,
+        preserve_created=value.preserve_created,
+        preserve_acl=value.preserve_acl,
     )
 
 

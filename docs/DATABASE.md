@@ -462,6 +462,16 @@ replaces the UTF-8 JSON file. This prevents two processes editing unrelated
 settings from reverting one another. The settings store does not claim
 parent-directory write-through across sudden power loss; preferences are not
 part of the audit ledger's durability contract.
+Schema v2 adds the desktop Setup automatic-verification default. Other schemas
+are refused without rewriting or deleting their files. Partial preservation
+patches merge creation-time and ACL switches into the latest stored policy under
+the same mutex, preserving ADS and omitted sibling switches. A full preservation
+replacement cannot be combined with partial preservation switches.
+During pre-release development, an old-schema refusal is resolved with the app
+closed: move only that data root's `settings.json` aside as a backup and reopen
+with fresh defaults. Production uses the root selected by `AppPaths` (normally
+`%LOCALAPPDATA%\NamiSync`); a development data-dir override selects another root.
+Never delete the ledger/history pair or `ui-state.json` for a settings reset.
 Reads require the exact integer schema discriminator and reject duplicate JSON
 object keys rather than accepting boolean/integer equivalence or last-key-wins
 ambiguity.

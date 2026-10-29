@@ -23,13 +23,13 @@ from namisync.core.planning import (
 from namisync.core.scalars import require_utf16_path
 
 
-SETTINGS_SCHEMA_VERSION = 1
+SETTINGS_SCHEMA_VERSION = 2
 _MAX_JSON_CHARACTER_ESCAPE_BYTES = 6
 _LONGEST_FIXED_SETTINGS_DOCUMENT = (
     b'{"deletion_policy":"additive","filters":[],"preservation":'
     b'{"preserve_acl":false,"preserve_ads":false,"preserve_created":false},'
-    b'"propagate_source_casing":false,"schema_version":1,'
-    b'"trash_on_update":false}\n'
+    b'"propagate_source_casing":false,"schema_version":2,'
+    b'"trash_on_update":false,"verify_after_execute":false}\n'
 )
 SETTINGS_MAX_BYTES = (
     len(_LONGEST_FIXED_SETTINGS_DOCUMENT)
@@ -50,6 +50,7 @@ class SemanticSettings:
     trash_on_update: bool = True
     preservation: PreservationPolicy = PreservationPolicy()
     propagate_source_casing: bool = False
+    verify_after_execute: bool = False
 
     def __post_init__(self) -> None:
         validate_filter_set(self.filters)
@@ -65,6 +66,7 @@ class SemanticSettings:
         if (
             type(self.trash_on_update) is not bool
             or type(self.propagate_source_casing) is not bool
+            or type(self.verify_after_execute) is not bool
         ):
             raise TypeError("semantic settings switches must be bools")
         if self.deletion_policy not in {
@@ -94,6 +96,9 @@ class SemanticSettingsPatch:
     trash_on_update: bool | None = None
     preservation: PreservationPolicy | None = None
     propagate_source_casing: bool | None = None
+    verify_after_execute: bool | None = None
+    preserve_created: bool | None = None
+    preserve_acl: bool | None = None
 
     def __post_init__(self) -> None:
         if self.filters is not None:
@@ -114,9 +119,16 @@ class SemanticSettingsPatch:
         for field_name, value in (
             ("trash_on_update", self.trash_on_update),
             ("propagate_source_casing", self.propagate_source_casing),
+            ("verify_after_execute", self.verify_after_execute),
+            ("preserve_created", self.preserve_created),
+            ("preserve_acl", self.preserve_acl),
         ):
             if value is not None and type(value) is not bool:
                 raise TypeError(f"semantic {field_name} patch must be a bool")
+        if self.preservation is not None and (
+            self.preserve_created is not None or self.preserve_acl is not None
+        ):
+            raise ValueError("full and partial preservation patches cannot be combined")
 
 
 class SemanticSettingsStore:
@@ -171,6 +183,9 @@ class SemanticSettingsStore:
             trash_on_update=patch.trash_on_update,
             preservation=patch.preservation,
             propagate_source_casing=patch.propagate_source_casing,
+            verify_after_execute=patch.verify_after_execute,
+            preserve_created=patch.preserve_created,
+            preserve_acl=patch.preserve_acl,
         )
         with _WindowsNamedMutex(
             self.mutex_name,
@@ -258,9 +273,17 @@ def _apply_patch(
             "trash_on_update",
             "preservation",
             "propagate_source_casing",
+            "verify_after_execute",
         )
         if (value := getattr(patch, field)) is not None
     }
+    preservation = {
+        field: value
+        for field in ("preserve_created", "preserve_acl")
+        if (value := getattr(patch, field)) is not None
+    }
+    if preservation:
+        values["preservation"] = replace(current.preservation, **preservation)
     return replace(current, **values)
 
 
@@ -273,6 +296,7 @@ def _encode_settings(value: SemanticSettings) -> bytes:
         trash_on_update=value.trash_on_update,
         preservation=value.preservation,
         propagate_source_casing=value.propagate_source_casing,
+        verify_after_execute=value.verify_after_execute,
     )
     payload = {
         "schema_version": SETTINGS_SCHEMA_VERSION,
@@ -285,6 +309,7 @@ def _encode_settings(value: SemanticSettings) -> bytes:
             "preserve_acl": value.preservation.preserve_acl,
         },
         "propagate_source_casing": value.propagate_source_casing,
+        "verify_after_execute": value.verify_after_execute,
     }
     encoded = (
         json.dumps(
@@ -312,6 +337,7 @@ def _decode_settings(value: object) -> SemanticSettings:
         "trash_on_update",
         "preservation",
         "propagate_source_casing",
+        "verify_after_execute",
     }
     if set(value) != expected:
         raise SettingsFormatError("settings.json has missing or unknown keys")
@@ -339,6 +365,7 @@ def _decode_settings(value: object) -> SemanticSettings:
     booleans = (
         value["trash_on_update"],
         value["propagate_source_casing"],
+        value["verify_after_execute"],
         preservation["preserve_ads"],
         preservation["preserve_created"],
         preservation["preserve_acl"],
@@ -359,6 +386,7 @@ def _decode_settings(value: object) -> SemanticSettings:
                 preserve_acl=preservation["preserve_acl"],
             ),
             propagate_source_casing=value["propagate_source_casing"],
+            verify_after_execute=value["verify_after_execute"],
         )
     except (TypeError, ValueError) as error:
         raise SettingsFormatError("settings.json contains an invalid value") from error

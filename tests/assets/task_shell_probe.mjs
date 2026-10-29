@@ -597,6 +597,7 @@ appSource = appSource
   .replace("./readiness.js", readinessUrl)
   .replace("./appearance.js", appearanceUrl)
   .replace("./theme.js", themeUrl)
+  .replace("./settings.js", moduleUrl("export const installSetupDefaults = () => ({ open() {} });"))
   .replace("./execution_confirmation.js", executionConfirmationUrl)
   .replace("./task_status.js", taskStatusUrl)
   .replace("./rail.js", moduleUrl(railSource))

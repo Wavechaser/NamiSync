@@ -165,6 +165,66 @@ def _invoke(spec, payload: object, *, context: object = OPEN_CONTEXT) -> object:
     return spec.invoke(payload, context=context)
 
 
+def test_setup_defaults_commands_read_and_commit_only_explicit_fields() -> None:
+    service = _Service()
+    commands = production_command_specs(
+        picker=lambda: None, slots=_Slots(), registry=service,
+        cosmetics=_Cosmetics(), shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+    expected = _setup_options_payload()
+    assert _invoke(commands["read_setup_defaults"], {}) == expected
+    assert _invoke(commands["commit_setup_defaults"], {"patch": {
+        "filters": ["*.tmp"], "preserve_created": False, "verify_after_execute": True,
+    }}) == expected
+    patch = service.calls[-1][1]
+    assert patch.filters == ("*.tmp",)
+    assert patch.preserve_created is False
+    assert patch.verify_after_execute is True
+    assert patch.preserve_acl is None
+    assert patch.preservation is None
+    assert patch.deletion_policy is None
+
+
+def test_setup_defaults_commands_compose_through_real_registry_and_store(tmp_path: Path) -> None:
+    with service_module.NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        registry = TaskRegistry(service)
+        commands = production_command_specs(
+            picker=lambda: None, slots=_Slots(), registry=registry,
+            cosmetics=_Cosmetics(), shell_ready=lambda _generation: None,
+            readiness_echo=lambda _generation, _challenge: False,
+        )
+        saved = _invoke(commands["commit_setup_defaults"], {"patch": {
+            "verify_after_execute": True, "preserve_created": False,
+        }})
+        assert saved["verify_after_execute"] is True
+        assert saved["preservation"] == {
+            "preserve_ads": False, "preserve_created": False, "preserve_acl": False,
+        }
+        assert _invoke(commands["read_setup_defaults"], {}) == saved
+        assert (tmp_path / "settings.json").is_file()
+        assert registry.list_tasks().tasks == ()
+
+
+@pytest.mark.parametrize("patch", [
+    {}, {"preserve_ads": False}, {"preservation": {}}, {"verify_after_execute": 1},
+    {"verify_after_execute": None}, {"filters": None}, {"filters": ["x"] * 65},
+    {"filters": ["x" * 1025]}, {"filters": ["x" * 1024] * 17},
+    {"filters": [""]}, {"filters": ["\ud800"]}, {"deletion_policy": "mirror"},
+    {"preserve_acl": "true"}, {"trash_on_update": 0},
+])
+def test_setup_defaults_commands_reject_invalid_patch_before_service(patch: object) -> None:
+    service = _Service()
+    commands = production_command_specs(
+        picker=lambda: None, slots=_Slots(), registry=service,
+        cosmetics=_Cosmetics(), shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+    with pytest.raises(CommandPayloadError):
+        _invoke(commands["commit_setup_defaults"], {"patch": patch})
+    assert service.calls == []
+
+
 class _Slots:
     def __init__(self) -> None:
         self.stored: list[tuple[str, str]] = []
@@ -197,6 +257,10 @@ class _Service:
         return TaskListView(())
 
     def read_setup_options(self):
+        return SETUP_OPTIONS
+
+    def commit_setup_defaults(self, patch):
+        self.calls.append(("commit-defaults", patch))
         return SETUP_OPTIONS
 
     def prepare_setup_options(self, value):

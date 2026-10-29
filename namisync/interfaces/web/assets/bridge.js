@@ -29,6 +29,8 @@ const COMMAND_POLICY_JSON = `{
   "create_task": {"response_policy": "mutation-observed", "retry": "none", "phase": "open"},
   "list_tasks": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "read_setup": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "read_setup_defaults": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "commit_setup_defaults": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
   "probe_recent_pairs": {"response_policy": "local-5-seconds", "retry": "none", "phase": "open"},
   "prepare_setup": {"response_policy": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "admit_location": {"response_policy": "feedback-only", "retry": "none", "phase": "open"},
@@ -646,6 +648,36 @@ export function replaceCosmeticSection(expectedRevision, theme, onDelayed = null
     validateCosmeticReplacementResult,
     COSMETIC_REPLACE_TIMEOUT_MS, false, onDelayed,
   );
+}
+
+export async function readSetupDefaults() {
+  const read = () => dispatchAttempt("read_setup_defaults", Object.freeze({}),
+    validateSetupOptions, SETUP_READ_TIMEOUT_MS);
+  try {
+    return await read();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return read();
+}
+
+export function commitSetupDefaults(patch, onDelayed = null) {
+  const allowed = ["filters", "deletion_policy", "trash_on_update", "preserve_created",
+    "preserve_acl", "propagate_source_casing", "verify_after_execute"];
+  if (!isPlainObject(patch) || Object.keys(patch).length === 0
+      || Object.keys(patch).some((key) => !allowed.includes(key))) {
+    throw new TypeError("Setup defaults patch is invalid");
+  }
+  const options = {filters: [], deletion_policy: "trash", trash_on_update: true,
+    preservation: {preserve_ads: false, preserve_created: true, preserve_acl: false},
+    propagate_source_casing: false, verify_after_execute: false};
+  for (const [key, value] of Object.entries(patch)) {
+    if (["preserve_created", "preserve_acl"].includes(key)) options.preservation[key] = value;
+    else options[key] = value;
+  }
+  if (!isSetupOptions(options)) throw new TypeError("Setup defaults patch is invalid");
+  return dispatchAttempt("commit_setup_defaults", freezeJson({patch}),
+    validateSetupOptions, null, true, onDelayed);
 }
 
 export function acknowledgeShellReady() {

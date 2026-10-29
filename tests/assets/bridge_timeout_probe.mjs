@@ -351,6 +351,12 @@ async function expireAsync(milliseconds) {
 }
 
 function success(request) {
+  if (["read_setup_defaults", "commit_setup_defaults"].includes(request.command)) {
+    return { schema_version: 1, request_id: request.request_id, ok: true,
+      result: { filters: [], deletion_policy: "trash", trash_on_update: true,
+        preservation: { preserve_ads: false, preserve_created: true, preserve_acl: false },
+        propagate_source_casing: false, verify_after_execute: true } };
+  }
   if (request.command === "probe_recent_pairs") {
     return { schema_version: 1, request_id: request.request_id, ok: true, result: { pairs: [] } };
   }
@@ -397,6 +403,9 @@ page.pywebview = { api: { dispatch(raw) {
   if (request.command === "custom_echo") {
     return { transport_version: 1, response_token: null,
       response: { schema_version: 1, request_id: request.request_id, ok: true, result: request.payload } };
+  }
+  if (request.command === "read_setup_defaults") {
+    return { transport_version: 1, response_token: null, response: success(request) };
   }
   const nativeToken = (++wireId).toString(16).padStart(32, "0");
   const completionToken = (++wireId).toString(16).padStart(32, "0");
@@ -773,3 +782,44 @@ await Promise.all(batch);
 assert.equal(asyncRequests.length, countBefore + 64,
   "manual checks only observe the original 64 requests");
 assert.equal(page.listenerCount("pywebviewready"), 1);
+
+// Saving defaults uses asynchronous completion and delayed feedback, with no
+// original-result observation or mutation replay. A lost admission is reconciled
+// by reading current defaults; an uncorroborated completion cannot be acknowledged.
+let savedDefaults;
+delivery = (exchange) => { savedDefaults = exchange; return exchange.admission; };
+const defaultsRequests = asyncRequests.length;
+const defaultsObservations = asyncObservations.length;
+const defaultsFeedback = [];
+let defaultsSettled = false;
+const defaultsSave = asyncBridge.commitSetupDefaults({verify_after_execute: true},
+  (status) => defaultsFeedback.push(status)).then((value) => {
+    defaultsSettled = true;
+    return value;
+  });
+await flush();
+assert.equal(savedDefaults.request.command, "commit_setup_defaults");
+assert.deepEqual(savedDefaults.request.payload, {patch: {verify_after_execute: true}});
+await expireAsync(5000);
+assert.equal(defaultsSettled, false, "feedback cannot declare an unfinished save");
+assert.deepEqual(defaultsFeedback.at(-1), {state: "pending", check: null});
+assert.equal(asyncObservations.length, defaultsObservations);
+send(savedDefaults.message);
+assert.equal((await defaultsSave).verify_after_execute, true);
+assert.equal(asyncRequests.length, defaultsRequests + 1);
+
+delivery = (exchange) => {
+  savedDefaults = exchange;
+  throw new Error("lost defaults admission");
+};
+const lostDefaultsRequests = asyncRequests.length;
+await assert.rejects(asyncBridge.commitSetupDefaults({preserve_acl: true}),
+  {name: "BridgeTransportError"});
+assert.equal(asyncRequests.length, lostDefaultsRequests + 1, "lost save is never replayed");
+assert.equal(asyncObservations.length, defaultsObservations, "save never observes original outcome");
+assert.equal((await asyncBridge.readSetupDefaults()).verify_after_execute, true);
+assert.equal(asyncRequests.length, lostDefaultsRequests + 2, "recovery reads current defaults once");
+send(savedDefaults.message);
+await flush();
+assert.equal(cleanup.includes(`ack:completion:${hostGeneration}:${savedDefaults.request.request_id}:${savedDefaults.message.completion_token}`), false,
+  "lost admission cannot authorize completion cleanup");

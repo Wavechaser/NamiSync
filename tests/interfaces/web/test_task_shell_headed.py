@@ -335,6 +335,13 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     result = _run_task_shell_scenario(headed_installed_wheel, tmp_path, large_window=large_window)
     report = result["report"]
 
+    assert report["setup_defaults"] == {
+        "defaultsDraftRetained": True,
+        "newTaskDefaults": True,
+        "newTaskOverrideRetained": True,
+        "adsUnavailable": True,
+    }
+
     assert report["initial"] == {
         "newest": ["Task 48", "Task 47", "Task 46"],
         "setupVisible": True,

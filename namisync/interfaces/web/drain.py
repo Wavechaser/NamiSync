@@ -38,6 +38,7 @@ from namisync.interfaces.task_port import (
     TaskUpdateView,
 )
 from namisync.workflows.views import (
+    SemanticSettingsPatchView,
     IntegrityOutcomeView,
     OperationItemView,
     SessionEventView,
@@ -867,6 +868,9 @@ class TaskRegistry:
 
     def read_setup_options(self) -> SetupOptionsView:
         return self._lifecycle.read_setup_options()
+
+    def commit_setup_defaults(self, patch: SemanticSettingsPatchView) -> SetupOptionsView:
+        return self._lifecycle.commit_setup_defaults(patch)
 
     def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView:
         return self._lifecycle.prepare_setup_options(value)

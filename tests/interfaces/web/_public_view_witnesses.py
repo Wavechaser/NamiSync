@@ -814,6 +814,22 @@ PUBLIC_VIEW_WITNESSES: dict[
     ),
     SemanticSettingsPatchView: (
         PublicViewWitness(
+            "setup-defaults-patch",
+            SemanticSettingsPatchView(
+                verify_after_execute=True, preserve_created=False, preserve_acl=True,
+            ),
+            {
+                "filters": None,
+                "deletion_policy": None,
+                "trash_on_update": None,
+                "preservation": None,
+                "propagate_source_casing": None,
+                "verify_after_execute": True,
+                "preserve_created": False,
+                "preserve_acl": True,
+            },
+        ),
+        PublicViewWitness(
             "semantic-settings-patch-present",
             SemanticSettingsPatchView(
                 ("*.bak",),
@@ -828,6 +844,9 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "trash_on_update": False,
                 "preservation": PRESERVATION_JSON,
                 "propagate_source_casing": True,
+                "verify_after_execute": None,
+                "preserve_created": None,
+                "preserve_acl": None,
             },
         ),
         PublicViewWitness(
@@ -839,6 +858,9 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "trash_on_update": None,
                 "preservation": None,
                 "propagate_source_casing": None,
+                "verify_after_execute": None,
+                "preserve_created": None,
+                "preserve_acl": None,
             },
         ),
     ),

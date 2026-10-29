@@ -26,6 +26,7 @@ from namisync.workflows import (
 )
 from namisync.workflows.inventory import LocationCandidate
 from namisync.workflows.views import (
+    SemanticSettingsPatchView,
     SessionEventView,
     SessionRecordView,
     SetupOptionsView,
@@ -386,6 +387,8 @@ class TaskLifecyclePort(Protocol):
     ) -> TaskStartView: ...
 
     def read_setup_options(self) -> SetupOptionsView: ...
+
+    def commit_setup_defaults(self, patch: SemanticSettingsPatchView) -> SetupOptionsView: ...
 
     def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView: ...
 

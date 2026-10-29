@@ -241,6 +241,8 @@ class TaskAuthority(Protocol):
 
     def read_setup_options(self) -> SetupOptionsView: ...
 
+    def commit_setup_defaults(self, patch: SemanticSettingsPatchView) -> SetupOptionsView: ...
+
     def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView: ...
 
     def remembered_locations(self) -> RememberedLocations: ...
@@ -919,6 +921,16 @@ def production_command_specs(
             "recents": None,
         }
 
+    def read_setup_defaults(payload: object) -> object:
+        if payload is not None:
+            raise TypeError("read_setup_defaults received an unvalidated payload")
+        return _setup_options_to_wire(registry.read_setup_options())
+
+    def commit_setup_defaults(payload: object) -> object:
+        if type(payload) is not SemanticSettingsPatchView:
+            raise TypeError("commit_setup_defaults received an unvalidated payload")
+        return _setup_options_to_wire(registry.commit_setup_defaults(payload))
+
     def start_plan(payload: object) -> object:
         if not isinstance(payload, _StartPlanPayload):
             raise TypeError("start_plan received an unvalidated payload")
@@ -1454,6 +1466,25 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "read_setup_defaults": CommandSpec(
+                validate_payload=_validate_empty_payload,
+                handler=read_setup_defaults,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "commit_setup_defaults": CommandSpec(
+                validate_payload=_validate_setup_defaults_patch,
+                handler=commit_setup_defaults,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                response_policy=CommandResponsePolicy.FEEDBACK_ONLY,
+                retry=CommandRetry.NONE,
+                work=CommandWork.ASYNC_SMALL,
             ),
             "probe_recent_pairs": CommandSpec(
                 validate_payload=_validate_probe_recent_pairs,
@@ -2476,6 +2507,38 @@ def _validate_release_terminal_session(
     if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
         raise CommandPayloadError("release_terminal_session payload is invalid")
     return _ReleaseTerminalSessionPayload(task_id, session_id)
+
+
+def _validate_setup_defaults_patch(value: object) -> SemanticSettingsPatchView:
+    command = "commit_setup_defaults"
+    if type(value) is not dict or set(value) != {"patch"}:
+        raise CommandPayloadError(f"{command} payload is invalid")
+    patch = value["patch"]
+    allowed = {
+        "filters", "deletion_policy", "trash_on_update", "preserve_created",
+        "preserve_acl", "propagate_source_casing", "verify_after_execute",
+    }
+    if type(patch) is not dict or not patch or not set(patch) <= allowed:
+        raise CommandPayloadError(f"{command} payload is invalid")
+    admitted = dict(patch)
+    if "filters" in patch:
+        filters = patch["filters"]
+        if type(filters) is not list or len(filters) > 64:
+            raise CommandPayloadError(f"{command} payload is invalid")
+        try:
+            sizes = [len(item.encode("utf-8")) for item in filters if type(item) is str]
+        except UnicodeError as error:
+            raise CommandPayloadError(f"{command} payload is invalid") from error
+        if (len(sizes) != len(filters) or any(size == 0 or size > 1024 for size in sizes)
+                or sum(sizes) > 16384):
+            raise CommandPayloadError(f"{command} payload is invalid")
+        admitted["filters"] = tuple(filters)
+    if any(value is None for value in admitted.values()):
+        raise CommandPayloadError(f"{command} payload is invalid")
+    try:
+        return SemanticSettingsPatchView(**admitted)
+    except (TypeError, ValueError, UnicodeError) as error:
+        raise CommandPayloadError(f"{command} payload is invalid") from error
 
 
 def _validate_setup_options(value: object, command: str) -> SetupOptionsView:

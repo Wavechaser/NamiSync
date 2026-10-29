@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, whole/selected Refresh, missing-item visibility and standalone integrity selection/controls use the same-task bridge actions. Same-task copied-file verification uses ordinary Inventory scan/Verify over workflow-admitted copied paths. History and full settings remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, whole/selected Refresh, missing-item visibility and standalone integrity selection/controls use the same-task bridge actions. Same-task copied-file verification uses ordinary Inventory scan/Verify over workflow-admitted copied paths. Settings exposes saved Setup defaults and theme preferences. History and further settings remain unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -354,6 +354,8 @@ restore_inventory(command_id, location_id, row_ids, *, changed_at)
     -> tuple[InventoryDispositionView, ...]
 read_semantic_settings() -> SemanticSettingsView
 commit_semantic_settings(patch: SemanticSettingsPatchView) -> SemanticSettingsView
+read_setup_options() -> SetupOptionsView
+commit_setup_defaults(patch: SemanticSettingsPatchView) -> SetupOptionsView
 list_history(limit=50) -> tuple[HistoryRunSummaryView, ...]
 get_history_summary(run_token) -> HistoryRunSummaryView
 get_history_items(run_token, *, after_order=0, through_order=None, limit=256)
@@ -867,8 +869,9 @@ keyword-only `settings_path` but imports no database package. Its default is
 `settings.json` beside the selected ledger. `read_semantic_settings()` and
 `commit_semantic_settings(SemanticSettingsPatchView)` expose only primitive
 workflow views: filters, deletion policy, trash-on-update, preservation
-booleans, and source-casing propagation. A partial patch preserves omitted
-fields. Public view construction requires exact booleans, tuple-of-string
+booleans, and source-casing propagation. The patch also supports the automatic
+verification default and individual creation-time/ACL switches. A partial patch
+preserves omitted fields. Public view construction requires exact booleans, tuple-of-string
 filters, a supported deletion value, and the correct preservation view, so an
 invalid patch cannot poison the atomic settings file.
 The currently active `start_plan(..., deletion_policy=None)` captures the
@@ -877,7 +880,11 @@ plan, and review exposes the complete frozen snapshot while commit/execution
 never reread settings. Desktop Setup uses the same backend canonicalization: the bridge
 submits one complete raw Setup value and freezes only the backend-derived
 canonical snapshot. ADS is projected unavailable/off and mirror has no desktop
-control. Linked verification defaults off and freezes with that task. Setup
+control. Linked verification prepopulates from the persisted default (initially
+off) and freezes with that task. `commit_setup_defaults()` applies only explicit
+dirty fields and returns canonical `SetupOptionsView`; it preserves stored ADS
+while projecting ADS off to the desktop. Plan semantic-review views and CLI
+verification behavior retain their existing contracts. Setup
 leaves global settings unchanged; exact Setup fields
 remain bridge authority.
 

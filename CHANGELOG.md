@@ -838,6 +838,15 @@ Standalone Inventory adds integrity selection, controls and retained results.
 Same-task Plan/Verify navigation adds first manual post-copy verification and
 explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain open.
 
+#### Add explicit Setup defaults to Settings (2026-10-29)
+
+- Present Setup defaults, Appearance and About cards in the existing scrollable
+  Settings page. Save only changed options, including automatic execution
+  verification, while existing task drafts and Plan again retain their choices.
+- Preserve unsaved fields across navigation, serialize reads and saves, and
+  offer current-default readback after an unconfirmed save without replaying it.
+  Keep ADS unavailable and theme persistence independent.
+
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
 - Close the integrated A–E review and stop for GUI recap. Final verification

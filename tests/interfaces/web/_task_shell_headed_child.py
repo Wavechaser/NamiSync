@@ -364,14 +364,31 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   retainedSource.dispatchEvent(new Event("input", {bubbles: true}));
   settingsButton.click();
   await until(() => document.querySelector("#theme-mode-trigger")?.disabled === false, "Settings theme readiness");
+  const defaultVerify = await until(() => {
+    const input = document.querySelector('[data-default-option="verify_after_execute"]');
+    return input instanceof HTMLInputElement && !input.disabled ? input : null;
+  }, "Setup defaults readiness");
+  const originalDefaultVerify = defaultVerify.checked;
+  if (originalDefaultVerify) throw new Error("isolated fixture must start with verification off");
+  defaultVerify.checked = true;
+  defaultVerify.dispatchEvent(new Event("change", {bubbles: true}));
   const settingsSurface = document.querySelector(".nami-work-panel").getAttribute("aria-label") === "Settings" &&
-    document.querySelectorAll("#settings-view > .nami-card").length === 2 &&
+    document.querySelectorAll("#settings-view > .nami-card").length === 3 &&
     document.querySelector("#settings-view").textContent.includes('0.1.0 "Gertrud"') &&
     rows().length === 48 && settingsButton.getAttribute("aria-current") === "page";
   clickSelect("Task 48");
   await until(() => workTitle() === "Task 48", "return from Settings");
   const settingsDraftRetained = document.querySelector("#setup-source-path") === retainedSource &&
-    retainedSource.value === "C:\\retained-settings-draft";
+    retainedSource.value === "C:\\retained-settings-draft" &&
+    document.querySelector('[data-option="verify_after_execute"]').checked === false;
+  settingsButton.click();
+  await until(() => !defaultVerify.disabled, "reopened Setup defaults");
+  const defaultsDraftRetained = defaultVerify.checked;
+  document.querySelector("#setup-defaults-save").click();
+  await until(() => document.querySelector("#setup-defaults-status").textContent.startsWith("Defaults saved."),
+    "saved Setup defaults");
+  clickSelect("Task 48");
+  await until(() => workTitle() === "Task 48", "saved defaults preserve old task");
   await control("checkpoint", "capacity");
   clickSelect("Task 47");
   await until(() => selectedTitle() === "Task 47" && workTitle() === "Task 47", "older task selection");
@@ -418,6 +435,25 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "navigation_recorded");
   clickNew();
   await until(() => rows().length === 47 && statusFor("Task 50") === "New task", "busy Setup task");
+  const inheritedVerify = await until(() => {
+    const input = document.querySelector('[data-option="verify_after_execute"]');
+    return input instanceof HTMLInputElement && !input.disabled ? input : null;
+  }, "new task Setup defaults");
+  const newTaskDefaults = inheritedVerify.checked;
+  inheritedVerify.checked = false;
+  inheritedVerify.dispatchEvent(new Event("change", {bubbles: true}));
+  settingsButton.click();
+  await until(() => !defaultVerify.disabled, "restore isolated Setup defaults");
+  defaultVerify.checked = originalDefaultVerify;
+  defaultVerify.dispatchEvent(new Event("change", {bubbles: true}));
+  document.querySelector("#setup-defaults-save").click();
+  await until(() => document.querySelector("#setup-defaults-status").textContent.startsWith("Defaults saved."),
+    "restored isolated Setup defaults");
+  clickSelect("Task 50");
+  await until(() => workTitle() === "Task 50", "restored new task draft");
+  const newTaskOverrideRetained = document.querySelector('[data-option="verify_after_execute"]').checked === false;
+  await control("record", {setup_defaults: {defaultsDraftRetained, newTaskDefaults, newTaskOverrideRetained,
+    adsUnavailable: document.querySelector('[data-option="preserve_ads"]').disabled}});
   await control("start_busy");
   await control("set_stage", "busy");
 })()

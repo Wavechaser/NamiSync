@@ -17,7 +17,17 @@
     </header>
     <div class="nami-settings" id="settings-view" hidden>
       <section class="nami-card nami-settings__card">
-        <h2>Settings</h2>
+        <h2>Setup defaults</h2>
+        <p>Used for new tasks. Existing tasks keep their choices.</p>
+        <div class="nami-settings__controls" id="setup-defaults-controls"></div>
+        <p id="setup-defaults-status" role="status" aria-live="polite"></p>
+        <div class="nami-settings__actions">
+          <button id="setup-defaults-save" class="nami-button nami-button--primary" type="button" disabled>Save defaults</button>
+          <button id="setup-defaults-refresh" class="nami-button" type="button" hidden>Read current defaults</button>
+        </div>
+      </section>
+      <section class="nami-card nami-settings__card">
+        <h2>Appearance</h2>
         <div class="nami-shell__theme">
           <span class="nami-field__label" id="theme-mode-label">Theme</span>
           <div class="nami-combobox" data-value="system" id="theme-mode">

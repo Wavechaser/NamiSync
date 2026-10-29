@@ -220,6 +220,7 @@ source = source
   .replace("./readiness.js", readinessStub)
   .replace("./appearance.js", appearanceStub)
   .replace("./theme.js", themeStub)
+  .replace("./settings.js", `data:text/javascript,${encodeURIComponent("export const installSetupDefaults = () => ({ open() {} });")}`)
   .replace("./execution_confirmation.js", executionConfirmationStub)
   .replace("./panels.js", panelsStub)
   .replace("./rail.js", railStub)

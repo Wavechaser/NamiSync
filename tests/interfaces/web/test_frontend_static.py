@@ -234,6 +234,18 @@ def test_br_g_32_only_bridge_wrapper_references_pywebview(
     assert assets["bridge.js"].count("window.pywebview") == 1
 
 
+def test_setup_defaults_editor_preserves_dirty_fields_and_never_replays() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the Setup defaults witness"
+    completed = run_node_probe(
+        [str(node), str(PROJECT_ROOT / "tests/assets/settings_probe.mjs"),
+         str(PROJECT_ROOT / ASSET_ROOT / "settings.js")], timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+    assert completed.stderr == ""
+
+
 def test_modules_use_only_local_explicit_js_imports(
     built_wheel: BuiltWheel,
 ) -> None:
@@ -250,6 +262,7 @@ def test_modules_use_only_local_explicit_js_imports(
             "./readiness.js",
             "./appearance.js",
             "./theme.js",
+            "./settings.js",
             "./execution_confirmation.js",
             "./panels.js",
             "./rail.js",
@@ -274,6 +287,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "readiness.js": [],
         "render.js": [],
         "setup.js": ["./icons.js", "./render.js"],
+        "settings.js": ["./bridge.js", "./render.js"],
         "theme.js": ["./bridge.js", "./render.js"],
         "tree.js": ["./render.js", "./row_highlight.js", "./table_controller.js"],
         "row_highlight.js": [],

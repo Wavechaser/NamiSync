@@ -1050,6 +1050,12 @@ class NamiSyncService:
         self._require_open()
         return self._runtime.commit_semantic_settings(patch)
 
+    def commit_setup_defaults(
+        self, patch: SemanticSettingsPatchView,
+    ) -> SetupOptionsView:
+        self._require_open()
+        return self._runtime.commit_setup_defaults(patch)
+
     def get_plan_review(self, request_id: str):
         state, artifact = self._selection_state(request_id)
         with self._lock:

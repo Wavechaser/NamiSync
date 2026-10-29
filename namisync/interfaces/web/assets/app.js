@@ -53,6 +53,7 @@ import {
 import { installReadinessReceiver } from "./readiness.js";
 import { installAppearanceReceiver } from "./appearance.js";
 import { installThemeCombobox, installThemeSelector } from "./theme.js";
+import { installSetupDefaults } from "./settings.js";
 import { createExecutionConfirmation } from "./execution_confirmation.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
@@ -107,6 +108,7 @@ const theme = installThemeSelector(themeCombobox, {
   },
 });
 themeRefresh.addEventListener("click", () => { void theme.refresh(); });
+const setupDefaults = installSetupDefaults(settingsView);
 let appliedPresentationRevision = null;
 installAppearanceReceiver(
   window.chrome.webview,
@@ -475,6 +477,7 @@ function showSettings() {
   navigationRevision += 1;
   settingsVisible = true;
   renderTasks();
+  void setupDefaults.open();
 }
 
 function followEligible(review) {

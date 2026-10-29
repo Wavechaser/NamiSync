@@ -19,6 +19,37 @@ from namisync.workflows.runtime import LocalWorkflowRuntime
 from _service_fixtures import make_service
 
 
+def test_setup_defaults_save_is_partial_and_never_changes_frozen_requests(tmp_path: Path) -> None:
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    service = make_service(runtime=runtime)
+    try:
+        service.commit_semantic_settings(SemanticSettingsPatchView(
+            preservation=PreservationSettingsView(True, True, False),
+        ))
+        before = service.read_setup_options()
+        request = runtime.create_plan_request("original", "source", "target")
+        updated = service.commit_setup_defaults(SemanticSettingsPatchView(
+            filters=("b/*", "a/*", "b/*"), preserve_created=False,
+            verify_after_execute=True,
+        ))
+        service.commit_setup_defaults(SemanticSettingsPatchView(preserve_acl=True))
+        assert updated.filters == ("a\\*", "b\\*")
+        assert updated.verify_after_execute is True
+        assert updated.preservation == PreservationSettingsView(False, False, False)
+        assert service.read_setup_options().preservation == PreservationSettingsView(False, False, True)
+        assert service.read_semantic_settings().preservation == PreservationSettingsView(True, False, True)
+        assert before.verify_after_execute is False
+        assert request.verify_after_execute is False
+        assert runtime.create_plan_request("later", "source", "target").verify_after_execute is False
+        assert request.options.preservation.preserve_created is True
+        with pytest.raises(ValueError, match="individual"):
+            service.commit_setup_defaults(SemanticSettingsPatchView(
+                preservation=PreservationSettingsView(False, True, False),
+            ))
+    finally:
+        runtime.close()
+
+
 def _wait_for_terminal(service: NamiSyncService, session_id: str):
     current = service.observe(session_id, lambda _update: None)
     try:

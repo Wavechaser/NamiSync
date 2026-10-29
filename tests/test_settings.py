@@ -88,6 +88,50 @@ def test_semantic_settings_round_trip_and_capture_immutable_options(
     assert policy_fingerprint(updated.to_sync_options()) != captured_fingerprint
 
 
+def test_setup_defaults_partial_preservation_and_verification_round_trip(tmp_path: Path) -> None:
+    store = SemanticSettingsStore(tmp_path / "settings.json")
+    original = store.commit(SemanticSettingsPatch(
+        preservation=PreservationPolicy(True, True, False),
+    ))
+    first = store.commit(SemanticSettingsPatch(preserve_created=False))
+    second = store.commit(SemanticSettingsPatch(preserve_acl=True, verify_after_execute=True))
+    assert first.preservation == PreservationPolicy(True, False, False)
+    assert second.preservation == PreservationPolicy(True, False, True)
+    assert second.verify_after_execute is True
+    assert store.read() == second
+    assert original.to_sync_options().preservation == PreservationPolicy(True, True, False)
+    assert json.loads(store.path.read_text(encoding="utf-8"))["schema_version"] == 2
+
+
+@pytest.mark.parametrize("value", [0, 1, "true"])
+def test_setup_defaults_new_switches_require_exact_bools(value: object) -> None:
+    for field in ("verify_after_execute", "preserve_created", "preserve_acl"):
+        with pytest.raises(TypeError, match="bool"):
+            SemanticSettingsPatch(**{field: value})
+    with pytest.raises(TypeError, match="bool"):
+        SemanticSettings(verify_after_execute=value)  # type: ignore[arg-type]
+
+
+def test_setup_defaults_reject_full_and_partial_preservation() -> None:
+    with pytest.raises(ValueError, match="combined"):
+        SemanticSettingsPatch(preservation=PreservationPolicy(), preserve_acl=True)
+
+
+def test_old_settings_schema_is_refused_without_rewrite(tmp_path: Path) -> None:
+    path = tmp_path / "settings.json"
+    payload = json.loads(settings_module._encode_settings(SemanticSettings()))
+    payload["schema_version"] = 1
+    payload.pop("verify_after_execute")
+    original = json.dumps(payload).encode("utf-8")
+    path.write_bytes(original)
+    store = SemanticSettingsStore(path)
+    with pytest.raises(SettingsFormatError):
+        store.read()
+    with pytest.raises(SettingsFormatError):
+        store.commit(SemanticSettingsPatch(verify_after_execute=True))
+    assert path.read_bytes() == original
+
+
 def test_semantic_settings_reject_hidden_mirror_and_bad_schema(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="mirror"):
         SemanticSettings(deletion_policy=DeletionPolicy.MIRROR)
@@ -97,7 +141,7 @@ def test_semantic_settings_reject_hidden_mirror_and_bad_schema(tmp_path: Path) -
         '{"deletion_policy":"trash","filters":[],"preservation":'
         '{"preserve_acl":false,"preserve_ads":false,"preserve_created":true},'
         '"propagate_source_casing":false,"schema_version":999,'
-        '"trash_on_update":true}',
+        '"trash_on_update":true,"verify_after_execute":false}',
         encoding="utf-8",
     )
     with pytest.raises(SettingsFormatError, match="unsupported"):
@@ -128,6 +172,7 @@ def test_semantic_settings_schema_version_requires_an_exact_integer(
                     "preserve_acl": False,
                 },
                 "propagate_source_casing": False,
+                "verify_after_execute": False,
             }
         ),
         encoding="utf-8",
@@ -158,7 +203,7 @@ def test_settings_read_admits_exact_byte_limit_and_rejects_n_plus_one_before_jso
     path = tmp_path / "settings.json"
     calls: list[int] = []
     decoded = {
-        "schema_version": 1,
+        "schema_version": 2,
         "filters": [],
         "deletion_policy": "trash",
         "trash_on_update": True,
@@ -168,6 +213,7 @@ def test_settings_read_admits_exact_byte_limit_and_rejects_n_plus_one_before_jso
             "preserve_acl": False,
         },
         "propagate_source_casing": False,
+        "verify_after_execute": False,
     }
 
     def accepted_loads(payload: str, **_kwargs):
@@ -195,7 +241,7 @@ def test_settings_filter_decode_rejects_n_plus_one_before_filter_construction(
 ) -> None:
     path = tmp_path / "settings.json"
     payload = {
-        "schema_version": 1,
+        "schema_version": 2,
         "filters": [str(index) for index in range(65)],
         "deletion_policy": "trash",
         "trash_on_update": True,
@@ -205,6 +251,7 @@ def test_settings_filter_decode_rejects_n_plus_one_before_filter_construction(
             "preserve_acl": False,
         },
         "propagate_source_casing": False,
+        "verify_after_execute": False,
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
 

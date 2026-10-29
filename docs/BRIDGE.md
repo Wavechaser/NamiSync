@@ -473,6 +473,8 @@ BOOTSTRAP rows, commands require OPEN.
 | `readiness_echo` | `{challenge:HexId}` | `{acknowledged:boolean}` | BOOTSTRAP with exact post-open replay; 5 s; one identical-payload retry after false/uncertainty |
 | `pick_folder` | `{purpose:"source"\|"target"\|"inventory"}` | `null` or `LocationChoice` | interactive; no deadline or automatic retry |
 | `read_setup` | `{task_id:null\|TaskId}` | `{task_id:null\|TaskId,snapshot:SetupSnapshot,recents:null\|RecentLocations}` | 5 s; one identical-payload retry |
+| `read_setup_defaults` | `{}` | canonical `SetupOptions` | 5 s; one identical-payload retry |
+| `commit_setup_defaults` | `{patch:SetupDefaultsPatch}` | canonical `SetupOptions` | async-small; current-state recovery; 5 s feedback; no mutation replay |
 | `probe_recent_pairs` | `{}` | `{pairs:[{mapping_id:LocationId,source_id:LocationId,target_id:LocationId,source_state:LocationState,target_state:LocationState}]}` | async-small; 5 s; no automatic retry |
 | `prepare_setup` | `{options:SetupOptions}` | canonical `SetupOptions` | 5 s; one identical-payload retry |
 | `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | current-state recovery; 5 s feedback; no mutation replay |
@@ -954,6 +956,19 @@ at most 16,384 bytes before normalization. Existing backend `FilterSet` grammar
 and canonicalization apply; the browser never normalizes or deduplicates them.
 Defaults prepopulate the form, and `prepare_setup` freezes one complete value
 per gesture without writing global settings.
+
+`read_setup_defaults` takes `{}` and returns complete canonical `SetupOptions`.
+`commit_setup_defaults` takes exactly `{patch}`; its nonempty partial patch allows
+only `filters`, `deletion_policy`, `trash_on_update`, `preserve_created`,
+`preserve_acl`, `propagate_source_casing`, and `verify_after_execute`. Each supplied
+value follows the existing Setup bounds and scalar rules. ADS is unavailable and
+cannot be patched. Only supplied dirty fields change; native persistence merges
+partial preservation switches under its write mutex. Both commands forbid
+command id and revision. Reads use local-five-second/same-payload-once policy;
+saves use feedback-only/no-retry policy and asynchronous small work. An uncertain
+save is reconciled through a current defaults read, never an automatic replay.
+The read does not certify the original save outcome. Defaults changes do not
+rewrite existing drafts, queued pairs, frozen Setup or Plan-again values.
 
 `LocationCandidate` is exactly `{kind:"literal_path",path,selected_mount}` or
 `{kind:"remembered_location",location_id,selected_mount}`. A mount is null or

@@ -63,8 +63,10 @@ search/filter-scoped bulk selection, sibling sorting and a
 blocking Fluent confirmation
 for each destructive execution admission,
 live pause/resume/cancel controls, bounded live and retained execution review,
-and a minimal Settings/About page with theme control and independent task-rail
-scrolling. Execution review keeps filesystem, verification, recording and audit
+and a Settings page with saved Setup defaults, theme control and About, alongside
+independent task-rail scrolling. Defaults include automatic verification for new
+desktop tasks; existing task choices and explicit CLI verification remain unchanged.
+Execution review keeps filesystem, verification, recording and audit
 results distinct, with current stored evidence and on-demand operation detail.
 Canonical execution following has an explicit manual override and navigation
 controls; phase progress, observed throughput and ETA share the inline status

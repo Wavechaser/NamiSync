@@ -196,6 +196,7 @@ const replacements = {
   "./readiness.js": url("export const installReadinessReceiver = () => ({ revision: () => 0 });"),
   "./appearance.js": url("export const installAppearanceReceiver = () => {};"),
   "./theme.js": url("export const installThemeCombobox = () => ({}); export const installThemeSelector = () => ({ refresh() {} });"),
+  "./settings.js": url("export const installSetupDefaults = () => ({ open() {} });"),
   "./execution_confirmation.js": url(`export const createExecutionConfirmation = (...factory) => ({
     element: new HTMLElement('dialog'), show(request) { globalThis.inventoryConfirmations.push({factory, request}); }
   });`),

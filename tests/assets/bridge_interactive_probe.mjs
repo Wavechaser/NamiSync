@@ -283,6 +283,27 @@ const setupOptions = {
   propagate_source_casing: false,
   verify_after_execute: false,
 };
+testWindow.queueResults("read_setup_defaults", setupOptions);
+assert.deepEqual(await bridge.readSetupDefaults(), setupOptions);
+testWindow.queueResults("commit_setup_defaults", {...setupOptions, verify_after_execute: true});
+assert.equal((await bridge.commitSetupDefaults({verify_after_execute: true})).verify_after_execute, true);
+assert.deepEqual(testWindow.requests.at(-1).payload, {patch: {verify_after_execute: true}});
+for (const patch of [{}, {preserve_ads: false}, {preservation: {}},
+  {verify_after_execute: 1}, {filters: ["x".repeat(1025)]}, {filters: Array(65).fill("x")},
+  {filters: ["\ud800"]}, {deletion_policy: "mirror"}, {preserve_acl: null}]) {
+  assert.throws(() => bridge.commitSetupDefaults(patch), TypeError);
+}
+const defaultsRequestCount = testWindow.requests.length;
+const defaultsObservationCount = testWindow.observations.length;
+testWindow.failCommand("commit_setup_defaults", 1);
+testWindow.queueResults("commit_setup_defaults", setupOptions);
+await assert.rejects(bridge.commitSetupDefaults({preserve_created: false}), bridge.BridgeTransportError);
+assert.equal(testWindow.requests.length, defaultsRequestCount + 1, "uncertain save cannot replay");
+assert.equal(testWindow.observations.length, defaultsObservationCount, "save uses current-state reconciliation");
+testWindow.queueResults("read_setup_defaults", setupOptions, setupOptions);
+testWindow.failCommand("read_setup_defaults", 1);
+assert.deepEqual(await bridge.readSetupDefaults(), setupOptions);
+assert.equal(testWindow.requests.length, defaultsRequestCount + 3, "current read retries once");
 const setupLocation = { display: "C:\\Selected", location_id: null };
 const defaultSetup = {
   setup_state: "default",
