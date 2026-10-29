@@ -47,6 +47,20 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Settings links and footer — 2026-10-29
+
+Approved two atomic follow-ups from `156677de`: read the complete seven-color
+Windows palette (Accent, Light1–3 and Dark1–3) in the existing appearance owner,
+project Dark2/Light3 for un-underlined HyperlinkButtons, then align the Settings
+advisory left and Save controls right in a stable footer row. Owners/direct
+consumers are appearance snapshot/publication, exact browser validator, theme
+tokens and hyperlink styles, appearance/material/gallery witnesses, Settings
+markup/footer styles and installed Settings checks. Preserve other accent-filled
+controls, forced colors, save/read recovery semantics and task defaults. Gates:
+focused appearance/frontend checks, interface department, affected installed
+appearance/gallery/Settings cases and independent review per atomic outcome.
+In progress. No unrelated material, lifecycle or Settings contract changes.
+
 ### Settings and final layout batch — 2026-10-29
 
 User-approved three atomic outcomes, based on `c64aec73`:

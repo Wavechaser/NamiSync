@@ -370,8 +370,19 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   }, "Setup defaults readiness");
   const originalDefaultVerify = defaultVerify.checked;
   if (originalDefaultVerify) throw new Error("isolated fixture must start with verification off");
+  const defaultsFooter = document.querySelector(".nami-settings__footer");
+  const defaultsCard = defaultsFooter.closest(".nami-settings__card");
+  const cleanDefaultsHeight = defaultsCard.getBoundingClientRect().height;
   defaultVerify.checked = true;
   defaultVerify.dispatchEvent(new Event("change", {bubbles: true}));
+  const footerBounds = defaultsFooter.getBoundingClientRect();
+  const saveBounds = document.querySelector("#setup-defaults-save").getBoundingClientRect();
+  const advisoryBounds = document.querySelector("#setup-defaults-status").getBoundingClientRect();
+  const defaultsFooterStable = Math.abs(defaultsCard.getBoundingClientRect().height - cleanDefaultsHeight) <= 1;
+  const defaultsFooterAligned = Math.abs(saveBounds.right - footerBounds.right) <= 1
+    && Math.abs(advisoryBounds.left - footerBounds.left) <= 1
+    && advisoryBounds.right <= saveBounds.left
+    && advisoryBounds.top >= saveBounds.top && advisoryBounds.bottom <= saveBounds.bottom;
   const settingsSurface = document.querySelector(".nami-work-panel").getAttribute("aria-label") === "Settings" &&
     document.querySelectorAll("#settings-view > .nami-card").length === 3 &&
     document.querySelector("#settings-view").textContent.includes('0.1.0 "Gertrud"') &&
@@ -453,6 +464,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => workTitle() === "Task 50", "restored new task draft");
   const newTaskOverrideRetained = document.querySelector('[data-option="verify_after_execute"]').checked === false;
   await control("record", {setup_defaults: {defaultsDraftRetained, newTaskDefaults, newTaskOverrideRetained,
+    defaultsFooterStable, defaultsFooterAligned,
     adsUnavailable: document.querySelector('[data-option="preserve_ads"]').disabled}});
   await control("start_busy");
   await control("set_stage", "busy");

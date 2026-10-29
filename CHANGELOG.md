@@ -846,6 +846,8 @@ explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain
 - Preserve unsaved fields across navigation, serialize reads and saves, and
   offer current-default readback after an unconfirmed save without replaying it.
   Keep ADS unavailable and theme persistence independent.
+- Keep the ordinary unsaved advisory in the footer's left column and Save
+  defaults at the bottom right without changing the card height.
 
 #### Add About license and open source notices (2026-10-29)
 

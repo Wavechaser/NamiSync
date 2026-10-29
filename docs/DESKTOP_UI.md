@@ -1726,8 +1726,10 @@ including automatic execution verification, with unavailable ADS preservation
 disabled. Exclude filters use individual Add/Remove actions and preserve each
 pattern's exact spelling. Only explicit Save defaults writes the changed fields;
 unchanged fields are omitted from the patch. Reading the page retains unsaved
-fields while refreshing untouched defaults. Reads and saves are serialized and
-disable editing until they settle. A delayed save stays pending; an unconfirmed
+fields while refreshing untouched defaults. The footer keeps advisories on the
+left and Save defaults on the right of the same row. The button reserves the row
+height when the ordinary unsaved advisory is absent. Reads and saves are serialized
+and disable editing until they settle. A delayed save stays pending; an unconfirmed
 save offers Read current defaults before another explicit save and never replays
 the earlier write. A successful current-state read does not claim that the earlier
 save succeeded. Existing task drafts and captured plan choices remain unchanged.

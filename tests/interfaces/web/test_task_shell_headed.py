@@ -339,6 +339,8 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "defaultsDraftRetained": True,
         "newTaskDefaults": True,
         "newTaskOverrideRetained": True,
+        "defaultsFooterStable": True,
+        "defaultsFooterAligned": True,
         "adsUnavailable": True,
     }
 
