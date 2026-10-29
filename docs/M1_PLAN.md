@@ -69,7 +69,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | --- | --- | --- | --- |
 | A1 | Deterministic license text: pin only LICENSE to LF, manually update its embedded text in `assets/legal_content.js`, and compare packaged JS to `read_bytes().decode()` in the About test. Preserve all notice hashes/text and package identity; no unrelated normalization or new generator. Owners: desktop assets, wheel/static tests, .gitattributes. | Existing About reproducer first; real wheel About/package checks in fresh autocrlf true/false checkouts, interfaces department, source/diff and independent review. | Complete; receipts below. |
 | A2 | Correct README stale desktop/bootstrap text, spelling and supported-target/compatibility wording; FEATURES intro/Inventory active status and explicitly future scoped planning; WORKFLOWS review-publication account against actual owners, preserving complete publication/refusal/replacement. | A1 independent; source-to-prose reconciliation, local links/diff and independent review. No support expansion or new publication design. | Complete; source/link/diff review passed. |
-| C1 | Add ordinary ingress witnesses for `admit_location` and `_validate_location_candidate`: typed/remembered successes, bad kind, extra keys, noncanonical/zero/over-range location IDs, refusals before service/slot work. Owners: `web/commands.py` existing contract, `test_commands.py`. | Must pass before B1. Real command invocation with valid purpose; focused command tests and interfaces department. Missing-purpose refusal is not parser coverage. | Pending; precedes B1. |
+| C1 | Add ordinary ingress witnesses for `admit_location` and `_validate_location_candidate`: typed/remembered successes, bad kind, extra keys, noncanonical/zero/over-range location IDs, refusals before service/slot work. Owners: `web/commands.py` existing contract, `test_commands.py`. | Must pass before B1. Real command invocation with valid purpose; focused command tests and interfaces department. Missing-purpose refusal is not parser coverage. | Complete; 280 command and 2,165 interfaces passes, fresh independent review. |
 | B1 | Retire raw-string folder slots, legacy flag/conversion and alternate pair return; narrow FolderSlotAuthority and migrate fixtures to LocationCandidate. Owners: slots/commands; direct command/transport/host/slot fixtures. | C1 complete. Retain opacity, purpose, expiry, capacity, ambiguity, atomic pair resolution, exact replay and fresh admission; focused slots/commands/transport, interfaces and affected installed picker/start witnesses. | Pending. |
 | B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Pending. |
 | B3 | Reuse canonical preorder/inverse result for Inventory PATH sorting; retain second traversal after non-PATH sort. Owner: inventory_projection; Inventory review and tools consumers. | Equal ordered/inverse outputs across empty/nested/warning cases, warning-tail/sort/reset/spelling tests, workflows department and affected required large-projection gate. No speed claim. | Pending. |
@@ -95,6 +95,18 @@ rich fields, hierarchy, Unicode, maximum/empty/head/tail, stale generation and
 fixture identity. Flush-method retirement removes its zero-call counters only
 with the method/protocol; retain finalization order and actual native durable
 flush/recording witnesses.
+
+B1 elaboration (inspected `624c5717`, revalidate after C1): production edits
+are confined to `web/slots.py` and `web/commands.py`; direct fixture consumers
+are `test_slots.py`, `test_commands.py`, `test_transport.py` and `test_host.py`.
+Keep start/replay ordering and continuation re-admission unchanged. Existing
+AB-7 dispositions forbid automatic mutation replay; typed candidates do not
+grant lasting root authority. The single acceptance gate combines these focused
+files, the interfaces department, and installed
+`test_br_g_32_native_picker_keeps_real_paths_in_server_slots` plus
+`test_m1_6_installed_setup_flow`, followed by independent review. Update BRIDGE's
+slot account only as needed; no registry/custody redesign or TTL/capacity change.
+Commit the protocol narrowing and every fixture migration together.
 
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and
@@ -124,16 +136,19 @@ review confirmed exact license/hash, unchanged third-party bytes, and raw wheel
 comparison. Evidence: `results/a1-fresh-checkouts.json`, `a1-fresh-checkouts.log`,
 `a1-c1-interfaces.log` and `a1-c1-native-recheck.log` under the study root.
 
-The batch is **paused at the user's request after A1/A2**. A1 committed as
+The user resumed the batch on 2026-10-29 under the execute-task workflow.
+C1 resumes first, followed by B1 only after its prerequisite closes. Reduction
+reviews classify lost guarantees independently of test color; obsolete mechanism
+assertions may retire, while passing tests supplement producer/consumer review.
+A1 committed as
 `0bbe841d`; A2 reconciles the three named documents with current source, with
 77 local file-link targets verified and independent source/diff review passed.
-Already-written C1 ingress tests passed
-280 command cases and the above interfaces gate, but are not delivered. Only
-that file is preserved at `codex/recovery-closeout-c1-20261029` (`419aad11`), with
-exact patch/provenance in `results/c1-preservation.json` and `c1-unfinished.patch`.
-Rebuild and review the test delta on resumption; never merge the recovery commit
-as-is. Do not start B1 or another row during this pause. No existing user branch
-or stash was changed.
+C1's saved delta was rebuilt, without merging/cherry-picking recovery `419aad11`.
+Fresh gates passed 280 command cases and 2,165 interfaces cases; a fresh reviewer
+found no issue with parser reachability, typed conversion or refusal/order
+witnesses. Evidence: `results/c1-resume-command-20261029.log`,
+`c1-resume-interfaces.log` and `c1-resume-review.txt`. The recovery ref is retained
+for final accounting. No existing user branch or stash was changed.
 
 ### Settings links and footer — 2026-10-29
 

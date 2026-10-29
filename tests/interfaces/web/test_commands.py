@@ -2145,6 +2145,97 @@ def test_br_g_32_admit_location_validates_exact_keys_before_indexing(
     assert service.calls == []
 
 
+@pytest.mark.parametrize(
+    ("candidate", "expected"),
+    [
+        (
+            {"kind": "literal_path", "path": r"C:\typed 🌊", "selected_mount": None},
+            LocationCandidate.literal(r"C:\typed 🌊"),
+        ),
+        (
+            {"kind": "remembered_location", "location_id": "1", "selected_mount": None},
+            LocationCandidate.remembered(1),
+        ),
+        (
+            {"kind": "remembered_location", "location_id": str(MAX_JAVASCRIPT_SAFE_INTEGER), "selected_mount": None},
+            LocationCandidate.remembered(MAX_JAVASCRIPT_SAFE_INTEGER),
+        ),
+    ],
+)
+def test_admit_location_routes_valid_typed_candidates_before_storing_choice(
+    monkeypatch: pytest.MonkeyPatch,
+    candidate: dict[str, object],
+    expected: LocationCandidate,
+) -> None:
+    commands, slots, service = _commands()
+    admitted: list[LocationCandidate] = []
+    admit = service.admit_location_candidate
+
+    def record_admission(value: LocationCandidate) -> LocationCandidateResult:
+        admitted.append(value)
+        assert slots.stored == []
+        return admit(value)
+
+    monkeypatch.setattr(service, "admit_location_candidate", record_admission)
+
+    result = _invoke(
+        commands["admit_location"],
+        {"purpose": "source", "candidate": candidate},
+    )
+
+    assert admitted == [expected]
+    assert slots.stored == [(expected, "source")]
+    assert result == {
+        "purpose": "source",
+        "state": "resolved",
+        "choice_id": SOURCE_ID,
+        "continuation_id": None,
+        "display": expected.path or r"C:\remembered",
+        "location_id": None if expected.location_id is None else str(expected.location_id),
+        "candidates": [],
+        "detail": None,
+    }
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    [
+        None,
+        [],
+        {},
+        {"kind": "unknown", "path": r"C:\source", "selected_mount": None},
+        {"kind": True, "path": r"C:\source", "selected_mount": None},
+        {"kind": "literal_path", "path": r"C:\source"},
+        {"kind": "literal_path", "path": r"C:\source", "selected_mount": None, "extra": None},
+        {"kind": "literal_path", "path": None, "selected_mount": None},
+        {"kind": "literal_path", "path": "\ud800", "selected_mount": None},
+        {"kind": "remembered_location", "location_id": "1"},
+        {"kind": "remembered_location", "location_id": "1", "selected_mount": None, "extra": None},
+        *(
+            {"kind": "remembered_location", "location_id": value, "selected_mount": None}
+            for value in ("0", "-1", "01", "+1", " 1", "1 ", "١", str(MAX_JAVASCRIPT_SAFE_INTEGER + 1), str((1 << 63) - 1), str(1 << 63), 1, True, None)
+        ),
+    ],
+)
+def test_admit_location_rejects_nested_candidates_before_admission_or_slot_effects(
+    monkeypatch: pytest.MonkeyPatch,
+    candidate: object,
+) -> None:
+    commands, slots, service = _commands()
+    admitted: list[object] = []
+    monkeypatch.setattr(service, "admit_location_candidate", admitted.append)
+
+    with pytest.raises(CommandPayloadError, match="admit_location payload"):
+        _invoke(
+            commands["admit_location"],
+            {"purpose": "source", "candidate": candidate},
+        )
+
+    assert admitted == []
+    assert slots.stored == []
+    assert service.calls == []
+
+
 def test_br_g_32_synthetic_escape_projection_admits_combined_size_before_eviction() -> None:
     mount_paths = tuple(
         "\x01" * 32_765 + f"{index:02d}"
