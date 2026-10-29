@@ -47,6 +47,20 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Shell gutter compensation — 2026-10-29
+
+Remove the document stable gutter, retain work-panel stable gutters on every
+page, and compensate globally with 14px inline-end padding (24px minus the
+shared 10px custom-scrollbar size). Gallery owns its document gutter and symmetric
+padding, removed during its production-shell witness. Forced colors intentionally
+retain browser width with the same padding. One CSS/gallery/docs commit; preserve
+all internal scroll owners, native input and action behavior. Gate: interface
+department, installed gallery/Plan/Inventory/execution cases, independent review.
+Complete: 2,105 interface tests and all nine installed cases pass (eight initial
+passes plus unchanged larger-execution rerun). The retained failed attempt waited
+for ordinary Resume; its underlying cause is unestablished. Independent review
+found no remaining issue. Evidence: `build/gui-gutter-20261029/`.
+
 ### Alignment closeout — 2026-10-29
 
 Review and commit the user's existing shared cloud/floating-control CSS edits:

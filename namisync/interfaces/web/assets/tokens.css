@@ -43,6 +43,7 @@
   --space-5: 16px;
   --space-6: 24px;
   --space-7: 32px;
+  --scrollbar-size: 10px;
 
   /* The local 4px radius labels select Fluent Medium, XLarge, and 2XLarge. */
   --radius-none: 0;

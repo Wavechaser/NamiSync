@@ -538,6 +538,8 @@ window.addEventListener("unhandledrejection", (event) => {
   app.style.blockSize = "auto";
   app.style.gridTemplateRows = "none";
   app.style.overflow = "visible";
+  app.style.paddingInlineEnd = "var(--space-6)";
+  document.documentElement.style.scrollbarGutter = "stable";
   const galleryHeader = document.createElement("header");
   galleryHeader.className = "nami-shell__header";
   const heading = document.createElement("h1");
@@ -3785,6 +3787,8 @@ window.addEventListener("unhandledrejection", (event) => {
     blockSize: app.style.blockSize,
     gridTemplateRows: app.style.gridTemplateRows,
     overflow: app.style.overflow,
+    paddingInlineEnd: app.style.paddingInlineEnd,
+    scrollbarGutter: document.documentElement.style.scrollbarGutter,
   };
   const catalogPanelStyle = {
     blockSize: planReviewPanel.element.style.blockSize,
@@ -3795,6 +3799,8 @@ window.addEventListener("unhandledrejection", (event) => {
   app.style.removeProperty("block-size");
   app.style.removeProperty("grid-template-rows");
   app.style.removeProperty("overflow");
+  app.style.removeProperty("padding-inline-end");
+  document.documentElement.style.removeProperty("scrollbar-gutter");
   const minimumHeader = document.createElement("header");
   minimumHeader.className = "nami-shell__header";
   const minimumHeading = document.createElement("h1");
@@ -3814,6 +3820,15 @@ window.addEventListener("unhandledrejection", (event) => {
   minimumWorkBody.append(planReviewPanel.element);
   app.append(minimumHeader, minimumRail, minimumWork);
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const shellPadding = getComputedStyle(app);
+  const pageRightGap = innerWidth - minimumWorkBody.getBoundingClientRect().right;
+  if (getComputedStyle(document.documentElement).scrollbarGutter !== "auto"
+      || getComputedStyle(minimumWork).scrollbarGutter !== "stable"
+      || parseFloat(shellPadding.paddingInlineStart) !== 24
+      || parseFloat(shellPadding.paddingInlineEnd) !== 14
+      || (!matchMedia("(forced-colors: active)").matches && Math.abs(pageRightGap - 24) > 1)) {
+    throw new Error("Production shell padding must include exactly one work-panel gutter");
+  }
   headlineLayout.push(...railHeadlineLayout("minimum"));
   const minimumLayoutEvidence = [
     await diagnosticLayout("minimum-folded-empty", null, false, false),
@@ -3967,6 +3982,8 @@ window.addEventListener("unhandledrejection", (event) => {
   app.style.blockSize = catalogRootStyle.blockSize;
   app.style.gridTemplateRows = catalogRootStyle.gridTemplateRows;
   app.style.overflow = catalogRootStyle.overflow;
+  app.style.paddingInlineEnd = catalogRootStyle.paddingInlineEnd;
+  document.documentElement.style.scrollbarGutter = catalogRootStyle.scrollbarGutter;
   planReviewPanel.element.style.blockSize = catalogPanelStyle.blockSize;
   planReviewPanel.element.style.gridColumn = catalogPanelStyle.gridColumn;
   galleryMeasurementStep = "recent_ui_specimens";

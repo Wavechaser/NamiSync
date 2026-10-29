@@ -133,9 +133,18 @@ development mutex/title and roots all state beneath
 composition does not change the production launcher's arguments, environment
 contract, packaged assets, or desktop behavior. `TOOLS.md` owns its exact
 commands, relaunch loop, diagnostic lifecycle, and process-safety rules.
-The gallery is a natural-height specimen document with page scrolling; it does
-not inherit the task shell's viewport-height limit. Installed gallery checks
-reject overlap between its top-level specimen sections.
+The production document reserves no scrollbar gutter. The shell keeps 24px
+outer padding except at inline end, where it subtracts the shared 10px scrollbar
+size to give 14px. Every work panel retains its stable gutter, including Plan
+and Inventory with hidden outer overflow, so normal-theme page content ends
+24px from the window edge. Setup and Settings use that same gutter when scrolling.
+Forced colors keep the same shell padding and browser-owned scrollbar width;
+their combined spacing may differ from 24px but remains consistent across pages.
+The gallery is a natural-height specimen document with page scrolling; it owns
+a stable document gutter and symmetric 24px padding. Its temporary production
+shell check removes those overrides and restores them afterward. It does not
+inherit the task shell's viewport-height limit. Installed gallery checks reject
+overlap between its top-level specimen sections.
 
 Scrolling remains browser-owned. The bundled WebView2 SDK supports
 [`ScrollBarStyle = FluentOverlay`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2environmentoptions.scrollbarstyle),

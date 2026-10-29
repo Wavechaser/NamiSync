@@ -223,6 +223,9 @@ explicit, reviewable and regression-backed.
 
 #### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-29)
 
+- Remove the unused document gutter and include the retained work-panel gutter
+  in the shell's right spacing: 14px padding plus the normal 10px gutter.
+  Give the scrolling gallery its own gutter and symmetric padding override.
 - Align the native-size cloud artwork optically within its row slot and move
   floating Go/Follow controls to 28px logical insets.
 - Group item details with divider lines and 1:1.5 metadata columns. Put Plan

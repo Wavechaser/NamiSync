@@ -32,13 +32,13 @@ body {
     .nami-tree,
     .nami-combobox__popup
   )::-webkit-scrollbar {
-    height: 10px;
-    width: 10px;
+    height: var(--scrollbar-size);
+    width: var(--scrollbar-size);
   }
 
   .nami-table__header::-webkit-scrollbar {
-    height: 10px;
-    width: 10px;
+    height: var(--scrollbar-size);
+    width: var(--scrollbar-size);
   }
 
   :is(

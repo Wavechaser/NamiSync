@@ -4,10 +4,6 @@ body {
   margin: 0;
 }
 
-html {
-  scrollbar-gutter: stable;
-}
-
 body {
   container-type: inline-size;
   min-block-size: 100vh;
@@ -27,6 +23,7 @@ body {
   min-block-size: 100vh;
   overflow: hidden;
   padding: var(--space-6);
+  padding-inline-end: calc(var(--space-6) - var(--scrollbar-size));
 }
 
 .nami-shell__header {
