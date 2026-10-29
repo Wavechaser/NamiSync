@@ -161,18 +161,6 @@ class InventorySnapshot:
 
 
 @dataclass(frozen=True, slots=True)
-class RunSnapshot:
-    run_token: str
-    activity_kind: str
-    host_id: int
-    mapping_id: int | None
-    started_at: datetime
-    ended_at: datetime | None
-    filesystem_status: str | None
-    recording_status: str | None
-
-
-@dataclass(frozen=True, slots=True)
 class MappingLookup:
     mapping_id: int
     source_location_id: int
@@ -1172,23 +1160,6 @@ class LedgerRepository:
                     ORDER BY id""",
                 (location_id, location_id),
             )
-        )
-
-    def get_run(self, run_token: str) -> RunSnapshot:
-        row = self._connection.execute(
-            "SELECT * FROM runs WHERE run_token = ?", (run_token,)
-        ).fetchone()
-        if row is None:
-            raise KeyError(run_token)
-        return RunSnapshot(
-            run_token=row["run_token"],
-            activity_kind=row["activity_kind"],
-            host_id=int(row["host_id"]),
-            mapping_id=None if row["mapping_id"] is None else int(row["mapping_id"]),
-            started_at=decode_utc(row["started_at"]),
-            ended_at=_optional_time(row["ended_at"]),
-            filesystem_status=row["filesystem_status"],
-            recording_status=row["recording_status"],
         )
 
     def close(self) -> None:

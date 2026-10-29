@@ -443,10 +443,6 @@ class PlanReviewState:
             return "selected"
         return "unselected" if selected == 0 else "mixed"
 
-    def node_for_id(self, node_id: str) -> PlanProjectionNode:
-        with self._lock:
-            return self.projection.node_for_id(node_id)
-
     def detail(self, *, expected_revision: int, node_id: str) -> dict[str, object]:
         with self._lock:
             response: dict[str, object] = {

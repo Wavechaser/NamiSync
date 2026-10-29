@@ -416,17 +416,6 @@ class Terminal:
             raise TypeError("Terminal result has the wrong type")
 
 
-EventBody = (
-    StateChanged
-    | PhaseChanged
-    | Progress
-    | ItemOutcome
-    | IntegrityOutcome
-    | Gap
-    | Terminal
-)
-
-
 @dataclass(frozen=True, slots=True)
 class Envelope:
     session_id: SessionId

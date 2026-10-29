@@ -173,6 +173,9 @@ behavioral evidence.
   typed candidates throughout, preserving expiry, capacity, ambiguity, atomic
   pair lookup, fresh admission and original-result replay. Native picker and
   installed Setup witnesses passed.
+- Retired the finite unconsumed contract, repository, service, workflow and
+  presentation helpers and their resulting orphans. Preserved live facade
+  imports and similarly named APIs; no tests were deleted for this outcome.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

@@ -15,7 +15,6 @@ from namisync.workflows.inventory import (
     InventoryDetails,
     InventoryRequest,
     LocationCandidate,
-    LocationCandidateKind,
     LocationCandidateResult,
     LocationCandidateState,
     LocationBinding,
@@ -89,12 +88,6 @@ from namisync.workflows.sync import (
 )
 
 
-def sync_options(deletion_policy: str) -> SyncOptions:
-    """Translate the M0 public deletion choices into typed plan options."""
-
-    return SyncOptions(deletion_policy=DeletionPolicy(deletion_policy))
-
-
 def integrity_request(
     mode: str,
     request_id: str,
@@ -155,7 +148,6 @@ __all__ = [
     "InventoryProjectionPopulationLimitError",
     "InventoryRollup",
     "LocationCandidate",
-    "LocationCandidateKind",
     "LocationCandidateResult",
     "LocationCandidateState",
     "LocationBinding",
@@ -190,6 +182,5 @@ __all__ = [
     "run_plan",
     "sort_plan_projection",
     "sort_inventory_projection",
-    "sync_options",
     "validate_sync_paths",
 ]

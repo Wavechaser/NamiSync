@@ -19,7 +19,6 @@ const FILTERS = Object.freeze([
   "copy", "mkdir", "move", "rename", "update", "move_update", "trash", "delete",
   "error", "unsupported", "blocked", "noop", "notice", "recall",
 ]);
-const WINDOW_LIMIT = 256;
 const ROW_HEIGHT = 24;
 const DISPLAY_LABELS = Object.freeze({
   all: "All", copy: "Copy", move: "Move", update: "Update", remove: "Remove",

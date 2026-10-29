@@ -2160,18 +2160,6 @@ def refusal_views(verdict: Verdict) -> tuple[RefusalView, ...]:
     return tuple(views)
 
 
-def _emit_items(ctx: RunContext, items: tuple[ItemOutcome, ...]) -> None:
-    for item in items:
-        ctx.emit(
-            snapshot_item_outcome(
-                item,
-                item_id=item.item_id,
-                kind=item.kind,
-                path=item.path,
-            )
-        )
-
-
 def _strict_execution_revalidator(
     xset: ExecutionSet,
 ) -> Callable[[], None]:

@@ -11,7 +11,7 @@ from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import datetime
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Callable, Mapping
+from typing import Mapping
 
 from namisync.core.clock import Clock
 from namisync.core.event_v5 import validate_and_encode_event_v5_envelope
@@ -1660,24 +1660,6 @@ class HistoryObserver:
             raise HistoryIntegrityError("history observer is degraded")
 
 
-class HistoryObserverFactory:
-    """Composition-root adapter matching the dispatcher's audit factory shape."""
-
-    def __init__(
-        self,
-        store: HistoryStore,
-        context_provider: Callable[[SessionRecord], HistoryContext | None],
-    ) -> None:
-        self._store = store
-        self._context_provider = context_provider
-
-    def __call__(self, record: SessionRecord) -> HistoryObserver | None:
-        context = self._context_provider(record)
-        if context is None:
-            return None
-        return self._store.observer(record, context)
-
-
 class HistoryRepository:
     def __init__(
         self,
@@ -2660,18 +2642,6 @@ def _operation_results(row: sqlite3.Row) -> frozenset[str]:
 
 def _empty_classification_aggregate() -> _ClassificationCounts:
     return _ClassificationCounts(0, 0, frozenset(), False)
-
-
-def _phase_to_dict(phase: PhaseResult) -> dict[str, object]:
-    return {
-        "phase": phase.phase,
-        "status": phase.status.value,
-        "items_done": phase.items_done,
-        "items_total": phase.items_total,
-        "bytes_done": phase.bytes_done,
-        "bytes_total": phase.bytes_total,
-        "error": phase.error,
-    }
 
 
 def _validate_terminal_snapshot(

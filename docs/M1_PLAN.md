@@ -71,7 +71,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | A2 | Correct README stale desktop/bootstrap text, spelling and supported-target/compatibility wording; FEATURES intro/Inventory active status and explicitly future scoped planning; WORKFLOWS review-publication account against actual owners, preserving complete publication/refusal/replacement. | A1 independent; source-to-prose reconciliation, local links/diff and independent review. No support expansion or new publication design. | Complete; source/link/diff review passed. |
 | C1 | Add ordinary ingress witnesses for `admit_location` and `_validate_location_candidate`: typed/remembered successes, bad kind, extra keys, noncanonical/zero/over-range location IDs, refusals before service/slot work. Owners: `web/commands.py` existing contract, `test_commands.py`. | Must pass before B1. Real command invocation with valid purpose; focused command tests and interfaces department. Missing-purpose refusal is not parser coverage. | Complete; 280 command and 2,165 interfaces passes, fresh independent review. |
 | B1 | Retire raw-string folder slots, legacy flag/conversion and alternate pair return; narrow FolderSlotAuthority and migrate fixtures to LocationCandidate. Owners: slots/commands; direct command/transport/host/slot fixtures. | C1 complete. Retain opacity, purpose, expiry, capacity, ambiguity, atomic pair resolution, exact replay and fresh admission; focused slots/commands/transport, interfaces and affected installed picker/start witnesses. | Complete; 539 focused, 2,166 interfaces, 294 correction checks and two installed witnesses; independent review. |
-| B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Pending. |
+| B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Complete; 6,316 ordinary passes/four capability skips, 12 import contracts and independent deletion review. |
 | B3 | Reuse canonical preorder/inverse result for Inventory PATH sorting; retain second traversal after non-PATH sort. Owner: inventory_projection; Inventory review and tools consumers. | Equal ordered/inverse outputs across empty/nested/warning cases, warning-tail/sort/reset/spelling tests, workflows department and affected required large-projection gate. No speed claim. | Pending. |
 | C2 | Cover read_setup/prepare_setup, service.read_plan_setup readiness/frozen values, ensure_database_pair refusal and runtime Plan refusal. Preserve existing underlying classification/CLI/headed witnesses. | Finite successful/refused/default/task/readiness cases; refused pair leaves bytes unchanged and admits no work. Interfaces/workflows owning and direct-consumer tests, then ordinary integration. | Pending. |
 | C3 | Use contained run_node_probe for required transport probes; retire demonstrated localRow spelling pin and duplicate wheel asset equality only. Owners: transport/frontend/wheel tests and existing helper. | Keep mandatory Node discovery, original-command/interactive/both drain record kinds, runner timeout/output limits, tree fixture provenance/runtime cases, dedicated wheel population/CSP checks; harmless rename and wrong-digest control, missing/extra asset control; interfaces department. | Pending. |
@@ -125,6 +125,34 @@ tree/projection lookup methods and tools' unrelated local names. Current docs
 have no behavioral account requiring repair; historical declarations stay
 historical. One deletion commit follows ordinary tests, all 12 import contracts
 and fresh independent consumer/orphan review.
+The final deletion retains the workflows `DeletionPolicy` facade import: service
+uses it directly despite its absence from `__all__`. An initial mistaken removal
+caused collection failure and was corrected before acceptance. No tests retire.
+Raw receipts: `results/b2-focused-20261029.log` (failed collection),
+`b2-focused-02-20261029.log` (618 passes, one skip, five hardlink setup
+failures), `b2-ordinary.log`/`.json` (the five hardlink cases passed) and
+`b2-imports.log`. `b2-skip-reasons.log` confirms four unavailable symlink-privilege
+cases outside the sandbox; these skips are not passes.
+
+B3 elaboration (inspected `65e50174`, refresh after B2): reuse ordered/inverse
+preorder in `workflows/inventory_projection.py` for PATH only; non-PATH siblings
+still sort before recomputing both indexes. Preserve spelling, warning tail,
+null-last/tie ordering and validation. Gate: `test_inventory_projection.py`,
+`web/test_inventory_review.py`, workflows department (including
+`test_inventory_projection_supports_base_and_information_heavy_fixture_populations`)
+and renewed 21-case output/traversal ablation, then fresh review. One source
+mechanism commit; no timing improvement claim or additional cache.
+
+CLOSE also renews cold Inventory evidence after all gating-file edits settle:
+B2 scalars/repositories, B3 inventory projection and D2 tree work invalidate
+earlier source bindings. Retain old raw JSON unchanged. The observed machine
+still matches the named hardware/OS/SQLite profile and AC power; Python is now
+3.13.17 following the installed security update. Predeclare fresh acceptance on
+that runtime at the unchanged base 3 s / heavy 6 s maxima, five fresh children
+per case and the existing independent checker. This renews named-profile
+evidence, not a universal performance claim or changed limit. The user confirmed
+no unrelated sustained workload; pause task tests during collection. Actual
+profile facts are in `results/current-profile.json`; confirm again at collection.
 
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and

@@ -7,7 +7,7 @@ import ctypes
 from ctypes import wintypes
 
 from .models import FileIdentity
-from .scalars import MAX_FILE_INDEX_128, file_index_128_to_text
+from .scalars import MAX_FILE_INDEX_128
 
 
 FILE_ID_INFO_CLASS = 18
@@ -43,12 +43,6 @@ def file_index_128_from_bytes(value: bytes | bytearray | memoryview) -> int:
     if len(raw) != 16:
         raise ValueError("FILE_ID_128 must contain exactly 16 bytes")
     return int.from_bytes(raw, byteorder="little", signed=False)
-
-
-def file_index_128_text(value: int) -> str:
-    """Return the canonical persistence/wire spelling of a file index."""
-
-    return file_index_128_to_text(value)
 
 
 def file_identity_from_stat(

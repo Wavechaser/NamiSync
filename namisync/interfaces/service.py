@@ -1760,9 +1760,6 @@ class NamiSyncService:
     def get_session(self, session_id: str) -> SessionRecordView:
         return session_record_view(self._dispatcher.get(session_id))
 
-    def list_sessions(self) -> tuple[SessionRecordView, ...]:
-        return tuple(session_record_view(item) for item in self._dispatcher.list())
-
     def observe(self, session_id: str, sink: SessionSink) -> SessionRecordView:
         self._require_open()
         claim = self._lifecycle.begin_observation(session_id)
