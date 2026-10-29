@@ -192,6 +192,13 @@ behavioral evidence.
   last Settings control. Mount the reviewed tree in the work body before native
   Tab navigation from the rail; retain exact focus, arrow-navigation and visual
   assertions independently of intervening About controls.
+- Retired test-facing bridge/tree/database/planning/runtime conveniences after
+  migrating their witnesses to real dispatch, window, probe and native seams.
+  Removed the unused flush protocol slot together with zero-call assertions;
+  actual native durability flush and settlement/recording order remain covered.
+  Verification passed 6,327 ordinary cases, twelve import contracts, before/after
+  settlement checks and affected installed Inventory/shell journeys; four
+  symlink-privilege cases remain explicit skips.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

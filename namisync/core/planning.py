@@ -590,14 +590,6 @@ def assignment_projection(value: Assignment) -> dict[str, object]:
     }
 
 
-# Retain the established private names used by the frozen identity-contract
-# tests while exposing descriptive public projection helpers to codecs.
-_preservation_projection = preservation_policy_projection
-_filter_projection = filter_set_projection
-_destination_assignment_projection = destination_assignment_projection
-_assignment_projection = assignment_projection
-
-
 def operation_projection(value: PlanOperation) -> dict[str, object]:
     if type(value) is not PlanOperation:
         raise TypeError("operation projection requires PlanOperation")
@@ -770,10 +762,6 @@ def plan_fingerprint(plan: Plan) -> PlanFingerprint:
     payload = plan_projection(plan)
     del payload["fingerprint"]
     return PlanFingerprint(hashlib.sha256(canonical_json_bytes(payload)).hexdigest())
-
-
-def serialize_plan(plan: Plan) -> bytes:
-    return canonical_json_bytes(plan_projection(plan))
 
 
 def selection_digest(selection: Sequence[OpId] | frozenset[OpId]) -> bytes:

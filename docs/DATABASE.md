@@ -141,8 +141,8 @@ rechecks both roles after peer validation. Cold admission retries only observed
 artifact drift, at most three validation attempts with a 10 ms pause between
 attempts. Pair admission retries the whole classification and both cold roles;
 standalone first reads use the same policy without nested retries. This bounds
-attempt count, not total time spent reading database-sized snapshots. Boolean
-contract probes remain single-attempt observations. A cleanup failure prevents
+attempt count, not total time spent reading database-sized snapshots. The typed
+file-contract probe remains a single-attempt observation. A cleanup failure prevents
 retry, preserving its primary error and cleanup evidence. Quiescent
 ready/refusal/error fixtures preserve all source bytes, and injected-drift
 fixtures retain only the external mutation. Private SQLite handles close before

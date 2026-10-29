@@ -1697,19 +1697,42 @@ function assertTreeFixture(value) {
     "tail",
   ]);
   const rowKeys = [
+    "blocked_reason",
+    "dependency_count",
     "depth",
     "display",
     "expanded",
     "first_child_visible_index",
+    "highlighted",
     "is_container",
+    "move_group",
+    "move_peer_id",
+    "mtime_ns",
     "node_id",
+    "notice",
+    "operation_count",
+    "operation_id",
+    "operation_kind",
     "parent_visible_index",
     "position_in_set",
+    "presentation_kind",
+    "prior_name",
+    "reason",
+    "recall",
+    "risk",
+    "row_kind",
+    "selectable_operation_count",
+    "selected_operation_count",
+    "selection",
+    "selection_exclusion_reason",
     "set_size",
+    "size",
     "visible_index",
   ];
   for (const windowValue of Object.values(value.views)) {
-    assert.deepEqual(Object.keys(windowValue).sort(), ["offset", "rows", "total"]);
+    assert.deepEqual(Object.keys(windowValue).sort(), [
+      "disposition", "highlight_revision", "offset", "rows", "total", "view_revision",
+    ]);
     assert.ok(windowValue.rows.length <= 256);
     for (const [relativeIndex, rowValue] of windowValue.rows.entries()) {
       assert.deepEqual(Object.keys(rowValue).sort(), rowKeys);

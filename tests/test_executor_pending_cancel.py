@@ -174,7 +174,7 @@ def test_cancel_replays_pending_byte_outcome_without_reclassifying(
     assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
     evidence = xset.published_evidence[operation.op_id]
     assert evidence is pending.published_evidence
-    assert evidence.copy_recorded is not recording_fails
+    assert (evidence.recorded_identity is not None) is not recording_fails
     assert evidence.recorded_identity == (
         None if recording_fails else recorder._copy_identity(operation.op_id)
     )

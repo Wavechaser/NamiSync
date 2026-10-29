@@ -289,29 +289,6 @@ def _snapshot_artifacts(
     return evidence
 
 
-def ledger_file_contract_matches(path: str | Path) -> bool:
-    """Return whether stable main/WAL evidence has the exact ledger contract."""
-
-    return _file_contract_matches(path, validate_ledger_reader_contract)
-
-
-def history_file_contract_matches(path: str | Path) -> bool:
-    """Return whether stable main/WAL evidence has the exact history contract."""
-
-    return _file_contract_matches(path, validate_history_reader_contract)
-
-
-def _file_contract_matches(
-    path: str | Path,
-    validator: _ContractValidator,
-) -> bool:
-    try:
-        _validate_file_contract(Path(path).resolve(), validator)
-    except (OSError, sqlite3.Error, ValueError):
-        return False
-    return True
-
-
 def require_database_file_contract(path: str | Path, *, history: bool) -> DatabaseFileEvidence:
     """Refuse unstable or incompatible artifacts before an ordinary SQLite open."""
 

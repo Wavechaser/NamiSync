@@ -195,7 +195,7 @@ def test_copy_is_atomic_hashed_and_attested_to_published_target(tmp_path: Path) 
     published = xset.published_evidence[operation.op_id]
     assert published.attestation is attestation
     assert published.recorded_identity == recorder._copy_identity(operation.op_id)
-    assert published.copy_recorded
+    assert (published.recorded_identity is not None)
     assert attestation.content.algorithm == "xxh3_128"
     assert attestation.content.digest == xxh3_128(b"complete-content").digest()
     assert attestation.content.provenance is Provenance.COPY_ATTESTED
@@ -330,7 +330,7 @@ def test_xv_1_published_evidence_cardinality_and_atomic_emission_for_all_byte_ki
     assert set(xset.status) == set(xset.selection)
     assert set(xset.published_evidence) == byte_ids
     assert all(
-        evidence.copy_recorded
+        (evidence.recorded_identity is not None)
         and evidence.attestation.content.provenance
         is Provenance.COPY_ATTESTED
         for evidence in xset.published_evidence.values()
@@ -1438,7 +1438,7 @@ def test_update_preserves_displaced_version_before_replace(
     assert recorder.calls[0][0] == "updated"
     assert result.bytes_total == len(b"new-version")
     assert set(xset.published_evidence) == {operation.op_id}
-    assert xset.published_evidence[operation.op_id].copy_recorded
+    assert (xset.published_evidence[operation.op_id].recorded_identity is not None)
 
 
 def test_failed_work_does_not_abort_independent_and_defers_dependents(tmp_path: Path) -> None:
@@ -3105,7 +3105,7 @@ def test_composite_move_update_publishes_new_then_trashes_old(tmp_path: Path) ->
     assert _recorder_names(recorder) == ["move_updated"]
     assert recorder.flushes == 2
     assert set(xset.published_evidence) == {operation.op_id}
-    assert xset.published_evidence[operation.op_id].copy_recorded
+    assert (xset.published_evidence[operation.op_id].recorded_identity is not None)
 
 
 def test_successful_trash_delete_and_noop_record_after_filesystem_result(

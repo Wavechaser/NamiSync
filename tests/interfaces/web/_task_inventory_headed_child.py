@@ -281,7 +281,7 @@ class _InventoryPhase:
         return wrapped
 
     def _observe(self, name: str, original: Callable[[object], object]) -> Callable[[object], object]:
-        from namisync.interfaces.web.bridge import to_primitive_view
+        from _bridge_result_support import dispatch_result
 
         def invoke(payload: object) -> object:
             if name == "start_inventory_integrity":
@@ -304,7 +304,7 @@ class _InventoryPhase:
             with self.lock:
                 self.commands.append(record)
                 try:
-                    record["result"] = to_primitive_view(result)
+                    record["result"] = dispatch_result(result)["result"]
                     record.update({"task_id": payload.task_id,
                                    "request_id": getattr(payload, "request_id", None),
                                    "command_id": getattr(payload, "command_id", None),

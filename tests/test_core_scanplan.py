@@ -31,8 +31,8 @@ from namisync.core.pathing import (
 from namisync.core.planning import (
     canonical_json_bytes,
     plan_fingerprint,
+    plan_projection,
     policy_fingerprint,
-    serialize_plan,
 )
 
 from _identity_epoch5 import frozen_vector
@@ -1215,7 +1215,7 @@ class _UnprojectedRoot:
     root_id: str
 
 
-@pytest.mark.parametrize("encode", (plan_fingerprint, serialize_plan))
+@pytest.mark.parametrize("encode", (plan_fingerprint, plan_projection))
 def test_plan_hash_boundary_refuses_an_unknown_nested_dataclass(encode) -> None:
     reviewed = two_copy_plan(False)
     unknown = _UnprojectedRoot(reviewed.source_root.path, reviewed.source_root.root_id)
@@ -1227,7 +1227,7 @@ def test_plan_hash_boundary_refuses_an_unknown_nested_dataclass(encode) -> None:
 
 def test_serialized_plan_quotes_identity_without_stringifying_known_integers() -> None:
     plans, _ = hash_fixtures(True)
-    encoded = json.loads(serialize_plan(plans["all_fields"]))
+    encoded = json.loads(canonical_json_bytes(plan_projection(plans["all_fields"])))
     operation = encoded["operations"][1]
 
     assert operation["source_expected"]["file_identity"]["file_index"] == str(MAX_FILE_INDEX)
@@ -1258,7 +1258,7 @@ def test_plan_fingerprint_uses_explicit_identity_text(name: str) -> None:
     expected_fingerprint = hashlib.sha256(canonical).hexdigest()
     assert plan_fingerprint(plans[name]) == expected_fingerprint
     expected["fingerprint"] = expected_fingerprint
-    assert serialize_plan(plans[name]) == json.dumps(
+    assert canonical_json_bytes(plan_projection(plans[name])) == json.dumps(
         expected, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
     ).encode("utf-8")
 
@@ -1268,7 +1268,7 @@ def test_identityless_plan_bytes_preserve_the_epoch5_capture(name: str) -> None:
     plans, _ = hash_fixtures(False)
     reviewed = plans[name]
 
-    assert serialize_plan(reviewed) == frozen_vector(f"plan/{name}/identityless/serialize")
+    assert canonical_json_bytes(plan_projection(reviewed)) == frozen_vector(f"plan/{name}/identityless/serialize")
     assert plan_fingerprint(reviewed) == hashlib.sha256(
         frozen_vector(f"plan/{name}/identityless/fingerprint")
     ).hexdigest()
@@ -1306,10 +1306,10 @@ def test_core_hash_projections_cover_exact_known_dataclasses() -> None:
         (model_contracts.volume_id_projection, reviewed.source_volume_id),
         (model_contracts.volume_evidence_projection, reviewed.source_volume_evidence),
         (model_contracts.capability_profile_projection, reviewed.source_profile),
-        (planning_contracts._preservation_projection, reviewed.preservation),
-        (planning_contracts._filter_projection, reviewed.filter_snapshot),
-        (planning_contracts._destination_assignment_projection, reviewed.assignment.items[1]),
-        (planning_contracts._assignment_projection, reviewed.assignment),
+        (planning_contracts.preservation_policy_projection, reviewed.preservation),
+        (planning_contracts.filter_set_projection, reviewed.filter_snapshot),
+        (planning_contracts.destination_assignment_projection, reviewed.assignment.items[1]),
+        (planning_contracts.assignment_projection, reviewed.assignment),
         (planning_contracts.operation_projection, operation),
         (planning_contracts.plan_projection, reviewed),
     )
@@ -1334,7 +1334,7 @@ def test_core_hash_projections_cover_exact_known_dataclasses() -> None:
 def test_plan_projection_preserves_sequence_and_historical_volume_set_order() -> None:
     plans, _ = hash_fixtures(False)
     reviewed = plans["all_fields"]
-    encoded = json.loads(serialize_plan(reviewed))
+    encoded = json.loads(canonical_json_bytes(plan_projection(reviewed)))
     assert encoded["required_volumes"] == [
         {"fs_type": "NTFS", "serial": "FFFFFFFF"},
         {"fs_type": "REFS", "serial": "00000001"},

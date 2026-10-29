@@ -1013,10 +1013,6 @@ class NativeFileSystem:
                 raise ctypes.WinError(error)
         return result
 
-    def flush_file(self, stream: BinaryIO) -> None:
-        stream.flush()
-        os.fsync(stream.fileno())
-
     def flush_path(self, path: Path) -> None:
         with Path(_win32_path(path)).open("r+b", buffering=0) as stream:
             os.fsync(stream.fileno())
@@ -1661,13 +1657,6 @@ class NativeFileSystem:
         current = self._get_attributes(path)
         self._set_attributes(
             path, (current & ~MANAGED_FILE_ATTRIBUTE_MASK) | desired
-        )
-
-    def _set_creation_time(self, path: Path, created_ns: int) -> None:
-        self._set_windows_file_times(
-            path,
-            created_ns=created_ns,
-            modified_ns=None,
         )
 
     def _set_windows_file_times(

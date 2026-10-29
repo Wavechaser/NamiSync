@@ -27,7 +27,6 @@ from namisync.interfaces.web.visible_sequence import (
     VisibleSequenceParameters,
     derive_visible_sequence,
     resolve_visible_anchor,
-    to_visible_window_view,
     window_visible_sequence,
 )
 from namisync.workflows import CompactUnsignedIntegers
@@ -153,7 +152,7 @@ def test_br_g_34_empty_workflow_projection_keeps_its_single_root() -> None:
     sequence = derive_visible_sequence(tree.nodes, _parameters())
 
     assert sequence.nodes is tree.nodes
-    assert _ids(sequence) == (tree.root_node_id,)
+    assert _ids(sequence) == (tree.nodes[0].node_id,)
     assert tree.nodes[0].display == "All items"
     assert tuple(sequence.retained_direct_child_counts) == (0,)
     assert window_visible_sequence(
@@ -166,70 +165,34 @@ def test_br_g_34_empty_workflow_projection_keeps_its_single_root() -> None:
 def test_br_g_34_cross_layer_fixture_runs_the_exact_production_chain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original_build = tree_fixture_module.build_node_tree
-    original_derive = tree_fixture_module.derive_visible_sequence
-    original_window = tree_fixture_module.window_visible_sequence
-    original_view = tree_fixture_module.to_visible_window_view
-    calls: list[str] = []
-    built_tree: list[NodeTree] = []
+    original_projection = tree_fixture_module.build_plan_projection
+    original_window = tree_fixture_module.PlanReviewState.window
+    projections = []
+    windows = []
 
-    def observed_build(*args, **kwargs):
-        calls.append("build")
-        tree = original_build(*args, **kwargs)
-        built_tree.append(tree)
-        return tree
+    def observed_projection(*args, **kwargs):
+        projection = original_projection(*args, **kwargs)
+        projections.append(projection)
+        return projection
 
-    def observed_derive(nodes, parameters, **kwargs):
-        calls.append("derive")
-        assert len(built_tree) == 1
-        assert nodes is built_tree[0].nodes
-        sequence = original_derive(nodes, parameters, **kwargs)
-        assert sequence.nodes is built_tree[0].nodes
-        return sequence
+    def observed_window(review, **kwargs):
+        assert review.projection is projections[0]
+        assert review.current_sequence.nodes is projections[0].nodes
+        result = original_window(review, **kwargs)
+        windows.append(result)
+        return result
 
-    def observed_window(sequence, *, offset, limit):
-        calls.append("window")
-        assert sequence.nodes is built_tree[0].nodes
-        window = original_window(sequence, offset=offset, limit=limit)
-        assert all(
-            row.node is built_tree[0].nodes[row.node.position]
-            for row in window.rows
-        )
-        return window
-
-    def observed_view(window):
-        calls.append("view")
-        assert all(
-            row.node is built_tree[0].nodes[row.node.position]
-            for row in window.rows
-        )
-        return original_view(window)
-
-    monkeypatch.setattr(tree_fixture_module, "build_node_tree", observed_build)
-    monkeypatch.setattr(
-        tree_fixture_module,
-        "derive_visible_sequence",
-        observed_derive,
-    )
-    monkeypatch.setattr(
-        tree_fixture_module,
-        "window_visible_sequence",
-        observed_window,
-    )
-    monkeypatch.setattr(
-        tree_fixture_module,
-        "to_visible_window_view",
-        observed_view,
-    )
+    monkeypatch.setattr(tree_fixture_module, "build_plan_projection", observed_projection)
+    monkeypatch.setattr(tree_fixture_module.PlanReviewState, "window", observed_window)
 
     manifest = tree_fixture_module.build_tree_window_manifest()
 
-    assert set(manifest) == {"schema", "node_ids", "views"}
-    assert calls == [
-        "build",
-        *("derive" for _ in range(5)),
-        *(value for _ in range(9) for value in ("window", "view")),
-    ]
+    assert len(projections) == 1
+    assert len(windows) == 9
+    assert all(any(view is window for window in windows)
+               for view in manifest["views"].values())
+    assert all(row["node_id"] != projections[0].nodes[0].node_id
+               for view in windows for row in view["rows"])
 
 
 def test_br_g_34_cross_layer_fixture_is_canonical_and_non_vacuous(
@@ -272,7 +235,8 @@ def test_br_g_34_cross_layer_fixture_is_canonical_and_non_vacuous(
     assert views["tail"]["rows"][-1]["visible_index"] == (
         views["tail"]["total"] - 1
     )
-    assert views["empty"] == {"offset": 0, "total": 0, "rows": []}
+    assert views["empty"]["offset"] == views["empty"]["total"] == 0
+    assert views["empty"]["rows"] == []
     assert [
         next(
             row["expanded"]
@@ -321,10 +285,10 @@ def test_br_g_34_cross_layer_fixture_is_canonical_and_non_vacuous(
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
     }
     assert {
-        "build_node_tree",
-        "derive_visible_sequence",
-        "window_visible_sequence",
-        "to_visible_window_view",
+        "build_plan_projection",
+        "build_inventory_projection",
+        "PlanReviewState",
+        "InventoryReviewState",
     } <= calls
     assert not any(
         isinstance(node, ast.Dict)
@@ -577,15 +541,13 @@ def test_br_g_34_filesystem_layout_controls_stay_raw_until_rendering() -> None:
     )
 
     sequence = derive_visible_sequence(nodes, _parameters())
-    view = to_visible_window_view(
-        window_visible_sequence(sequence, offset=0, limit=3)
-    )
+    window = window_visible_sequence(sequence, offset=0, limit=3)
 
     assert sequence.nodes is nodes
     assert sequence.nodes[1].display == control_display
     assert sequence.nodes[2].display == marker_display
-    assert view["rows"][1]["display"] == control_display
-    assert view["rows"][2]["display"] == marker_display
+    assert window.rows[1].node.display == control_display
+    assert window.rows[2].node.display == marker_display
     assert _ids(
         derive_visible_sequence(nodes, _parameters(search="\u202e"))
     ) == ("root", "control")
@@ -939,52 +901,43 @@ def test_br_g_34_window_is_exact_bounded_and_wraps_only_requested_rows() -> None
             window_visible_sequence(sequence, offset=0, limit=value)
 
 
-def test_br_g_34_window_wire_view_is_exact_bounded_and_authority_free() -> None:
-    tree = _tree(NodeTreeKind.PLAN)
-    sequence = derive_visible_sequence(tree.nodes, _parameters())
-    window = window_visible_sequence(sequence, offset=0, limit=3)
-
-    view = to_visible_window_view(window)
-
-    assert set(view) == {"offset", "total", "rows"}
-    assert type(view["offset"]) is int
-    assert type(view["total"]) is int
-    assert type(view["rows"]) is list
-    rows = view["rows"]
-    assert len(rows) == 3
-    expected_row_keys = {
-        "node_id",
-        "display",
-        "depth",
-        "is_container",
-        "visible_index",
-        "parent_visible_index",
-        "first_child_visible_index",
-        "position_in_set",
-        "set_size",
-        "expanded",
-    }
-    assert all(
-        type(row) is dict and set(row) == expected_row_keys for row in rows
-    )
-    assert rows[0]["display"] == "All items"
-    assert rows[0]["expanded"] is True
-    assert rows[2]["expanded"] is None
-    forbidden_fields = {
-        "rel_path",
-        "rel_path_key",
-        "member_ids",
-        "position",
-        "parent_index",
-        "subtree_end",
-        "subtree_extent",
-        "subtree_member_count",
-    }
-    assert all(forbidden_fields.isdisjoint(row) for row in rows)
-    assert json.loads(json.dumps(view, ensure_ascii=False)) == view
-
-    with pytest.raises(TypeError, match="VisibleWindow"):
-        to_visible_window_view(object())  # type: ignore[arg-type]
+@pytest.mark.parametrize("kind", [NodeTreeKind.PLAN, NodeTreeKind.INVENTORY])
+def test_br_g_34_window_wire_view_is_exact_bounded_and_authority_free(kind) -> None:
+    review = tree_fixture_module._build_review(kind)
+    root_id = review.projection.nodes[0].node_id
+    first = review.window(expected_revision=0, offset=0, limit=256)
+    total = first["total"]
+    tail = review.window(expected_revision=0, offset=total - 3, limit=256)
+    assert first["disposition"] == tail["disposition"] == "current"
+    assert len(first["rows"]) == 256 < total
+    assert len(tail["rows"]) == 3
+    assert tail["rows"][-1]["visible_index"] == total - 1
+    assert first["rows"][0]["visible_index"] == first["rows"][0]["depth"] == 0
+    assert first["rows"][0]["parent_visible_index"] is None
+    assert all(row["node_id"] != root_id for row in first["rows"])
+    container, child = first["rows"][1:3]
+    assert container["expanded"] is True
+    assert container["first_child_visible_index"] == child["visible_index"] == 2
+    assert child["depth"] == 2 and child["parent_visible_index"] == 1
+    assert child["expanded"] is None
+    assert child["size"] == "7"
+    assert child["mtime_ns"] == "9223372036854775807"
+    rich_keys = ({"operation_id", "operation_kind", "selection", "reason", "risk"}
+                 if kind is NodeTreeKind.PLAN else
+                 {"row_id", "presence", "verification_state", "has_baseline", "rollup"})
+    assert all(rich_keys <= set(row) for row in first["rows"])
+    forbidden = {"rel_path", "rel_path_key", "member_ids", "position",
+                 "parent_index", "subtree_end", "subtree_member_count"}
+    assert all(forbidden.isdisjoint(row) for row in first["rows"])
+    assert json.loads(json.dumps(first, ensure_ascii=False)) == first
+    tree_fixture_module._update(review, search_query="no matching path")
+    empty = review.window(expected_revision=review.view_revision, offset=0, limit=256)
+    assert empty["disposition"] == "current"
+    assert empty["total"] == 0 and empty["rows"] == []
+    stale = review.window(expected_revision=0, offset=9, limit=256)
+    assert stale["disposition"] == "conflict"
+    assert stale["view_revision"] == review.view_revision
+    assert stale["offset"] == 9 and stale["total"] == 0 and stale["rows"] == []
 
 
 def test_br_g_34_sequence_retains_only_compact_global_metadata() -> None:

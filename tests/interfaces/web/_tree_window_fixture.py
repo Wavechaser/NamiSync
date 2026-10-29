@@ -5,24 +5,23 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
+from types import SimpleNamespace
 
+from _db_fixtures import NOW, file_stat, operation, plan
+from namisync.core.models import EntryKind
 from namisync.core.pathing import normalize_relative_path
-from namisync.interfaces.web.visible_sequence import (
-    VisibleSequence,
-    VisibleSequenceParameters,
-    derive_visible_sequence,
-    to_visible_window_view,
-    window_visible_sequence,
+from namisync.core.planning import OperationKind
+from namisync.core.preflight import Verdict
+from namisync.db.repositories import InventoryPresence, InventorySnapshot
+from namisync.interfaces.web.inventory_review import InventoryReviewState
+from namisync.interfaces.web.plan_review import PlanReviewState
+from namisync.workflows import (
+    PlanSortColumn, SortDirection, build_inventory_projection, build_plan_projection,
 )
-from namisync.workflows.node_tree import (
-    NodeTree,
-    NodeTreeKind,
-    NodeTreeMember,
-    build_node_tree,
-)
-from namisync.workflows.plan_projection import CompactUnsignedIntegers
+from namisync.workflows.models import PlanArtifact, PlanRequest
+from namisync.workflows.node_tree import NodeTreeKind
 
 
 TREE_WINDOW_FIXTURE_SCHEMA = "namisync-tree-window-fixture-v1"
@@ -47,7 +46,9 @@ _ROW_KEYS = {
     "set_size",
     "expanded",
 }
-_WINDOW_KEYS = {"offset", "total", "rows"}
+_WINDOW_KEYS = {
+    "offset", "total", "rows", "disposition", "view_revision", "highlight_revision",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,136 +90,115 @@ def write_tree_window_fixture(directory: Path) -> TreeWindowFixture:
 
 
 def build_tree_window_manifest() -> dict[str, object]:
-    """Derive every positive renderer window from one workflow tree."""
+    """Produce renderer windows through the real Plan review owner."""
 
-    tree = _build_source_tree()
-    projection_id = tree.node_id_for_path_key(
-        normalize_relative_path(PROJECTION_DISPLAY)
-    )
-    layout_control_id = tree.node_id_for_path_key(
-        normalize_relative_path(LAYOUT_CONTROL_DISPLAY)
-    )
-    ordinary_id = tree.node_id_for_path_key(
-        normalize_relative_path(ORDINARY_UNICODE_DISPLAY)
-    )
-    long_id = tree.node_id_for_path_key(
-        normalize_relative_path(LONG_UNICODE_DISPLAY)
-    )
-
-    expanded = _derive(tree)
-    collapsed = _derive(tree, collapsed=(projection_id,))
-    projected_empty = _derive(tree, counts={projection_id: 1})
-    empty = _derive(tree, counts={})
-    layout_control = _derive(tree, counts={layout_control_id: 1})
-    total = len(expanded.visible_positions)
-
+    review = _build_review(NodeTreeKind.PLAN)
+    ids = {
+        label: next(
+            node.node_id for node in review.projection.nodes
+            if node.rel_path_key == normalize_relative_path("Fixture\\" + display)
+        )
+        for label, display in (
+            ("projection", PROJECTION_DISPLAY),
+            ("layout_control", LAYOUT_CONTROL_DISPLAY),
+            ("ordinary_unicode", ORDINARY_UNICODE_DISPLAY),
+            ("long_unicode", LONG_UNICODE_DISPLAY),
+        )
+    }
+    total = review.summary()["visible_row_count"]
     views = {
-        "head": _view(tree, expanded, offset=0, limit=4),
-        "next": _view(tree, expanded, offset=4, limit=4),
-        "tail": _view(tree, expanded, offset=total - 4, limit=4),
-        "empty": _view(tree, empty, offset=0, limit=4),
-        "maximum": _view(tree, expanded, offset=0, limit=256),
-        "pointer_expanded": _view(tree, expanded, offset=0, limit=3),
-        "pointer_collapsed": _view(tree, collapsed, offset=0, limit=3),
-        "projected_empty": _view(
-            tree,
-            projected_empty,
-            offset=0,
-            limit=3,
-        ),
-        "layout_control": _view(
-            tree,
-            layout_control,
-            offset=0,
-            limit=2,
-        ),
+        name: review.window(expected_revision=0, offset=offset, limit=limit)
+        for name, offset, limit in (
+            ("head", 0, 4), ("next", 4, 4), ("tail", total - 4, 4),
+            ("maximum", 0, 256), ("pointer_expanded", 0, 3),
+        )
     }
-    manifest: dict[str, object] = {
-        "schema": TREE_WINDOW_FIXTURE_SCHEMA,
-        "node_ids": {
-            "projection": projection_id,
-            "layout_control": layout_control_id,
-            "ordinary_unicode": ordinary_id,
-            "long_unicode": long_id,
-        },
-        "views": views,
-    }
+    _update(review, collapse_node_id=ids["projection"], collapsed=True)
+    views["pointer_collapsed"] = review.window(
+        expected_revision=review.view_revision, offset=0, limit=3,
+    )
+    # The directory operation matches while its COPY child is filtered out.
+    _update(review, filters=frozenset({"mkdir"}))
+    views["projected_empty"] = review.window(
+        expected_revision=review.view_revision, offset=0, limit=3,
+    )
+    _update(review, search_query="no matching path")
+    views["empty"] = review.window(
+        expected_revision=review.view_revision, offset=0, limit=4,
+    )
+    _update(review, search_query=LAYOUT_CONTROL_DISPLAY)
+    views["layout_control"] = review.window(
+        expected_revision=review.view_revision, offset=0, limit=2,
+    )
+    manifest = {"schema": TREE_WINDOW_FIXTURE_SCHEMA, "node_ids": ids, "views": views}
     _assert_manifest(
-        manifest,
-        projection_id,
-        layout_control_id,
-        ordinary_id,
-        long_id,
+        manifest, ids["projection"], ids["layout_control"],
+        ids["ordinary_unicode"], ids["long_unicode"],
     )
     return manifest
 
 
-def _build_source_tree() -> NodeTree:
-    members = (
-        _member("projection", PROJECTION_DISPLAY, is_container=True),
-        _member("projection-child", f"{PROJECTION_DISPLAY}\\Child.txt"),
-        _member("layout-control", LAYOUT_CONTROL_DISPLAY),
-        _member("ordinary-unicode", ORDINARY_UNICODE_DISPLAY),
-        _member("long-unicode", LONG_UNICODE_DISPLAY),
-        *(
-            _member(f"bulk-{index:03d}", f"Bulk-{index:03d}.txt")
-            for index in range(270)
-        ),
+def _build_review(kind: NodeTreeKind) -> PlanReviewState | InventoryReviewState:
+    """Build domain facts, project them, and let the review owner serialize."""
+
+    paths = (
+        (PROJECTION_DISPLAY, True),
+        (f"{PROJECTION_DISPLAY}\\Child.txt", False),
+        (LAYOUT_CONTROL_DISPLAY, False),
+        (ORDINARY_UNICODE_DISPLAY, False),
+        (LONG_UNICODE_DISPLAY, False),
+        *((f"Bulk-{index:03d}.txt", False) for index in range(270)),
     )
-    return build_node_tree(
-        tree_kind=NodeTreeKind.PLAN,
-        scope_identity="stage-6-cross-layer-fixture",
-        members=members,
+    paths = tuple(("Fixture\\" + path, container) for path, container in paths)
+    stat = file_stat(size=7, mtime_ns=9223372036854775807)
+    request_id = "3" * 32
+    if kind is NodeTreeKind.PLAN:
+        operations = tuple(
+            operation(
+                OperationKind.MKDIR if container else OperationKind.COPY,
+                source_path=path, target_path=path,
+                source=replace(stat, kind=EntryKind.DIRECTORY) if container else stat,
+                intended=replace(stat, kind=EntryKind.DIRECTORY) if container else stat,
+            )
+            for path, container in paths
+        )
+        value = plan(operations)
+        request = PlanRequest(request_id, value.source_root.path, value.target_root.path)
+        scan = SimpleNamespace(files=(), directories=(), unsupported=(), warnings=())
+        artifact = PlanArtifact(
+            request, scan, scan, value, Verdict(True, (), SimpleNamespace()),
+        )
+        return PlanReviewState(
+            "task-" + request_id, request_id,
+            build_plan_projection(request_id, artifact),
+            0, "reviewing", "source", "target",
+        )
+    rows = tuple(
+        InventorySnapshot(
+            str(index), 1, path, normalize_relative_path(path),
+            EntryKind.DIRECTORY if container else EntryKind.FILE,
+            InventoryPresence.PRESENT,
+            replace(stat, kind=EntryKind.DIRECTORY) if container else stat,
+            None, NOW, None, "scope", None, None, None, None, None,
+        )
+        for index, (path, container) in enumerate(paths, 1)
+    )
+    return InventoryReviewState(
+        "task-" + request_id, request_id,
+        build_inventory_projection(1, rows), r"C:\root", True, len(rows), 0,
     )
 
 
-def _member(
-    member_id: str,
-    rel_path: str,
-    *,
-    is_container: bool = False,
-) -> NodeTreeMember:
-    return NodeTreeMember(
-        member_id=member_id,
-        rel_path=rel_path,
-        rel_path_key=normalize_relative_path(rel_path),
-        is_container=is_container,
+def _update(
+    review, *, search_query="", filters=frozenset(),
+    collapse_node_id=None, collapsed=None,
+):
+    return review.update(
+        expected_revision=review.view_revision,
+        search_query=search_query, filters=filters,
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=collapse_node_id, collapsed=collapsed,
     )
-
-
-def _derive(
-    tree: NodeTree,
-    *,
-    collapsed: tuple[str, ...] = (),
-    counts: dict[str, int] | None = None,
-) -> VisibleSequence:
-    sequence = derive_visible_sequence(
-        tree.nodes,
-        VisibleSequenceParameters(
-            collapsed_node_ids=frozenset(collapsed),
-            match_counts_by_node_id=counts,
-        ),
-        ordered_source_positions=CompactUnsignedIntegers(
-            tuple(range(len(tree.nodes))),
-            maximum=max(len(tree.nodes) - 1, 0),
-        ),
-    )
-    assert sequence.nodes is tree.nodes
-    return sequence
-
-
-def _view(
-    tree: NodeTree,
-    sequence: VisibleSequence,
-    *,
-    offset: int,
-    limit: int,
-) -> dict[str, object]:
-    window = window_visible_sequence(sequence, offset=offset, limit=limit)
-    assert all(
-        row.node is tree.nodes[row.node.position] for row in window.rows
-    )
-    return to_visible_window_view(window)
 
 
 def _assert_manifest(
@@ -254,7 +234,7 @@ def _assert_manifest(
         rows = view["rows"]
         assert isinstance(rows, list)
         assert all(
-            isinstance(row, dict) and set(row) == _ROW_KEYS for row in rows
+            isinstance(row, dict) and _ROW_KEYS <= set(row) for row in rows
         )
         assert all(
             re.fullmatch(r"node-[0-9a-f]{32}", row["node_id"])

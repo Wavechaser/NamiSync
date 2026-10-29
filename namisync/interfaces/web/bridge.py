@@ -1588,20 +1588,6 @@ class BridgeDispatcher:
                 owner.join(max(0.0, deadline - monotonic()))
 
 
-def to_primitive_view(value: object) -> object:
-    """Recursively encode only approved public views as JSON-native data."""
-
-    from .commands import PUBLIC_VIEW_DATACLASSES
-
-    snapshot = _snapshot_response_value(
-        value,
-        set(),
-        PUBLIC_VIEW_DATACLASSES,
-        None,
-    )
-    return _project_response_value(snapshot, set(), validate=True)
-
-
 def snapshot_bridge_response_result(
     value: object,
     request_id: str,
@@ -1642,26 +1628,6 @@ def _capture_bridge_response_result(
         budget,
     )
     return snapshot
-
-
-def snapshot_task_drain_response_prefix(
-    task_id: str,
-    session_id: str,
-    drain_id: str,
-    updates: Iterable[TaskUpdateView],
-    stage: object,
-) -> TaskDrainView:
-    """Capture each source update once and return its longest admitted prefix."""
-
-    return _consume_task_drain_response(
-        _admit_task_drain_response_prefix(
-            task_id,
-            session_id,
-            drain_id,
-            updates,
-            stage,
-        )
-    )
 
 
 def _admit_task_drain_response_prefix(

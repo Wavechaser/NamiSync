@@ -152,7 +152,7 @@ def _values(
     fake: FakeRegistry,
     *,
     client: str,
-    version: str,
+    version: object,
     hive: object | None = None,
     machine_path: str | None = None,
 ) -> dict[tuple[object, str, str], object]:
@@ -391,18 +391,31 @@ def test_malformed_earlier_channel_aborts_like_the_upstream_detector(
 
 
 @pytest.mark.parametrize(
-    ("version", "supported"),
+    ("version", "supported", "reason"),
     [
-        ("85.0.9999.999", False),
-        ("86.0.621.999", True),
-        ("86.0.622", True),
-        ("150.0.4078.105", True),
-        ("not-a-version", False),
-        (None, False),
+        ("85.0.9999.999", False, runtime.WebView2RefusalReason.WEBVIEW2_RUNTIME),
+        ("86.0.621.999", True, None),
+        ("86.0.622", True, None),
+        ("150.0.4078.105", True, None),
+        ("not-a-version", False, runtime.WebView2RefusalReason.DETECTION_FAILED),
+        (None, False, runtime.WebView2RefusalReason.DETECTION_FAILED),
     ],
 )
-def test_webview2_runtime_version_helper(version: object, supported: bool) -> None:
-    assert runtime.is_supported_webview2_version(version) is supported
+def test_webview2_runtime_version_probe(
+    monkeypatch: pytest.MonkeyPatch, version: object, supported: bool,
+    reason: runtime.WebView2RefusalReason | None,
+) -> None:
+    fake = FakeRegistry({})
+    fake.values = _values(fake, client=runtime.WEBVIEW2_CLIENTS[0], version=version)
+    monkeypatch.setattr(runtime, "winreg", fake)
+
+    probe = runtime.probe_webview2_runtime(
+        {"WEBVIEW2_RUNTIME_PATH": None}, architecture="AMD64"
+    )
+
+    assert probe.available is supported
+    assert probe.available is _upstream_detector(fake, architecture="AMD64")
+    assert probe.refusal_reason is reason
 
 
 @pytest.mark.parametrize(

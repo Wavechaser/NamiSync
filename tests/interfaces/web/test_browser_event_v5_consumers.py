@@ -14,6 +14,7 @@ from _event_v5_fixtures import (
     cancellation_terminal_cases,
     envelope as event_envelope,
 )
+from _bridge_result_support import dispatch_result
 from _frontend_test_support import _node_executable
 from namisync.core.events import envelope_from_dict
 from namisync.core.review import ReviewFactLimitExceeded
@@ -26,7 +27,6 @@ from namisync.core.session import (
 )
 from namisync.interfaces.task_port import _TASK_RECORD_PAUSE_SUPPORT
 from namisync.interfaces.web import bridge as bridge_module
-from namisync.interfaces.web.bridge import to_primitive_view
 from namisync.workflows import INVENTORY_KIND, PLAN_KIND, VERIFY_KIND
 from namisync.workflows.views import (
     SessionRecordView,
@@ -94,9 +94,7 @@ def test_required_node_accepts_each_canonical_python_event_projection() -> None:
             "name": body_type,
             "kind": "event",
             "expected": True,
-            "value": to_primitive_view(
-                session_event_view(envelope_from_dict(event_envelope(body_type)))
-            ),
+            "value": dispatch_result(session_event_view(envelope_from_dict(event_envelope(body_type))))["result"],
         }
         for body_type in bodies()
     ]
@@ -123,7 +121,7 @@ def test_required_node_operation_result_keeps_cancellation_truth() -> None:
             if accepted
             else OperationResult(SessionState.COMPLETED)
         )
-        value = to_primitive_view(operation_result_view(result))
+        value = dispatch_result(operation_result_view(result))["result"]
         if not accepted:
             value.update(
                 filesystem=summary["status"],
@@ -147,7 +145,7 @@ def test_required_node_operation_result_keeps_review_fact_truth() -> None:
         disposition=Disposition.UNRUN,
         review_fact_limit=ReviewFactLimitExceeded.plan_logical_bytes(),
     )
-    value = to_primitive_view(operation_result_view(result))
+    value = dispatch_result(operation_result_view(result))["result"]
     cases = [
         {"name": "valid", "kind": "result", "expected": True, "value": value},
     ]
@@ -170,10 +168,8 @@ def test_required_node_operation_result_keeps_review_fact_truth() -> None:
 
 
 def test_required_node_session_record_keeps_timestamp_boundary() -> None:
-    result = to_primitive_view(
-        operation_result_view(OperationResult(SessionState.COMPLETED))
-    )
-    record = to_primitive_view(SessionRecordView(
+    result = dispatch_result(operation_result_view(OperationResult(SessionState.COMPLETED)))["result"]
+    record = dispatch_result(SessionRecordView(
         SESSION_ID,
         PLAN_KIND,
         "completed",
@@ -182,7 +178,7 @@ def test_required_node_session_record_keeps_timestamp_boundary() -> None:
         None,
         "2026-08-25T00:00:00+00:00",
         operation_result_view(OperationResult(SessionState.COMPLETED)),
-    ))
+    ))["result"]
     assert record["result"] == result
     cases = []
     for name, timestamp, accepted in UTC_TIMESTAMP_CASES:
@@ -199,7 +195,7 @@ def test_required_node_session_record_keeps_timestamp_boundary() -> None:
 
 
 def test_required_node_session_record_keeps_task_kind_pause_contract() -> None:
-    record = to_primitive_view(SessionRecordView(
+    record = dispatch_result(SessionRecordView(
         SESSION_ID,
         PLAN_KIND,
         "completed",
@@ -208,7 +204,7 @@ def test_required_node_session_record_keeps_task_kind_pause_contract() -> None:
         None,
         "2026-08-25T00:00:00+00:00",
         operation_result_view(OperationResult(SessionState.COMPLETED)),
-    ))
+    ))["result"]
     cases = []
     for kind, supports_pause in _TASK_RECORD_PAUSE_SUPPORT.items():
         value = deepcopy(record)

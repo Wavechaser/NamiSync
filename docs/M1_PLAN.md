@@ -76,7 +76,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | C2 | Cover read_setup/prepare_setup, service.read_plan_setup readiness/frozen values, ensure_database_pair refusal and runtime Plan refusal. Preserve existing underlying classification/CLI/headed witnesses. | Finite successful/refused/default/task/readiness cases; refused pair leaves bytes unchanged and admits no work. Interfaces/workflows owning and direct-consumer tests, then ordinary integration. | Complete; 608 focused and 3,592 neighborhood passes, no skips; independent review. |
 | C3 | Use contained run_node_probe for required transport probes; retire demonstrated localRow spelling pin and duplicate wheel asset equality only. Owners: transport/frontend/wheel tests and existing helper. | Keep mandatory Node discovery, original-command/interactive/both drain record kinds, runner timeout/output limits, tree fixture provenance/runtime cases, dedicated wheel population/CSP checks; harmless rename and wrong-digest control, missing/extra asset control; interfaces department. | Complete; 228 focused, 2,174 interfaces passes and all four controls; independent review. |
 | D1 | Remove redundant Scope planner parameter/type/kinds/factories and workflow/tool/test call-site plumbing. Preserve scoped planning/history replay as an explicitly unrealized outcome without this placeholder representation. Owners: core/planner, workflow composition, executor rig, contract tests and CORE/PLANNER/FEATURES. | Revalidate full caller population; planner/workflows/tools and contract consumers; ordinary suite/imports. No change to current whole-plan or dependency-closed execution selection. | Complete; 634 focused and 6,327 ordinary passes/four capability skips, twelve imports and independent review. |
-| D2 | Migrate test-facing convenience APIs to real production seams, then retire bounded population listed below with matching docs. Preserve independent behavioral/fault witnesses rather than tests of removed representation. | Per-family consumer map before editing; focused real producer/admission/native witnesses, affected departments, ordinary/imports and applicable native/settlement gates by dependency. No blanket deletion based on coverage absence. | Pending. |
+| D2 | Migrate test-facing convenience APIs to real production seams, then retire bounded population listed below with matching docs. Preserve independent behavioral/fault witnesses rather than tests of removed representation. | Per-family consumer map before editing; focused real producer/admission/native witnesses, affected departments, ordinary/imports and applicable native/settlement gates by dependency. No blanket deletion based on coverage absence. | Complete; 6,327 ordinary passes/four capability skips, twelve imports, before/after settlement 30×3 and installed Inventory/shell; independent family and integrated review. |
 | R1 | Retire never-produced ALREADY_EXISTS/EMPTY_DIRECTORY everywhere: enums, web accept lists/labels, probes and DESKTOP_UI plus any exact consumers found in the finite history/current census. No producer or string-to-enum construction is expected; incompatible pre-release schema policy remains. | Confirm supplied all-history evidence and current constructors/consumers; ordinary/imports and real event/Plan decoder negative controls. Own commit; stop for contradictory supported producer/artifact evidence. | Pending. |
 | E1 | Condense completed register chronology with a decision/disposition map; consolidate M2 proposal list and internal CORE census/Progress-shape repetition; shorten repeated historical checkpoint disclaimers and TESTS incident chronology without changing their policy. | A–D/R settled. Map each removed clause to surviving decision/owner/evidence; retain future outcomes, exclusions, wire grammar, residual qualifications, unresolved observations and reopening triggers. Active links/diff and independent review. BUGS/PERFORMANCE archival requires a separate finite disposition map, never volume alone. | Pending. |
 | CLOSE | Account for all rows and dependencies, complete ordinary/import and affected installed/native gates, independent integrated review, delivery docs and final state. | Reuse unchanged evidence only by dependencies; retain failures. No assertion of M1-12 or release completion. | Pending. |
@@ -157,8 +157,9 @@ still matches the named hardware/OS/SQLite profile and AC power; Python is now
 3.13.17 following the installed security update. Predeclare fresh acceptance on
 that runtime at the unchanged base 3 s / heavy 6 s maxima, five fresh children
 per case and the existing independent checker. This renews named-profile
-evidence, not a universal performance claim or changed limit. The user confirmed
-no unrelated sustained workload; pause task tests during collection. Actual
+evidence, not a universal performance claim or changed limit. The user renewed
+idle-machine confirmation on 2026-10-30 until further notice. Announce timing
+before starting and pause task tests during collection. Actual
 profile facts are in `results/current-profile.json`; confirm again at collection.
 
 C2 elaboration (inspected `93481fcb`, refresh after B3): change only four existing
@@ -238,6 +239,63 @@ refresh/acknowledge/restore/close witnesses after fixture/observer migration.
 The installed shell also covers the real runtime detector. Review each family
 independently and the integrated delta before commit. No new production APIs,
 test framework, weaker wire acceptance or historical evidence rewrites.
+The tree migration's direct runtime consumer `tests/assets/tree_probe.mjs` also
+pins the retired generic row/window shape. Migrate that exact key oracle to the
+real Plan window fields, retaining digest, behavior and stale-generation checks;
+this is the already-authorized producer/consumer migration, not a new behavior.
+After retiring the path-position accessor, remove its now-unread retained
+`NodeTree._position_by_path_key` index and convenience-only immutability assertion.
+The builder's local path map still constructs topology; retain the live immutable
+node-ID index. Renew tree digest controls and installed shell evidence.
+
+D2 final candidate: 6,327 ordinary passes, four unavailable symlink-privilege
+skips and twelve import contracts pass. Focused family and independent source
+reviews pass; raw receipts are in `results/d2-*`. Before and resumed after
+settlement checks each pass 30 scenarios × three runs. The earlier approval
+timeout/capacity failure occurred before execution, not inside the gate.
+Installed Inventory passes in `d2-installed.log`; the corrected shell driver
+passes in `d2-shell-driver-corrected.log`. Final review checks exact retirement
+accounting in `d2-tree-test-disposition.json` and the docstring-only hash
+correction in `d2-final-source-corrections.json`. No native durability flush or
+behavioral assertion was removed with the unused protocol method.
+
+2026-10-30 resumption: candidate hashes match preservation; the after-settlement
+check now passes 30 scenarios × three runs. Installed Inventory passes. SH-G-7
+exposed a pre-existing driver assumption: it Tabs from Theme directly toward the
+tree despite intervening About buttons added in `156677de`. The tree fixture is
+valid and later navigation succeeds; no product focus defect is established.
+Correct this bounded driver issue in a separate test commit: use the existing
+exclusive work-body tree mount before the native Tab witness, starting from the
+rail's Settings control. Keep Theme/Create and exact tree focus/navigation
+assertions. Population: `_shell_gate_child.py`, TESTS and delivery docs; gate:
+ordinary shell-driver checks, exact installed SH-G-7 and fresh review. No product
+change or relaxed focus assertion. Retain `results/d2-installed.log` as failed.
+Delivered separately as `5553daab`, with five ordinary driver checks and the
+exact installed SH-G-7 passing; fresh independent review found no issues.
+
+R1 elaboration (inspected D2 candidate based on `e820cefd`, refresh after commit):
+remove the two enum values from `core/execution.py`/`core/planning.py`, their
+browser allowlists in `assets/bridge.js`, Plan label/hidden-set entries in
+`assets/plan_review.js`, the obsolete Plan probe case and DESKTOP_UI prose.
+Keep `DESTINATION_OCCUPIED`, `REQUIRED_DIRECTORY` and unrelated Windows mutex
+`ERROR_ALREADY_EXISTS`. Python event reason admission is derived from the enum.
+Use real producer-valid event and published Plan/execution-window fixtures for
+negative controls: Python event admission/decoder refuses `already-exists`;
+browser Plan reason and execution-overlay/detail validators refuse the retired
+values while unchanged fixtures pass. The live browser event-envelope validator
+does not recertify event-body semantics; do not add that responsibility.
+Retain existing generic negative witnesses; temporary controls are sufficient
+where they avoid an obsolete-name permanent matrix. Focused producers/decoders,
+ordinary/imports and fresh review gate a separate reason-retirement commit.
+
+History correction: the removed `workflows/payloads.py::_decode_operation` did
+construct `OperationReason` from input strings. Commit `370cfa51` removed that
+process-local JSON payload format in favor of typed checkpoints; it did not
+support durable resume. Current readers have no migration path for it. The
+full-history/current census found no target-reason producer or contradictory
+currently supported artifact, so no R1 stop is established. This does not prove
+arbitrary historical input never contained the value. Commands, outputs and
+support-state evidence are retained in `results/r1-history-census.json`.
 
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and

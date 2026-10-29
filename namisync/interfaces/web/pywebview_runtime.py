@@ -117,15 +117,6 @@ def probe_webview2_runtime(
     )
 
 
-def is_supported_webview2_version(value: object) -> bool:
-    """Apply the pinned pywebview backend's version-helper behavior exactly."""
-
-    try:
-        return _is_supported_webview2_version(value)
-    except (TypeError, ValueError):
-        return False
-
-
 def _is_supported_webview2_version(value: object) -> bool:
     minimum = MINIMUM_WEBVIEW2_VERSION.split(".")
     candidate = str(value).split(".")

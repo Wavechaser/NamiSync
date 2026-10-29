@@ -560,34 +560,6 @@ def window_visible_sequence(
     return VisibleWindow(offset=offset, total=total, rows=tuple(rows))
 
 
-def to_visible_window_view(
-    window: VisibleWindow[_VisibleNodeT],
-) -> dict[str, object]:
-    """Flatten one bounded window to its exact renderer-facing wire shape."""
-
-    if type(window) is not VisibleWindow:
-        raise TypeError("window must be a VisibleWindow")
-    return {
-        "offset": window.offset,
-        "total": window.total,
-        "rows": [
-            {
-                "node_id": row.node.node_id,
-                "display": row.node.display,
-                "depth": row.node.depth,
-                "is_container": row.node.is_container,
-                "visible_index": row.visible_index,
-                "parent_visible_index": row.parent_visible_index,
-                "first_child_visible_index": row.first_child_visible_index,
-                "position_in_set": row.position_in_set,
-                "set_size": row.set_size,
-                "expanded": row.expanded,
-            }
-            for row in window.rows
-        ],
-    }
-
-
 def resolve_visible_node_anchor(
     sequence: VisibleSequence[_VisibleNodeT], node_id: str,
 ) -> VisibleAnchor | None:

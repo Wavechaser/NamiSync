@@ -1411,7 +1411,6 @@ class FinalizationOrderFileSystem(NativeFileSystem):
         self.calls: list[str] = []
         self.last_access_values: list[int] = []
         self.acl_applied = False
-        self.writer_flushes = 0
         self.copied_descriptor: int | None = None
 
     def create_temp(self, path: Path, *, allocation_size: int | None):
@@ -1419,10 +1418,6 @@ class FinalizationOrderFileSystem(NativeFileSystem):
         self.copied_descriptor = stream.fileno()
         self.calls.append("create")
         return stream
-
-    def flush_file(self, stream) -> None:
-        self.writer_flushes += 1
-        super().flush_file(stream)
 
     def _open_metadata_handle(self, path: Path) -> int:
         if self.acl_applied:
@@ -1754,7 +1749,6 @@ def test_full_copy_has_no_writer_flush_and_finalizes_before_restrictive_acl(
 
     assert result.status is SessionState.COMPLETED
     assert (target / "file.bin").read_bytes() == b"payload"
-    assert fs.writer_flushes == 0
     assert fs.calls == ["create", "acl", "basic", "flush"]
     assert fs.copied_descriptor is not None
     with pytest.raises(OSError):
@@ -2081,8 +2075,10 @@ def test_name_tunneled_creation_and_readonly_repair_only_changed_fields(
     assert finalized.metadata.created_ns is not None
     assert not finalized.metadata.attributes & 0x1
     fs.publish_new(temp, target)
-    fs._set_creation_time(
-        target, max(0, finalized.metadata.created_ns - 1_000_000_000)
+    fs._set_windows_file_times(
+        target,
+        created_ns=max(0, finalized.metadata.created_ns - 1_000_000_000),
+        modified_ns=None,
     )
     before = target.stat(follow_symlinks=False)
     before_attributes = fs._get_attributes(target)
@@ -3067,7 +3063,6 @@ class BackupShapeFileSystem(NativeFileSystem):
         self.finalized_paths: list[Path] = []
         self.finalization_flushes: list[tuple[Path, int]] = []
         self.security_pairs: list[tuple[Path, Path]] = []
-        self.writer_flushes = 0
         self.handle_flushes = 0
         self.temp_descriptors: dict[Path, int] = {}
 
@@ -3089,10 +3084,6 @@ class BackupShapeFileSystem(NativeFileSystem):
             (path, self.handle_flushes - before)
         )
         return result
-
-    def flush_file(self, stream) -> None:
-        self.writer_flushes += 1
-        super().flush_file(stream)
 
     def _flush_handle(self, handle) -> None:
         self.handle_flushes += 1
@@ -3174,7 +3165,6 @@ def test_copied_backup_stays_serial_hashless_fixed_chunk_and_unallocated(
     assert set(fs.read_requests[source_path]) == {1024 * 1024}
     assert len(backup_temps) == 1 and backup_temps[0][1] is None
     assert backup_temps[0][0] in fs.finalized_paths
-    assert fs.writer_flushes == 0
     assert dict(fs.finalization_flushes)[backup_temps[0][0]] == 1
     if os.name == "nt":
         assert len(fs.temp_descriptors) == 2

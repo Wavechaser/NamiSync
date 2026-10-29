@@ -85,6 +85,7 @@ from tests.interfaces.web._public_view_witnesses import (
     PublicViewWitness,
     iter_public_view_witnesses,
 )
+from _bridge_result_support import dispatch_result
 from _frontend_test_support import _node_executable, run_node_probe
 
 
@@ -997,7 +998,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
                         "created_at": "2026-08-12T10:59:59+00:00",
                         "started_at": None,
                         "ended_at": "2026-08-12T11:00:00+00:00",
-                        "result": bridge_module.to_primitive_view(result),
+                        "result": dispatch_result(result)["result"],
                     },
                 },
             ],

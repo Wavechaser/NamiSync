@@ -954,7 +954,7 @@ def test_exact_schema_topology_does_not_replace_marker_value_validation(history:
 def test_exact_schema_topology_is_selected_by_all_admission_boundaries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from namisync.db.contracts import history_file_contract_matches, ledger_file_contract_matches
+    from namisync.db.contracts import probe_database_file_contract
     from namisync.workflows.database_pair import validate_database_pair
 
     ledger = initialize_ledger(tmp_path / "ledger.db")
@@ -979,8 +979,8 @@ def test_exact_schema_topology_is_selected_by_all_admission_boundaries(
             ({True}, lambda: schema_module.validate_history_reader_contract(history_reader)),
             ({False}, lambda: LedgerRepository(ledger).close()),
             ({True}, lambda: HistoryRepository(history).close()),
-            ({False}, lambda: ledger_file_contract_matches(ledger)),
-            ({True}, lambda: history_file_contract_matches(history)),
+            ({False}, lambda: probe_database_file_contract(ledger, history=False)),
+            ({True}, lambda: probe_database_file_contract(history, history=True)),
             ({False, True}, lambda: validate_database_pair(ledger, history)),
         ):
             observed.clear()

@@ -52,7 +52,8 @@ from namisync.core.planning import (
     OperationKind,
     SyncOptions,
     calculate_required_bytes,
-    serialize_plan,
+    canonical_json_bytes,
+    plan_projection,
 )
 from namisync.core.preflight import (
     ObservedWorld,
@@ -1958,13 +1959,13 @@ def test_repeated_contexts_are_identical_for_identical_worlds_and_fresh_drift_ch
 def test_refusal_leaves_plan_selection_status_and_world_unchanged() -> None:
     xset = _xset()
     world = replace(_world(xset), free_space=0)
-    before_plan = serialize_plan(xset.plan)
+    before_plan = canonical_json_bytes(plan_projection(xset.plan))
     before_selection = xset.selection
     before_status = dict(xset.status)
     before_world = _world_fact(world)
     verdict = preflight(xset, world)
     assert not verdict.ok
-    assert serialize_plan(xset.plan) == before_plan
+    assert canonical_json_bytes(plan_projection(xset.plan)) == before_plan
     assert xset.selection == before_selection
     assert xset.status == before_status
     assert _world_fact(world) == before_world

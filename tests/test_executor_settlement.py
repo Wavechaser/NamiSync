@@ -330,7 +330,7 @@ def test_pause_retains_settled_copy_evidence_for_in_memory_resume(
     assert xset.status == {first.op_id: Outcome.SUCCEEDED}
     assert set(xset.published_evidence) == {first.op_id}
     first_evidence = xset.published_evidence[first.op_id]
-    assert first_evidence.copy_recorded
+    assert (first_evidence.recorded_identity is not None)
 
     result, _, _ = _run(xset, fs=fs)
 
@@ -341,7 +341,7 @@ def test_pause_retains_settled_copy_evidence_for_in_memory_resume(
     }
     assert set(xset.published_evidence) == {first.op_id, second.op_id}
     assert xset.published_evidence[first.op_id] is first_evidence
-    assert xset.published_evidence[second.op_id].copy_recorded
+    assert (xset.published_evidence[second.op_id].recorded_identity is not None)
 
 
 def test_noncopy_recording_degradation_survives_pause_and_resume(
@@ -406,7 +406,7 @@ def test_noncopy_recording_degradation_survives_pause_and_resume(
     assert result.status is SessionState.COMPLETED
     assert result.recording is RecordingStatus.DEGRADED
     assert xset.recording is RecordingStatus.DEGRADED
-    assert xset.published_evidence[copied.op_id].copy_recorded
+    assert (xset.published_evidence[copied.op_id].recorded_identity is not None)
 
 
 def test_pause_flush_degradation_is_retained_for_resume(
@@ -457,7 +457,7 @@ def test_pause_flush_degradation_is_retained_for_resume(
     assert tuple(issue.reason for issue in xset.recording_issues) == (
         TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
     )
-    assert xset.published_evidence[operation.op_id].copy_recorded
+    assert (xset.published_evidence[operation.op_id].recorded_identity is not None)
 
 
 class InterruptingBackend(NativeCopyBackend):
@@ -3230,7 +3230,7 @@ def test_recorder_failure_preserves_filesystem_success_and_degrades_axis(
     assert xset.recording_issues == ()
     assert set(xset.published_evidence) == {operation.op_id}
     published = xset.published_evidence[operation.op_id]
-    assert not published.copy_recorded
+    assert not (published.recorded_identity is not None)
     assert published.recorded_identity is None
 
 
@@ -3315,7 +3315,7 @@ def test_recording_diagnostic_failure_preserves_executor_truth(
         assert item.outcome is Outcome.SUCCEEDED
         assert observed_failures == []
         evidence = xset.published_evidence[operation.op_id]
-        assert evidence.copy_recorded is (boundary == "final-flush")
+        assert (evidence.recorded_identity is not None) is (boundary == "final-flush")
         assert item.recording_reason is (
             ItemRecordingReason.RECORD_WRITE_FAILED if boundary == "item" else None
         )
@@ -3411,7 +3411,7 @@ def test_copy_recorder_none_return_is_degraded_not_recorded(
     assert result.status is SessionState.COMPLETED
     assert result.recording is RecordingStatus.DEGRADED
     published = xset.published_evidence[operation.op_id]
-    assert not published.copy_recorded
+    assert not (published.recorded_identity is not None)
     assert published.recorded_identity is None
     item = _item_outcome(events)
     assert item.recording_reason is ItemRecordingReason.RECORD_WRITE_FAILED
@@ -3480,8 +3480,8 @@ def test_recording_truth_is_per_copy_while_aggregate_degradation_is_sticky(
         first.op_id,
         second.op_id,
     }
-    assert not xset.published_evidence[first.op_id].copy_recorded
-    assert xset.published_evidence[second.op_id].copy_recorded
+    assert not (xset.published_evidence[first.op_id].recorded_identity is not None)
+    assert (xset.published_evidence[second.op_id].recorded_identity is not None)
     assert xset.recording_reasons == {
         first.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
     }
@@ -3521,8 +3521,8 @@ def test_later_record_failure_does_not_rewrite_committed_copy_truth(
 
     assert result.status is SessionState.COMPLETED
     assert result.recording is RecordingStatus.DEGRADED
-    assert xset.published_evidence[first.op_id].copy_recorded
-    assert not xset.published_evidence[second.op_id].copy_recorded
+    assert (xset.published_evidence[first.op_id].recorded_identity is not None)
+    assert not (xset.published_evidence[second.op_id].recorded_identity is not None)
     assert xset.recording_reasons == {
         second.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
     }
@@ -3571,7 +3571,7 @@ def test_later_item_failure_does_not_rewrite_committed_copy_truth(
         first.op_id: Outcome.SUCCEEDED,
         second.op_id: Outcome.FAILED,
     }
-    assert xset.published_evidence[first.op_id].copy_recorded
+    assert (xset.published_evidence[first.op_id].recorded_identity is not None)
     assert second.op_id not in xset.published_evidence
     assert xset.recording_reasons == {}
     assert xset.recording_issues == ()

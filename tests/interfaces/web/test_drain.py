@@ -17,6 +17,8 @@ from weakref import ref
 
 import pytest
 
+from _bridge_result_support import dispatch_result
+
 from _event_v5_fixtures import maximum_reliable_envelope
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION, Envelope, Gap, ItemOutcome, Progress, StateChanged,
@@ -46,8 +48,6 @@ from namisync.interfaces.web.bridge import (
     _admit_task_drain_response_prefix,
     _consume_task_drain_response,
     _peek_task_drain_response,
-    snapshot_task_drain_response_prefix,
-    to_primitive_view,
 )
 from namisync.interfaces.web import drain as drain_module
 from namisync.interfaces.web.drain import (
@@ -69,7 +69,7 @@ from namisync.interfaces.task_port import (
     TaskTerminalDelivery,
     TaskUnavailableError,
 )
-from namisync.interfaces.web.task_snapshot import TaskPresentationState, TaskSnapshotStage
+from namisync.interfaces.web.task_snapshot import TaskPresentationState
 from namisync.workflows import (
     EXECUTION_KIND, ExecutionEvidenceResult, ExecutionEvidenceState,
     ExecutionEvidenceWindow,
@@ -1007,7 +1007,7 @@ def test_maximum_reliable_head_drains_alone_below_the_bridge_response_wall() -> 
         "schema_version": BRIDGE_SCHEMA_VERSION,
         "request_id": "6" * 32,
         "ok": True,
-        "result": to_primitive_view(drained),
+        "result": dispatch_result(drained)["result"],
     }
     encoded = json.dumps(
         response,
@@ -1064,29 +1064,34 @@ def test_drain_keeps_an_oversized_reliable_tail_for_the_next_response() -> None:
     registry.begin_close()
 
 
-def test_drain_response_prefix_owns_each_source_before_advancing() -> None:
+def test_drain_response_prefix_owns_each_source_before_advancing(monkeypatch) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
     first = _event(2)
     second = _event(3)
+    service.sink(first)
+    service.sink(second)
+    original = drain_module._tag_update
+    tagged = []
 
-    def hostile_source():
-        yield TaskEventUpdateView("event", first)
-        object.__setattr__(first, "body_type", "Gap")
-        yield TaskEventUpdateView("event", second)
+    def hostile_tag(update):
+        if tagged:
+            object.__setattr__(tagged[0], "body_type", "Gap")
+        tagged.append(update)
+        return original(update)
 
-    admitted = snapshot_task_drain_response_prefix(
-        "task-" + ("1" * 32),
-        SESSION,
-        DRAIN,
-        hostile_source(),
-        TaskSnapshotStage(TaskPresentationState("task-" + ("1" * 32), SESSION), None),
-    )
+    monkeypatch.setattr(drain_module, "_tag_update", hostile_tag)
+    admitted = registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
 
     assert [update.event.body_type for update in admitted.updates] == [
         "StateChanged",
         "StateChanged",
     ]
-    assert admitted.snapshot["revision"] == 2
+    assert len(tagged) == 2 and tagged[0].body_type == "Gap"
+    assert admitted.snapshot["revision"] == 3
     assert admitted.snapshot["gap_first_missed_seq"] is None
+    registry.begin_close()
 
 
 def test_progress_rate_uses_sink_time_after_coalescing_and_failed_capture(
@@ -1148,16 +1153,16 @@ def test_progress_sample_survives_a_byte_excluded_tail(
     clock.advance_to(3.0)
     service.sink(_execution_event(SESSION, 4, Progress("execute", 0, 2, 20, 100, None)))
     task = registry._tasks[start.task_id]
-    first_only = snapshot_task_drain_response_prefix(
+    first_only = TaskDrainView(
         start.task_id, SESSION, "6" * 32,
         (TaskEventUpdateView("event", reliable),),
-        TaskSnapshotStage(task.presentation_state, None),
+        task.presentation_state.advance(TaskEventUpdateView("event", reliable), None).snapshot(),
     )
     first_bytes = len(json.dumps({
         "schema_version": BRIDGE_SCHEMA_VERSION,
         "request_id": "0" * 32,
         "ok": True,
-        "result": to_primitive_view(first_only),
+        "result": dispatch_result(first_only)["result"],
     }, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
     clock.advance_to(100.0)
     with monkeypatch.context() as patch:

@@ -195,12 +195,6 @@ class PublishedCopyEvidence:
         ):
             raise TypeError("recorded copy identity has the wrong type")
 
-    @property
-    def copy_recorded(self) -> bool:
-        """Whether the copy transaction returned a complete durable identity."""
-
-        return self.recorded_identity is not None
-
 
 def _validate_published_evidence_shape(
     value: object,
@@ -1097,8 +1091,6 @@ class ExecutorFileSystem(Protocol):
     def create_temp(
         self, path: Path, *, allocation_size: int | None
     ) -> BinaryIO: ...
-
-    def flush_file(self, stream: BinaryIO) -> None: ...
 
     def flush_path(self, path: Path) -> None: ...
 

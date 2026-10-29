@@ -437,12 +437,9 @@ def _assert_epoch_pair_refused_without_mutation(
     before = _snapshot(ledger, history)
     for role in refused_roles:
         selected = ledger if role == "ledger" else history
-        probe = (
-            file_contracts.ledger_file_contract_matches if role == "ledger"
-            else file_contracts.history_file_contract_matches
-        )
         for _ in range(2):
-            assert not probe(selected)
+            with pytest.raises(SchemaResetRequired, match="data epoch 7"):
+                file_contracts.probe_database_file_contract(selected, history=role == "history")
             assert _snapshot(ledger, history) == before
         for consumer in (
             initialize_ledger if role == "ledger" else initialize_history,
@@ -570,11 +567,11 @@ def test_current_markers_do_not_admit_or_repair_invalid_topology(
             connection.execute("CREATE VIEW poison AS SELECT * FROM schema_metadata")
         connection.commit()
     before = _snapshot(ledger, history)
-    probe = file_contracts.ledger_file_contract_matches if role == "ledger" else file_contracts.history_file_contract_matches
     repository = LedgerRepository if role == "ledger" else HistoryRepository
     initialize = initialize_ledger if role == "ledger" else initialize_history
 
-    assert not probe(selected)
+    with pytest.raises(SchemaResetRequired, match="archive or delete both database main files"):
+        file_contracts.probe_database_file_contract(selected, history=role == "history")
     assert _snapshot(ledger, history) == before
     result = database_pair.validate_database_pair(ledger, history)
     assert result.state == "refused"
@@ -622,8 +619,9 @@ def test_any_journal_entry_refuses_before_any_sqlite_connection(
 
     monkeypatch.setattr(file_contracts.sqlite3, "connect", unexpected)
     assert database_pair.validate_database_pair(ledger, history).state == "refused"
-    probe = file_contracts.ledger_file_contract_matches if role == "ledger" else file_contracts.history_file_contract_matches
-    assert not probe(selected)
+    with pytest.raises(DatabaseAdmissionError) as raised:
+        file_contracts.probe_database_file_contract(selected, history=role == "history")
+    assert type(raised.value) is DatabaseAdmissionError
     for consumer in (
         LedgerRepository if role == "ledger" else HistoryRepository,
         initialize_ledger if role == "ledger" else initialize_history,
@@ -690,8 +688,13 @@ def test_wal_contract_truth_is_checked_without_source_artifact_changes(
             Path(f"{selected}{suffix}").write_bytes(Path(f"{producer}{suffix}").read_bytes())
         assert Path(f"{selected}-wal").stat().st_size > 0
         before = _snapshot(ledger, history)
-        probe = file_contracts.ledger_file_contract_matches if role == "ledger" else file_contracts.history_file_contract_matches
-        assert probe(selected) is (change == "benign")
+        if change == "benign":
+            evidence = file_contracts.probe_database_file_contract(selected, history=role == "history")
+            assert evidence.path == selected
+            evidence.require_unchanged()
+        else:
+            with pytest.raises(SchemaResetRequired):
+                file_contracts.probe_database_file_contract(selected, history=role == "history")
         assert _snapshot(ledger, history) == before
         result = database_pair.validate_database_pair(ledger, history)
         assert result.state == ("ready" if change == "benign" else "refused")
@@ -819,7 +822,8 @@ def test_snapshot_copy_refuses_changed_artifact_before_reading_or_copying(
     with monkeypatch.context() as patch:
         patch.setattr(file_contracts, "_snapshot_artifacts", capture_then_grow)
         patch.setattr(Path, "open", track_open)
-        assert not file_contracts.ledger_file_contract_matches(candidate)
+        with pytest.raises(file_contracts.DatabaseArtifactsChanged):
+            file_contracts.probe_database_file_contract(candidate, history=False)
 
     assert raced
     assert changed_reads == []
@@ -909,7 +913,13 @@ def test_admission_drift_refuses_with_only_the_external_mutation(
     monkeypatch.setattr(repositories_module, "connect_ledger_reader", ordinary_open_is_forbidden)
     monkeypatch.setattr(schema_module, "connect_ledger_writer", ordinary_open_is_forbidden)
     if consumer == "probe":
-        assert not file_contracts.ledger_file_contract_matches(candidate)
+        refusal = (
+            DatabaseAdmissionError if change == "new-journal" else
+            file_contracts.DatabaseArtifactsChanged
+        )
+        with pytest.raises(refusal) as raised:
+            file_contracts.probe_database_file_contract(candidate, history=False)
+        assert type(raised.value) is refusal
     else:
         with pytest.raises(DatabaseAdmissionError):
             (LedgerRepository if consumer == "repository" else initialize_ledger)(candidate)
@@ -976,7 +986,9 @@ def test_wal_probe_uses_private_sqlite_without_copying_source_shm(
     monkeypatch.setattr(file_contracts.sqlite3, "connect", private_connect)
     monkeypatch.setattr(file_contracts, "validate_ledger_reader_contract", validate_wal_truth)
 
-    assert file_contracts.ledger_file_contract_matches(candidate)
+    evidence = file_contracts.probe_database_file_contract(candidate, history=False)
+    assert evidence.path == candidate
+    evidence.require_unchanged()
     assert len(opened) == len(private_snapshots) == 1
     assert not private_snapshots[0].exists()
     assert _snapshot(candidate) == before

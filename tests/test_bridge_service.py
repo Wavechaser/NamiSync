@@ -2229,7 +2229,7 @@ def test_br_g_24_folder_mutation_uses_full_subtree_not_collapsed_rows() -> None:
     plan_value = plan((folder, first, second))
     service = _service(_PlanRuntime(_artifact(plan_value)))
     tree = service._plan_tree(REQUEST_ID, plan_value)
-    folder_id = tree.node_id_for_path_key("FOLDER")
+    folder_id = next(node.node_id for node in tree.nodes if node.rel_path_key == "FOLDER")
 
     changed = service.mutate_selection(
         REQUEST_ID,
@@ -2273,9 +2273,8 @@ def test_leaf_resolution_skips_folder_wide_selection_derivation(
             REQUEST_ID, plan_value, (str(leaf.op_id),)
         ) == (str(leaf.op_id),)
 
-    folder_id = service._plan_tree(REQUEST_ID, plan_value).node_id_for_path_key(
-        "FOLDER"
-    )
+    folder_id = next(node.node_id for node in service._plan_tree(REQUEST_ID, plan_value).nodes
+        if node.rel_path_key == "FOLDER")
     assert set(
         service._resolve_plan_selection_ids(REQUEST_ID, plan_value, (folder_id,))
     ) == {str(folder.op_id), str(leaf.op_id)}
@@ -2310,7 +2309,7 @@ def test_br_g_24_folder_mutation_skips_safety_disabled_descendants() -> None:
     changed = service.mutate_selection(
         REQUEST_ID,
         0,
-        deselect=(tree.node_id_for_path_key("FOLDER"),),
+        deselect=(next(node.node_id for node in tree.nodes if node.rel_path_key == "FOLDER"),),
     ).preview
 
     assert set(changed.user_deselected) == {
@@ -2391,8 +2390,8 @@ def test_br_g_1_and_29_opaque_location_ids_union_freeze_and_refuse_foreign() -> 
             for row in rows
         ),
     )
-    folder_id = tree.node_id_for_path_key("FOLDER")
-    hostile_id = tree.node_id_for_path_key(r"100%_]\ITEM.BIN")
+    folder_id = next(node.node_id for node in tree.nodes if node.rel_path_key == "FOLDER")
+    hostile_id = next(node.node_id for node in tree.nodes if node.rel_path_key == r"100%_]\ITEM.BIN")
 
     service.start_inventory(
         location_id=7,
@@ -2447,7 +2446,7 @@ def test_br_g_1_and_29_opaque_location_ids_union_freeze_and_refuse_foreign() -> 
     with pytest.raises(ValueError, match="does not belong to location"):
         service.start_verify(
             location_id=7,
-            selected_ids=(foreign_tree.root_node_id,),
+            selected_ids=(foreign_tree.nodes[0].node_id,),
         )
     with pytest.raises(ValueError, match="require selected ids"):
         service.start_inventory(location_id=7, selected_ids=())
@@ -2601,7 +2600,7 @@ def test_br_g_29_folder_verify_continues_past_one_unreadable_frozen_subject(
                 for row in rows
             ),
         )
-        folder_id = tree.node_id_for_path_key("FOLDER")
+        folder_id = next(node.node_id for node in tree.nodes if node.rel_path_key == "FOLDER")
 
         started = service.start_verify(
             location_id=location_id,

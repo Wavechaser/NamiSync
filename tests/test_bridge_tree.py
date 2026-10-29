@@ -10,7 +10,6 @@ from namisync.core.pathing import (
     normalize_relative_path,
     relative_path_depth,
     relative_path_parent,
-    strip_common_relative_path_suffix,
 )
 from namisync.modules import planner
 from namisync.workflows.node_tree import (
@@ -64,25 +63,22 @@ def test_br_g_1_node_ids_are_scope_qualified_stable_and_order_independent() -> N
     )
 
     docs_key = normalize_relative_path("docs")
-    assert first.node_id_for_path_key(docs_key) == rebuilt.node_id_for_path_key(
-        docs_key
-    )
-    assert first.node_id_for_path_key(docs_key) != foreign.node_id_for_path_key(
-        docs_key
-    )
+    first_docs = next(node for node in first.nodes if node.rel_path_key == docs_key)
+    rebuilt_docs = next(node for node in rebuilt.nodes if node.rel_path_key == docs_key)
+    foreign_docs = next(node for node in foreign.nodes if node.rel_path_key == docs_key)
+    plan_docs = next(node for node in plan_domain.nodes if node.rel_path_key == docs_key)
+    assert first_docs.node_id == rebuilt_docs.node_id
+    assert first_docs.node_id != foreign_docs.node_id
     assert tuple(node.node_id for node in first.nodes) == tuple(
         node.node_id for node in rebuilt.nodes
     )
-    foreign_docs_id = foreign.node_id_for_path_key(docs_key)
     with pytest.raises(KeyError):
-        first.node_for_id(foreign_docs_id)
-    assert first.node_id_for_path_key(docs_key) != plan_domain.node_id_for_path_key(
-        docs_key
-    )
+        first.node_for_id(foreign_docs.node_id)
+    assert first_docs.node_id != plan_docs.node_id
 
     hostile_key = normalize_relative_path(r"100%_[x]\a&b.txt")
     hostile_node = first.node_for_id(
-        first.node_id_for_path_key(hostile_key)
+        next(node.node_id for node in first.nodes if node.rel_path_key == hostile_key)
     )
     assert hostile_node.rel_path == r"100%_[x]\a&b.txt"
     assert "100%" not in hostile_node.node_id
@@ -137,17 +133,12 @@ def test_br_g_2_ordered_array_contains_complete_structure_and_indexes() -> None:
         7,
         8,
     )
-    assert all(
-        node.subtree_extent == (node.position, node.subtree_end)
-        for node in tree.nodes
-    )
-
-    a_node_id = tree.node_id_for_path_key("A")
+    a_node_id = next(node.node_id for node in tree.nodes if node.rel_path_key == "A")
     a_position = tree.position_for_node_id(a_node_id)
     assert a_position == 1
     assert tree.node_for_id(a_node_id) is tree.nodes[a_position]
-    assert tree.rel_path_key_for_node_id(a_node_id) == "A"
-    assert tree.rel_path_for_node_id(a_node_id) in {"A", "a"}
+    assert tree.node_for_id(a_node_id).rel_path_key == "A"
+    assert tree.node_for_id(a_node_id).rel_path in {"A", "a"}
     assert tree.subtree_member_ids(a_node_id) == (
         "same-a",
         "same-b",
@@ -156,7 +147,7 @@ def test_br_g_2_ordered_array_contains_complete_structure_and_indexes() -> None:
     assert tree.nodes[a_position].subtree_member_count == 3
     assert "sibling" not in tree.subtree_member_ids(a_node_id)
 
-    empty = tree.node_for_id(tree.node_id_for_path_key("EMPTY"))
+    empty = next(node for node in tree.nodes if node.rel_path_key == "EMPTY")
     assert empty.is_container
     assert empty.member_ids == ("empty-directory",)
 
@@ -221,9 +212,7 @@ def test_br_g_2_indexes_are_read_only_and_input_is_consumed_once() -> None:
     assert one_shot.iterations == 1
     assert tree.nodes == expected.nodes
     with pytest.raises(TypeError):
-        tree.node_positions[tree.root_node_id] = 99  # type: ignore[index]
-    with pytest.raises(TypeError):
-        tree.path_positions[""] = 99  # type: ignore[index]
+        tree._position_by_node_id[tree.nodes[0].node_id] = 99  # type: ignore[index]
 
 
 def test_br_g_2_empty_tree_retains_an_addressable_root() -> None:
@@ -235,11 +224,11 @@ def test_br_g_2_empty_tree_retains_an_addressable_root() -> None:
 
     assert len(tree.nodes) == 1
     root = tree.nodes[0]
-    assert root.node_id == tree.root_node_id
+    assert tree.node_for_id(root.node_id) is root
     assert root.rel_path == root.rel_path_key == ""
     assert root.position == root.depth == 0
     assert root.parent_index is None
-    assert root.subtree_extent == (0, 1)
+    assert (root.position, root.subtree_end) == (0, 1)
     assert root.subtree_member_count == 0
     assert root.is_container
 
@@ -322,8 +311,8 @@ def test_case_variant_paths_keep_the_lexicographic_minimum_display() -> None:
     )
 
     assert len(tree.nodes) == 3
-    folder = tree.nodes[tree.path_positions["FOLDER"]]
-    leaf = tree.nodes[tree.path_positions[r"FOLDER\FILE.TXT"]]
+    folder = next(node for node in tree.nodes if node.rel_path_key == "FOLDER")
+    leaf = next(node for node in tree.nodes if node.rel_path_key == r"FOLDER\FILE.TXT")
     assert folder.rel_path == "FOLDER"
     assert leaf.rel_path == r"FOLDER\FILE.txt"
     assert leaf.member_ids == ("lower", "mixed", "upper")
@@ -353,23 +342,3 @@ def test_br_g_3_planner_uses_the_promoted_helpers_without_private_copies() -> No
     assert planner.relative_path_depth is relative_path_depth
     assert planner.relative_path_parent is relative_path_parent
     assert planner.is_relative_path_descendant is is_relative_path_descendant
-
-
-def test_common_relative_path_suffix_is_segment_aware_and_preserves_spelling() -> None:
-    assert strip_common_relative_path_suffix(
-        r"Old\Nested\File.TXT",
-        r"New\nested\file.txt",
-    ) == ("Old", "New")
-    assert strip_common_relative_path_suffix(
-        r"folder\a.txt",
-        r"folder-a\a.txt",
-    ) == ("folder", "folder-a")
-    assert strip_common_relative_path_suffix(
-        r"left\a.txt",
-        r"right\b.txt",
-    ) == (r"left\a.txt", r"right\b.txt")
-    assert strip_common_relative_path_suffix("cat.txt", "at.txt") == (
-        "cat.txt",
-        "at.txt",
-    )
-    assert strip_common_relative_path_suffix("same.txt", "SAME.TXT") == ("", "")

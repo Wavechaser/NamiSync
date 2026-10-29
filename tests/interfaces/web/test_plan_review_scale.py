@@ -21,8 +21,9 @@ from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, ItemOutcom
 from namisync.core.evidence import Outcome
 from namisync.core.session import SessionId
 from namisync.interfaces.task_port import TaskEventUpdateView
-from namisync.interfaces.web.bridge import snapshot_task_drain_response_prefix
-from namisync.interfaces.web.task_snapshot import TaskPresentationState, TaskSnapshotStage
+from _bridge_result_support import dispatch_result
+from namisync.interfaces.web.drain import TaskDrainView
+from namisync.interfaces.web.task_snapshot import TaskPresentationState
 from namisync.workflows.views import session_event_view
 from tools.performance import plan as benchmark
 from tools.performance.plan import build_fixture_manifest, build_plan_fixture
@@ -796,14 +797,15 @@ def test_large_plan_task_snapshot_does_not_publish_an_outcome_map() -> None:
         if first_population is None:
             first_population = population(asdict(state))
     assert population(asdict(state)) == first_population
-    published = snapshot_task_drain_response_prefix(
-        state.task_id, session_id, "d3" * 16, (),
-        TaskSnapshotStage(state, None),
-    )
-    assert published.updates == ()
-    assert published.snapshot == state.snapshot()
-    assert published.snapshot["terminal_result"] is None
-    assert not any(str(operation.op_id) in json.dumps(published.snapshot)
+    response = dispatch_result(TaskDrainView(
+        state.task_id, session_id, "d3" * 16, (), state.snapshot(),
+    ))
+    assert response["ok"] is True
+    published = response["result"]
+    assert published["updates"] == []
+    assert published["snapshot"] == state.snapshot()
+    assert published["snapshot"]["terminal_result"] is None
+    assert not any(str(operation.op_id) in json.dumps(published["snapshot"])
                    for operation in (artifact.plan.operations[0], artifact.plan.operations[-1]))
 
 

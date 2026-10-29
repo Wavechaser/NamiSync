@@ -10,7 +10,6 @@ from typing import Iterable, Mapping
 
 from namisync.core.pathing import (
     fold_validated_path,
-    normalize_relative_path,
     validate_relative_path,
 )
 from namisync.core.review import (
@@ -90,12 +89,6 @@ class NodeTreeNode:
         return self.rel_path or "All items"
 
     @property
-    def subtree_extent(self) -> tuple[int, int]:
-        """Return this node's half-open pre-order interval."""
-
-        return self.position, self.subtree_end
-
-    @property
     def synthetic(self) -> bool:
         """Return whether the node exists only to carry hierarchy."""
 
@@ -104,43 +97,18 @@ class NodeTreeNode:
 
 @dataclass(frozen=True, slots=True)
 class NodeTree:
-    """Immutable nodes plus authoritative identity and path indexes."""
+    """Immutable nodes plus an authoritative identity index."""
 
     tree_kind: NodeTreeKind
     scope_identity: str
     nodes: tuple[NodeTreeNode, ...]
     _position_by_node_id: Mapping[str, int]
-    _position_by_path_key: Mapping[str, int]
-
-    @property
-    def root_node_id(self) -> str:
-        return self.nodes[0].node_id
-
-    @property
-    def node_positions(self) -> Mapping[str, int]:
-        return self._position_by_node_id
-
-    @property
-    def path_positions(self) -> Mapping[str, int]:
-        return self._position_by_path_key
 
     def node_for_id(self, node_id: str) -> NodeTreeNode:
         return self.nodes[self.position_for_node_id(node_id)]
 
     def position_for_node_id(self, node_id: str) -> int:
         return self._position_by_node_id[node_id]
-
-    def node_id_for_path_key(self, rel_path_key: str) -> str:
-        canonical = normalize_relative_path(rel_path_key, allow_root=True)
-        if canonical != rel_path_key:
-            raise ValueError("node lookup path key is not canonical")
-        return self.nodes[self._position_by_path_key[canonical]].node_id
-
-    def rel_path_for_node_id(self, node_id: str) -> str:
-        return self.node_for_id(node_id).rel_path
-
-    def rel_path_key_for_node_id(self, node_id: str) -> str:
-        return self.node_for_id(node_id).rel_path_key
 
     def subtree_positions(self, node_id: str) -> range:
         node = self.node_for_id(node_id)
@@ -342,7 +310,6 @@ def _build_node_tree(
         scope_identity=scope_identity,
         nodes=tuple(nodes),
         _position_by_node_id=MappingProxyType(position_by_node_id),
-        _position_by_path_key=MappingProxyType(position_by_path_key),
     )
 
 

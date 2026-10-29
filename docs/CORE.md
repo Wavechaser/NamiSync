@@ -712,10 +712,7 @@ rewrites either spelling.
 Relative hierarchy uses `relative_path_depth()`, `relative_path_parent()`, and
 strict `is_relative_path_descendant()`. They operate on relative Windows path
 segments and remain distinct from `is_path_below()`, which checks resolved
-absolute-root containment. `strip_common_relative_path_suffix()` removes equal
-trailing segments under the same one-codepoint case mapping while preserving
-the original spelling of both remaining prefixes; it never performs a raw
-character-suffix match.
+absolute-root containment.
 
 Filesystem enumeration may observe names outside this lexical contract. Those
 names never enter `FileRecord`, `DirRecord`, `UnsupportedRecord`, or operation

@@ -206,7 +206,7 @@ preservation policy. No stream manifest enters a plan.
 
 Plan and operation hashes use explicit complete field projections rather than
 generic dataclass traversal. `plan_fingerprint()` omits only the plan's own
-fingerprint; public `serialize_plan()` includes it. Non-null file indices use
+fingerprint; the canonical encoding of `plan_projection()` includes it. Non-null file indices use
 canonical quoted `FileIndex128` text, while sizes, timestamps, and other integer
 fields retain their numeric form. Sequence order and the established canonical
 JSON ordering of required-volume sets remain unchanged. Policy hashing keeps

@@ -127,37 +127,6 @@ def is_relative_path_descendant(path: str, directory: str) -> bool:
     return path_key.startswith(directory_key + "\\")
 
 
-def strip_common_relative_path_suffix(
-    left: str,
-    right: str,
-) -> tuple[str, str]:
-    """Strip equal trailing path components and preserve each prefix spelling."""
-
-    left_parts = PureWindowsPath(
-        validate_relative_path(left, allow_root=True)
-    ).parts
-    right_parts = PureWindowsPath(
-        validate_relative_path(right, allow_root=True)
-    ).parts
-    common_count = 0
-    for left_part, right_part in zip(
-        reversed(left_parts),
-        reversed(right_parts),
-        strict=False,
-    ):
-        if _uppercase_one_codepoint(left_part) != _uppercase_one_codepoint(
-            right_part
-        ):
-            break
-        common_count += 1
-    if common_count == 0:
-        return "\\".join(left_parts), "\\".join(right_parts)
-    return (
-        "\\".join(left_parts[:-common_count]),
-        "\\".join(right_parts[:-common_count]),
-    )
-
-
 def is_path_below(candidate: str, root: str) -> bool:
     """Return whether two resolved absolute paths preserve root containment."""
 

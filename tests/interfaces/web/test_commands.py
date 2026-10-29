@@ -14,6 +14,8 @@ from typing import get_args, get_type_hints
 
 import pytest
 
+from _bridge_result_support import dispatch_result
+
 import namisync.interfaces.web.bridge as bridge_module
 from namisync.core.session import OperationResult, SessionState
 from namisync.core.models import VolumeId
@@ -42,13 +44,11 @@ from namisync.interfaces.service import (
     SetupOptionsView,
 )
 from namisync.interfaces.web.bridge import (
-    BridgeProtocolError,
     BridgeResponseTooLargeError,
     _admit_task_drain_response_prefix,
     _consume_task_drain_response,
     _peek_task_drain_response,
     snapshot_bridge_response_result,
-    to_primitive_view,
 )
 from namisync.interfaces.web.commands import (
     ADAPTER_PUBLIC_VIEW_DATACLASSES,
@@ -1259,7 +1259,7 @@ def test_async_small_real_command_projections_have_exact_bounded_completion_shap
     )
 
     for name, payload, expected, expected_bytes in cases:
-        projected = to_primitive_view(_invoke(commands[name], payload))
+        projected = dispatch_result(_invoke(commands[name], payload))["result"]
         assert projected == expected
         envelope = {
             "kind": "namisync.command-completion.v1",
@@ -3321,7 +3321,7 @@ def test_br_g_32_public_view_codec_manifest_is_recursive_and_json_native() -> No
         }
     )
 
-    encoded = to_primitive_view(view)
+    encoded = dispatch_result(view)["result"]
     assert encoded == {
         "admission": {
             "disposition": "accepted",
@@ -3526,7 +3526,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
         TaskEventUpdateView,
         TaskRecordUpdateView,
     }
-    assert to_primitive_view(drain) == {
+    assert dispatch_result(drain)["result"] == {
         "task_id": TASK_ID,
         "session_id": SESSION_ID,
         "drain_id": DRAIN_ID,
@@ -3556,7 +3556,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
         "2026-08-12T10:00:00+00:00",
         result,
     )
-    assert to_primitive_view(TaskRecordUpdateView("record", record)) == {
+    assert dispatch_result(TaskRecordUpdateView("record", record))["result"] == {
         "update_type": "record",
         "record": {
             "session_id": SESSION_ID,
@@ -3566,7 +3566,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
             "created_at": "2026-08-12T10:00:00+00:00",
             "started_at": None,
             "ended_at": "2026-08-12T10:00:00+00:00",
-            "result": to_primitive_view(result),
+            "result": dispatch_result(result)["result"],
         },
     }
 
@@ -3585,16 +3585,14 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
     ],
 )
 def test_br_g_32_public_view_codec_refuses_non_wire_values(value: object) -> None:
-    with pytest.raises(BridgeProtocolError):
-        to_primitive_view(value)
+    assert dispatch_result(value)["error"]["code"] == "internal_error"
 
 
 def test_br_g_32_public_view_codec_refuses_recursive_containers() -> None:
     recursive: list[object] = []
     recursive.append(recursive)
 
-    with pytest.raises(BridgeProtocolError, match="recursive"):
-        to_primitive_view(recursive)
+    assert dispatch_result(recursive)["error"]["code"] == "internal_error"
 
 
 def _valid_task_record() -> SessionRecordView:
@@ -3639,8 +3637,7 @@ def test_next_events_rechecks_exact_nested_task_data(update) -> None:
 @pytest.mark.parametrize("update", _invalid_task_update_views())
 def test_task_serializer_rechecks_nested_data(update) -> None:
     returned = TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, (update,), _task_snapshot())
-    with pytest.raises(BridgeProtocolError):
-        to_primitive_view(returned)
+    assert dispatch_result(returned)["error"]["code"] == "internal_error"
 
 
 def test_task_serializer_rechecks_body_mutated_after_command_return() -> None:
@@ -3666,7 +3663,7 @@ def test_task_serializer_rechecks_body_mutated_after_command_return() -> None:
     assert returned.snapshot["revision"] == 0
     assert accepted is not returned
     event.body["state"] = "invented"
-    assert to_primitive_view(accepted)["updates"][0]["event"]["body"] == {
+    assert dispatch_result(accepted)["result"]["updates"][0]["event"]["body"] == {
         "state": "running"
     }
 
@@ -3681,7 +3678,7 @@ def test_task_serializer_does_not_recertify_trusted_event_body() -> None:
         _task_snapshot(),
     )
 
-    assert to_primitive_view(returned)["updates"][0]["event"] == {
+    assert dispatch_result(returned)["result"]["updates"][0]["event"] == {
         "session_id": SESSION_ID,
         "sequence": 1,
         "at": "producer timestamp",
@@ -3712,8 +3709,7 @@ def test_task_serializer_does_not_recertify_trusted_event_body() -> None:
 ])
 def test_result_view_serializer_rejects_malformed_typed_facts(changes) -> None:
     result = replace(_valid_task_record().result, **changes)
-    with pytest.raises(BridgeProtocolError):
-        to_primitive_view(result)
+    assert dispatch_result(result)["error"]["code"] == "internal_error"
 
 
 @pytest.mark.parametrize("changes", [
@@ -3723,15 +3719,14 @@ def test_result_view_serializer_rejects_malformed_typed_facts(changes) -> None:
     {"state": "failed"},
 ])
 def test_generic_record_serializer_rejects_malformed_facts(changes) -> None:
-    with pytest.raises(BridgeProtocolError):
-        to_primitive_view(replace(_valid_task_record(), **changes))
+    assert dispatch_result(replace(_valid_task_record(), **changes))["error"]["code"] == "internal_error"
 
 
 def test_generic_record_serializer_preserves_result_free_snapshots() -> None:
     record = replace(_valid_task_record(), result=None)
-    assert to_primitive_view(record)["result"] is None
+    assert dispatch_result(record)["result"]["result"] is None
     pending = replace(record, state="pending", ended_at=None)
-    assert to_primitive_view(pending)["state"] == "pending"
+    assert dispatch_result(pending)["result"]["state"] == "pending"
 
 
 def test_ordinary_integrity_commands_bound_complete_intent_before_registry():

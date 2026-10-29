@@ -50,9 +50,10 @@ from namisync.core.planning import (
     PreservationPolicy,
     SyncOptions,
     calculate_required_bytes,
+    canonical_json_bytes,
     deterministic_operation_id,
+    plan_projection,
     policy_fingerprint,
-    serialize_plan,
 )
 from namisync.modules.planner import plan, snapshot_plan_options
 from namisync.workflows.selection import ExclusionReason, derive_execution_selection
@@ -157,7 +158,7 @@ def test_repeated_serialization_and_randomized_input_order_are_byte_identical() 
         randomizer.shuffle(files)
         source = _scan("source", SOURCE_VOLUME, files=tuple(files), directories=tuple(reversed(directories)))
         target = _scan("target", TARGET_VOLUME)
-        serialized = serialize_plan(_plan(source, target))
+        serialized = canonical_json_bytes(plan_projection(_plan(source, target)))
         baseline = serialized if baseline is None else baseline
         assert serialized == baseline
 
@@ -1150,7 +1151,7 @@ def test_destination_policy_collision_is_deterministic_unique_and_reviewable() -
     options = SyncOptions(destination_policy=CollidingPolicy())
     first = _plan(source, _scan("target", TARGET_VOLUME), options=options)
     second = _plan(source, _scan("target", TARGET_VOLUME), options=options)
-    assert serialize_plan(first) == serialize_plan(second)
+    assert canonical_json_bytes(plan_projection(first)) == canonical_json_bytes(plan_projection(second))
     collision_ops = [operation for operation in first.operations if operation.target_rel_path == "same.bin"]
     assert len(collision_ops) == 2
     assert len({operation.op_id for operation in collision_ops}) == 2
