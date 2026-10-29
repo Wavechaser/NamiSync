@@ -154,6 +154,16 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
+#### Consolidate before M1 closeout (2026-10-29)
+
+- Formalized the amended reconciliation as a finite register, with nested
+  candidate-ingress tests preceding legacy-slot removal and separate reason
+  retirement. M1-12 and release remain inactive.
+- Made the About license witness independent of checkout line endings: pin
+  LICENSE to LF, update its static embedded text/hash, and compare packaged
+  JavaScript to raw checkout bytes. Fresh LF/CRLF checkouts build and verify
+  the wheel without changing third-party notices or pinning JavaScript EOLs.
+
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 
 - The executor/verifier reductions above kept each effect and refusal boundary

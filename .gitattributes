@@ -1,3 +1,4 @@
+/LICENSE text eol=lf
 /tests/bridge_transport_custody.py text eol=lf
 /tests/interfaces/web/test_bridge_transport_custody.py text eol=lf
 /tests/interfaces/web/test_bridge_transport_custody_holdout.py text eol=lf

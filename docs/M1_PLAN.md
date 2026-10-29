@@ -22,8 +22,9 @@ do not establish acceptance for changed dependencies.
 M1-10 is complete as of 2026-10-14, including the requested integrated A–C
 review before D and final cross-component review. The authorized GUI-hardening
 follow-up below is also complete. The review consolidation batch below is complete
-as of 2026-10-19. M1-12, release and DOC-2 remain inactive. Backend optimization
-continues with the authorized PO3/PO5 outcomes and conditional PO4 study below.
+as of 2026-10-19. M1-12, release and DOC-2 remain inactive. PO3/PO5 and
+conditional PO4 completed through 2026-10-21. The pre-closeout consolidation
+below is authorized from 2026-10-29.
 Other pending rows still need user authorization, active scope and verification.
 A finding does not enlarge a row; [AGENTS](../AGENTS.md) governs scope changes,
 stops and recovery.
@@ -46,6 +47,90 @@ the old tip and opens a draft PR from `milestone1-anthony`. Before any action,
 freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
+
+## Pre-closeout consolidation — authorized 2026-10-29
+
+Baseline: clean `2285b426`. The user adopted the two-study reconciliation with
+explicit amendments on candidate ingress, sequencing, stale FEATURES status,
+license bytes, the full test-only population and reason retirement. Studies,
+source census, supplied external receipts and counterfactuals remain in
+`build/m1-closeout-study-20261029/`; they inform scope but are not acceptance
+for changed dependencies. This register supersedes the preserved draft registers
+there. M1-12, release and DOC-2 remain inactive.
+
+Goal: fewer representations, unused APIs and duplicated maintenance obligations,
+while retaining reviewed effects, atomic publication/recording, idempotency,
+ingress bounds, exact result custody and independent behavioral witnesses.
+No line-count, timing or coverage-percentage target. One coherent row per
+mergeable commit; separate a row further only along independently verified
+outcomes. Finish each row's gate and adversarial review before its commit.
+
+| Row | Finite outcome and owners/direct consumers | Dependencies and acceptance | Status |
+| --- | --- | --- | --- |
+| A1 | Deterministic license text: pin only LICENSE to LF, manually update its embedded text in `assets/legal_content.js`, and compare packaged JS to `read_bytes().decode()` in the About test. Preserve all notice hashes/text and package identity; no unrelated normalization or new generator. Owners: desktop assets, wheel/static tests, .gitattributes. | Existing About reproducer first; real wheel About/package checks in fresh autocrlf true/false checkouts, interfaces department, source/diff and independent review. | Complete; receipts below. |
+| A2 | Correct README stale desktop/bootstrap text, spelling and supported-target/compatibility wording; FEATURES intro/Inventory active status and explicitly future scoped planning; WORKFLOWS review-publication account against actual owners, preserving complete publication/refusal/replacement. | A1 independent; source-to-prose reconciliation, local links/diff and independent review. No support expansion or new publication design. | Pending. |
+| C1 | Add ordinary ingress witnesses for `admit_location` and `_validate_location_candidate`: typed/remembered successes, bad kind, extra keys, noncanonical/zero/over-range location IDs, refusals before service/slot work. Owners: `web/commands.py` existing contract, `test_commands.py`. | Must pass before B1. Real command invocation with valid purpose; focused command tests and interfaces department. Missing-purpose refusal is not parser coverage. | Pending; precedes B1. |
+| B1 | Retire raw-string folder slots, legacy flag/conversion and alternate pair return; narrow FolderSlotAuthority and migrate fixtures to LocationCandidate. Owners: slots/commands; direct command/transport/host/slot fixtures. | C1 complete. Retain opacity, purpose, expiry, capacity, ambiguity, atomic pair resolution, exact replay and fresh admission; focused slots/commands/transport, interfaces and affected installed picker/start witnesses. | Pending. |
+| B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Pending. |
+| B3 | Reuse canonical preorder/inverse result for Inventory PATH sorting; retain second traversal after non-PATH sort. Owner: inventory_projection; Inventory review and tools consumers. | Equal ordered/inverse outputs across empty/nested/warning cases, warning-tail/sort/reset/spelling tests, workflows department and affected required large-projection gate. No speed claim. | Pending. |
+| C2 | Cover read_setup/prepare_setup, service.read_plan_setup readiness/frozen values, ensure_database_pair refusal and runtime Plan refusal. Preserve existing underlying classification/CLI/headed witnesses. | Finite successful/refused/default/task/readiness cases; refused pair leaves bytes unchanged and admits no work. Interfaces/workflows owning and direct-consumer tests, then ordinary integration. | Pending. |
+| C3 | Use contained run_node_probe for required transport probes; retire demonstrated localRow spelling pin and duplicate wheel asset equality only. Owners: transport/frontend/wheel tests and existing helper. | Keep mandatory Node discovery, original-command/interactive/both drain record kinds, runner timeout/output limits, tree fixture provenance/runtime cases, dedicated wheel population/CSP checks; harmless rename and wrong-digest control, missing/extra asset control; interfaces department. | Pending. |
+| D1 | Remove redundant Scope planner parameter/type/kinds/factories and workflow/tool/test call-site plumbing. Preserve scoped planning/history replay as an explicitly unrealized outcome without this placeholder representation. Owners: core/planner, workflow composition, executor rig, contract tests and CORE/PLANNER/FEATURES. | Revalidate full caller population; planner/workflows/tools and contract consumers; ordinary suite/imports. No change to current whole-plan or dependency-closed execution selection. | Pending. |
+| D2 | Migrate test-facing convenience APIs to real production seams, then retire bounded population listed below with matching docs. Preserve independent behavioral/fault witnesses rather than tests of removed representation. | Per-family consumer map before editing; focused real producer/admission/native witnesses, affected departments, ordinary/imports and applicable native/settlement gates by dependency. No blanket deletion based on coverage absence. | Pending. |
+| R1 | Retire never-produced ALREADY_EXISTS/EMPTY_DIRECTORY everywhere: enums, web accept lists/labels, probes and DESKTOP_UI plus any exact consumers found in the finite history/current census. No producer or string-to-enum construction is expected; incompatible pre-release schema policy remains. | Confirm supplied all-history evidence and current constructors/consumers; ordinary/imports and real event/Plan decoder negative controls. Own commit; stop for contradictory supported producer/artifact evidence. | Pending. |
+| E1 | Condense completed register chronology with a decision/disposition map; consolidate M2 proposal list and internal CORE census/Progress-shape repetition; shorten repeated historical checkpoint disclaimers and TESTS incident chronology without changing their policy. | A–D/R settled. Map each removed clause to surviving decision/owner/evidence; retain future outcomes, exclusions, wire grammar, residual qualifications, unresolved observations and reopening triggers. Active links/diff and independent review. BUGS/PERFORMANCE archival requires a separate finite disposition map, never volume alone. | Pending. |
+| CLOSE | Account for all rows and dependencies, complete ordinary/import and affected installed/native gates, independent integrated review, delivery docs and final state. | Reuse unchanged evidence only by dependencies; retain failures. No assertion of M1-12 or release completion. | Pending. |
+
+D2 population: `to_visible_window_view`, `to_primitive_view`,
+`snapshot_task_drain_response_prefix`, `*_file_contract_matches`,
+`strip_common_relative_path_suffix`, six NodeTree convenience accessors
+(`root_node_id`, `node_positions`, `path_positions`, `node_id_for_path_key`,
+`rel_path_for_node_id`, `rel_path_key_for_node_id`) plus
+`NodeTreeNode.subtree_extent`, `NativeFileSystem.flush_file` and its protocol
+slot, `serialize_plan`, private planning aliases near the old line 624,
+`is_supported_webview2_version`, `_set_creation_time`, and `copy_recorded`.
+Exact symbol owners/consumers and component gates are resolved before each
+family starts. Real Plan/Inventory window producers retain rootless offsets,
+rich fields, hierarchy, Unicode, maximum/empty/head/tail, stale generation and
+fixture identity. Flush-method retirement removes its zero-call counters only
+with the method/protocol; retain finalization order and actual native durable
+flush/recording witnesses.
+
+Retain `derive_visible_sequence` and its tools consumer, the live validated
+engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and
+historical JSON evidence. No native flush, safety/selection/custody guard,
+durable future outcome, icon population, recovery ref or stash cleanup is
+authorized. Win32 binding consolidation remains deferred because a common core
+owner cannot serve interfaces under the import law; identical declarations do
+not justify changing that law. Do not extract two identical locked drain blocks
+for marginal savings. Held-root restatements have distinct authority/mechanics/
+consumer roles. Unconfirmed TESTS incidents do not become BUGS entries.
+
+AGENTS mandatory safety and recurrence stops apply. New findings do not enlarge
+this finite batch. Contradictory live consumers, changed ownership/effects or
+an unavailable required remedy stop dependent implementation for adjudication;
+routine fixture migration within the named population needs no renewed approval.
+Existing unrelated work must remain separate. At interruption preserve task-owned
+unfinished work under AGENTS recovery rules; no recovery snapshot is merge-ready.
+
+A1 verification: four real wheel/About/package checks passed in each fresh Git
+checkout (`autocrlf=false` and `true`); JavaScript actually used LF/CRLF while
+LICENSE remained LF. The interfaces run passed 2,132 cases, with five failures
+and 28 setup errors caused by sandbox native restrictions and a repository-local
+custody cache. All 67 cases in the affected recheck population passed outside
+the sandbox with external temp storage. Original failed receipts remain failed;
+the combined dependency-scoped evidence closes the department gate. Independent
+review confirmed exact license/hash, unchanged third-party bytes, and raw wheel
+comparison. Evidence: `results/a1-fresh-checkouts.json`, `a1-fresh-checkouts.log`,
+`a1-c1-interfaces.log` and `a1-c1-native-recheck.log` under the study root.
+
+The user requested a pause after A1/A2. Already-written C1 ingress tests passed
+280 command cases and the above interfaces gate, but are not delivered. Only
+that file is preserved at `codex/recovery-closeout-c1-20261029` (`419aad11`), with
+exact patch/provenance in `results/c1-preservation.json` and `c1-unfinished.patch`.
+Rebuild and review the test delta on resumption; never merge the recovery commit
+as-is. Do not start B1 or another row during this pause. No existing user branch
+or stash was changed.
 
 ### Settings links and footer — 2026-10-29
 

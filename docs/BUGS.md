@@ -885,6 +885,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### About notice packaging
+
+- MINOR - FIXED (2026-10-29). Checkout-dependent byte comparison. The ordinary
+  About notice test failed from fresh LF and CRLF checkouts despite passing in
+  the working checkout. Cause: embedded GPL text retained CRLF while Git stored
+  LICENSE as LF, and the wheel comparison normalized only its checkout operand.
+  Pinning LICENSE to LF, updating its embedded text/hash and comparing raw
+  decoded JavaScript bytes fixes both mismatches. Fresh checkouts in both
+  autocrlf modes build and verify the wheel; third-party notice bytes are
+  unchanged. No mirroring or native UI behavior changes.
+
 ### Execution row presentation
 
 - MODERATE - FIXED (2026-10-16). Missing producer invalidation. Returning to

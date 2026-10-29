@@ -258,8 +258,10 @@ def test_about_notices_keep_reviewed_text_and_modal_lifecycle(built_wheel: Built
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert completed.stderr == ""
     content = json.loads(completed.stdout)
-    assert content["license"]["text"] == (PROJECT_ROOT / "LICENSE").read_bytes().decode("utf-8")
-    assert _wheel_assets(built_wheel)["legal_content.js"] == (PROJECT_ROOT / ASSET_ROOT / "legal_content.js").read_text(encoding="utf-8")
+    license_bytes = (PROJECT_ROOT / "LICENSE").read_bytes()
+    assert content["license"]["text"] == license_bytes.decode("utf-8")
+    assert content["license"]["sha256"] == hashlib.sha256(license_bytes).hexdigest()
+    assert _wheel_assets(built_wheel)["legal_content.js"] == (PROJECT_ROOT / ASSET_ROOT / "legal_content.js").read_bytes().decode("utf-8")
     # Reviewed upstream notice texts, including embedded libraries and source headers.
     expected = {
         "pywebview": "4a988dd3598832cd3653de20dc33cb677d0fb53ab5551c879ca31280ae653675",

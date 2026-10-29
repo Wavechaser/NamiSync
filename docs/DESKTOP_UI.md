@@ -1745,7 +1745,10 @@ plus normal keyboard focus. Forced colors retain the system link color.
 Each opens a read-only native modal with the shared dialog material and motion.
 License presents the existing GPL text; acknowledgements present locally packaged
 notices for the current Windows dependencies and derived/bundled assets, with
-version and source attribution. Text is selectable and internally scrollable;
+version and source attribution. The NamiSync license uses the repository's
+LF-pinned LICENSE bytes and matching SHA-256; its static embedded record is
+maintained explicitly. Packaged JavaScript is compared with checkout bytes
+without newline normalization. Text is selectable and internally scrollable;
 Close stays outside the scrolling region. Close and Escape dismiss, restore the
 available invoking button and preserve background inertness and page scroll lock
 through exit. Source URLs are inert text, and opening notices performs no remote
