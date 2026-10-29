@@ -1,0 +1,10 @@
+{
+  "status": "pass",
+  "raw_sha256": "ffb24fd99ef03db0f7b21b5bd2f269635de48ed2e5f2ac0a059e3d3e2aca9628",
+  "validator_sha256": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+  "maximum_seconds": {
+    "base": 1.6487122,
+    "information-heavy": 2.2893115
+  },
+  "uncertainty": "Named reference profile only; five fresh children per case, no universal latency or memory claim."
+}

@@ -1,4 +1,6 @@
 /LICENSE text eol=lf
+/tests/interfaces/web/m1_closeout_inventory_cold_20261030_raw.json -text
+/tests/interfaces/web/m1_closeout_inventory_cold_20261030_validation.json -text
 /tests/bridge_transport_custody.py text eol=lf
 /tests/interfaces/web/test_bridge_transport_custody.py text eol=lf
 /tests/interfaces/web/test_bridge_transport_custody_holdout.py text eol=lf

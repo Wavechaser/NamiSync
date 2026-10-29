@@ -208,6 +208,12 @@ behavioral evidence.
   M2 proposal index, and shortened test incident notes. Retained exact wire
   rules, accepted future outcomes, exclusions, uncertainty and evidence pointers;
   a deletion disposition ledger accounts for the documentation reductions.
+- Closed the batch with 6,326 ordinary passes, four explicit privilege skips,
+  twelve import contracts and a final installed real-copy/execution-review
+  journey. Renewed cold Inventory acceptance at unchanged 3 s/6 s limits:
+  maxima 1.649 s/2.289 s on the recorded Python 3.13.17 reference profile.
+  Retained exact raw/validation bytes, original failures and recovery evidence;
+  M1-12 and release remain separate pending work.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

@@ -1026,6 +1026,27 @@ are overwritten. Samples apply only to the recorded profile and five children,
 without universal latency, memory or complexity claims. No acceptance samples
 are claimed merely by adding this method or passing correctness-only controls.
 
+### Inventory projection renewal — 2026-10-30
+
+After the pre-closeout reductions, the unchanged 3/6-second limits pass on clean
+`cbf73a4f`: base maximum **1.6487122 s** (range 1.616232–1.6487122) and
+information-heavy maximum **2.2893115 s** (range 2.2703143–2.2893115), five fresh
+children per case. The recorded Windows 11 Pro build 26200, i7-13700K, 63.7 GiB,
+WD_BLACK SN850X NVMe and SQLite 3.50.4 profile remains on AC power. Python is
+3.13.17 after the security update; the register predeclared renewal on this
+runtime without changing budgets under DEFENSE §7. The user confirmed an idle
+machine; task tests were paused and measurement was announced before collection.
+
+The [new raw samples](../tests/interfaces/web/m1_closeout_inventory_cold_20261030_raw.json)
+and [independent validation](../tests/interfaces/web/m1_closeout_inventory_cold_20261030_validation.json)
+bind the final gating sources, unchanged collector/checker, complete fixtures
+and runtime. Raw child logs are retained in
+`build/m1-9-20261001/measurement-inventory-cold-20261029T165303Z-1a8d61fc/`
+(UTC directory stamp; local date is October 30). The correctness-only fixture
+check also passed before collection. Historical samples below remain unchanged;
+this renewal establishes current named-profile acceptance, not a universal
+latency guarantee or an isolated speed comparison between code changes.
+
 ### Inventory projection result — 2026-10-01
 
 The coordinated quiet reference-profile run passed both fixed maxima:

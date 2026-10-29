@@ -653,8 +653,10 @@ origin/code disclosure and exact lifecycle relationships.
 ## Focused scale acceptance
 
 The inventory projection criterion retains the reference profile and sampling
-in [PERFORMANCE](PERFORMANCE.md#reference-profile-and-collection). It remains
-open acceptance work; the runtime population target alone does not close it.
+in [PERFORMANCE](PERFORMANCE.md#reference-profile-and-collection). The
+[2026-10-30 renewal](PERFORMANCE.md#inventory-projection-renewal--2026-10-30)
+passes on its recorded profile and gating sources. Changed dependencies require
+renewed evidence; the runtime population target alone does not close this gate.
 
 | Behavior | Retained criterion |
 | --- | --- |

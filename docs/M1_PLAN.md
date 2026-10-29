@@ -81,7 +81,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | D2 | Migrate test-facing convenience APIs to real production seams, then retire bounded population listed below with matching docs. Preserve independent behavioral/fault witnesses rather than tests of removed representation. | Per-family consumer map before editing; focused real producer/admission/native witnesses, affected departments, ordinary/imports and applicable native/settlement gates by dependency. No blanket deletion based on coverage absence. | Complete; 6,327 ordinary passes/four capability skips, twelve imports, before/after settlement 30×3 and installed Inventory/shell; independent family and integrated review. |
 | R1 | Retire never-produced ALREADY_EXISTS/EMPTY_DIRECTORY everywhere: enums, web accept lists/labels, probes and DESKTOP_UI plus any exact consumers found in the finite history/current census. Current producers/constructors and historical support must be distinguished; incompatible pre-release schema policy remains. | Confirm supplied all-history evidence and current constructors/consumers; ordinary/imports and real event/Plan decoder negative controls. Own commit; stop for contradictory supported producer/artifact evidence. | Complete; 448 focused, 6,326 ordinary passes/four capability skips, twelve imports, producer-derived negative controls and independent review. |
 | E1 | Condense completed register chronology with a decision/disposition map; consolidate M2 proposal list and internal CORE census/Progress-shape repetition; shorten repeated historical checkpoint disclaimers and TESTS incident chronology without changing their policy. | A–D/R settled. Map each removed clause to surviving decision/owner/evidence; retain future outcomes, exclusions, wire grammar, residual qualifications, unresolved observations and reopening triggers. Active links/diff and independent review. BUGS/PERFORMANCE archival requires a separate finite disposition map, never volume alone. | Complete; 56 removed blocks mapped and independently reviewed, all twelve proposals and wire/policy qualifications retained, 372 active links/anchors and 75 evidence pointers checked. |
-| CLOSE | Account for all rows and dependencies, complete ordinary/import and affected installed/native gates, independent integrated review, delivery docs and final state. | Reuse unchanged evidence only by dependencies; retain failures. No assertion of M1-12 or release completion. | Pending. |
+| CLOSE | Account for all rows and dependencies, complete ordinary/import and affected installed/native gates, independent integrated review, delivery docs and final state. | Reuse unchanged evidence only by dependencies; retain failures. No assertion of M1-12 or release completion. | Complete; final ordinary/import, affected installed journey, settlement and renewed cold Inventory evidence accounted; independent integrated review and exact artifact preservation. M1-12/release/DOC-2 remain inactive. |
 
 Completed A–D/R outcomes are summarized in the table above. Their exact
 consumer populations, controls, failed receipts and correction chronology remain
@@ -140,9 +140,22 @@ execution-review journey passes (`results/close-installed-execution.log` and
 `results/close-installed-execution.json`, 27.24 s), covering changed Plan
 reason/overlay/detail validators. Earlier shell,
 Inventory, picker and Setup receipts retain their own wheel identities and
-unchanged-mechanism authority. E1 review is complete; CLOSE accounting remains
-pending. `results/e1-deletion-ledger.json` retains the actual removed blocks and
+unchanged-mechanism authority. E1 and CLOSE reviews are complete.
+`results/e1-deletion-ledger.json` retains the actual removed blocks and
 their dispositions; `e1-consistency.json` and `e1-links.json` record checks.
+
+Integrated on `milestone1`: A1 `0bbe841d`, A2 `624c5717`, C1 `1f0eb086`,
+B1 `65e50174`, B2 `93481fcb`, B3 `bfdc6a63`, C2 `6650082d`, C3 `5642c16a`,
+D1 `e820cefd`, D2 `cbf73a4f`, R1 `bb537934` and E1 `12c33e25`; the separate
+shell-driver correction is `5553daab`. CLOSE carries the final evidence and
+delivery record. `results/close-review.md` and `close-installed-source-review.json`
+account for source/wheel equality and dependency-scoped gate reuse.
+`cold-review.md` and `close-staged-evidence.json` account for the new exact-byte
+receipts; only those two new JSON files use new `-text` attributes. Historical
+JSON, frozen drivers, other normalization and failed receipts remain untouched.
+There is one original worktree and no push/PR or stash cleanup. The C1 recovery
+ref `codex/recovery-closeout-c1-20261029` (`419aad11`) remains deliberately
+preserved after its full rebuild; the D2 approval-block snapshot also remains.
 
 E1 elaboration (design refreshed at integrated R1 `bb537934`): edit only
 M1_PLAN, CORE, FEATURES, M2_PROPOSAL and TESTS, plus delivery docs. Preserve
