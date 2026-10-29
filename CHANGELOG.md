@@ -176,6 +176,9 @@ behavioral evidence.
 - Retired the finite unconsumed contract, repository, service, workflow and
   presentation helpers and their resulting orphans. Preserved live facade
   imports and similarly named APIs; no tests were deleted for this outcome.
+- Reused Inventory's canonical traversal and inverse for PATH sorting; other
+  sorts still rebuild indexes after sibling ordering. The finite ablation
+  preserves complete outputs while removing one redundant PATH traversal.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

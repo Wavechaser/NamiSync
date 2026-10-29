@@ -266,10 +266,10 @@ def sort_inventory_projection(
     # Warnings are an independent attachment-order tail, never canonical paths.
     warnings = [node.position for node in projection.nodes if node.warning is not None]
     children[0] = [position for position in children.get(0, ()) if projection.nodes[position].warning is None] + warnings
-    canonical, _ = preorder_positions(children)
-    if column is not PlanSortColumn.PATH:
-        children = sorted_siblings(projection.nodes, canonical, column.value, descending=direction is SortDirection.DESCENDING)
     ordered, inverse = preorder_positions(children)
+    if column is not PlanSortColumn.PATH:
+        children = sorted_siblings(projection.nodes, ordered, column.value, descending=direction is SortDirection.DESCENDING)
+        ordered, inverse = preorder_positions(children)
     maximum = len(projection.nodes) - 1
     return InventoryProjectionOrder(projection, CompactUnsignedIntegers(ordered, maximum=maximum), CompactUnsignedIntegers(inverse, maximum=maximum))
 

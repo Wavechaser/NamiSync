@@ -72,7 +72,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | C1 | Add ordinary ingress witnesses for `admit_location` and `_validate_location_candidate`: typed/remembered successes, bad kind, extra keys, noncanonical/zero/over-range location IDs, refusals before service/slot work. Owners: `web/commands.py` existing contract, `test_commands.py`. | Must pass before B1. Real command invocation with valid purpose; focused command tests and interfaces department. Missing-purpose refusal is not parser coverage. | Complete; 280 command and 2,165 interfaces passes, fresh independent review. |
 | B1 | Retire raw-string folder slots, legacy flag/conversion and alternate pair return; narrow FolderSlotAuthority and migrate fixtures to LocationCandidate. Owners: slots/commands; direct command/transport/host/slot fixtures. | C1 complete. Retain opacity, purpose, expiry, capacity, ambiguity, atomic pair resolution, exact replay and fresh admission; focused slots/commands/transport, interfaces and affected installed picker/start witnesses. | Complete; 539 focused, 2,166 interfaces, 294 correction checks and two installed witnesses; independent review. |
 | B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Complete; 6,316 ordinary passes/four capability skips, 12 import contracts and independent deletion review. |
-| B3 | Reuse canonical preorder/inverse result for Inventory PATH sorting; retain second traversal after non-PATH sort. Owner: inventory_projection; Inventory review and tools consumers. | Equal ordered/inverse outputs across empty/nested/warning cases, warning-tail/sort/reset/spelling tests, workflows department and affected required large-projection gate. No speed claim. | Pending. |
+| B3 | Reuse canonical preorder/inverse result for Inventory PATH sorting; retain second traversal after non-PATH sort. Owner: inventory_projection; Inventory review and tools consumers. | Equal ordered/inverse outputs across empty/nested/warning cases, warning-tail/sort/reset/spelling tests, workflows department and affected required large-projection gate. No speed claim. | Complete; 21 comparisons, 50 focused, 949 workflow passes plus all six failed native cases rechecked passing; independent review. |
 | C2 | Cover read_setup/prepare_setup, service.read_plan_setup readiness/frozen values, ensure_database_pair refusal and runtime Plan refusal. Preserve existing underlying classification/CLI/headed witnesses. | Finite successful/refused/default/task/readiness cases; refused pair leaves bytes unchanged and admits no work. Interfaces/workflows owning and direct-consumer tests, then ordinary integration. | Pending. |
 | C3 | Use contained run_node_probe for required transport probes; retire demonstrated localRow spelling pin and duplicate wheel asset equality only. Owners: transport/frontend/wheel tests and existing helper. | Keep mandatory Node discovery, original-command/interactive/both drain record kinds, runner timeout/output limits, tree fixture provenance/runtime cases, dedicated wheel population/CSP checks; harmless rename and wrong-digest control, missing/extra asset control; interfaces department. | Pending. |
 | D1 | Remove redundant Scope planner parameter/type/kinds/factories and workflow/tool/test call-site plumbing. Preserve scoped planning/history replay as an explicitly unrealized outcome without this placeholder representation. Owners: core/planner, workflow composition, executor rig, contract tests and CORE/PLANNER/FEATURES. | Revalidate full caller population; planner/workflows/tools and contract consumers; ordinary suite/imports. No change to current whole-plan or dependency-closed execution selection. | Pending. |
@@ -142,6 +142,13 @@ null-last/tie ordering and validation. Gate: `test_inventory_projection.py`,
 `test_inventory_projection_supports_base_and_information_heavy_fixture_populations`)
 and renewed 21-case output/traversal ablation, then fresh review. One source
 mechanism commit; no timing improvement claim or additional cache.
+Receipts: `results/b3-comparison.log`, `b3-focused.log`, `b3-workflows.log`/`.json`
+and `b3-native-recheck.log`/`.json`. The comparison extracts the baseline function
+from `93481fcb` and calls the actual candidate. Initial hardlink setup refusals
+and one failed long-path execution occurred in the workspace-temp run; all six
+exact cases pass with unchanged product in the external-temp native recheck.
+The failed receipt remains; it alone does not establish the long-path cause.
+Cold timing evidence remains pending CLOSE.
 
 CLOSE also renews cold Inventory evidence after all gating-file edits settle:
 B2 scalars/repositories, B3 inventory projection and D2 tree work invalidate
@@ -153,6 +160,20 @@ per case and the existing independent checker. This renews named-profile
 evidence, not a universal performance claim or changed limit. The user confirmed
 no unrelated sustained workload; pause task tests during collection. Actual
 profile facts are in `results/current-profile.json`; confirm again at collection.
+
+C2 elaboration (inspected `93481fcb`, refresh after B3): change only four existing
+test owners. `web/test_commands.py` covers real default/task `read_setup`,
+canonical service output from `prepare_setup`, and TypeError/ValueError refusal
+without slot/task work. `test_bridge_service.py` covers frozen paths, IDs and
+options independent of defaults, exact binding resolution and readiness pairs
+resolved/resolved, offline/ambiguous, missing/unavailable, plus absent bindings.
+`test_database_contracts.py` witnesses `ensure_database_pair` refusing empty
+mains without byte/sidecar changes. `test_workflows.py` witnesses real runtime
+Plan refusal before resource admission with unchanged database bytes/population.
+Reuse existing local fixtures; do not duplicate classification or normalization
+matrices. One test commit follows the four focused modules and the interfaces,
+workflows and database neighborhood, with ordinary integration at CLOSE and
+fresh independent review. Existing CLI and installed witnesses remain.
 
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and
