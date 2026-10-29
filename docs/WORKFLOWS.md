@@ -169,28 +169,28 @@ service/interface concerns rather than tree-builder policy.
 
 ### Review publication
 
-Stage 6 injects an immutable workflow-owned `ReviewPublicationContext` and a
-workflow-level `ReviewPublicationSink` implemented by the task service. The
-incremental collector either stages one complete immutable plan/inventory
-candidate—including indexes, rollups, charge, and omission identities—or
-returns the typed no-partial population refusal. It never returns an unbounded
-or partial raw graph.
+`run_plan` saves one admitted `PlanArtifact` through `SyncDependencies.save_plan`
+after scan, planning and review-preflight admission. The inventory workflow
+retains `InventoryDetails` after scan and recording. The local runtime owns
+these retained values; the service's `get_plan_projection` and
+`get_task_inventory_projection` compose the workflow-owned projection builders
+with the admitted plan or current ledger rows and retained scan warnings.
+Population refusals do not publish a partial review graph.
 
-The workflow invokes the sink only for the exact session/slot/tree intent it was
-given and stages at most once. Once successful fresh preflight has staged its
-complete notice generation, expected execution failures and cancellation are
-contained into a normal terminal `OperationResult` so the stage survives for
-reconciliation. Missing, duplicate, rejected, contradictory, or escaped
-post-stage behavior is structural producer failure, not a recoverable workflow
-result. The exact stage/result matrix, latch behavior, owner reconciliation,
-fault disposition, and retry boundary are bridge authority.
+The desktop adapter constructs a complete review state before installing it.
+It checks the current task, session, request and generation before publication;
+Plan publication also checks selection/artifact identity at the service seam.
+Initial Inventory publication requires exact terminal delivery and successful
+session release. During Refresh or failed replacement construction, the prior
+complete view remains readable under its original request identity. Successful
+replacement installs the complete new generation and advances its view revision.
+Projection completeness does not imply scan completeness.
 
-An initial plan or inventory publication has no prior baseline. Inventory
-refresh evaluates the complete candidate in place of the old inventory for
-population admission but does not reclaim the still-owned generation before
-atomic swap. Fresh execution preflight similarly replaces its complete notice
-set—even when empty—without replacing the immutable plan. Workflow never
-reprojects a staged candidate after publication.
+Informational notices never acquire action scope or execution authority.
+Execution preflight independently judges the current selected work against fresh
+observations without rewriting the immutable plan. [BRIDGE.md](BRIDGE.md) and
+[INTERFACES.md](INTERFACES.md) own publication/lifecycle fences and recovery;
+[PRESENTATION.md](PRESENTATION.md) owns projection, omission and population rules.
 
 ## Reviewed Sync
 

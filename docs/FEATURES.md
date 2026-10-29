@@ -1,8 +1,9 @@
 # Features
 
 The headless sync/inventory/integrity/history/CLI capabilities and secured
-desktop host/transport/presentation foundation are active. Production desktop
-workflow surfaces remain unrealized unless stated otherwise below. Each feature
+desktop host/transport/presentation foundation are active. Desktop Setup, Plan
+review, execution, Inventory review and integrity controls are active; desktop
+History remains unrealized. Each feature
 owns its behavior/status; M1_PLAN owns remaining delivery, and BRIDGE,
 PRESENTATION and INTERFACES own protocol, projection and host contracts.
 
@@ -125,7 +126,7 @@ provision.
 
 ## PLANNER
 
-- **Scoped Planning**. The planner accepts a scope over candidate files as a first-class input — everything, a pattern, an explicit selection, or the file set recorded by a past run — so ordinary sync, filtered execution, and history replay are the same mechanism applied to different scopes.
+- **Scoped Planning** *(accepted; unrealized beyond whole-plan planning)*. Current planning uses the whole admitted candidate population; dependency-closed execution selection remains a separate active feature. Future scoped planning will support patterns, explicit candidate selections and the file set recorded by a past run, including history replay. This outcome does not prescribe the current placeholder scope API as its implementation.
 - **Destination Policy Seam**. Every operation's target path comes through a destination policy, and diffing matches source to target through that computed destination — path-preserving is simply the default policy — so restructure-on-copy workflows such as ingest change a policy implementation, never the planner's diff logic.
 - **Filesystem Capability Awareness**. Diffing compares timestamps within the coarser of the two roots' recorded timestamp granularity, and move detection is disabled on any root whose filesystem doesn't support stable file identity, instead of silently misreading FAT-family timestamps and identities as reliable.
 - **Metadata-Based Diffing**. Matching size, modification time within filesystem granularity, and the shared managed attribute mask (readonly, hidden, system, not-content-indexed) produces a no-op; drift in one of those managed bits produces an update. The full raw attribute bitmap remains scan/plan evidence, but unmanaged bits such as ARCHIVE and TEMPORARY do not schedule work the executor cannot converge. Content-aware comparison remains later work.
@@ -321,8 +322,8 @@ location activities through the shared service.
 ## DESKTOP UI
 
 The appearance, bridge, shell, generic presentation, task lifecycle, frozen
-Setup and Plan-review surfaces are active. Inventory review and history remain
-unrealized unless an entry says otherwise.
+Setup, Plan review, execution, Inventory review and integrity controls are
+active. Desktop History remains unrealized.
 
 - **Desktop Presentation Foundation Realignment**. One pure tree-agnostic
   `visible_sequence.py` consumes workflow-owned pre-order arrays directly and owns literal

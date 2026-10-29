@@ -118,17 +118,17 @@ sidecars together. Reset loses app evidence/history, not managed files. See
 | **Windows 11 ARM64 (native)** | ✅ | ❌ | ❌ | — | ❌ shell & dependencies blocked |
 | **Windows 11 ARM64 (emulation)** | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ runs (emulated) |
 | **Windows 10 (x86, < 1709)** | ❌ | ✅ | ⚠️ | ⚠️ | ❌ backend floor |
-| **Windows 10 (x86, ≥ 1709)** | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ runs with reduced appeareance |
+| **Windows 10 (x86, ≥ 1709)** | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ runs with reduced appearance |
 | **Windows 10 (x64, < 1709)** | ❌ | ✅ | ✅ | ⚠️ | ❌ backend floor |
-| **Windows 10 (x64, ≥ 1709)** | ✅ | ✅ | ✅ | ⚠️ | ⚠️ runs with reduced appeareance |
+| **Windows 10 (x64, ≥ 1709)** | ✅ | ✅ | ✅ | ⚠️ | ⚠️ runs with reduced appearance |
 
 **Legend:** ✅ works · ⚠️ works reduced · ❌ blocked · — unreachable (blocked upstream in same row)
 
 - **Backcompatibility:** NamiSync is designed on and for Windows 11 x64, but
   the engine is written to be version- and architecture-neutral and is therefore
   compatible with Windows 10 and is ARM64 ready. However, database pairing currently
-  uses POSIX semantics with no fallback, therefore requiring Windows 10 to be newer
-  than **version 1709/build 16299**. 
+  uses POSIX semantics with no fallback, therefore requiring Windows 10
+  **version 1709/build 16299 or later**.
 - **WebView2:** not natively included in Windows 10, and therefore requires one-time
   Evergreen runtime install (x86/x64/ARM64 all exist); it is included in-box on
   Windows 11. Runtime support on *very* old Win10 (< 1607) is unverified.
@@ -150,7 +150,9 @@ sidecars together. Reset loses app evidence/history, not managed files. See
 
 ## Setup and dependencies
 
-NamiSync requires Windows 11 x64 and Python 3.13 or later. The package declares
+NamiSync's supported and actively serviced target is Windows 11 x64; the
+compatibility section above describes other configurations without extending
+that support target. Python 3.13 or later is required. The package declares
 no Python upper bound; exact runtime profiles in project evidence identify
 measured configurations rather than launch admission. Runtime dependencies are
 `xxhash` 3.x and the reality-tested `pywebview` 6.2.1 host stack.
@@ -227,9 +229,7 @@ never hides the other result axes in rendered output.
 
 ## What is deliberately not promised yet
 
-- No user-facing desktop workflow-control surface, durable plan/session queue,
-  or restart-resume; the current headed page remains a secured transport
-  bootstrap boundary with its production event drain available to later views.
+- No durable plan/session queue or restart-resume.
 - No cross-process desktop task visibility, background integrity, concurrent
   file execution, general database migration, backup, or history retention.
 - No automatic execution or bypass of reviewed-plan confirmation.

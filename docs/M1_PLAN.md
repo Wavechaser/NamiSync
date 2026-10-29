@@ -68,7 +68,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | Row | Finite outcome and owners/direct consumers | Dependencies and acceptance | Status |
 | --- | --- | --- | --- |
 | A1 | Deterministic license text: pin only LICENSE to LF, manually update its embedded text in `assets/legal_content.js`, and compare packaged JS to `read_bytes().decode()` in the About test. Preserve all notice hashes/text and package identity; no unrelated normalization or new generator. Owners: desktop assets, wheel/static tests, .gitattributes. | Existing About reproducer first; real wheel About/package checks in fresh autocrlf true/false checkouts, interfaces department, source/diff and independent review. | Complete; receipts below. |
-| A2 | Correct README stale desktop/bootstrap text, spelling and supported-target/compatibility wording; FEATURES intro/Inventory active status and explicitly future scoped planning; WORKFLOWS review-publication account against actual owners, preserving complete publication/refusal/replacement. | A1 independent; source-to-prose reconciliation, local links/diff and independent review. No support expansion or new publication design. | Pending. |
+| A2 | Correct README stale desktop/bootstrap text, spelling and supported-target/compatibility wording; FEATURES intro/Inventory active status and explicitly future scoped planning; WORKFLOWS review-publication account against actual owners, preserving complete publication/refusal/replacement. | A1 independent; source-to-prose reconciliation, local links/diff and independent review. No support expansion or new publication design. | Complete; source/link/diff review passed. |
 | C1 | Add ordinary ingress witnesses for `admit_location` and `_validate_location_candidate`: typed/remembered successes, bad kind, extra keys, noncanonical/zero/over-range location IDs, refusals before service/slot work. Owners: `web/commands.py` existing contract, `test_commands.py`. | Must pass before B1. Real command invocation with valid purpose; focused command tests and interfaces department. Missing-purpose refusal is not parser coverage. | Pending; precedes B1. |
 | B1 | Retire raw-string folder slots, legacy flag/conversion and alternate pair return; narrow FolderSlotAuthority and migrate fixtures to LocationCandidate. Owners: slots/commands; direct command/transport/host/slot fixtures. | C1 complete. Retain opacity, purpose, expiry, capacity, ambiguity, atomic pair resolution, exact replay and fresh admission; focused slots/commands/transport, interfaces and affected installed picker/start witnesses. | Pending. |
 | B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Pending. |
@@ -124,7 +124,10 @@ review confirmed exact license/hash, unchanged third-party bytes, and raw wheel
 comparison. Evidence: `results/a1-fresh-checkouts.json`, `a1-fresh-checkouts.log`,
 `a1-c1-interfaces.log` and `a1-c1-native-recheck.log` under the study root.
 
-The user requested a pause after A1/A2. Already-written C1 ingress tests passed
+The batch is **paused at the user's request after A1/A2**. A1 committed as
+`0bbe841d`; A2 reconciles the three named documents with current source, with
+77 local file-link targets verified and independent source/diff review passed.
+Already-written C1 ingress tests passed
 280 command cases and the above interfaces gate, but are not delivered. Only
 that file is preserved at `codex/recovery-closeout-c1-20261029` (`419aad11`), with
 exact patch/provenance in `results/c1-preservation.json` and `c1-unfinished.patch`.

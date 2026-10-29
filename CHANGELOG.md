@@ -163,6 +163,11 @@ behavioral evidence.
   LICENSE to LF, update its static embedded text/hash, and compare packaged
   JavaScript to raw checkout bytes. Fresh LF/CRLF checkouts build and verify
   the wheel without changing third-party notices or pinning JavaScript EOLs.
+- Corrected README and FEATURES desktop/Inventory status, explicitly retained
+  future scoped planning, clarified supported target versus compatibility,
+  and replaced nonexistent workflow publication APIs with current source owners.
+  Paused after these corrections at the user's request; remaining rows are not
+  delivered, and unfinished ingress tests are preserved separately.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 
