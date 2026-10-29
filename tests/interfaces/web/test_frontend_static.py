@@ -4,6 +4,7 @@ from __future__ import annotations
 from namisync.workflows import RecallSummary
 
 import json
+import hashlib
 import re
 import subprocess
 import zipfile
@@ -246,6 +247,48 @@ def test_setup_defaults_editor_preserves_dirty_fields_and_never_replays() -> Non
     assert completed.stderr == ""
 
 
+def test_about_notices_keep_reviewed_text_and_modal_lifecycle(built_wheel: BuiltWheel) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the About notice witness"
+    completed = run_node_probe(
+        [str(node), str(PROJECT_ROOT / "tests/assets/about_probe.mjs"),
+         str(PROJECT_ROOT / ASSET_ROOT / "about.js"),
+         str(PROJECT_ROOT / ASSET_ROOT / "legal_content.js")], timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+    content = json.loads(completed.stdout)
+    assert content["license"]["text"] == (PROJECT_ROOT / "LICENSE").read_bytes().decode("utf-8")
+    assert _wheel_assets(built_wheel)["legal_content.js"] == (PROJECT_ROOT / ASSET_ROOT / "legal_content.js").read_text(encoding="utf-8")
+    # Reviewed upstream notice texts, including embedded libraries and source headers.
+    expected = {
+        "pywebview": "4a988dd3598832cd3653de20dc33cb677d0fb53ab5551c879ca31280ae653675",
+        "pythonnet": "e1dc3a6ff017a6800dc27a7220500f512b95fbcd996d38ebbbff85c693245369",
+        "Python.NET contributors": "65a13631f078bed51e9a4033dea257e57a7f23097f3003b1ce1ba1c8a9136c93",
+        "bottle": "af150257b1f7cce92b6207854f2e8f90ea9ae52d7cac758d13a47bd12e2a2443",
+        "xxhash": "b3c620adc9a8812cc0c3c7fc09567fa9a9930d3546de955dfb955b168cf989ac",
+        "typing_extensions": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+        "clr_loader": "dd6bdca10cdc3b24c6b0b6cef5fd611b7feb6917f127833283ddcdb310d3b453",
+        "cffi": "5ba24ddc57067f9249add644c3afc41a5d6dc37e23433ef759d95df370b0af63",
+        "pycparser": "0c846399369ea76ddd7b5c44fe6d16497415fcf015f5cbb508c24bf98b81c5b1",
+        "proxy_tools": "a428fb8a2e762af3eb0a6edbbb88e9b42ccfee80fd9b423958bcacf9b9abbfe4",
+        "xxHash library": "6ffedbc0f7878612d2b23589f1ff2ab15633e1df7963a5d9fc750ec5500c7e7a",
+        "libffi notices in CFFI Windows sources": "6d2acfac1e3ff1e422964109de1073289691964cfbd92e314a9f90280620eb01",
+        "Microsoft WebView2 SDK": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+        "Microsoft WebView2 SDK third-party notices": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90",
+        "Fluent UI System Icons": "69bc45dc42b9acb96a69823adbc6ae538374e3c0bde169b855b32c48eaaef52f",
+        "Fluent UI theme tokens": "1434c6b2a8417d41e4db20ff3b772888e66a0069e20d928f83fa1390f44758c7",
+        "domJSON": "9876c56a0a754e788f8bd7bc683e52ccf79b7a8eae05799407fffa798fc8f272",
+        "Native Promise Only": "87c815bfd1dc02ac37eb5593290e245b5dc1de6be1e0dbd00b18dcd2ed3523f6",
+        "Symbol-ES6": "24efa6399810650b5b060a735e2b6cb5d8657aaa507fe92a4bed1be8a1107167",
+        "Microsoft.NET.Build.Extensions": "2ddc7ffd9b8ed968550a34d258cfafe7443073f73f5ee5ef01013782029287ab",
+    }
+    records = content["acknowledgements"]["notices"]
+    assert {record["name"]: hashlib.sha256(record["text"].encode("utf-8")).hexdigest() for record in records} == expected
+    assert len(records) == len(expected)
+    assert all(record["sha256"] == expected[record["name"]] and record["version"] and record["source"].startswith("https://") for record in records)
+
+
 def test_modules_use_only_local_explicit_js_imports(
     built_wheel: BuiltWheel,
 ) -> None:
@@ -263,12 +306,15 @@ def test_modules_use_only_local_explicit_js_imports(
             "./appearance.js",
             "./theme.js",
             "./settings.js",
+            "./about.js",
             "./execution_confirmation.js",
             "./panels.js",
             "./rail.js",
             "./render.js",
         ],
         "appearance.js": [],
+        "about.js": ["./legal_content.js", "./render.js"],
+        "legal_content.js": [],
         "bridge.js": [],
         "execution_confirmation.js": ["./render.js"],
         "file_row.js": ["./render.js"],

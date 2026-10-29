@@ -66,6 +66,7 @@ live pause/resume/cancel controls, bounded live and retained execution review,
 and a Settings page with saved Setup defaults, theme control and About, alongside
 independent task-rail scrolling. Defaults include automatic verification for new
 desktop tasks; existing task choices and explicit CLI verification remain unchanged.
+About opens the license and open source acknowledgements as selectable local text.
 Execution review keeps filesystem, verification, recording and audit
 results distinct, with current stored evidence and on-demand operation detail.
 Canonical execution following has an explicit manual override and navigation

@@ -55,6 +55,8 @@ _ASSET_NAMES = (
     "integrity.js",
     "plan.js",
     "execution_confirmation.js",
+    "about.js",
+    "legal_content.js",
     "inventory_review.js",
     "table_columns.js",
     "table_controller.js",
@@ -126,6 +128,26 @@ def _review_controls_sample() -> dict[str, object]:
     value["states"] = [[["rgb(255, 255, 255)", "none", True] for _ in range(3)]
                        for _ in range(2)]
     return value
+
+
+def _about_notices_sample() -> dict[str, object]:
+    return {"focus_contained": True, "internal_wheel": True, **{
+        name: {key: True for key in ("opened", "text_exact", "selectable", "internally_scrollable", "close_fixed",
+                                    "background_blocked", "underlined", "closed", "focus_restored")}
+        for name in ("license", "acknowledgements")}}
+
+
+def test_about_notice_report_keeps_shape_separate_from_acceptance() -> None:
+    sample = _about_notices_sample()
+    assert component_gallery_child._valid_about_notices(sample)
+    sample["license"]["selectable"] = False
+    assert component_gallery_child._valid_about_notices(sample)
+    with pytest.raises(AssertionError):
+        _assert_about_notices(sample)
+
+
+def _assert_about_notices(value: dict[str, object]) -> None:
+    assert value == _about_notices_sample()
 
 
 def _assert_review_controls(value: dict[str, object]) -> None:
@@ -758,11 +780,19 @@ def test_component_gallery_failure_evidence_is_sanitized(tmp_path: Path) -> None
     assert "sentinel" not in encoded
 
 
+@pytest.mark.parametrize("step,reason,pending", [
+    ("native_minimum_request", "native_minimum_pending", "minimum_window"),
+    ("about_notices", "native_wheel_pending", "wheel_about-tab"),
+    ("about_notices", "native_wheel_pending", "wheel_about-scroll"),
+    ("about_notices", "native_wheel_pending", "wheel_about-backdrop"),
+    ("about_notices", "native_wheel_pending", "wheel_about-escape"),
+    ("about_notices", "native_wheel_pending", "wheel_about-enter"),
+])
 def test_component_gallery_measurement_diagnostic_survives_full_failure_path(
-    tmp_path: Path,
+    tmp_path: Path, step: str, reason: str, pending: str,
 ) -> None:
     native_snapshot = {
-        "pending": "minimum_window",
+        "pending": pending,
         "owner_scale": 1.25,
         "minimum_width": 1280,
         "minimum_height": 800,
@@ -779,8 +809,11 @@ const fs = require("fs");
 const source = fs.readFileSync(process.argv[1], "utf8");
 const prefix = source.slice(0, source.indexOf("(async () => {"));
 const native = JSON.parse(process.argv[2]);
+const step = process.argv[3];
+const reason = process.argv[4];
 global.window = {addEventListener() {}};
 eval(prefix + `
+if (!validNativeFailureSnapshot(native)) throw new Error("native diagnostic rejected");
 const site = failureSite({name:"TypeError", stack:[
   "TypeError: private sentinel",
   "    at inventory (file:///C:/private/gallery.js:1961:5)",
@@ -788,13 +821,13 @@ const site = failureSite({name:"TypeError", stack:[
 ].join(String.fromCharCode(10))});
 console.log(JSON.stringify([
   buildFailureEvidence("measurement", "Error", "control_styles", "control_invariant", null, site),
-  buildFailureEvidence("measurement", "Error", "native_minimum_request", "native_minimum_pending", native, site),
+  buildFailureEvidence("measurement", "Error", step, reason, native, site),
 ]));`);
 """
     completed = subprocess.run(
         [
             node, "-e", probe, str(_SCENARIO),
-            json.dumps(native_snapshot),
+            json.dumps(native_snapshot), step, reason,
         ],
         check=True,
         timeout=10,
@@ -1127,9 +1160,20 @@ def test_component_gallery_seed_accepts_a_persisted_same_mode_relaunch(
 
 def test_component_gallery_preview_wheel_is_bounded(tmp_path: Path) -> None:
     scheduled: list[str] = []
+    status = component_gallery_child._MinimumWindowStatus()
+    status.publish(
+        owner_scale=1.0, minimum_width=1024, minimum_height=640,
+        outer_width=1280, outer_height=800, client_width=1260, client_height=760,
+    )
+
+    def schedule(target: str) -> None:
+        status.set_pending(f"wheel_{target}")
+        assert status.read_diagnostic()["pending"] == f"wheel_{target}"
+        scheduled.append(target)
+
     spec = component_gallery_child._test_report_spec(
         component_gallery_child._Recorder(EvidencePaths(tmp_path.resolve()), "light"),
-        lambda _targets: None, "light", scheduled.append,
+        lambda _targets: None, "light", schedule,
     )
     for payload in (
         {"phase": "preview_wheel", "target": "body"},
@@ -1139,12 +1183,13 @@ def test_component_gallery_preview_wheel_is_bounded(tmp_path: Path) -> None:
         with pytest.raises(CommandPayloadError):
             spec.invoke(payload, context=_OPEN_CONTEXT)
     assert scheduled == []
-    for target in ("content", "backdrop"):
+    targets = ("content", "backdrop", "about-tab", "about-scroll", "about-backdrop", "about-escape", "about-enter")
+    for target in targets:
         payload = {"phase": "preview_wheel", "target": target}
         assert spec.invoke(payload, context=_OPEN_CONTEXT) == {"accepted": True}
         with pytest.raises(CommandPayloadError):
             spec.invoke(payload, context=_OPEN_CONTEXT)
-    assert scheduled == ["content", "backdrop"]
+    assert scheduled == list(targets)
 
 
 def test_component_gallery_minimum_window_requires_completed_native_observation(
@@ -1325,10 +1370,9 @@ def test_component_gallery_minimum_window_callback_uses_native_owner(
     }
     status.set_pending("pseudo_states")
     assert status.read_diagnostic()["pending"] == "pseudo_states"
-    status.set_pending("wheel_content")
-    assert status.read_diagnostic()["pending"] == "wheel_content"
-    status.set_pending("wheel_backdrop")
-    assert status.read_diagnostic()["pending"] == "wheel_backdrop"
+    for target in ("content", "backdrop", "about-tab", "about-scroll", "about-backdrop", "about-escape", "about-enter"):
+        status.set_pending(f"wheel_{target}")
+        assert status.read_diagnostic()["pending"] == f"wheel_{target}"
 
     schedule = scheduler["value"]
     assert callable(schedule)
@@ -1981,6 +2025,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "focus_restored": True,
                 "wheel_blocked": True,
             },
+            "about_notices": _about_notices_sample(),
             "diagnostic_layout": [
                 {
                     "case": f"{size}-{disclosure}-{population}",
@@ -2211,8 +2256,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         ("lifecycle_progress", report["lifecycle_progress"]),
         ("diagnostic_layout", report["control_contract"]["diagnostic_layout"]),
         ("inventory_panel", report["control_contract"]["inventory_panel"]),
+        ("about_notices", report["control_contract"]["about_notices"]),
         ("control_contract", {name: value for name, value in report["control_contract"].items()
-                              if name not in {"diagnostic_layout", "inventory_panel"}}),
+                              if name not in {"diagnostic_layout", "inventory_panel", "about_notices"}}),
         ("motion", report["motion"]),
         ("icons", report["icons"]),
     ]
@@ -4628,6 +4674,7 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "faded": True,
         "closed": True,
     }
+    _assert_about_notices(report["control_contract"]["about_notices"])
     assert report["control_contract"]["confirmation_preview"] == {
         "initially_closed": True,
         "opened_from_button": True,

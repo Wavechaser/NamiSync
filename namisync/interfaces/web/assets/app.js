@@ -54,6 +54,7 @@ import { installReadinessReceiver } from "./readiness.js";
 import { installAppearanceReceiver } from "./appearance.js";
 import { installThemeCombobox, installThemeSelector } from "./theme.js";
 import { installSetupDefaults } from "./settings.js";
+import { installAboutNotices } from "./about.js";
 import { createExecutionConfirmation } from "./execution_confirmation.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
@@ -303,6 +304,8 @@ const rebaselineConfirmation = createExecutionConfirmation([app, themeOptions], 
     + (detail === null ? "" : ` · ${detail}`),
 });
 document.body.append(rebaselineConfirmation.element);
+const aboutNotices = installAboutNotices(settingsView, [app, themeOptions]);
+document.body.append(aboutNotices.element);
 
 function taskArray() {
   return Array.from(tasks.values()).reverse();

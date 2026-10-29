@@ -536,6 +536,7 @@
     --color-accent-fill-hover: Highlight !important;
     --color-accent-fill-pressed: Highlight !important;
     --color-accent-fill-foreground: HighlightText !important;
+    --color-hyperlink-foreground: LinkText;
     --color-focus-ring: Highlight;
     --color-focus-inner: Canvas;
     --filter-delete-foreground: CanvasText;

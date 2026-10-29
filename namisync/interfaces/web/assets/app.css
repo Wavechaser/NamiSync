@@ -1940,3 +1940,94 @@ body {
     forced-color-adjust: none;
   }
 }
+.nami-button.nami-hyperlink-button {
+  background: var(--color-semantic-transparent);
+  border-color: var(--color-semantic-transparent);
+  color: var(--color-accent-fill);
+  font-weight: var(--font-weight-regular);
+  text-decoration: underline;
+}
+
+.nami-button.nami-hyperlink-button:not(:disabled):hover {
+  background: var(--color-selection-highlight);
+  color: var(--color-accent-fill-hover);
+}
+
+.nami-button.nami-hyperlink-button:not(:disabled):active {
+  background: var(--color-selection-highlight-pressed);
+  color: var(--color-accent-fill-pressed);
+}
+
+.nami-button.nami-hyperlink-button:disabled {
+  color: var(--color-neutral-foreground-disabled);
+}
+
+@media (forced-colors: active) {
+  .nami-button.nami-hyperlink-button:not(:disabled) {
+    background: var(--color-semantic-transparent);
+    color: var(--color-hyperlink-foreground);
+  }
+}
+
+.nami-about-dialog {
+  background: var(--color-neutral-surface);
+  box-sizing: border-box;
+  display: none;
+  inline-size: min(calc(100% - 2 * var(--space-6)), 48rem);
+  margin: auto;
+  max-block-size: calc(100% - 2 * var(--space-6));
+  max-inline-size: 48rem;
+  overflow: hidden;
+}
+
+.nami-about-dialog[open] {
+  display: grid;
+  gap: var(--space-5);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.nami-about-dialog:is(:hover, :active) {
+  background: var(--color-neutral-surface);
+}
+
+.nami-about-dialog > h2,
+.nami-about-dialog__notice > :is(h3, p, pre) {
+  margin: 0;
+}
+
+.nami-about-dialog__body {
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  user-select: text;
+}
+
+.nami-about-dialog__body > p {
+  margin-block: 0 var(--space-5);
+}
+
+.nami-about-dialog__notice {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.nami-about-dialog__notice + .nami-about-dialog__notice {
+  margin-block-start: var(--space-6);
+}
+
+.nami-about-dialog__notice > pre {
+  font-family: var(--font-family-monospace);
+  font-size: var(--font-size-caption);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.nami-about-dialog__source {
+  overflow-wrap: anywhere;
+}
+
+.nami-about-dialog__actions {
+  display: flex;
+  justify-content: end;
+}

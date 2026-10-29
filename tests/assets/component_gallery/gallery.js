@@ -45,7 +45,8 @@ function validMinimumWindowStatus(value) {
 function validNativeFailureSnapshot(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     && Object.keys(value).length === 8
-    && ["none", "pseudo_states", "wheel_content", "wheel_backdrop", "minimum_window"]
+    && ["none", "pseudo_states", "wheel_content", "wheel_backdrop", "minimum_window",
+      "wheel_about-tab", "wheel_about-scroll", "wheel_about-backdrop", "wheel_about-escape", "wheel_about-enter"]
       .includes(value.pending)
     && [
       "owner_scale", "minimum_width", "minimum_height", "outer_width",
@@ -308,7 +309,7 @@ window.addEventListener("unhandledrejection", (event) => {
     dispatchInteractive,
     readCosmeticSection,
     replaceCosmeticSection,
-  }, { renderText }, iconModule, { renderPlanRow }, { createIntegrityCell }, { renderFileRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }, { createInventoryReviewPanel }, { createWorkPanel }] = await Promise.all([
+  }, { renderText }, iconModule, { renderPlanRow }, { createIntegrityCell }, { renderFileRow }, { createTaskRail }, { createExecutionConfirmation }, { createPlanReviewPanel }, { createInventoryReviewPanel }, { createWorkPanel }, { createAboutNotices }, legalContent] = await Promise.all([
     import("/bridge.js"),
     import("/render.js"),
     import("/icons.js"),
@@ -320,6 +321,8 @@ window.addEventListener("unhandledrejection", (event) => {
     import("/plan_review.js"),
     import("/inventory_review.js"),
     import("/panels.js"),
+    import("/about.js"),
+    import("/legal_content.js"),
   ]);
   const { createIcon, ICON_NAMES } = iconModule;
   if (
@@ -574,6 +577,19 @@ window.addEventListener("unhandledrejection", (event) => {
     });
   });
   galleryHeader.append(previewButton, previewResult);
+  document.querySelector("#about-notice-dialog")?.remove();
+  const aboutPreview = createAboutNotices([app, document.querySelector("#theme-options")]);
+  document.body.append(aboutPreview.element);
+  const aboutButtons = ["License", "Open source acknowledgements"].map((caption, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "nami-button nami-hyperlink-button";
+    renderText(button, caption);
+    button.addEventListener("click", () => index === 0
+      ? aboutPreview.showLicense(button) : aboutPreview.showAcknowledgements(button));
+    galleryHeader.append(button);
+    return button;
+  });
 
   const galleryRail = createTaskRail({
     onCreate() {},
@@ -3594,6 +3610,8 @@ window.addEventListener("unhandledrejection", (event) => {
   galleryMeasurementStep = "confirmation_preview";
   galleryFailureReason = "dialog_invariant";
   const confirmationPreviewEvidence = await measureConfirmationPreview();
+  galleryMeasurementStep = "about_notices";
+  const aboutNoticesEvidence = await measureAboutNotices();
   themeTrigger.blur();
   themeTrigger.click();
   await new Promise((resolve) =>
@@ -4393,6 +4411,7 @@ window.addEventListener("unhandledrejection", (event) => {
     },
     dialog_exit: dialogExit,
     confirmation_preview: confirmationPreviewEvidence,
+    about_notices: aboutNoticesEvidence,
     diagnostic_layout: diagnosticLayoutEvidence,
     inventory_panel: inventoryPanelEvidence,
     minimum_window: minimumWindowEvidence,
@@ -4491,8 +4510,9 @@ window.addEventListener("unhandledrejection", (event) => {
     { name: "lifecycle_progress", value: lifecycleProgress },
     { name: "diagnostic_layout", value: controlContract.diagnostic_layout },
     { name: "inventory_panel", value: controlContract.inventory_panel },
+    { name: "about_notices", value: controlContract.about_notices },
     { name: "control_contract", value: Object.fromEntries(Object.entries(controlContract)
-      .filter(([name]) => !["diagnostic_layout", "inventory_panel"].includes(name))) },
+      .filter(([name]) => !["diagnostic_layout", "inventory_panel", "about_notices"].includes(name))) },
     {
       name: "motion",
       value: Object.freeze({
@@ -4612,5 +4632,105 @@ window.addEventListener("unhandledrejection", (event) => {
       focus_restored: cancelFocus && document.activeElement === previewButton,
       wheel_blocked: wheelBlocked,
     };
+  }
+
+  async function measureAboutNotices() {
+    const dialog = aboutPreview.element;
+    const page = document.scrollingElement;
+    let escapeKeydowns = 0;
+    let cancelEvents = 0;
+    const observeEscape = (event) => {
+      if (event.key === "Escape") escapeKeydowns += 1;
+    };
+    const observeCancel = () => { cancelEvents += 1; };
+    dialog.addEventListener("keydown", observeEscape);
+    dialog.addEventListener("cancel", observeCancel);
+    async function nativeInput(target) {
+      globalThis.__namiGalleryWheelTarget = null;
+      galleryFailureReason = "native_wheel_pending";
+      await dispatchInteractive("test_report", Object.freeze({phase: "preview_wheel", target}), validAccepted);
+      for (let frame = 0; globalThis.__namiGalleryWheelTarget !== target; frame += 1) {
+        if (frame === 300) throw new Error("native About input did not complete");
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      galleryFailureReason = "dialog_invariant";
+    }
+    async function closed() {
+      for (let frame = 0; frame < 120; frame += 1) {
+        if (!dialog.open) return;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      if (escapeKeydowns === 0) {
+        throw new Error("Native Escape keydown did not reach the About dialog");
+      }
+      if (cancelEvents === 0) {
+        throw new Error("Native Escape did not request About cancellation");
+      }
+      throw new Error("About notice did not close");
+    }
+    const result = {};
+    for (const [index, name] of ["license", "acknowledgements"].entries()) {
+      const button = aboutButtons[index];
+      button.focus();
+      button.click();
+      await Promise.allSettled(dialog.getAnimations()
+        .filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+        .map((animation) => animation.finished));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const body = dialog.querySelector(".nami-about-dialog__body");
+      const close = dialog.querySelector("button");
+      const footerBefore = close.getBoundingClientRect();
+      const texts = [...body.querySelectorAll("pre")];
+      const expected = index === 0 ? [legalContent.NAMI_LICENSE]
+        : legalContent.OPEN_SOURCE_ACKNOWLEDGEMENTS.notices;
+      const opened = dialog.open && dialog.matches(":modal") && document.activeElement === close;
+      const textExact = texts.length === expected.length && texts.every((value, position) =>
+        value.textContent === expected[position].text);
+      const selection = getSelection();
+      const range = document.createRange();
+      const sample = /\S[^\r\n]{19,39}/.exec(expected[0].text);
+      if (sample === null) throw new Error("Notice specimen requires a visible selection sample");
+      const textNode = texts[0].firstChild;
+      range.setStart(textNode, sample.index);
+      range.setEnd(textNode, sample.index + sample[0].length);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const selectable = selection.toString() === sample[0] && selection.anchorNode === textNode
+        && getComputedStyle(body).userSelect === "text";
+      selection.removeAllRanges();
+      const pageBefore = page.scrollTop;
+      const backgroundInert = app.inert && document.querySelector("#theme-options").inert;
+      if (index === 0) {
+        await nativeInput("about-tab");
+        result.focus_contained = document.activeElement === body && dialog.contains(document.activeElement);
+        await nativeInput("about-scroll");
+        result.internal_wheel = body.scrollTop > 0;
+        await nativeInput("about-backdrop");
+      }
+      body.scrollTop = body.scrollHeight;
+      const footerAfter = close.getBoundingClientRect();
+      result[name] = {
+        opened, text_exact: textExact, selectable,
+        internally_scrollable: body.scrollTop > 0 && body.scrollTop + body.clientHeight >= body.scrollHeight - 1,
+        close_fixed: Math.abs(footerAfter.top - footerBefore.top) < 1 && footerAfter.bottom <= innerHeight,
+        background_blocked: backgroundInert && page.scrollTop === pageBefore,
+        underlined: getComputedStyle(button).textDecorationLine.includes("underline"),
+      };
+      if (index === 0) await nativeInput("about-escape");
+      else {
+        close.focus();
+        await nativeInput("about-enter");
+      }
+      await closed();
+      if (index === 0 && (escapeKeydowns !== 1 || cancelEvents !== 1)) {
+        throw new Error("About keyboard close requires one native Escape keydown and cancel event");
+      }
+      result[name].closed = !app.inert && !document.querySelector("#theme-options").inert;
+      result[name].focus_restored = document.activeElement === button;
+    }
+    dialog.removeEventListener("keydown", observeEscape);
+    dialog.removeEventListener("cancel", observeCancel);
+    return result;
   }
 })().catch(reportFailure);

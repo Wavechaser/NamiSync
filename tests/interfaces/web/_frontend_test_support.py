@@ -32,6 +32,8 @@ INITIAL_ASSETS = {
     "app.css",
     "app.js",
     "appearance.js",
+    "about.js",
+    "legal_content.js",
     "bridge.js",
     "components.css",
     "execution_confirmation.js",

@@ -1,23 +1,35 @@
-# Latest session — Shell gutter compensation, 2026-10-29
+# Latest session — Settings and final layout, 2026-10-29
 
-One requested CSS outcome on milestone1 from 253e78af. Removed the document's
-stable scrollbar gutter while retaining the work-panel stable gutter on every
-page, including Plan and Inventory. Global inline-end padding is 24px minus the
-shared 10px scrollbar-size token, giving 14px plus the normal 10px gutter. Other
-outer padding stays 24px. Forced colors intentionally retain browser-owned
-scrollbar width and the same 14px padding, per the user's clarification.
+Completed the approved three-part batch on milestone1 from c64aec73:
 
-The scrolling gallery explicitly restores its document gutter and symmetric
-24px padding; its production-shell witness removes and then restores those
-overrides. Direct native geometry checks require root auto/work stable and 24/14px
-padding, plus an actual 24px right content gap outside forced colors. Internal
-table/detail/rail scroll owners, native input and action behavior remain intact.
+- 24edbc6c: Filters caption/count, 32px Go/Follow insets, 1.2px card outlines,
+  and Rebaseline menu width/leading-edge alignment. Minimum-width inspection
+  also caught caption wrapping; intrinsic filter width and remaining-space
+  Search sizing keep the label on one line without changing narrow stacking.
+- 8c44f88a: Setup defaults, Appearance and About cards, explicit dirty-field
+  saves and persisted automatic verification. Existing task drafts, Plan again,
+  CLI behavior, theme persistence and disabled ADS remain intact.
+- The accompanying About commit adds separate License and Open source
+  acknowledgements links, selectable scrolling dialogs with fixed Close, and
+  verified packaged notices. No new EULA or release certification.
 
-All 2,105 interface tests and nine installed cases pass; eight native cases passed
-initially and larger execution passed unchanged on rerun. The retained failed
-attempt waited for ordinary Resume; its underlying cause is unestablished.
-Independent review found no remaining issue. Normal-theme gallery assertions
-confirm the actual 24px page right gap, and the minimum-window capture was viewed.
-Evidence lives in build/gui-gutter-20261029/. Subject docs, delivery register and
-changelog updated. No public contracts, worktrees, recovery refs, push or PR.
+Settings uses strict schema 2, as approved for this unreleased app. Old development
+settings require manual reset; they are not migrated or automatically overwritten.
+No default settings file was present in the checked local application-data path.
+
+Verification: ordinary suite 6,274 passes/four skips, then 45 affected lifecycle
+passes after updating the exact port expectation. Interface run 2,129 passes,
+then 14 focused passes after token/fake-DOM corrections. Twelve import contracts
+kept. The final filter correction passes 47 focused checks. All nine installed
+checks have passing evidence: final combined run passed eight, and default Plan
+passed unchanged on a single rerun after a Plan-again transition failure whose
+cause is unestablished. Four gallery modes verify dialogs, menu geometry and
+minimum-width layout; minimum screenshots were inspected. Independent source,
+legal provenance, correction and evidence reviews passed.
+
+Raw receipts, including failed harness attempts and corrections, are retained
+under build/gui-settings-20261029/; verification.md explains dependency reuse.
+The final native roots are namisync-settings29-final and
+namisync-settings29-final-shell under the user's Local/Temp directory. No timeout
+or foreground guard was weakened. No worktrees, recovery refs, push or PR.
 Inventory recents, queued-input coordinator, M1-12, release and DOC-2 stay inactive.

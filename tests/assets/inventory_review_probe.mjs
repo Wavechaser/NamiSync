@@ -744,6 +744,7 @@ for (const [key, value] of Object.entries({
   "./appearance.js": moduleUrl("export const installAppearanceReceiver = () => {};"),
   "./theme.js": moduleUrl("export const installThemeCombobox = () => ({}); export const installThemeSelector = () => ({ refresh() {} });"),
   "./settings.js": moduleUrl("export const installSetupDefaults = () => ({ open() {} });"),
+  "./about.js": moduleUrl("export const installAboutNotices = () => ({ element: document.createElement('dialog') });"),
   "./execution_confirmation.js": moduleUrl("export const createExecutionConfirmation = () => ({ element: document.createElement('dialog') });"),
   "./rail.js": moduleUrl("export const createTaskRail = () => ({ element: document.createElement('nav'), render() {} });"),
 })) appSource = appSource.replace(key, value);

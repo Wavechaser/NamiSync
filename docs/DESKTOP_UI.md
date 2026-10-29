@@ -1731,8 +1731,22 @@ disable editing until they settle. A delayed save stays pending; an unconfirmed
 save offers Read current defaults before another explicit save and never replays
 the earlier write. A successful current-state read does not claim that the earlier
 save succeeded. Existing task drafts and captured plan choices remain unchanged.
-Appearance contains only the existing Theme selector; About initially contains `0.1.0 "Gertrud"`.
-About/license/third-party links remain to be populated with their actual content.
+Appearance contains only the existing Theme selector. About shows `0.1.0 "Gertrud"`
+with separate License and Open source acknowledgements buttons. Their default
+underline and neutral hover/pressed surface follow the
+[WinUI HyperlinkButton resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/HyperlinkButton_themeresources.xaml)
+and [underline guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/hyperlinks#hyperlink-underlines),
+using the existing accent and neutral tokens plus normal keyboard focus.
+Each opens a read-only native modal with the shared dialog material and motion.
+License presents the existing GPL text; acknowledgements present locally packaged
+notices for the current Windows dependencies and derived/bundled assets, with
+version and source attribution. Text is selectable and internally scrollable;
+Close stays outside the scrolling region. Close and Escape dismiss, restore the
+available invoking button and preserve background inertness and page scroll lock
+through exit. Source URLs are inert text, and opening notices performs no remote
+load or navigation. The body uses the existing shared scrollbar treatment.
+The installed gallery exercises both contents, native Tab/wheel/Escape/Enter,
+selection, fixed Close, background blocking and focus restoration in its four modes.
 Opening Settings preserves task identities, drafts, activity and closure state.
 Background task updates do not navigate away from Settings. Clicking a task
 returns to it; an unraced successful New task action opens its new task.

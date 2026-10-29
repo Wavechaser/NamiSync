@@ -598,6 +598,7 @@ appSource = appSource
   .replace("./appearance.js", appearanceUrl)
   .replace("./theme.js", themeUrl)
   .replace("./settings.js", moduleUrl("export const installSetupDefaults = () => ({ open() {} });"))
+  .replace("./about.js", moduleUrl("export const installAboutNotices = () => ({ element: document.createElement('dialog') });"))
   .replace("./execution_confirmation.js", executionConfirmationUrl)
   .replace("./task_status.js", taskStatusUrl)
   .replace("./rail.js", moduleUrl(railSource))

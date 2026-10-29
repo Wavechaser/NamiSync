@@ -304,6 +304,7 @@ async function loadScenario({
     .replace("./appearance.js", appearanceUrl)
     .replace("./theme.js", themeUrl)
     .replace("./settings.js", `data:text/javascript,${encodeURIComponent("export const installSetupDefaults = () => ({ open() {} });")}`)
+    .replace("./about.js", `data:text/javascript,${encodeURIComponent("export const installAboutNotices = () => ({ element: {} });")}`)
     .replace("./execution_confirmation.js", executionConfirmationUrl)
     .replace("./panels.js", panelUrl)
     .replace("./rail.js", railUrl)

@@ -29,6 +29,8 @@ _ASSET_NAMES = (
     "integrity.js",
     "plan.js",
     "execution_confirmation.js",
+    "about.js",
+    "legal_content.js",
     "inventory_review.js",
     "table_columns.js",
     "table_controller.js",
@@ -261,6 +263,7 @@ _FAILURE_STEPS = frozenset(
         "icon_registry",
         "dialog_exit",
         "confirmation_preview",
+        "about_notices",
         "combobox_layout",
         "task_rail_layout",
         "native_minimum_request",
@@ -307,7 +310,9 @@ _NATIVE_FAILURE_REASONS = frozenset(
     }
 )
 _NATIVE_PENDING = frozenset(
-    {"none", "pseudo_states", "wheel_content", "wheel_backdrop", "minimum_window"}
+    {"none", "pseudo_states", "wheel_content", "wheel_backdrop", "minimum_window",
+     "wheel_about-tab", "wheel_about-scroll", "wheel_about-backdrop",
+     "wheel_about-escape", "wheel_about-enter"}
 )
 _FAILURE_SITE_TYPES = frozenset(
     {"Error", "TypeError", "ReferenceError", "SyntaxError"}
@@ -370,7 +375,7 @@ _CONTROL_REPORT_CHUNK_COUNT = math.ceil(
 _REPORT_PART_NAMES = (
     ("lifecycles", "intents")
     + ("controls",) * _CONTROL_REPORT_CHUNK_COUNT
-    + ("lifecycle_progress", "diagnostic_layout", "inventory_panel", "control_contract", "motion", "icons")
+    + ("lifecycle_progress", "diagnostic_layout", "inventory_panel", "about_notices", "control_contract", "motion", "icons")
 )
 
 
@@ -698,7 +703,9 @@ def _test_report_spec(
         if type(payload) is not dict or type(payload.get("phase")) is not str:
             raise CommandPayloadError("component gallery report is invalid")
         if payload["phase"] == "preview_wheel" and set(payload) == {"phase", "target"}:
-            if type(payload["target"]) is not str or payload["target"] not in {"content", "backdrop"}:
+            if type(payload["target"]) is not str or payload["target"] not in {
+                "content", "backdrop", "about-tab", "about-scroll", "about-backdrop", "about-escape", "about-enter",
+            }:
                 raise CommandPayloadError("component gallery wheel target is invalid")
             return dict(payload)
         if payload["phase"] == "minimum_window" and set(payload) == {"phase"}:
@@ -777,7 +784,7 @@ def _test_report_spec(
                     and type(value) is not list
                 )
                 or (
-                    name in {"inventory_panel", "control_contract", "motion", "icons"}
+                    name in {"inventory_panel", "about_notices", "control_contract", "motion", "icons"}
                     and type(value) is not dict
                 )
             ):
@@ -793,7 +800,7 @@ def _test_report_spec(
                     raise CommandPayloadError(
                         "component gallery report is invalid"
                     )
-            if name == "control_contract" and {"diagnostic_layout", "inventory_panel"}.intersection(value):
+            if name == "control_contract" and {"diagnostic_layout", "inventory_panel", "about_notices"}.intersection(value):
                 raise CommandPayloadError("component gallery report is invalid")
             return dict(payload)
         if payload["phase"] != "complete" or set(payload) != {
@@ -899,6 +906,7 @@ def _test_report_spec(
             "control_contract": {
                 **values["control_contract"], "diagnostic_layout": values["diagnostic_layout"],
                 "inventory_panel": values["inventory_panel"],
+                "about_notices": values["about_notices"],
             },
             "motion": values["motion"],
             "icons": values["icons"],
@@ -1448,12 +1456,23 @@ def _valid_review_controls(value: object) -> bool:
     return True
 
 
+def _valid_about_notices(value: object) -> bool:
+    fields = {"opened", "text_exact", "selectable", "internally_scrollable", "close_fixed",
+              "background_blocked", "underlined", "closed", "focus_restored"}
+    return (type(value) is dict and set(value) == {"license", "acknowledgements", "focus_contained", "internal_wheel"}
+            and type(value["focus_contained"]) is bool and type(value["internal_wheel"]) is bool
+            and all(type(value[name]) is dict and set(value[name]) == fields
+                    and all(type(item) is bool for item in value[name].values())
+                    for name in ("license", "acknowledgements")))
+
+
 def _valid_control_contract(value: object) -> bool:
     if type(value) is not dict or set(value) != {
         "accent",
         "tri_state",
         "dialog_exit",
         "confirmation_preview",
+        "about_notices",
         "diagnostic_layout",
         "inventory_panel",
         "minimum_window",
@@ -1479,6 +1498,7 @@ def _valid_control_contract(value: object) -> bool:
     integrity_list = value["integrity_list"]
     return (
         _valid_recall_advisory(value["recall_advisory"])
+        and _valid_about_notices(value["about_notices"])
         and _valid_recent_ui(value["recent_ui"])
         and _valid_inventory_panel(value["inventory_panel"])
         and type(accent) is dict
@@ -2965,7 +2985,14 @@ def _schedule_preview_wheel(
           if (!dialog?.matches(':modal')) throw new Error('preview is not modal');
           const rect = dialog.querySelector('[data-confirm-execution]').getBoundingClientRect();
           return {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
-        })()""" if target == "content" else "({x: 4, y: innerHeight / 2})"
+        })()""" if target == "content" else (
+            """(() => {
+              const dialog = document.querySelector('#about-notice-dialog');
+              if (!dialog?.matches(':modal')) throw new Error('About is not modal');
+              const rect = dialog.querySelector('.nami-about-dialog__body').getBoundingClientRect();
+              return {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+            })()""" if target == "about-scroll" else "({x: 4, y: innerHeight / 2})"
+        )
         task = core.CallDevToolsProtocolMethodAsync(
             "Runtime.evaluate", json.dumps({"expression": expression, "returnByValue": True}),
         )
@@ -2986,20 +3013,41 @@ def _schedule_preview_wheel(
                 return
 
             def wheel() -> None:
+                keys = {"about-tab": ("Tab", 9), "about-escape": ("Escape", 27), "about-enter": ("Enter", 13)}
+                key = keys.get(target)
+                key_fields = ({"key": key[0], "code": key[0],
+                               "windowsVirtualKeyCode": key[1], "nativeVirtualKeyCode": key[1]}
+                              if key else {})
+                key_down = ({"type": "keyDown", "text": "\r", "unmodifiedText": "\r", **key_fields}
+                            if key and key[0] == "Enter" else {"type": "rawKeyDown", **key_fields})
                 sent = core.CallDevToolsProtocolMethodAsync(
-                    "Input.dispatchMouseEvent",
-                    json.dumps({"type": "mouseWheel", **point, "deltaX": 0, "deltaY": 500}),
+                    "Input.dispatchKeyEvent" if key else "Input.dispatchMouseEvent",
+                    json.dumps(key_down if key else {"type": "mouseWheel", **point, "deltaX": 0, "deltaY": 500}),
                 )
 
                 def finished() -> None:
                     if sent.IsFaulted or sent.IsCanceled:
                         fail()
                         return
-                    on_ui(lambda: _execute_script_checked(
-                        core, f"globalThis.__namiGalleryWheelTarget = {json.dumps(target)};",
-                        stage="preview_wheel", recorder=recorder,
-                        retained_delegates=retained_delegates,
-                    ))
+                    def acknowledge() -> None:
+                        _execute_script_checked(
+                            core, f"globalThis.__namiGalleryWheelTarget = {json.dumps(target)};",
+                            stage="preview_wheel", recorder=recorder,
+                            retained_delegates=retained_delegates,
+                        )
+                    def release_key() -> None:
+                        released = core.CallDevToolsProtocolMethodAsync("Input.dispatchKeyEvent", json.dumps({
+                            "type": "keyUp", **key_fields,
+                        }))
+                        def released_done() -> None:
+                            if released.IsFaulted or released.IsCanceled:
+                                on_ui(fail)
+                            else:
+                                on_ui(acknowledge)
+                        completion = Action(released_done)
+                        retained_delegates.append(completion)
+                        released.GetAwaiter().OnCompleted(completion)
+                    on_ui(release_key if key else acknowledge)
 
                 completion = Action(finished)
                 retained_delegates.append(completion)

@@ -221,6 +221,7 @@ source = source
   .replace("./appearance.js", appearanceStub)
   .replace("./theme.js", themeStub)
   .replace("./settings.js", `data:text/javascript,${encodeURIComponent("export const installSetupDefaults = () => ({ open() {} });")}`)
+  .replace("./about.js", `data:text/javascript,${encodeURIComponent("export const installAboutNotices = () => ({ element: {} });")}`)
   .replace("./execution_confirmation.js", executionConfirmationStub)
   .replace("./panels.js", panelsStub)
   .replace("./rail.js", railStub)

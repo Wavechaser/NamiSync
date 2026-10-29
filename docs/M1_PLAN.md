@@ -82,7 +82,22 @@ Shared files and acceptance runs are serialized. Subject docs and CHANGELOG
 travel with each outcome; HANDOFF closes the session. No task execution policy,
 history, inventory recents, coordinator, M2 cosmetics or full release packaging
 is activated. Repository scope/recurrence and mandatory stops remain applicable.
-Status: approved; implementation in progress.
+Complete. All nine installed checks pass: five task-page checks and all four
+gallery modes, including saved-default inheritance, retained task drafts,
+Rebaseline alignment and both About dialogs. The ordinary run passed 6,274 tests;
+its one exact-port expectation was migrated and all 45 affected lifecycle tests
+passed. The final interface run passed 2,129 tests; its two affected token/fake-DOM
+checks were corrected and all 14 focused cases passed. All 12 import contracts
+are kept. Independent source, provenance, correction and evidence reviews pass.
+Failed harness attempts and their bounded corrections remain in
+`build/gui-settings-20261029/verification.md` and the corresponding raw receipts.
+No production dialog workaround or relaxed test timeout/bound was introduced.
+Final minimum-width inspection corrected caption wrapping through intrinsic
+filter width and remaining-space Search sizing; 47 focused checks pass. The
+final installed run passed eight cases, then default Plan passed unchanged on
+its single rerun after a Plan-again transition failure of unestablished cause.
+Visual polish is `24edbc6c`; saved defaults are `8c44f88a`. About and session
+closure travel together in the following atomic commit.
 
 ### Shell gutter compensation — 2026-10-29
 

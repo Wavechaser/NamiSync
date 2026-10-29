@@ -847,6 +847,15 @@ explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain
   offer current-default readback after an unconfirmed save without replaying it.
   Keep ADS unavailable and theme persistence independent.
 
+#### Add About license and open source notices (2026-10-29)
+
+- Add separate underlined License and Open source acknowledgements links with
+  scrollable, selectable local text, a fixed Close action and shared modal motion.
+- Package the existing GPL and reviewed current Windows dependency/asset notices,
+  including embedded JavaScript, native compatibility assemblies and Fluent
+  assets. Retain source/version attribution without changing navigation or
+  claiming final release-license closure.
+
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
 - Close the integrated A–E review and stop for GUI recap. Final verification
