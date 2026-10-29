@@ -182,6 +182,9 @@ behavioral evidence.
 - Covered Setup reads/preparation, frozen readiness and database-pair refusal
   through their real entry points, including unchanged database/sidecar bytes
   and refusal before resource admission.
+- Routed required transport Node probes through existing process/memory/output
+  containment. Retired one helper-spelling pin and duplicate wheel population
+  assertion, with harmless-change and fault controls for the retained witnesses.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

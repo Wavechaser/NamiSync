@@ -29,7 +29,7 @@ from namisync.interfaces.web.commands import production_command_specs
 from namisync.workflows.views import ResultCategory
 
 from _frontend_test_support import (
-    ASSET_ROOT, INITIAL_ASSETS, _node_executable, run_node_probe,
+    ASSET_ROOT, _node_executable, run_node_probe,
 )
 
 
@@ -188,7 +188,6 @@ def test_shipped_page_has_exact_first_csp_and_no_inline_execution(
     built_wheel: BuiltWheel,
 ) -> None:
     assets = _wheel_assets(built_wheel)
-    assert set(assets) == INITIAL_ASSETS
     assert assets["index.html"].isascii()
     raw_csp = re.search(
         r'<head><meta http-equiv="Content-Security-Policy" content="([^"]+)">',
@@ -1089,7 +1088,6 @@ def test_supplemental_node_tree_probe_uses_production_modules(
     asset_root = (
         PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
     )
-    assert probe_source.count("localRow(") == 5
     assert "Array.from({length: 256}" not in probe_source
     assert "fixtureViews.maximum" in probe_source
     assert "fixtureViews.empty" in probe_source

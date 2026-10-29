@@ -74,7 +74,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Complete; 6,316 ordinary passes/four capability skips, 12 import contracts and independent deletion review. |
 | B3 | Reuse canonical preorder/inverse result for Inventory PATH sorting; retain second traversal after non-PATH sort. Owner: inventory_projection; Inventory review and tools consumers. | Equal ordered/inverse outputs across empty/nested/warning cases, warning-tail/sort/reset/spelling tests, workflows department and affected required large-projection gate. No speed claim. | Complete; 21 comparisons, 50 focused, 949 workflow passes plus all six failed native cases rechecked passing; independent review. |
 | C2 | Cover read_setup/prepare_setup, service.read_plan_setup readiness/frozen values, ensure_database_pair refusal and runtime Plan refusal. Preserve existing underlying classification/CLI/headed witnesses. | Finite successful/refused/default/task/readiness cases; refused pair leaves bytes unchanged and admits no work. Interfaces/workflows owning and direct-consumer tests, then ordinary integration. | Complete; 608 focused and 3,592 neighborhood passes, no skips; independent review. |
-| C3 | Use contained run_node_probe for required transport probes; retire demonstrated localRow spelling pin and duplicate wheel asset equality only. Owners: transport/frontend/wheel tests and existing helper. | Keep mandatory Node discovery, original-command/interactive/both drain record kinds, runner timeout/output limits, tree fixture provenance/runtime cases, dedicated wheel population/CSP checks; harmless rename and wrong-digest control, missing/extra asset control; interfaces department. | Pending. |
+| C3 | Use contained run_node_probe for required transport probes; retire demonstrated localRow spelling pin and duplicate wheel asset equality only. Owners: transport/frontend/wheel tests and existing helper. | Keep mandatory Node discovery, original-command/interactive/both drain record kinds, runner timeout/output limits, tree fixture provenance/runtime cases, dedicated wheel population/CSP checks; harmless rename and wrong-digest control, missing/extra asset control; interfaces department. | Complete; 228 focused, 2,174 interfaces passes and all four controls; independent review. |
 | D1 | Remove redundant Scope planner parameter/type/kinds/factories and workflow/tool/test call-site plumbing. Preserve scoped planning/history replay as an explicitly unrealized outcome without this placeholder representation. Owners: core/planner, workflow composition, executor rig, contract tests and CORE/PLANNER/FEATURES. | Revalidate full caller population; planner/workflows/tools and contract consumers; ordinary suite/imports. No change to current whole-plan or dependency-closed execution selection. | Pending. |
 | D2 | Migrate test-facing convenience APIs to real production seams, then retire bounded population listed below with matching docs. Preserve independent behavioral/fault witnesses rather than tests of removed representation. | Per-family consumer map before editing; focused real producer/admission/native witnesses, affected departments, ordinary/imports and applicable native/settlement gates by dependency. No blanket deletion based on coverage absence. | Pending. |
 | R1 | Retire never-produced ALREADY_EXISTS/EMPTY_DIRECTORY everywhere: enums, web accept lists/labels, probes and DESKTOP_UI plus any exact consumers found in the finite history/current census. No producer or string-to-enum construction is expected; incompatible pre-release schema policy remains. | Confirm supplied all-history evidence and current constructors/consumers; ordinary/imports and real event/Plan decoder negative controls. Own commit; stop for contradictory supported producer/artifact evidence. | Pending. |
@@ -193,6 +193,25 @@ assertion using detached inputs. Retain provenance, runtime tree cases, CSP,
 safe sinks, packaging and A1 notice-byte checks per AB-9 dispositions. Focused
 transport/frontend/wheel plus interfaces and fresh review gate one test commit;
 no production asset or new generic helper.
+Evidence: `results/c3-focused.log`/`.json`, `c3-interfaces.log`/`.json` and
+`c3-controls-retry.log` bind the unchanged test candidate, fixture and wheel.
+The harmless rename passes; wrong digest fails at digest equality; missing/extra
+assets fail the dedicated exact-population assertion. The initial control-driver
+import failure is retained in `c3-controls.log`, not counted as a control result.
+
+D1 elaboration (inspected `6650082d`, refresh after C3): production owners are
+`core/planning.py`, `modules/planner.py`, `workflows/sync.py`, and
+`tools/executor_rig.py`. Migrate direct tests in `test_core_scanplan.py`,
+`test_planner.py`, `test_plan_projection.py`, `test_plan_review_limits.py`,
+`test_preflight.py`, and `_identity_hash_fixtures.py`; include the three explicit
+planner doubles and retain their admission/identity/failure witnesses. Remove
+only Scope's representation fixture/name; retain live `Sequence` imports.
+Update PLANNER and CORE plus ARCHITECTURE's reproduced planner signature.
+FEATURES already marks scoped planning as unrealized; retain that and History
+Replay. Scanner `ScanScope`, inventory/copy scopes and dependency-closed
+execution selection are unrelated and stay. Focused real planner/contract/
+preflight/projection/rig consumers precede ordinary and twelve import contracts,
+then fresh review. One atomic contract/caller/test/doc migration commit.
 
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and

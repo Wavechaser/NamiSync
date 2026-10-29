@@ -85,7 +85,7 @@ from tests.interfaces.web._public_view_witnesses import (
     PublicViewWitness,
     iter_public_view_witnesses,
 )
-from _frontend_test_support import _node_executable
+from _frontend_test_support import _node_executable, run_node_probe
 
 
 REQUEST_ID = "a1" * 16
@@ -606,11 +606,8 @@ def _run_required_bridge_probe(probe_name: str) -> None:
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
     try:
-        completed = subprocess.run(
+        completed = run_node_probe(
             [str(node), str(probe), str(bridge)],
-            capture_output=True,
-            check=False,
-            text=True,
             timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -856,11 +853,8 @@ def test_br_g_36_node_drain_validates_transport_before_batch_delivery(
     )
 
     try:
-        completed = subprocess.run(
+        completed = run_node_probe(
             [str(node), str(probe), str(bridge), str(producer_fixture), record_kind],
-            capture_output=True,
-            check=False,
-            text=True,
             timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
