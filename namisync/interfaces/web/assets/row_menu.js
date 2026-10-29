@@ -65,8 +65,9 @@ export function createRowMenu(owner, {trigger = null, label = "Item actions"} = 
     const bottom = Math.min(view.innerHeight - 8, boundary?.bottom ?? view.innerHeight - 8);
     menu.style.setProperty("max-inline-size", `${right - left}px`);
     menu.style.setProperty("max-block-size", `${bottom - top}px`);
-    const bounds = menu.getBoundingClientRect();
     const rect = anchor.getBoundingClientRect();
+    if (trigger !== null) menu.style.setProperty("inline-size", `${rect.width}px`);
+    const bounds = menu.getBoundingClientRect();
     const keyboard = event.type === "keydown" || trigger !== null;
     const x = keyboard ? rect.left : event.clientX;
     const y = keyboard ? rect.bottom : event.clientY;

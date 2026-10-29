@@ -47,6 +47,43 @@ freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
 
+### Settings and final layout batch — 2026-10-29
+
+User-approved three atomic outcomes, based on `c64aec73`:
+
+1. Shared visual polish: `Filters · matched/total`, 32px Go/Follow insets,
+   and 1.2px content-card outlines. The user's added Rebaseline dropdown request
+   matches the full split button's width and leading edge. Owners: shared
+   filter/CSS, row-menu positioning and Inventory anchor, direct gallery
+   and renderer witnesses. Preserve filter population, actions and scroll rules.
+   Gate: focused probes, interface department, affected installed gallery and
+   review cases, independent review.
+2. Settings: scrollable Setup defaults, Appearance (theme only), and About
+   cards. Explicit dirty-field Save defaults, including persisted automatic
+   verification. Owners: settings store, workflow/service defaults projection,
+   bounded bridge commands and validators, Settings renderer and consumers.
+   Use a new exact settings schema without legacy migration, per the user's
+   pre-release reset clarification; retain strict wrong-schema refusal and no
+   automatic overwrite. Preserve atomic/mutex writes, ingress bounds, frozen task
+   drafts and Plan again, CLI verification behavior, disabled ADS, and existing
+   theme persistence. Keep frozen Plan semantic-view shape unchanged. Gate:
+   persistence/facade/bridge/browser cases, ordinary suite, installed Settings
+   and task preservation witnesses, independent review.
+3. About: separate License and Open source acknowledgements HyperlinkButton-style
+   buttons opening scrollable, selectable license and
+   verified third-party acknowledgement dialogs, sharing existing dialog styles.
+   Owners: packaged legal content, Settings/notice presentation, asset catalogs
+   and installed gallery witnesses. Use existing GPL terms; no new EULA, release
+   certification or unrelated dependency migration. Gate: source/provenance and
+   wheel checks, interface department, installed dialog keyboard/scroll/focus
+   checks in gallery modes, independent review.
+
+Shared files and acceptance runs are serialized. Subject docs and CHANGELOG
+travel with each outcome; HANDOFF closes the session. No task execution policy,
+history, inventory recents, coordinator, M2 cosmetics or full release packaging
+is activated. Repository scope/recurrence and mandatory stops remain applicable.
+Status: approved; implementation in progress.
+
 ### Shell gutter compensation — 2026-10-29
 
 Remove the document stable gutter, retain work-panel stable gutters on every

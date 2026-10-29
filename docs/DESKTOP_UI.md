@@ -1394,7 +1394,7 @@ clamp near its end. Refreshes preserve the existing viewport wherever possible.
 
 Float **Go to current operation** (Plan), **Go to current item** (Inventory), and
 **Turn on autoscroll** over the rows at
-the viewport's lower-right with 28px logical insets, reusing existing floating-control conventions. Go
+the viewport's lower-right with 32px logical insets (`--space-7`), reusing existing floating-control conventions. Go
 uses navigation-location-target and autoscroll uses location-arrow. Both are icon-only square
 buttons with accessible action names and tooltips. Go keeps its ordinary neutral
 button styling and autoscroll keeps its primary accent emphasis. Each button sits
@@ -1444,7 +1444,8 @@ Plan and Status cards leave the remaining work-panel height to the table card;
 the table's two-axis viewport scrolls. Search is a narrower right-aligned
 box with inset submit and Clear icons styled like Setup path-box controls.
 Clear restores input focus and immediately clears the query. Plan and Inventory
-share one ordinary-sized Filter button with regular Filter and chevron icons.
+share one ordinary-sized button with regular Filter and chevron icons and the
+caption `Filters · matching/total`. With no accepted count it reads `Filters`.
 Its inline counter shows matching/total items from the accepted summary, using
 the same population as All rather than counting active categories. Search affects
 the numerator; folding and scrolling do not. It stays neutral at All and uses
@@ -1744,8 +1745,8 @@ keyboard focus retains a system-visible outline. Selection is conveyed
 with `aria-selected`/`aria-current` and is not
 inferred from a task's running status.
 
-Background/content cards are a separate static component role. They do not
-react to hover or press. Light uses a solid `#EBEBEB` stroke fallback beneath a
+Background/content cards are a separate static component role with 1.2px outlines.
+They do not react to hover or press. Light uses a solid `#EBEBEB` stroke fallback beneath a
 black 6% blended stroke and a white 70% primary fill; Dark uses a solid
 `#1C1C1C` fallback beneath a black 10% blended stroke and a white 5% primary
 fill. The token foundation also retains the supplied secondary and tertiary
@@ -2168,7 +2169,8 @@ complete file bytes while its tooltip and Details distinguish own object facts.
 The frozen Setup, status and table align with Plan review. The standalone task's
 switcher selects Integrity and disables Sync. Status actions run left to right:
 ordinary icon-only Refresh inventory (Arrow Clockwise), Baseline split button,
-and accented Verify. Baseline runs directly; its dropdown exposes Rebaseline.
+and accented Verify. Baseline runs directly; its dropdown exposes Rebaseline,
+matching the full split button's width and leading edge.
 The dropdown follows the shared menu's keyboard, dismissal and currentness rules,
 and returns focus to its trigger on Escape, action activation or confirmation.
 Outside interaction, scrolling and window blur dismiss it without moving focus.

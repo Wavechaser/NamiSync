@@ -626,7 +626,7 @@ body {
 
 .nami-plan-review__toolbar {
   align-items: end;
-  grid-template-columns: minmax(0, 1fr) minmax(10rem, 16rem);
+  grid-template-columns: max-content minmax(0, 1fr);
 }
 
 .nami-plan-review__field {
@@ -870,8 +870,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  inset-block-end: calc(var(--space-5) + var(--space-4));
-  inset-inline-end: calc(var(--space-5) + var(--space-4));
+  inset-block-end: var(--space-7);
+  inset-inline-end: var(--space-7);
   pointer-events: none;
   position: absolute;
   z-index: 2;

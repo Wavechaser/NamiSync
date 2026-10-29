@@ -11,7 +11,7 @@ export function createFilterMenu(categories, onChange) {
   trigger.ariaHasPopup = "menu";
   trigger.ariaExpanded = "false";
   const caption = document.createElement("span");
-  renderText(caption, "Filter");
+  renderText(caption, "Filters");
   const activeCount = document.createElement("span");
   activeCount.className = "nami-filter-count";
   trigger.append(createIcon(document, "filter", "sm"), caption, activeCount,
@@ -114,7 +114,8 @@ export function createFilterMenu(categories, onChange) {
     disabled = pending;
     trigger.ariaDisabled = String(disabled);
     trigger.dataset.active = String(selected.size > 0);
-    trigger.ariaLabel = matched === null ? "Filter" : `Filter ${matched} of ${total} items`;
+    trigger.ariaLabel = matched === null ? "Filters" : `Filters ${matched} of ${total} items`;
+    renderText(caption, matched === null ? "Filters" : "Filters ·");
     renderText(activeCount, matched === null ? "" : `${matched}/${total}`);
     for (const [key, item] of items) {
       item.ariaChecked = String(key === "all" ? selected.size === 0 : selected.has(key));

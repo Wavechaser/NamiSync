@@ -1371,7 +1371,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     card = _block(source, ".nami-card ")
     assert "background: var(--color-card-background-solid);" in card
     assert "background: var(--color-card-background);" in card
-    assert "border: 1px solid var(--color-card-border-solid);" in card
+    assert "border: 1.2px solid var(--color-card-border-solid);" in card
     assert "border-color: var(--color-card-border);" in card
     assert "background-clip: padding-box;" in card
     assert "box-shadow: none;" in card

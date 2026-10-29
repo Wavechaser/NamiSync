@@ -118,7 +118,7 @@ def _review_controls_sample() -> dict[str, object]:
     value = {kind: [[f"{glyph}_{20 if index == 0 else 16}_regular.svg", 32, 32, index == 1]
                     for index, glyph in enumerate(("navigation_location_target", "location_arrow"))]
              for kind in ("plan", "inventory")}
-    value["insets"] = {kind: [28, 28] for kind in ("plan", "inventory")}
+    value["insets"] = {kind: [32, 32] for kind in ("plan", "inventory")}
     value["actions"] = {kind: {name: [32, 32] for name in
         (("pause", "resume", "cancel") if kind == "plan" else
          ("pause", "resume", "cancel", "refresh", "baseline-menu"))} for kind in ("plan", "inventory")}
@@ -136,7 +136,7 @@ def _assert_review_controls(value: dict[str, object]) -> None:
             assert control[1:3] == pytest.approx(sample[1:3], abs=0.1)
             assert control[3] is sample[3]
     for kind in ("plan", "inventory"):
-        assert value["insets"][kind] == pytest.approx([28, 28], abs=0.1)
+        assert value["insets"][kind] == pytest.approx([32, 32], abs=0.1)
         for dimensions in value["actions"][kind].values():
             assert dimensions == pytest.approx([32, 32], abs=0.1)
     for states in value["states"]:
@@ -679,6 +679,9 @@ def test_component_gallery_scenario_injects_real_inventory_for_raw_preview(
         filtered = recall[kind]["filtered"]["window"]["rows"]
         assert len(filtered) == 1 and filtered[0]["recall"] is True
     rows = payload["rows"]
+    for state in ("default", "filtered"):
+        assert recall["inventory"][state]["summary"]["selected_file_count"] == 2
+        assert all(row["selection"] == "all" for row in recall["inventory"][state]["window"]["rows"])
     assert len(rows) == payload["summary"]["visible_row_count"] == 300
     assert [row["visible_index"] for row in rows] == list(range(300))
     assert len({row["node_id"] for row in rows}) == 300

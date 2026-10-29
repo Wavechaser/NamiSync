@@ -223,6 +223,9 @@ explicit, reviewable and regression-backed.
 
 #### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-29)
 
+- Show `Filters · matching/total` beside the existing filter glyph and dropdown
+  chevron. Use 32px Go/Follow insets and 1.2px content-card outlines; align the
+  Rebaseline dropdown to the full Baseline split button and match its width.
 - Remove the unused document gutter and include the retained work-panel gutter
   in the shell's right spacing: 14px padding plus the normal 10px gutter.
   Give the scrolling gallery its own gutter and symmetric padding override.

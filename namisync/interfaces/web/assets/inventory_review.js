@@ -411,7 +411,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       && review.actionRevision === actionRevision && owner.sessionId === sessionId;
     rowMenu.close();
     filterMenu.close();
-    baselineMenu.open(event, baselineMenuTrigger, baselineMenuTrigger,
+    baselineMenu.open(event, baselineGroup, baselineMenuTrigger,
       [{id: "inventory-rebaseline", label: "Rebaseline", run: () => callbacks.onStart?.(review, "rebaseline", baselineMenuTrigger)}], isCurrent);
   }
   baselineMenuTrigger.addEventListener("click", openBaselineMenu);

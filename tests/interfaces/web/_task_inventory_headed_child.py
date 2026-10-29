@@ -776,7 +776,8 @@ _PAGE = r"""
   review.append(colorReference);
   await new Promise(resolve => setTimeout(resolve, 150));
   const neutralStyle = getComputedStyle(filterTrigger);
-  const neutral = filterTrigger.children[2].textContent === '304/304' && filterTrigger.dataset.active === 'false'
+  const neutral = filterTrigger.children[1].textContent === 'Filters ·'
+    && filterTrigger.children[2].textContent === '304/304' && filterTrigger.dataset.active === 'false'
     && neutralStyle.backgroundColor === getComputedStyle(colorReference).backgroundColor
     && neutralStyle.color === getComputedStyle(colorReference).color;
   const neutralColors = [neutralStyle.backgroundColor, neutralStyle.color];

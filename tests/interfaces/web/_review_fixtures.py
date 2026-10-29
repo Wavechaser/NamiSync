@@ -109,7 +109,8 @@ def recall_gallery_fixture() -> dict[str, object]:
         for index, (path, stat) in enumerate(facts, 1))
     inventory_view = InventoryReviewState("task-" + "9" * 32, "9" * 32,
         build_inventory_projection(1, rows), r"C:\synthetic", True, 2, 0,
-        recall=RecallSummary(1, facts[0][1].size), scan_request_id="9" * 32)
+        recall=RecallSummary(1, facts[0][1].size), scan_request_id="9" * 32,
+        selected_row_ids=frozenset(row.row_id for row in rows))
     result = {}
     for name, view in (("plan", plan_view), ("inventory", inventory_view)):
         default = {"summary": view.summary(), "window": view.window(expected_revision=0, offset=0, limit=256)}

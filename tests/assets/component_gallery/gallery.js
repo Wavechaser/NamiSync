@@ -1499,7 +1499,8 @@ window.addEventListener("unhandledrejection", (event) => {
   }
   galleryMeasurementStep = "plan_review_filter_menu";
   const filterTrigger = planReviewPanel.element.querySelector('[data-action="filter-menu"]');
-  if (filterTrigger.children[2].textContent !== "3/21" || filterTrigger.dataset.active !== "true") {
+  if (filterTrigger.children[1].textContent !== "Filters ·"
+      || filterTrigger.children[2].textContent !== "3/21" || filterTrigger.dataset.active !== "true") {
     throw new Error("Filter trigger must show matching and total items");
   }
   filterTrigger.scrollIntoView({block: "center"});
@@ -1552,7 +1553,8 @@ window.addEventListener("unhandledrejection", (event) => {
   planReviewTask.review.summary.filters = [];
   planReviewTask.review.summary.matched_item_count = 21;
   planReviewPanel.render(planReviewTask);
-  if (filterTrigger.children[2].textContent !== "21/21" || filterTrigger.dataset.active !== "false") {
+  if (filterTrigger.children[1].textContent !== "Filters ·"
+      || filterTrigger.children[2].textContent !== "21/21" || filterTrigger.dataset.active !== "false") {
     throw new Error("All must retain a neutral Filter item counter");
   }
   await settleFilterTransition();
@@ -3840,7 +3842,10 @@ window.addEventListener("unhandledrejection", (event) => {
   const minimumFilterTrigger = planReviewPanel.element.querySelector('[data-action="filter-menu"]');
   const minimumSearchBounds = planReviewPanel.element.querySelector('.nami-plan-review__search').getBoundingClientRect();
   const minimumFilterBounds = minimumFilterTrigger.getBoundingClientRect();
+  const minimumFilterCaption = document.createRange();
+  minimumFilterCaption.selectNodeContents(minimumFilterTrigger.children[1]);
   if (minimumFilterTrigger.children[2].textContent !== "3/21"
+      || minimumFilterCaption.getClientRects().length !== 1
       || Math.abs(minimumFilterBounds.bottom - minimumSearchBounds.bottom) > 1
       || minimumFilterBounds.right > minimumSearchBounds.left + 1) {
     throw new Error("Plan Filter item count or original inline Search layout is invalid");
@@ -4341,6 +4346,21 @@ window.addEventListener("unhandledrejection", (event) => {
       };
       capture("refresh");
       capture("baseline-menu");
+      const baselineGroup = panel.element.querySelector(".nami-inventory-review__baseline");
+      baselineGroup.scrollIntoView({block: "center"});
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const baselineTrigger = panel.element.querySelector('[data-action="inventory-baseline-menu"]');
+      if (baselineTrigger.disabled) throw new Error("Rebaseline specimen requires selected files");
+      baselineTrigger.click();
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const baselinePopup = panel.element.querySelector('[role="menu"][aria-label="Baseline actions"]');
+      const groupBounds = baselineGroup.getBoundingClientRect();
+      const menuBounds = baselinePopup.getBoundingClientRect();
+      if (baselinePopup.hidden || Math.abs(groupBounds.width - menuBounds.width) > 1
+          || Math.abs(groupBounds.left - menuBounds.left) > 1) {
+        throw new Error("Rebaseline menu must match the full split button width and leading edge");
+      }
+      baselinePopup.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
       panel.render({...task, sessionState: "active", sessionKind: "verify", sessionReleased: false,
         executionControlState: "running"});
       capture("pause");
