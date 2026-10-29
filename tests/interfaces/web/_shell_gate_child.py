@@ -1346,22 +1346,21 @@ def _begin_probe(
 
     def after_create_focus(value: object) -> None:
         page["create_focus"] = value
-        evaluate('document.querySelector("#theme-mode-trigger").focus(); ({ready: true});',
-                 lambda _value: press("Tab", "Tab", 9, after_tree_tab))
+        # Work pages are exclusive. Replace Settings before testing native Tab
+        # into the tree, starting from the last task-navigation control.
+        evaluate(
+            'const root = globalThis.__namiShellTreeEvidence.root; '
+            'document.querySelector(".nami-work-panel__body").replaceChildren(root); '
+            'document.querySelector(".nami-task-rail__settings").focus(); ({ready: true});',
+            lambda _value: press("Tab", "Tab", 9, after_tree_tab),
+        )
 
     def after_tree_tab(_value: object) -> None:
         evaluate(_ACTIVE_PROBE, after_first_focus)
 
     def after_first_focus(value: object) -> None:
         page["first_focus"] = value
-        # Work pages are exclusive. Keep the native Tab witness above, then
-        # replace Settings with the same tree before testing its reflow.
-        evaluate(
-            'const root = globalThis.__namiShellTreeEvidence.root; '
-            'document.querySelector(".nami-work-panel__body").replaceChildren(root); '
-            'root.focus(); ({ready: true});',
-            lambda _value: press("ArrowDown", "ArrowDown", 40, after_second_key),
-        )
+        press("ArrowDown", "ArrowDown", 40, after_second_key)
 
     def after_second_key(_value: object) -> None:
         evaluate(_ACTIVE_PROBE, after_second_focus)

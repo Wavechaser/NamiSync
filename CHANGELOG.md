@@ -154,7 +154,7 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
-#### Consolidate before M1 closeout (2026-10-29)
+#### Consolidate before M1 closeout (2026-10-29 – 2026-10-30)
 
 - Formalized the amended reconciliation as a finite register, with nested
   candidate-ingress tests preceding legacy-slot removal and separate reason
@@ -188,6 +188,10 @@ behavioral evidence.
 - Removed the unused Scope planner contract and caller plumbing while retaining
   whole-plan behavior, execution selection and future scoped-planning/History
   Replay outcomes. Updated signatures and subject documentation together.
+- Corrected the installed shell driver's stale assumption that Theme is the
+  last Settings control. Mount the reviewed tree in the work body before native
+  Tab navigation from the rail; retain exact focus, arrow-navigation and visual
+  assertions independently of intervening About controls.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 
