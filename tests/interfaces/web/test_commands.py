@@ -235,7 +235,7 @@ class _Slots:
         slot_id = SOURCE_ID if purpose == "source" else TARGET_ID
         return slot_id, display or f"Selected {purpose} \U0001f30a"
 
-    def resolve_pair(self, source_id: str, target_id: str) -> tuple[str, str]:
+    def resolve_pair(self, source_id: str, target_id: str) -> tuple[LocationCandidate, LocationCandidate]:
         self.resolved.append((source_id, target_id))
         return LocationCandidate.literal(r"C:\private\source"), LocationCandidate.literal(r"D:\private\target")
 
@@ -2208,6 +2208,7 @@ def test_admit_location_routes_valid_typed_candidates_before_storing_choice(
         {"kind": "literal_path", "path": r"C:\source"},
         {"kind": "literal_path", "path": r"C:\source", "selected_mount": None, "extra": None},
         {"kind": "literal_path", "path": None, "selected_mount": None},
+        {"kind": "literal_path", "path": "", "selected_mount": None},
         {"kind": "literal_path", "path": "\ud800", "selected_mount": None},
         {"kind": "remembered_location", "location_id": "1"},
         {"kind": "remembered_location", "location_id": "1", "selected_mount": None, "extra": None},
@@ -2284,7 +2285,7 @@ def test_br_g_32_synthetic_escape_projection_admits_combined_size_before_evictio
     tokens = iter(f"{index:032x}" for index in range(64))
     slots = FolderSlotTable(token=tokens.__next__)
     retained = {
-        slots.store(f"path-{index}", purpose="source")[0]
+        slots.store(LocationCandidate.literal(f"path-{index}"), purpose="source")[0]
         for index in range(32)
     }
     commands = production_command_specs(

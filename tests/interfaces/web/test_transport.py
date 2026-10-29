@@ -648,7 +648,7 @@ def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
     payload: dict[str, object],
 ) -> None:
     class Slots:
-        def resolve_pair(self, *args: object) -> tuple[str, str]:
+        def resolve_pair(self, *args: object) -> tuple[LocationCandidate, LocationCandidate]:
             del args
             raise AssertionError("invalid start_plan reached slot authority")
 

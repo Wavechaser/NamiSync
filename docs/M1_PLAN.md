@@ -70,7 +70,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | A1 | Deterministic license text: pin only LICENSE to LF, manually update its embedded text in `assets/legal_content.js`, and compare packaged JS to `read_bytes().decode()` in the About test. Preserve all notice hashes/text and package identity; no unrelated normalization or new generator. Owners: desktop assets, wheel/static tests, .gitattributes. | Existing About reproducer first; real wheel About/package checks in fresh autocrlf true/false checkouts, interfaces department, source/diff and independent review. | Complete; receipts below. |
 | A2 | Correct README stale desktop/bootstrap text, spelling and supported-target/compatibility wording; FEATURES intro/Inventory active status and explicitly future scoped planning; WORKFLOWS review-publication account against actual owners, preserving complete publication/refusal/replacement. | A1 independent; source-to-prose reconciliation, local links/diff and independent review. No support expansion or new publication design. | Complete; source/link/diff review passed. |
 | C1 | Add ordinary ingress witnesses for `admit_location` and `_validate_location_candidate`: typed/remembered successes, bad kind, extra keys, noncanonical/zero/over-range location IDs, refusals before service/slot work. Owners: `web/commands.py` existing contract, `test_commands.py`. | Must pass before B1. Real command invocation with valid purpose; focused command tests and interfaces department. Missing-purpose refusal is not parser coverage. | Complete; 280 command and 2,165 interfaces passes, fresh independent review. |
-| B1 | Retire raw-string folder slots, legacy flag/conversion and alternate pair return; narrow FolderSlotAuthority and migrate fixtures to LocationCandidate. Owners: slots/commands; direct command/transport/host/slot fixtures. | C1 complete. Retain opacity, purpose, expiry, capacity, ambiguity, atomic pair resolution, exact replay and fresh admission; focused slots/commands/transport, interfaces and affected installed picker/start witnesses. | Pending. |
+| B1 | Retire raw-string folder slots, legacy flag/conversion and alternate pair return; narrow FolderSlotAuthority and migrate fixtures to LocationCandidate. Owners: slots/commands; direct command/transport/host/slot fixtures. | C1 complete. Retain opacity, purpose, expiry, capacity, ambiguity, atomic pair resolution, exact replay and fresh admission; focused slots/commands/transport, interfaces and affected installed picker/start witnesses. | Complete; 539 focused, 2,166 interfaces, 294 correction checks and two installed witnesses; independent review. |
 | B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Pending. |
 | B3 | Reuse canonical preorder/inverse result for Inventory PATH sorting; retain second traversal after non-PATH sort. Owner: inventory_projection; Inventory review and tools consumers. | Equal ordered/inverse outputs across empty/nested/warning cases, warning-tail/sort/reset/spelling tests, workflows department and affected required large-projection gate. No speed claim. | Pending. |
 | C2 | Cover read_setup/prepare_setup, service.read_plan_setup readiness/frozen values, ensure_database_pair refusal and runtime Plan refusal. Preserve existing underlying classification/CLI/headed witnesses. | Finite successful/refused/default/task/readiness cases; refused pair leaves bytes unchanged and admits no work. Interfaces/workflows owning and direct-consumer tests, then ordinary integration. | Pending. |
@@ -107,6 +107,24 @@ files, the interfaces department, and installed
 `test_m1_6_installed_setup_flow`, followed by independent review. Update BRIDGE's
 slot account only as needed; no registry/custody redesign or TTL/capacity change.
 Commit the protocol narrowing and every fixture migration together.
+Delivered evidence: `results/b1-focused-final.log`, `b1-interfaces.log`,
+`b1-correction-focused.log` and `b1-installed.log`. Review replaced two forged
+candidate slot cases with ordinary empty/surrogate ingress refusals; unchanged
+product/shared fixtures allowed reuse of unaffected department evidence.
+No supported guarantee was retired. The initial temp setup failures remain in
+`b1-focused.log`; they are not counted as passes.
+
+B2 elaboration (inspected `1f0eb086`, refresh after B1): finite source files are
+`core/events.py`, `core/file_identity.py`, `core/scalars.py`, `db/history.py`,
+`db/repositories.py`, `interfaces/service.py`, `workflows/sync.py`,
+`workflows/__init__.py`, `interfaces/web/plan_review.py` and its JS asset.
+`RunSnapshot` becomes orphaned with `get_run` and retires in that same commit;
+remove only imports made unused by these deletions. No test removal is needed.
+Preserve the live core `_phase_to_dict`, actual inventory candidate-kind type,
+tree/projection lookup methods and tools' unrelated local names. Current docs
+have no behavioral account requiring repair; historical declarations stay
+historical. One deletion commit follows ordinary tests, all 12 import contracts
+and fresh independent consumer/orphan review.
 
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and

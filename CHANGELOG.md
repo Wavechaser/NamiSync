@@ -169,6 +169,10 @@ behavioral evidence.
 - Added ordinary typed/remembered location ingress witnesses, including exact
   nested shapes and canonical ID bounds, with refusals before admission or slot
   effects. These precede removal of the legacy string-slot representation.
+- Removed raw-string slot conversion and alternate pair results. Slots now use
+  typed candidates throughout, preserving expiry, capacity, ambiguity, atomic
+  pair lookup, fresh admission and original-result replay. Native picker and
+  installed Setup witnesses passed.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

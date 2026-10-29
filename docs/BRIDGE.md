@@ -935,7 +935,7 @@ distinct. No effect queue or durable receipt is added.
 
 Resolved typed, picker and remembered candidates create startable slots. An
 ambiguous picker may instead create a non-startable continuation. Both share
-one slot table. A slot holds the candidate,
+one slot table. The table accepts typed `LocationCandidate` values only. A slot holds the candidate,
 purpose, inert display, fixed monotonic expiry 30 minutes after insertion, and
 LRU recency. Lookup is nonconsuming and refreshes recency without extending expiry.
 Sweep expired slots before insert/lookup; at most 32 unexpired entries exist.

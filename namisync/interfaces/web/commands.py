@@ -217,13 +217,15 @@ class FolderSlotAuthority(Protocol):
 
     def store(
         self,
-        candidate: LocationCandidate | str,
+        candidate: LocationCandidate,
         *,
         purpose: str,
         display: str | None = None,
     ) -> tuple[str, str]: ...
 
-    def resolve_pair(self, source_id: str, target_id: str): ...
+    def resolve_pair(
+        self, source_id: str, target_id: str
+    ) -> tuple[LocationCandidate, LocationCandidate]: ...
 
     def resolve(self, slot_id: str, *, purpose: str) -> LocationCandidate: ...
 

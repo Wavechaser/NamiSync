@@ -35,7 +35,6 @@ class _FolderSlot:
     display: str
     expires_at: float
     last_used: float
-    legacy_path: bool = False
     binding: LocationBinding | None = None
     candidates: tuple[str, ...] = ()
 
@@ -60,7 +59,7 @@ class FolderSlotTable:
 
     def store(
         self,
-        candidate: LocationCandidate | str,
+        candidate: LocationCandidate,
         *,
         purpose: str,
         display: str | None = None,
@@ -73,9 +72,6 @@ class FolderSlotTable:
             "inventory",
         }:
             raise ValueError("folder slot purpose is invalid")
-        legacy_path = type(candidate) is str
-        if legacy_path:
-            candidate = LocationCandidate.literal(candidate)
         if type(candidate) is not LocationCandidate:
             raise TypeError("folder slot candidate must be exact")
         candidate.__post_init__()
@@ -106,7 +102,6 @@ class FolderSlotTable:
                 display=display,
                 expires_at=now + _TTL_SECONDS,
                 last_used=now,
-                legacy_path=legacy_path,
             )
             return slot_id, display
 
@@ -240,7 +235,7 @@ class FolderSlotTable:
         self,
         source_id: str,
         target_id: str,
-    ) -> tuple[LocationCandidate, LocationCandidate] | tuple[str, str]:
+    ) -> tuple[LocationCandidate, LocationCandidate]:
         """Atomically resolve one live purpose-correct pair without consuming it."""
 
         with self._lock:
@@ -266,10 +261,6 @@ class FolderSlotTable:
                 raise SlotUnavailableError("folder slot is unavailable")
             source.last_used = now
             target.last_used = now
-            if source.legacy_path and target.legacy_path:
-                assert source.candidate.path is not None
-                assert target.candidate.path is not None
-                return source.candidate.path, target.candidate.path
             return source.candidate, target.candidate
 
     def _sweep(self, now: float) -> None:

@@ -62,11 +62,11 @@ def _ambiguous(path: str = r"C:\source") -> tuple[LocationCandidate, LocationCan
 def test_br_g_32_slots_are_opaque_nonconsuming_and_purpose_bound() -> None:
     table = FolderSlotTable(token=_tokens())
     source_id, source_display = table.store(
-        "C:\\private\\source U0001f30a",
+        LocationCandidate.literal("C:\\private\\source U0001f30a"),
         purpose="source",
     )
     target_id, target_display = table.store(
-        "D:\\private\\target",
+        LocationCandidate.literal("D:\\private\\target"),
         purpose="target",
     )
 
@@ -75,12 +75,12 @@ def test_br_g_32_slots_are_opaque_nonconsuming_and_purpose_bound() -> None:
     assert source_display == "C:\\private\\source U0001f30a"
     assert target_display == "D:\\private\\target"
     assert table.resolve_pair(source_id, target_id) == (
-        "C:\\private\\source U0001f30a",
-        "D:\\private\\target",
+        LocationCandidate.literal("C:\\private\\source U0001f30a"),
+        LocationCandidate.literal("D:\\private\\target"),
     )
     assert table.resolve_pair(source_id, target_id) == (
-        "C:\\private\\source U0001f30a",
-        "D:\\private\\target",
+        LocationCandidate.literal("C:\\private\\source U0001f30a"),
+        LocationCandidate.literal("D:\\private\\target"),
     )
 
     with pytest.raises(SlotUnavailableError):
@@ -89,19 +89,20 @@ def test_br_g_32_slots_are_opaque_nonconsuming_and_purpose_bound() -> None:
         table.resolve_pair(target_id, source_id)
 
 
-@pytest.mark.parametrize("path", ["", "\ud800"])
-def test_br_g_32_slots_require_nonempty_valid_unicode_paths(path: str) -> None:
+def test_slots_reject_raw_paths_without_mutation() -> None:
     table = FolderSlotTable(token=_tokens())
 
-    with pytest.raises(ValueError):
-        table.store(path, purpose="source")
+    with pytest.raises(TypeError, match="candidate"):
+        table.store("path", purpose="source")  # type: ignore[arg-type]
+
+    assert table._entries == {}
 
 
 def test_br_g_32_slots_reject_non_string_purpose_without_mutation() -> None:
     table = FolderSlotTable(token=_tokens())
 
     with pytest.raises(ValueError, match="purpose"):
-        table.store("path", purpose=[])  # type: ignore[arg-type]
+        table.store(LocationCandidate.literal("path"), purpose=[])  # type: ignore[arg-type]
 
     assert table._entries == {}
 
@@ -109,11 +110,11 @@ def test_br_g_32_slots_reject_non_string_purpose_without_mutation() -> None:
 def test_br_g_32_slot_expiry_is_fixed_at_the_exact_thirty_minute_edge() -> None:
     clock = _Clock()
     table = FolderSlotTable(clock=clock, token=_tokens())
-    source_id, _ = table.store("source", purpose="source")
-    target_id, _ = table.store("target", purpose="target")
+    source_id, _ = table.store(LocationCandidate.literal("source"), purpose="source")
+    target_id, _ = table.store(LocationCandidate.literal("target"), purpose="target")
 
     clock.now = 1_799.999
-    assert table.resolve_pair(source_id, target_id) == ("source", "target")
+    assert table.resolve_pair(source_id, target_id) == (LocationCandidate.literal("source"), LocationCandidate.literal("target"))
 
     clock.now = 1_800.0
     with pytest.raises(SlotUnavailableError):
@@ -124,39 +125,39 @@ def test_br_g_32_thirty_third_slot_evicts_lru_with_slot_id_tiebreak() -> None:
     clock = _Clock()
     table = FolderSlotTable(clock=clock, token=_tokens())
     source_ids = [
-        table.store(f"source-{index}", purpose="source")[0]
+        table.store(LocationCandidate.literal(f"source-{index}"), purpose="source")[0]
         for index in range(31)
     ]
-    target_id, _ = table.store("target", purpose="target")
+    target_id, _ = table.store(LocationCandidate.literal("target"), purpose="target")
 
     clock.now = 1.0
     assert table.resolve_pair(source_ids[0], target_id) == (
-        "source-0",
-        "target",
+        LocationCandidate.literal("source-0"),
+        LocationCandidate.literal("target"),
     )
 
     clock.now = 2.0
-    table.store("source-new", purpose="source")
+    table.store(LocationCandidate.literal("source-new"), purpose="source")
 
     assert table.resolve_pair(source_ids[0], target_id) == (
-        "source-0",
-        "target",
+        LocationCandidate.literal("source-0"),
+        LocationCandidate.literal("target"),
     )
     with pytest.raises(SlotUnavailableError):
         table.resolve_pair(source_ids[1], target_id)
 
     tied = FolderSlotTable(clock=_Clock(), token=_tokens())
     tied_sources = [
-        tied.store(f"tied-{index}", purpose="source")[0]
+        tied.store(LocationCandidate.literal(f"tied-{index}"), purpose="source")[0]
         for index in range(31)
     ]
-    tied_target, _ = tied.store("target", purpose="target")
-    tied.store("replacement", purpose="source")
+    tied_target, _ = tied.store(LocationCandidate.literal("target"), purpose="target")
+    tied.store(LocationCandidate.literal("replacement"), purpose="source")
     with pytest.raises(SlotUnavailableError):
         tied.resolve_pair(tied_sources[0], tied_target)
     assert tied.resolve_pair(tied_sources[1], tied_target) == (
-        "tied-1",
-        "target",
+        LocationCandidate.literal("tied-1"),
+        LocationCandidate.literal("target"),
     )
 
 
@@ -164,12 +165,12 @@ def test_br_g_32_expired_slots_are_swept_before_capacity_eviction() -> None:
     clock = _Clock()
     table = FolderSlotTable(clock=clock, token=_tokens())
     old_ids = [
-        table.store(f"old-{index}", purpose="source")[0]
+        table.store(LocationCandidate.literal(f"old-{index}"), purpose="source")[0]
         for index in range(32)
     ]
 
     clock.now = 1_800.0
-    current_id, _ = table.store("current", purpose="source")
+    current_id, _ = table.store(LocationCandidate.literal("current"), purpose="source")
 
     assert set(table._entries) == {current_id}
     assert not set(old_ids) & set(table._entries)
@@ -179,10 +180,10 @@ def test_br_g_32_failed_pair_resolution_touches_neither_slot() -> None:
     clock = _Clock()
     table = FolderSlotTable(clock=clock, token=_tokens())
     source_ids = [
-        table.store(f"source-{index}", purpose="source")[0]
+        table.store(LocationCandidate.literal(f"source-{index}"), purpose="source")[0]
         for index in range(31)
     ]
-    target_id, _ = table.store("target", purpose="target")
+    target_id, _ = table.store(LocationCandidate.literal("target"), purpose="target")
 
     clock.now = 1.0
     with pytest.raises(SlotUnavailableError):
@@ -191,7 +192,7 @@ def test_br_g_32_failed_pair_resolution_touches_neither_slot() -> None:
     assert table._entries[target_id].last_used == 0.0
 
     clock.now = 2.0
-    table.store("replacement", purpose="source")
+    table.store(LocationCandidate.literal("replacement"), purpose="source")
 
     with pytest.raises(SlotUnavailableError):
         table.resolve_pair(source_ids[0], target_id)
@@ -200,29 +201,29 @@ def test_br_g_32_failed_pair_resolution_touches_neither_slot() -> None:
 def test_br_g_32_successful_pair_resolution_touches_both_slots() -> None:
     clock = _Clock()
     table = FolderSlotTable(clock=clock, token=_tokens())
-    source_id, _ = table.store("source", purpose="source")
-    target_id, _ = table.store("target", purpose="target")
+    source_id, _ = table.store(LocationCandidate.literal("source"), purpose="source")
+    target_id, _ = table.store(LocationCandidate.literal("target"), purpose="target")
     for index in range(30):
-        table.store(f"filler-{index}", purpose="source")
+        table.store(LocationCandidate.literal(f"filler-{index}"), purpose="source")
 
     clock.now = 1.0
-    assert table.resolve_pair(source_id, target_id) == ("source", "target")
+    assert table.resolve_pair(source_id, target_id) == (LocationCandidate.literal("source"), LocationCandidate.literal("target"))
     clock.now = 2.0
-    table.store("replacement", purpose="source")
+    table.store(LocationCandidate.literal("replacement"), purpose="source")
 
-    assert table.resolve_pair(source_id, target_id) == ("source", "target")
+    assert table.resolve_pair(source_id, target_id) == (LocationCandidate.literal("source"), LocationCandidate.literal("target"))
 
 
 def test_br_g_32_slot_id_collision_remints_without_overwriting() -> None:
     candidates = iter((_token(7), _token(7), _token(8)))
     table = FolderSlotTable(token=lambda: next(candidates))
 
-    first, _ = table.store("first", purpose="source")
-    second, _ = table.store("second", purpose="target")
+    first, _ = table.store(LocationCandidate.literal("first"), purpose="source")
+    second, _ = table.store(LocationCandidate.literal("second"), purpose="target")
 
     assert first == "slot-" + _token(7)
     assert second == "slot-" + _token(8)
-    assert table.resolve_pair(first, second) == ("first", "second")
+    assert table.resolve_pair(first, second) == (LocationCandidate.literal("first"), LocationCandidate.literal("second"))
 
 
 def test_br_g_32_slot_capacity_is_bounded_under_concurrent_insertion() -> None:
@@ -232,7 +233,7 @@ def test_br_g_32_slot_capacity_is_bounded_under_concurrent_insertion() -> None:
         results = tuple(
             workers.map(
                 lambda index: table.store(
-                    f"path-{index}",
+                    LocationCandidate.literal(f"path-{index}"),
                     purpose="source",
                 )[0],
                 range(128),
@@ -287,7 +288,7 @@ def test_br_g_32_ambiguity_continuation_shares_capacity_and_is_not_startable() -
 
 def test_br_g_32_continuation_response_admission_precedes_eviction() -> None:
     table = FolderSlotTable(token=_tokens())
-    retained = [table.store(f"path-{index}", purpose="source")[0] for index in range(32)]
+    retained = [table.store(LocationCandidate.literal(f"path-{index}"), purpose="source")[0] for index in range(32)]
     candidate, result = _ambiguous()
 
     with pytest.raises(RuntimeError, match="too large"):
@@ -310,8 +311,8 @@ def test_br_g_32_concurrent_resolution_and_churn_is_atomic_and_bounded() -> None
     for index in range(16):
         source_path = f"source-{index}"
         target_path = f"target-{index}"
-        source_id, _ = table.store(source_path, purpose="source")
-        target_id, _ = table.store(target_path, purpose="target")
+        source_id, _ = table.store(LocationCandidate.literal(source_path), purpose="source")
+        target_id, _ = table.store(LocationCandidate.literal(target_path), purpose="target")
         pairs.append((source_id, target_id, source_path, target_path))
 
     start = Event()
@@ -325,8 +326,8 @@ def test_br_g_32_concurrent_resolution_and_churn_is_atomic_and_bounded() -> None
             for index in range(16, 144):
                 source_path = f"source-{index}"
                 target_path = f"target-{index}"
-                source_id, _ = table.store(source_path, purpose="source")
-                target_id, _ = table.store(target_path, purpose="target")
+                source_id, _ = table.store(LocationCandidate.literal(source_path), purpose="source")
+                target_id, _ = table.store(LocationCandidate.literal(target_path), purpose="target")
                 with pair_lock:
                     pairs.append(
                         (source_id, target_id, source_path, target_path)
@@ -347,7 +348,10 @@ def test_br_g_32_concurrent_resolution_and_churn_is_atomic_and_bounded() -> None
                 except SlotUnavailableError:
                     outcome = "unavailable"
                 else:
-                    assert resolved == (source_path, target_path)
+                    assert resolved == (
+                        LocationCandidate.literal(source_path),
+                        LocationCandidate.literal(target_path),
+                    )
                     outcome = "complete"
                 with result_lock:
                     observations.append(outcome)
