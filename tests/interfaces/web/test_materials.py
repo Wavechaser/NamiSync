@@ -204,6 +204,9 @@ def _system(
         accent_light_1=accent,
         accent_light_2=accent,
         accent_dark_1=accent,
+        accent_light_3=accent,
+        accent_dark_2=accent,
+        accent_dark_3=accent,
     )
 
 
@@ -1434,6 +1437,7 @@ def test_sh_g_12_loaded_document_gets_only_validated_inert_appearance_values() -
             "accentFillHover": "#A1B2C3E6",
             "accentFillPressed": "#A1B2C3CC",
             "accentFillForeground": "#000000",
+            "accentTextFill": "#A1B2C3",
             "advancedColor": False,
         }
     ]
@@ -2230,6 +2234,7 @@ def test_unconfirmed_live_fallback_publishes_degraded_opaque_page_state() -> Non
         "accentFillHover": "#ABCDEFE6",
         "accentFillPressed": "#ABCDEFCC",
         "accentFillForeground": "#000000",
+        "accentTextFill": "#ABCDEF",
         "advancedColor": False,
     }
     controller.close()
@@ -2309,6 +2314,9 @@ def test_effective_theme_matrix_preserves_raw_windows_authority(
         accent_light_1="#345678",
         accent_light_2="#89ABCD",
         accent_dark_1="#012345",
+        accent_light_3="#ABCDEF",
+        accent_dark_2="#123456",
+        accent_dark_3="#012345",
     )
 
     effective = appearance._effective_system_appearance(raw, theme_mode)
@@ -2320,6 +2328,12 @@ def test_effective_theme_matrix_preserves_raw_windows_authority(
     assert effective.accent_light_1 == raw.accent_light_1
     assert effective.accent_light_2 == raw.accent_light_2
     assert effective.accent_dark_1 == raw.accent_dark_1
+    assert effective.accent_light_3 == raw.accent_light_3
+    assert effective.accent_dark_2 == raw.accent_dark_2
+    assert effective.accent_dark_3 == raw.accent_dark_3
+    assert effective.accent_text_fill == (
+        raw.accent_light_3 if expected_dark else raw.accent_dark_2
+    )
     expected_fill = raw.accent_light_2 if expected_dark else raw.accent_dark_1
     assert effective.accent_fill == expected_fill
     assert effective.accent_fill_hover == f"{expected_fill}E6"
@@ -2330,6 +2344,8 @@ def test_effective_theme_matrix_preserves_raw_windows_authority(
 def test_semantic_accent_fill_selects_the_theme_rung_and_stable_foreground() -> None:
     light = SystemAppearance(False, False, "#0078D4", 26100)
     dark = SystemAppearance(True, False, "#0078D4", 26100)
+    assert light.accent_text_fill == "#003E92"
+    assert dark.accent_text_fill == "#99EBFF"
 
     assert (
         light.accent_fill,
@@ -2419,6 +2435,9 @@ def test_native_snapshot_reads_each_windows_appearance_owner(
             light_1="#667788",
             light_2="#8899AA",
             dark_1="#223344",
+            light_3="#AABBCC",
+            dark_2="#112233",
+            dark_3="#001122",
         ),
     )
     monkeypatch.setattr(appearance, "_windows_build", lambda: 26100)
@@ -2433,6 +2452,9 @@ def test_native_snapshot_reads_each_windows_appearance_owner(
         accent_light_1="#667788",
         accent_light_2="#8899AA",
         accent_dark_1="#223344",
+        accent_light_3="#AABBCC",
+        accent_dark_2="#112233",
+        accent_dark_3="#001122",
     )
 
 
@@ -2449,6 +2471,9 @@ def test_windows_accent_palette_uses_required_ui_settings_variants(
         "AccentLight1": SimpleNamespace(R=4, G=5, B=6),
         "AccentLight2": SimpleNamespace(R=7, G=8, B=9),
         "AccentDark1": SimpleNamespace(R=10, G=11, B=12),
+        "AccentLight3": SimpleNamespace(R=13, G=14, B=15),
+        "AccentDark2": SimpleNamespace(R=16, G=17, B=18),
+        "AccentDark3": SimpleNamespace(R=19, G=20, B=21),
     }
     getter = SimpleNamespace(
         Invoke=lambda _settings, arguments: colors[arguments[0]],
@@ -2467,6 +2492,9 @@ def test_windows_accent_palette_uses_required_ui_settings_variants(
         light_1="#040506",
         light_2="#070809",
         dark_1="#0A0B0C",
+        light_3="#0D0E0F",
+        dark_2="#101112",
+        dark_3="#131415",
     )
 
 
@@ -2494,9 +2522,15 @@ def test_pinned_runtime_reads_the_live_ui_settings_palette() -> None:
         palette.light_1,
         palette.light_2,
         palette.dark_1,
+        palette.light_3,
+        palette.dark_2,
+        palette.dark_3,
     ) == tuple(
         direct(name)
-        for name in ("Accent", "AccentLight1", "AccentLight2", "AccentDark1")
+        for name in (
+            "Accent", "AccentLight1", "AccentLight2", "AccentDark1",
+            "AccentLight3", "AccentDark2", "AccentDark3",
+        )
     )
 
 
@@ -2605,6 +2639,9 @@ def test_coincident_ui_settings_palette_values_are_preserved(
         light_1="#010203",
         light_2="#010203",
         dark_1="#010203",
+        light_3="#010203",
+        dark_2="#010203",
+        dark_3="#010203",
     )
 
 
@@ -2795,19 +2832,32 @@ def test_native_client_glass_rejects_failing_hresult_before_black_assignment(
     assert native_window.BackColor is None
 
 
-def test_system_snapshot_rejects_non_inert_accent_values() -> None:
+@pytest.mark.parametrize("field", (
+    "accent_light_1", "accent_light_2", "accent_light_3",
+    "accent_dark_1", "accent_dark_2", "accent_dark_3",
+))
+def test_system_snapshot_rejects_non_inert_accent_values(field: str) -> None:
     with pytest.raises(ValueError, match="uppercase"):
         _system(accent="#aabbcc")
     with pytest.raises(ValueError, match="uppercase"):
         _system(accent="red; background: url(https://example.invalid)")
-    with pytest.raises(ValueError, match="accent_light_2"):
+    with pytest.raises(ValueError, match=field):
         SystemAppearance(
             False,
             False,
             "#AABBCC",
             26100,
-            accent_light_2="#aabbcc",
+            **{field: "#aabbcc"},
         )
+
+
+@pytest.mark.parametrize("settings", (None, object()))
+def test_unavailable_palette_falls_back_to_all_seven_colors(settings: object) -> None:
+    assert appearance._read_accent_palette(settings) == appearance._AccentPalette(
+        accent="#0078D4", light_1="#0091F8", light_2="#4CC2FF",
+        dark_1="#0067C0", light_3="#99EBFF", dark_2="#003E92",
+        dark_3="#001A68",
+    )
 
 
 def test_documented_accent_read_and_no_direct_document_sink() -> None:

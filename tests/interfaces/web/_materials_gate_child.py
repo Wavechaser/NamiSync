@@ -121,6 +121,8 @@ _PAGE_PROBE = r"""
     forced_colors_active: matchMedia("(forced-colors: active)").matches,
     inline_accent_fill: root.style
       .getPropertyValue("--color-accent-fill").trim(),
+    inline_accent_text_fill: root.style
+      .getPropertyValue("--color-accent-text-fill").trim(),
     inline_accent_fill_hover: root.style
       .getPropertyValue("--color-accent-fill-hover").trim(),
     inline_accent_fill_pressed: root.style
@@ -291,6 +293,10 @@ def _appearance_snapshot(value: object) -> dict[str, object]:
         "accent_light_1": str(value.accent_light_1),
         "accent_light_2": str(value.accent_light_2),
         "accent_dark_1": str(value.accent_dark_1),
+        "accent_light_3": str(value.accent_light_3),
+        "accent_dark_2": str(value.accent_dark_2),
+        "accent_dark_3": str(value.accent_dark_3),
+        "accent_text_fill": str(value.accent_text_fill),
         "accent_fill": str(value.accent_fill),
         "accent_fill_hover": str(value.accent_fill_hover),
         "accent_fill_pressed": str(value.accent_fill_pressed),
@@ -618,6 +624,9 @@ def _install_native_boundary_observers(
                 accent_light_1=actual.accent_light_1,
                 accent_light_2=actual.accent_light_2,
                 accent_dark_1=actual.accent_dark_1,
+                accent_light_3=actual.accent_light_3,
+                accent_dark_2=actual.accent_dark_2,
+                accent_dark_3=actual.accent_dark_3,
             )
         elif scenario == "dark-no-material":
             selected = appearance.SystemAppearance(
@@ -628,6 +637,9 @@ def _install_native_boundary_observers(
                 accent_light_1=actual.accent_light_1,
                 accent_light_2=actual.accent_light_2,
                 accent_dark_1=actual.accent_dark_1,
+                accent_light_3=actual.accent_light_3,
+                accent_dark_2=actual.accent_dark_2,
+                accent_dark_3=actual.accent_dark_3,
             )
         elif scenario == "high-contrast":
             selected = appearance.SystemAppearance(
@@ -638,6 +650,9 @@ def _install_native_boundary_observers(
                 accent_light_1=actual.accent_light_1,
                 accent_light_2=actual.accent_light_2,
                 accent_dark_1=actual.accent_dark_1,
+                accent_light_3=actual.accent_light_3,
+                accent_dark_2=actual.accent_dark_2,
+                accent_dark_3=actual.accent_dark_3,
             )
         else:
             selected = appearance.SystemAppearance(
@@ -648,6 +663,9 @@ def _install_native_boundary_observers(
                 accent_light_1=actual.accent_light_1,
                 accent_light_2=actual.accent_light_2,
                 accent_dark_1=actual.accent_dark_1,
+                accent_light_3=actual.accent_light_3,
+                accent_dark_2=actual.accent_dark_2,
+                accent_dark_3=actual.accent_dark_3,
             )
         recorder.set("selected_system", _appearance_snapshot(selected))
         recorder.set("opaque_system_color", native.opaque_background(selected))

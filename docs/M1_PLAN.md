@@ -59,7 +59,12 @@ markup/footer styles and installed Settings checks. Preserve other accent-filled
 controls, forced colors, save/read recovery semantics and task defaults. Gates:
 focused appearance/frontend checks, interface department, affected installed
 appearance/gallery/Settings cases and independent review per atomic outcome.
-In progress. No unrelated material, lifecycle or Settings contract changes.
+Complete: 225 focused checks, 2,138 interface checks and all 12 installed
+gallery, default/larger Settings and native appearance cases pass. Independent
+source, provenance and evidence reviews cover each atomic outcome. No unrelated
+material, lifecycle or Settings contract changes. Raw receipts and provenance:
+`build/gui-settings-footer-20261029/verification.md`.
+Footer commit: `c51ff241`; the following accent commit includes session closure.
 
 ### Settings and final layout batch — 2026-10-29
 

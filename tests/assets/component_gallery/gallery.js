@@ -4715,7 +4715,7 @@ window.addEventListener("unhandledrejection", (event) => {
         internally_scrollable: body.scrollTop > 0 && body.scrollTop + body.clientHeight >= body.scrollHeight - 1,
         close_fixed: Math.abs(footerAfter.top - footerBefore.top) < 1 && footerAfter.bottom <= innerHeight,
         background_blocked: backgroundInert && page.scrollTop === pageBefore,
-        underlined: getComputedStyle(button).textDecorationLine.includes("underline"),
+        no_underline: getComputedStyle(button).textDecorationLine === "none",
       };
       if (index === 0) await nativeInput("about-escape");
       else {

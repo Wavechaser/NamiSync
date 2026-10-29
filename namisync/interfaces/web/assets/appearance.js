@@ -6,6 +6,7 @@ const KEYS = Object.freeze([
   "accentFillForeground",
   "accentFillHover",
   "accentFillPressed",
+  "accentTextFill",
   "advancedColor",
   "highContrast",
   "kind",
@@ -43,7 +44,8 @@ function isAppearanceMessage(value, previousRevision) {
     && OPAQUE_COLOR.test(value.accentFill)
     && ALPHA_COLOR.test(value.accentFillHover)
     && ALPHA_COLOR.test(value.accentFillPressed)
-    && OPAQUE_COLOR.test(value.accentFillForeground);
+    && OPAQUE_COLOR.test(value.accentFillForeground)
+    && OPAQUE_COLOR.test(value.accentTextFill);
 }
 
 export function installAppearanceReceiver(webview, root, onApplied = null) {
@@ -70,6 +72,7 @@ export function installAppearanceReceiver(webview, root, onApplied = null) {
     root.dataset.windowMaterial = value.material;
     root.dataset.advancedColor = String(value.advancedColor);
     root.style.setProperty("--color-accent-fill", value.accentFill);
+    root.style.setProperty("--color-accent-text-fill", value.accentTextFill);
     root.style.setProperty("--color-accent-fill-hover", value.accentFillHover);
     root.style.setProperty("--color-accent-fill-pressed", value.accentFillPressed);
     root.style.setProperty(

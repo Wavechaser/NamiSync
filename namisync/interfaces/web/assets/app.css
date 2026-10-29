@@ -1962,19 +1962,19 @@ body {
 .nami-button.nami-hyperlink-button {
   background: var(--color-semantic-transparent);
   border-color: var(--color-semantic-transparent);
-  color: var(--color-accent-fill);
+  color: var(--color-accent-text-fill);
   font-weight: var(--font-weight-regular);
-  text-decoration: underline;
+  text-decoration: none;
 }
 
 .nami-button.nami-hyperlink-button:not(:disabled):hover {
   background: var(--color-selection-highlight);
-  color: var(--color-accent-fill-hover);
+  color: var(--color-accent-text-fill);
 }
 
 .nami-button.nami-hyperlink-button:not(:disabled):active {
   background: var(--color-selection-highlight-pressed);
-  color: var(--color-accent-fill-pressed);
+  color: var(--color-accent-text-fill);
 }
 
 .nami-button.nami-hyperlink-button:disabled {

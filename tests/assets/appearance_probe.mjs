@@ -46,6 +46,7 @@ const base = {
   accentFillHover: "#123456E6",
   accentFillPressed: "#123456CC",
   accentFillForeground: "#FFFFFF",
+  accentTextFill: "#003E92",
 };
 
 receive({ data: { ...base, revision: 1, accentFill: "red;url(x)" } });
@@ -67,6 +68,9 @@ receive({ data: { ...base, revision: 6, advancedColor: "true" } });
 const { advancedColor: _omitted, ...withoutAdvancedColor } = base;
 receive({ data: { ...withoutAdvancedColor, revision: 6 } });
 receive({ data: { ...base, revision: 6, kind: "namisync.appearance.v2" } });
+receive({ data: { ...base, revision: 6, accentTextFill: "red;url(x)" } });
+const { accentTextFill: _omittedTextFill, ...withoutAccentTextFill } = base;
+receive({ data: { ...withoutAccentTextFill, revision: 6 } });
 await Promise.resolve();
 const resolvedBeforeNewRevision = reapplied;
 receive({

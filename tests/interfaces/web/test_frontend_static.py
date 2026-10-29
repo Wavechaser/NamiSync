@@ -391,6 +391,7 @@ def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
         "--color-accent-fill-hover",
         "--color-accent-fill-pressed",
         "--color-accent-fill-foreground",
+        "--color-accent-text-fill",
     }
 
 
@@ -438,6 +439,7 @@ def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None
             "--color-accent-fill-hover": "#123456E6",
             "--color-accent-fill-pressed": "#123456CC",
             "--color-accent-fill-foreground": "#FFFFFF",
+            "--color-accent-text-fill": "#003E92",
         },
         "resolvedBeforeValidMessage": False,
         "resolvedAfterValidMessage": True,

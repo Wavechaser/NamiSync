@@ -418,8 +418,9 @@ button interaction colors and absent backdrop filters in light, dark and forced
 colors. `tokens.css` also owns channel-scoped
 intent, lifecycle, and integrity aliases; neutral roles use a
 pinned Microsoft Fluent light/dark subset. Native appearance retains the
-observed Windows `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1`
-ramp values, while the page receives only semantic accent-fill roles. These
+observed Windows `Accent`, `AccentLight1`–`AccentLight3`, and
+`AccentDark1`–`AccentDark3` ramp values, while the page receives only semantic
+accent-fill and accent-text-fill roles. These
 externally owned design inputs are tested separately from the 15
 NamiSync-authored primitives. The neutral and scale values are transcribed from
 pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
@@ -833,10 +834,12 @@ registered glyphs are available vocabulary; assign their surface semantics when
 the corresponding interaction is designed, rather than inventing 47 actions.
 
 Native appearance observes Windows light/dark/high-contrast state and live
-`UISettings` `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1` values.
+`UISettings` `Accent`, `AccentLight1`–`AccentLight3`, and
+`AccentDark1`–`AccentDark3` values.
 The raw ramp stays native-side. The revisioned `namisync.appearance.v3`
 envelope publishes only `accentFill`, its 90% hover and 80% pressed values, one
-contrast-selected foreground and the Boolean `advancedColor` of the window's
+contrast-selected foreground, `accentTextFill` (`AccentDark2` in Light and
+`AccentLight3` in Dark), and the Boolean `advancedColor` of the window's
 current display to packaged `appearance.js` through UI-thread
 `document_channel.py`; only its exact schema and fixed CSSOM/dataset sinks are
 valid. `advancedColor` is read through DisplayConfig (24H2 active Advanced
@@ -1735,10 +1738,10 @@ the earlier write. A successful current-state read does not claim that the earli
 save succeeded. Existing task drafts and captured plan choices remain unchanged.
 Appearance contains only the existing Theme selector. About shows `0.1.0 "Gertrud"`
 with separate License and Open source acknowledgements buttons. Their default
-underline and neutral hover/pressed surface follow the
+appearance has no underline. Their neutral hover/pressed surfaces follow the
 [WinUI HyperlinkButton resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/HyperlinkButton_themeresources.xaml)
-and [underline guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/hyperlinks#hyperlink-underlines),
-using the existing accent and neutral tokens plus normal keyboard focus.
+with `accentTextFill` retaining the same text color through hover and press,
+plus normal keyboard focus. Forced colors retain the system link color.
 Each opens a read-only native modal with the shared dialog material and motion.
 License presents the existing GPL text; acknowledgements present locally packaged
 notices for the current Windows dependencies and derived/bundled assets, with

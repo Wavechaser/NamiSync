@@ -1458,7 +1458,7 @@ def _valid_review_controls(value: object) -> bool:
 
 def _valid_about_notices(value: object) -> bool:
     fields = {"opened", "text_exact", "selectable", "internally_scrollable", "close_fixed",
-              "background_blocked", "underlined", "closed", "focus_restored"}
+              "background_blocked", "no_underline", "closed", "focus_restored"}
     return (type(value) is dict and set(value) == {"license", "acknowledgements", "focus_contained", "internal_wheel"}
             and type(value["focus_contained"]) is bool and type(value["internal_wheel"]) is bool
             and all(type(value[name]) is dict and set(value[name]) == fields

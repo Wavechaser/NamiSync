@@ -170,6 +170,7 @@
   --color-shadow-key: rgba(0,0,0,0.14);
   --color-window-base: var(--color-neutral-canvas);
   --color-accent-fill: #0067C0;
+  --color-accent-text-fill: #003E92;
   --color-accent-fill-hover: #0067C0E6;
   --color-accent-fill-pressed: #0067C0CC;
   --color-accent-fill-foreground: #FFFFFF;
@@ -326,6 +327,7 @@
   --color-focus-ring: #ffffff;
   --color-focus-inner: #000000;
   --color-accent-fill: #4CC2FF;
+  --color-accent-text-fill: #99EBFF;
   --color-accent-fill-hover: #4CC2FFE6;
   --color-accent-fill-pressed: #4CC2FFCC;
   --color-accent-fill-foreground: #000000;
@@ -429,6 +431,7 @@
     --color-focus-ring: #ffffff;
     --color-focus-inner: #000000;
     --color-accent-fill: #4CC2FF;
+    --color-accent-text-fill: #99EBFF;
     --color-accent-fill-hover: #4CC2FFE6;
     --color-accent-fill-pressed: #4CC2FFCC;
     --color-accent-fill-foreground: #000000;

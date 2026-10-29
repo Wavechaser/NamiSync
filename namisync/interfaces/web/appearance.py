@@ -44,7 +44,10 @@ _FLUENT_DARK_CANVAS = "#1F1F1F"
 _DEFAULT_ACCENT = "#0078D4"
 _DEFAULT_ACCENT_LIGHT_1 = "#0091F8"
 _DEFAULT_ACCENT_LIGHT_2 = "#4CC2FF"
+_DEFAULT_ACCENT_LIGHT_3 = "#99EBFF"
 _DEFAULT_ACCENT_DARK_1 = "#0067C0"
+_DEFAULT_ACCENT_DARK_2 = "#003E92"
+_DEFAULT_ACCENT_DARK_3 = "#001A68"
 _APPEARANCE_MESSAGE_KIND = "namisync.appearance.v3"
 
 _MONITOR_DEFAULTTONEAREST = 2
@@ -165,6 +168,9 @@ class _AccentPalette:
     light_1: str
     light_2: str
     dark_1: str
+    light_3: str
+    dark_2: str
+    dark_3: str
 
 
 @dataclass(frozen=True)
@@ -178,6 +184,9 @@ class SystemAppearance:
     accent_light_1: str = _DEFAULT_ACCENT_LIGHT_1
     accent_light_2: str = _DEFAULT_ACCENT_LIGHT_2
     accent_dark_1: str = _DEFAULT_ACCENT_DARK_1
+    accent_light_3: str = _DEFAULT_ACCENT_LIGHT_3
+    accent_dark_2: str = _DEFAULT_ACCENT_DARK_2
+    accent_dark_3: str = _DEFAULT_ACCENT_DARK_3
 
     def __post_init__(self) -> None:
         if type(self.dark) is not bool or type(self.high_contrast) is not bool:
@@ -191,6 +200,9 @@ class SystemAppearance:
             "accent_light_1",
             "accent_light_2",
             "accent_dark_1",
+            "accent_light_3",
+            "accent_dark_2",
+            "accent_dark_3",
         ):
             value = getattr(self, name)
             if type(value) is not str or _RGB.fullmatch(value) is None:
@@ -207,6 +219,10 @@ class SystemAppearance:
     @property
     def accent_fill(self) -> str:
         return self.accent_light_2 if self.dark else self.accent_dark_1
+
+    @property
+    def accent_text_fill(self) -> str:
+        return self.accent_light_3 if self.dark else self.accent_dark_2
 
     @property
     def accent_fill_hover(self) -> str:
@@ -313,6 +329,9 @@ class _WindowsAppearanceNative:
             accent_light_1=palette.light_1,
             accent_light_2=palette.light_2,
             accent_dark_1=palette.dark_1,
+            accent_light_3=palette.light_3,
+            accent_dark_2=palette.dark_2,
+            accent_dark_3=palette.dark_3,
         )
 
     def opaque_background(self, system: SystemAppearance) -> str:
@@ -1437,6 +1456,7 @@ class WindowAppearanceController:
             "accentFillHover": system.accent_fill_hover,
             "accentFillPressed": system.accent_fill_pressed,
             "accentFillForeground": system.accent_fill_foreground,
+            "accentTextFill": system.accent_text_fill,
             "advancedColor": presentation.advanced_color,
         }
 
@@ -1670,6 +1690,9 @@ def _read_accent_palette(
             light_1=_DEFAULT_ACCENT_LIGHT_1,
             light_2=_DEFAULT_ACCENT_LIGHT_2,
             dark_1=_DEFAULT_ACCENT_DARK_1,
+            light_3=_DEFAULT_ACCENT_LIGHT_3,
+            dark_2=_DEFAULT_ACCENT_DARK_2,
+            dark_3=_DEFAULT_ACCENT_DARK_3,
         )
     try:
         from System import Enum, Type
@@ -1693,6 +1716,9 @@ def _read_accent_palette(
             light_1=read("AccentLight1"),
             light_2=read("AccentLight2"),
             dark_1=read("AccentDark1"),
+            light_3=read("AccentLight3"),
+            dark_2=read("AccentDark2"),
+            dark_3=read("AccentDark3"),
         )
         if any(
             _RGB.fullmatch(value) is None
@@ -1701,6 +1727,9 @@ def _read_accent_palette(
                 palette.light_1,
                 palette.light_2,
                 palette.dark_1,
+                palette.light_3,
+                palette.dark_2,
+                palette.dark_3,
             )
         ):
             raise ValueError("Windows returned an invalid accent palette")
@@ -1712,6 +1741,9 @@ def _read_accent_palette(
             light_1=_DEFAULT_ACCENT_LIGHT_1,
             light_2=_DEFAULT_ACCENT_LIGHT_2,
             dark_1=_DEFAULT_ACCENT_DARK_1,
+            light_3=_DEFAULT_ACCENT_LIGHT_3,
+            dark_2=_DEFAULT_ACCENT_DARK_2,
+            dark_3=_DEFAULT_ACCENT_DARK_3,
         )
 
 

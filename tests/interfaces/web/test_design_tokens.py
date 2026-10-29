@@ -251,12 +251,14 @@ FLUENT_SHADOW_ALIASES = {
 WINDOWS_ACCENT_FALLBACK = {
     "light": {
         "--color-accent-fill": "#0067C0",
+        "--color-accent-text-fill": "#003E92",
         "--color-accent-fill-hover": "#0067C0E6",
         "--color-accent-fill-pressed": "#0067C0CC",
         "--color-accent-fill-foreground": "#FFFFFF",
     },
     "dark": {
         "--color-accent-fill": "#4CC2FF",
+        "--color-accent-text-fill": "#99EBFF",
         "--color-accent-fill-hover": "#4CC2FFE6",
         "--color-accent-fill-pressed": "#4CC2FFCC",
         "--color-accent-fill-foreground": "#000000",

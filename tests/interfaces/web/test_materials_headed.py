@@ -759,6 +759,10 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
             "accent_light_1",
             "accent_light_2",
             "accent_dark_1",
+            "accent_light_3",
+            "accent_dark_2",
+            "accent_dark_3",
+            "accent_text_fill",
             "accent_fill",
             "accent_fill_hover",
             "accent_fill_pressed",
@@ -776,6 +780,7 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
         "high_contrast",
         "forced_colors_active",
         "inline_accent_fill",
+        "inline_accent_text_fill",
         "inline_accent_fill_hover",
         "inline_accent_fill_pressed",
         "inline_accent_fill_foreground",
@@ -894,6 +899,7 @@ def _assert_appearance_publication(result: dict[str, object]) -> None:
         selected["high_contrast"]
     ).lower()
     assert page["inline_accent_fill"] == selected["accent_fill"]
+    assert page["inline_accent_text_fill"] == selected["accent_text_fill"]
     assert page["inline_accent_fill_hover"] == selected["accent_fill_hover"]
     assert page["inline_accent_fill_pressed"] == selected["accent_fill_pressed"]
     assert (

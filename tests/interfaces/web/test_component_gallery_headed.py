@@ -133,7 +133,7 @@ def _review_controls_sample() -> dict[str, object]:
 def _about_notices_sample() -> dict[str, object]:
     return {"focus_contained": True, "internal_wheel": True, **{
         name: {key: True for key in ("opened", "text_exact", "selectable", "internally_scrollable", "close_fixed",
-                                    "background_blocked", "underlined", "closed", "focus_restored")}
+                                    "background_blocked", "no_underline", "closed", "focus_restored")}
         for name in ("license", "acknowledgements")}}
 
 

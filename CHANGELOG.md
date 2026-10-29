@@ -851,8 +851,11 @@ explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain
 
 #### Add About license and open source notices (2026-10-29)
 
-- Add separate underlined License and Open source acknowledgements links with
+- Add separate License and Open source acknowledgements links with
   scrollable, selectable local text, a fixed Close action and shared modal motion.
+- Use Windows AccentDark2/AccentLight3 text without underlines. Retain all seven
+  Windows accent colors in the native appearance snapshot without changing
+  existing accent-filled controls or forced-color behavior.
 - Package the existing GPL and reviewed current Windows dependency/asset notices,
   including embedded JavaScript, native compatibility assemblies and Fluent
   assets. Retain source/version attribution without changing navigation or
