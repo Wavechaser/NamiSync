@@ -73,7 +73,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | B1 | Retire raw-string folder slots, legacy flag/conversion and alternate pair return; narrow FolderSlotAuthority and migrate fixtures to LocationCandidate. Owners: slots/commands; direct command/transport/host/slot fixtures. | C1 complete. Retain opacity, purpose, expiry, capacity, ambiguity, atomic pair resolution, exact replay and fresh admission; focused slots/commands/transport, interfaces and affected installed picker/start witnesses. | Complete; 539 focused, 2,166 interfaces, 294 correction checks and two installed witnesses; independent review. |
 | B2 | Remove uncalled EventBody alias, file_index_128_text, require_json_unicode, HistoryObserverFactory, history's private _phase_to_dict, LedgerRepository.get_run, NamiSyncService.list_sessions, sync._emit_items, PlanReviewState.node_for_id, workflows.sync_options, facade-only LocationCandidateKind re-export, and Plan JS WINDOW_LIMIT. Keep live same-name helpers/types and token factory. | Revalidate callers/facades/docs including tools; remove task-created orphans only; ordinary suite and 12 import contracts; independent review of exact deletion population. Scope factories belong to D1. | Complete; 6,316 ordinary passes/four capability skips, 12 import contracts and independent deletion review. |
 | B3 | Reuse canonical preorder/inverse result for Inventory PATH sorting; retain second traversal after non-PATH sort. Owner: inventory_projection; Inventory review and tools consumers. | Equal ordered/inverse outputs across empty/nested/warning cases, warning-tail/sort/reset/spelling tests, workflows department and affected required large-projection gate. No speed claim. | Complete; 21 comparisons, 50 focused, 949 workflow passes plus all six failed native cases rechecked passing; independent review. |
-| C2 | Cover read_setup/prepare_setup, service.read_plan_setup readiness/frozen values, ensure_database_pair refusal and runtime Plan refusal. Preserve existing underlying classification/CLI/headed witnesses. | Finite successful/refused/default/task/readiness cases; refused pair leaves bytes unchanged and admits no work. Interfaces/workflows owning and direct-consumer tests, then ordinary integration. | Pending. |
+| C2 | Cover read_setup/prepare_setup, service.read_plan_setup readiness/frozen values, ensure_database_pair refusal and runtime Plan refusal. Preserve existing underlying classification/CLI/headed witnesses. | Finite successful/refused/default/task/readiness cases; refused pair leaves bytes unchanged and admits no work. Interfaces/workflows owning and direct-consumer tests, then ordinary integration. | Complete; 608 focused and 3,592 neighborhood passes, no skips; independent review. |
 | C3 | Use contained run_node_probe for required transport probes; retire demonstrated localRow spelling pin and duplicate wheel asset equality only. Owners: transport/frontend/wheel tests and existing helper. | Keep mandatory Node discovery, original-command/interactive/both drain record kinds, runner timeout/output limits, tree fixture provenance/runtime cases, dedicated wheel population/CSP checks; harmless rename and wrong-digest control, missing/extra asset control; interfaces department. | Pending. |
 | D1 | Remove redundant Scope planner parameter/type/kinds/factories and workflow/tool/test call-site plumbing. Preserve scoped planning/history replay as an explicitly unrealized outcome without this placeholder representation. Owners: core/planner, workflow composition, executor rig, contract tests and CORE/PLANNER/FEATURES. | Revalidate full caller population; planner/workflows/tools and contract consumers; ordinary suite/imports. No change to current whole-plan or dependency-closed execution selection. | Pending. |
 | D2 | Migrate test-facing convenience APIs to real production seams, then retire bounded population listed below with matching docs. Preserve independent behavioral/fault witnesses rather than tests of removed representation. | Per-family consumer map before editing; focused real producer/admission/native witnesses, affected departments, ordinary/imports and applicable native/settlement gates by dependency. No blanket deletion based on coverage absence. | Pending. |
@@ -174,6 +174,25 @@ Reuse existing local fixtures; do not duplicate classification or normalization
 matrices. One test commit follows the four focused modules and the interfaces,
 workflows and database neighborhood, with ordinary integration at CLOSE and
 fresh independent review. Existing CLI and installed witnesses remain.
+Eleven cases delivered. `results/c2-focused-01.log` retains six initial fixture
+failures; correcting invalid snapshots/resolutions and fake cleanup assumptions
+changed no product code. `c2-focused-02.log`/`.json` and
+`c2-neighborhood.log`/`.json` record the passing final candidate.
+
+C3 elaboration (inspected `bfdc6a63`, refresh after C2): only
+`web/test_transport.py` and `web/test_frontend_static.py` change. Route the
+required timeout/interactive probes and both drain session kinds through the
+existing `run_node_probe` with the same ten-second deadline. Retain mandatory
+Node discovery, fixture arguments, failure diagnostics, helper timeout/output
+checks and process-tree containment. Remove only the `localRow` occurrence pin
+and frontend's duplicated complete wheel-asset-set equality; dedicated
+`test_wheel_assets.py` remains authoritative for that exact population.
+Prove harmless helper rename runs with the real tree fixture, wrong digest
+fails at its digest check, and missing/extra assets fail the dedicated wheel
+assertion using detached inputs. Retain provenance, runtime tree cases, CSP,
+safe sinks, packaging and A1 notice-byte checks per AB-9 dispositions. Focused
+transport/frontend/wheel plus interfaces and fresh review gate one test commit;
+no production asset or new generic helper.
 
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and

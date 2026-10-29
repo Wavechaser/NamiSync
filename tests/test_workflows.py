@@ -13,6 +13,7 @@ import pytest
 
 import namisync.workflows.sync as sync_workflow
 import namisync.workflows.runtime as runtime_module
+import namisync.workflows.database_pair as database_pair
 import namisync.workflows.selection as selection_module
 import namisync.core.review as review_module
 from namisync.core.events import ItemOutcome
@@ -194,6 +195,43 @@ def test_prepare_plan_rejects_noncanonical_domain_values(tmp_path: Path) -> None
         ):
             with pytest.raises(error, match=message):
                 runtime.prepare_plan(request)
+    finally:
+        runtime.close()
+
+
+def test_prepare_plan_refuses_database_pair_before_resource_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    ledger.touch()
+    history.touch()
+    runtime = LocalWorkflowRuntime(ledger, history)
+    artifacts = tuple(
+        Path(f"{path}{suffix}")
+        for path in (ledger, history)
+        for suffix in ("", "-wal", "-shm", "-journal")
+    )
+    before = {path: path.read_bytes() for path in artifacts if path.exists()}
+    admitted: list[object] = []
+
+    def resources(*paths):
+        admitted.append(paths)
+        pytest.fail("refused database pair must not admit Plan resources")
+
+    monkeypatch.setattr(runtime, "_resources_for_paths", resources)
+    try:
+        with pytest.raises(database_pair.DatabasePairRefusedError) as raised:
+            runtime.prepare_plan(PlanRequest("1" * 32, str(source), str(target)))
+
+        assert raised.value.contract.state is database_pair.DatabasePairState.REFUSED
+        assert raised.value.contract.reason == "ledger-contract"
+        assert raised.value.contract.reset_direction == database_pair.DATABASE_RESET_DIRECTION
+        assert admitted == []
+        assert {path: path.read_bytes() for path in artifacts if path.exists()} == before
+        assert list(source.iterdir()) == list(target.iterdir()) == []
     finally:
         runtime.close()
 

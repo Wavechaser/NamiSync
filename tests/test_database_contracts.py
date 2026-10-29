@@ -271,6 +271,22 @@ def test_empty_database_pair_refuses_read_only(tmp_path: Path) -> None:
     service.close()
 
 
+def test_ensure_database_pair_refuses_empty_mains_without_mutation(tmp_path: Path) -> None:
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    ledger.touch()
+    history.touch()
+    before = _snapshot(ledger, history)
+
+    with pytest.raises(database_pair.DatabasePairRefusedError) as raised:
+        database_pair.ensure_database_pair(ledger, history)
+
+    assert raised.value.contract.state is database_pair.DatabasePairState.REFUSED
+    assert raised.value.contract.reason == "ledger-contract"
+    assert raised.value.contract.reset_direction == database_pair.DATABASE_RESET_DIRECTION
+    assert database_pair.DATABASE_RESET_DIRECTION in str(raised.value)
+    assert _snapshot(ledger, history) == before
+
+
 @pytest.mark.parametrize("wrong_role", ("ledger", "history"))
 def test_wrong_role_contract_marker_refuses_read_only(
     tmp_path: Path,

@@ -83,6 +83,7 @@ from namisync.interfaces.web.drain import (
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.interfaces.web.task_snapshot import TaskPresentationState, TaskSnapshotStage
+from namisync.interfaces.task_port import TaskSetupLocationView
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.workflows import (
     BASELINE_KIND,
@@ -222,6 +223,95 @@ def test_setup_defaults_commands_reject_invalid_patch_before_service(patch: obje
     )
     with pytest.raises(CommandPayloadError):
         _invoke(commands["commit_setup_defaults"], {"patch": patch})
+    assert service.calls == []
+
+
+@pytest.mark.parametrize("task_id", [None, TASK_ID])
+def test_read_setup_routes_default_and_task_snapshots_without_start_effects(
+    monkeypatch: pytest.MonkeyPatch, task_id: str | None,
+) -> None:
+    commands, slots, service = _commands()
+    reads: list[object] = []
+    frozen = TaskSetupSnapshotView(
+        "frozen", "sync-plan",
+        TaskSetupLocationView(r"C:\source", "7"),
+        TaskSetupLocationView(r"D:\target", "8"), None, SETUP_OPTIONS,
+    )
+
+    def defaults():
+        reads.append("defaults")
+        return SETUP_OPTIONS
+
+    def recents():
+        reads.append("recents")
+        return RememberedLocations((), (), ())
+
+    def task_setup(value):
+        reads.append(value)
+        return frozen
+
+    monkeypatch.setattr(service, "read_setup_options", defaults)
+    monkeypatch.setattr(service, "remembered_locations", recents)
+    monkeypatch.setattr(service, "read_task_setup", task_setup)
+
+    result = _invoke(commands["read_setup"], {"task_id": task_id})
+
+    assert result == {
+        "task_id": task_id,
+        "snapshot": {
+            "setup_state": "default" if task_id is None else "frozen",
+            "task_kind": None if task_id is None else "sync-plan",
+            "source": None if task_id is None else {"display": r"C:\source", "location_id": "7"},
+            "target": None if task_id is None else {"display": r"D:\target", "location_id": "8"},
+            "root": None,
+            "options": _setup_options_payload(), "plan_again": None,
+        },
+        "recents": {"sources": [], "targets": [], "pairs": []} if task_id is None else None,
+    }
+    assert reads == (["defaults", "recents"] if task_id is None else [TASK_ID])
+    assert slots.stored == []
+    assert service.calls == []
+
+
+def test_prepare_setup_returns_canonical_service_options_without_start_effects(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands, slots, service = _commands()
+    prepared: list[SetupOptionsView] = []
+    canonical = replace(SETUP_OPTIONS, filters=("canonical/*",), verify_after_execute=True)
+
+    def prepare(value):
+        prepared.append(value)
+        return canonical
+
+    monkeypatch.setattr(service, "prepare_setup_options", prepare)
+    result = _invoke(commands["prepare_setup"], {"options": _setup_options_payload()})
+
+    assert prepared == [SETUP_OPTIONS]
+    assert result == {**_setup_options_payload(), "filters": ["canonical/*"], "verify_after_execute": True}
+    assert slots.stored == []
+    assert service.calls == []
+
+
+@pytest.mark.parametrize("error_type", [TypeError, ValueError])
+def test_prepare_setup_translates_service_refusal_without_start_effects(
+    monkeypatch: pytest.MonkeyPatch, error_type: type[Exception],
+) -> None:
+    commands, slots, service = _commands()
+    prepared: list[SetupOptionsView] = []
+    error = error_type("unsupported Setup options")
+
+    def prepare(value):
+        prepared.append(value)
+        raise error
+
+    monkeypatch.setattr(service, "prepare_setup_options", prepare)
+    with pytest.raises(PlanningRefusedError, match="Setup options were refused") as raised:
+        _invoke(commands["prepare_setup"], {"options": _setup_options_payload()})
+
+    assert raised.value.__cause__ is error
+    assert prepared == [SETUP_OPTIONS]
+    assert slots.stored == []
     assert service.calls == []
 
 

@@ -179,6 +179,9 @@ behavioral evidence.
 - Reused Inventory's canonical traversal and inverse for PATH sorting; other
   sorts still rebuild indexes after sibling ordering. The finite ablation
   preserves complete outputs while removing one redundant PATH traversal.
+- Covered Setup reads/preparation, frozen readiness and database-pair refusal
+  through their real entry points, including unchanged database/sidecar bytes
+  and refusal before resource admission.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

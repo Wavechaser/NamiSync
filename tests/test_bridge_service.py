@@ -1499,6 +1499,82 @@ def test_task_plan_receipt_replay_does_not_recreate_delivery_or_observation(
     assert factory_calls == [("first", first.task_id)]
 
 
+@pytest.mark.parametrize(
+    ("states", "expected_states"),
+    [
+        ((VolumeResolutionState.RESOLVED, VolumeResolutionState.RESOLVED), ("resolved", "resolved")),
+        ((VolumeResolutionState.OFFLINE, VolumeResolutionState.AMBIGUOUS), ("offline", "ambiguous")),
+        ((VolumeResolutionState.ROOT_MISSING, VolumeResolutionState.ROOT_UNAVAILABLE), ("missing", "unavailable")),
+        (None, None),
+    ],
+)
+def test_read_plan_setup_preserves_frozen_values_and_fresh_binding_readiness(
+    states: tuple[VolumeResolutionState, VolumeResolutionState] | None,
+    expected_states: tuple[str, str] | None,
+) -> None:
+    source_binding = LocationBinding(VolumeId("source", "NTFS"), "src", "C:\\", ("C:\\",), False, 7)
+    target_binding = LocationBinding(VolumeId("target", "NTFS"), "dst", "D:\\", ("D:\\",), False, 8)
+    options = SyncOptions(
+        deletion_policy=DeletionPolicy.ADDITIVE,
+        preservation=PreservationPolicy(False, False, True),
+        filters=FilterSet(("*.tmp",)), trash_on_update=False,
+        propagate_source_casing=True,
+    )
+    request = PlanRequest(
+        REQUEST_ID, r"C:\src", r"D:\dst", options,
+        source_binding if states is not None else None,
+        target_binding if states is not None else None,
+        True,
+    )
+    resolved: list[LocationBinding] = []
+
+    class Runtime(_PlanRuntime):
+        def read_setup_options(self):
+            pytest.fail("frozen Plan Setup must not reread current defaults")
+
+        def get_plan(self, request_id):
+            assert request_id == REQUEST_ID
+            return self.artifact
+
+        def resolve_reviewed_location(self, binding):
+            assert states is not None
+            index = len(resolved)
+            assert binding is (source_binding, target_binding)[index]
+            resolved.append(binding)
+            return VolumeResolution(
+                states[index], binding,
+                root_path=binding.selected_mount + binding.volume_relative_path if states[index] is VolumeResolutionState.RESOLVED else None,
+                selected_mount=binding.selected_mount if states[index] is VolumeResolutionState.RESOLVED else None,
+                candidates=("C:\\", "E:\\") if index == 0 else ("D:\\",),
+            )
+
+    runtime = Runtime(SimpleNamespace(request=request))
+    dispatcher = _Dispatcher()
+    service = _service(runtime, dispatcher)
+    snapshot = service.read_plan_setup(REQUEST_ID)
+
+    assert snapshot.setup_state == "frozen"
+    assert snapshot.task_kind == "sync-plan"
+    assert (snapshot.source.display, snapshot.target.display) == (r"C:\src", r"D:\dst")
+    assert (snapshot.source.location_id, snapshot.target.location_id) == (("7", "8") if states is not None else (None, None))
+    assert snapshot.root is None
+    assert snapshot.options == SetupOptionsView(
+        ("*.tmp",), "additive", False,
+        PreservationSettingsView(False, False, True), True, True,
+    )
+    if expected_states is None:
+        assert snapshot.plan_again is None
+        assert resolved == []
+    else:
+        readiness = snapshot.plan_again
+        assert readiness is not None
+        assert (readiness.source_state, readiness.target_state) == expected_states
+        assert readiness.source_candidates == ("C:\\", "E:\\")
+        assert readiness.target_candidates == ("D:\\",)
+        assert resolved == [source_binding, target_binding]
+    assert dispatcher.submissions == []
+
+
 def test_m1_6_plan_again_preserves_frozen_setup_and_resets_selection() -> None:
     copied = operation(OperationKind.COPY, source=file_stat())
     plan_value = plan((copied,))
