@@ -48,7 +48,6 @@ from namisync.core.planning import (
     OperationReason,
     PlanOperation,
     PreservationPolicy,
-    Scope,
     SyncOptions,
     calculate_required_bytes,
     deterministic_operation_id,
@@ -142,7 +141,6 @@ def _plan(
         target,
         correspondence or MappingSnapshot.empty(source.volume_id, target.volume_id),
         options or SyncOptions(),
-        Scope.everything(),
     )
 
 
@@ -906,7 +904,6 @@ def test_reviewed_policy_receives_adopted_target_and_filtered_record_identities(
             filters=FilterSet(("SKIP.BIN",)),
             destination_policy=CapturingPolicy(),  # type: ignore[arg-type]
         ),
-        Scope.everything(),
         review_admission=PlanReviewProducerAdmission(),
     )
 
@@ -972,7 +969,6 @@ def test_reviewed_policy_inputs_keep_independent_capacity_gates(
             SyncOptions(
                 destination_policy=UnreachedPolicy(),  # type: ignore[arg-type]
             ),
-            Scope.everything(),
             review_admission=PlanReviewProducerAdmission(),
         )
 
@@ -1022,7 +1018,6 @@ def test_destination_policy_review_limit_keeps_ordinary_identity(
             target,
             MappingSnapshot.empty(source.volume_id, target.volume_id),
             SyncOptions(destination_policy=SpoofingPolicy()),  # type: ignore[arg-type]
-            Scope.everything(),
             review_admission=(
                 PlanReviewProducerAdmission() if reviewed else None
             ),
@@ -1055,7 +1050,6 @@ def test_reviewed_plan_fingerprint_uses_captured_policy_identity() -> None:
         target,
         MappingSnapshot.empty(source.volume_id, target.volume_id),
         SyncOptions(destination_policy=ChangingPolicy()),  # type: ignore[arg-type]
-        Scope.everything(),
         review_admission=PlanReviewProducerAdmission(),
     )
 
@@ -1088,7 +1082,6 @@ def test_destination_policy_ordinary_failure_keeps_identity(
             target,
             MappingSnapshot.empty(source.volume_id, target.volume_id),
             SyncOptions(destination_policy=FailingPolicy()),  # type: ignore[arg-type]
-            Scope.everything(),
             review_admission=(
                 PlanReviewProducerAdmission() if reviewed else None
             ),
@@ -1145,7 +1138,6 @@ def test_destination_policy_process_fatal_keeps_identity_after_frame_retirement(
             target,
             MappingSnapshot.empty(source.volume_id, target.volume_id),
             SyncOptions(destination_policy=FailingPolicy()),  # type: ignore[arg-type]
-            Scope.everything(),
         )
 
     assert raised.value is failure

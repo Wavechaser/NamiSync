@@ -45,8 +45,6 @@ from namisync.core.planning import (
     PlanFingerprint,
     PlanOperation,
     PreservationPolicy,
-    Scope,
-    ScopeKind,
     SyncOptions,
     calculate_required_bytes,
     deterministic_operation_id,
@@ -565,7 +563,6 @@ def _plan(
     target: ScanResult,
     correspondence: MappingSnapshot,
     options: SyncOptions,
-    scope: Scope,
     *,
     review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Plan:
@@ -577,17 +574,10 @@ def _plan(
     if admission is not None:
         if type(admission) is not PlanReviewProducerAdmission:
             raise TypeError("plan review admission has the wrong type")
-        if type(scope) is not Scope or type(scope.kind) is not ScopeKind:
-            raise TypeError("planner scope must be an exact typed Scope")
-        if scope.kind is ScopeKind.EVERYTHING and scope.value is not None:
-            raise ValueError("everything scope must not carry a value")
         _validate_plan_mapping_source(correspondence, admission)
         policy_identity, assign_destinations = _capture_destination_policy(
             options.destination_policy
         )
-
-    if scope.kind is not ScopeKind.EVERYTHING:
-        raise NotImplementedError(f"scope {scope.kind.value!r} is declared but not implemented in M0")
 
     source_files_all = sorted(source.files, key=lambda item: (item.rel_path_key, item.rel_path))
     target_files_all = sorted(target.files, key=lambda item: (item.rel_path_key, item.rel_path))
@@ -1061,7 +1051,6 @@ def plan(
     target: ScanResult,
     correspondence: MappingSnapshot,
     options: SyncOptions,
-    scope: Scope,
     *,
     review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Plan:
@@ -1073,7 +1062,6 @@ def plan(
             target,
             correspondence,
             options,
-            scope,
             review_admission=review_admission,
         )
     except BaseException as error:
@@ -1095,7 +1083,7 @@ def plan(
         if preserve_scalar_cause:
             BaseException.__cause__.__set__(error, cause)
             BaseException.__context__.__set__(error, context)
-        del source, target, correspondence, options, scope, review_admission
+        del source, target, correspondence, options, review_admission
         del cause, context, preserve_scalar_cause
         raise
 

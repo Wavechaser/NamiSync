@@ -30,7 +30,6 @@ from namisync.core.planning import (
     OpId,
     OperationKind,
     Plan,
-    Scope,
     SyncOptions,
 )
 from namisync.core.session import OperationResult
@@ -141,7 +140,7 @@ def prepare_execution(
     started = perf_counter()
     correspondence = MappingSnapshot.empty(source_scan.volume_id, target_scan.volume_id)
     plan = build_plan(
-        source_scan, target_scan, correspondence, sync_options, Scope.everything()
+        source_scan, target_scan, correspondence, sync_options
     )
     selection = derive_execution_selection(plan)
     if selection.exclusions:

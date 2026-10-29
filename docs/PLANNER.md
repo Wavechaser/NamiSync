@@ -16,8 +16,7 @@ or executes/repairs anything.
 
 ```python
 plan(source: ScanResult, target: ScanResult,
-     correspondence: MappingSnapshot, options: SyncOptions,
-     scope: Scope, *,
+     correspondence: MappingSnapshot, options: SyncOptions, *,
      review_admission: PlanReviewProducerAdmission | None = None) -> Plan
 ```
 
@@ -37,12 +36,12 @@ workflow. The separate retained-plan helper accepts only exact
 
 `namisync.modules.planner.plan()` is a pure transformation over frozen core
 snapshots. `namisync.core.planning` owns the serializable plan, operation,
-assignment, policy, scope, deterministic-id/fingerprint, selection-digest,
-and shared capacity contracts. M0 implements `Scope.everything()` and the
-batch-shaped identity destination policy; the other scope constructors remain
-declared but raise rather than pretending to work.
+assignment, policy, deterministic-id/fingerprint, selection-digest,
+and shared capacity contracts. Planning uses the whole admitted candidate
+population and the batch-shaped identity destination policy. Scoped planning
+remains an accepted future outcome without a placeholder parameter or type.
 
-The eleven exact planning dataclasses are frozen and slotted, so their
+The ten exact planning dataclasses are frozen and slotted, so their
 instances carry only their declared fields. This structural constraint does
 not change plan identity, fingerprints, payloads, equality, validation, or
 selection behavior. The named internal (rung 3) workflow transfer validates
@@ -324,12 +323,11 @@ filesystem name or an attempted operation.
 
 ## Scope And Selection
 
-M0 implements `Scope.everything()` plus workflow-owned safe-subset selection.
-Pattern, explicit, and recorded-run scopes
-are declared now. Scope uses canonical stable candidate identities, not raw UI
-row numbers or display paths. The implemented selector closes dependencies,
-recomputes capacity/summaries, and reports forced exclusions; user-edited
-partial selection remains deferred.
+Planning uses the whole admitted candidate population; workflow-owned execution
+selection closes dependencies, recomputes capacity/summaries, and reports forced
+exclusions. Pattern, explicit candidate, and recorded-run planning scopes remain
+unrealized, including history replay, as described in [FEATURES](FEATURES.md).
+Those future outcomes do not prescribe a placeholder scope representation.
 
 The accepted Stage 6 review surface is a memoized workflow/interface
 projection of one immutable plan. Planner remains the authority for operations,

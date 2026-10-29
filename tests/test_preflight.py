@@ -50,7 +50,6 @@ from namisync.core.planning import (
     FilterSet,
     MappingSnapshot,
     OperationKind,
-    Scope,
     SyncOptions,
     calculate_required_bytes,
     serialize_plan,
@@ -565,7 +564,7 @@ def test_native_planned_directory_chain_is_admitted_but_file_parent_refuses(
     built = plan(
         source_scan, target_scan,
         MappingSnapshot.empty(source_scan.volume_id, target_scan.volume_id),
-        SyncOptions(), Scope.everything(),
+        SyncOptions(),
     )
     assert sum(operation.kind is OperationKind.MKDIR for operation in built.operations) == 2
     review = ExecutionReview(
@@ -1316,7 +1315,6 @@ def _xset(
         target,
         MappingSnapshot.empty(SOURCE_VOLUME, TARGET_VOLUME),
         options or SyncOptions(),
-        Scope.everything(),
     )
     return ExecutionReview(
         built,
@@ -1664,7 +1662,6 @@ def test_preflight_refuses_manually_selected_blocked_correspondence(plan_review:
         target,
         MappingSnapshot.empty(SOURCE_VOLUME, TARGET_VOLUME),
         SyncOptions(),
-        Scope.everything(),
     )
     counterpart = next(
         operation
@@ -2529,7 +2526,7 @@ def test_plan_review_credits_temp_in_noop_only_parent(
     built = plan(
         source_scan, target_scan,
         MappingSnapshot.empty(source_scan.volume_id, target_scan.volume_id),
-        SyncOptions(), Scope.everything(),
+        SyncOptions(),
     )
     review = ExecutionReview(
         built, frozenset(operation.op_id for operation in built.operations),

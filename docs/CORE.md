@@ -870,7 +870,7 @@ are not additional cancellation requirements.
 ## Provisioning For Latent Features
 
 Declare expensive-to-retrofit shapes now: `DEFERRED`, `BLOCKED`, schema-versioned events,
-all `Scope` kinds, nullable file identity/hardlink group, policy protocols,
+nullable file identity/hardlink group, policy protocols,
 opaque typed workflow checkpoints, and attestation provenance. A latent protocol is
 declared shape-only and has no implementation until its first consumer; this
 provisions the seam without speculative runtime behavior.

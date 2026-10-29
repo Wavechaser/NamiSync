@@ -712,7 +712,6 @@ def test_planning_contracts_are_exactly_slotted() -> None:
             None,
         ),
         planning_contracts.MappingSnapshot.empty(),
-        planning_contracts.Scope.everything(),
         reviewed.operations[0],
         reviewed,
     )
@@ -725,7 +724,6 @@ def test_planning_contracts_are_exactly_slotted() -> None:
         "SyncOptions",
         "MappingPair",
         "MappingSnapshot",
-        "Scope",
         "PlanOperation",
         "Plan",
     )

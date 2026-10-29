@@ -65,7 +65,6 @@ from namisync.core.planning import (
     OperationKind,
     Plan,
     PlanOperation,
-    Scope,
     SyncOptions,
     plan_fingerprint,
     selection_digest,
@@ -249,7 +248,6 @@ class Planner(Protocol):
         target: ScanResult,
         correspondence: MappingSnapshot,
         options: SyncOptions,
-        scope: Scope,
         *,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan: ...
@@ -453,7 +451,6 @@ def _run_plan(
             target_scan,
             correspondence,
             live_options,
-            Scope.everything(),
             review_admission=producer_admission,
         )
         plan = adopt_plan_candidate(

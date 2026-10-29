@@ -434,35 +434,6 @@ class MappingSnapshot:
         return cls(source_volume_id, target_volume_id)
 
 
-class ScopeKind(StrEnum):
-    EVERYTHING = "everything"
-    PATTERN = "pattern"
-    EXPLICIT = "explicit"
-    RECORDED_RUN = "recorded_run"
-
-
-@dataclass(frozen=True, slots=True)
-class Scope:
-    kind: ScopeKind
-    value: str | tuple[str, ...] | None = None
-
-    @classmethod
-    def everything(cls) -> Scope:
-        return cls(ScopeKind.EVERYTHING)
-
-    @classmethod
-    def pattern(cls, pattern: str) -> Scope:
-        return cls(ScopeKind.PATTERN, pattern)
-
-    @classmethod
-    def explicit(cls, candidate_ids: Sequence[str]) -> Scope:
-        return cls(ScopeKind.EXPLICIT, tuple(sorted(set(candidate_ids))))
-
-    @classmethod
-    def from_run(cls, token: str) -> Scope:
-        return cls(ScopeKind.RECORDED_RUN, token)
-
-
 @dataclass(frozen=True, slots=True)
 class PlanOperation:
     op_id: OpId

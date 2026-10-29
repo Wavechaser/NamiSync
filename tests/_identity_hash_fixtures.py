@@ -25,7 +25,7 @@ from namisync.core.models import (
 from namisync.core.planning import (
     Assignment, BlockedReason, DeletionPolicy, DestinationAssignment, FilterSet,
     IdentityDestinationPolicy, MappingSnapshot, OperationKind, OperationReason,
-    Plan, PlanFingerprint, PreservationPolicy, Scope, SyncOptions,
+    Plan, PlanFingerprint, PreservationPolicy, SyncOptions,
     plan_fingerprint, policy_fingerprint, selection_digest,
 )
 from namisync.core.recording import (
@@ -106,7 +106,7 @@ def two_copy_plan(with_identity: bool) -> Plan:
     source, target = scans(with_identity)
     return plan(
         source, target, MappingSnapshot.empty(SOURCE_VOLUME, TARGET_VOLUME),
-        SyncOptions(), Scope.everything(),
+        SyncOptions(),
     )
 
 

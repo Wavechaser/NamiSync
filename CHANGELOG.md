@@ -185,6 +185,9 @@ behavioral evidence.
 - Routed required transport Node probes through existing process/memory/output
   containment. Retired one helper-spelling pin and duplicate wheel population
   assertion, with harmless-change and fault controls for the retained witnesses.
+- Removed the unused Scope planner contract and caller plumbing while retaining
+  whole-plan behavior, execution selection and future scoped-planning/History
+  Replay outcomes. Updated signatures and subject documentation together.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

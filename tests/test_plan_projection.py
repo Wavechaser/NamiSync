@@ -134,7 +134,7 @@ def test_projection_keeps_original_spelling_and_notice_path_origin() -> None:
 def test_real_planner_source_paths_require_observed_source_and_keep_spelling() -> None:
     from _db_fixtures import _file, _scan
     from namisync.core.models import UnsupportedRecord, UnsupportedReason
-    from namisync.core.planning import MappingSnapshot, Scope, SyncOptions
+    from namisync.core.planning import MappingSnapshot, SyncOptions
     from namisync.interfaces.web.plan_review import PlanReviewState
     from namisync.modules.planner import plan as build_plan
 
@@ -144,7 +144,7 @@ def test_real_planner_source_paths_require_observed_source_and_keep_spelling() -
         volume_evidence=base.target_volume_evidence, files=(_file("keep.txt", 2), _file("old.bin", 3)),
         unsupported=(UnsupportedRecord("cloud.bin", "CLOUD.BIN", UnsupportedReason.PLACEHOLDER, EntryKind.FILE),))
     reviewed = build_plan(source, target, MappingSnapshot.empty(source.volume_id, target.volume_id),
-                          SyncOptions(), Scope.everything())
+                          SyncOptions())
     artifact = PlanArtifact(PlanRequest(REQUEST_ID, source.root.path, target.root.path),
                             source, target, reviewed, Verdict(True, (), SimpleNamespace()))
     projection = build_plan_projection(REQUEST_ID, artifact)

@@ -30,7 +30,7 @@ from namisync.core.models import (
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import (
     Assignment, FilterSet, MappingPair, MappingSnapshot, OperationKind,
-    OperationReason, Plan, PlanOperation, Scope, SyncOptions,
+    OperationReason, Plan, PlanOperation, SyncOptions,
 )
 from namisync.core.preflight import (
     ObservedWorld, Refusal, RefusalCode, RootObservation, StatObservation,
@@ -182,7 +182,6 @@ def _planned(
         target,
         mapping or _mapping(source, target),
         options,
-        Scope.everything(),
     )
 
 def _xset(value: Plan, token: str = "c" * 32) -> ExecutionReview:
@@ -1437,14 +1436,12 @@ def test_protected_planner_observer_and_preflight_match_ordinary_semantics(
         target,
         mapping,
         SyncOptions(),
-        Scope.everything(),
     )
     protected_plan = plan(
         source,
         target,
         mapping,
         SyncOptions(),
-        Scope.everything(),
         review_admission=PlanReviewProducerAdmission(),
     )
     assert protected_plan == ordinary_plan
@@ -1520,7 +1517,6 @@ def test_planner_required_bytes_remains_logical_overflow_owner() -> None:
                 target,
                 _mapping(source, target),
                 SyncOptions(),
-                Scope.everything(),
                 review_admission=admission,
             )
         assert caught.value.fact == ReviewFactLimitExceeded.plan_logical_bytes()
@@ -1781,7 +1777,6 @@ def test_each_raw_population_refuses_first_excess_before_save(
         target: ScanResult,
         mapping: MappingSnapshot,
         options: SyncOptions,
-        scope: Scope,
         *,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan:
@@ -1791,7 +1786,6 @@ def test_each_raw_population_refuses_first_excess_before_save(
             target,
             mapping,
             options,
-            scope,
         )
         if population == "plan-assignment":
             item = value.assignment.items[0]
@@ -2354,12 +2348,11 @@ def test_workflow_producers_receive_only_counter_free_admission_capability(
         target: ScanResult,
         mapping: MappingSnapshot,
         options: SyncOptions,
-        scope: Scope,
         *,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan:
         capture(review_admission)
-        return plan(source, target, mapping, options, scope)
+        return plan(source, target, mapping, options)
 
     def observer(
         execution_set: ExecutionReview,
@@ -2477,7 +2470,6 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         target: ScanResult,
         mapping: MappingSnapshot,
         options: SyncOptions,
-        scope: Scope,
         *,
         review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan:
@@ -2486,7 +2478,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         assert target is raw["target"]
         assert mapping is not raw["mapping"]
         assert mapping.ambiguous_source_keys == frozenset()
-        value = plan(source, target, mapping, options, scope)
+        value = plan(source, target, mapping, options)
         raw["plan"] = value
         return value
 
