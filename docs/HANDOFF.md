@@ -36,13 +36,15 @@ tree focus. Five ordinary driver checks and the corrected installed SH-G-7 pass
 in d2-shell-driver-corrected.log/.json. Keep the original failed receipt.
 
 The separate shell-driver correction is independently reviewed commit 5553daab.
-D2 is committed as cbf73a4f. R1 reason retirement is verified: 448 focused and
+D2 is committed as cbf73a4f. R1 is committed as bb537934: 448 focused and
 6,326 ordinary passes, four capability skips, twelve import contracts and real
 producer-derived negative controls. Its history census found an old process-local
 string-to-enum decoder,
 but no currently supported target-reason producer/artifact; M1_PLAN preserves
-that distinction. Next after R1's separate commit is E1 documentation consolidation
-using results/e1-design.md and the finite elaboration in M1_PLAN.
+that distinction. E1 consolidates the five named documents; its exact removed
+blocks and surviving dispositions are in results/e1-deletion-ledger.json,
+with consistency and link evidence alongside it. No product or test-authority
+change accompanies the condensation. CLOSE follows its review and commit.
 
 Cold Inventory timing was announced and collected after the user's 2026-10-30
 idle confirmation, with task tests paused. Five fresh children per case passed
@@ -52,9 +54,11 @@ Fresh review verified the complete source/runtime/profile bindings. Exact new
 receipt -text attributes preserve their original CRLF bytes; verify staged
 blob hashes before committing. No other file is renormalized.
 
-CLOSE also renews the default installed execution-review journey on final assets;
-earlier installed passes remain evidence of their unchanged mechanisms at their
+CLOSE's default installed execution-review journey passes on final assets
+(results/close-installed-execution.log/.json); independent artifact review confirms
+301 source inputs and 298 packaged/installed files match current product.
+Earlier installed passes remain evidence of their unchanged mechanisms at their
 original wheel identities. Deferred doc contradictions are results/findings.md.
 
-Remaining D2/R1/E1/CLOSE stay authorized. No unrelated refs, stashes or worktrees
+Remaining E1/CLOSE stay authorized. No unrelated refs, stashes or worktrees
 were changed; no push or PR. Preserve all failed receipts and the recovery ref.

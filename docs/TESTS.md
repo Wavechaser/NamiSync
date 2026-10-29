@@ -286,42 +286,31 @@ retires the unrealized DWM sentinel proposal; no automatic environment monitor
 or new focus-recovery mechanism is required. Existing ownership checks before
 sending native input remain necessary to avoid interacting with another window.
 
-AB-7's final-run default-shell receipt illustrates the focus limitation:
-`plan_again` was the last completed checkpoint, after Task 53 was created,
-selected and rendered. CDP's zero-based lines 9/490 identify the later
-`keyboard focus re-entry ring` wait; the driver recorded
-`document_has_focus: false`. An unfocused page may not display the expected
-focus ring after programmatic focus. The actor causing focus loss is unknown;
-do not diagnose a failed Plan-again action from that checkpoint label. Mapping
-scripts and original receipts remain in `build/trace-20260927/scripts/plan-again/`
-and `build/post-m1-8-ablation-20260925/ab7-final-evidence/`.
+AB-7's default-shell Plan Again succeeded: Task 53 was created/selected/rendered;
+the later keyboard focus re-entry-ring wait observed `document_has_focus: false`.
+The actor is unknown; do not diagnose failed Plan Again from the last checkpoint
+label. Original mapping (including CDP lines 9/490) and receipts:
+`build/trace-20260927/scripts/plan-again/` and
+`build/post-m1-8-ablation-20260925/ab7-final-evidence/`.
 
-After clicking the notice filter, the helper waits for the expected notice
-text, no pending review action, and an enabled Plan-again button before its
-single click. This readiness check is not a correction for the historical
-focus loss. No product button/icon change follows from this test prerequisite.
-For historical compositor context, the August 17 18:29:25 run coincided with
-Application Error 63156, Dwminit 63157 and WER report
-`854b76c5-b80c-4127-acc8-404d18814e0d`; temporal overlap did not establish
-NamiSync causality. Those observations neither require environment detection
-nor make a passing page test a compositor-health claim.
+The notice-filter helper still waits for expected notice text, no pending review
+action and enabled Plan Again before one click. This prerequisite does not fix
+historical focus loss or justify product button/icon changes. The August 17
+18:29:25 compositor overlap (Application Error 63156, Dwminit 63157, WER
+`854b76c5-b80c-4127-acc8-404d18814e0d`) established no NamiSync causality,
+environment-detection requirement or compositor-health claim.
 
-AB-8's larger-shell stack/wrap failure remains deferred and unconfirmed. In
-`_task_shell_headed_child.py`, the Plan-review witness temporarily writes the
-live renderer's status text and `hidden` flag, narrows the summary to 650px,
-then yields one animation frame before comparing geometry. A render through
-`plan_review.js` can reset that same status from the current action message;
-hiding it would invalidate the geometry assertion without a CSS regression.
-This is a candidate mechanism, not a captured failing interleaving. If the
-assertion recurs, inspect the before/after node connection, text, visibility
-and rectangles alongside the live render before choosing a fix. Preserve the
-current check and CSS until the failure is reproduced and work is authorized.
+AB-8's larger-shell stack/wrap failure remains deferred/unconfirmed. Its witness
+writes live status/hidden, narrows summary to 650px and waits one frame; a live
+`plan_review.js` render could replace/hide the status and invalidate geometry
+without a CSS regression. This is a candidate, not a captured interleaving.
+On recurrence inspect before/after node connection, text, visibility, rectangles
+and live render; preserve the check/CSS until reproduction and authorization.
 Evidence: `build/ab8-20260926/installed-native-evidence/`,
-`build/ab8-resume-20260926/verification.md` and the bounded diagnostic copy in
-`build/incident-trace-20260927/native_trace.py`. AB-7's later larger-shell
-post-Plan-again failure may be another occurrence, but its unpreserved
-intermediate script prevents exact line attribution; do not count it as a
-proven second reproduction.
+`build/ab8-resume-20260926/verification.md`,
+`build/incident-trace-20260927/native_trace.py`. AB-7's later larger-shell failure
+is not a proven second reproduction: its intermediate script was not preserved,
+preventing exact line attribution.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed

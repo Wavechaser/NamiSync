@@ -12,8 +12,9 @@ the active count and request bounds described in `DEFENSE.md`.
 
 The external bridge contract is owned by `BRIDGE.md`; scalar and containment
 walls are owned by `DEFENSE.md` §1.3. Scoped recording continuation and terminal
-checkpoint cleanup are active below. Every live producer and consumer uses event v5 and data epoch
-6 with the corrected ledger/plan identity hash contract. Prior event epochs
+checkpoint cleanup are active below. Live events use v5; current persistence
+uses ledger v4/history v7 at data epoch 7, including the corrected ledger/plan
+identity hash contract. Prior event epochs
 have no supported decode or compatibility route; public paths reject them and
 no positive compatibility fixture remains.
 Component docs point to those authorities rather than copying task authority or
@@ -34,50 +35,32 @@ attestation format.
 
 ## Owned Contracts
 
-- Stable identifier value types: session, run, operation, row, mapping, host,
-  volume, and file identity.
-- Immutable scan (`FileRecord`, `DirRecord`, `UnsupportedRecord`), plan,
-  observation, content-evidence, attestation, item-result, run-result,
-  execution-review, and recording-spec dataclasses; `ExecutionSet` is the
-  explicit mutable execution-status carrier.
-- `MappingSnapshot`, root-qualified `Subject`, `Commitment`,
-  `PreservationPolicy`, `MetadataSnapshot`, capability profile,
-  and the stable `VolumeId`/corroborating `VolumeEvidence` split.
-- `MANAGED_FILE_ATTRIBUTE_MASK`, the shared readonly/hidden/system/
-  not-content-indexed policy used by planner equality and executor mutation;
-  `MetadataSnapshot.attributes` still retains the complete observed bitmap.
-- `SessionState`, its legal transition table, and terminal-state predicate.
-- Six-value `Outcome` (`succeeded`, `skipped`, `failed`, `canceled`, `deferred`,
-  `blocked`) and typed reason codes; free-form text is presentation detail, not
-  control flow.
-- Versioned event envelopes and typed event bodies, including `Gap` and the M1
-  `IntegrityOutcome`/eight-value `IntegrityResult` vocabulary.
-- `RunContext`, nonblocking cooperative pause/cancel checkpoint protocol, and
-  the generic session runner that alone resolves pause/cancel and emits
-  `Terminal`.
-- Protocols for recorder, clock, failure policy, copy backend, streaming hasher
-  factory, change source, destination policy, metadata extraction, session
-  storage, and filesystem observations needed by module contracts.
-- Windows relative-path normalization, validation, hierarchy, containment, and
-  long-path conversion helpers.
-- Ephemeral `RootAuthority` facts plus stateless native anchor, volume, and
-  no-follow component probes; every admission uses fresh evidence and typed
-  failures rather than cached or persisted authorization.
-- Pure shared calculations such as capacity requirements and deterministic
-  operation identifiers when those rules cross module boundaries.
-- Exact nonnegative population measurement and excess comparison shared by
-  independent admission owners, plus typed plan-review limit facts, counter-free
-  raw source-population gates, exact declared scan adoption, and cumulative
-  admission only for final domain/informational rows and unavoidable
-  simultaneously retained shallow references. Exact
-  `PlanReviewProducerAdmission` gates expose no cumulative `admit` capability;
-  exact `PlanReviewAdmission` ledgers expose no raw-source gate. One counter-free
-  producer gate may serve the sequential plan stages; it shares no counters
-  with the retained ledger, only one opaque same-run admission token. Both
-  capabilities issue the same private exact plan signal with that token, while
-  inventory owns a distinct private exact signal and domain-local token.
-  Each final reference slot uses the fixed eight-byte charge; disposable
-  construction owners do not enter that ledger.
+The [architecture source locator](ARCHITECTURE.md#31-contract-authority-and-source-locator)
+maps identifiers, immutable evidence/plans/results, session/event vocabulary and
+module protocols to their canonical symbols. `ExecutionSet` remains the explicit
+mutable execution-status carrier. Core owns shared path/identity and capacity/
+operation-ID calculations; domain walking and observation remain module policy.
+
+`MANAGED_FILE_ATTRIBUTE_MASK` governs readonly/hidden/system/not-content-indexed
+equality and mutation; metadata retains the full observed bitmap. Stable volume
+identity remains distinct from corroborating evidence. Outcomes/reasons are
+typed; free-form text is presentation, never control flow. The generic runner
+alone resolves cooperative pause/cancel and emits Terminal. Ephemeral root
+admission uses fresh evidence and typed failures, never persisted authorization.
+
+Core provides exact nonnegative population measurement and excess comparison shared by
+independent admission owners, plus typed plan-review limit facts, counter-free
+raw source-population gates, exact declared scan adoption, and cumulative
+admission only for final domain/informational rows and unavoidable
+simultaneously retained shallow references. Exact
+`PlanReviewProducerAdmission` gates expose no cumulative `admit` capability;
+exact `PlanReviewAdmission` ledgers expose no raw-source gate. One counter-free
+producer gate may serve the sequential plan stages; it shares no counters
+with the retained ledger, only one opaque same-run admission token. Both
+capabilities issue the same private exact plan signal with that token, while
+inventory owns a distinct private exact signal and domain-local token.
+Each final reference slot uses the fixed eight-byte charge; disposable
+construction owners do not enter that ledger.
 
 `core/review.py` is the canonical source for the two population
 primitives and for the plan constructors, limits, counter order, and adoption
@@ -98,15 +81,10 @@ deliberately charges only the declared shallow slots. It does not establish
 aggregate process-memory containment. Focused presentation costs are measured
 at their owner; no complete-task reservation model is a prerequisite.
 
-The M0 scan/plan/preflight portion is implemented in `core/pathing.py`,
-`core/root_authority.py`, `core/models.py`, `core/planning.py`, and
-`core/preflight.py`. These files own canonical Windows relative paths,
-immutable filesystem evidence, shared native root-admission mechanics,
-deterministic plan serialization and capacity, and root-qualified
-observation/refusal shapes. General filesystem walking and domain observation
-remain in operation modules; core's stateless probes carry no module policy and
-remain standard-library-only. `core/pathing.py` stays purely lexical and does
-not re-export native anchor or volume probes from `core/root_authority.py`.
+Core's stateless root probes carry no module policy and remain standard-library-
+only. `core/pathing.py` stays purely lexical and does not re-export native anchor
+or volume probes from `core/root_authority.py`; the architecture locator owns
+the remaining file/symbol inventory.
 
 The scan/model, planning, preflight, and integrity contracts are frozen and slotted where required by their source definitions. Their declared fields, identity, validation, and serialization semantics are canonical in the corresponding modules under `namisync/core/`; this document records their meaning and adoption boundaries without duplicating field inventories.
 
@@ -118,8 +96,8 @@ and the declared fingerprint must still agree with the admitted inputs.
 `plan_fingerprint()` keeps its existing canonical projection and wire/hash
 identity; retained-plan capacity admission remains a separate workflow step.
 
-The six preflight observation/verdict dataclasses and the two remaining
-integrity command/context dataclasses are also frozen and slotted. This excludes
+Preflight observation/verdict and integrity command/context values are frozen
+and slotted as declared by their owning symbols. This excludes
 undeclared outer instance state without changing observation, refusal,
 candidate, recorder, or continuation semantics. `ObservedWorld` validates its
 scalar and UTC fields before touching mapping inputs. It preserves an exact
@@ -134,14 +112,11 @@ without rebuilding either graph. The observer world reaches judgment by
 identity, the verdict must retain that exact world, and workflow retains the
 exact callback verdict after its independent informational gate.
 
-The 33 core contracts in the four cohorts above (fourteen scan/model, eleven
-planning, six preflight, and two integrity contracts) have no `__weakref__`
-slot and therefore cannot be targets of `weakref.ref`. Production creates no
-weak references to them, and current leak regressions use explicitly weakref-
-capable witnesses instead. Do not add blanket weakref support: it adds storage
-to every instance. Add `weakref_slot=True` only to a named contract when a
-concrete ownership or leak witness requires it, with its representation cost
-included in the owning model.
+The contracts above omit `__weakref__` where declared in source; current leak
+regressions use explicitly weakref-capable witnesses. Do not add blanket weakref
+support: it adds storage to every instance. Add `weakref_slot=True` only to a
+named contract when a concrete ownership or leak witness requires it, including
+its representation cost in the owning model.
 
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`
@@ -517,17 +492,8 @@ as a terminal task update is adapter policy, not another core lifecycle state.
 Version 5 makes every Progress body an exact eleven-key object:
 
 ```text
-phase
-items_done
-items_total
-bytes_done
-bytes_total
-current_path
-item_id
-item_type
-item_attempt_id
-item_bytes_done
-item_bytes_total
+phase, items_done, items_total, bytes_done, bytes_total, current_path,
+item_id, item_type, item_attempt_id, item_bytes_done, item_bytes_total
 ```
 
 `phase` is a nonempty string. Item counts are exact non-Boolean JavaScript-safe
@@ -550,12 +516,10 @@ aggregate `bytes_total`. An attempt id with an absent byte pair is the only
 active indeterminate-byte shape; an item without an attempt has no item-byte
 counters. Extra or missing keys are rejected.
 
-Attempt ids are minted at actual byte-pipeline entry and identify only that
-attempt. Retry or reconstructed resume mints a new token exactly when it will
-rerun the byte pipeline; retained post-byte work does not invent a replacement
-attempt. Overshoot retains item and attempt identity while making the byte pair
-absent. Settlement clears item, attempt, and item-byte fields. The tokens are
-opaque and deliberately are not persisted generation counters.
+[ARCHITECTURE §2.3](ARCHITECTURE.md#progress-v5-protocol) owns attempt-entry,
+retry/resume, overshoot and settlement transitions, including opaque tokens
+rather than persisted generation counters. The exact grammar above and below
+does not define a second reporter state machine.
 
 Scalar decoding is non-coercive: schema, sequence, and item counts require
 exact SafeInt integers; byte quantities use canonical decimal Scalar64 text.

@@ -11,11 +11,13 @@ retains investigation, rejected proposals and superseded execution recipes;
 the decisions still governing delivery are below. Historical observations
 certify their recorded build and dependencies only.
 
-Completed registers below are condensed from `fc8a79b`; Git retains their
-full finite populations and chronology, while named local evidence roots
-retain raw and failed receipts. Current subject
-contracts and retained exclusions remain binding; historical measurements
-do not establish acceptance for changed dependencies.
+Completed registers retain shipped outcomes, decisions, exclusions and unresolved
+observations. Git at `bb537934` retains their pre-consolidation populations and
+chronology; named evidence roots retain original and failed receipts. Current
+subject contracts remain binding. Historical passes certify only their recorded
+product, producer, checker and driver dependencies; failures are not acceptance.
+[AGENTS](../AGENTS.md) owns scope, safety, recurrence and recovery rules for every
+row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
@@ -78,238 +80,71 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | D1 | Remove redundant Scope planner parameter/type/kinds/factories and workflow/tool/test call-site plumbing. Preserve scoped planning/history replay as an explicitly unrealized outcome without this placeholder representation. Owners: core/planner, workflow composition, executor rig, contract tests and CORE/PLANNER/FEATURES. | Revalidate full caller population; planner/workflows/tools and contract consumers; ordinary suite/imports. No change to current whole-plan or dependency-closed execution selection. | Complete; 634 focused and 6,327 ordinary passes/four capability skips, twelve imports and independent review. |
 | D2 | Migrate test-facing convenience APIs to real production seams, then retire bounded population listed below with matching docs. Preserve independent behavioral/fault witnesses rather than tests of removed representation. | Per-family consumer map before editing; focused real producer/admission/native witnesses, affected departments, ordinary/imports and applicable native/settlement gates by dependency. No blanket deletion based on coverage absence. | Complete; 6,327 ordinary passes/four capability skips, twelve imports, before/after settlement 30×3 and installed Inventory/shell; independent family and integrated review. |
 | R1 | Retire never-produced ALREADY_EXISTS/EMPTY_DIRECTORY everywhere: enums, web accept lists/labels, probes and DESKTOP_UI plus any exact consumers found in the finite history/current census. Current producers/constructors and historical support must be distinguished; incompatible pre-release schema policy remains. | Confirm supplied all-history evidence and current constructors/consumers; ordinary/imports and real event/Plan decoder negative controls. Own commit; stop for contradictory supported producer/artifact evidence. | Complete; 448 focused, 6,326 ordinary passes/four capability skips, twelve imports, producer-derived negative controls and independent review. |
-| E1 | Condense completed register chronology with a decision/disposition map; consolidate M2 proposal list and internal CORE census/Progress-shape repetition; shorten repeated historical checkpoint disclaimers and TESTS incident chronology without changing their policy. | A–D/R settled. Map each removed clause to surviving decision/owner/evidence; retain future outcomes, exclusions, wire grammar, residual qualifications, unresolved observations and reopening triggers. Active links/diff and independent review. BUGS/PERFORMANCE archival requires a separate finite disposition map, never volume alone. | Pending. |
+| E1 | Condense completed register chronology with a decision/disposition map; consolidate M2 proposal list and internal CORE census/Progress-shape repetition; shorten repeated historical checkpoint disclaimers and TESTS incident chronology without changing their policy. | A–D/R settled. Map each removed clause to surviving decision/owner/evidence; retain future outcomes, exclusions, wire grammar, residual qualifications, unresolved observations and reopening triggers. Active links/diff and independent review. BUGS/PERFORMANCE archival requires a separate finite disposition map, never volume alone. | Complete; 56 removed blocks mapped and independently reviewed, all twelve proposals and wire/policy qualifications retained, 372 active links/anchors and 75 evidence pointers checked. |
 | CLOSE | Account for all rows and dependencies, complete ordinary/import and affected installed/native gates, independent integrated review, delivery docs and final state. | Reuse unchanged evidence only by dependencies; retain failures. No assertion of M1-12 or release completion. | Pending. |
 
-D2 population: `to_visible_window_view`, `to_primitive_view`,
+Completed A–D/R outcomes are summarized in the table above. Their exact
+consumer populations, controls, failed receipts and correction chronology remain
+in Git at `bb537934` and `build/m1-closeout-study-20261029/results/`:
+
+| Outcome | Final evidence / retained disposition |
+| --- | --- |
+| A1/C1 | `a1-fresh-checkouts.*`, `a1-c1-interfaces.log`, `a1-c1-native-recheck.log`, `c1-resume-*` and `c1-preservation.json`. Both autocrlf wheel/About checks passed; sandbox/custody-cache failures were reconciled by the external-temp recheck, not relabeled passes. C1's recovery ref remains for CLOSE accounting. |
+| B1 | `b1-focused-final.log`, `b1-interfaces.log`, `b1-correction-focused.log`, `b1-installed.log`, `b1-review.txt`. Ordinary empty/surrogate ingress replaces forged candidate cases; slot TTL/capacity, original-result replay and fresh admission remain. |
+| B2 | `b2-removal-population.json`, `b2-ordinary.*`, `b2-imports.log`, `b2-review.txt`, `b2-skip-reasons.log`. `RunSnapshot` retired with `get_run`; live same-name helpers and the directly used `DeletionPolicy` facade remain. Initial mistaken facade deletion/collection failure was corrected. Four unavailable symlink-privilege skips are not passes. |
+| B3 | `b3-comparison.log`, `b3-focused.log`, `b3-workflows.*`, `b3-native-recheck.*`, `b3-review.txt`. Baseline `93481fcb` and candidate agree in 21 cases; six failed native cases pass unchanged with external temp. The original long-path failure's cause remains unestablished. No speed claim. |
+| C2 | `c2-focused-01.*`, `c2-focused-02.*`, `c2-neighborhood.*`, `c2-review.txt`. Real Setup/default/task/readiness and database/runtime refusal witnesses retain unchanged bytes and no admitted work; underlying classification/CLI/headed witnesses remain. |
+| C3 | `c3-focused.*`, `c3-interfaces.log`, `c3-controls.log`, `c3-controls-retry.log`, `c3-review.txt`. Mandatory contained Node execution, original/interactive and both drain record kinds, fixture provenance, timeout/output bounds and dedicated wheel/CSP population witnesses remain. Harmless rename, wrong digest and missing/extra asset controls reach their intended verdicts. |
+| D1 | `d1-focused-01.*`, `d1-ordinary.*`, `d1-imports.log`, `d1-test-accounting.json`. Scope placeholders and plumbing retired; whole-plan and dependency-closed selection remain. Scoped planning/history replay is still unrealized, without a prescribed replacement representation. |
+| D2 | `d2-tree-test-disposition.json`, `d2-tree-controls.*`, `d2-final-source-corrections.json`, `d2-ordinary.*`, `d2-imports.log`, `d2-settlement-*`, `d2-native-focused-final.*`, `d2-installed.log`, `d2-shell-driver-corrected.log`. Real Plan/Inventory producers replace convenience-only windows and indexes. Independent geometry, rich fields, rootless offsets, Unicode, generation/digest and native flush-before-recording/settlement witnesses remain; no durability flush retired. |
+| R1 | `r1-history-census.json`, `r1-focused.*`, `r1-ordinary.*`, `r1-imports.log`, `r1-controls-retry.log`. Current producer/decoder and published Plan/window negative controls refuse retired reasons; no event-body certifier was added to the browser wrapper. Initial control serialization failure remains in `r1-controls.log`. |
+
+D2 (`cbf73a4f`) retires `to_visible_window_view`, `to_primitive_view`,
 `snapshot_task_drain_response_prefix`, `*_file_contract_matches`,
-`strip_common_relative_path_suffix`, six NodeTree convenience accessors
-(`root_node_id`, `node_positions`, `path_positions`, `node_id_for_path_key`,
-`rel_path_for_node_id`, `rel_path_key_for_node_id`) plus
-`NodeTreeNode.subtree_extent`, `NativeFileSystem.flush_file` and its protocol
-slot, `serialize_plan`, private planning aliases near the old line 624,
-`is_supported_webview2_version`, `_set_creation_time`, and `copy_recorded`.
-Exact symbol owners/consumers and component gates are resolved before each
-family starts. Real Plan/Inventory window producers retain rootless offsets,
-rich fields, hierarchy, Unicode, maximum/empty/head/tail, stale generation and
-fixture identity. Flush-method retirement removes its zero-call counters only
-with the method/protocol; retain finalization order and actual native durable
-flush/recording witnesses.
+`strip_common_relative_path_suffix`, the six NodeTree convenience accessors,
+`NodeTreeNode.subtree_extent` and its unread path-position index,
+`NativeFileSystem.flush_file` and its protocol slot, `serialize_plan`, private
+planning aliases, `is_supported_webview2_version`, `_set_creation_time` and
+`copy_recorded`. The live node-ID index, builder topology, real native durable
+flush and finalization order remain. Focused family reviews, 6,327 ordinary
+passes/four capability skips, twelve imports and before/after settlement 30×3
+close D2's gate; its earlier approval timeout occurred before execution.
 
-B1 elaboration (inspected `624c5717`, revalidate after C1): production edits
-are confined to `web/slots.py` and `web/commands.py`; direct fixture consumers
-are `test_slots.py`, `test_commands.py`, `test_transport.py` and `test_host.py`.
-Keep start/replay ordering and continuation re-admission unchanged. Existing
-AB-7 dispositions forbid automatic mutation replay; typed candidates do not
-grant lasting root authority. The single acceptance gate combines these focused
-files, the interfaces department, and installed
-`test_br_g_32_native_picker_keeps_real_paths_in_server_slots` plus
-`test_m1_6_installed_setup_flow`, followed by independent review. Update BRIDGE's
-slot account only as needed; no registry/custody redesign or TTL/capacity change.
-Commit the protocol narrowing and every fixture migration together.
-Delivered evidence: `results/b1-focused-final.log`, `b1-interfaces.log`,
-`b1-correction-focused.log` and `b1-installed.log`. Review replaced two forged
-candidate slot cases with ordinary empty/surrogate ingress refusals; unchanged
-product/shared fixtures allowed reuse of unaffected department evidence.
-No supported guarantee was retired. The initial temp setup failures remain in
-`b1-focused.log`; they are not counted as passes.
+The separate `5553daab` shell-driver correction mounts the exclusive work-body
+tree before native Tab from rail Settings, preserving Theme/Create and exact
+focus/navigation assertions. Its five ordinary checks and installed SH-G-7 pass.
+The prior driver assumed Theme was the final control despite About buttons;
+no product focus defect was established. The failed installed receipt remains.
 
-B2 elaboration (inspected `1f0eb086`, refresh after B1): finite source files are
-`core/events.py`, `core/file_identity.py`, `core/scalars.py`, `db/history.py`,
-`db/repositories.py`, `interfaces/service.py`, `workflows/sync.py`,
-`workflows/__init__.py`, `interfaces/web/plan_review.py` and its JS asset.
-`RunSnapshot` becomes orphaned with `get_run` and retires in that same commit;
-remove only imports made unused by these deletions. No test removal is needed.
-Preserve the live core `_phase_to_dict`, actual inventory candidate-kind type,
-tree/projection lookup methods and tools' unrelated local names. Current docs
-have no behavioral account requiring repair; historical declarations stay
-historical. One deletion commit follows ordinary tests, all 12 import contracts
-and fresh independent consumer/orphan review.
-The final deletion retains the workflows `DeletionPolicy` facade import: service
-uses it directly despite its absence from `__all__`. An initial mistaken removal
-caused collection failure and was corrected before acceptance. No tests retire.
-Raw receipts: `results/b2-focused-20261029.log` (failed collection),
-`b2-focused-02-20261029.log` (618 passes, one skip, five hardlink setup
-failures), `b2-ordinary.log`/`.json` (the five hardlink cases passed) and
-`b2-imports.log`. `b2-skip-reasons.log` confirms four unavailable symlink-privilege
-cases outside the sandbox; these skips are not passes.
+R1 (`bb537934`) distinguishes current support from history: removed
+`workflows/payloads.py::_decode_operation` once constructed reasons from input
+strings, but `370cfa51` retired that process-local JSON format without durable
+resume. No currently supported producer/artifact requires the retired values;
+this does not prove arbitrary historical input never contained them. The one
+fewer ordinary case is an enum-derived acceptance parameter, not a deleted test
+function; the real negative control now witnesses refusal. `DESTINATION_OCCUPIED`,
+`REQUIRED_DIRECTORY` and Win32 `ERROR_ALREADY_EXISTS` remain.
 
-B3 elaboration (inspected `65e50174`, refresh after B2): reuse ordered/inverse
-preorder in `workflows/inventory_projection.py` for PATH only; non-PATH siblings
-still sort before recomputing both indexes. Preserve spelling, warning tail,
-null-last/tie ordering and validation. Gate: `test_inventory_projection.py`,
-`web/test_inventory_review.py`, workflows department (including
-`test_inventory_projection_supports_base_and_information_heavy_fixture_populations`)
-and renewed 21-case output/traversal ablation, then fresh review. One source
-mechanism commit; no timing improvement claim or additional cache.
-Receipts: `results/b3-comparison.log`, `b3-focused.log`, `b3-workflows.log`/`.json`
-and `b3-native-recheck.log`/`.json`. The comparison extracts the baseline function
-from `93481fcb` and calls the actual candidate. Initial hardlink setup refusals
-and one failed long-path execution occurred in the workspace-temp run; all six
-exact cases pass with unchanged product in the external-temp native recheck.
-The failed receipt remains; it alone does not establish the long-path cause.
-Cold timing evidence remains pending CLOSE.
+CLOSE renews cold Inventory evidence because B2 scalars/repositories, B3
+projection and D2 tree dependencies invalidate older bindings. Preserve old raw
+JSON. The approved profile uses Python 3.13.17, unchanged hardware/OS/SQLite and
+AC power, 3 s base/6 s heavy maxima, five fresh children per case and the
+independent checker, without unrelated sustained workload or concurrent tests.
+Current reviewed maxima are 1.6487122/2.2893115 s; `current-profile.json` and the
+CLOSE receipts retain profile/input/source binding and raw data. This is named
+profile acceptance, not a universal performance claim.
 
-CLOSE also renews cold Inventory evidence after all gating-file edits settle:
-B2 scalars/repositories, B3 inventory projection and D2 tree work invalidate
-earlier source bindings. Retain old raw JSON unchanged. The observed machine
-still matches the named hardware/OS/SQLite profile and AC power; Python is now
-3.13.17 following the installed security update. Predeclare fresh acceptance on
-that runtime at the unchanged base 3 s / heavy 6 s maxima, five fresh children
-per case and the existing independent checker. This renews named-profile
-evidence, not a universal performance claim or changed limit. The user renewed
-idle-machine confirmation on 2026-10-30 until further notice. Announce timing
-before starting and pause task tests during collection. Actual
-profile facts are in `results/current-profile.json`; confirm again at collection.
+Final R1 ordinary evidence has 6,326 passes, four capability skips and 35 headed
+deselections; twelve import contracts pass. The final-wheel default installed
+execution-review journey passes (`results/close-installed-execution.log` and
+`results/close-installed-execution.json`, 27.24 s), covering changed Plan
+reason/overlay/detail validators. Earlier shell,
+Inventory, picker and Setup receipts retain their own wheel identities and
+unchanged-mechanism authority. E1 review is complete; CLOSE accounting remains
+pending. `results/e1-deletion-ledger.json` retains the actual removed blocks and
+their dispositions; `e1-consistency.json` and `e1-links.json` record checks.
 
-C2 elaboration (inspected `93481fcb`, refresh after B3): change only four existing
-test owners. `web/test_commands.py` covers real default/task `read_setup`,
-canonical service output from `prepare_setup`, and TypeError/ValueError refusal
-without slot/task work. `test_bridge_service.py` covers frozen paths, IDs and
-options independent of defaults, exact binding resolution and readiness pairs
-resolved/resolved, offline/ambiguous, missing/unavailable, plus absent bindings.
-`test_database_contracts.py` witnesses `ensure_database_pair` refusing empty
-mains without byte/sidecar changes. `test_workflows.py` witnesses real runtime
-Plan refusal before resource admission with unchanged database bytes/population.
-Reuse existing local fixtures; do not duplicate classification or normalization
-matrices. One test commit follows the four focused modules and the interfaces,
-workflows and database neighborhood, with ordinary integration at CLOSE and
-fresh independent review. Existing CLI and installed witnesses remain.
-Eleven cases delivered. `results/c2-focused-01.log` retains six initial fixture
-failures; correcting invalid snapshots/resolutions and fake cleanup assumptions
-changed no product code. `c2-focused-02.log`/`.json` and
-`c2-neighborhood.log`/`.json` record the passing final candidate.
-
-C3 elaboration (inspected `bfdc6a63`, refresh after C2): only
-`web/test_transport.py` and `web/test_frontend_static.py` change. Route the
-required timeout/interactive probes and both drain session kinds through the
-existing `run_node_probe` with the same ten-second deadline. Retain mandatory
-Node discovery, fixture arguments, failure diagnostics, helper timeout/output
-checks and process-tree containment. Remove only the `localRow` occurrence pin
-and frontend's duplicated complete wheel-asset-set equality; dedicated
-`test_wheel_assets.py` remains authoritative for that exact population.
-Prove harmless helper rename runs with the real tree fixture, wrong digest
-fails at its digest check, and missing/extra assets fail the dedicated wheel
-assertion using detached inputs. Retain provenance, runtime tree cases, CSP,
-safe sinks, packaging and A1 notice-byte checks per AB-9 dispositions. Focused
-transport/frontend/wheel plus interfaces and fresh review gate one test commit;
-no production asset or new generic helper.
-Evidence: `results/c3-focused.log`/`.json`, `c3-interfaces.log`/`.json` and
-`c3-controls-retry.log` bind the unchanged test candidate, fixture and wheel.
-The harmless rename passes; wrong digest fails at digest equality; missing/extra
-assets fail the dedicated exact-population assertion. The initial control-driver
-import failure is retained in `c3-controls.log`, not counted as a control result.
-
-D1 elaboration (inspected `6650082d`, refresh after C3): production owners are
-`core/planning.py`, `modules/planner.py`, `workflows/sync.py`, and
-`tools/executor_rig.py`. Migrate direct tests in `test_core_scanplan.py`,
-`test_planner.py`, `test_plan_projection.py`, `test_plan_review_limits.py`,
-`test_preflight.py`, and `_identity_hash_fixtures.py`; include the three explicit
-planner doubles and retain their admission/identity/failure witnesses. Remove
-only Scope's representation fixture/name; retain live `Sequence` imports.
-Update PLANNER and CORE plus ARCHITECTURE's reproduced planner signature.
-FEATURES already marks scoped planning as unrealized; retain that and History
-Replay. Scanner `ScanScope`, inventory/copy scopes and dependency-closed
-execution selection are unrelated and stay. Focused real planner/contract/
-preflight/projection/rig consumers precede ordinary and twelve import contracts,
-then fresh review. One atomic contract/caller/test/doc migration commit.
-Evidence: `results/d1-focused-01.log`/`.json`, `d1-ordinary.log`/`.json`,
-`d1-imports.log` and `d1-test-accounting.json`. No test functions retire; only
-Scope's instance/name in the slotted contract fixture is removed. Independent
-review caught and corrected the stale ARCHITECTURE source-locator word. All
-four ordinary skips are explicit unavailable symlink privileges.
-
-D2 elaboration (inspected `5642c16a`, refresh planning consumers after D1): one
-atomic migration commit after every family below settles. Source/test writers
-must have disjoint files; parent serializes subject-doc and register updates.
-
-| Family | Finite owners and direct test population | Preserved witness / disposition |
-| --- | --- | --- |
-| Bridge conversion/prefix | `web/bridge.py`; web tests commands, drain, transport, browser_event_v5_consumers, plan_review_scale and `_task_inventory_headed_child.py`. | Use real bridge response/command admission and serialization, not a replacement wrapper around retired private mechanics. Preserve semantic rejection, prefix byte overflow, update identity/body, original result and both update kinds. A small shared test-only real-dispatch fixture in `_bridge_result_support.py` is allowed if needed; no copied codec/policy. |
-| Visible tree/window/path utility | `web/visible_sequence.py`, `workflows/node_tree.py`, `core/pathing.py`; test_bridge_tree, test_bridge_service, web test_visible_sequence and `_tree_window_fixture.py`. | Produce fixture windows through real Plan/Inventory review owners; preserve root omission, complete rich fields, hierarchy, Unicode, maximum/empty/head/tail, stale generation and digest provenance. Retain four live tree methods and derive_visible_sequence/tools. Retire only suffix-helper-only assertions with the unused helper. Update CORE path account. |
-| Database wrappers | `db/contracts.py`; test_database_contracts and test_db_schema. | Replace Boolean shortcuts with actual probe evidence or exact typed refusals; retain WAL/journal/sidecar drift, read-only bytes and retry distinctions. Keep reset_databases. |
-| Executor conveniences | `core/execution.py`, `modules/executor/native.py`; test_executor_native, test_executor_settlement, test_executor_runtime, test_executor_pending_cancel. | Remove flush protocol/method/overrides/counters/zero assertions together; keep actual native flush, finalize/publish/record order and settlement. Use existing native timestamp fixture helper and recorded_identity presence. No settlement policy or oracle baseline changes. |
-| Planning serialization/aliases | `core/planning.py`; test_planner, test_core_scanplan, test_preflight. | Use live canonical plan projection/encoding and descriptive projection functions; retain independent frozen fingerprints, nested refusal and preflight immutability. Update PLANNER. |
-| WebView version wrapper | `web/pywebview_runtime.py`; test_pywebview_runtime. | Version cases exercise actual runtime probe with registry fixtures, retaining upstream parity and detection-failed/unavailable distinctions. |
-
-D2 gate: focused affected families, ordinary suite and twelve import contracts;
-unchanged settlement oracle `check --repeat 3` before/after executor-contract
-retirement; installed shell tree keyboard/reflow/forced-colors and Inventory
-refresh/acknowledge/restore/close witnesses after fixture/observer migration.
-The installed shell also covers the real runtime detector. Review each family
-independently and the integrated delta before commit. No new production APIs,
-test framework, weaker wire acceptance or historical evidence rewrites.
-The tree migration's direct runtime consumer `tests/assets/tree_probe.mjs` also
-pins the retired generic row/window shape. Migrate that exact key oracle to the
-real Plan window fields, retaining digest, behavior and stale-generation checks;
-this is the already-authorized producer/consumer migration, not a new behavior.
-After retiring the path-position accessor, remove its now-unread retained
-`NodeTree._position_by_path_key` index and convenience-only immutability assertion.
-The builder's local path map still constructs topology; retain the live immutable
-node-ID index. Renew tree digest controls and installed shell evidence.
-
-D2 final candidate: 6,327 ordinary passes, four unavailable symlink-privilege
-skips and twelve import contracts pass. Focused family and independent source
-reviews pass; raw receipts are in `results/d2-*`. Before and resumed after
-settlement checks each pass 30 scenarios × three runs. The earlier approval
-timeout/capacity failure occurred before execution, not inside the gate.
-Installed Inventory passes in `d2-installed.log`; the corrected shell driver
-passes in `d2-shell-driver-corrected.log`. Final review checks exact retirement
-accounting in `d2-tree-test-disposition.json` and the docstring-only hash
-correction in `d2-final-source-corrections.json`. No native durability flush or
-behavioral assertion was removed with the unused protocol method.
-
-2026-10-30 resumption: candidate hashes match preservation; the after-settlement
-check now passes 30 scenarios × three runs. Installed Inventory passes. SH-G-7
-exposed a pre-existing driver assumption: it Tabs from Theme directly toward the
-tree despite intervening About buttons added in `156677de`. The tree fixture is
-valid and later navigation succeeds; no product focus defect is established.
-Correct this bounded driver issue in a separate test commit: use the existing
-exclusive work-body tree mount before the native Tab witness, starting from the
-rail's Settings control. Keep Theme/Create and exact tree focus/navigation
-assertions. Population: `_shell_gate_child.py`, TESTS and delivery docs; gate:
-ordinary shell-driver checks, exact installed SH-G-7 and fresh review. No product
-change or relaxed focus assertion. Retain `results/d2-installed.log` as failed.
-Delivered separately as `5553daab`, with five ordinary driver checks and the
-exact installed SH-G-7 passing; fresh independent review found no issues.
-
-R1 elaboration (inspected D2 candidate based on `e820cefd`, refresh after commit):
-remove the two enum values from `core/execution.py`/`core/planning.py`, their
-browser allowlists in `assets/bridge.js`, Plan label/hidden-set entries in
-`assets/plan_review.js`, the obsolete Plan probe case and DESKTOP_UI prose.
-Keep `DESTINATION_OCCUPIED`, `REQUIRED_DIRECTORY` and unrelated Windows mutex
-`ERROR_ALREADY_EXISTS`. Python event reason admission is derived from the enum.
-Use real producer-valid event and published Plan/execution-window fixtures for
-negative controls: Python event admission/decoder refuses `already-exists`;
-browser Plan reason and execution-overlay/detail validators refuse the retired
-values while unchanged fixtures pass. The live browser event-envelope validator
-does not recertify event-body semantics; do not add that responsibility.
-Retain existing generic negative witnesses; temporary controls are sufficient
-where they avoid an obsolete-name permanent matrix. Focused producers/decoders,
-ordinary/imports and fresh review gate a separate reason-retirement commit.
-
-History correction: the removed `workflows/payloads.py::_decode_operation` did
-construct `OperationReason` from input strings. Commit `370cfa51` removed that
-process-local JSON payload format in favor of typed checkpoints; it did not
-support durable resume. Current readers have no migration path for it. The
-full-history/current census found no target-reason producer or contradictory
-currently supported artifact, so no R1 stop is established. This does not prove
-arbitrary historical input never contained the value. Commands, outputs and
-support-state evidence are retained in `results/r1-history-census.json`.
-Final R1 receipts: `r1-focused.log`/`.json`, `r1-ordinary.log`/`.json`,
-`r1-imports.log` and `r1-controls-retry.log`. The initial control-driver JSON
-serialization failure remains in `r1-controls.log`; only the retry using the
-real bridge serialization reaches acceptance.
-The one fewer ordinary case is the enum-derived `already-exists` acceptance
-parameter in `test_dormant_v5_operation_item_accepts_every_outcome_reason`;
-the retired value is now exercised as a refusal by the real control.
-No test function was deleted. CLOSE renews the existing default
-installed execution-review journey because it exercises the changed Plan reason,
-execution-overlay and detail validators on the final wheel. Earlier shell,
-Inventory, picker and Setup passes retain their original wheel provenance and
-remain evidence of their unchanged mechanisms, not new final-wheel runs.
-
-E1 elaboration (design at `e820cefd`, refresh after R1 integration): edit only
+E1 elaboration (design refreshed at integrated R1 `bb537934`): edit only
 M1_PLAN, CORE, FEATURES, M2_PROPOSAL and TESTS, plus delivery docs. Preserve
 existing heading anchors consumed by active and archived links. Condense
 completed register sections to shipped outcomes, retained decisions/exclusions,
@@ -323,7 +158,8 @@ shapes and ARCHITECTURE's transition semantics; correct its stale active epoch
 against schema source. TESTS keeps unresolved incident consequences, provenance
 and reopening conditions without promoting them to BUGS. Do not archive BUGS
 or PERFORMANCE or revise other subject documents' newly observed stale status
-claims in this row; report those separately. Gate: complete deletion disposition,
+claims in this row; `results/findings.md` retains their four owners and narrow
+remedies (DATABASE, PLANNER, INVENTORY and VERIFIER). Gate: complete deletion disposition,
 source/prose and active link/anchor checks, diff check and fresh independent
 review. No executable contract/test-authority change or product test rerun is
 authorized merely by condensation. Commit after R1; CLOSE remains distinct.
@@ -345,419 +181,250 @@ routine fixture migration within the named population needs no renewed approval.
 Existing unrelated work must remain separate. At interruption preserve task-owned
 unfinished work under AGENTS recovery rules; no recovery snapshot is merge-ready.
 
-A1 verification: four real wheel/About/package checks passed in each fresh Git
-checkout (`autocrlf=false` and `true`); JavaScript actually used LF/CRLF while
-LICENSE remained LF. The interfaces run passed 2,132 cases, with five failures
-and 28 setup errors caused by sandbox native restrictions and a repository-local
-custody cache. All 67 cases in the affected recheck population passed outside
-the sandbox with external temp storage. Original failed receipts remain failed;
-the combined dependency-scoped evidence closes the department gate. Independent
-review confirmed exact license/hash, unchanged third-party bytes, and raw wheel
-comparison. Evidence: `results/a1-fresh-checkouts.json`, `a1-fresh-checkouts.log`,
-`a1-c1-interfaces.log` and `a1-c1-native-recheck.log` under the study root.
-
-The user resumed the batch on 2026-10-29 under the execute-task workflow.
-C1 resumes first, followed by B1 only after its prerequisite closes. Reduction
-reviews classify lost guarantees independently of test color; obsolete mechanism
-assertions may retire, while passing tests supplement producer/consumer review.
-A1 committed as
-`0bbe841d`; A2 reconciles the three named documents with current source, with
-77 local file-link targets verified and independent source/diff review passed.
-C1's saved delta was rebuilt, without merging/cherry-picking recovery `419aad11`.
-Fresh gates passed 280 command cases and 2,165 interfaces cases; a fresh reviewer
-found no issue with parser reachability, typed conversion or refusal/order
-witnesses. Evidence: `results/c1-resume-command-20261029.log`,
-`c1-resume-interfaces.log` and `c1-resume-review.txt`. The recovery ref is retained
-for final accounting. No existing user branch or stash was changed.
+A1 and C1's verification, resumption and preservation records are indexed above.
+No user branch or stash was changed; CLOSE must account for task-owned recovery
+refs. The original interrupted and failed receipts remain in the evidence root.
 
 ### Settings links and footer — 2026-10-29
 
-Approved two atomic follow-ups from `156677de`: read the complete seven-color
-Windows palette (Accent, Light1–3 and Dark1–3) in the existing appearance owner,
-project Dark2/Light3 for un-underlined HyperlinkButtons, then align the Settings
-advisory left and Save controls right in a stable footer row. Owners/direct
-consumers are appearance snapshot/publication, exact browser validator, theme
-tokens and hyperlink styles, appearance/material/gallery witnesses, Settings
-markup/footer styles and installed Settings checks. Preserve other accent-filled
-controls, forced colors, save/read recovery semantics and task defaults. Gates:
-focused appearance/frontend checks, interface department, affected installed
-appearance/gallery/Settings cases and independent review per atomic outcome.
-Complete: 225 focused checks, 2,138 interface checks and all 12 installed
-gallery, default/larger Settings and native appearance cases pass. Independent
-source, provenance and evidence reviews cover each atomic outcome. No unrelated
-material, lifecycle or Settings contract changes. Raw receipts and provenance:
-`build/gui-settings-footer-20261029/verification.md`.
-Footer commit: `c51ff241`; the following accent commit includes session closure.
+Delivered the seven-color Windows accent palette and Dark2/Light3 hyperlink
+colors, then a stable Settings footer with left advisory/right Save controls.
+Other accent-filled controls, forced colors, save/read recovery and task defaults
+remain. DESKTOP_UI/INTERFACES own presentation; appearance publication and exact
+browser validation retain palette provenance. Footer: `c51ff241`; accent/session
+closure and independently reviewed 225 focused, 2,138 interface and twelve
+installed cases: `build/gui-settings-footer-20261029/verification.md`.
 
 ### Settings and final layout batch — 2026-10-29
 
-User-approved three atomic outcomes, based on `c64aec73`:
+Delivered shared Filters matched/total, 32px Go/Follow insets, 1.2px card
+outlines and full-width aligned Rebaseline dropdown; scrollable Setup-defaults,
+Appearance/theme and About cards; and separate selectable License/verified open
+source acknowledgement dialogs. Visual polish is `24edbc6c`, saved defaults
+`8c44f88a`; About/session closure follows in Git. DESKTOP_UI/INTERFACES/DATABASE
+own current behavior; legal content retains GPL terms and notice provenance.
 
-1. Shared visual polish: `Filters · matched/total`, 32px Go/Follow insets,
-   and 1.2px content-card outlines. The user's added Rebaseline dropdown request
-   matches the full split button's width and leading edge. Owners: shared
-   filter/CSS, row-menu positioning and Inventory anchor, direct gallery
-   and renderer witnesses. Preserve filter population, actions and scroll rules.
-   Gate: focused probes, interface department, affected installed gallery and
-   review cases, independent review.
-2. Settings: scrollable Setup defaults, Appearance (theme only), and About
-   cards. Explicit dirty-field Save defaults, including persisted automatic
-   verification. Owners: settings store, workflow/service defaults projection,
-   bounded bridge commands and validators, Settings renderer and consumers.
-   Use a new exact settings schema without legacy migration, per the user's
-   pre-release reset clarification; retain strict wrong-schema refusal and no
-   automatic overwrite. Preserve atomic/mutex writes, ingress bounds, frozen task
-   drafts and Plan again, CLI verification behavior, disabled ADS, and existing
-   theme persistence. Keep frozen Plan semantic-view shape unchanged. Gate:
-   persistence/facade/bridge/browser cases, ordinary suite, installed Settings
-   and task preservation witnesses, independent review.
-3. About: separate License and Open source acknowledgements HyperlinkButton-style
-   buttons opening scrollable, selectable license and
-   verified third-party acknowledgement dialogs, sharing existing dialog styles.
-   Owners: packaged legal content, Settings/notice presentation, asset catalogs
-   and installed gallery witnesses. Use existing GPL terms; no new EULA, release
-   certification or unrelated dependency migration. Gate: source/provenance and
-   wheel checks, interface department, installed dialog keyboard/scroll/focus
-   checks in gallery modes, independent review.
+Save writes only explicit dirty defaults, including automatic verification.
+The user's pre-release reset decision requires the exact new settings schema,
+strict wrong-schema refusal and no automatic overwrite. Atomic/mutex writes,
+ingress bounds, existing theme persistence, frozen task drafts/Plan Again, frozen
+Plan semantic-view shape, CLI verification and disabled ADS remain. No new EULA,
+dependency migration, execution policy, recents, coordinator or release work.
 
-Shared files and acceptance runs are serialized. Subject docs and CHANGELOG
-travel with each outcome; HANDOFF closes the session. No task execution policy,
-history, inventory recents, coordinator, M2 cosmetics or full release packaging
-is activated. Repository scope/recurrence and mandatory stops remain applicable.
-Complete. All nine installed checks pass: five task-page checks and all four
-gallery modes, including saved-default inheritance, retained task drafts,
-Rebaseline alignment and both About dialogs. The ordinary run passed 6,274 tests;
-its one exact-port expectation was migrated and all 45 affected lifecycle tests
-passed. The final interface run passed 2,129 tests; its two affected token/fake-DOM
-checks were corrected and all 14 focused cases passed. All 12 import contracts
-are kept. Independent source, provenance, correction and evidence reviews pass.
-Failed harness attempts and their bounded corrections remain in
-`build/gui-settings-20261029/verification.md` and the corresponding raw receipts.
-No production dialog workaround or relaxed test timeout/bound was introduced.
-Final minimum-width inspection corrected caption wrapping through intrinsic
-filter width and remaining-space Search sizing; 47 focused checks pass. The
-final installed run passed eight cases, then default Plan passed unchanged on
-its single rerun after a Plan-again transition failure of unestablished cause.
-Visual polish is `24edbc6c`; saved defaults are `8c44f88a`. About and session
-closure travel together in the following atomic commit.
+Independent ordinary/import/interface and nine installed obligations passed;
+minimum-width caption/Search correction passed 47 focused checks and all affected
+installed checks. The unchanged default Plan rerun followed a Plan-again failure
+of unestablished cause. Exact counts, provenance, failed harness attempts and
+review: `build/gui-settings-20261029/verification.md`. No production dialog
+workaround or relaxed timeout/bound was introduced.
 
 ### Shell gutter compensation — 2026-10-29
 
-Remove the document stable gutter, retain work-panel stable gutters on every
-page, and compensate globally with 14px inline-end padding (24px minus the
-shared 10px custom-scrollbar size). Gallery owns its document gutter and symmetric
-padding, removed during its production-shell witness. Forced colors intentionally
-retain browser width with the same padding. One CSS/gallery/docs commit; preserve
-all internal scroll owners, native input and action behavior. Gate: interface
-department, installed gallery/Plan/Inventory/execution cases, independent review.
-Complete: 2,105 interface tests and all nine installed cases pass (eight initial
-passes plus unchanged larger-execution rerun). The retained failed attempt waited
-for ordinary Resume; its underlying cause is unestablished. Independent review
-found no remaining issue. Evidence: `build/gui-gutter-20261029/`.
+Delivered document gutter removal with work-panel stable gutters and 14px
+inline-end compensation (24px minus the shared 10px custom scrollbar). Gallery
+retains its own symmetric/document-gutter policy outside the production-shell
+witness; forced colors retain browser width and compensation. Internal scroll
+owners and native actions remain. DESKTOP_UI owns layout; independently reviewed
+2,105 interface and nine installed passes are in `build/gui-gutter-20261029/`.
+The unchanged larger-execution rerun passed after an ordinary Resume wait failed;
+that earlier cause remains unestablished.
 
 ### Alignment closeout — 2026-10-29
 
-Review and commit the user's existing shared cloud/floating-control CSS edits:
-native 16px cloud in a 16x12px slot shifted up 1px, and 28px Go/Follow insets.
-Preserve the supplied CSS, accessible labels, hit targets and behavior. Migrate
-existing gallery geometry expectations and subject docs; interface department,
-four installed gallery modes and independent review close this single CSS commit.
-Complete: 2,105 interface tests and four installed gallery modes pass;
-independent review found no issues. Evidence: `build/gui-alignment-20261029/`.
+Committed the user's supplied cloud/floating-control CSS: native 16px cloud
+in a 16×12px slot shifted up 1px, and 28px Go/Follow insets. Accessible labels,
+hit targets and actions remain. DESKTOP_UI and the migrated gallery geometry
+witnesses own layout. Independent review, 2,105 interface checks and four
+installed gallery modes passed; `build/gui-alignment-20261029/`.
 
 ### Item detail grouping — 2026-10-29
 
-Rearrange Plan and Inventory item details into the user's divider-separated
-blocks, using 1:1.5 metadata columns. Plan puts operation/reason/recording before
-paths and metadata; Inventory groups presence, path, checksum/result/recording,
-attested facts, observed facts and timestamps. Folder details omit observed size
-and show their scope advisory only alongside eligible acknowledge/restore actions.
-One atomic presentation commit owns the two renderers, shared detail CSS, direct
-browser/gallery/native consumers and DESKTOP_UI. Preserve evidence currentness,
-conditional diagnostics, action scope, copyability and all bridge/domain contracts.
-Gate: focused detail probes, interfaces department, affected installed galleries
-and Plan/Inventory/execution checks, visual inspection and independent review.
-Status: complete in the detail-grouping commit from `2cf04ad2`; 2,105 interface
-tests, 64 focused/static checks and all nine installed cases pass (eight final-run
-passes plus the unchanged default Plan-shell rerun). Independent review found no
-remaining issue. Evidence: `build/gui-detail-groups-20261029/`, including retained
-sink-guard failure/correction and the transient Plan-again stage failure.
-Recurrence/mandatory stops remain binding;
-no lifecycle, selection, verifier, persistence or public-contract changes.
+Delivered divider-separated item details with 1:1.5 metadata columns: Plan
+operation/reason/recording precede paths/metadata; Inventory separates presence,
+path, checksum/result/recording, attested/observed facts and timestamps. Folder
+details omit observed size and show scope advice only with eligible visibility
+actions. Evidence currentness, conditional diagnostics, copyability, action scope
+and bridge/domain contracts remain. DESKTOP_UI owns presentation. Independent
+review, 2,105 interfaces, 64 focused/static and nine installed checks passed;
+`build/gui-detail-groups-20261029/` retains the sink-guard correction and transient
+Plan-again failure, without a claimed cause.
 
 ### Navigation context and compact controls — 2026-10-28
 
-User approved three atomic outcomes from `b8a2aabb` on `milestone1`.
-Execute-task builders and independent reviews serialize shared source owners.
-Evidence lives in `build/gui-position-20261028/` and subsequent named unit roots.
+Delivered pinned Fluent location icons, compact square controls and opaque,
+accessible wrappers; four-row context for explicit Go/Follow and move jumps,
+retaining target identity and refresh viewport; and the revised Filters
+matched/total badge with Inventory All count. Plan's existing All-item population
+includes mkdir, excludes ordinary structural/context nodes; Inventory default/All
+excludes acknowledged rows while its denominator includes them. Search/filter
+union does not double count and is independent of folding/windows. BRIDGE,
+PRESENTATION, DESKTOP_UI and TOOLS own these contracts.
 
-| ID | Outcome / finite owners | Verification and boundary | Status |
-| --- | --- | --- | --- |
-| P1 | Microsoft navigation-location-target / location-arrow assets through the pinned icon tool; 16px floating insets; square pause/resume, cancel, refresh and baseline dropdown controls. Catalog/generated assets, both renderers/CSS, direct icon/renderer/gallery/native consumers, DESKTOP_UI/TOOLS. | Icon provenance check, focused probes, interfaces/tools and affected installed gallery/journeys; preserve opaque wrappers, accessible names, normal button styles and action eligibility. One visual commit. | Complete: 134 focused, 29 geometry, 2,511 interface/tool passes (three existing skips), all seven installed checks; independent review. |
-| P2 | Shared four-row context for explicit Go/follow and move jumps, retaining target identity; preserve existing refresh viewport. Shared app navigation, Plan/Inventory/tree renderers and direct delayed-input/native probes; PRESENTATION/DESKTOP_UI. | Early/end targets, loaded/unloaded windows, stale responses, user scroll, refresh and keyboard focus; interfaces and affected headed checks. One navigation commit after P1. | Complete: six focused probes, 2,104 interface passes, native Inventory and both Plan shells; independent review. Evidence `build/gui-context-20261028/`; retained migrated-layout failures and foreground refusal precede final passes. |
-| P3 | Revised Filter button matching/total badge; replace active-category count, add Inventory All dropdown count. Plan counts existing All items including mkdir, excluding ordinary structural/context nodes. Inventory default/All excludes acknowledged rows; denominator includes them. One matched-item scalar per summary, exact bridge validators, existing matching owners, shared Filter, direct fixtures/gallery/native consumers and subject docs. | Search/filter union without double counting; folding/window independence; acknowledged/default/explicit views; exact validation, ordinary suite, original Search layout and native narrow-width nonoverlap. Preserve selected-filter emphasis and menu behavior. One revised counter commit after exact revert. | Complete in the revised counter commit containing this register. Exact revert `2a8d1843` removes `269736f6` synthetic fields/containment. 6,250 ordinary passes/four skips, 12 imports, focused116/count81/driver33 and all nine installed checks pass across initial four and corrected five. Evidence `build/gui-filter-button-20261028/`; independent review confirms inline Search layout. |
-
-User approved the revised narrow matched-item summary extension. Reuse existing
-All-item populations; no standalone caption or table-card containment change.
-No selection, effects, persistence, queued-input coordinator or recents changes.
-AGENTS recurrence and mandatory stops remain binding.
+The user approved one narrow matched-item summary scalar and preserved inline
+Search, existing menu emphasis, selection and effects. Revert `2a8d1843` removed
+`269736f6` synthetic fields/containment; no standalone caption or table-card
+containment shipped. Independently reviewed ordinary/import, provenance and
+installed gates passed. Receipts: `build/gui-position-20261028/`,
+`build/gui-context-20261028/`, `build/gui-filter-button-20261028/`, including
+migrated-layout failures and foreground refusal. No queued-input coordinator,
+recents or persistence change.
 
 ### Selection, navigation and detail refinement — 2026-10-28
 
-User approved this three-commit batch from `10b59e78` on `milestone1`.
-N1 shipped as `5d8e13de`; N2 as `791a6a03`; N3 is the selection commit
-containing this completed register. Evidence: `build/gui-controls-20261028/`,
-`build/gui-navigation-20261028/` and `build/gui-selection-20261028/`.
-Execute-task builders and fresh independent reviewers serialize shared owners.
+N1 (`5d8e13de`) delivered revised controls, selected-scope Baseline/Rebaseline
+on sync Inventory, Restore context action, folder names/green ordinary presence,
+concise details/muted labels and No change display. N2 (`791a6a03`) makes keyboard
+highlight drive fresh details and preserves surviving highlight/appropriate focus
+through same-task Refresh, with stale-detail retirement and no focus stealing.
+N3 restricts multi-highlight checkbox actions to highlighted rows' direct
+contributions; singleton/outside-range folders remain recursive, aggregate
+tri-state remains authoritative and Plan dependency closure is unchanged.
 
-| ID | Outcome / finite owners | Verification and boundary | Status |
-| --- | --- | --- | --- |
-| N1 | Requested control labels, selected-scope Baseline/Rebaseline on the sync task's Inventory page, Restore context action and folder action names; green ordinary folder presence, concise details, muted labels and No change display. app/inventory_review/plan_review JS, app CSS, direct renderer/gallery/native consumers and DESKTOP_UI/PRESENTATION. | Focused probes, interface suite and affected installed gallery/Inventory/execution checks; preserve current-publication guards, confirmation, raw outcomes and native identity witnesses. One presentation commit. | Complete: 114 focused, 2,100 interface and final count/driver checks pass; all seven installed checks pass across retained five and corrected execution rerun; independent review. |
-| N2 | Keyboard highlight drives fresh details; same-task Inventory refresh retains surviving highlight and appropriate focus. Inventory state and app/tree/renderers as needed, direct state/drain/browser/native consumers; PRESENTATION/INTERFACES/DESKTOP_UI. | Keyboard and off-window navigation, partial/full replacement, removed identities, stale detail responses, navigation/session replacement and no focus stealing; owning suites and installed input witnesses. One navigation commit after N1. | Complete: 2,102 interface passes, focused delayed/off-window and driver checks, both installed Plan shells and corrected Inventory rerun pass; independent review. |
-| N3 | Both tables' multi-highlight checkbox actions use only highlighted rows' direct contributions; singleton/outside-range folder clicks remain recursive and tri-state aggregates remain authoritative. Plan/Inventory selection owners, direct projection/drain/renderer/native consumers and PRESENTATION/DESKTOP_UI. | Cross-folder/collapsed/unloaded ranges, singleton/outside-range gestures, authoritative mixed states, stale revision rejection and unchanged Plan dependency closure; owning suites and installed input witnesses. One selection commit after N2. | Complete: 6,249 ordinary passes and four existing skips, 12 import contracts, focused owner/renderer checks and all three installed journeys accounted for; independent review. |
-
-Baseline/Rebaseline on either page means ordinary selected-file scope. The
-infrastructure's linked activity capability does not authorize a separate
-copied-file baseline product action; copied scope remains Verify-only. No new
-wire shape, filesystem effect policy, persistence, queued-input coordinator or
-recents work is authorized. The user approved migration of documented highlight
-replacement and highlighted-selection behavior; AGENTS stop rules remain.
+PRESENTATION/INTERFACES/DESKTOP_UI own these behaviors. Baseline/Rebaseline always
+uses ordinary selected files; linked activity capability grants no separate
+copied-file baseline action. Copied scope remains Verify-only. No new wire,
+effect policy, persistence, queued-input coordinator or recents work. Independent
+owning/ordinary/import and native input gates passed; evidence:
+`build/gui-controls-20261028/`, `build/gui-navigation-20261028/`,
+`build/gui-selection-20261028/`.
 
 ### Details and Inventory truth refinement — 2026-10-27
 
-User-authorized follow-up from `95576a4b` on `milestone1`, using execute-task,
-serialized builders and fresh independent review per atomic outcome.
+Delivered opaque ordinary Go/Follow controls, plain cloud glyph/Remote files;
+full-width path/hash with columned metadata and shared work-panel-session Details
+disclosure in the 1:2 task/item pane; and fresh Inventory presentation that does not retain stale verified
+evidence after changed observation. Historical activity remains separate.
+PRESENTATION/DESKTOP_UI/BRIDGE own the behavior. The nullable exact source path
+exists only with supplied `source_expected`; unknown/synthetic/target-only sources
+remain null. No window/event/persistent schema or execution-effect change.
 
-| ID | Outcome / owners | Verification and boundary | Status |
-| --- | --- | --- | --- |
-| D1 | Ordinary Go/Follow buttons on opaque wrappers; remove derived-color exception. Plain cloud glyph and Remote files label. Plan/Inventory renderers, CSS/tokens, icon catalog/generated assets, direct browser/gallery/token/icon consumers, DESKTOP_UI/TOOLS. | Focused renderer/token/icon checks, interface/tools departments and affected installed gallery/journeys. Preserve action emphasis, names, keyboard and forced colors. One controls commit. | Complete: 56 focused, 2,506 interface/tool passes and three existing skips; all seven installed cases pass across the retained five journeys and corrected gallery rerun; independent review. |
-| D2 | Mixed full-width path/hash and columned metadata details; action/reason before Plan metadata and available execution outcomes; concise applicable Inventory evidence/actions; 1:2 task/item pane. Shared work-panel-session disclosure state. App/panels/Plan/Inventory/CSS and direct browser/gallery/native consumers; approved nullable exact source-path migration through plan_projection, plan_review and bridge validator, direct projection/detail/drain/bridge fixtures; DESKTOP_UI/PRESENTATION/BRIDGE. | Long values, exact observed source provenance and absent unknown/target-only sources, file/folder/missing/error/execution facts, copyability, navigation/new tasks/manual close, stale detail retirement; focused, ordinary/import and installed journeys; independent review. One details commit after D3. | Complete: 417 focused checks; 6,244 ordinary passes and four existing skips with the stale ratio fixture corrected; 2,100 final interface and 26 final driver checks; 12 imports and all seven installed cases accounted by dependency. Independent review. |
-| D3 | Same-session refreshed Inventory must not present stale verified evidence after changed observation. Inventory renderer primary state, direct pane/native service fixtures and DESKTOP_UI. Retain historical activity evidence separately. | Native reproduction and bounded production-renderer witness; current-session results, fresh publication, failed refresh/retained publication, view changes; interface and installed Inventory gate, independent review. One freshness-presentation commit after D1. | Complete: native and renderer reproduction, 15 focused and 2,100 interface passes; installed Inventory rerun passes after foreground interruption; fresh review. |
+Native ordinary-only subsets complete in all three modes; selected missing files
+truthfully yield `verification-incomplete` / `integrity=missing`, accepted by the
+user without terminal reclassification. No queued-input coordinator or recents.
 
-The reported subset headline was clarified to mixed ordinary/missing files on
-`b243bb71`. Native ordinary-only subsets complete for all three modes; including
-a selected missing file produces `verification-incomplete` / `integrity=missing`.
-User accepts missing-file incompleteness; retain that truthful behavior. No
-terminal-classification change is needed. D2's approved source field preserves
-the exact operation source spelling only with supplied `source_expected` facts;
-unknown/synthetic/target-only subjects remain null. No window, event, persistent
-schema or execution-effect contract changes. Source paths reuse the existing
-target-path joining, formatting and full-width rendering infrastructure.
-
-No queued-input coordinator, recents, domain effect change, M1-12, release,
-DOC-2, push or PR is activated. Existing mandatory/recurrence stops apply.
-Parent owns M1_PLAN, CHANGELOG and HANDOFF. Shared production/test writers
-serialize. Evidence belongs in ignored `build/gui-details-20261027/`.
-
-D2 review paused new product corrections under the recurrence rule: the new
-detail header can supply an exact item while its shared renderer still consumes
-table-owned session/mode context. The finite review found three calls in
-`inventory_review.js` (row creation, live repaint, exact detail header).
-
-| Context mismatch | Consequence / bounded correction |
-| --- | --- |
-| Older exact detail versus newer same-owner window result | Header initially retained the old result; corrected fallback uses the newer window item. |
-| New current-session exact result versus older table session/mode | Tooltip can name the previous mode and live progress can cover an already settled item. Pass item, owning session and mode as one coherent context. |
-
-The implemented reorganization changed only that renderer and existing direct
-probes, with table defaults retaining their bounded map and the header selecting
-one admitted context. Freshness, history, progress, wire and effect rules remain
-intact. Both timing cases and existing refreshed-state/navigation cases passed;
-affected ordinary/native evidence was refreshed. The user explicitly approved
-this narrow reorganization on 2026-10-27. Checker migrations stayed within the
-named population; correction and independent verification are complete.
+After recurrence review the user approved passing item/session/mode as one
+coherent renderer context: newer same-owner window results supersede older
+exact details, and new exact results cannot borrow an older table's mode or live
+progress. The three row/repaint/header calls retain table defaults and one
+admitted header context. Both timing cases, refreshed/navigation behavior and
+affected ordinary/import/native gates passed independent review. Source and
+correction evidence: `build/gui-details-20261027/`.
 
 ### Inventory view reuse and control refinement — 2026-10-27
 
-User-authorized GUI round from `c7868abd` on `milestone1`, following execute-task
-with independent review and serialized atomic commits.
+V1 reuses confirmed Inventory views, rereads on invalidation/uncertain freshness
+or session replacement and preserves mounted panes. V2 delivered smaller cloud,
+filled Resume and opaque icon-only Go/Follow controls through the pinned icon
+tool. PRESENTATION/DESKTOP_UI/TOOLS own current behavior. Independent owning and
+installed gates passed; `build/gui-inventory-reuse-20261027/`.
 
-| ID | Outcome and finite owners | Verification / commit boundary | Status |
-| --- | --- | --- | --- |
-| V1 | Reuse confirmed Inventory views on navigation; reread on invalidation, uncertain freshness or session changes. Separate view reads from task activity and preserve the mounted pane during rereads. App, Inventory renderer, task-status helper, direct Inventory browser/native consumers and DESKTOP_UI. | Delayed/stale/session/invalidation reads, navigation reuse, stable headline/pane and preserved selection/action custody; interface department and affected installed Inventory/shell/execution journeys, fresh review. One view-lifecycle commit. | Complete: 2,098 interface tests and all five installed Inventory/shell/execution cases pass; independent review confirms both race corrections. |
-| V2 | Smaller, better-spaced filename cloud glyph; filled Resume play glyph; icon-only opaque Go-current (eye) and autoscroll (location-ripple) buttons. Plan/Inventory renderers, shared CSS, fixed icon catalog/generated assets, direct browser/gallery/native consumers and DESKTOP_UI/TOOLS. | Icon provenance, accessible action names, button/row geometry and opaque surfaces in installed gallery; affected interface/tool checks and native journeys, fresh review. One visual-control commit after V1. | Complete: 45 focused checks, 2,505 unaffected interface/tool passes plus all 12 corrected token-policy checks, three existing skips, and all seven installed checks; independent review. |
-| V3 | After V2, investigate queued input under stale cache plus background refresh, genuine invalidation during foreground work, navigation/session replacement, and explicit Reload during delayed work. Assess a small coordinator on existing `tableReadOwner` for full Inventory refresh decisions. App/read owner and direct browser probes only; ignored bounded investigation witnesses allowed. | Report observed input disposition, ownership and tradeoffs from the final V2 revision; recommend whether a coordinator is necessary. Investigation only; no product/test coordinator or behavior changes this round. | Complete at `637a4d6`: nine bounded app witnesses, including source-supported active-Verify Gap timing. Ordinary background refresh preserves latest input; overriding refresh can retire it. Queued-input policy precedes any coordinator; local correction may suffice. No implementation. |
+The user adjudicated two foreground-custody recurrences: background task-list
+refresh discarded pending Search, and interrupted highlight made cache freshness
+bypass that guard. Full-view loading now respects the foreground operation's
+captured session/navigation/invalidation identity independently of cache freshness.
+Selection/highlight custody remains; native Refresh establishes hidden Details
+explicitly and acknowledgement checks retained expanded Details.
 
-Preserve exact session/publication identity, selection, stale-response retirement,
-bounded reads, reviewed effects, confirmation and action custody. No backend,
-bridge, recents, M1-12, release, DOC-2, push or PR work. Inventory recents remain
-shelved. Existing mandatory and recurrence stops apply. Parent owns this register,
-CHANGELOG and HANDOFF; shared source/test writers serialize. Evidence belongs in
-ignored `build/gui-inventory-reuse-20261027/`.
-
-V1 review found interrupted-highlight freshness loss and a repeated foreground
-custody mechanism. The recurrence pause was adjudicated by the user on
-2026-10-27: protect foreground work using its own captured session, navigation
-and invalidation identity, independently of cached-view freshness; verify both
-triggers and continue V1/V2. No scope or effect authority expands.
-
-| Trigger / consequence | Owner and common correction |
-| --- | --- |
-| An unrelated task-list refresh during a pending search discards its queued latest query. | App full-view loader must defer to current foreground ownership. |
-| An interrupted highlight marks the cache stale; the same background refresh then bypasses that guard and again loses queued search. | Same loader guard must use the foreground operation's session identity, not cache confirmation. Existing selection/highlight custody remains. |
-
-Direct consumers are the Inventory app probe and installed Inventory driver.
-The driver must explicitly establish hidden Details for its selected-Refresh
-scenario; it must also assert retained expanded Details across acknowledgement.
-The native input, effect, foreground and hit-target assertions remain required.
+V3 at `637a4d6` is investigation only: nine bounded witnesses include active-Verify
+Gap timing. Ordinary background refresh preserves latest input; overriding
+refresh can retire it. Queued-input policy must precede any coordinator; a local
+correction may suffice. No coordinator, backend/bridge redesign or recents
+implementation is authorized; Inventory recents remain shelved.
 
 ### Headline and startup refinement — 2026-10-26
 
-User-authorized GUI round from `7015596a` on `milestone1`, with execute-task,
-fresh independent review and serialized atomic commits. Domain/bridge contracts,
-current-session versus retained-result identity, recovery, selection, exact
-controls and reviewed filesystem effects remain unchanged.
+H1 (`fdc0e839`) aligns ordinary rail/card operation headlines with the retained
+error/recovery/result exceptions and full recovery guidance. Representative
+gallery tabs, not an exhaustive catalog, cover normal/minimum-width wrapping
+without shrinking text. H2 creates one task only on an initially empty list with
+unchanged mutation revision and no creation attempt; uncertain-create recovery
+remains, and later Close/refresh never replenishes tasks. DESKTOP_UI/INTERFACES
+own the behavior; independent interface and installed gates passed.
 
-| ID | Outcome and finite owners | Verification / commit boundary | Status |
-| --- | --- | --- | --- |
-| H1 | Align ordinary rail/card headlines with explicit operation names; preserve user-listed error/recovery/retained-result exceptions. Keep rail detail concise and single-line. Ratify a few representative production-rendered task tabs in the gallery, without an exhaustive state catalog. Task-status, rail, Plan/Inventory renderers, CSS, direct browser/gallery/native text consumers and DESKTOP_UI. | Focused state matrix, interface department, affected installed gallery/native checks including the three longest headline candidates; independent review. One presentation commit. | Complete: 2,091 unaffected interface passes plus the corrected ordinary Inventory pane fixture pass; all six installed obligations pass. All three examples fit one line at normal width; longest uses two at minimum width without shrinking text. Full exceptional recovery guidance remains in rail text/tooltip. |
-| H2 | Create one empty task at startup only when the initial task list is empty. Replace the empty rail placeholder with a task-card-sized ordinary New Task button using add-square-multiple; preserve top create and normal uncertain-create recovery. App startup, rail/CSS, direct startup/shell/gallery/setup/native consumers and DESKTOP_UI/INTERFACES. | Empty/existing startup, creation recovery/races, no recreation after last close, button action/accessibility/layout; interface department and affected installed witnesses; independent review. One startup/empty-state commit after H1. | Complete from H1 `fdc0e839`: 2,098 interface tests and all five installed obligations pass. Startup reuses creation only when initial-list mutation revision is unchanged and no creation attempt exists. Later Close/refresh does not replenish tasks. |
-| H3 | Investigate Inventory paths in Setup recents without implementation. Existing recent-query/persistence, inventory admission/scan and Setup consumers. | Trace policy, schema/API consequences and direct tests; report bounded future scope. | Investigation complete: current dropdowns derive from sync runs. Observed-location queries need no schema change but include integrity and post-registration recording failures; exact admitted Inventory-start hints need explicit bounded persistence ownership and potentially a new bridge hint representation. No implementation authorized. |
-
-Parent owns this register, CHANGELOG and HANDOFF; product/test writers serialize
-shared files. Existing mandatory and recurrence stops apply. Evidence lives in
-ignored `build/gui-headlines-startup-20261026/`. No M1-12, release, DOC-2, push,
-PR, recent-path behavior or persistence migration is activated.
-H1 is integrated in `fdc0e839`; H2 is the startup/empty-state commit containing
-the final handoff. Both received independent source and evidence review.
-Native driver corrections and failed receipts remain in evidence; no original
-input, lifecycle or effect assertion was weakened. No outstanding implementation
-or test gate remains in this round.
+H3 is investigation only. Current recents derive from sync runs. Observed-location
+queries need no schema change but include integrity/post-registration recording
+failures; exact admitted Inventory-start hints require bounded persistence
+ownership and perhaps a bridge hint shape. No recents/persistence implementation.
+Evidence: `build/gui-headlines-startup-20261026/`; corrected native drivers and
+failed receipts remain without weakened input/lifecycle/effect assertions.
 
 ### Action-row refinement — 2026-10-25
 
-User authorized the next GUI round from `2dcdc05` on `milestone1`, retaining
-execute-task's independent review and atomic commits. Serialize shared renderers,
-CSS, fixtures and documentation across these outcomes:
-
-| ID | Outcome and finite owners | Verification / commit boundary | Status |
-| --- | --- | --- | --- |
-| A1 | Hide Plan Again while execution/admission is active; put icon-only Pause/Resume and Cancel in the top action row; keep the selected switcher half interactive with hover/click and accent on both pages, while the other half retains destination eligibility. Plan/Inventory renderers, app CSS, direct Plan/Inventory/shell/execution probes and installed layout consumers, DESKTOP_UI. | Active, paused, canceling, admission/recovery and terminal action states; preserved cancel confirmation and pane locks, selected-half same-page clicks; interface department, affected installed gallery/native journeys, fresh review. One controls commit. | Complete; 2,089 unaffected interface passes, six migrated trace-helper passes, all six installed gallery/native cases passed. Independent review. |
-| A2 | Inventory toolbar order: ordinary clockwise refresh icon, Baseline split button with Rebaseline dropdown, accented Verify. Remove toolbar Refresh selected, retain context-menu action; use icon-only Inventory Pause/Resume/Cancel. Inventory renderer, existing menu/component styles only as needed, direct browser/gallery/native Inventory consumers, DESKTOP_UI. | Dropdown keyboard/dismissal/currentness, baseline direct action, confirmation-gated rebaseline, context refresh target, toolbar geometry; interface department, affected installed gallery/native journeys, fresh review. One toolbar commit. | Complete; 2,092 interface tests and all six installed gallery/native cases passed. Two foreground-blocked shell cases passed unchanged on rerun after user readiness. Independent review. |
-| A3 | Task-rail headline uses the main status's semantic colors. Keep existing surface-specific wording and current-session identity; use a headline-only rail state where view-error and missing-result presentation differ from progress state, and correct paused Plan headline color. Rail/Plan renderers, CSS and direct status/gallery consumers, DESKTOP_UI. | Ready/running/paused/terminal/error/recovery colors and truthful headlines across matching-session surfaces in light/dark; preserve forced-color system foreground on selected/hovered cards. Interface department, installed gallery and fresh review. One status presentation commit. | Complete; three focused tests, 2,092 interface tests and installed light/dark/forced gallery passed. Independent source/evidence review approved. |
-
-Preserve domain/bridge contracts, reviewed execution, exact-session controls,
-confirmation, selection, recovery, progress and viewport anchoring. No new
-backend policy or execution authorization. Existing mandatory/recurrence stops
-apply. Parent owns register/changelog/handoff; builder serializes source/tests.
-Evidence: ignored `build/gui-actions-20261025/`. M1-12, release, DOC-2, push and
-PR remain inactive. Microsoft Fluent button guidance and reference repository
-guide split-button and disabled-state details.
-All three outcomes are integrated on `milestone1`: A1 `058a6b85`, A2 `ba905d0`,
-and A3 in this final status-color commit. No unresolved findings, outstanding
-gates or task-created recovery/worktree refs. Earlier failed receipts remain
-in evidence; no native focus or action/effect assertion was relaxed.
+A1 (`058a6b85`) hides Plan Again during execution/admission, places icon-only
+Pause/Resume/Cancel in the action row and keeps selected switcher halves accented
+and interactive while destination halves retain eligibility. A2 (`ba905d0`)
+orders Inventory Refresh, Baseline/Rebaseline split and Verify, retaining
+Refresh-selected context scope and explicit rebaseline confirmation. A3 aligns
+rail semantic colors with main status, preserving surface wording/current
+session, view-error/missing-result distinctions and forced-color foreground.
+DESKTOP_UI owns presentation; exact controls, selection, recovery and viewport
+anchoring remain. Independent interface and all affected installed checks passed;
+`build/gui-actions-20261025/` retains foreground refusals and unchanged reruns.
+No new backend policy or execution authorization.
 
 ### Status-card refinement — 2026-10-25
 
-User authorized the next GUI round from `98ee15dd` on `milestone1`, continuing
-execute-task's independent review and atomic commits. Two serialized outcomes:
-
-| ID | Outcome and finite owners | Verification / commit boundary | Status |
-| --- | --- | --- | --- |
-| S1 | Card text is unselectable outside the expanded Details column; item paths/hashes and other detail text remain selectable/copyable, and inputs retain editing. Shared component/app CSS, direct installed gallery consumers, DESKTOP_UI. | Real browser text selection/copy and input checks, interface department, independent review; one selection-policy commit. | Complete; 2,091 unaffected interface passes, 40 corrected CSS/gallery consumer passes, installed light/dark/forced gallery and independent review. |
-| S2 | Both status cards use short `statusTitle`, supporting `facts`, and one explanatory/advisory `status`, with the two supporting rows left of Details. Merge Plan execution alert; remove Inventory's separate selection/result paragraphs and repeated facts. Remove the user-identified redundant cloud-provider paragraph from Plan Details while keeping the existing remote-file advisory. Plan/Inventory renderers, shared task-status helpers only as needed, CSS, direct browser/native consumers, DESKTOP_UI. | Loading/ready/running/paused/terminal/error/recovery/Gap cases preserve truthful feedback and controls; installed minimum/default-width layout, interface department and independent review; one status-layout commit. | Complete; 87 focused, 2,092 interface and 40 migrated-helper passes, 12 import contracts, installed gallery plus all five input cases passed. Independent source and final evidence review; integrated in this status-card commit. |
-
-Preserve workflow/bridge contracts, evidence and action eligibility, progress,
-selection authority, read recovery, detail contents and the recent viewport
-anchoring fix. Short headlines need no padding; advisory text may wrap rather
-than lose essential recovery information. No domain behavior, release, M1-12,
-DOC-2, push or PR is activated. Existing mandatory and recurrence stops apply.
-Parent owns delivery/changelog/handoff; one builder serializes shared CSS/tests.
-Evidence belongs in ignored `build/gui-status-20261025/`. S1 is `00dfb9d`;
-S2 is this verified closeout commit. The temporary recovery state was rebuilt
-into S2 after the user confirmed desktop readiness. Final source/test hashes
-match the reviewed and tested candidate. Earlier foreground failures and stale
-layout assertions remain in evidence; no input/safety checks were weakened.
-No unresolved finding or task-created recovery ref remains.
+S1 (`00dfb9d`) makes card text unselectable outside expanded Details while
+paths/hashes/detail text stay copyable and inputs editable. S2 uses a short
+statusTitle, facts and one advisory left of Details, merges Plan's execution
+alert and removes duplicate Inventory paragraphs/counters and the redundant
+cloud-provider paragraph while retaining the remote-file advisory. DESKTOP_UI
+owns layout; short headlines need no padding and recovery text may wrap.
+Eligibility, progress, selection, details, read recovery and viewport anchoring
+remain. Independent interface/import and installed layout/input checks passed;
+`build/gui-status-20261025/` retains the rebuilt recovery accounting, earlier
+foreground failures and stale layout corrections. No domain behavior changed.
 
 ### Inventory GUI follow-up — 2026-10-23
 
-User authorized seven GUI corrections with execute-task, independent review and
-small atomic commits, starting at `389b4895` on `milestone1`. M1-12, release,
-DOC-2, push and PR remain inactive. Shared documents and gates are serialized;
-each unit receives fresh adversarial review before its commit.
+Delivered stable selection geometry/Sync-Integrity accent (G1 `8de9a330`),
+truthful baseline wording (G2 `243b14d2`), initial selection (G3 `68db0d26`),
+Presence results/progress with correct session pairing (G4 `cbd27e6f`) and
+actionable read-recovery controls in each top action row (G5). New baseline is
+not comparison verification; workflow/CLI `verification-incomplete` remains.
+Present ordinary folders have blank Presence; exceptional folder states/notes
+and unavailable controls remain.
 
-| ID | Accepted outcome and owners | Verification and atomic boundary | Status |
-| --- | --- | --- | --- |
-| G1 | Stable Inventory highlight geometry and visible selected Sync/Integrity accent, preserving existing disabled controls until execution finishes. Web app CSS; direct browser/gallery consumers; DESKTOP_UI. | Selection geometry and disabled selected/unavailable control behavior, interface department and installed appearance witness; one selected-state fix. | Complete; 87 focused passes, 2,083 interface passes, installed light/dark/forced gallery and independent review. |
-| G2 | Explain successful baseline creation during Verify without claiming comparison verification. Desktop task-status digest and its shell probe; DESKTOP_UI. | Baseline aggregate and adverse terminal axes through production digest, existing mixed-result runtime witness; interface department; one summary fix. | Complete; focused production shell probe, 2,083 interface passes and independent review. |
-| G3 | Check all selectable files on a new explicit Inventory scan/Refresh publication; folders reflect aggregate selection. Inventory review state/drain and direct review, composition and headed consumers; PRESENTATION/DESKTOP_UI. | Initial/new user scan selects files, integrity-owned internal scan and visibility publication preserve choices, filtered/off-window selection and native journey; one default-selection fix. | Complete; 278 focused, 2,091 interface passes and installed Inventory journey; independently reviewed. Superseded next by G3b per user sequencing. |
-| G3b | User clarification: apply all-selected default only once at the first Inventory publication. Every later scan/Refresh retains checked/unchecked surviving files, removes departed IDs and leaves new files unchecked. Missing ledger rows retain checkbox state, explicitly confirmed by the user. Same adapter/direct consumer population as G3. | Initial all-selected plus checked/unchecked/removal/new-file replacement composition and native journey; separate correction commit after G3 as explicitly requested. | Complete; 279 focused and 6,229 ordinary passes, installed Inventory journey and independent review. |
-| G4 | Put Inventory live integrity results and existing per-item progress in Presence; ordinary present folders have blank Presence, retaining exceptional folder states. Inventory renderer and direct browser/gallery/native result consumers; DESKTOP_UI. | Active/paused/terminal result precedence, supplied progress, missing/reappeared/unsupported folders and notes retention; interface department and installed witness; one Presence rendering fix. | Complete; focused probes, 2,091 interface passes, installed Inventory and light/dark/forced gallery. Independent review caught and confirmed correction of async result/session pairing. |
-| G5 | Narrow Inventory reload visibility to actionable read recovery and place both pages' reload controls in their top action rows. Plan/Inventory renderer, app read-recovery state and direct browser/gallery consumers; DESKTOP_UI. | Loading/refresh/update do not flash recovery, real read failure remains recoverable, both placements; interface department and installed witness; one recovery-control fix. | Complete; focused probes, installed Inventory and gallery, independent review including corrected viewport recovery clearing. Final department result recorded below. |
-
-Preserve filesystem/evidence effects, eligibility, reviewed starts, session/result
-identity, bounded windows, selection authority, accessibility and unavailable
-controls. G2 changes GUI wording only: a new baseline is not a comparison and the
-workflow/CLI `verification-incomplete` classification remains intact. G3b supersedes
-G3's later explicit-Refresh reset after G3 was committed, following the user's
-in-turn sequencing request. Final selection defaults once, then preserves
-surviving membership; a no-scan execution ledger retains its existing default.
-G4 consumes existing
-progress facts without adding a second reducer. Direct test consumers migrate
-with their production behavior; no wire/schema migration was needed. AGENTS
-mandatory and recurrence stops apply. Evidence: `build/gui-followup-20261023/`.
-
-Integrated G1 `8de9a330`, G2 `243b14d2`, G3 `68db0d26`, G4 `cbd27e6f`,
-G3b `5e83201`, and G5 in this closeout commit. Final ordinary gate: 6,229
-passed, four existing privilege skips, 35 headed deselections; 12 import
-contracts passed. The final G5 viewport-recovery correction received renewed
-independent review and affected interface/native reruns: 2,092 interface passes.
-Both installed checks
-passed, covering the Inventory journey and light/dark/forced gallery. Unchanged
-non-interface ordinary evidence remains valid. No unresolved finding, task-owned
-worktree or branch remains; M1-12/release/DOC-2 stay inactive.
+The user explicitly sequenced G3b (`5e83201`) after G3: all-selected defaults
+only on first Inventory publication. Later scans/Refresh retain surviving
+checked/unchecked files, remove departed IDs and leave new files unchecked;
+missing ledger rows retain choices. No-scan execution ledgers keep their own
+default. PRESENTATION/DESKTOP_UI own behavior; no second progress reducer or
+wire/schema migration shipped. Independent ordinary/import/interface and
+installed Inventory/gallery gates passed; `build/gui-followup-20261023/` retains
+final G5 viewport-recovery review, failed receipts and exact gate accounting.
 
 ### Recall availability advisory — 2026-10-22
 
-User authorized this bounded M1 batch with execute-task, starting at `adce88d`
-after separately committing the preexisting toolchain-maintenance documentation.
-The orchestrator owns this register, HANDOFF, CHANGELOG, integration and review;
-builders serialize shared source and test gates. Original checkout: `milestone1`.
+RA1 `a3aa2e4`, RA2 `b3f1c2c`, RA3 `ecbeed3` and the reviewed RA4 GUI delivery
+document local effects/completion and expose positive recall evidence, full-scan
+file/logical-byte counters, row indicators and filters. DEFENSE/SCANNER/FEATURES
+own cloud policy; DATABASE retains observations; BRIDGE/PRESENTATION own bounded
+projection, DESKTOP_UI/TOOLS own accessible pinned Fluent assets.
 
-| ID | Accepted outcome and finite owners | Verification and atomic boundary | Status |
-| --- | --- | --- | --- |
-| RA1 | Clarify cloud policy in DEFENSE, FEATURES, SCANNER and relevant README/PREFLIGHT limitations: reviewed local effects, local completion, advisory rather than network authorization; document actual hydration boundary and M2 next steps. | Source/native-dependency audit, existing OneDrive evidence limits, documentation consistency/link/diff checks, independent review; documentation commit. | Complete; `a3aa2e4`. |
-| RA2 | Retain positive recall evidence from already-observed attributes for ordinary and unsupported scan entries; preserve file size where available. Core models/classification, scanner, recorder/repository and their direct contract/test consumers; SCANNER/DATABASE. | Focused scanner/persistence roundtrip and malformed/missing evidence cases, owning and direct consumer departments, independent review; evidence-retention commit. | Complete; ordinary 6,209 passed/four existing privilege skips, imports 12, independent review approved. |
-| RA3 | Workflow projections and desktop bridge expose full-scan file count/logical byte total, row-specific recall flags and matching filters for Plan/Inventory. Owners: workflow models/inventory/plan projections, web review/commands/drain, browser bridge validators, direct fixtures; BRIDGE/PRESENTATION. | Full-scan vs selection/window/filter invariance, source/target and unsupported coverage, stale/missing observations, bounded wire validation and overlapping filter semantics; affected departments and independent review; bridge commit. | Complete; ordinary 6,219 passed/four existing privilege skips, imports 12; independent review approved. |
-| RA4 | Integrate accessible cloud-arrow-down indicators and non-local filter choices in Plan/Inventory. Use pinned Microsoft Fluent icon catalog/generator and existing filter/menu conventions; no summary counter UI. Assets/catalog, frontend/native/headed fixtures, DESKTOP_UI/TOOLS. | Production browser consumers, icon provenance/check, real installed GUI/filter and gallery witnesses, ordinary suite/import contracts, independent review; GUI commit and batch closeout. | Complete; 6,220 ordinary passes/four existing privilege skips, four installed GUI modes, 12 import contracts; independent review and evidence below. |
+Recall is positive `0x00400000` evidence independent of reparse markers; absence
+does not prove local availability. Directory flags do not add file bytes. Totals
+include observed unsupported files with usable evidence after ignores, independent
+of selection/window/filter, with unknown/partial/overflow explicit. Source/target
+observations stay distinct; combining them is not physical deduplication. Logical
+size is not network traffic, and persisted evidence is not a live residency probe.
 
-Recall means positive `0x00400000` evidence, independently of reparse markers;
-absence is not proof of local availability. Directories can carry the row flag,
-but counters count files only. Counters describe all observed files in the scan
-scope after ignores, including unsupported files with usable evidence, not only
-selected/executable operations. Plan source/target observations remain distinct;
-any combined count counts observations rather than deduplicating physical objects.
-Sizes are logical bytes, not predicted network traffic. Partial/unavailable scan
-facts remain explicit; persisted observations never become a current live probe.
+Advisory calculation adds no I/O, eligibility or operation reason. Root/reparse/
+containment, fresh admission, scan completeness and local settlement stay intact.
+No hydration authorization, provider compatibility, cloud completion, remote
+verification or universal detection/no-hydration guarantee shipped. Aggregate
+counters remain bridge-only; status integration is future and M2 owns stronger
+detection/hydration guarantees and cloud completion policy.
+The finite native audit covers enumeration, stat, identity fallback and intentional
+content reads; no small complete no-hydration fix was established. Existing user
+OneDrive files remain read-only and must not be content-read.
 
-Preserve unsupported eligibility, reparse/root/containment checks, scan completeness,
-selection, destructive review, local settlement truth and interface bounds. Advisory
-calculation adds no filesystem I/O and is orthogonal to operation reasons. Do not
-introduce hydration authorization, cloud completion tracking, remote verification,
-provider-specific compatibility or a universal detection/no-hydration guarantee.
-M2 owns stronger guarantees; the finite audit covers enumeration, root/scoped stat,
-stable-identity fallback and intentional executor/verifier content reads. No small
-complete no-hydration fix is established; this batch documents that boundary.
-Existing user OneDrive files remain read-only and must not be content-read.
-AGENTS mandatory and recurrence stops apply. M1-12/release/DOC-2, push and PR remain
-inactive. Evidence and failed receipts: `build/recall-advisory-20261022/`.
-Delivered commits: RA1 `a3aa2e4`, RA2 `b3f1c2c`, RA3 `ecbeed3`; RA4 is
-the GUI delivery commit containing this closeout. Each outcome received an
-independent review before integration. `reviews.md` and `ra2-receipt.md` through
-`ra4-receipt.md` under the evidence root retain corrections, failed receipts and
-final gate identities; Git retains the finite checkpoint elaborations.
-
-The final GUI candidate passed 6,220 ordinary tests (four existing privilege
-skips), four installed gallery modes and 12 import contracts with 540 unchanged
-inputs. Native GUI evidence covers the actual filter callback, matching row,
-accessible label, installed icon mask and layout; no recall-specimen bitmap was
-captured. The full OneDrive scan observed two recall-marked files totaling
-79,529,014 logical bytes, with both online allocations still zero afterward.
-That bounded observation does not establish a universal no-hydration guarantee.
-Aggregate counters remain bridge-only. Strong detection and hydration guarantees,
-cloud completion tracking and new authorization dialogs remain excluded.
+Independent ordinary/import and four installed gallery modes passed with 540
+unchanged inputs; review/receipts: `build/recall-advisory-20261022/`, including
+`reviews.md` and `ra2-receipt.md` through `ra4-receipt.md`. No recall-specimen
+bitmap was captured. Two recall-marked OneDrive files totaled 79,529,014 logical
+bytes with zero online allocation afterward; this bounded observation establishes
+no universal no-hydration guarantee.
 
 ### Planning observation optimization — 2026-10-19
 
@@ -950,9 +617,8 @@ The matching wheel, manifests, raw receipts, source staging and retained referen
 environment remain; all failed or unexplained fixtures are untouched.
 `rv6-cleanup-01.json` records the exact subtree.
 
-The requested RV3 review pause ended with acceptance and RV4–6 resumption on
-2026-10-18. The consolidation is complete; stop for recap. M1-12, release, DOC-2,
-push and PR remain inactive.
+The RV3 review pause ended with user acceptance and RV4–6 resumption on
+2026-10-18; the consolidation is complete.
 
 ### Verify table hardening — 2026-10-15–16
 
@@ -1245,10 +911,9 @@ temporary worktrees were removed; only regenerable caches accompanied worktree
 removal. Raw evidence, manifests and five pre-existing stashes remain.
 `recovery-cleanup-20261014.log` records the checks and exact removals.
 
-Stop here for recap and GUI tweaks. Existing Inventory legibility and physical
-wheel/tilt observations remain for that review, without a claimed fix or visual
-acceptance. M1-12, release, terminal subset retry and unrelated optimization
-remain outside this delivery.
+The requested recap/GUI pause closed this delivery. Inventory legibility and
+physical wheel/tilt observations remain without a claimed fix or visual
+acceptance. Terminal subset retry and unrelated optimization were excluded.
 
 This delivery preserved atomic publication, conditional recording including
 prior absence, root admission, fixed continuation identity and original
@@ -1316,9 +981,9 @@ warnings stay outside path/action scope; publication is complete or keeps the
 prior complete generation. Baseline, verify and rebaseline remain distinct.
 Rebaseline requires acknowledgement, includes eligible selected null-evidence
 files, creates/replaces evidence after fresh hash and clears verification
-freshness without becoming compare-and-accept. Manual exact post-copy
-verification uses atomic handoff classification on a ready subset, preserves
-execution truth and reports ineligible outcomes honestly.
+freshness without becoming compare-and-accept. The historical exact-manual handoff preserved execution truth and truthful
+ineligible outcomes; RV1 superseded that desktop action with ordinary copied-file
+scan/Verify under workflow-owned scope.
 
 Release remains accepted. [INTERFACES](INTERFACES.md#sh-g-release-criteria)
 owns open SH-G-15 cold-start/repeated/long-workload resource policy, still without
@@ -1645,7 +1310,7 @@ CHANGELOG and the named ignored evidence hold its chronology and failed receipts
 | AB-7, AB-7R, AB-7S and corrections | Existing asynchronous admission/completion retains original results for effect/lifecycle commands without elapsed-time mutation abandonment or replay. Bounded observation, late adoption, explicit unavailable/invalid-result feedback, duplicate protection, exact intent fences and pending Close survive. Five revisioned/current-state commands use refresh or fresh choice. One browser attempt/settlement owner replaces duplicate recovery paths. [BRIDGE](BRIDGE.md), [INTERFACES](INTERFACES.md), [DESKTOP_UI](DESKTOP_UI.md). | `6287db0c`, `d4351acd`, `514d71d1`, corrections through `4f1537c2`; `build/post-m1-8-ablation-20260925/ab7-verification.md`, `ab7r-verification.md`, `ab7s-verification.md` and later review receipts. The earlier unexplained Setup/Plan-again observations are not claimed fixed. |
 | AB-8 and follow-up | One Python task/session snapshot owns semantic progress and terminal presentation; the page atomically adopts bounded facts. Gap uncertainty, exact scalar identity, item windows/detail, transport replay, local interaction, D4, command recovery and Close remain. A task-list summary can briefly precede snapshot delivery without becoming a second terminal authority; record adoption reconciles them. [BRIDGE](BRIDGE.md), [PRESENTATION](PRESENTATION.md), [INTERFACES](INTERFACES.md). | `7445f70a`, `4ff11a8`; `build/ab8-resume-20260926/` and `build/ab8-followup-20260926/`. Full event-body removal remains a separate protocol decision. The earlier stack/wrap rerun's cause was not established. |
 | AB-9 | Duplicate CSS/source/gallery spelling pins retired with behavioral, computed-style, native, accessibility and security witnesses retained; no production asset changed. [TESTS](TESTS.md), [DESKTOP_UI](DESKTOP_UI.md). | `7af07724`; `build/ab9-20260926/verification.md` and `detector-map.md`. |
-| AB-10 | Integrated workflow, boundary and evidence sweep; one stale optional execution-UI feedback driver/checker corrected while frozen historical JSON and product semantics stayed unchanged. Required retained gates and final endpoint/installed journeys were accounted by dependency. | `cb57c41a` (first AB-10 commit); `build/ab10-20260926/verification.md`, `reuse-and-raw-evidence.json`, review and link receipts. The bridge-event diagnostic remains incomplete with an unassigned event-v5 fixture migration; it claims no product cause, release gate or performance result. |
+| AB-10 | Integrated workflow, boundary and evidence sweep; one stale optional execution-UI feedback driver/checker corrected while frozen historical JSON and product semantics stayed unchanged. Required retained gates and final endpoint/installed journeys were accounted by dependency. | `cb57c41a` (first AB-10 commit); `build/ab10-20260926/verification.md`, `reuse-and-raw-evidence.json`, review and link receipts. IR-BRIDGE later migrated the event-v5 fixture; this remains diagnostic evidence without a release or performance acceptance claim. |
 
 Post-closeout consolidation archived the study and pruned the accounted AB-3,
 AB-6 gesture, GUI-J and GUI-M2 recovery refs plus the AB-3 worktree. Exact tips

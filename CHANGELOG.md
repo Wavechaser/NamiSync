@@ -204,6 +204,10 @@ behavioral evidence.
   Real producer-derived event, Plan-window and execution-detail controls reject
   the retired values while accepting current output. Historical process-local
   decoding is distinguished from current supported persistence and producers.
+- Consolidated completed delivery chronology and source inventories, kept one
+  M2 proposal index, and shortened test incident notes. Retained exact wire
+  rules, accepted future outcomes, exclusions, uncertainty and evidence pointers;
+  a deletion disposition ledger accounts for the documentation reductions.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

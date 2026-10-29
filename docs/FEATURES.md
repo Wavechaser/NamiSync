@@ -557,18 +557,10 @@ active. Desktop History remains unrealized.
 
 ## M2 PROPOSED
 
-- **User-Facing Execution Retry**. Retry a complete execution, an executor failure, or a reviewed safe subset.
-- **Terminal Verification Retry**. Retry terminal verification, including a standalone verification and a request to verify remaining files.
-- **User Session Cleanup**. Let users request cleanup of NamiSync-owned session temporary files and trash.
-- **Batched Small-File Durability**. Flush a directory once for a group of published small files, then record the group, keeping durability before recording.
-- **Richer I/O Failure Types**. Expose more specific typed filesystem I/O causes than the current generic `IO_ERROR` classification.
-- **Native Fluent Overlay Scrollbars**. Replace the CSS approximation through a coordinated WebView2/pywebview Windows startup integration.
-- **Verify-Only Batches**. Compose batches of standalone verification directories, beyond the current source/target pair runner.
-- **Persistent Pair Presets**. Let users create and customize saved sync pairs with the same Setup population and fresh availability behavior as history-derived recent pairs. Persistence and bridge commands remain unrealized; M1 does not add them.
-
-Durable desktop tasks and queued work retain their M2 status in the feature
-sections above. [M2_PROPOSAL.md](M2_PROPOSAL.md) collects the proposed outcomes
-without defining an implementation plan.
+[M2_PROPOSAL](M2_PROPOSAL.md) is the single index of proposed later outcomes
+and their qualifications, without an implementation plan or activation. Durable
+desktop tasks and queue ownership retain their unrealized status and accepted
+boundaries in the feature sections above and ARCHITECTURE's milestone roadmap.
 
 ## CROSS-PROCESS SAFETY
 
