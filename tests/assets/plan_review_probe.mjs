@@ -1181,7 +1181,7 @@ function terminologyRow(patch) {
     window: { ...review.window, rows: [specimen] } } });
   return findByDataset(terminologyPanel.element, "nodeId", specimen.node_id);
 }
-for (const reason of ["source_only", "metadata_match", "identity_rename", "required_directory", "empty_directory"]) {
+for (const reason of ["source_only", "metadata_match", "identity_rename", "required_directory"]) {
   const rendered = terminologyRow({ reason });
   assert.equal(findByDataset(rendered, "fileColumn", "notes").textContent, "", reason);
   assert.ok(findText(rendered, "No change"));

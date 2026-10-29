@@ -199,6 +199,11 @@ behavioral evidence.
   Verification passed 6,327 ordinary cases, twelve import contracts, before/after
   settlement checks and affected installed Inventory/shell journeys; four
   symlink-privilege cases remain explicit skips.
+- Retired the never-produced execution `already-exists` and planning
+  `empty_directory` reasons across enums, browser consumers and documentation.
+  Real producer-derived event, Plan-window and execution-detail controls reject
+  the retired values while accepting current output. Historical process-local
+  decoding is distinguished from current supported persistence and producers.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 

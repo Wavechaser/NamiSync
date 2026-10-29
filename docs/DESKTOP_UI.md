@@ -1543,7 +1543,7 @@ The Notes policy is explicit and fail-visible:
 
 | Input | Display policy |
 | --- | --- |
-| Operation reason `source_only`, `metadata_match`, `identity_rename`, `required_directory`, `empty_directory` | Hide only when risk is `none` and there is no blocker or selection exclusion; action/hierarchy already conveys the low-risk explanation. |
+| Operation reason `source_only`, `metadata_match`, `identity_rename`, `required_directory` | Hide only when risk is `none` and there is no blocker or selection exclusion; action/hierarchy already conveys the low-risk explanation. |
 | Those same reasons on risky/blocked/excluded rows | Show the friendly explanation. |
 | `metadata_changed`, `identity_rename_changed`, `target_only`, `directory_cleanup` | Show changed-file, removal or cleanup context. |
 | Case, Unicode, type, policy and destination conflicts; unsupported and blocked reasons | Show friendly explanation. |

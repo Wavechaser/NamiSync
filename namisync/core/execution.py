@@ -930,7 +930,6 @@ class ExecutionReason(StrEnum):
     """Typed executor reasons; detail text is presentation-only."""
 
     NOOP = "noop"
-    ALREADY_EXISTS = "already-exists"
     BLOCKED = "blocked"
     DEPENDENCY_FAILED = "dependency-failed"
     SOURCE_DRIFT = "source-drift"

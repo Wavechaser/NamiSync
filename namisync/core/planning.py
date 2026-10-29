@@ -113,7 +113,6 @@ class OperationReason(StrEnum):
     IDENTITY_RENAME = "identity_rename"
     IDENTITY_RENAME_CHANGED = "identity_rename_changed"
     REQUIRED_DIRECTORY = "required_directory"
-    EMPTY_DIRECTORY = "empty_directory"
     TARGET_ONLY = "target_only"
     DIRECTORY_CLEANUP = "directory_cleanup"
     UNSUPPORTED = "unsupported"

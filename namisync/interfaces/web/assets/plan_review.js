@@ -31,7 +31,7 @@ const REASON_LABELS = Object.freeze({
   source_only: "Only in source", metadata_match: "Metadata matches",
   metadata_changed: "File metadata changed", identity_rename: "Moved file",
   identity_rename_changed: "Moved file with changed metadata",
-  required_directory: "Required folder", empty_directory: "Empty folder",
+  required_directory: "Required folder",
   target_only: "Only in target", directory_cleanup: "Remove unneeded folder",
   unsupported: "Unsupported item", case_mismatch: "Name casing differs",
   unicode_normalization_mismatch: "Unicode name normalization differs",
@@ -44,7 +44,7 @@ const REASON_LABELS = Object.freeze({
 });
 // Only redundant low-risk operation reasons are hidden; new values stay visible.
 const HIDDEN_REASONS = new Set([
-  "source_only", "metadata_match", "identity_rename", "required_directory", "empty_directory",
+  "source_only", "metadata_match", "identity_rename", "required_directory",
 ]);
 const displayLabel = (value) => Object.prototype.hasOwnProperty.call(DISPLAY_LABELS, value) ? DISPLAY_LABELS[value] : value;
 const reasonLabel = (value) => Object.prototype.hasOwnProperty.call(REASON_LABELS, value) ? REASON_LABELS[value] : value;

@@ -36,16 +36,25 @@ tree focus. Five ordinary driver checks and the corrected installed SH-G-7 pass
 in d2-shell-driver-corrected.log/.json. Keep the original failed receipt.
 
 The separate shell-driver correction is independently reviewed commit 5553daab.
-Next after the D2 atomic commit is R1 reason retirement. Its history census found
-an old process-local string-to-enum decoder,
+D2 is committed as cbf73a4f. R1 reason retirement is verified: 448 focused and
+6,326 ordinary passes, four capability skips, twelve import contracts and real
+producer-derived negative controls. Its history census found an old process-local
+string-to-enum decoder,
 but no currently supported target-reason producer/artifact; M1_PLAN preserves
-that distinction. E1 read-only design is results/e1-design.md; refresh after R1.
+that distinction. Next after R1's separate commit is E1 documentation consolidation
+using results/e1-design.md and the finite elaboration in M1_PLAN.
 
-Cold Inventory timing has not run. The user confirmed on 2026-10-30 that the
-machine is idle until further notice. Announce measurements before starting,
-pause task tests and recapture the profile before unchanged 3 s/6 s acceptance.
-The capture script defaults confirmation to false; affirm only after checking
-the fresh facts and this still-current user confirmation.
+Cold Inventory timing was announced and collected after the user's 2026-10-30
+idle confirmation, with task tests paused. Five fresh children per case passed
+the unchanged limits: base maximum 1.6487122 s, heavy 2.2893115 s. Raw/validation
+files and PERFORMANCE/PRESENTATION updates remain pending the CLOSE commit.
+Fresh review verified the complete source/runtime/profile bindings. Exact new
+receipt -text attributes preserve their original CRLF bytes; verify staged
+blob hashes before committing. No other file is renormalized.
+
+CLOSE also renews the default installed execution-review journey on final assets;
+earlier installed passes remain evidence of their unchanged mechanisms at their
+original wheel identities. Deferred doc contradictions are results/findings.md.
 
 Remaining D2/R1/E1/CLOSE stay authorized. No unrelated refs, stashes or worktrees
 were changed; no push or PR. Preserve all failed receipts and the recovery ref.

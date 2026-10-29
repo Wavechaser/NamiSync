@@ -77,7 +77,7 @@ outcomes. Finish each row's gate and adversarial review before its commit.
 | C3 | Use contained run_node_probe for required transport probes; retire demonstrated localRow spelling pin and duplicate wheel asset equality only. Owners: transport/frontend/wheel tests and existing helper. | Keep mandatory Node discovery, original-command/interactive/both drain record kinds, runner timeout/output limits, tree fixture provenance/runtime cases, dedicated wheel population/CSP checks; harmless rename and wrong-digest control, missing/extra asset control; interfaces department. | Complete; 228 focused, 2,174 interfaces passes and all four controls; independent review. |
 | D1 | Remove redundant Scope planner parameter/type/kinds/factories and workflow/tool/test call-site plumbing. Preserve scoped planning/history replay as an explicitly unrealized outcome without this placeholder representation. Owners: core/planner, workflow composition, executor rig, contract tests and CORE/PLANNER/FEATURES. | Revalidate full caller population; planner/workflows/tools and contract consumers; ordinary suite/imports. No change to current whole-plan or dependency-closed execution selection. | Complete; 634 focused and 6,327 ordinary passes/four capability skips, twelve imports and independent review. |
 | D2 | Migrate test-facing convenience APIs to real production seams, then retire bounded population listed below with matching docs. Preserve independent behavioral/fault witnesses rather than tests of removed representation. | Per-family consumer map before editing; focused real producer/admission/native witnesses, affected departments, ordinary/imports and applicable native/settlement gates by dependency. No blanket deletion based on coverage absence. | Complete; 6,327 ordinary passes/four capability skips, twelve imports, before/after settlement 30×3 and installed Inventory/shell; independent family and integrated review. |
-| R1 | Retire never-produced ALREADY_EXISTS/EMPTY_DIRECTORY everywhere: enums, web accept lists/labels, probes and DESKTOP_UI plus any exact consumers found in the finite history/current census. No producer or string-to-enum construction is expected; incompatible pre-release schema policy remains. | Confirm supplied all-history evidence and current constructors/consumers; ordinary/imports and real event/Plan decoder negative controls. Own commit; stop for contradictory supported producer/artifact evidence. | Pending. |
+| R1 | Retire never-produced ALREADY_EXISTS/EMPTY_DIRECTORY everywhere: enums, web accept lists/labels, probes and DESKTOP_UI plus any exact consumers found in the finite history/current census. Current producers/constructors and historical support must be distinguished; incompatible pre-release schema policy remains. | Confirm supplied all-history evidence and current constructors/consumers; ordinary/imports and real event/Plan decoder negative controls. Own commit; stop for contradictory supported producer/artifact evidence. | Complete; 448 focused, 6,326 ordinary passes/four capability skips, twelve imports, producer-derived negative controls and independent review. |
 | E1 | Condense completed register chronology with a decision/disposition map; consolidate M2 proposal list and internal CORE census/Progress-shape repetition; shorten repeated historical checkpoint disclaimers and TESTS incident chronology without changing their policy. | A–D/R settled. Map each removed clause to surviving decision/owner/evidence; retain future outcomes, exclusions, wire grammar, residual qualifications, unresolved observations and reopening triggers. Active links/diff and independent review. BUGS/PERFORMANCE archival requires a separate finite disposition map, never volume alone. | Pending. |
 | CLOSE | Account for all rows and dependencies, complete ordinary/import and affected installed/native gates, independent integrated review, delivery docs and final state. | Reuse unchanged evidence only by dependencies; retain failures. No assertion of M1-12 or release completion. | Pending. |
 
@@ -296,6 +296,37 @@ full-history/current census found no target-reason producer or contradictory
 currently supported artifact, so no R1 stop is established. This does not prove
 arbitrary historical input never contained the value. Commands, outputs and
 support-state evidence are retained in `results/r1-history-census.json`.
+Final R1 receipts: `r1-focused.log`/`.json`, `r1-ordinary.log`/`.json`,
+`r1-imports.log` and `r1-controls-retry.log`. The initial control-driver JSON
+serialization failure remains in `r1-controls.log`; only the retry using the
+real bridge serialization reaches acceptance.
+The one fewer ordinary case is the enum-derived `already-exists` acceptance
+parameter in `test_dormant_v5_operation_item_accepts_every_outcome_reason`;
+the retired value is now exercised as a refusal by the real control.
+No test function was deleted. CLOSE renews the existing default
+installed execution-review journey because it exercises the changed Plan reason,
+execution-overlay and detail validators on the final wheel. Earlier shell,
+Inventory, picker and Setup passes retain their original wheel provenance and
+remain evidence of their unchanged mechanisms, not new final-wheel runs.
+
+E1 elaboration (design at `e820cefd`, refresh after R1 integration): edit only
+M1_PLAN, CORE, FEATURES, M2_PROPOSAL and TESTS, plus delivery docs. Preserve
+existing heading anchors consumed by active and archived links. Condense
+completed register sections to shipped outcomes, retained decisions/exclusions,
+unresolved observations, commits and evidence; pending rows keep their gates.
+The finite section/proposal/wire/incident map is `results/e1-design.md`.
+Before deletion, record each actual removed block's original text/hash and
+surviving owner or historical disposition in an ignored evidence ledger.
+FEATURES links to the single twelve-item M2 proposal index without activating it.
+CORE retains policy and exact wire grammar while linking source-owned symbol
+shapes and ARCHITECTURE's transition semantics; correct its stale active epoch
+against schema source. TESTS keeps unresolved incident consequences, provenance
+and reopening conditions without promoting them to BUGS. Do not archive BUGS
+or PERFORMANCE or revise other subject documents' newly observed stale status
+claims in this row; report those separately. Gate: complete deletion disposition,
+source/prose and active link/anchor checks, diff check and fresh independent
+review. No executable contract/test-authority change or product test rerun is
+authorized merely by condensation. Commit after R1; CLOSE remains distinct.
 
 Retain `derive_visible_sequence` and its tools consumer, the live validated
 engine, `_reset_logging_for_tests`, `reset_databases`, frozen custody driver and

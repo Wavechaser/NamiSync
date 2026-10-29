@@ -204,7 +204,7 @@ const ITEM_RESULTS = Object.freeze([
   "succeeded", "skipped", "failed", "canceled", "deferred", "blocked",
 ]);
 const OPERATION_REASONS = Object.freeze([
-  "noop", "already-exists", "blocked", "dependency-failed", "source-drift",
+  "noop", "blocked", "dependency-failed", "source-drift",
   "target-drift", "destination-occupied", "wrong-type", "source-missing",
   "target-missing", "trash-collision", "unsafe-path", "sharing-violation",
   "acl-copy-failed", "cleanup-failed", "published-size-mismatch",
@@ -3411,7 +3411,7 @@ function validatePlanWindowRow(value) {
     && (value.operation_id === null || (typeof value.operation_id === "string" && ID_PATTERN.test(value.operation_id)))
     && validatePlanKinds(value)
     && (value.reason === null || ["source_only", "metadata_changed", "metadata_match", "identity_rename",
-      "identity_rename_changed", "required_directory", "empty_directory", "target_only", "directory_cleanup",
+      "identity_rename_changed", "required_directory", "target_only", "directory_cleanup",
       "unsupported", "case_mismatch", "unicode_normalization_mismatch", "case_collision", "type_collision", "policy_collision"].includes(value.reason))
     && (value.blocked_reason === null || ["unsupported", "case_mismatch", "case_collision", "type_collision",
       "destination_collision", "blocked_dependency"].includes(value.blocked_reason))
