@@ -89,7 +89,7 @@ in Git at `bb537934` and `build/m1-closeout-study-20261029/results/`:
 
 | Outcome | Final evidence / retained disposition |
 | --- | --- |
-| A1/C1 | `a1-fresh-checkouts.*`, `a1-c1-interfaces.log`, `a1-c1-native-recheck.log`, `c1-resume-*` and `c1-preservation.json`. Both autocrlf wheel/About checks passed; sandbox/custody-cache failures were reconciled by the external-temp recheck, not relabeled passes. C1's recovery ref remains for CLOSE accounting. |
+| A1/C1 | `a1-fresh-checkouts.*`, `a1-c1-interfaces.log`, `a1-c1-native-recheck.log`, `c1-resume-*` and `c1-preservation.json`. Both autocrlf wheel/About checks passed; sandbox/custody-cache failures were reconciled by the external-temp recheck, not relabeled passes. C1's recovery ref was accounted and pruned in the authorized 2026-10-30 cleanup below. |
 | B1 | `b1-focused-final.log`, `b1-interfaces.log`, `b1-correction-focused.log`, `b1-installed.log`, `b1-review.txt`. Ordinary empty/surrogate ingress replaces forged candidate cases; slot TTL/capacity, original-result replay and fresh admission remain. |
 | B2 | `b2-removal-population.json`, `b2-ordinary.*`, `b2-imports.log`, `b2-review.txt`, `b2-skip-reasons.log`. `RunSnapshot` retired with `get_run`; live same-name helpers and the directly used `DeletionPolicy` facade remain. Initial mistaken facade deletion/collection failure was corrected. Four unavailable symlink-privilege skips are not passes. |
 | B3 | `b3-comparison.log`, `b3-focused.log`, `b3-workflows.*`, `b3-native-recheck.*`, `b3-review.txt`. Baseline `93481fcb` and candidate agree in 21 cases; six failed native cases pass unchanged with external temp. The original long-path failure's cause remains unestablished. No speed claim. |
@@ -154,8 +154,24 @@ account for source/wheel equality and dependency-scoped gate reuse.
 receipts; only those two new JSON files use new `-text` attributes. Historical
 JSON, frozen drivers, other normalization and failed receipts remain untouched.
 There is one original worktree and no push/PR or stash cleanup. The C1 recovery
-ref `codex/recovery-closeout-c1-20261029` (`419aad11`) remains deliberately
-preserved after its full rebuild; the D2 approval-block snapshot also remains.
+ref `codex/recovery-closeout-c1-20261029` (`419aad11`) was retained through
+closeout and is accounted for by the separately authorized cleanup below;
+the D2 approval-block snapshot remains.
+
+User-authorized branch cleanup, 2026-10-30: the five local `codex/*` branch
+histories are preserved in the verified complete-history bundle
+`build/m1-closeout-study-20261029/results/recovery-branches-20261030.bundle`.
+The matching `branch-cleanup-20261030.json` records original tips, accounting
+and ref/stash/worktree checks. No product, test, remote, stash or hidden Codex
+ref cleanup is included.
+
+| Removed local branch | Accounted outcome |
+| --- | --- |
+| `codex/recovery-closeout-c1-20261029` | Saved 91-line test patch exactly rebuilt in `1f0eb086`. |
+| `codex/review-controller-rebuild` | `5e505fbc` is already an ancestor of milestone1. |
+| `codex/wip-20261016-2159-review-controller` | Stopped `0556322b` rebuilt and reviewed in `5e505fbc`; original candidate/review records remain. |
+| `codex/wip-20261015-1621-verify-table` | All 48 saved path entries match the verified rebuild accounting at `a594b3ce`; corrected investigation supersedes provisional diagnosis. |
+| `codex/wip-20261017-0156-inventory-follow` | `f67fa6c2` has the exact integrated `4fceac7b` tree. |
 
 E1 elaboration (design refreshed at integrated R1 `bb537934`): edit only
 M1_PLAN, CORE, FEATURES, M2_PROPOSAL and TESTS, plus delivery docs. Preserve
@@ -626,7 +642,8 @@ refusals and all other failed receipts also remain. RV1's earlier full-suite run
 was not green; `rv6-ordinary-01.log` supplies integrated ordinary acceptance.
 
 Recovery `0556322` and its rebuild ref, corrected RV3 recovery `f67fa6c` (parent
-`a932d5d8`), older stopped Verify refs and all five unrelated stashes remain.
+`a932d5d8`) and older stopped Verify refs were retained through closure, then
+accounted and pruned in the 2026-10-30 branch cleanup above. All five unrelated stashes remain.
 The user authorized RV3 recovery correction and reviewed squash; its WIP history
 is not integration ancestry. Existing 17/39/48-path accounting remains with the
 named integration/recovery records. Retain both ablation reports and the original
@@ -716,8 +733,8 @@ simplification is claimed. `closure-review-20261016.md` records independent revi
 
 **Recovery and integration:** rebuilt from `47a4bcae` on
 `codex/verify-ux-rebuild` and fast-forwarded into `milestone1`; no recovery WIP
-ancestry is integrated. Disposable `codex/wip-20261015-1621-verify-table` retains
-`d1c3b325` and `fb2253e2`.
+ancestry is integrated. Disposable `codex/wip-20261015-1621-verify-table` retained
+`d1c3b325` and `fb2253e2` until the separately authorized 2026-10-30 cleanup above.
 `rebuild-recovery-accounting-20261016.json` accounts all 48 saved path entries.
 The original user handoff remains byte-for-byte in `recurrence-input-handoff-01.md`;
 HANDOFF now serves latest-session context again. Five pre-existing stashes and

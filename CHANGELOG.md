@@ -218,6 +218,10 @@ behavioral evidence.
   history schema/epoch, active desktop Setup, null-evidence rebaseline and
   same-task manual post-copy Verify. Preserved historical cutovers and future
   policy boundaries; source, link and independent documentation review apply.
+- Accounted and pruned five obsolete local Codex recovery/rebuild branches;
+  retained their complete histories in a verified bundle. Integrated trees,
+  rebuilt patches and saved-path dispositions account for their contents.
+  Stashes, remote branches, hidden refs and product files remain unchanged.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 
