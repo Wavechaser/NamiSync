@@ -24,7 +24,8 @@ row. A completed batch does not activate another pending outcome.
 M1-10 is complete as of 2026-10-14, including the requested integrated A–C
 review before D and final cross-component review. The authorized GUI-hardening
 follow-up below is also complete. The review consolidation batch below is complete
-as of 2026-10-19. M1-12, release and DOC-2 remain inactive. PO3/PO5 and
+as of 2026-10-19. M1-12 is complete as of 2026-10-30; release and DOC-2
+remain inactive. PO3/PO5 and
 conditional PO4 completed through 2026-10-21. The pre-closeout consolidation
 below is authorized from 2026-10-29.
 Other pending rows still need user authorization, active scope and verification.
@@ -40,7 +41,7 @@ the documentation; raw evidence remains in `build/node-security-20261022/`.
 | --- | --- | --- | --- |
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and evidence in the completed M1-9 section below. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Complete; A–E reviewed and integrated through D2 `d88f863` plus documentation closure. Stopped for recap and GUI tweaks. Rebaseline confirmation remains distinct from missing-row acknowledgement. |
-| M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Pending. |
+| M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Complete 2026-10-30; 6,326 ordinary passes/four capability skips, all 35 headed obligations, twelve imports, settlement and independent review. No product changes. |
 | M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
 
 DOC-2 remains **pending, outside the AB batch**. Its historical branch proposal
@@ -49,6 +50,61 @@ the old tip and opens a draft PR from `milestone1-anthony`. Before any action,
 freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
+
+## M1-12 verification — authorized 2026-10-30
+
+Start from clean `b22a2943` after consolidation and recovery-ref accounting.
+The finite inspection population is current service/task lifecycle, dispatcher
+custody, workflow runtime and integrity/inventory transitions, web delivery,
+host shutdown and production page consumers, their ordinary tests and installed
+headed drivers. INTERFACES/BRIDGE own lifecycle and transport; workflow/core
+contracts own retained result truth; EXECUTOR owns settlement. Inspect archived
+dispositions through the completed registers below, without reactivating them.
+
+| Step | Outcome and verification | Status |
+| --- | --- | --- |
+| V1 | Map activated task surfaces and adverse terminal states to existing ownership, release, navigation/reload/Close/shutdown witnesses; run real composition cases early and independently inspect cross-component seams. | Complete; 717 composition passes and independent mechanism/consumer review. |
+| V2 | Reconcile concrete gaps within the accepted lifecycle outcome; preserve reviewed effects, exact identities, bounded admission, stale-response refusal, truthful result axes and retryable cleanup. Any fixes carry reproducer, owner/consumer tests and matching subject docs. | Review found no blocking gap or supported safety defect; no product changes needed. |
+| V3 | Run ordinary suite, all interface headed tests with default addopts cleared, installed-wheel/product witnesses, twelve import contracts and applicable settlement oracle; account for skips and retain failed receipts. | Complete; 6,326 ordinary passes/four symlink-privilege skips, twelve imports, settlement 30 scenarios × 3 runs and all 35 headed obligations. Five resumed journeys passed unchanged after foreground became available. |
+| V4 | Review integrated result adversarially, check active links/diff and update delivery/HANDOFF/CHANGELOG; one coherent verification closeout commit, with separately verified defect commits only where AGENTS permits. | Complete; independent lifecycle/evidence review, artifact/source hash verification and active-link/diff checks. Task-only closeout excludes concurrent build-cleanup changes. |
+
+Evidence belongs in ignored `build/m1-12-20261030/`: named run logs and JSON
+receipts at its root; copied installed artifacts in `installed/` if needed.
+Keep original failed receipts and exact source/artifact identities. These files
+record chronology, not a second scope authority. Dependencies, not merely product
+bytes, determine reuse. Release distribution, SH-G-15 resource calibration,
+DOC-2, new features, aggregate artifact limits and whole-owner-graph criteria
+remain excluded. AGENTS safety, recurrence, scope-change and recovery stops
+apply unchanged; a blocked gate without an authorized remedy needs adjudication.
+
+The independent `lifecycle-review.md` maps shared-owner tests and real composed
+Plan/execution, linked/manual verification and Inventory journeys to the row.
+This is mechanism-based coverage, not every Cartesian combination of terminal
+state and navigation action. The bounded scalar execution-binding lookup left
+on a closed service is not a demonstrated native-resource or retained-result
+leak: public reads are closed, and runtime reviews are separately retired.
+No whole-owner sweep or speculative cleanup follows from that observation.
+Two initial sandbox runs failed during pytest temporary-directory setup (289
+passes/175 setup errors each); `lifecycle-native.log` records the successful
+717-test native run with a fresh explicit temporary root. Failed logs remain.
+The first installed headed run completed 30 obligations; both execution journeys,
+Inventory and both task-shell journeys refused native input because another
+window owned foreground. The shell's `plan_again` checkpoint and fresh-row checks
+had already passed; its earlier Task 52 diagnostic is not evidence of failed
+Plan Again. Exact driver/foreground receipts and installed identities are copied
+under `headed-artifacts/`. No product defect or relaxed focus guard follows.
+The unchanged retry again failed all
+five native foreground checks; its 34 selected artifacts are hash-preserved
+under `headed-retry-artifacts/`. The user then paused native verification.
+The user resumed native verification later on 2026-10-30 with foreground
+availability. All five unchanged journeys passed in `headed-resume.log`;
+34 receipts/captures/identity artifacts are hash-preserved in
+`headed-resume-artifacts/`. Product, tests and helpers remain at `b22a2943`;
+source/artifact identities were revalidated before reusing the 30 unaffected
+headed passes and completed ordinary gates. Recovery `7b0744d4` on
+`codex/m1-12-verification-recovery-20261030` contains pause documentation only,
+superseded by this verified closeout. Its provenance is in `recovery.json`;
+it remains historical preservation, never a merge or cherry-pick unit.
 
 ## Pre-closeout consolidation — authorized 2026-10-29
 

@@ -290,6 +290,17 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Verify integrated M1 lifecycle and retention (2026-10-30)
+
+- Map activated task surfaces to shared lifecycle owners and real composition
+  witnesses; independent review found no blocking supported defect in that corpus.
+- Pass 717 composition and 6,326 ordinary checks (four symlink-privilege skips),
+  twelve import contracts and the pinned 30-scenario, three-run settlement gate.
+- Complete all 35 installed headed obligations, including five unchanged journeys
+  resumed after foreground refusals. Preserve original failures and verified
+  artifact identities; complete independent review and documentation checks.
+  M1-12 is complete. Release remains separate; no product or test changes.
+
 #### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-29)
 
 - Show `Filters · matching/total` beside the existing filter glyph and dropdown
