@@ -160,6 +160,24 @@ behavioral evidence.
   requiring a 64px label column. Keep the installed refusal, Clear and
   readmission sequence and the specified option spacing.
 
+#### Reduce retained build artifacts (2026-10-29 – 2026-10-30)
+
+- Remove 674,132 files / 19.77 GiB of logical payload across the authorized
+  cleanup batches, preserving must-keeps, raw receipts and recent work.
+- Restore read access to two protected wheels in `ab8-20260926` and `m1-7`
+  without changing their owners or contents.
+- Remove 112,349 duplicate source files after proving exact reconstruction
+  from a retained Git bundle; preserve 531 large fixture inputs in a verified
+  eight-payload archive with original filesystem facts before removing copies.
+- Remove 239,978 more files / 5.91 GiB and 156,445 empty directories in round
+  2: wheel staging proven against retained wheels and identity records,
+  RECORD-verified venv files, per-test pytest state and uncited scratch roots.
+  Only open-question failure fixtures (RV1/RV2B/RV3 failing tests, named AB-7/AB-8
+  witnesses) are kept.
+- Retain exact deletion journals and hash verification. Recovery artifacts and
+  limits are recorded in `build/build_cleanup_reduction_summary.json` and
+  `build/build_cleanup_round2_summary.json`. Product and test code are unchanged.
+
 #### Consolidate before M1 closeout (2026-10-29 – 2026-10-30)
 
 - Formalized the amended reconciliation as a finite register, with nested
