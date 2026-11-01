@@ -117,7 +117,6 @@ _EDITABLE_SCRIPT = r"""
   const verifyToggle = document.querySelector('[data-option="verify_after_execute"]');
   const additiveToggle = document.querySelector('[data-option="deletion_policy"]');
   const adsToggle = document.querySelector('[data-option="preserve_ads"]');
-  const sourceLine = document.querySelector('[data-purpose="source"] .nami-setup__location-line');
   const sourceLabel = document.querySelector('[for="setup-source-path"]');
   const pathControl = document.querySelector('[data-purpose="source"] .nami-setup__path-control');
   const recentTrigger = document.querySelector("#setup-source-recent-trigger");
@@ -135,7 +134,6 @@ _EDITABLE_SCRIPT = r"""
   if (!(more instanceof HTMLButtonElement)) missingControls.push("more-button");
   else if (more.getAttribute("aria-controls") !== "setup-advanced-options") missingControls.push("more-controls");
   if (!(advanced instanceof HTMLDivElement)) missingControls.push("advanced-panel");
-  if (!(sourceLine instanceof HTMLDivElement)) missingControls.push("source-line");
   if (!(sourceLabel instanceof HTMLLabelElement)) missingControls.push("source-label");
   if (!(pathControl instanceof HTMLDivElement)) missingControls.push("path-control");
   if (!(recentTrigger instanceof HTMLButtonElement)) missingControls.push("recent-trigger");
@@ -206,7 +204,6 @@ _EDITABLE_SCRIPT = r"""
     .map((item) => item.getBoundingClientRect());
   const expandedRowGaps = expandedRows.slice(1).map((rect, index) =>
     rect.top - expandedRows[index].bottom);
-  const sourceLineStyle = getComputedStyle(sourceLine);
   const standardFilter = document.querySelector("#setup-filter");
   if (!(standardFilter instanceof HTMLInputElement)) throw new Error("Setup standard filter input is unavailable");
   const filterIdleStyle = getComputedStyle(standardFilter);
@@ -509,7 +506,6 @@ _EDITABLE_SCRIPT = r"""
       Math.abs(advancedBounds.left - optionsBounds.left) <= 1 && Math.abs(advancedBounds.right - optionsBounds.right) <= 1,
     expanded_options_padding: expandedOptionsGap >= 8,
     expanded_option_row_gaps: expandedRowGaps,
-    form_label_track: sourceLineStyle.gridTemplateColumns.split(" ")[0],
     more_idle_transparent: moreIdleTransparent,
     clear_shared_variant: clearSharedVariant,
     refresh_icon_transparent: refreshIdleTransparent,
@@ -538,6 +534,7 @@ _EDITABLE_SCRIPT = r"""
     browse_square: browseSquare,
     pair_actions_right_aligned: pairActionsRightAligned,
     inline_location_controls: inlineControls,
+    path_left_edges: [source, target].map((field) => field.getBoundingClientRect().left),
     browse_outside_path_control: browseOutsidePathControl,
     dropdown_anchored: dropdownAnchored,
     dropdown_rerender_focus_restored: recentKeyboard,

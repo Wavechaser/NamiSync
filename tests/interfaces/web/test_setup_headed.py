@@ -83,7 +83,6 @@ def test_m1_6_installed_setup_flow(
     assert result["expanded_options_padding"] is True
     assert result["expanded_option_row_gaps"]
     assert all(gap == pytest.approx(8, abs=1) for gap in result["expanded_option_row_gaps"])
-    assert result["form_label_track"] == "64px"
     assert result["more_idle_transparent"] is True
     assert result["clear_shared_variant"] is True
     assert result["refresh_icon_transparent"] is True
@@ -136,6 +135,8 @@ def test_m1_6_installed_setup_flow(
     assert result["browse_square"] is True
     assert result["pair_actions_right_aligned"] is True
     assert result["inline_location_controls"] is True
+    source_left, target_left = result["path_left_edges"]
+    assert source_left == pytest.approx(target_left, abs=1), "Setup path fields are misaligned"
     assert result["browse_outside_path_control"] is True
     assert result["dropdown_anchored"] is True
     assert result["dropdown_rerender_focus_restored"] is True

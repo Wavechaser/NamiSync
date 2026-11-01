@@ -154,6 +154,12 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
+#### Pilot Setup journey simplification (2026-11-01)
+
+- Check that the rendered Source and Target path fields align instead of
+  requiring a 64px label column. Keep the installed refusal, Clear and
+  readmission sequence and the specified option spacing.
+
 #### Consolidate before M1 closeout (2026-10-29 – 2026-10-30)
 
 - Formalized the amended reconciliation as a finite register, with nested
