@@ -307,7 +307,10 @@ explicit, reviewable and regression-backed.
   artifact identities; complete independent review and documentation checks.
   M1-12 is complete. Release remains separate; no product or test changes.
 
-#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-10-29)
+#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-11-01)
+
+- Select the newly launched Plan Again task automatically, while preserving
+  navigation made by the user during a delayed launch.
 
 - Show `Filters · matching/total` beside the existing filter glyph and dropdown
   chevron. Use 32px Go/Follow insets and 1.2px content-card outlines; align the

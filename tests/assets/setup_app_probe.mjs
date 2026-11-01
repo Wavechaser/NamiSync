@@ -1228,7 +1228,7 @@ if (lifecycleScenario === "all" || lifecycleScenario === "plan-again") {
   const shell = harness.adoptTask({ ...summary(TASK_B), session_id: "6".repeat(32),
     request_id: "7".repeat(32), plan_request_id: "7".repeat(32), session_kind: "sync-plan",
     task_kind: "sync-plan", session_state: "completed", session_released: true });
-  shell.review = { pending: null };
+  shell.review = { pending: null, summary: { highlight_focus_node_id: null } };
   const previousDrain = harness.drains.at(-1);
   harness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
   let dispatchError;
@@ -1243,14 +1243,44 @@ if (lifecycleScenario === "all" || lifecycleScenario === "plan-again") {
   assert.equal(previousDrain.stopped, true, "session replacement stops its old drain");
   assert.equal(harness.drains.at(-1).args[1], shell.sessionId);
   assert.equal(dispatchError, undefined, "Plan-again admission also survives observation failure");
+  assert.equal(harness.task.taskId, TASK_B, "Plan again activates the admitted tab");
   previousDrain.args[5](TASK_B, "6".repeat(32));
   assert.equal(shell.sessionReleased, false, "the superseded drain cannot release the new session");
   assert.equal(shell.sessionState, "active");
+  harness.railCallbacks.onSettings();
   harness.adoptTask({ ...summary(TASK_B), session_id: "a".repeat(32),
     request_id: shell.requestId, plan_request_id: shell.planRequestId,
     session_kind: "sync-execution", task_kind: "sync-plan", session_state: "active", session_released: false });
   assert.equal(shell.executionStarted, true, "execution's same-request transition remains intact");
   assert.equal(shell.executionWindowDirty, true);
+}
+
+// Delayed Plan again admits the task without overriding newer navigation.
+for (const destination of ["settings", "task"]) {
+  const snapshot = {
+    setup_state: "frozen", task_kind: "sync-plan",
+    source: { display: "C:\\source", location_id: "41" },
+    target: { display: "D:\\target", location_id: "42" }, root: null,
+    options: structuredClone(DEFAULT_OPTIONS),
+    plan_again: { source_state: "resolved", source_candidates: [], target_state: "resolved", target_candidates: [] },
+  };
+  const harness = await loadScenario({ snapshot, initialSummary: {
+    ...summary(), session_id: "1".repeat(32), request_id: "2".repeat(32),
+    plan_request_id: "2".repeat(32), session_kind: "sync-plan",
+    task_kind: "sync-plan", session_state: "completed", session_released: true,
+  } });
+  const original = harness.task;
+  const admission = deferred();
+  harness.planAgain = () => admission.promise;
+  harness.listTasks = () => Promise.reject(new Error("list transport unavailable"));
+  const started = harness.startPlanAgain(original);
+  harness.railCallbacks.onSettings();
+  if (destination === "task") harness.railCallbacks.onSelect(TASK_A);
+  admission.resolve({ task_id: TASK_B, request_id: "8".repeat(32), session_id: "9".repeat(32) });
+  await started;
+  assert.equal(harness.tasks.has(TASK_B), true);
+  assert.equal(harness.settingsVisible, destination === "settings");
+  if (destination === "task") assert.equal(harness.task.taskId, TASK_A);
 }
 
 for (const observation of ["failed", "stale"]) {

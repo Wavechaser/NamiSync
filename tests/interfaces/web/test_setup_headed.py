@@ -336,6 +336,13 @@ def test_plan_again_trace_transforms_exact_assets_and_restores_bytes(
                     )
                 instrumented = (asset_root / name).read_bytes()
                 assert instrumented == expected.encode("utf-8")
+                if name == "app.js":
+                    normalized = instrumented.decode("utf-8").replace("\r\n", "\n")
+                    assert 'const navigation = navigationRevision;' in normalized
+                    assert '''  if (attempt.kind === "plan-again" && navigationRevision === navigation
+      && selectedTaskId === task.taskId && !settingsVisible) {
+    selectTask(startedTask.taskId);
+  }''' in normalized
                 assert hashes[name] == {
                     "original": hashlib.sha256(originals[name]).hexdigest(),
                     "instrumented": hashlib.sha256(instrumented).hexdigest(),

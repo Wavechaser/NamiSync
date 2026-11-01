@@ -21,6 +21,14 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+2026-11-01 Plan Again follow-up selects the admitted task unless newer user
+navigation supersedes launch intent. Old review state and other start paths stay
+unchanged. Verification: focused lifecycle probe, 2,172 interface passes plus
+12 passing checks after migrating the diagnostic trace helper, and both installed
+Plan-shell sizes proving automatic selection. Evidence and retained earlier
+receipts: `build/plan-again-focus-20261101/`. Pre-existing uncommitted HANDOFF,
+PERFORMANCE and unrelated CHANGELOG edits are preserved outside this change.
+
 M1-10 is complete as of 2026-10-14, including the requested integrated A–C
 review before D and final cross-component review. The authorized GUI-hardening
 follow-up below is also complete. The review consolidation batch below is complete

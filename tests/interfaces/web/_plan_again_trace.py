@@ -225,20 +225,24 @@ _APP_BEGIN_TRACE = r'''  const attempt = beginFormAttempt(task, form, "plan-agai
 '''
 
 _APP_DISPATCH_START = r'''async function dispatchFormAttempt(task, form, attempt, submit) {
+  const navigation = navigationRevision;
+  let startedTask = null;
   attempt.dispatched = true;
   renderTasks();
   try {
     const result = await submit();
-    adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
+    startedTask = adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
 '''
 _APP_DISPATCH_START_TRACE = r'''async function dispatchFormAttempt(task, form, attempt, submit) {
+  const navigation = navigationRevision;
+  let startedTask = null;
   attempt.dispatched = true;
   renderTasks();
   const countBeforeRefresh = attempt.kind === "plan-again" ? tasks.size : null;
   if (attempt.kind === "plan-again") globalThis.__namiPlanAgainTrace?.record("dispatch", "submitted");
   try {
     const result = await submit();
-    adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
+    startedTask = adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
     if (attempt.kind === "plan-again") globalThis.__namiPlanAgainTrace?.record("dispatch-settle", "success");
 '''
 
@@ -256,6 +260,10 @@ _APP_REFRESH = r'''  if (currentFormAttempt(task, form, attempt)) {
     form.attempt = null;
     task.startRecovery = null;
   }
+  if (attempt.kind === "plan-again" && navigationRevision === navigation
+      && selectedTaskId === task.taskId && !settingsVisible) {
+    selectTask(startedTask.taskId);
+  }
   renderTasks();
   try { await refreshTasks(); } catch (_error) {
     // The admitted identity and its live drain already own current task status.
@@ -265,6 +273,10 @@ _APP_REFRESH = r'''  if (currentFormAttempt(task, form, attempt)) {
 _APP_REFRESH_TRACE = r'''  if (currentFormAttempt(task, form, attempt)) {
     form.attempt = null;
     task.startRecovery = null;
+  }
+  if (attempt.kind === "plan-again" && navigationRevision === navigation
+      && selectedTaskId === task.taskId && !settingsVisible) {
+    selectTask(startedTask.taskId);
   }
   renderTasks();
   try { await refreshTasks(); } catch (_error) {

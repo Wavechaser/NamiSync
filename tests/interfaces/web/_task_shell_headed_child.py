@@ -833,7 +833,6 @@ window.addEventListener("error", (event) => {
     }
   }
   if (firstPlanAgainError !== null) throw firstPlanAgainError;
-  clickSelect("Task 53");
   await until(() => selectedTitle() === "Task 53", "fresh Plan-again selection");
   await until(() => document.querySelector(".nami-plan-review__rows")?.textContent.includes("source-added.txt"), "changed source plan row");
   await until(() => document.querySelector(".nami-plan-review__rows")?.textContent.includes("target-added.txt"), "changed target plan row");
@@ -1162,7 +1161,6 @@ window.addEventListener("error", (event) => {
     }
   }
   if (secondPlanAgainError !== null) throw secondPlanAgainError;
-  clickSelect("Task 54");
   await until(() => selectedTitle() === "Task 54", "live Plan-again selection");
   await until(() => document.querySelector(".nami-plan-review__rows [data-node-id]"), "live Plan rows");
   const live = document.querySelector(".nami-plan-review");

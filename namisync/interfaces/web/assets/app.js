@@ -3898,11 +3898,13 @@ function freshFormAttempt(task, form, attempt, revision) {
 }
 
 async function dispatchFormAttempt(task, form, attempt, submit) {
+  const navigation = navigationRevision;
+  let startedTask = null;
   attempt.dispatched = true;
   renderTasks();
   try {
     const result = await submit();
-    adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
+    startedTask = adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
   } catch (error) {
     if (!currentFormAttempt(task, form, attempt)) return;
     if (error instanceof StartPlanUncertainError) {
@@ -3920,6 +3922,10 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
   if (currentFormAttempt(task, form, attempt)) {
     form.attempt = null;
     task.startRecovery = null;
+  }
+  if (attempt.kind === "plan-again" && navigationRevision === navigation
+      && selectedTaskId === task.taskId && !settingsVisible) {
+    selectTask(startedTask.taskId);
   }
   renderTasks();
   try { await refreshTasks(); } catch (_error) {

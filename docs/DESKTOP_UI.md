@@ -1495,7 +1495,8 @@ loading. Submitted folder text provides context until canonical reviewed paths
 arrive; it is not admitted evidence. Admission refusal returns to Setup. A delayed
 start retains Check outcome for the original delivery, and an unknown outcome
 stops animation while preserving its admission fence. Plan again keeps the old
-review until the newly created task is adopted; pair batches keep their coordinator.
+review until the newly created task is adopted, then selects the new task unless
+the user navigated elsewhere while launch was pending. Pair batches keep their coordinator.
 Ready, unexecuted plans remain idle; execution retains its progress authority.
 The production Plan grid orders Select, Name, Action, Checksum (empty), Size,
 Modified and Notes; Checksum and Modified share their default width. The
