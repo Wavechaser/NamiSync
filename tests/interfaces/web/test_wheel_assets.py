@@ -23,7 +23,8 @@ def test_sh_g_6_built_wheel_contains_exact_initial_web_assets(
         (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
     assert project["tool"]["setuptools"]["package-data"] == {
-        "namisync.interfaces.web": ["assets/*", "assets/icons/*"]
+        "namisync.interfaces": ["branding/*"],
+        "namisync.interfaces.web": ["assets/*", "assets/icons/*"],
     }
 
     with zipfile.ZipFile(built_wheel.path) as wheel:

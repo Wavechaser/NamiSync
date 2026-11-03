@@ -755,6 +755,28 @@ There is no remote load, icon font, runtime registration, inline/generated SVG,
 or data-derived class/asset path. Icons remain decorative beside visible text;
 icon-only controls require their own accessible name.
 
+#### App icon
+
+The NamiSync app icon pairs the two-sheet copy glyph with water: an outlined
+source sheet behind, and a front sheet painted as layered paper waves. Under a
+band of sky sits a teal wave, and a deep front swell rises over it on the
+right. Three fixed 256 x 256 SVG masters live in `namisync/interfaces/branding/`:
+
+- `namisync_icon_color.svg` uses gradients, and each wave casts a soft shadow
+  onto the layer behind it.
+- `namisync_icon_two_tone.svg` uses blue-main and a dark blue.
+- `namisync_icon_mono.svg` paints a single `currentColor` ink.
+
+The two flat renders omit the teal wave, so its band becomes negative space.
+A short bar on the front sheet's left edge closes that band, keeping the sheet
+whole. The color master has no such bar. All three share the remaining geometry.
+
+The masters are artwork, not UI glyphs. They ship as `namisync.interfaces`
+package data, outside the web assets, so the `tokens.css` palette ownership and
+Fluent vocabulary rules do not apply to them. Nothing loads them yet. Wiring the
+window, taskbar or installer icon, and deriving any `.ico`, is later work that
+must start from these masters.
+
 #### Maintaining the icon vocabulary
 
 See [TOOLS.md](TOOLS.md#icon-maintenance) for the command syntax and options.

@@ -49,7 +49,7 @@ with matching tests and documentation:
 | `namisync/db/` | Persistence, repositories and history observer; imports core; sole main-ledger writer. |
 | `namisync/workflows/` | Only place domain modules meet; imports core, modules and db. |
 | `namisync/dispatcher/` | Domain-blind admission, custody, control and event fan-out; imports core only. |
-| `namisync/interfaces/` | CLI/API/desktop adapters; access workflows and dispatcher through composition; no domain policy. |
+| `namisync/interfaces/` | CLI/API/desktop adapters; access workflows and dispatcher through composition; no domain policy. `branding/` holds the app icon's SVG masters as package data. |
 | `tests/` | Pytest coverage following package boundaries. |
 | `tools/` | Development utilities; temporary fixtures, archives and evidence go in ignored `build/`. |
 

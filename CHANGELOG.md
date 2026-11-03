@@ -945,6 +945,15 @@ Standalone Inventory adds integrity selection, controls and retained results.
 Same-task Plan/Verify navigation adds first manual post-copy verification and
 explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain open.
 
+#### Add the NamiSync app icon (2026-11-03)
+
+- Add color, two-tone and mono SVG masters for the app icon: a two-sheet copy
+  glyph whose front sheet is layered paper waves. The flat renders omit the teal
+  wave, leaving negative space, and close the front sheet with a left-edge bar.
+- Ship the masters as package data in `namisync/interfaces/branding/`, outside
+  the web assets. The app does not load them yet; window, taskbar and installer
+  icons remain later work.
+
 #### Add explicit Setup defaults to Settings (2026-10-29)
 
 - Present Setup defaults, Appearance and About cards in the existing scrollable
