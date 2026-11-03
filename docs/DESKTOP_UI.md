@@ -78,7 +78,7 @@ starting frontend artifact to revise into the packaged UI.
 
 Stage 6 delivers:
 
-- a `nami-sync-gui` GUI-subsystem entry point with no retained console window;
+- a `namisync-gui` GUI-subsystem entry point with no retained console window;
 - one single-instance desktop shell, Setup, process-live task rail, work area,
   plan/execution review, and inventory/integrity views; the history dialog is a
   later M1 surface outside the accepted second-half reslice;
@@ -97,10 +97,10 @@ closing the desktop loses unexecuted plans and restart-resume is not promised.
 ## Packaging and local host state
 
 The console and desktop entry points deliberately remain separate Windows
-subsystems over one implementation. `nami-sync` and `python -m namisync` always
+subsystems over one implementation. `namisync` and `python -m namisync` always
 route through `interfaces/launcher.py` to the CLI; with no subcommand they print
-usage, point to `nami-sync-gui`, and exit with the existing usage status.
-`nami-sync-gui` resolves its one path authority, then lazily imports the web
+usage, point to `namisync-gui`, and exit with the existing usage status.
+`namisync-gui` resolves its one path authority, then lazily imports the web
 host. The host acquires the fixed per-logon instance mutex before creating any
 directory or logger; only the primary configures file logging and imports
 pywebview. Explicit CLI work never imports or initializes pywebview.

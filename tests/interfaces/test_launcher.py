@@ -21,8 +21,8 @@ def test_console_launcher_without_command_names_gui(
     captured = capsys.readouterr()
     assert result == 2
     assert captured.out == ""
-    assert captured.err.startswith("usage: nami-sync")
-    assert "nami-sync-gui" in captured.err
+    assert captured.err.startswith("usage: namisync")
+    assert "namisync-gui" in captured.err
 
 
 def test_console_launcher_delegates_explicit_arguments(

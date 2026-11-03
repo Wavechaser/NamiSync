@@ -31,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not arguments:
         cli.build_parser().print_usage(sys.stderr)
-        print("For the desktop app, run nami-sync-gui.", file=sys.stderr)
+        print("For the desktop app, run namisync-gui.", file=sys.stderr)
         return cli.EXIT_USAGE
     return cli.main(arguments)
 

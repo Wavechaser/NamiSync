@@ -21,6 +21,11 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+The 2026-11-04 CLI follow-up covers visible filename controls and the installed
+`namisync` and `namisync-gui` launchers. [COMMANDLINE](COMMANDLINE.md) owns the
+output contract and [INTERFACES](INTERFACES.md) owns launcher classification.
+M1-12 retains its original verification baseline.
+
 2026-11-01 Plan Again follow-up selects the admitted task unless newer user
 navigation supersedes launch intent. Old review state and other start paths stay
 unchanged. Verification: focused lifecycle probe, 2,172 interface passes plus

@@ -205,7 +205,7 @@ def _runtime_identity() -> dict[str, Any]:
                     "value": entry.value,
                 }
                 for entry in importlib.metadata.entry_points()
-                if entry.name in {"nami-sync", "nami-sync-gui"}
+                if entry.name in {"namisync", "namisync-gui"}
             ),
             key=lambda entry: (entry["group"], entry["name"]),
         ),

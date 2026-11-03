@@ -34,10 +34,10 @@ def test_entry_points_route_through_the_lazy_launcher() -> None:
     )
 
     assert project["project"]["scripts"] == {
-        "nami-sync": "namisync.interfaces.launcher:main"
+        "namisync": "namisync.interfaces.launcher:main"
     }
     assert project["project"]["gui-scripts"] == {
-        "nami-sync-gui": "namisync.interfaces.launcher:gui_main"
+        "namisync-gui": "namisync.interfaces.launcher:gui_main"
     }
     module_entry = (project_root / "namisync" / "__main__.py").read_text(
         encoding="utf-8"

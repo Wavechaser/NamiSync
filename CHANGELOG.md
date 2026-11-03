@@ -318,6 +318,14 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Align executable names with the package name (2026-11-04)
+
+- Rename the console and desktop entry points to `namisync` and `namisync-gui`,
+  including usage guidance, package metadata, active documentation and tests.
+- Keep `python -m namisync`, launcher routing and Windows subsystem choices
+  unchanged; retain historical entry-point names in archived documentation and
+  earlier changelog entries.
+
 #### Make filenames readable in CLI output (2026-11-04)
 
 - Show Unicode line and direction controls visibly in reviewed paths so a

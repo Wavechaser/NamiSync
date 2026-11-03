@@ -90,7 +90,8 @@ Use the relevant routes below, not a mandatory full-document reading sequence:
   refactors. Remove only orphans/artifacts created by this task, preserving
   unrelated work. Keep build outputs, caches, virtual environments, databases
   and sync trash out of Git.
-- Use `NamiSync`, Python package `namisync`, and executable `nami-sync`; never
+- Use `NamiSync`, Python package and console executable `namisync`, and GUI
+  executable `namisync-gui`; never
   `nami_sync`. Use lowercase snake_case modules and clear domain type names.
   Persist root-relative paths independent of drive letters; filesystem APIs
   may use `pathlib.Path` with long-path-safe handling.

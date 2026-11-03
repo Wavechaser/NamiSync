@@ -9,7 +9,7 @@ deferred.
 
 ## Entry Points
 
-`nami-sync` and `python -m namisync` execute the same `main()` and read real
+`namisync` and `python -m namisync` execute the same `main()` and read real
 `sys.argv[1:]` when no explicit test argument is supplied. Tests exercise both
 real process entry points. No command is reachable only through injected argv.
 Before parser construction, the CLI bounds the complete argument vector to
@@ -20,8 +20,8 @@ The CLI delegates process composition, session observation, and typed result
 classification to `interfaces/service.py`; it does not construct a dispatcher
 or workflow runtime.
 
-No-subcommand `nami-sync` and `python -m namisync` print usage, point to
-`nami-sync-gui`, and exit nonzero. Nothing runs implicitly. `nami-sync-gui` is
+No-subcommand `namisync` and `python -m namisync` print usage, point to
+`namisync-gui`, and exit nonzero. Nothing runs implicitly. `namisync-gui` is
 the GUI-subsystem launcher for the sole
 desktop implementation and retains no console window.
 
@@ -29,10 +29,10 @@ desktop implementation and retains no console window.
 
 ### M0
 
-- `nami-sync sync SOURCE TARGET`: run the plan session, render complete review,
+- `namisync sync SOURCE TARGET`: run the plan session, render complete review,
   collect explicit commitment between sessions, then submit execution and render
   item/summary results.
-- `nami-sync history [RUN]`: list retained run summaries or render one summary
+- `namisync history [RUN]`: list retained run summaries or render one summary
   and stream its typed item detail in bounded database pages.
 
 Recent-run listings include blocked/deferred exception counts and history

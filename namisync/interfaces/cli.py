@@ -47,7 +47,7 @@ class _ArgumentParser(argparse.ArgumentParser):
 
 def build_parser() -> argparse.ArgumentParser:
     parser = _ArgumentParser(
-        prog="nami-sync",
+        prog="namisync",
         description="Safety-first reviewed one-way file mirroring.",
     )
     subcommands = parser.add_subparsers(dest="command")

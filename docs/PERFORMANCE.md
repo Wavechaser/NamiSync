@@ -2552,7 +2552,7 @@ results through rotation or concurrent log writers. The standalone `gui.ps1`
 does not import that package into the harness; it starts the existing headed
 composition externally and uses that host's isolated development log.
 
-Keep `python -m tools` separate from `nami-sync`: the latter is a shipped product
+Keep `python -m tools` separate from `namisync`: the latter is a shipped product
 surface with lazy GUI imports and reviewed domain workflows, while the
 measurement commands use fake persistence seams and destructive owned
 workspaces. If distributing those commands is later required, prefer a separate

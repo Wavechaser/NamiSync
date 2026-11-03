@@ -96,7 +96,7 @@ def test_output_escapes_layout_controls_without_literal_marker_collisions() -> N
 def test_argument_errors_escape_external_text(case, capsys) -> None:
     assert main(["sync", "source", "target", "--unknown=" + case["raw"]]) == EXIT_USAGE
     errors = capsys.readouterr().err
-    assert "usage: nami-sync " in errors
+    assert "usage: namisync " in errors
     assert "--unknown=" + case["cli"] in errors
 
 
@@ -116,7 +116,7 @@ def test_real_process_review_results_and_history_escape_layout_controls(
     prefix = (
         [sys.executable, "-m", "namisync"]
         if entry == "module"
-        else [str(Path(sys.executable).with_name("nami-sync.exe"))]
+        else [str(Path(sys.executable).with_name("namisync.exe"))]
     )
     ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
     environment = dict(os.environ, PYTHONIOENCODING=encoding)
@@ -2058,8 +2058,8 @@ def test_real_module_and_console_entry_points_use_process_argv(tmp_path: Path) -
         capture_output=True,
         check=False,
     )
-    console = Path(sys.executable).with_name("nami-sync.exe")
-    assert console.exists(), "editable/install build must provide nami-sync.exe"
+    console = Path(sys.executable).with_name("namisync.exe")
+    assert console.exists(), "editable/install build must provide namisync.exe"
     executable = subprocess.run(
         [str(console)],
         cwd=Path(__file__).parents[1],
@@ -2075,7 +2075,7 @@ def test_real_module_and_console_entry_points_use_process_argv(tmp_path: Path) -
 
 
 def test_real_process_entry_points_run_sync_and_history(tmp_path: Path) -> None:
-    console = Path(sys.executable).with_name("nami-sync.exe")
+    console = Path(sys.executable).with_name("namisync.exe")
     entry_points = (
         [sys.executable, "-m", "namisync"],
         [str(console)],
@@ -2115,7 +2115,7 @@ def test_real_process_entry_points_run_sync_and_history(tmp_path: Path) -> None:
 def test_real_process_entry_points_run_location_commands(
     tmp_path: Path,
 ) -> None:
-    console = Path(sys.executable).with_name("nami-sync.exe")
+    console = Path(sys.executable).with_name("namisync.exe")
     entry_points = (
         [sys.executable, "-m", "namisync"],
         [str(console)],

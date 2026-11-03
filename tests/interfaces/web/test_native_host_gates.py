@@ -650,12 +650,12 @@ def test_br_g_31_installed_host_composition_preserves_security_boundaries(
     assert runtime["entry_points"] == [
         {
             "group": "console_scripts",
-            "name": "nami-sync",
+            "name": "namisync",
             "value": "namisync.interfaces.launcher:main",
         },
         {
             "group": "gui_scripts",
-            "name": "nami-sync-gui",
+            "name": "namisync-gui",
             "value": "namisync.interfaces.launcher:gui_main",
         },
     ]

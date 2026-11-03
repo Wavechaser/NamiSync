@@ -193,24 +193,24 @@ and stopcodes.
 Review and, only after typing the exact confirmation, execute a one-way sync:
 
 ```powershell
-nami-sync sync C:\Source D:\Target
-nami-sync sync C:\Source D:\Target --verify-after-copy
+namisync sync C:\Source D:\Target
+namisync sync C:\Source D:\Target --verify-after-copy
 ```
 
 Refresh or check one explicit location:
 
 ```powershell
-nami-sync inventory E:\Archive
-nami-sync baseline --location-id 12
-nami-sync verify E:\Archive --path Photos\keeper.jpg
-nami-sync rebaseline E:\Archive --path Photos\keeper.jpg --accept-current-evidence
+namisync inventory E:\Archive
+namisync baseline --location-id 12
+namisync verify E:\Archive --path Photos\keeper.jpg
+namisync rebaseline E:\Archive --path Photos\keeper.jpg --accept-current-evidence
 ```
 
 Browse retained history or one run in detail:
 
 ```powershell
-nami-sync history
-nami-sync history RUN_TOKEN
+namisync history
+namisync history RUN_TOKEN
 ```
 
 `trash` is the default deletion policy; `additive` is public, while `mirror`

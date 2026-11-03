@@ -47,8 +47,8 @@ def test_sh_g_1_entry_points_are_classified_by_the_operating_system(
     tmp_path: Path,
 ) -> None:
     deadline = scenario_deadline()
-    console = headed_installed_wheel.scripts / "nami-sync.exe"
-    gui = headed_installed_wheel.scripts / "nami-sync-gui.exe"
+    console = headed_installed_wheel.scripts / "namisync.exe"
+    gui = headed_installed_wheel.scripts / "namisync-gui.exe"
     environment = clean_child_environment()
 
     for command in (
@@ -65,8 +65,8 @@ def test_sh_g_1_entry_points_are_classified_by_the_operating_system(
         )
         assert completed.returncode == 2
         assert completed.stdout == ""
-        assert completed.stderr.startswith("usage: nami-sync")
-        assert "nami-sync-gui" in completed.stderr
+        assert completed.stderr.startswith("usage: namisync")
+        assert "namisync-gui" in completed.stderr
 
     module_probe = """
 import json
