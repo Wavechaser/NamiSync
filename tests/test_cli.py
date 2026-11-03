@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 from contextlib import closing
 import os
 import re
@@ -70,6 +71,78 @@ from namisync.workflows.models import PlanOperationView
 from namisync.workflows.views import result_item_view, session_record_view
 
 from _db_fixtures import FakeClock, NOW
+
+
+_FILESYSTEM_TEXT_CASES = json.loads(
+    (Path(__file__).parent / "assets" / "filesystem_text_cases.json").read_text(
+        encoding="utf-8"
+    )
+)
+
+
+def test_output_escapes_layout_controls_without_literal_marker_collisions() -> None:
+    for first, last in _FILESYSTEM_TEXT_CASES["layout_control_ranges"]:
+        for codepoint in range(first, last + 1):
+            marker = f"[U+{codepoint:04X}]"
+            assert cli_module._safe(chr(codepoint)) == marker
+            assert cli_module._safe(marker) == "[" + marker
+    for case in _FILESYSTEM_TEXT_CASES["examples"]:
+        assert cli_module._safe(case["raw"]) == case["cli"]
+    preserved = _FILESYSTEM_TEXT_CASES["preserved_text"]
+    assert cli_module._safe(preserved) == preserved
+
+
+@pytest.mark.parametrize("case", _FILESYSTEM_TEXT_CASES["examples"][:5])
+def test_argument_errors_escape_external_text(case, capsys) -> None:
+    assert main(["sync", "source", "target", "--unknown=" + case["raw"]]) == EXIT_USAGE
+    errors = capsys.readouterr().err
+    assert "usage: nami-sync " in errors
+    assert "--unknown=" + case["cli"] in errors
+
+
+@pytest.mark.parametrize("entry", ("module", "console"))
+@pytest.mark.parametrize("encoding", ("utf-8", "cp1252"))
+def test_real_process_review_results_and_history_escape_layout_controls(
+    tmp_path: Path, entry: str, encoding: str,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    cases = _FILESYSTEM_TEXT_CASES["examples"][:2] + [
+        _FILESYSTEM_TEXT_CASES["examples"][3]
+    ]
+    for case in cases:
+        (source / case["raw"]).write_bytes(b"reviewed bytes")
+    prefix = (
+        [sys.executable, "-m", "namisync"]
+        if entry == "module"
+        else [str(Path(sys.executable).with_name("nami-sync.exe"))]
+    )
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    environment = dict(os.environ, PYTHONIOENCODING=encoding)
+    synced = subprocess.run(
+        [*prefix, *_arguments(source, target, ledger, history)],
+        input="execute\n", text=True, encoding=encoding,
+        capture_output=True, check=False, env=environment,
+    )
+    assert synced.returncode == EXIT_SUCCESS, (synced.stdout, synced.stderr)
+    assert synced.stderr == ""
+    for case in cases:
+        assert synced.stdout.count(case["cli"]) >= 2
+        assert (target / case["raw"]).read_bytes() == b"reviewed bytes"
+    assert "\u0085" not in synced.stdout and "\u202e" not in synced.stdout
+    with NamiSyncService(ledger, history) as service:
+        run_token = service.list_history(1)[0].run_token
+    browsed = subprocess.run(
+        [*prefix, "history", run_token, "--history-database", str(history)],
+        text=True, encoding=encoding, capture_output=True, check=False,
+        env=environment,
+    )
+    assert browsed.returncode == EXIT_SUCCESS, (browsed.stdout, browsed.stderr)
+    assert browsed.stderr == ""
+    for case in cases:
+        assert case["cli"] in browsed.stdout
+    assert "\u0085" not in browsed.stdout and "\u202e" not in browsed.stdout
 
 
 @pytest.mark.parametrize("persistent", (False, True))

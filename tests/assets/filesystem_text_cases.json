@@ -1,0 +1,12 @@
+{
+  "layout_control_ranges": [[0, 31], [127, 159], [173, 173], [1564, 1564], [8203, 8203], [8206, 8207], [8232, 8238], [8288, 8303], [65279, 65279]],
+  "preserved_text": "C:\\ordinary\\<img onerror=alert(1)> العربية עברית e\u0301 🌊\ufe0f A\u200cB\u200dC \udb40\udc20",
+  "examples": [
+    {"raw": "draft\u0085Operations approved.txt", "cli": "draft[U+0085]Operations approved.txt", "desktop": "draft⟦U+0085⟧Operations approved.txt"},
+    {"raw": "report\u202ephoto.txt", "cli": "report[U+202E]photo.txt", "desktop": "report⟦U+202E⟧photo.txt"},
+    {"raw": "a\n\u001bb.txt", "cli": "a[U+000A][U+001B]b.txt", "desktop": "a⟦U+000A⟧⟦U+001B⟧b.txt"},
+    {"raw": "[U+0085].txt", "cli": "[[U+0085].txt", "desktop": "[U+0085].txt"},
+    {"raw": "[[U+0085]].txt", "cli": "[[[[U+0085]].txt", "desktop": "[[U+0085]].txt"},
+    {"raw": "⟦U+0085⟧.txt", "cli": "⟦U+0085⟧.txt", "desktop": "⟦U+27E6⟧U+0085⟦U+27E7⟧.txt"}
+  ]
+}

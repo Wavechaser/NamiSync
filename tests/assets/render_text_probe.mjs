@@ -87,21 +87,11 @@ renderText(target, unicode);
 assert.equal(target.textContent, unicode);
 assert.equal(setterCalls, 1);
 
-const escapedCodePoints = [];
-for (let codePoint = 0x0000; codePoint <= 0x001f; codePoint += 1) {
-  escapedCodePoints.push(codePoint);
-}
-for (let codePoint = 0x007f; codePoint <= 0x009f; codePoint += 1) {
-  escapedCodePoints.push(codePoint);
-}
-escapedCodePoints.push(0x00ad, 0x061c, 0x200b, 0x200e, 0x200f);
-for (let codePoint = 0x2028; codePoint <= 0x202e; codePoint += 1) {
-  escapedCodePoints.push(codePoint);
-}
-for (let codePoint = 0x2060; codePoint <= 0x206f; codePoint += 1) {
-  escapedCodePoints.push(codePoint);
-}
-escapedCodePoints.push(0xfeff, 0x27e6, 0x27e7);
+const cases = JSON.parse(await readFile(new URL("filesystem_text_cases.json", import.meta.url), "utf8"));
+const escapedCodePoints = cases.layout_control_ranges.flatMap(([first, last]) =>
+  Array.from({length: last - first + 1}, (_, index) => first + index)
+);
+escapedCodePoints.push(0x27e6, 0x27e7);
 
 const escapedOutputs = [];
 for (const codePoint of escapedCodePoints) {
@@ -129,10 +119,12 @@ for (const marker of escapedOutputs) {
   );
 }
 
-const preserved =
-  "<img onerror=alert(1)> العربية עברית e\u0301 🌊\ufe0f A\u200cB\u200dC \u{e0020}";
-renderFilesystemText(target, preserved);
-assert.equal(target.textContent, preserved);
+for (const {raw, desktop} of cases.examples) {
+  renderFilesystemText(target, raw);
+  assert.equal(target.textContent, desktop);
+}
+renderFilesystemText(target, cases.preserved_text);
+assert.equal(target.textContent, cases.preserved_text);
 
 assert.throws(
   () => renderFilesystemText(impostor, "trusted text"),

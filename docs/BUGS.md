@@ -2472,6 +2472,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ## WORKFLOW AND CLI
 
+### Output rendering
+
+- SEVERE - FIXED (2026-11-04). Review-text layout-control injection.
+  CLI review displayed legal filenames containing U+0085 or bidi controls as
+  active text, allowing a filename to split review lines or visually reorder
+  its spelling before commitment. Cause: the CLI escaped only C0/DEL, while
+  parser errors also reflected unescaped arguments. The output formatter now
+  covers the desktop's defended layout-control set with ASCII `[U+XXXX]`
+  markers and doubles literal `[` to prevent marker collisions; argparse
+  diagnostics use the same formatter. Shared desktop/CLI examples and real
+  module/console sync-to-history checks cover raw path identity and redirected
+  UTF-8/cp1252 output. Ordinary Unicode remains unchanged; confusable text has
+  the residual boundary owned by `DEFENSE.md`.
+
 ### Plan projection
 
 - MODERATE - FIXED (2026-09-18). Subtree/direct membership confusion.

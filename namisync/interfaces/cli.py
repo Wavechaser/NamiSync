@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -33,10 +34,19 @@ EXIT_MISMATCH = 8
 EXIT_VERIFICATION_INCOMPLETE = 9
 _MAX_COMMAND_ENVELOPE_BYTES = 65_536
 _INVALID_COMMAND_REQUEST = "Invalid command request."
+_LAYOUT_CONTROL = re.compile(
+    "[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f"
+    "\u2028-\u202e\u2060-\u206f\ufeff\\[]"
+)
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        super().error(_safe(message))
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = _ArgumentParser(
         prog="nami-sync",
         description="Safety-first reviewed one-way file mirroring.",
     )
@@ -1208,12 +1218,9 @@ def _close_service(service: NamiSyncService, stderr: TextIO) -> None:
 def _safe(value: object) -> str:
     if value is None:
         return "-"
-    text = str(value)
-    return "".join(
-        character
-        if character >= " " and character not in {"\x7f", "\x1b"}
-        else f"\\x{ord(character):02x}"
-        for character in text
+    return _LAYOUT_CONTROL.sub(
+        lambda match: "[[" if match[0] == "[" else f"[U+{ord(match[0]):04X}]",
+        str(value),
     )
 
 

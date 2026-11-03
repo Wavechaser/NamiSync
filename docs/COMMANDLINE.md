@@ -220,7 +220,14 @@ an explicit hard-abort policy but never reports clean cancellation prematurely.
 ## Safety
 
 Paths are ordinary arguments, never interpolated into a shell. Output escapes
-control characters. Runtime validation names missing/nonexistent/unusable paths
+the desktop's defended C0/C1, bidirectional, line and invisible layout controls
+as ASCII `[U+XXXX]` markers in review, progress, results, history and diagnostics,
+including parser errors. Literal `[` becomes `[[`, so a filename containing
+`[U+0085]` remains distinguishable from an actual U+0085 control. Marker output
+also works with redirected Windows code-page streams; ordinary Unicode and
+Windows path separators retain their spelling, subject to the selected output
+encoding. Rendering does not alter filesystem paths or operation identity.
+Runtime validation names missing/nonexistent/unusable paths
 and the corrective action. Mirror deletion is not exposed. Database defaults
 remain local and outside managed roots.
 

@@ -154,15 +154,9 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
-#### Pilot Setup journey simplification (2026-11-01)
+#### Reduce retained build artifacts (2026-10-29 – 2026-11-04)
 
-- Check that the rendered Source and Target path fields align instead of
-  requiring a 64px label column. Keep the installed refusal, Clear and
-  readmission sequence and the specified option spacing.
-
-#### Reduce retained build artifacts (2026-10-29 – 2026-10-30)
-
-- Remove 674,132 files / 19.77 GiB of logical payload across the authorized
+- Remove 713,567 files / 21.32 GiB of logical payload across the authorized
   cleanup batches, preserving must-keeps, raw receipts and recent work.
 - Restore read access to two protected wheels in `ab8-20260926` and `m1-7`
   without changing their owners or contents.
@@ -174,9 +168,19 @@ behavioral evidence.
   RECORD-verified venv files, per-test pytest state and uncited scratch roots.
   Only open-question failure fixtures (RV1/RV2B/RV3 failing tests, named AB-7/AB-8
   witnesses) are kept.
-- Retain exact deletion journals and hash verification. Recovery artifacts and
-  limits are recorded in `build/build_cleanup_reduction_summary.json` and
-  `build/build_cleanup_round2_summary.json`. Product and test code are unchanged.
+- Remove 39,435 more files / 1.55 GiB and 13,082 empty directories in round 3:
+  SQLite state, fixture and package-metadata TXT, Git-reconstructible JSON/TXT
+  copies, root-admission differential fixtures and superseded cleanup journals.
+  Run-output TXT and per-test outcome JSON are kept.
+- Verify each round by hash. Recovery artifacts, holds and limits are recorded
+  in the `build/build_cleanup_*_summary.json` files. Product and test code are
+  unchanged.
+
+#### Pilot Setup journey simplification (2026-11-01)
+
+- Check that the rendered Source and Target path fields align instead of
+  requiring a 64px label column. Keep the installed refusal, Clear and
+  readmission sequence and the specified option spacing.
 
 #### Consolidate before M1 closeout (2026-10-29 – 2026-10-30)
 
@@ -313,6 +317,11 @@ behavioral evidence.
 
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
+
+#### Make filenames readable in CLI output (2026-11-04)
+
+- Show Unicode line and direction controls visibly in reviewed paths so a
+  filename cannot split an operation row or disguise its suffix.
 
 #### Verify integrated M1 lifecycle and retention (2026-10-30)
 
