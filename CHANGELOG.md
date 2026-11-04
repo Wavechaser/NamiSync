@@ -318,6 +318,18 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Exercise the portable package beyond startup (2026-11-04)
+
+- Verify 30 frozen CLI invocations and 70 checks across reviewed copy, integrity,
+  history, eight database refusal cases, isolated placement and relocation.
+  Exercise native GUI copy/verification, Unicode paths and settings persistence.
+- Record three fresh-process idle diagnostics with 354–360 MiB settled private
+  bytes, without a resource-budget or release-acceptance claim. Repeated workload
+  measurement remains unavailable after two Create plan input attempts; preserve
+  failed specimens and the unresolved delivery evidence.
+- Reconcile the accumulated handoff into current resumption context and account
+  for task-owned fixture cleanup while retaining evidence.
+
 #### Build the first portable M1 debug package (2026-11-04)
 
 - Activate M1-Release for a small tester group receiving a portable Windows x64

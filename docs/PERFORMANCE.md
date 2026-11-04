@@ -10,6 +10,54 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Portable development-package diagnostics — 2026-11-04
+
+Attempt-03's portable ZIP SHA-256 is
+`acc2c253057bce8af3c497053dfab3765da0621c9c507792b2aa4fb6e553bd69`.
+Its recorded source is `3aa03caa` plus staged packaging/host inputs, not a clean
+release candidate. Evidence and exact drivers are retained under
+`build/bughunt-20261104/packaged-round/evidence/`; `cold-bundle-01.json` binds
+all 471 extracted files before/after collection, while `cold-idle-01.json`
+records the driver dependency hashes and their before/after comparison.
+Host: Windows 11 Pro build 26200, i7-13700K, about 63.7 GiB visible RAM, local
+NTFS; packaged Python 3.13.17 and WebView2 156.0.4314.58.
+
+Three fresh GUI processes/profiles were observed for 60 seconds each, serialized
+with functional tests. This is fresh-process startup, not forced OS-cache-cold
+startup. The Windows Job includes the frozen host and all descendants; only the
+launch wrapper is excluded. PID/creation identity brackets resource reads.
+Private-byte totals are sampled nominally every 0.5 seconds; settled values are
+the final 15-second medians. Unknown descendant roles remain included.
+
+| Run | Sampled peak private bytes | Settled private bytes | Normal close, seconds |
+| --- | ---: | ---: | ---: |
+| 1 | 375,414,784 | 373,381,120 | 1.010 |
+| 2 | 372,514,816 | 371,609,600 | 1.060 |
+| 3 | 377,425,920 | 377,331,712 | 1.060 |
+
+Settled totals are approximately 354–360 MiB. Of 360 samples, 357 are complete;
+each run's first sample precedes product Job membership. Retain those gaps in
+`cold-idle-01.samples.jsonl`; sampled peaks are lower bounds on transient peaks.
+All three processes exit 0 with empty Jobs before closure and no forced teardown.
+Native-window observation time is not interactive-ready latency.
+
+The separately declared repeated workload was three cycles of Plan, Execute,
+Verify copied and Close task over 256 files of 16 KiB, changing one file between
+cycles, with bounded idle windows. Both native-input attempts stopped at the
+first Create plan transition; neither produced any repeated-workload result.
+The second attempt proves cursor placement over the intended UIA button, but
+not delivery/processing of mouse events. The user independently observed cursor
+movement and could not confirm click acknowledgement. The harness timed out
+and closed the window; logs and exit 0 do not establish a crash. Two remaining
+WebView descendants in the retry required final Job cleanup. Failed profiles,
+drivers and captures are preserved in `gui-repeat-preservation-02.json` and its
+named archive. No third attempt was made, and cause remains unresolved.
+
+These are diagnostics without a resource budget, SH-G-15 pass or leak-freedom
+claim. Repeated and longer/heavier-session growth, representative-corpus
+acceptance and clean-candidate release evidence remain open. Changed package,
+driver or checker dependencies require new evidence for the affected claim.
+
 ## Handle-relative compatibility probes — 2026-10-21
 
 At product revision `e6734bbd`, the user-provided K: SD card was natively

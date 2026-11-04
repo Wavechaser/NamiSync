@@ -135,6 +135,49 @@ consolidation do not execute, close or authorize DOC-2 history rewriting.
 
 ## M1-Release — authorized 2026-11-04
 
+### Portable development-package behavioral round — 2026-11-04
+
+The user handed attempt-03 to this session for deeper database, deployment and
+workflow testing, plus measurement work. Inspect archive/source provenance and
+use fresh isolated data directories; this is an investigation against the frozen
+development package, not a clean release candidate or authority to publish.
+`build/bughunt-20261104/packaged-round/README.md` defines evidence/fixture layout.
+
+Finite behavioral population: real packaged CLI reviewed copy/readback/history/
+restart/no-op and integrity lifecycle; malformed/old/mixed/partial database-pair
+refusal and standalone history; relocation/unrelated working directory and
+per-user versus explicit data placement. The GUI lane covers actual packaged
+Setup/Plan/execute/inventory/verify task transitions, persistence across restart
+and safe close using native interaction where available. Existing startup-only
+evidence is reused by dependency, never substituted for these workflows.
+Close each scenario with observed results, a finding or explicit unavailable
+capability. Report findings before fixes; AGENTS mandatory stops still apply.
+
+Measurements start by mapping existing drivers and gates. Declare finite
+workloads/process scope before serialized observations; no SH-G-15 pass or
+resource budget is invented from diagnostics. Final acceptance remains subject
+to R3's predeclared criteria. At closeout, reconcile and commit HANDOFF as the
+user requested, preserving necessary packaging/evidence context rather than
+leaving accumulated notes unstaged. Fixture cleanup follows the user's end-of-
+round rule after exact ownership, evidence and recovery accounting.
+
+Status: bounded investigation complete with explicit measurement unavailability.
+The real portable CLI passed 70 checks across 30 invocations, covering the named
+corpus including eight database-pair refusal cases and relocation. Native GUI
+review/execute/Verify copied, inventory, saved defaults, restart and normal close
+passed on a small Unicode fixture. No new product defect was established.
+Three fresh-process idle diagnostics completed; PERFORMANCE owns their method,
+354–360 MiB settled private-byte observations and sampling limits. Repeated
+workload measurement is unavailable after the initial attempt and one authorized
+instrumented retry: Create plan never advanced; exact cursor placement does not
+prove click delivery, and the harness subsequently closed the window. No third
+attempt is authorized by this round. Failed specimens and drivers are archived.
+Evidence: `build/bughunt-20261104/packaged-round/evidence/summary.md` and lane
+receipts. Final cleanup accounting and resumption context are in HANDOFF.
+GUI busy/pause/cancel, malformed-profile startup, fresh Integrity setup,
+longer/heavier workloads and clean-machine prerequisites remain untested here;
+this finite diagnostic round does not close R3/R4 or grant release acceptance.
+
 Continuation on 2026-11-04 prioritizes a runnable portable development package
 for the user's next installed-behavior/cold-install debug pass. The installed
 wheel sweep and its bounded fixes are complete through `3aa03caa`; packaging
