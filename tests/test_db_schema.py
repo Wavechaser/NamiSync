@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 import os
 import sqlite3
 from pathlib import Path
@@ -36,6 +36,14 @@ from namisync.db.schema import (
 
 def _pragma(connection: sqlite3.Connection, name: str):
     return connection.execute(f"PRAGMA {name}").fetchone()[0]
+
+
+@contextmanager
+def _schema_connection(history: bool):
+    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.executescript(script)
+        yield connection
 
 
 def test_history_trigger_cut_requires_epoch_seven_and_history_v7() -> None:
@@ -738,9 +746,7 @@ def test_exact_schema_topology_accepts_complete_definitions_without_writes(
 
 @pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 def test_exact_schema_topology_is_main_only_and_preserves_caller_transaction(history: bool) -> None:
-    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
-    with closing(sqlite3.connect(":memory:")) as connection:
-        connection.executescript(script)
+    with _schema_connection(history) as connection:
         connection.execute("ATTACH DATABASE ':memory:' AS unrelated")
         connection.execute("CREATE TABLE unrelated.untrusted (value TEXT)")
         connection.execute("CREATE TEMP TABLE untrusted (value TEXT)")
@@ -870,9 +876,7 @@ def test_exact_schema_topology_refuses_loss_of_without_rowid() -> None:
 def test_exact_schema_topology_allows_only_declared_statistics_tables(
     history: bool, statistics: str,
 ) -> None:
-    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
-    with closing(sqlite3.connect(":memory:")) as connection:
-        connection.executescript(script)
+    with _schema_connection(history) as connection:
         if statistics == "analyze":
             connection.execute("ANALYZE")
             assert connection.execute(
@@ -897,9 +901,7 @@ def test_exact_schema_topology_allows_only_declared_statistics_tables(
     "type", "owner", "definition", "duplicate", "undeclared-table", "index", "trigger",
 ])
 def test_exact_schema_topology_refuses_statistics_spoofing(history: bool, poison: str) -> None:
-    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
-    with closing(sqlite3.connect(":memory:")) as connection:
-        connection.executescript(script)
+    with _schema_connection(history) as connection:
         connection.execute("ANALYZE")
         row = connection.execute(
             "SELECT type,name,tbl_name,rootpage,sql FROM sqlite_schema WHERE name = 'sqlite_stat1'"
@@ -938,13 +940,11 @@ def test_exact_schema_topology_refuses_statistics_spoofing(history: bool, poison
 
 @pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 def test_exact_schema_topology_does_not_replace_marker_value_validation(history: bool) -> None:
-    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
     validate = (
         schema_module.validate_history_reader_contract
         if history else schema_module.validate_ledger_reader_contract
     )
-    with closing(sqlite3.connect(":memory:")) as connection:
-        connection.executescript(script)
+    with _schema_connection(history) as connection:
         connection.execute("UPDATE schema_metadata SET value = 'wrong' WHERE key = 'contract_id'")
         schema_module._validate_schema_topology(connection, history=history)
         with pytest.raises(SchemaResetRequired, match="schema contract wrong"):

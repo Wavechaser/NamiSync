@@ -318,6 +318,14 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Consolidate database and history test setup (2026-11-04)
+
+- Share local schema-role and bounded-history-window setup across four schema
+  and six history tests, preserving fault SQL, assertions and cleanup order.
+- Retain all test identities and parameters: 261 cases pass before and after,
+  and all 461 database department tests pass. Independent review approved;
+  product code and global test fixtures are unchanged.
+
 #### Complete the behavioral invariant and sibling sweep (2026-11-04)
 
 - Close all 84 component/invariant cells with bounded evidence or explicit

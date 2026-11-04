@@ -70,6 +70,21 @@ window test-fixture consolidation opportunity is recorded, without changes.
 Installed-app behavior testing awaits the user's transition; this discovery
 closure does not grant release acceptance or close existing release gates.
 
+#### Approved bug-hunt follow-up — 2026-11-04
+
+The user authorized two bounded outcomes after the sweep, then an explicit pause
+before further release work. Preserve existing release-session edits and retained
+fixtures. Each outcome receives its own verification, fresh independent review
+and coherent commit; repository safety/recurrence stops remain in force.
+
+| Outcome | Finite population, preserved guarantees and gate | Status |
+| --- | --- | --- |
+| A-2 correction | CLI output boundary in `interfaces/cli.py`, direct `test_cli.py` regressions and COMMANDLINE documentation. Preserve the selected stream encoding, readable encodable text, unambiguous existing control markers, caller stream ownership and real write/flush errors. Escape unencodable text before writing across runtime output and parser diagnostics. Reproduce the Japanese-filename failure first; verify real cp1252/UTF-8 module/console review, result and history paths, stream/error controls, then interfaces department and independent review. BUGS owns defect disposition. | Active. |
+| Database/history test setup | Only `test_db_schema.py` repeated in-memory role/schema setup and `test_db_history.py` repeated fixed-clock store/session/observer setup in bounded-window cases. Local helpers retain fault-specific SQL, expectations, test identities, parameters and window values. No product, global fixture or department-manifest changes. | Complete: four schema and six history test functions consolidated; 261 identical cases pass before/after, 461 database department passes, all 122 test definitions retain assertions/fault controls. Independent review approved; `evidence/db-consolidation-*` retains receipts. |
+
+No release packaging, installed-app round, runtime persistence refactor or new
+test-authority policy is included. Fixtures remain until the later app round.
+
 The 2026-11-04 CLI follow-up covers visible filename controls and the installed
 `namisync` and `namisync-gui` launchers. [COMMANDLINE](COMMANDLINE.md) owns the
 output contract and [INTERFACES](INTERFACES.md) owns launcher classification.

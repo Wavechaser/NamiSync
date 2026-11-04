@@ -129,6 +129,16 @@ def _item(seq: int, outcome: Outcome = Outcome.SUCCEEDED) -> ItemOutcome:
 
 
 @contextmanager
+def _history_window(
+    path: Path, policy: HistoryWindowPolicy, *, run_token: str = "run-1",
+):
+    record = _record()
+    with HistoryStore(path, clock=FakeClock(), window_policy=policy) as store:
+        observer = store.observer(record, HistoryContext(run_token, "host-1"))
+        yield store, record, observer
+
+
+@contextmanager
 def _without_history_triggers(connection: sqlite3.Connection, *names: str):
     # Corrupt data independently of topology so readback integrity assertions
     # still run behind the exact-schema admission boundary.
@@ -831,11 +841,7 @@ def test_count_bound_flushes_complete_windows_and_exposes_incomplete_summary(
     tmp_path: Path,
 ) -> None:
     policy = HistoryWindowPolicy(max_events=2)
-    record = _record()
-    with HistoryStore(
-        tmp_path / "history.db", clock=FakeClock(), window_policy=policy
-    ) as store:
-        observer = store.observer(record, HistoryContext("run-1", "host-1"))
+    with _history_window(tmp_path / "history.db", policy) as (store, record, observer):
         observer.on_event(_envelope(record, 1, _item(1)))
         assert observer.pending_event_count == 1
         observer.on_event(_envelope(record, 2, _item(2)))
@@ -1163,10 +1169,8 @@ def test_failed_finalization_rolls_back_tail_and_keeps_pending_window(
 ) -> None:
     path = tmp_path / "history.db"
     policy = HistoryWindowPolicy(max_events=2)
-    record = _record()
     result = OperationResult(SessionState.COMPLETED, items=(_item(1), _item(2), _item(3)))
-    with HistoryStore(path, clock=FakeClock(), window_policy=policy) as store:
-        observer = store.observer(record, HistoryContext("run-1", "host-1"))
+    with _history_window(path, policy) as (store, record, observer):
         observer.on_event(_envelope(record, 1, _item(1)))
         observer.on_event(_envelope(record, 2, _item(2)))
         observer.on_event(_envelope(record, 3, _item(3)))
@@ -1243,13 +1247,9 @@ def test_failed_window_commit_is_absent_and_keeps_its_bounded_pending_data(
 def test_durable_duplicates_are_idempotent_but_conflicts_and_late_events_fail(
     tmp_path: Path,
 ) -> None:
-    record = _record()
     context = HistoryContext("run-1", "host-1")
     policy = HistoryWindowPolicy(max_events=1)
-    with HistoryStore(
-        tmp_path / "history.db", clock=FakeClock(), window_policy=policy
-    ) as store:
-        observer = store.observer(record, context)
+    with _history_window(tmp_path / "history.db", policy) as (store, record, observer):
         observer.on_event(_envelope(record, 1, _item(1)))
         observer.on_event(_envelope(record, 3, _item(3)))
         observer.on_event(_envelope(record, 1, _item(1)))
@@ -1277,16 +1277,12 @@ def test_durable_duplicates_are_idempotent_but_conflicts_and_late_events_fail(
 def test_new_sequence_exact_item_duplicate_is_a_noncounting_receipt(
     tmp_path: Path, max_events: int,
 ) -> None:
-    record = _record()
     item = _item(1)
-    with HistoryStore(
+    with _history_window(
         tmp_path / "history.db",
-        clock=FakeClock(),
-        window_policy=HistoryWindowPolicy(max_events=max_events),
-    ) as store:
-        observer = store.observer(
-            record, HistoryContext("run-duplicate", "host-1")
-        )
+        HistoryWindowPolicy(max_events=max_events),
+        run_token="run-duplicate",
+    ) as (store, record, observer):
         assert observer.on_event(_envelope(record, 1, item)) is RecordingStatus.OK
         assert observer.on_event(_envelope(record, 2, item)) is RecordingStatus.OK
         assert (
@@ -1325,16 +1321,12 @@ def test_new_sequence_exact_item_duplicate_is_a_noncounting_receipt(
 def test_new_sequence_conflicting_item_identity_breaks_the_prefix(
     tmp_path: Path,
 ) -> None:
-    record = _record()
     original = _item(1)
     changed = replace(original, detail={"message": "99"})
     policy = HistoryWindowPolicy(max_events=1)
-    with HistoryStore(
-        tmp_path / "history.db", clock=FakeClock(), window_policy=policy
-    ) as store:
-        observer = store.observer(
-            record, HistoryContext("run-conflict", "host-1")
-        )
+    with _history_window(
+        tmp_path / "history.db", policy, run_token="run-conflict",
+    ) as (store, record, observer):
         observer.on_event(_envelope(record, 1, original))
         with pytest.raises(HistoryIntegrityError, match="identity was reused"):
             observer.on_event(_envelope(record, 2, changed))
@@ -1353,17 +1345,13 @@ def test_new_sequence_conflicting_item_identity_breaks_the_prefix(
 def test_same_window_conflicting_item_identity_rolls_back_the_window(
     tmp_path: Path,
 ) -> None:
-    record = _record()
     original = _item(1)
     changed = replace(original, reason="blocked-correspondence")
-    with HistoryStore(
+    with _history_window(
         tmp_path / "history-same-window-conflict.db",
-        clock=FakeClock(),
-        window_policy=HistoryWindowPolicy(max_events=2),
-    ) as store:
-        observer = store.observer(
-            record, HistoryContext("run-same-window-conflict", "host-1")
-        )
+        HistoryWindowPolicy(max_events=2),
+        run_token="run-same-window-conflict",
+    ) as (store, record, observer):
         observer.on_event(_envelope(record, 1, original))
         with pytest.raises(HistoryIntegrityError, match="identity was reused"):
             observer.on_event(_envelope(record, 2, changed))
