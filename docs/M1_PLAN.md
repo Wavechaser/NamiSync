@@ -44,9 +44,17 @@ installed Setup/task-shell cases pass. All 2,208 interface cases are accounted
 for across 2,204 department passes and a five-case direct-consumer rerun after
 correcting two browser fixtures' row shape and synchronous timing assumptions.
 The four original failures remain evidence; product bytes did not change for
-that correction. Independent review approved the fix; the commit precedes the
-requested native diagnostic. Evidence: `build/setup-admission-20261104/`.
-AGENTS stop rules apply.
+that correction. Independent review approved the fix, committed as `e2f482ae`.
+The subsequent native accessibility-controlled journey passed: Target retained
+focus, one down/up reached Plan ready, and the three-file dry-run left source
+hashes and empty Target unchanged. Normal close exited 0 with an empty Job.
+The screenshot shows three Copy items, 278 bytes and zero issues. Two controller
+startup failures occurred before app launch and remain preserved; this is one
+successful first-click diagnostic, not release acceptance. Evidence:
+`build/setup-admission-20261104/`, including `postcommit-journey/result-03.json`.
+Both diagnostic runtime roots and all three session pytest roots were removed
+after evidence preservation and process checks. This follow-up is complete;
+AGENTS stop rules apply to any subsequent work.
 
 ### Behavioral bug hunt — authorized 2026-11-04
 

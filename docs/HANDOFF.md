@@ -33,17 +33,31 @@ actual deferred stage. Failed receipts remain, including a sandbox temp-root
 refusal before the successful fixture rerun. Fresh independent review approved
 the fix and its evidence; local links and diff checks pass.
 
-## Immediate continuation
+## Post-commit native journey
 
-The user requested a small accessibility-controlled journey **after** the fix
-is reviewed and committed. Its prepared driver and conventions are under
-`build/setup-admission-20261104/postcommit-journey/`; do not claim it ran yet.
-Reuse the verified current installed-wheel environment, send one down/up while
-Target retains focus, observe Plan, then close normally. No preparatory blur,
-second click or Execute is part of that diagnostic. The outer Job bounds the
-whole controller and app tree. Preserve the receipt/screenshot and clean the
-exact owned runtime fixture afterward; include final handoff in a follow-up
-evidence commit if the result arrives after the product commit.
+Fix commit: `e2f482ae`. The requested accessibility-controlled journey passed
+against its verified installed wheel after commit. With Target still focused,
+one native down/up reached Plan ready without preparatory blur, a second click
+or manual help. The captured native window shows three Copy items, 278 bytes
+and zero planning issues. No Execute was sent; source hashes were unchanged
+and Target remained empty. Normal close exited 0 with an empty Job.
+
+Evidence: `build/setup-admission-20261104/postcommit-journey/result-03.json`
+and `plan-ready.png`. The 6.7-second diagnostic used UIA to locate controls and
+read the settled Plan, with native input for the first click and no JavaScript
+or CDP injection. The wheel SHA-256 is
+`4c2d5b6dd24be22422929331e1a6cfa739ad34d66f84f04dadba61bffc4e837f`;
+installed bytes matched before and after. Two earlier controller startup
+failures (abbreviated commit identity and unqualified UIA assembly loading)
+occurred before app launch and remain recorded. The corrected driver uses the
+existing harness's qualified assembly identities and a whole-tree watchdog.
+This is one successful first-click observation, not a repeated workload or
+release-acceptance claim. Both diagnostic runtime roots and the three session
+pytest roots were archived as needed and removed after process checks. Cleanup
+receipts are `postcommit-journey/cleanup-result-20261104-161317.json` and
+`pytest-cleanup-result-20261104-161340.json`; all five roots are absent. Native
+screenshots, wheel/installation identities, failed receipts and fixture archives
+remain in the evidence directory. No further test window is open.
 
 ## Prior package context
 

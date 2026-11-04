@@ -330,6 +330,9 @@ explicit, reviewable and regression-backed.
   accessible path descriptions and avoiding error text beneath the path rows.
 - Verify focused race/refusal controls, all 2,208 interface cases across the
   department and corrected-fixture rerun, and three installed Setup/shell cases.
+- After committing the fix, confirm a single native click while Target retains
+  focus reaches Plan ready for three files without preparatory blur or retry;
+  the dry-run leaves files unchanged and closes normally.
 
 #### Exercise the portable package beyond startup (2026-11-04)
 
