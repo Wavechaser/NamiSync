@@ -122,7 +122,7 @@ _EDITABLE_SCRIPT = r"""
   const recentTrigger = document.querySelector("#setup-source-recent-trigger");
   const clearSource = document.querySelector('[data-purpose="source"] .nami-setup__clear');
   const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
-  const targetStatus = document.querySelector('[data-purpose="target"] .nami-setup__location-status');
+  const targetStatus = document.querySelector("#setup-target-status");
   const inventoryAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
     .find((item) => item.textContent === "Create inventory");
   const planAgainAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
@@ -373,14 +373,27 @@ _EDITABLE_SCRIPT = r"""
       onlinePair.getAttribute("aria-disabled") !== "false" || onlineSelect.disabled) {
     throw new Error("recent-pair availability interaction state is incorrect");
   }
+  const pathsBeforeRefusal = [source, target].map((input) => input.getBoundingClientRect());
+  const actionBeforeRefusal = primaryAction.getBoundingClientRect();
   source.focus();
   source.value = "not a native folder";
   source.dispatchEvent(new Event("input", {bubbles: true}));
   source.dispatchEvent(new Event("blur", {bubbles: true}));
   await until(() => source.dataset.state !== "unresolved", "typed location refusal");
   const refusedState = source.dataset.state;
-  const refusalHint = document.querySelector('[data-purpose="source"] .nami-setup__location-status');
+  const refusalHint = document.querySelector("#setup-source-status");
   const refusalHintVisible = refusalHint.checkVisibility() && refusalHint.textContent.length > 0;
+  const feedback = document.querySelector(".nami-setup__action-status");
+  const feedbackBounds = feedback.getBoundingClientRect();
+  const feedbackLeftOfActions = feedback.parentElement === compositionActions &&
+    feedbackBounds.right <= pairActions[0].getBoundingClientRect().left &&
+    feedback.contains(refusalHint) && refusalHint.textContent.startsWith("Source: ") &&
+    source.getAttribute("aria-describedby") === refusalHint.id;
+  const pathsStableDuringRefusal = [source, target].every((input, index) => {
+    const current = input.getBoundingClientRect();
+    return Math.abs(current.top - pathsBeforeRefusal[index].top) <= 1 &&
+      Math.abs(current.height - pathsBeforeRefusal[index].height) <= 1;
+  }) && Math.abs(primaryAction.getBoundingClientRect().top - actionBeforeRefusal.top) <= 1;
   source.focus();
   source.value = __SOURCE__;
   source.dispatchEvent(new Event("input", {bubbles: true}));
@@ -482,6 +495,8 @@ _EDITABLE_SCRIPT = r"""
       !document.querySelector("#host-status").checkVisibility(),
     empty_path_hint_hidden: emptyPathHintHidden,
     refusal_hint_visible: refusalHintVisible,
+    feedback_left_of_actions: feedbackLeftOfActions,
+    paths_stable_during_refusal: pathsStableDuringRefusal,
     hostile_filter_inert: document.querySelector("img") === null,
     options_visible: options.checkVisibility(),
     two_setup_cards: cards.length === 2,
@@ -745,8 +760,6 @@ _FROZEN_SCRIPT = r"""
   await until(() => source.dataset.state === "resolved" && source.value === __PICKED_SOURCE__, "resolved picker choice");
   target.value = __TARGET__;
   target.dispatchEvent(new Event("input", {bubbles: true}));
-  target.dispatchEvent(new Event("blur", {bubbles: true}));
-  await until(() => target.dataset.state === "resolved" && !button.disabled, "resolved typed target");
   const bridge = await import("./bridge.js");
   const originalTasks = (await bridge.listTasks()).tasks;
   if (originalTasks.length !== 1) throw new Error("original Setup task identity is ambiguous");
@@ -761,6 +774,11 @@ _FROZEN_SCRIPT = r"""
     propagate_source_casing: checked("propagate_source_casing"), verify_after_execute: checked("verify_after_execute"),
   };
   const pickerResolved = source.dataset.state === "resolved";
+  // Keep blur and activation in one turn so the native admission cannot finish
+  // between them. This is the formerly swallowed first-click ordering.
+  target.dispatchEvent(new Event("blur", {bubbles: true}));
+  const startEnabledDuringAdmission = !button.disabled;
+  if (!startEnabledDuringAdmission) throw new Error("blur admission disabled Create plan");
   button.click();
   let planAgain;
   try {
@@ -826,6 +844,7 @@ _FROZEN_SCRIPT = r"""
     plan_again_visible: planAgainVisible,
     plan_again_new_task: true,
     picker_resolved: pickerResolved,
+    start_enabled_during_admission: startEnabledDuringAdmission,
   };
 })()
 """

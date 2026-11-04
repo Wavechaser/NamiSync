@@ -586,6 +586,115 @@ async function loadScenario({
   assert.equal(harness.model.batch.length, 1, "returning to Sync restores the retained row");
 }
 
+// Blur admission and the following activation share one check, including a
+// recheck of an already-resolved row. A second activation never starts twice.
+for (const mode of ["sync-plan", "inventory"]) {
+  for (const outcome of ["resolved", "unresolved", "missing", "rejected", "edited"]) {
+    const harness = await loadScenario();
+    const callbacks = harness.callbacks;
+    callbacks.onMode(mode);
+    callbacks.onEdit("source", "C:\\source");
+    if (mode === "sync-plan") callbacks.onEdit("target", "D:\\target");
+    const rowName = mode === "sync-plan" ? "target" : "source";
+    const purpose = mode === "sync-plan" ? "target" : "inventory";
+    if (outcome !== "unresolved") {
+      callbacks.onValidate(rowName);
+      await until(() => harness.model[rowName].location !== null, "prior resolved choice");
+    }
+    const check = deferred();
+    const originalAdmit = harness.admitLocation;
+    harness.admitLocation = (requestedPurpose, candidate) => {
+      if (requestedPurpose !== purpose) return originalAdmit(requestedPurpose, candidate);
+      harness.calls.push(["shared-check", requestedPurpose, structuredClone(candidate)]);
+      return check.promise;
+    };
+    callbacks.onValidate(rowName);
+    const start = mode === "sync-plan" ? callbacks.onStartPlan : callbacks.onStartInventory;
+    const startCommand = mode === "sync-plan" ? "start-plan" : "start-inventory";
+    start();
+    start();
+    assert.equal(harness.model.attempt?.running, true, `${mode}: activation waits for blur admission`);
+    assert.equal(harness.model.attempt.dispatched, false);
+    await turns();
+    assert.equal(harness.calls.some((call) => call[0] === startCommand), false);
+    if (outcome === "edited") {
+      // The existing revision guard also covers an edit committed during the wait.
+      harness.model[rowName].revision += 1;
+      harness.model.revision += 1;
+    }
+    if (outcome === "rejected") check.reject(new Error("folder probe refused"));
+    else check.resolve(outcome === "missing"
+      ? { ...choice(purpose, "8"), state: "missing", choice_id: null, detail: "Reconnect this folder." }
+      : choice(purpose, "8"));
+    await until(() => harness.model.attempt === null, `${mode}: shared check settles`);
+    const starts = harness.calls.filter((call) => call[0] === startCommand);
+    const approved = outcome === "resolved" || outcome === "unresolved";
+    assert.equal(starts.length, approved ? 1 : 0, `${mode}: ${outcome}`);
+    if (approved) {
+      assert.equal(starts[0][mode === "sync-plan" ? 3 : 2], CHOICE("8"), "uses the new check's approval");
+      assert.equal(harness.model[rowName].pending, false);
+      assert.equal(harness.model[rowName].admissionPromise, null);
+    }
+    assert.equal(harness.calls.filter((call) => call[0] === "shared-check").length, 1);
+  }
+}
+
+{
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\slow-source");
+  callbacks.onEdit("target", "D:\\missing-target");
+  const sourceCheck = deferred();
+  const targetCheck = deferred();
+  harness.admitLocation = (purpose) => {
+    harness.calls.push(["admit", purpose]);
+    return purpose === "source" ? sourceCheck.promise : targetCheck.promise;
+  };
+  callbacks.onValidate("target");
+  callbacks.onStartPlan();
+  await until(() => harness.calls.filter((call) => call[0] === "admit").length === 2, "both folder probes running");
+  targetCheck.resolve({ ...choice("target", "2"), state: "missing", choice_id: null, detail: "Reconnect target." });
+  await until(() => !harness.model.target.pending, "target refusal precedes source completion");
+  sourceCheck.resolve(choice("source", "1"));
+  await until(() => harness.model.attempt === null, "refused shared pair settles");
+  assert.equal(harness.calls.filter((call) => call[0] === "admit").length, 2,
+    "a target check settling during the source wait is not repeated");
+  assert.equal(harness.calls.some((call) => call[0] === "start-plan"), false);
+}
+
+{
+  const harness = await loadScenario();
+  harness.callbacks.onEdit("source", "C:\\refused-source");
+  const originalAdmit = harness.admitLocation;
+  harness.admitLocation = () => { throw new Error("request refused before dispatch"); };
+  harness.callbacks.onValidate("source");
+  await until(() => !harness.model.source.pending, "synchronous admission refusal settles");
+  assert.equal(harness.model.source.admissionPromise, null);
+  harness.admitLocation = originalAdmit;
+  harness.callbacks.onValidate("source");
+  await until(() => harness.model.source.location?.state === "resolved", "fresh check after refusal");
+}
+
+{
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\queued-source");
+  callbacks.onEdit("target", "D:\\queued-target");
+  const check = deferred();
+  harness.admitLocation = () => check.promise;
+  callbacks.onValidate("target");
+  callbacks.onAddPair();
+  assert.equal(harness.model.batch.length, 1, "Add pair remains a local snapshot while blur admission runs");
+  const queued = harness.model.batch[0];
+  callbacks.onEdit("target", "D:\\later-target");
+  check.resolve(choice("target", "8"));
+  await turns();
+  assert.equal(queued.target.text, "D:\\queued-target");
+  assert.equal(queued.target.pending, false);
+  assert.equal(queued.target.admissionPromise, null, "queue snapshots never retain live admission");
+  assert.equal(queued.target.location, null, "late admission cannot rewrite captured input");
+}
+
 {
   const harness = await loadScenario();
   const callbacks = harness.callbacks;

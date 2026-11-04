@@ -1067,6 +1067,21 @@ body {
   gap: var(--space-5);
 }
 
+.nami-setup__actions {
+  align-items: flex-start;
+  flex-wrap: nowrap;
+}
+
+.nami-setup__action-status {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.nami-setup__action-status > p {
+  margin: 0;
+}
+
 .nami-setup__policy-group {
   align-items: center;
   display: flex;

@@ -1,81 +1,61 @@
-# Latest session — manual workload diagnostics, 2026-11-04
+# Latest session — Setup admission and feedback, 2026-11-04–05
 
-The requested diagnostic continuation and measured retry are complete. No product
-code changed. The actual measured workload contains three sync/close cycles and
-four verification runs; the user confirmed the extra one-file verification in
-cycle 2. Results are diagnostic, not an exact-three-verification profile pass or
-release acceptance. This replaced handoff is included in the delivery commit.
+The user authorized fixing the blur/check/Create gesture race and centralizing
+Setup feedback left of Add pair/Create. Create plan and inventory now retain
+one attempt and await the row's current admission promise, including a recheck
+of an accepted path. Both source and target in-flight results are retained at
+attempt entry. Stale edits, refusal and double activation still start no extra
+task. Add pair keeps its separately approved private-snapshot behavior and may
+capture a row while its ordinary check runs; batch admission stays independent.
 
-## Package and prior evidence
+Setup path, action/recovery and frozen guidance messages share the action-row
+feedback area. Source/Target/Root labels and accessible field descriptions are
+retained; path rows and action buttons do not move when an error appears.
+Mount selection and per-pair result cells keep their existing locations.
+Checking folders remains in the existing task-status shell once Create begins.
+No bridge, backend, execution authorization or package-release behavior changed.
 
-Packaging commit `027f7e64`; prior behavioral closeout `448e7ba3`.
-Artifact: `build/m1-release-20261104/attempt-03/NamiSync-windows-x64-dev.zip`.
-SHA-256: `acc2c253057bce8af3c497053dfab3765da0621c9c507792b2aa4fb6e553bd69`.
-Recorded source is `3aa03caa` plus staged host/icon/packaging inputs, not a clean
-release candidate. Source ZIP, wheel and resolved environment remain adjacent.
-All 471 extracted files matched before/after each continuation run. Commands
-are `namisync` and `namisync-gui`; Windows identity is `NamiSync.Desktop`.
+## Verification and review
 
-Earlier portable evidence remains in
-`build/bughunt-20261104/packaged-round/evidence/summary.md`: 30 frozen CLI
-invocations/70 checks, the small native GUI workflow/settings/restart journey,
-and three fresh-process idle observations. Packaging retains 6,359 ordinary
-passes/four capability skips and separate 35 headed obligations. No product
-gates were rerun for this documentation-only delivery; GitHub CI execution,
-clean-candidate release proof and publication remain open. No push occurred.
+Evidence: `build/setup-admission-20261104/`. Focused browser probes reproduce
+the old refusal and pass the shared-check, stale/refused result, repeated
+activation, target-before-source settlement and feedback placement controls.
+The installed Setup flow and both task-shell sizes pass (three cases), including
+same-turn blur/Create activation and stable error layout. These witnesses use
+the installed wheel, not the old portable package.
 
-## Continuation results and limits
+All 2,208 interface cases are accounted for: 2,204 passed in the department
+run, and four failures passed after correcting two direct browser fixtures
+(five focused passes including both bounded-diagnostics controls). One fixture
+assumed synchronous setup admission; the other omitted the new row promise
+field as well. Their corrections preserve lifecycle assertions and await the
+actual deferred stage. Failed receipts remain, including a sandbox temp-root
+refusal before the successful fixture rerun. Fresh independent review approved
+the fix and its evidence; local links and diff checks pass.
 
-Evidence root:
-`build/bughunt-20261104/packaged-round/continuation-native-20261104/`.
-Its `summary.md` and final review index exact scripts, raw samples, user
-witnesses, screenshots, specimen archives and private-copy database queries.
+## Immediate continuation
 
-- Both SendInput diagnostics accepted two events but reached Plan only after
-  manual activation. One may have had physical mouse interference; a controlled
-  hands-off repeat also needed a manual click. Browser delivery/root cause is
-  unresolved; no product fix is inferred.
-- Whole-tree UIA observation failed during startup and execution. Its old failure
-  cleanup closed the active copy; archived private-copy history correctly records
-  118 succeeded/138 canceled, recording/audit ok. No false success was found.
-- The user approved passive Job sampling with manual workflow witnesses instead.
-  Three sync cycles copied/updated 256/1/1 files with 0/255/255 no-ops. Managed
-  hashes and prior-version backups passed after every cycle. All three sync and
-  four verification history runs completed with recording/audit ok.
-- The 818.51-second session yielded 1,633 complete samples out of 1,637. Fixed
-  idle medians were 353 MiB initially, 853/665/628 MiB after each task close and
-  624 MiB finally. The sampled peak was 1,270.89 MiB. Final idle remained
-  271 MiB above startup while successive post-close medians decreased. These
-  observations do not prove a leak or long-session stability; PERFORMANCE owns
-  methods, units, sampling gaps and the extra-verification deviation.
-- Normal shutdown exited 0 with an empty Job; all eight sampled identities and
-  wrapper are gone. Sampler/app/workload-driver dependencies stayed unchanged.
-  One cropped parent screenshot is retained unused; corrected DPI-aware
-  captures have separate producer provenance. UI witnesses are manual.
+The user requested a small accessibility-controlled journey **after** the fix
+is reviewed and committed. Its prepared driver and conventions are under
+`build/setup-admission-20261104/postcommit-journey/`; do not claim it ran yet.
+Reuse the verified current installed-wheel environment, send one down/up while
+Target retains focus, observe Plan, then close normally. No preparatory blur,
+second click or Execute is part of that diagnostic. The outer Job bounds the
+whole controller and app tree. Preserve the receipt/screenshot and clean the
+exact owned runtime fixture afterward; include final handoff in a follow-up
+evidence commit if the result arrives after the product commit.
 
-The strict three-verification oracle remains failed, alongside the user's
-confirmation and `passive-review-reconciliation.json`. Do not relabel it as
-passing or remove the fourth verification from resource accounting.
+## Prior package context
 
-## Preservation, cleanup and resumption
-
-`continuation-specimens.zip` preserves all five diagnostic/observer fixtures;
-`passive-specimens.zip` preserves the final workload, databases and backups.
-Their manifests bind exact hashes/metadata and reproducible bundle contents.
-Original databases were never opened for inspection; only archived private
-copies were queried. All original failed receipts remain intact.
-
-Nine continuation runtime/cache/private-query roots were removed after archive
-and process review; `cleanup-result-20261104-115823.json` records every root.
-The previous round's 16 removals/four already-absent roots remain separately
-accounted. Evidence stays in build. The packaging-owned original
-`namisync-portable-debug-6ru3eo_p` extraction/native profiles remain excluded.
-
-M1_PLAN remains the sole scope owner. Longer/heavier resource profiles and
-predeclared release criteria remain open; do not infer a resource budget here.
-Other untested areas include fresh Integrity GUI setup, explicit busy/pause/
-cancel controls, malformed-profile startup and clean-machine prerequisites.
-Final dependency hashes/notices/source obligations, beta version/signing and
-distribution also remain open. Any further automation investigation should
-separate native input delivery from live accessibility-tree enumeration and
-preserve an active app on observer failure.
+Portable attempt-03 remains at
+`build/m1-release-20261104/attempt-03/NamiSync-windows-x64-dev.zip`, SHA-256
+`acc2c253057bce8af3c497053dfab3765da0621c9c507792b2aa4fb6e553bd69`.
+It predates this fix and is not a clean release candidate. Prior behavior and
+measurement evidence remains in `build/bughunt-20261104/packaged-round/`;
+`continuation-native-20261104/summary.md` records the completed three sync/four
+verification workload and its diagnostic limits. Prior runtime fixtures were
+cleaned, while packaging-owned extraction/native profiles remain excluded.
+The user's blur-race reconstruction prompted this fix; the earlier DPI failure
+is not retrospectively classified. Longer/heavier resource acceptance, clean
+release proof, dependency/notices/signing/distribution and GitHub CI execution
+remain open under M1_PLAN. No push or release is authorized by this fix.

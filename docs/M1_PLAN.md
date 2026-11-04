@@ -21,6 +21,33 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Setup admission sequencing — authorized 2026-11-04
+
+Queue Create plan, Add pair and inventory creation behind a current folder
+check instead of disabling their gesture during blur admission. Reuse that
+check's result, show validation progress, and retain revision/attempt guards,
+typed refusal, explicit Plan review and independent native admission. This is
+one interface-owned fix; no backend, bridge, release or measurement redesign.
+The user also authorized centralizing all Setup feedback in the action row left
+of Add pair/Create, removing path-message-driven row height changes. Add pair's
+independent snapshot behavior is explicitly approved. After the reviewed commit,
+run a small accessibility-controlled journey to check the original single-click
+gesture; retain its evidence separately from installed acceptance.
+Population: `app.js`, `setup.js`, necessary Setup styles, their browser probes and affected installed Setup/
+shell journeys; DESKTOP_UI, BUGS, CHANGELOG and HANDOFF document delivery.
+Gate: focused failing/passing race and stale/refusal/double-activation controls,
+interfaces department, affected installed headed cases, document/diff checks
+and fresh independent review before one atomic commit. Prior packaged results
+remain historical; the earlier DPI diagnosis is not reclassified by inference.
+Status: implementation complete; focused race/feedback probes and three
+installed Setup/task-shell cases pass. All 2,208 interface cases are accounted
+for across 2,204 department passes and a five-case direct-consumer rerun after
+correcting two browser fixtures' row shape and synchronous timing assumptions.
+The four original failures remain evidence; product bytes did not change for
+that correction. Independent review approved the fix; the commit precedes the
+requested native diagnostic. Evidence: `build/setup-admission-20261104/`.
+AGENTS stop rules apply.
+
 ### Behavioral bug hunt — authorized 2026-11-04
 
 The user authorized a coarse-to-fine investigation before the installed-app

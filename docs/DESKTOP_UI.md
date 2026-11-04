@@ -1230,7 +1230,13 @@ between their rows. Buttons, textboxes and combobox triggers use translucent
 disabled fills; other disabled surfaces retain their own component roles.
 Forced-color and transparent-action overrides remain independent.
 Empty and resolved paths omit routine hints; refusal and recovery messages remain
-visible. Each path has compact inset Clear and recent-folder buttons; Clear
+visible in the shared Setup feedback area left of Add pair/Create. Source,
+Target or Root labels identify folder feedback, and the path fields retain
+their accessible descriptions there. Action/recovery feedback and frozen-Setup
+guidance use the same area. Errors do not insert text beneath the path rows;
+buttons stay top-aligned when feedback wraps. Mount-choice controls remain with
+their fields, and per-pair results remain in the batch table.
+Each path has compact inset Clear and recent-folder buttons; Clear
 empties only that local field and invalidates its candidate without a Python
 request, including when the textbox was focused. Browse is square. Idle and
 disabled path-action buttons are transparent, with
@@ -1254,6 +1260,16 @@ keystroke. Refusal keeps the row editable and gives action-guiding typed
 feedback. A selected file remains visible with `not-directory`; it is never
 silently converted to its parent. Native code owns parsing, volume support, and
 no-follow admission.
+
+Create plan and Create inventory remain available during an ordinary folder
+check. Activating either starts one guarded attempt, displays Checking folders,
+and awaits the current row's admission before proceeding; it does not submit a
+duplicate check or use an older accepted choice while a recheck is running.
+Without a running check, unresolved rows are admitted normally. Editing the
+form abandons that attempt, and refusal starts no task. Picker and mount-choice
+waits retain their separate guards. Add pair remains a snapshot action and may
+capture a row during an ordinary check; Create batch admits that private
+snapshot later, without retaining the editable row's in-flight promise.
 
 When a picked folder has multiple current mounted copies, Setup presents the
 current mount choices. Choosing one continues that exact selection through a

@@ -318,6 +318,19 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Preserve Setup actions during folder validation (2026-11-04 – 2026-11-05)
+
+- Keep Create plan and Create inventory responsive during blur-triggered folder
+  checks; show Checking folders and reuse the running result without duplicate
+  admission or starting from an older accepted choice.
+- Allow Add pair to capture its private snapshot during a check. Preserve
+  independent batch admission, stale-edit/refusal guards and single-attempt
+  ownership; no change to explicit Plan review before execution.
+- Centralize Setup feedback to the left of its action buttons, retaining
+  accessible path descriptions and avoiding error text beneath the path rows.
+- Verify focused race/refusal controls, all 2,208 interface cases across the
+  department and corrected-fixture rerun, and three installed Setup/shell cases.
+
 #### Exercise the portable package beyond startup (2026-11-04)
 
 - Verify 30 frozen CLI invocations and 70 checks across reviewed copy, integrity,

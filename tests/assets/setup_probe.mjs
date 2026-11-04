@@ -186,9 +186,15 @@ function allByClass(root, className, values = []) {
 panel.render(model);
 const locations = allByClass(panel.element, "nami-setup__location");
 const firstSource = byClass(locations[0], "nami-setup__path");
-assert.equal(byClass(locations[1], "nami-setup__location-status").textContent, "");
-assert.equal(byClass(locations[1], "nami-setup__location-status").hidden, true);
-assert.equal(byClass(locations[0], "nami-setup__location-status").textContent, "Choose a mount.");
+const feedback = byClass(panel.element, "nami-setup__action-status");
+const locationFeedback = allByClass(feedback, "nami-setup__location-status");
+assert.equal(locationFeedback[1].textContent, "");
+assert.equal(locationFeedback[1].hidden, true);
+assert.equal(locationFeedback[0].textContent, "Source: Choose a mount.");
+assert.equal(feedback.parentNode, byClass(panel.element, "nami-setup__actions"));
+assert.equal(firstSource.getAttribute("aria-describedby"), locationFeedback[0].id);
+assert.equal(allByClass(locations[0], "nami-setup__location-status").length, 0,
+  "folder feedback belongs to the action row, not below the input");
 const mount = byClass(locations[0], "nami-setup__mount");
 assert.equal(mount.dataset.mountIndex, "0");
 mount.dispatch("click");
@@ -282,7 +288,7 @@ assert.deepEqual(
   "a mixed pair retains both endpoint truths while selection is disabled",
 );
 assert.deepEqual(allByClass(offlinePair, "nami-setup__pair-path-value").map((item) => item.textContent), ["<pair-source>", "pair-target"]);
-const actions = byClass(panel.element, "nami-setup__actions").children;
+const actions = byClass(panel.element, "nami-setup__actions").children.filter((item) => item.tagName === "BUTTON");
 const startPlan = actions[0];
 const addPair = actions[2];
 const startBatch = byClass(panel.element, "nami-setup__batch-actions").children[1];
@@ -300,6 +306,16 @@ panel.render(model);
 assert.equal(firstSource.disabled, false, "a delayed folder choice permits deliberate editing");
 assert.equal(startPlan.disabled, true);
 assert.equal(addPair.disabled, true);
+model.source.admissionPromise = Promise.resolve(null);
+panel.render(model);
+assert.equal(startPlan.disabled, false, "blur admission cannot disable Create during a pointer gesture");
+assert.equal(addPair.disabled, false, "blur admission cannot disable Add pair during a pointer gesture");
+model.mode = "inventory";
+panel.render(model);
+assert.equal(actions[1].disabled, false, "inventory activation waits for blur admission too");
+model.mode = "sync-plan";
+model.source.admissionPromise = null;
+panel.render(model);
 assert.equal(allByClass(panel.element, "nami-button--secondary").some(
   (button) => button.textContent === "Retry folder outcome" && !button.hidden), false,
 "CURRENT folder admission exposes no ineffective outcome retry");
@@ -408,7 +424,17 @@ filterInput.value = "  no-normalize\\  ";
 filterInput.dispatch("keydown", { key: "Enter" });
 const mode = byClass(panel.element, "nami-setup__mode");
 assert.equal(mode.ariaLabel, "Task type");
-assert.equal(byClass(panel.element, "nami-setup__action-status").hidden, true);
+assert.equal(feedback.hidden, false, "folder errors keep the shared feedback visible");
+assert.equal(locationFeedback[0].textContent, "Source: Reconnect this folder.");
+model.source.location = null;
+panel.render(model);
+assert.equal(feedback.hidden, true, "clearing the last error clears feedback");
+model.actionMessage = "Review the setup and try again.";
+panel.render(model);
+assert.equal(feedback.children[0].textContent, model.actionMessage);
+assert.equal(feedback.hidden, false);
+model.actionMessage = null;
+model.target.location = { state: "missing", choice_id: null, detail: "Reconnect target.", candidates: [] };
 mode.children[0].dispatch("keydown", { key: "ArrowRight" });
 panel.render({
   ...model, options: null, editable: false, mode: "inventory",
@@ -416,6 +442,8 @@ panel.render({
 });
 assert.equal(byClass(allByClass(panel.element, "nami-setup__location")[0], "nami-setup__path"), firstSource, "renders retain the active source input");
 assert.equal(firstSource.disabled, true);
+assert.equal(locationFeedback[1].hidden, true, "Inventory does not display the hidden Target's error");
+assert.equal(feedback.children.at(-1).textContent, "This inventory's reviewed root is frozen.");
 assert.equal(allByClass(panel.element, "nami-setup__location")[0].children[0].children[0].textContent, "Root");
 assert.deepEqual(events, [
   ["mount", "source", 0],

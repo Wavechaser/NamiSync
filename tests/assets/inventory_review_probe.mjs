@@ -754,13 +754,15 @@ const initialTask = app.adoptTask({task_id: "task-" + "9".repeat(32), session_id
   session_state: null, session_released: false, task_kind: null, request_id: null,
   plan_request_id: null, session_kind: null});
 initialTask.form = { editable: true, mode: "inventory", revision: 0, attempt: null,
-  source: {text: "C:\\initial", pending: false, candidate: {}, revision: 0, admissionRevision: 0} };
+  source: {text: "C:\\initial", pending: false, admissionPromise: null, candidate: {}, revision: 0, admissionRevision: 0} };
 app.selectTask(initialTask.taskId);
 const initialStart = app.startCurrentInventory();
 const initialPane = () => walk(app.panel.element).find((value) => value.ariaLabel === "Inventory review");
 const initialTitle = () => walk(initialPane()).find((value) => value.classList.contains("nami-plan-review__status-title"));
 assert.equal(initialTitle().textContent, "Checking folders");
 assert.equal(walk(initialPane()).some((value) => value.getAttribute("role") === "treeitem"), false);
+for (let count = 0; count < 20 && typeof admitInitial !== "function"; count += 1) await Promise.resolve();
+assert.equal(typeof admitInitial, "function", "the loading attempt reaches folder admission");
 admitInitial({purpose: "inventory", choice_id: "initial", display: "C:\\initial", continuation_id: null});
 for (let count = 0; count < 12; count += 1) await Promise.resolve();
 assert.equal(initialTitle().textContent, "Scanning");

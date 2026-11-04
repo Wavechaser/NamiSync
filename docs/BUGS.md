@@ -885,6 +885,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Setup folder admission
+
+- MINOR - FIXED (2026-11-04). In-flight validation gesture loss. Leaving a
+  path textbox starts admission and immediately disables Create plan, Create
+  inventory and Add pair, so a press/release spanning that transition can lose
+  the action without feedback. Cause: ordinary folder checks were treated as
+  action exclusions, and start admission returned no result for a running check.
+  Create now retains one attempt, shows Checking folders and awaits the current
+  row promise, including rechecks of an accepted path. Add pair captures its
+  usual private snapshot while checking; batch admission remains independent.
+  Revision, refusal, duplicate-attempt and picker/mount guards remain. Delayed
+  browser probes cover shared admission and stale/refused outcomes; this does
+  not establish the cause of earlier DPI-related automation failures.
+
 ### About notice packaging
 
 - MINOR - FIXED (2026-10-29). Checkout-dependent byte comparison. The ordinary

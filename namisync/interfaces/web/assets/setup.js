@@ -79,11 +79,10 @@ function createLocationRow(purpose, handlers) {
   picker.append(createIcon(document, "folder-open", "sm"));
   status.id = `setup-${purpose}-status`;
   status.classList.add("nami-field__hint", "nami-setup__location-status");
-  status.setAttribute("role", "status");
   mounts.classList.add("nami-setup__mounts");
   pathControl.append(input, clear, recentTrigger, popup);
   line.append(label, pathControl, picker);
-  field.append(line, status, mounts);
+  field.append(line, mounts);
 
   function setOpen(open, focus = false, restoreFocus = false) {
     const focusWasInside = !popup.hidden && popup.contains(document.activeElement);
@@ -237,7 +236,8 @@ export function createSetupPanel(callbacks) {
   const recentCard = document.createElement("section");
   const heading = document.createElement("h2");
   const guidance = document.createElement("p");
-  const actionStatus = document.createElement("p");
+  const actionStatus = document.createElement("div");
+  const actionMessage = document.createElement("p");
   const modeGroup = document.createElement("div");
   const mode = document.createElement("div");
   const modeButtons = new Map();
@@ -288,6 +288,7 @@ export function createSetupPanel(callbacks) {
   guidance.hidden = true;
   actionStatus.classList.add("nami-field__hint", "nami-setup__action-status");
   actionStatus.setAttribute("role", "status");
+  actionStatus.append(actionMessage, source.status, target.status, guidance);
   modeGroup.classList.add("nami-setup__mode-group");
   mode.classList.add("nami-segmented", "nami-setup__mode");
   mode.setAttribute("role", "radiogroup");
@@ -371,7 +372,7 @@ export function createSetupPanel(callbacks) {
     advancedOptions.hidden = !moreExpanded;
   });
   actions.classList.add("nami-setup__actions");
-  actions.append(startPlan, startInventory, addPair, planAgain);
+  actions.append(actionStatus, startPlan, startInventory, addPair, planAgain);
   planAgainChoices.classList.add("nami-setup__plan-again-mounts");
   batch.classList.add("nami-setup__batch");
   batchViewport.classList.add("nami-table-scroll", "nami-setup__pair-viewport", "nami-setup__batch-viewport");
@@ -426,7 +427,7 @@ export function createSetupPanel(callbacks) {
   recentBody.classList.add("nami-table__body");
   recentTable.append(thead, recentBody);
   recentViewport.append(recentTable);
-  setupCard.append(heading, guidance, actionStatus, modeGroup, source.field, target.field, options, actions, batch, planAgainChoices);
+  setupCard.append(heading, modeGroup, source.field, target.field, options, actions, batch, planAgainChoices);
   recentCard.append(recentHeader, recentViewport);
   root.append(setupCard, recentCard);
   startPlan.addEventListener("click", () => handlers.onStartPlan());
@@ -441,7 +442,7 @@ export function createSetupPanel(callbacks) {
     if (document.activeElement !== row.input && row.input.value !== value.text) row.input.value = value.text;
     row.input.dataset.state = value.location?.state ?? "unresolved";
     const message = locationStatus(value.location);
-    renderText(row.status, message);
+    renderText(row.status, message.length === 0 ? "" : `${text}: ${message}`);
     row.status.hidden = message.length === 0;
     row.renderRecents(recents, editable);
     renderText(row.label, text);
@@ -700,12 +701,14 @@ export function createSetupPanel(callbacks) {
       button.tabIndex = value === selectedMode ? 0 : -1;
       button.disabled = !controlsEditable;
     });
-    renderText(actionStatus, model.attempt?.recovery?.message
+    renderText(actionMessage, model.attempt?.recovery?.message
       ?? model.startRecovery?.message ?? model.actionMessage ?? model.batchMessage ?? "");
-    actionStatus.hidden = actionStatus.textContent.length === 0;
+    actionMessage.hidden = actionMessage.textContent.length === 0;
     renderLocation(source, model.source, recents.sources, controlsEditable, selectedMode === "inventory" ? "Root" : "Source");
     renderLocation(target, model.target, recents.targets, controlsEditable, "Target");
     target.field.hidden = selectedMode === "inventory";
+    if (selectedMode === "inventory") target.status.hidden = true;
+    actionStatus.hidden = [actionMessage, source.status, target.status, guidance].every((item) => item.hidden);
     recentCard.hidden = selectedMode === "inventory";
     renderRecentPairs(recents.pairs ?? [], model.recentPairAvailability, controlsEditable && selectedMode === "sync-plan");
     refreshRecents.disabled = !controlsEditable;
@@ -731,19 +734,21 @@ export function createSetupPanel(callbacks) {
       : null;
     const sourceNeedsMount = model.source.location?.state === "ambiguous";
     const targetNeedsMount = model.target.location?.state === "ambiguous";
+    const sourceChoosing = model.source.pending && !model.source.admissionPromise;
+    const targetChoosing = model.target.pending && !model.target.admissionPromise;
     renderText(startPlan, retryKind === "sync-plan" ? "Check outcome" : "Create plan");
     renderText(startInventory, retryKind === "inventory" ? "Check outcome" : "Create inventory");
     renderText(planAgain, retryKind === "plan-again" ? "Check outcome" : "Plan again");
     startPlan.hidden = selectedMode !== "sync-plan" || !editable;
     startPlan.disabled = retryKind === "sync-plan"
       ? model.batchRunning || model.closePending
-      : !controlsEditable || model.source.pending || model.target.pending || model.batchPending || !model.source.text || !model.target.text || sourceNeedsMount || targetNeedsMount;
+      : !controlsEditable || sourceChoosing || targetChoosing || model.batchPending || !model.source.text || !model.target.text || sourceNeedsMount || targetNeedsMount;
     startInventory.hidden = selectedMode !== "inventory" || !editable;
     startInventory.disabled = retryKind === "inventory"
       ? model.batchRunning || model.closePending
-      : !controlsEditable || model.source.pending || model.batchPending || !model.source.text || sourceNeedsMount;
+      : !controlsEditable || sourceChoosing || model.batchPending || !model.source.text || sourceNeedsMount;
     addPair.hidden = selectedMode !== "sync-plan" || !editable;
-    addPair.disabled = !controlsEditable || model.batchRunning || model.source.pending || model.target.pending
+    addPair.disabled = !controlsEditable || model.batchRunning || sourceChoosing || targetChoosing
       || model.batch.some((row) => row.state === "unknown")
       || (!model.source.text && !model.target.text)
       || (model.batchCount ?? model.batch.length) >= MAX_BATCH_PAIRS;

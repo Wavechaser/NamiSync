@@ -2110,8 +2110,8 @@ const loadingTask = scrollApp.adoptTask({task_id: "task-" + "9".repeat(32), sess
   plan_request_id: null, session_kind: null});
 const loadingOptions = { deletion_policy: "trash", preservation: {}, filters: [] };
 loadingTask.form = { editable: true, mode: "sync-plan", revision: 0, attempt: null, options: loadingOptions,
-  source: { text: "C:\\source", pending: false, location: {purpose: "source", choice_id: "source"} },
-  target: { text: "D:\\target", pending: false, location: {purpose: "target", choice_id: "target"} } };
+  source: { text: "C:\\source", pending: false, admissionPromise: null, location: {purpose: "source", choice_id: "source"} },
+  target: { text: "D:\\target", pending: false, admissionPromise: null, location: {purpose: "target", choice_id: "target"} } };
 scrollApp.selectTask(loadingTask.taskId);
 const loadingStart = scrollApp.startCurrentPlan();
 const loadingPane = () => findByClass(scrollApp.panel.element, "nami-plan-review");
@@ -2120,6 +2120,8 @@ assert.equal(findByClass(loadingPane(), "nami-plan-review__rows").children.lengt
 assert.equal(findByClass(loadingPane(), "nami-plan-review__table-card").hidden, false);
 assert.equal(findByClass(loadingPane(), "nami-plan-review__progress").classList.contains("nami-progress--indeterminate"), true);
 assert.equal(findAction(loadingPane(), "execute").disabled, true);
+for (let count = 0; count < 20 && typeof acceptSetup !== "function"; count += 1) await Promise.resolve();
+assert.equal(typeof acceptSetup, "function", "the loading attempt reaches setup preparation");
 acceptSetup(loadingOptions);
 for (let index = 0; index < 12; index += 1) await Promise.resolve();
 assert.equal(findByClass(loadingPane(), "nami-plan-review__status-title").textContent, "Planning");

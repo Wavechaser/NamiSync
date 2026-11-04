@@ -68,6 +68,8 @@ def test_m1_6_installed_setup_flow(
     assert result["host_ready_hidden"] is True
     assert result["empty_path_hint_hidden"] is True
     assert result["refusal_hint_visible"] is True
+    assert result["feedback_left_of_actions"] is True
+    assert result["paths_stable_during_refusal"] is True
     assert result["hostile_filter_inert"] is True
     assert result["two_setup_cards"] is True
     assert result["card_heading_hierarchy"] is True
@@ -174,6 +176,7 @@ def test_m1_6_installed_setup_flow(
     assert result["plan_again_visible"] is True
     assert result["plan_again_new_task"] is True
     assert result["picker_resolved"] is True
+    assert result["start_enabled_during_admission"] is True
     frozen = result["frozen_snapshot"]
     assert frozen["source"]["display"] == str(tmp_path / "picked-source")
     assert frozen["target"]["display"] == str(tmp_path / "target")

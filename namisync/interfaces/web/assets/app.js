@@ -1310,6 +1310,7 @@ function snapshotLocationRow(row) {
     revision: row.revision,
     admissionRevision: row.admissionRevision,
     pending: false,
+    admissionPromise: null,
   };
 }
 
@@ -1331,6 +1332,7 @@ function createForm(snapshot, recents) {
     revision: 0,
     admissionRevision: 0,
     pending: false,
+    admissionPromise: null,
   });
   const inventory = snapshot.task_kind === "inventory";
   return {
@@ -1504,6 +1506,7 @@ function clearLocationChoice(row) {
   row.mountIndex = null;
   row.admissionRevision += 1;
   row.pending = false;
+  row.admissionPromise = null;
 }
 
 function editMode(mode) {
@@ -3626,40 +3629,46 @@ function resolvedChoice(row, purpose) {
     : null;
 }
 
-async function admitRow(task, form, rowName, purpose = rowName) {
+function admitRow(task, form, rowName, purpose = rowName) {
   const row = form[rowName];
+  if (row.admissionPromise !== null) return row.admissionPromise;
   if (!row.text || row.candidate === null || row.pending) return null;
   const revision = row.revision;
+  const candidate = row.candidate;
   const admissionRevision = ++row.admissionRevision;
   row.pending = true;
-  renderTasks();
-  let result;
-  try {
-    result = await admitLocation(purpose, row.candidate, () => {
+  row.admissionPromise = (async () => {
+    let result;
+    try {
+      result = await Promise.resolve().then(() => admitLocation(purpose, candidate, () => {
+        if (tasks.get(task.taskId) === task && task.form === form
+            && row.revision === revision && row.admissionRevision === admissionRevision) {
+          form.actionMessage = "Folder choice is still pending. Wait, or edit this folder to choose again.";
+          renderTasks();
+        }
+      }));
+    } catch (error) {
       if (tasks.get(task.taskId) === task && task.form === form
-          && row.revision === revision) {
-        form.actionMessage = "Folder choice is still pending. Wait, or edit this folder to choose again.";
+          && row.revision === revision && row.admissionRevision === admissionRevision) {
+        form.actionMessage = "Folder choice could not be confirmed. Review or choose this folder again.";
         renderTasks();
       }
-    });
-  } catch (error) {
-    if (tasks.get(task.taskId) === task && task.form === form
-        && row.revision === revision && row.admissionRevision === admissionRevision) {
-      form.actionMessage = "Folder choice could not be confirmed. Review or choose this folder again.";
-      renderTasks();
+      throw error;
+    } finally {
+      if (tasks.get(task.taskId) === task && task.form === form
+          && row.revision === revision && row.admissionRevision === admissionRevision) {
+        row.pending = false;
+        row.admissionPromise = null;
+        renderTasks();
+      }
     }
-    throw error;
-  } finally {
-    if (tasks.get(task.taskId) === task && task.form === form
-        && row.revision === revision && row.admissionRevision === admissionRevision) {
-      row.pending = false;
-      renderTasks();
-    }
-  }
-  if (tasks.get(task.taskId) !== task || task.form !== form || row.revision !== revision || row.admissionRevision !== admissionRevision) return null;
-  acceptLocation(row, result);
+    if (tasks.get(task.taskId) !== task || task.form !== form || row.revision !== revision || row.admissionRevision !== admissionRevision) return null;
+    acceptLocation(row, result);
+    renderTasks();
+    return result;
+  })();
   renderTasks();
-  return result;
+  return row.admissionPromise;
 }
 
 async function validateLocation(purpose) {
@@ -3690,6 +3699,7 @@ async function pickLocation(purpose) {
   const formRevision = ++form.revision;
   const admissionRevision = ++row.admissionRevision;
   row.pending = true;
+  row.admissionPromise = null;
   row.location = null;
   row.candidate = null;
   row.continuationId = null;
@@ -3828,6 +3838,7 @@ async function chooseMount(rowName, mountIndex) {
   const admissionRevision = ++row.admissionRevision;
   row.mountIndex = mountIndex;
   row.pending = true;
+  row.admissionPromise = null;
   renderTasks();
   try {
     const result = await admitLocation(purpose, selection, () => {
@@ -3944,9 +3955,10 @@ async function retryFormAttempt(task, form, kind) {
 }
 
 async function choicesForStart(task, form, attempt, revision, optionsInput) {
-  const source = resolvedChoice(form.source, "source") ?? await admitRow(task, form, "source", "source");
+  const targetAdmission = form.target.admissionPromise;
+  const source = await (form.source.admissionPromise ?? resolvedChoice(form.source, "source") ?? admitRow(task, form, "source", "source"));
   if (!freshFormAttempt(task, form, attempt, revision)) return null;
-  const target = resolvedChoice(form.target, "target") ?? await admitRow(task, form, "target", "target");
+  const target = await (targetAdmission ?? resolvedChoice(form.target, "target") ?? admitRow(task, form, "target", "target"));
   if (!freshFormAttempt(task, form, attempt, revision)) return null;
   if (typeof source?.choice_id !== "string" || typeof target?.choice_id !== "string") return null;
   const options = await prepareSetup(optionsInput);
@@ -3983,7 +3995,8 @@ async function startCurrentPlan() {
     return;
   }
   if (!form.source.text || !form.target.text || form.options === null
-      || form.source.pending || form.target.pending) return;
+      || (form.source.pending && form.source.admissionPromise === null)
+      || (form.target.pending && form.target.admissionPromise === null)) return;
   const revision = form.revision;
   const optionsInput = cloneOptions(form.options);
   const attempt = beginFormAttempt(task, form, "sync-plan");
@@ -4023,13 +4036,13 @@ async function startCurrentInventory() {
     await retryFormAttempt(task, form, "inventory");
     return;
   }
-  if (!form.source.text || form.source.pending) return;
+  if (!form.source.text || (form.source.pending && form.source.admissionPromise === null)) return;
   const revision = form.revision;
   const attempt = beginFormAttempt(task, form, "inventory");
   if (attempt === null) return;
   try {
-    const root = resolvedChoice(form.source, "inventory")
-      ?? await admitRow(task, form, "source", "inventory");
+    const root = await (form.source.admissionPromise ?? resolvedChoice(form.source, "inventory")
+      ?? admitRow(task, form, "source", "inventory"));
     if (!freshFormAttempt(task, form, attempt, revision) || typeof root?.choice_id !== "string") {
       abandonFreshAttempt(task, form, attempt);
       return;
@@ -4054,7 +4067,8 @@ function addCurrentPair() {
   if (
     task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
     || fixedOutcome(task.startRecovery) || !formIsEditable(form) || form.mode !== "sync-plan" ||
-    form.source.pending || form.target.pending ||
+    (form.source.pending && form.source.admissionPromise === null)
+    || (form.target.pending && form.target.admissionPromise === null) ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
   if (pageBatch?.rows.some((row) => row.originTaskId === task.taskId
