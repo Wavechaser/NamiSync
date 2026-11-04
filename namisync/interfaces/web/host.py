@@ -1163,6 +1163,12 @@ def _log_startup_failure(error: Exception) -> None:
 def _prepare_webview_host(webview_module: object) -> None:
     from .bridge import prepare_pywebview_host
 
+    set_app_id = ctypes.WinDLL("shell32").SetCurrentProcessExplicitAppUserModelID
+    set_app_id.argtypes = (wintypes.LPCWSTR,)
+    set_app_id.restype = ctypes.c_long
+    result = set_app_id("NamiSync.Desktop")
+    if result < 0:
+        raise OSError(f"Could not establish NamiSync shell identity: {result:#x}")
     prepare_pywebview_host(webview_module)
 
 
@@ -1411,6 +1417,9 @@ def _start_webview(
         webview_module,
         on_initialized=on_initialized,
         storage_path=storage_path,
+        icon=str(importlib.resources.files("namisync.interfaces").joinpath(
+            "branding", "namisync.ico",
+        )),
     )
 
 

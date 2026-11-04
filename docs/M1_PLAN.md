@@ -106,8 +106,8 @@ PERFORMANCE and unrelated CHANGELOG edits are preserved outside this change.
 M1-10 is complete as of 2026-10-14, including the requested integrated A–C
 review before D and final cross-component review. The authorized GUI-hardening
 follow-up below is also complete. The review consolidation batch below is complete
-as of 2026-10-19. M1-12 is complete as of 2026-10-30; release and DOC-2
-remain inactive. PO3/PO5 and
+as of 2026-10-19. M1-12 is complete as of 2026-10-30. M1-Release preparation
+is active from 2026-11-04; DOC-2 remains inactive. PO3/PO5 and
 conditional PO4 completed through 2026-10-21. The pre-closeout consolidation
 below is authorized from 2026-10-29.
 Other pending rows still need user authorization, active scope and verification.
@@ -124,7 +124,7 @@ the documentation; raw evidence remains in `build/node-security-20261022/`.
 | M1-9 | Bounded inventory projections, current evidence and the full inventory consumer for sibling sorting, including missing-row acknowledge/restore. | Complete or prior-complete publication; warnings outside action scope; raw evidence provenance; search/filter/collapse/window/detail, replacement/race and production sort/reset paths; headed witnesses. | Complete; reviewed commits and evidence in the completed M1-9 section below. |
 | M1-10 | Baseline, verify and rebaseline controls plus first same-task manual post-copy verification, without persistent operation-time hashes. Eligible null-evidence files enter rebaseline; every admitted rebaseline hashes and replaces/creates evidence, and a match is not verified. | Confirm acknowledgement admission before claim/native work; all-null/mixed workflow, service/CLI and desktop paths; conditional recording and supersession races; atomic handoff classification; live pause/resume/cancel and unchanged automatic failed-read retries; overlay/result identity. Independently review operation matrix and conditional recording. Terminal Verify-remaining/subset retry remains deferred. | Complete; A–E reviewed and integrated through D2 `d88f863` plus documentation closure. Stopped for recap and GUI tweaks. Rebaseline confirmation remains distinct from missing-row acknowledgement. |
 | M1-12 | Close integrated lifecycle/retention across activated task surfaces, then complete adversarial, documentation, ordinary and headed verification. This absorbs former M1-11. | Plan-only, execution-only, linked/manual verification, inventory, refused/canceled/degraded/failed tasks across same-document navigation, contained unsupported reload, explicit close and shutdown; admission bounds, stale-response suppression, exact resource release and retained truth. Applicable settlement oracle, ordinary/headed, installed-wheel/product, imports, diff/active-link checks and independent cross-component review. No aggregate-artifact or whole-owner-graph criterion. | Complete 2026-10-30; 6,326 ordinary passes/four capability skips, all 35 headed obligations, twelve imports, settlement and independent review. No product changes. |
-| M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Pending. |
+| M1-Release | Beta packaging and release closure after delivery rows above. | Installed artifact from clean checkout; frozen specification/dependency/CI, notices and corresponding source; standard-integrity host proof and every applicable BR-G/SH-G gate. [INTERFACES](INTERFACES.md) owns host/package/SH-G; [BRIDGE](BRIDGE.md) owns BR-G. | Active preparation, 2026-11-04; small tester group and portable Windows x64 app selected. No candidate frozen or distributed. |
 
 DOC-2 remains **pending, outside the AB batch**. Its historical branch proposal
 removes exactly four superseded compact-plan commits from `milestone1`, preserves
@@ -132,6 +132,114 @@ the old tip and opens a draft PR from `milestone1-anthony`. Before any action,
 freshly check divergence, remote tip and preservation of all work; unexpected
 commits or unaccounted work require adjudication. AB-10 and the documentation
 consolidation do not execute, close or authorize DOC-2 history rewriting.
+
+## M1-Release — authorized 2026-11-04
+
+Continuation on 2026-11-04 prioritizes a runnable portable development package
+for the user's next installed-behavior/cold-install debug pass. The installed
+wheel sweep and its bounded fixes are complete through `3aa03caa`; packaging
+need not wait for that next pass. This package is not release acceptance.
+The user additionally authorizes stable Windows taskbar/AppUserModel identity,
+ratification and wiring of the existing icon, and GitHub CI with a later
+release-automation path. Host/branding, packaging and CI remain separately
+reviewable outcomes within M1-Release. TOOLS owns new directory conventions.
+
+The first development package is produced under
+`build/m1-release-20261104/attempt-03/`: portable ZIP, source ZIP, wheel,
+checksums, source identity and resolved build environment. The staged source
+includes the authorized working-tree host/icon changes over `3aa03caa` and is
+not represented as a clean release commit. The GUI starts with WebView2 from
+an extraction outside the repository, exposes a native icon and closes with
+exit 0 (`native-smoke-04.json`). The reviewed ICO contains nine declared sizes;
+builds never regenerate it. Windows shell identity is `NamiSync.Desktop`,
+independent of version, data directory and internal task identities.
+
+R1 has a working debug delivery; final hash-locked downloads and clean-candidate
+release proof remain open. The GitHub workflow is authored, not yet executed
+on GitHub: ordinary/import gates precede artifact upload, with no publication
+permission. Draft-release automation follows first-release decisions. The
+artifact is available for the user's next installed/cold-install debug pass;
+that pass and resource acceptance do not block creating this debug package.
+
+Verification includes 167 focused host/bridge checks, twelve import contracts,
+2,208 interface cases accounted across the department and corrected-location
+custody rerun, and all 35 installed headed obligations across the original sweep
+and one Setup rerun. The initial department's two failures/28 setup errors all
+refused an in-repository temporary root; 64 custody tests pass using the default
+external temporary root. The headed Setup fixture sampled the old Plan-again
+button after successful navigation; sampling before the click restores the
+intended witness without changing readiness/new-task/frozen-options assertions.
+The other 34 obligations retain unchanged dependencies. Failed receipts remain.
+Final ordinary verification passes 6,359 tests with four capability skips and
+35 headed exclusions (`ordinary.xml`); the separate headed accounting above
+closes those exclusions for this change, not the full release checkpoint.
+Local link/diff checks and adversarial review cover artifact provenance, ICO
+authority, process identity, source-archive population and CI permissions.
+
+Resource acceptance answers absolute usability and growth under longer/heavier
+sessions. Use a finite representative corpus: cold idle startup, a typical
+Plan/review/copy/verify/close journey, repeated task cycles, one sustained
+session and a heavier supported tree/task population. Declare supported
+profile/workload limits and a small number of edge cases; do not imply every
+possible use or Cartesian combination is supported. Predeclare exact sizes,
+durations, repetitions and separate predicates before measuring acceptance.
+Existing bridge timing observations are a baseline to assess by dependency,
+not a missing-baseline claim; general resource use has no baseline yet.
+
+The user activated release preparation while separate sessions finish build
+cleanup and final debugging, and selected a small tester group receiving a
+portable Windows x64 app. Inspected revision:
+`a2e188f147ff316d4c9188cfa16b8ee85ea5837d`; the existing uncommitted HANDOFF
+belongs to concurrent work. This revision is an inspection baseline, not a
+release candidate. Reconcile both sessions before freezing candidate inputs;
+do not run final acceptance against a moving checkout or clean their evidence.
+
+The delivery is an extract-and-run ZIP with bundled Python and the existing
+`namisync-gui.exe` and `namisync.exe` entry points. Portable describes deployment;
+the existing per-user application-data location and optional absolute
+`--data-dir` retain their contracts. WebView2 and the supported .NET runtime
+remain declared prerequisites unless a later reviewed packaging decision
+explicitly bundles them. No installer, updater, new data portability mode,
+schema migration, new sync behavior or DOC-2 history rewrite is included.
+
+Start with a PyInstaller folder bundle built in an isolated environment. Its
+official [bundle-mode documentation](https://pyinstaller.org/en/stable/operating-mode.html)
+and [pywebview freezing guidance](https://pywebview.flowrl.com/guide/freezing)
+support this investigation; successful native execution remains the deciding
+evidence. Keep build dependencies separate from runtime dependencies. Exact
+build/runtime versions and hashes must be fixed before candidate acceptance.
+The current version is `0.1.0`, nickname `Gertrud`; proposed first beta identity
+is `0.1.0b1`, to be settled before building a distributable candidate. Signing
+availability and the private delivery location remain decisions before handoff,
+not reasons to delay local preparation. No tag, upload or publication is made
+by this preparation record.
+
+| Step | Finite outcome, owners and verification | Dependency / status |
+| --- | --- | --- |
+| R0 | Inspect current package/version/launchers, INTERFACES/BRIDGE/DESKTOP_UI release criteria, TESTS commands, DEFENSE/PERFORMANCE evidence policy and relevant archived packaging dispositions. Record audience, format, missing work and serialized closeout. Documentation-only commit; local links and diff checks plus adversarial scope review. | Complete initial inspection; at that baseline, wheel metadata and installed-wheel witnesses existed but release CI, a dependency lock and frozen-app specification were absent. SH-G-15 has no budgets/artifacts; current-source bridge timing acceptance is also open. |
+| R1 | Build the portable packaging path: tools owns build script/specification/locked build inputs; interfaces owns existing entry points, resources and version metadata; tests owns artifact verification. Include package assets, native host assemblies, distribution metadata, GUI/console subsystem classification and corresponding source identity. Verify from a clean staged source on Windows x64, then extract to a path outside the checkout and exercise both actual executables under standard integrity without relying on development Python. Keep required clean-wheel checks. One coherent packaging commit with matching TOOLS/INTERFACES/TESTS documentation. | Development package delivered and native startup/close verified. Build versions are pinned; download hashes, hosted CI execution and final clean-candidate proof remain open. TOOLS owns structure and build commands. |
+| R2 | Complete the distribution contents and user journey: exact bundled dependency/asset census, notices/license texts and corresponding-source/build directions, beta version, extraction/start/prerequisite guidance, supported limitations, feedback instructions and upgrade/data-retention guidance. Owners: INTERFACES, README, FEATURES and existing notice corpus; packaging consumes them. Verify against actual ZIP contents, About/startup identity and clean-machine or isolated supported-host launch. One coherent distribution-documentation/asset commit. | After R1 fixes the bundle population. Existing About notices do not cover newly bundled Python/freezer/native components automatically. Full-color executable/window icon integration is delivered with native decoding and startup evidence; final license census and user-facing release materials remain open. |
+| R3 | Close quantitative release obligations under existing owners. INTERFACES/DEFENSE own SH-G-15 acceptance; PERFORMANCE owns exact profiles, workload corpus, process identities, repetitions/durations, quiescence, statistics, raw records and validator provenance. Predeclare separate cold peak/settled, retained-growth and trend budgets before acceptance measurements. Map current BR-G-42 timing and retained history/projection obligations to current validators/evidence by dependency. Commit each coherent acceptance mechanism with its subject docs and tests. | Design follows artifact/runtime selection; measurements follow settled inputs. No invented passing budget, diagnostic-to-acceptance promotion, retired BR-G-45 revival or universal leak-freedom claim. Missing policy choices or invalidated authority require adjudication under DEFENSE. |
+| R4 | Freeze a clean candidate after debugging/cleanup integration. Record commit, source/dependency/tool/runtime identities and artifact hashes; provide repeatable Windows build/CI configuration, with interactive native evidence separately identified. Run the complete TESTS release command with default exclusions cleared and no department filter, imports, applicable settlement and every BR-G/SH-G obligation. Map every active DESKTOP_UI acceptance item to evidence or an explicitly approved deferral. Add portable-artifact startup, packaged resource, standard-integrity, real reviewed-copy/inventory/verify and close witnesses; wheel evidence alone cannot certify the executable. | After R1–R3 and concurrent work settle. All `test_br_g` cases must collect/pass without skip/xfail; account for other capability skips. Changed source, producer, checker, driver or runtime invalidates affected evidence. One reviewed candidate closeout commit; no broad gate yet. |
+| R5 | Review exact candidate adversarially; reconcile notices/source, hashes, known issues, instructions and gate evidence. Prepare the immutable ZIP, source bundle, checksums and release notes for the selected testers. Update CHANGELOG, README, this register and HANDOFF with actual outcomes. | After R4. Present concrete files and remaining distribution/signing decisions before external delivery. Release completes only when named gates and agreed handoff are satisfied; uploading/tagging must not substitute for acceptance. |
+
+Preserve reviewed plans, atomic publication, durable truth, idempotency, import
+boundaries, root admission, exact command identity and per-user state placement.
+No packaging convenience may add elevation, relax origin/resource admission,
+silently reset a ledger or enable a browser fallback. Existing AGENTS safety,
+recurrence and recovery stops apply; an unsupported packaging assumption or
+blocked gate is a finding, not permission to change the product contract.
+
+Release preparation evidence belongs in ignored `build/m1-release-20261104/`:
+named logs/XML/JSON receipts at the root; numbered `attempt-NN/` directories
+contain source, wheel, freezer work/dist, archives and identity manifests.
+`package-env/` is disposable; `native-profile-NN/` holds isolated startup state.
+`native-smoke-04.json` registers the retained external extraction used for the
+outside-checkout test. Keep it until the user's installed-app debug pass ends.
+Use distinct attempt names, retain failed receipts and artifact hashes, and
+remove only task-owned disposable build environments after their evidence is
+preserved. This paragraph defines the structure before directory creation;
+the delivery register remains the only scope/status owner.
 
 ## M1-12 verification — authorized 2026-10-30
 

@@ -7,6 +7,46 @@ launcher. `tools/icons.py` maintains the fixed local icon vocabulary from
 `tools/icons.json`. None is part of the shipped `namisync` package. Pytest covers
 their behavior; measurement output remains subject to the authority rules below.
 
+## Portable build preparation
+
+`tools/packaging/` owns Windows portable-build inputs: Python entry shims,
+the PyInstaller specification, pinned build requirements and the build driver.
+It contains no product policy. `.github/workflows/` owns CI YAML; ordinary
+verification and portable artifact builds run there, while interactive Windows
+11 acceptance remains separately recorded. Generated environments, unpacked
+artifacts and logs live only in ignored `build/` or `dist/`, with a fresh output
+directory per attempt; never overwrite an earlier candidate or failed receipt.
+`namisync/interfaces/branding/` retains SVG masters and derived Windows ICO
+assets. Build-time artwork tools are not runtime dependencies.
+
+Build a development package in a disposable CPython 3.13 x64 environment:
+
+```powershell
+python -m venv build/package-env
+build/package-env/Scripts/python.exe -m pip install -r tools/packaging/requirements.txt
+build/package-env/Scripts/python.exe tools/packaging/build.py build/portable-attempt-01
+```
+
+Choose a new output directory for each run. The driver snapshots tracked and
+nonignored package/build inputs, records file identities, builds and installs
+a wheel into that disposable environment, then freezes two correctly classified
+executables sharing `_internal/`. It validates PE architecture/subsystems and
+runs the actual console help command. Outputs include the development ZIP,
+source ZIP, wheel, SHA-256 checksums, source manifest and resolved environment.
+These hashes identify distributed bytes; they are not an artwork-regeneration
+oracle. The icon is never rendered during this process. Explicit maintenance
+uses `tools/packaging/render_icon.py` (initial renderer: resvg-py 0.5.0 and
+Pillow 13.0.0), followed by visual review of the tracked ICO.
+
+The Windows GitHub workflow runs ordinary tests/import contracts before building
+and uploading development artifacts. Its Windows Server runner does not replace
+interactive Windows 11 acceptance. It has read-only repository permissions and
+does not publish releases. After the first release, extend the same validated
+build path to a manually approved draft-release job; final native evidence and
+artifact identity must still be accounted before publication. Exact dependency
+versions are pinned here; hash-locked downloads and the final distribution-wide
+license/source bundle remain release closure work.
+
 ## Icon maintenance
 
 The recall advisory uses the pinned catalog's plain `cloud` glyph with

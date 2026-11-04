@@ -13,6 +13,7 @@ from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
+
 from _command_catalog import COMMAND_NAMES
 from _startup_test_support import (
     StartupHandshakeDocumentChannel,
@@ -54,6 +55,68 @@ from namisync.workflows import (
     LocationCandidateState,
 )
 
+
+def test_packaged_app_icon_frames_decode_on_windows() -> None:
+    import ctypes
+    import struct
+
+    icon = Path(__file__).parents[3] / "namisync/interfaces/branding/namisync.ico"
+    data = icon.read_bytes()
+    reserved, kind, count = struct.unpack_from("<HHH", data)
+    assert (reserved, kind) == (0, 1)
+    expected = {16, 20, 24, 32, 40, 48, 64, 128, 256}
+    sizes = set()
+    native = ctypes.WinDLL("user32", use_last_error=True)
+    native.CreateIconFromResourceEx.argtypes = (
+        ctypes.c_void_p, ctypes.c_ulong, ctypes.c_bool, ctypes.c_ulong,
+        ctypes.c_int, ctypes.c_int, ctypes.c_uint,
+    )
+    native.CreateIconFromResourceEx.restype = ctypes.c_void_p
+    native.DestroyIcon.argtypes = (ctypes.c_void_p,)
+    for index in range(count):
+        width, height, _, _, _, _, length, offset = struct.unpack_from(
+            "<BBBBHHII", data, 6 + index * 16,
+        )
+        width, height = width or 256, height or 256
+        assert width == height
+        assert offset >= 6 + count * 16 and offset + length <= len(data)
+        frame = ctypes.create_string_buffer(data[offset:offset + length])
+        handle = native.CreateIconFromResourceEx(
+            frame, length, True, 0x00030000, width, height, 0,
+        )
+        assert handle, ctypes.get_last_error()
+        native.DestroyIcon(handle)
+        sizes.add(width)
+    assert count == len(expected)
+    assert sizes == expected
+
+
+def test_host_passes_reviewed_icon_to_native_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    from namisync.interfaces.web import bridge
+
+    captured = {}
+    monkeypatch.setattr(bridge, "start_edge_chromium", lambda module, **kw: captured.update(kw))
+    host._start_webview(object(), on_initialized=lambda: None, storage_path="isolated")
+    assert Path(captured["icon"]).name == "namisync.ico"
+    assert Path(captured["icon"]).is_file()
+    assert captured["storage_path"] == "isolated"
+
+
+def test_shell_identity_is_set_before_host_preparation(monkeypatch: pytest.MonkeyPatch) -> None:
+    from namisync.interfaces.web import bridge
+
+    calls = []
+
+    class SetIdentity:
+        def __call__(self, value):
+            calls.append(value)
+            return 0
+
+    native = SimpleNamespace(SetCurrentProcessExplicitAppUserModelID=SetIdentity())
+    monkeypatch.setattr(host.ctypes, "WinDLL", lambda name: native)
+    monkeypatch.setattr(bridge, "prepare_pywebview_host", lambda module: calls.append("prepare"))
+    host._prepare_webview_host(object())
+    assert calls == ["NamiSync.Desktop", "prepare"]
 
 _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 

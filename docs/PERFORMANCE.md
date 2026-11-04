@@ -2693,6 +2693,21 @@ owns the accepted custody behavior and current gate status.
   and repeated/long-workload release resource acceptance. It has no numeric
   budget or acceptance artifact yet.
 
+M1 release resource preparation distinguishes absolute cold/settled resource
+use from retained growth over repeated, sustained and heavier supported use.
+The finite workload selection is owned by M1_PLAN; instantiate its typical
+Plan/review/copy/verify/close journey, repeated task cycles, sustained session
+and heavier tree/task population with exact sizes and durations before
+acceptance collection. Include a small declared edge-case set, not exhaustive
+combinations or unsupported uses. Record host and relevant renderer/runtime
+children separately, with stable identities, metric definitions and aggregation
+that does not silently count shared resident pages as private memory. Declare
+warm-up/quiescence, repetitions, statistics and separate absolute/growth/trend
+predicates before measuring. General resource baseline and numeric budgets
+remain unestablished; existing bridge timing observations retain their own
+provenance and are not a substitute. INTERFACES and DEFENSE retain acceptance
+authority and the calibration-versus-predeclared-budget distinction.
+
 Raw child logs, screenshots, installed wheels, failure context and generated
 reports under ignored `build/` remain at their recorded paths, including
 `build/m1-7/evidence/p9-full-20260916/` and

@@ -1,0 +1,72 @@
+name: Windows verification and development package
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ordinary:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .venv/Scripts/python.exe -m pip install -r tools/packaging/requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .venv/Scripts/python.exe -m pip install '.[dev]'
+      - name: Ordinary tests
+        shell: pwsh
+        run: .venv/Scripts/python.exe -m pytest -q --junitxml=build/ci-ordinary.xml
+      - name: Import contracts
+        shell: pwsh
+        run: .venv/Scripts/lint-imports.exe
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ordinary-results
+          path: build/ci-ordinary.xml
+          if-no-files-found: warn
+
+  portable:
+    needs: ordinary
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Build development package
+        shell: pwsh
+        run: |
+          python -m venv build/package-env
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build/package-env/Scripts/python.exe -m pip install -r tools/packaging/requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build/package-env/Scripts/python.exe tools/packaging/build.py build/portable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NamiSync-windows-x64-development
+          if-no-files-found: error
+          path: |
+            build/portable/NamiSync-windows-x64-dev.zip
+            build/portable/NamiSync-source-dev.zip
+            build/portable/SHA256SUMS.txt
+            build/portable/source-identity.json
+            build/portable/build-environment.txt
+            build/portable/wheel/*.whl

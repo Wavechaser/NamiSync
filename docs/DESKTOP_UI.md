@@ -773,9 +773,14 @@ whole. The color master has no such bar. All three share the remaining geometry.
 
 The masters are artwork, not UI glyphs. They ship as `namisync.interfaces`
 package data, outside the web assets, so the `tokens.css` palette ownership and
-Fluent vocabulary rules do not apply to them. Nothing loads them yet. Wiring the
-window, taskbar or installer icon, and deriving any `.ico`, is later work that
-must start from these masters.
+Fluent vocabulary rules do not apply to them. The full-color master is ratified
+for the executable, title bar and taskbar; monochrome variants are intended for
+in-interface use alongside monochrome text. `namisync.ico` is a reviewed,
+tracked raster artifact derived from the full-color master, with 16, 20, 24,
+32, 40, 48, 64, 128 and 256 pixel frames. Builds consume it unchanged. Tests
+check parsing and frame sizes, never regeneration equality or exact bytes:
+renderer versions can legitimately change antialiasing. Regeneration requires
+explicit artwork review, not a routine build or test step.
 
 #### Maintaining the icon vocabulary
 

@@ -968,6 +968,13 @@ through a lazy wrapper.
 
 ### Launch and installation
 
+Windows shell grouping uses the stable process AppUserModelID
+`NamiSync.Desktop`, set before native window creation. This is independent of
+sync-task IDs, package version, data directory and the existing instance mutex.
+The host passes the packaged reviewed full-color ICO to pywebview for the
+title bar/taskbar. Portable executables embed the same artifact. No shortcut,
+registry installation or elevated launch is required to establish this identity.
+
 NamiSync has one GUI implementation and two correctly classified Windows entry-point families. `namisync` and `python -m namisync` are console entry points; without a subcommand they show usage and direct the user to `namisync-gui`. `namisync-gui` is a GUI entry point and does not retain a console window. `interfaces/launcher.py` owns `main(argv=None)` and `gui_main(argv=None)`; CLI work must not import pywebview. The GUI launcher completes path and logging setup before importing the web host.
 
 GUI arguments are closed: no arguments or one absolute local `--data-dir PATH` (including equals spelling). Unknown/positional/repeated/missing arguments and relative or non-local paths fail before directory creation, mutex acquisition, logging, or pywebview import. A dependency-free Win32 `MessageBoxW` reporter with caption `NamiSync - Startup Error` shows actionable startup failures when no console exists. Logging records failures once available; a second-instance activation is the settled non-error case.

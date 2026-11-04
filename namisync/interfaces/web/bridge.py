@@ -265,6 +265,7 @@ class _WebviewModule(Protocol):
         http_server: bool = True,
         private_mode: bool = True,
         storage_path: str | Path | None = None,
+        icon: str | None = None,
     ) -> None: ...
 
 
@@ -632,6 +633,7 @@ def start_edge_chromium(
     *,
     on_initialized: Callable[[], None] | None = None,
     storage_path: str | Path | None = None,
+    icon: str | None = None,
 ) -> None:
     """Force pywebview's Edge Chromium renderer; never accept MSHTML fallback."""
 
@@ -663,8 +665,9 @@ def start_edge_chromium(
         return None
 
     initialized_event += initialize_host_if_edge_chromium
+    icon_options = {} if icon is None else {"icon": icon}
     if storage_path is None:
-        webview_module.start(setup, gui="edgechromium", debug=False)
+        webview_module.start(setup, gui="edgechromium", debug=False, **icon_options)
     else:
         webview_module.start(
             setup,
@@ -673,6 +676,7 @@ def start_edge_chromium(
             http_server=True,
             private_mode=True,
             storage_path=storage_path,
+            **icon_options,
         )
     if renderer_error is not None:
         raise renderer_error

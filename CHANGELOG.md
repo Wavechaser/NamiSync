@@ -318,6 +318,24 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Build the first portable M1 debug package (2026-11-04)
+
+- Activate M1-Release for a small tester group receiving a portable Windows x64
+  app; retain existing per-user data placement and GUI/console entry points.
+- Record packaging, distribution contents, quantitative acceptance, clean
+  candidate verification and tester handoff in the owning delivery register.
+  Resource acceptance separates absolute use from longer/heavier-session growth
+  over a finite supported workload set; existing bridge timing remains a baseline.
+- Build a portable ZIP containing GUI/console executables, with a source archive,
+  wheel, dependency record and checksums. Validate native startup/icon/close from
+  an extraction outside the checkout. This is a development build, not release
+  acceptance; the product version remains unchanged.
+- Establish stable Windows shell identity and wire the ratified full-color icon.
+  Track the reviewed ICO; tests decode all nine sizes without regenerating it
+  or imposing an exact-byte artwork oracle.
+- Add Windows GitHub CI for ordinary tests/import contracts and development
+  package artifacts. Hosted execution and later release publication remain open.
+
 #### Sample Setup action visibility before navigation (2026-11-04)
 
 - Correct the installed Setup fixture's Plan-again visibility observation:

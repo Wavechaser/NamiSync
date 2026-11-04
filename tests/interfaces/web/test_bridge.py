@@ -879,7 +879,8 @@ def test_start_forces_edge_chromium_and_reports_missing_runtime() -> None:
     assert raised.value is host_error
 
 
-def test_start_forwards_private_http_server_storage_options(tmp_path: Path) -> None:
+@pytest.mark.parametrize("icon", [None, "reviewed.ico"])
+def test_start_forwards_private_http_server_storage_options(tmp_path: Path, icon) -> None:
     calls: list[tuple[object, ...]] = []
     storage = tmp_path / "webview2"
 
@@ -905,7 +906,9 @@ def test_start_forwards_private_http_server_storage_options(tmp_path: Path) -> N
             http_server: bool,
             private_mode: bool,
             storage_path: Path,
+            **options,
         ) -> None:
+            assert options == ({} if icon is None else {"icon": icon})
             calls.append(
                 (
                     func,
@@ -919,7 +922,7 @@ def test_start_forwards_private_http_server_storage_options(tmp_path: Path) -> N
             assert not Webview.windows[0].events.initialized.emit()
 
     setup = lambda: None
-    start_edge_chromium(Webview, setup, storage_path=storage)
+    start_edge_chromium(Webview, setup, storage_path=storage, icon=icon)
 
     assert calls == [(setup, "edgechromium", False, True, True, storage)]
 

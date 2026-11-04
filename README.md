@@ -93,7 +93,9 @@ Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work includes integrated lifecycle and release acceptance.
+Integrated lifecycle verification is complete. M1 release preparation targets
+a portable Windows x64 beta for a small tester group; packaging and final
+release acceptance remain open. No downloadable release is claimed yet.
 Rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
