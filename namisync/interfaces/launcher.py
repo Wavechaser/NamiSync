@@ -7,6 +7,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from namisync.interfaces.command_ingress import (
+    INVALID_COMMAND_REQUEST,
+    arguments_within_ingress_bound,
+)
+
 
 STARTUP_ERROR_CAPTION = "NamiSync - Startup Error"
 _EXIT_SUCCESS = 0
@@ -72,6 +77,8 @@ def gui_main(argv: list[str] | None = None) -> int:
 
 
 def _parse_gui_arguments(arguments: list[str]) -> GuiArguments:
+    if not arguments_within_ingress_bound(arguments):
+        raise GuiArgumentError(INVALID_COMMAND_REQUEST)
     if not arguments:
         return GuiArguments(data_dir=None)
     if len(arguments) == 1 and arguments[0].startswith("--data-dir="):

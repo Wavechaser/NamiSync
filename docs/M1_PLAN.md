@@ -21,6 +21,45 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Behavioral bug hunt — authorized 2026-11-04
+
+The user authorized a coarse-to-fine investigation before the installed-app
+round. Baseline `a2e188f1`; product changes from concurrent release work require
+dependency revalidation. Phase 1 covers each of core, scanner, planner,
+preflight, executor, verifier, database, workflows, dispatcher, service/task
+lifecycle, CLI/launcher and desktop bridge/presentation against operational
+safety, atomicity, idempotency, orthogonality, layering, RootAuthority reuse and
+ingress bounds. Every cell closes as clear within its named evidence corpus,
+finding, or inapplicable with a reason. Phase 2 groups the recorded BUGS
+mechanisms and probes remaining siblings at their direct consumer seams.
+
+Focused behavioral observations and existing regression witnesses support
+dispositions; passing an old suite alone does not close sibling exploration.
+Read individual implementations when a behavioral question requires it.
+This authorizes investigation and temporary fixtures. Findings and simplification
+opportunities are reported for disposition. Repository mandatory stops apply
+immediately, and unexamined cells remain pending across a stop.
+
+`build/bughunt-20261104/README.md` owns scratch layout. Reports and receipts
+live in `evidence/`, runtime state in `fixtures/`. Fixtures are retained through
+the later installed-app round and removed at that round's end, leaving evidence.
+Current status: A-1 corrected after approval on 2026-11-04; resume the same
+sweep after the fix gate and independent review. The correction owns shared CLI/GUI argument admission, launcher
+and CLI boundary tests, and matching interface/command-line documentation.
+Gate: original native-argv reproducer refuses before interface/path construction,
+exact-ceiling and first-excess tests for both GUI spellings, existing CLI
+regressions, interfaces department and fresh adversarial review. Preserve lazy
+startup and raw argument identity. One reviewed fix commit precedes resumption.
+Recovery `208ad744` retains the superseded stop; its scope and finding are
+rebuilt into this correction without merging or cherry-picking the recovery.
+
+The stop was caused by GUI launcher whole-request ingress omission.
+A real Windows argument vector carrying 66,123 UTF-8 bytes fits the native
+command-line limit and constructed a GUI request before admission. The mandatory
+stop led to this approved correction. Remaining cells and sibling probes are pending,
+not cleared. `evidence/adapters-report.md` contains the contained reproducer and
+contract mapping. Later installed-app testing awaits the user's transition.
+
 The 2026-11-04 CLI follow-up covers visible filename controls and the installed
 `namisync` and `namisync-gui` launchers. [COMMANDLINE](COMMANDLINE.md) owns the
 output contract and [INTERFACES](INTERFACES.md) owns launcher classification.

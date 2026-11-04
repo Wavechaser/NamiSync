@@ -2472,6 +2472,21 @@ defect, and move implementation-level test choreography out of the log.
 
 ## WORKFLOW AND CLI
 
+### Launcher ingress
+
+- MODERATE - FIXED (2026-11-04). Complete-request admission omission. The GUI
+  launcher accepts a Windows argument vector containing 66,123 UTF-8 bytes and
+  constructs `GuiArguments(Path(value))`, exceeding the common 65,536-byte
+  external request ceiling before interface construction. Cause: its closed
+  argument grammar had no whole-request bound, while the console CLI did.
+  A real subprocess probe used a 22,279-UTF-16-unit command and intercepted
+  application path resolution after observing construction. This establishes
+  an ingress-contract violation. Shared command-line admission now rejects
+  before Path/GuiArguments and host imports for both data-dir spellings.
+  Exact-limit, first-excess, malformed argument and real native-argv tests cover
+  the boundary; the existing CLI byte-counting behavior is retained. Evidence:
+  `build/bughunt-20261104/evidence/adapters-gui-ingress-receipt.json`.
+
 ### Output rendering
 
 - SEVERE - FIXED (2026-11-04). Review-text layout-control injection.

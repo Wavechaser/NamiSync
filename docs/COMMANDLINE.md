@@ -16,6 +16,9 @@ Before parser construction, the CLI bounds the complete argument vector to
 65,536 UTF-8 bytes, including one separator byte between arguments. Non-string
 or non-UTF-8 arguments and a first-excess vector receive the same non-reflecting
 usage refusal; no rejected argument content enters parser diagnostics.
+The GUI launcher uses the same dependency-free admission before constructing
+its `--data-dir` path or GUI request, for both separated and equals spellings;
+it reports refusal through the native startup dialog with exit `2`.
 The CLI delegates process composition, session observation, and typed result
 classification to `interfaces/service.py`; it does not construct a dispatcher
 or workflow runtime.

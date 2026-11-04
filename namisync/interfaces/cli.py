@@ -10,6 +10,10 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import TextIO
 
+from namisync.interfaces.command_ingress import (
+    INVALID_COMMAND_REQUEST,
+    arguments_within_ingress_bound,
+)
 from namisync.interfaces.service import (
     DatabaseAdmissionError,
     ExecutionAdmissionView,
@@ -32,8 +36,6 @@ EXIT_PARTIAL = 6
 EXIT_DEGRADED = 7
 EXIT_MISMATCH = 8
 EXIT_VERIFICATION_INCOMPLETE = 9
-_MAX_COMMAND_ENVELOPE_BYTES = 65_536
-_INVALID_COMMAND_REQUEST = "Invalid command request."
 _LAYOUT_CONTROL = re.compile(
     "[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f"
     "\u2028-\u202e\u2060-\u206f\ufeff\\[]"
@@ -158,8 +160,8 @@ def main(
     input_stream = sys.stdin if stdin is None else stdin
     output = sys.stdout if stdout is None else stdout
     errors = sys.stderr if stderr is None else stderr
-    if not _arguments_within_ingress_bound(arguments):
-        print(_INVALID_COMMAND_REQUEST, file=errors)
+    if not arguments_within_ingress_bound(arguments):
+        print(INVALID_COMMAND_REQUEST, file=errors)
         return EXIT_USAGE
     parser = build_parser()
     if not arguments:
@@ -183,21 +185,6 @@ def main(
         return _run_location_workflow(namespace, output, errors)
     parser.print_usage(errors)
     return EXIT_USAGE
-
-
-def _arguments_within_ingress_bound(arguments: list[str]) -> bool:
-    total = 0
-    for index, argument in enumerate(arguments):
-        if type(argument) is not str:
-            return False
-        try:
-            encoded_size = len(argument.encode("utf-8"))
-        except UnicodeEncodeError:
-            return False
-        total += encoded_size + (index > 0)
-        if total > _MAX_COMMAND_ENVELOPE_BYTES:
-            return False
-    return True
 
 
 def _run_sync(

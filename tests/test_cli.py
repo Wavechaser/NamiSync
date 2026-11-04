@@ -16,6 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.interfaces.cli as cli_module
+from namisync.interfaces.command_ingress import arguments_within_ingress_bound
 import namisync.db.contracts as file_contracts
 from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
@@ -335,16 +336,16 @@ def test_cli_ingress_bound_uses_complete_utf8_byte_size() -> None:
     exact = ["é" * 32_767, "x"]
     one_byte_over = ["é" * 32_767, "xx"]
 
-    assert cli_module._arguments_within_ingress_bound(exact) is True
-    assert cli_module._arguments_within_ingress_bound(one_byte_over) is False
+    assert arguments_within_ingress_bound(exact) is True
+    assert arguments_within_ingress_bound(one_byte_over) is False
 
 
 def test_cli_ingress_bound_counts_separators() -> None:
-    assert cli_module._arguments_within_ingress_bound(["x" * 65_536]) is True
-    assert cli_module._arguments_within_ingress_bound(
+    assert arguments_within_ingress_bound(["x" * 65_536]) is True
+    assert arguments_within_ingress_bound(
         ["x" * 65_535, ""]
     ) is True
-    assert cli_module._arguments_within_ingress_bound(
+    assert arguments_within_ingress_bound(
         ["x" * 65_536, ""]
     ) is False
 

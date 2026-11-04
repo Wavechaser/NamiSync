@@ -318,6 +318,13 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Bound GUI command-line requests (2026-11-04)
+
+- Share complete-request admission between the console and GUI launchers,
+  rejecting oversized or malformed arguments before GUI path/request creation.
+- Cover both data-dir spellings, exact and first-excess UTF-8 boundaries and
+  real Windows Unicode command lines while retaining lazy desktop imports.
+
 #### Align executable names with the package name (2026-11-04)
 
 - Rename the console and desktop entry points to `namisync` and `namisync-gui`,

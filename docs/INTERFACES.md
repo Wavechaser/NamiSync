@@ -972,6 +972,14 @@ NamiSync has one GUI implementation and two correctly classified Windows entry-p
 
 GUI arguments are closed: no arguments or one absolute local `--data-dir PATH` (including equals spelling). Unknown/positional/repeated/missing arguments and relative or non-local paths fail before directory creation, mutex acquisition, logging, or pywebview import. A dependency-free Win32 `MessageBoxW` reporter with caption `NamiSync - Startup Error` shows actionable startup failures when no console exists. Logging records failures once available; a second-instance activation is the settled non-error case.
 
+CLI and GUI arguments share the dependency-free `interfaces/command_ingress.py`
+admission: the complete vector may contain at most 65,536 UTF-8 bytes, including
+one separator byte between arguments. Non-exact strings, malformed Unicode and
+the first byte above that bound receive `Invalid command request.` without
+reflecting input. GUI admission precedes `Path`/`GuiArguments` construction for
+both data-dir spellings and reports the same usage refusal through its native
+startup reporter, before app paths or the desktop host are imported.
+
 The supported desktop stack is CPython 3.13 on Windows 11 x64, `pywebview==6.2.1`, `pythonnet==3.1.0` on Windows, and Bottle 0.13.4 or later. NamiSync supports the tested pythonnet netfx route and refuses a conflicting `PYTHONNET_RUNTIME`. A change affecting pywebview, pythonnet, clr_loader, or return transport reruns the relevant native reality and hostile-text checks.
 
 The window's native return adapter consumes a one-shot marker from the bridge's

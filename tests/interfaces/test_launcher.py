@@ -129,9 +129,86 @@ def test_gui_parser_accepts_both_absolute_data_dir_spellings(
     ) == launcher.GuiArguments(expected)
 
 
+@pytest.mark.parametrize("equals", (False, True))
+def test_gui_ingress_admits_exact_utf8_request_and_refuses_first_excess(
+    equals: bool, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = "C:\\" + "界" * 21_840 + "xx"
+    arguments = ["--data-dir=" + value] if equals else ["--data-dir", value]
+    assert sum(len(arg.encode("utf-8")) for arg in arguments) + len(arguments) - 1 == 65_536
+    assert launcher._parse_gui_arguments(arguments).data_dir == Path(value)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("first-excess request reached interface construction")
+
+    monkeypatch.setattr(launcher, "Path", forbidden)
+    monkeypatch.setattr(launcher, "GuiArguments", forbidden)
+    arguments[-1] += "x"
+    with pytest.raises(launcher.GuiArgumentError, match="^Invalid command request\\.$"):
+        launcher._parse_gui_arguments(arguments)
+
+
+@pytest.mark.parametrize("value", (object(), type("Text", (str,), {})("subclass"), "\ud800"))
+@pytest.mark.parametrize("equals", (False, True))
+def test_gui_ingress_refuses_invalid_arguments_before_effects(
+    value: object, equals: bool, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reports = []
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("invalid request reached interface construction")
+
+    if equals:
+        arguments = ["--data-dir=" + value] if type(value) is str else [value]
+    else:
+        arguments = ["--data-dir", value]
+    monkeypatch.setattr(launcher, "Path", forbidden)
+    monkeypatch.setattr(launcher, "GuiArguments", forbidden)
+    monkeypatch.setattr(launcher, "_native_startup_error", reports.append)
+    assert launcher.gui_main(arguments) == 2  # type: ignore[arg-type]
+    assert reports == ["Invalid command request."]
+    captured = capsys.readouterr()
+    assert captured.out == captured.err == ""
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="native Windows Unicode argv limit")
+@pytest.mark.parametrize("equals", (False, True))
+def test_real_windows_gui_argv_refuses_66k_before_import_or_construction(equals: bool) -> None:
+    script = """
+import json
+import sys
+from namisync.interfaces import launcher
+def forbidden(*args, **kwargs):
+    raise AssertionError("oversized argv reached interface construction")
+launcher.Path = launcher.GuiArguments = forbidden
+reports = []
+launcher._native_startup_error = reports.append
+code = launcher.gui_main()
+loaded = sorted(name for name in sys.modules if name in {
+    "namisync.interfaces.cli", "namisync.interfaces.service", "webview"
+} or name.startswith("namisync.interfaces.web."))
+print(json.dumps({"code": code, "reports": reports, "loaded": loaded,
+    "request_bytes": sum(len(arg.encode("utf-8")) for arg in sys.argv[1:]) + len(sys.argv[1:]) - 1}))
+"""
+    value = "C:\\" + "\\".join(["界" * 200] * 110)
+    arguments = ["--data-dir=" + value] if equals else ["--data-dir", value]
+    command = [sys.executable, "-c", script, *arguments]
+    assert len(subprocess.list2cmdline(command).encode("utf-16-le")) // 2 + 1 < 32_767
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=10, check=False)
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stderr == ""
+    assert json.loads(completed.stdout) == {
+        "code": 2, "reports": ["Invalid command request."], "loaded": [],
+        "request_bytes": 66_123,
+    }
+
+
+@pytest.mark.parametrize("equals", (False, True))
 def test_gui_launcher_constructs_the_fixed_production_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    equals: bool,
 ) -> None:
     from namisync.interfaces.web import host
 
@@ -147,7 +224,9 @@ def test_gui_launcher_constructs_the_fixed_production_identity(
         or 0,
     )
 
-    result = launcher.gui_main(["--data-dir", str(tmp_path / "isolated")])
+    value = str(tmp_path / "isolated")
+    arguments = ["--data-dir=" + value] if equals else ["--data-dir", value]
+    result = launcher.gui_main(arguments)
 
     assert result == 0
     assert len(seen) == 1
