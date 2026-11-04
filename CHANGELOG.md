@@ -324,9 +324,10 @@ explicit, reviewable and regression-backed.
   history, eight database refusal cases, isolated placement and relocation.
   Exercise native GUI copy/verification, Unicode paths and settings persistence.
 - Record three fresh-process idle diagnostics with 354–360 MiB settled private
-  bytes, without a resource-budget or release-acceptance claim. Repeated workload
-  measurement remains unavailable after two Create plan input attempts; preserve
-  failed specimens and the unresolved delivery evidence.
+  bytes, then a manually operated three-sync-cycle diagnostic with four explicit
+  verification runs. Final idle is 624 MiB versus 353 MiB initially; preserve
+  the extra-verification deviation, failed observers and unresolved synthetic
+  input evidence without a resource-budget or release-acceptance claim.
 - Reconcile the accumulated handoff into current resumption context and account
   for task-owned fixture cleanup while retaining evidence.
 

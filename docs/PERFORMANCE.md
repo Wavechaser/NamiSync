@@ -53,8 +53,56 @@ WebView descendants in the retry required final Job cleanup. Failed profiles,
 drivers and captures are preserved in `gui-repeat-preservation-02.json` and its
 named archive. No third attempt was made, and cause remains unresolved.
 
+### Manual workload continuation — 2026-11-04
+
+The user subsequently authorized input diagnosis and another measured run.
+Two dry-run-only SendInput probes accepted both mouse events but reached Plan
+only after manual activation; the second had explicit hands-off readiness.
+Acceptance by Windows does not establish browser delivery. No specific product
+cause was proven. Live UIA enumeration then failed during startup and execution;
+the latter observer closed a partially copied run. Archived private-copy checks
+confirmed truthful cancellation: 118 succeeded, 138 canceled, recording/audit ok.
+
+After explicit user review of the recurring observer mechanism, collection used
+passive Job sampling and human actions, screenshots and phase acknowledgements.
+The same 256-file, 16 KiB/file fixture ran three sync/task-close cycles in one
+fresh process, changing only one source file between cycles. Copy/update counts
+were 256/1/1 with 0/255/255 no-ops; all managed hashes and prior-version backups
+matched. Actual verification scopes were 256/1/1/1: the user confirmed a second
+Verify copied click in cycle 2. This is a disclosed deviation from the declared
+three-verification profile, not an exact-profile pass. Retain its failed exact-
+count oracle alongside the reconciled actual workload.
+
+| Fixed idle window | Median whole-Job private memory, MiB |
+| --- | ---: |
+| Initial 10 seconds | 352.96 |
+| 15 seconds after cycle 1 task close | 853.20 |
+| 15 seconds after cycle 2 task close | 664.53 |
+| 15 seconds after cycle 3 task close | 627.84 |
+| Final 15 seconds of the final 60-second idle | 624.00 |
+
+The 818.51-second session includes human response and screenshot-review time;
+it is not an execution-latency measurement. Of 1,637 samples, 1,633 are complete;
+the four incomplete samples comprise startup and changing Job membership.
+All fixed idle windows have complete samples. The maximum observed sample gap
+was 0.5152 seconds and observer duration 0.1146 seconds. The whole-session
+sampled private-memory maximum was 1,270.89 MiB, including mixed manual/work
+phases; sampled maxima remain lower bounds on transient peaks. The host exited
+0 and its Job was empty before release; no forced cleanup was required.
+
+Final idle was 271.03 MiB above initial idle, while post-close medians decreased
+by 225.36 MiB from cycle 1 to cycle 3. These correlated observations do not prove
+a leak, bounded long-session retention or release acceptance. No budget is
+derived from them. Longer/heavier profiles and resource acceptance remain open.
+Raw samples, fixed-window aggregation, exact producer identities, manual
+witnesses and private-copy history reconciliation live in
+`build/bughunt-20261104/packaged-round/continuation-native-20261104/`.
+The first parent screenshot was cropped by DPI virtualization and remains
+unused; corrected captures use a separately recorded DPI-aware producer.
+Sampler, app and workload-driver bytes stayed unchanged during collection.
+
 These are diagnostics without a resource budget, SH-G-15 pass or leak-freedom
-claim. Repeated and longer/heavier-session growth, representative-corpus
+claim. Longer/heavier-session growth, representative-corpus
 acceptance and clean-candidate release evidence remain open. Changed package,
 driver or checker dependencies require new evidence for the affected claim.
 

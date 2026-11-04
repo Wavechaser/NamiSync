@@ -161,7 +161,9 @@ user requested, preserving necessary packaging/evidence context rather than
 leaving accumulated notes unstaged. Fixture cleanup follows the user's end-of-
 round rule after exact ownership, evidence and recovery accounting.
 
-Status: bounded investigation complete with explicit measurement unavailability.
+Status: bounded investigation complete. Initial automated repeated-workload
+measurement was unavailable; the approved manual continuation below supplies
+actual-workload diagnostics with an explicit verification-count deviation.
 The real portable CLI passed 70 checks across 30 invocations, covering the named
 corpus including eight database-pair refusal cases and relocation. Native GUI
 review/execute/Verify copied, inventory, saved defaults, restart and normal close
@@ -177,6 +179,40 @@ receipts. Final cleanup accounting and resumption context are in HANDOFF.
 GUI busy/pause/cancel, malformed-profile startup, fresh Integrity setup,
 longer/heavier workloads and clean-machine prerequisites remain untested here;
 this finite diagnostic round does not close R3/R4 or grant release acceptance.
+
+Continuation authorized on 2026-11-04: diagnose the first native Create plan
+transition, then retry the same three-cycle measured workload using manual
+activation where synthetic input is ineffective. Preserve the completed round's
+receipts. The diagnostic performs no Execute; compare counted native input with
+an observed manual transition before selecting the measured driver. Manual wait
+phases are explicit and excluded from fixed idle summaries; no automated replay
+of an ambiguous mutation. New fixtures retain the same isolation, provenance,
+mandatory-stop and end-of-round cleanup requirements. The user is available for
+manual input; request each intervention only when the live window is ready.
+
+The continuation's repeated whole-tree UIA observation failures require a
+verification-method reorganization, approved explicitly in turn by the user:
+passive Job resource sampling, human phase acknowledgements, native screenshots
+and external file/history checks replace continuous live accessibility polling.
+The app, three-cycle file corpus and fixed idle windows remain unchanged. A
+failed observer must not close an app whose operation may still be active;
+preserve it for inspection. Before a new launch, inspect the interrupted prior
+run's durable truth from an archived private copy. This is diagnostic evidence
+with manual witnesses, not substitution for installed acceptance tests.
+
+Continuation outcome: passive collection completed in 818.51 seconds with normal
+exit and an empty Job. Three sync/close cycles passed exact file/backup checks;
+private-copy history confirms completed sync effects 256/1/1 and no-ops
+0/255/255. Four verification runs (256/1/1/1) include the user's confirmed second
+Verify copied click in cycle 2. Preserve the failed exact-three-verification
+oracle; the reconciled actual workload supplies diagnostics, not an exact-profile
+pass. PERFORMANCE owns the 1,633/1,637 complete samples and fixed idle medians:
+353 MiB initially, 853/665/628 MiB after each close, 624 MiB finally. The input
+root cause remains unresolved; no product defect or resource budget is inferred.
+Evidence is under the packaged round's `continuation-native-20261104/` directory.
+Longer/heavier resource acceptance and release R3/R4 remain open. All nine
+continuation fixture/cache/private-query roots were removed after preservation
+and process review. The replaced HANDOFF records the current resumption context.
 
 Continuation on 2026-11-04 prioritizes a runnable portable development package
 for the user's next installed-behavior/cold-install debug pass. The installed
