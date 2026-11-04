@@ -318,6 +318,13 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Sample Setup action visibility before navigation (2026-11-04)
+
+- Correct the installed Setup fixture's Plan-again visibility observation:
+  sample before clicking, because successful navigation may hide the old button.
+  Preserve readiness, actual new-task identity and frozen-option assertions.
+- The affected installed journey passes; no product behavior changed.
+
 #### Render Unicode filenames on redirected CLI streams (2026-11-04)
 
 - Render characters unsupported by the selected output encoding as visible

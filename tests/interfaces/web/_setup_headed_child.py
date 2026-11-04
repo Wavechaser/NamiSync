@@ -795,6 +795,7 @@ _FROZEN_SCRIPT = r"""
   await planAgainTraceControl("begin");
   globalThis.__namiPlanAgainTrace?.begin("setup");
   let routeError = null;
+  const planAgainVisible = !planAgain.hidden && planAgain.checkVisibility();
   try {
     planAgain.click();
     await until(() => document.querySelectorAll(".nami-task-rail__row").length === before + 1, "Plan-again task identity");
@@ -822,7 +823,7 @@ _FROZEN_SCRIPT = r"""
     expected_options: expectedOptions,
     original_after_replan: (await bridge.readSetup(originalTaskId)).snapshot,
     replanned_snapshot: (await bridge.readSetup(newTasks[0].task_id)).snapshot,
-    plan_again_visible: !planAgain.hidden,
+    plan_again_visible: planAgainVisible,
     plan_again_new_task: true,
     picker_resolved: pickerResolved,
   };

@@ -423,6 +423,11 @@ state remains explicit.
 
 ## Diagnostics
 
+The Setup journey samples Plan-again visibility before its click. Successful
+launch can select a new task and hide the original button; inspecting that
+retired surface afterward is not evidence that the action was unavailable.
+The existing readiness, new-task identity and frozen-option assertions remain.
+
 Rerun prior failures first:
 
 ```powershell
