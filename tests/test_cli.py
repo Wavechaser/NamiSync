@@ -101,6 +101,88 @@ def test_argument_errors_escape_external_text(case, capsys) -> None:
     assert "--unknown=" + case["cli"] in errors
 
 
+@pytest.mark.parametrize("encoding", ("utf-8", "cp1252"))
+@pytest.mark.parametrize("errors", ("strict", "replace"))
+def test_configuration_diagnostics_preserve_caller_streams(
+    monkeypatch: pytest.MonkeyPatch, encoding: str, errors: str,
+) -> None:
+    def refused_service(*args):
+        raise ValueError("日本語 [U+65E5] \u202e")
+
+    monkeypatch.setattr(cli_module, "NamiSyncService", refused_service)
+    output_bytes, error_bytes = io.BytesIO(), io.BytesIO()
+    output = io.TextIOWrapper(output_bytes, encoding=encoding, errors=errors)
+    error_stream = io.TextIOWrapper(error_bytes, encoding=encoding, errors=errors)
+    try:
+        result = main(["history"], stdout=output, stderr=error_stream)
+        output.flush()
+        error_stream.flush()
+        rendered = error_bytes.getvalue().decode(encoding)
+        expected = "日本語" if encoding == "utf-8" else "[U+65E5][U+672C][U+8A9E]"
+        assert result == EXIT_USAGE
+        assert f"Configuration error: {expected} [[U+65E5] [U+202E]" in rendered
+        assert output_bytes.getvalue() == b""
+        for stream in (output, error_stream):
+            assert stream.encoding == encoding
+            assert stream.errors == errors
+            assert not stream.closed
+    finally:
+        output.close()
+        error_stream.close()
+
+
+def test_argument_error_fallback_preserves_encoding_and_control_markers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    buffer = io.BytesIO()
+    stream = io.TextIOWrapper(buffer, encoding="cp1252", errors="strict")
+    monkeypatch.setattr(sys, "stderr", stream)
+    try:
+        assert main(["--unknown=日本語[U+65E5]\u202e"]) == EXIT_USAGE
+        stream.flush()
+        rendered = buffer.getvalue().decode("cp1252")
+        assert "--unknown=[U+65E5][U+672C][U+8A9E][[U+65E5][U+202E]" in rendered
+        assert stream.encoding == "cp1252" and stream.errors == "strict"
+        assert not stream.closed
+    finally:
+        stream.close()
+
+
+@pytest.mark.parametrize("operation", ("write", "flush"))
+def test_output_encoding_fallback_does_not_swallow_io_failure(operation: str) -> None:
+    class UnwritableBuffer(io.BytesIO):
+        def write(self, value):
+            raise OSError("output unavailable")
+
+    stream = io.TextIOWrapper(
+        UnwritableBuffer(), encoding="cp1252", write_through=operation == "write",
+    )
+    output = cli_module._OutputStream(stream)
+    try:
+        if operation == "flush":
+            output.write("日本語")
+            with pytest.raises(OSError, match="output unavailable"):
+                output.flush()
+        else:
+            with pytest.raises(OSError, match="output unavailable"):
+                output.write("日本語")
+    finally:
+        stream.detach().close()
+
+
+def test_parser_retains_existing_write_failure_handling() -> None:
+    class UnwritableBuffer(io.BytesIO):
+        def write(self, value):
+            raise OSError("output unavailable")
+
+    stream = io.TextIOWrapper(UnwritableBuffer(), encoding="cp1252", write_through=True)
+    try:
+        build_parser().print_usage(stream)
+        assert not stream.closed
+    finally:
+        stream.detach().close()
+
+
 @pytest.mark.parametrize("entry", ("module", "console"))
 @pytest.mark.parametrize("encoding", ("utf-8", "cp1252"))
 def test_real_process_review_results_and_history_escape_layout_controls(
@@ -110,7 +192,12 @@ def test_real_process_review_results_and_history_escape_layout_controls(
     source.mkdir()
     target.mkdir()
     cases = _FILESYSTEM_TEXT_CASES["examples"][:2] + [
-        _FILESYSTEM_TEXT_CASES["examples"][3]
+        _FILESYSTEM_TEXT_CASES["examples"][3],
+        {
+            "raw": "日本語.txt",
+            "cli": "日本語.txt" if encoding == "utf-8" else "[U+65E5][U+672C][U+8A9E].txt",
+        },
+        {"raw": "[U+65E5].txt", "cli": "[[U+65E5].txt"},
     ]
     for case in cases:
         (source / case["raw"]).write_bytes(b"reviewed bytes")

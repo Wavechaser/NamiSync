@@ -318,6 +318,15 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Render Unicode filenames on redirected CLI streams (2026-11-04)
+
+- Render characters unsupported by the selected output encoding as visible
+  Unicode markers across CLI review, results, history and diagnostics. UTF-8
+  retains Japanese text; literal marker filenames remain distinguishable.
+- Preserve caller-owned streams, their encoding and existing I/O-error handling.
+  Real module/console round trips and the original retained history reproduction
+  verify both cp1252 and UTF-8 output without changing file or database identity.
+
 #### Consolidate database and history test setup (2026-11-04)
 
 - Share local schema-role and bounded-history-window setup across four schema

@@ -2489,14 +2489,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Output rendering
 
-- MODERATE - OPEN (2026-11-04). Redirected-output encoding mismatch. On this
-  Windows cp1252 environment, redirecting normal CLI history output for a run
-  containing a Japanese filename returns exit 4 with a partial report and a
-  charmap error. The identical read in Python UTF-8 mode completes. Cause:
-  filename rendering preserves ordinary Unicode, then writes to the default
-  redirected stream without handling unencodable characters. This is a report
-  rendering failure; the retained successful run and file bytes are intact.
-  Evidence: `build/bughunt-20261104/evidence/integration-output-encoding.json`.
+- MODERATE - FIXED (2026-11-04). Redirected-output encoding mismatch. Japanese
+  filenames failed CLI review or produced partial history with exit 4 on
+  redirected cp1252 streams; retained file and database state remained intact.
+  Cause: rendered Unicode reached a stream that could not encode it. A shared
+  non-owning CLI output wrapper now emits unencodable characters as unambiguous
+  `[U+XXXX]` markers, preserving encodable text, selected encoding, ownership
+  and existing I/O-error handling. Parser diagnostics use the same boundary.
+  Real module/console cp1252 and UTF-8 review/result/history cases, literal-marker
+  controls and stream/error regressions pass. Evidence: `build/bughunt-20261104/evidence/fix-a2-*`.
 
 - SEVERE - FIXED (2026-11-04). Review-text layout-control injection.
   CLI review displayed legal filenames containing U+0085 or bidi controls as
@@ -2507,7 +2508,7 @@ defect, and move implementation-level test choreography out of the log.
   markers and doubles literal `[` to prevent marker collisions; argparse
   diagnostics use the same formatter. Shared desktop/CLI examples and real
   module/console sync-to-history checks cover raw path identity and redirected
-  UTF-8/cp1252 output. Ordinary Unicode remains unchanged; confusable text has
+  UTF-8/cp1252 output. Encodable ordinary Unicode remains unchanged; confusable text has
   the residual boundary owned by `DEFENSE.md`.
 
 ### Plan projection

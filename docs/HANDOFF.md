@@ -1,34 +1,35 @@
-# Latest session — behavioral sweep completed, 2026-11-04
+# Latest session — bug-hunt fixes complete; paused, 2026-11-04
 
-The request-bound fix is committed as `fbd969f0`: CLI and GUI share strict
-whole-argv admission before interface/path values. Exact/first-excess and
-native argv regressions pass; interfaces qualification accounts for 2,196
-distinct passes. Original failures remain in `fix-a1-*` evidence.
+Both user-authorized follow-ups are complete and independently reviewed.
+This session is paused before further release work, as requested. No packaging
+or installed-app behavior testing was started.
 
-The resumed two-phase investigation is complete: 84 cells = 67 bounded clears,
-16 reasoned N/A and one open finding. All 311 original BUGS entries have an
-owner/mechanism disposition. Fresh probes cover root freshness, native
-copy/update/rename/no-op and trash recovery, cancellation, verifier recording,
-stale inventory, sparse replay, small queue capacities and adapter/JS races.
-Independent review checked receipts and corrected category ownership accounting.
+A-2 is fixed: the CLI now uses non-owning output wrappers to render characters
+that its selected encoding cannot represent as visible `[U+XXXX]` markers.
+UTF-8 retains Japanese spelling; literal marker filenames stay distinguishable.
+Review, results, history and parser diagnostics share the boundary. Stream
+encoding, ownership and existing I/O-error handling remain intact. BUGS and
+COMMANDLINE document the correction. Verification: 112 CLI tests and 2,204
+interface-department tests pass; both real module/console entry points and the
+original retained history report succeed in cp1252 and UTF-8.
 
-A-2 is OPEN in BUGS: redirected Windows cp1252 history output cannot render a
-Japanese filename and returns exit 4/partial report. The identical Python
-`-X utf8` read succeeds; underlying files and recorded success remain intact.
-No A-2 implementation or installed-app acceptance occurred. The next decision
-is disposition of A-2 and transition into the user's later installed-app round.
-No third substantive defect emerged. One optional test-fixture consolidation
-was identified; no further production refactor is proposed.
+Database/history test setup is consolidated in `a40fd2f7`: local helpers replace
+repeated setup in four schema and six history test functions. All 261 case
+identities, assertions, parameters and fault SQL remain; 261 tests pass before
+and after, and the database department passes all 461 tests. Runtime persistence
+code, global fixtures and test authority are unchanged.
 
-Start with `build/bughunt-20261104/evidence/summary-resumed.md`, lane reports,
-`corpus-closure.json` and `final-manifest.json`. Earlier stopped reports and
-manifests are historical, not current pending status. Recovery `208ad744` was
-never merged/cherry-picked; useful content was rebuilt into reviewed records.
+Evidence remains in `build/bughunt-20261104/evidence/`: `fix-a2-*` includes the
+red/final gates, original-history reproduction, seven registered external roots
+and source hashes; `db-consolidation-*` includes baseline/candidate XML and
+assertion/population comparison. `followup-manifest.json` records final identities
+and cleanup inventory. The preceding sweep's historical reports retain their
+original open-finding status; M1_PLAN and BUGS carry current disposition.
 
-Keep `build/bughunt-20261104/fixtures/` plus registered external TEMP roots
-`namisync-bughunt-a1-xre87_hl` and `namisync-bughunt-tools-lrgnm16v` until the
-later app round ends, then clean exact contained fixture paths while retaining
-evidence. Do not remove unrelated ignored caches. Product/tests/tools have no
-changes after `fbd969f0`; concurrent release docs remain owned by that session.
-M1_PLAN retains release/checkpoint authority; this sweep does not close its
-unrelated release gates.
+Keep local `build/bughunt-20261104/fixtures/`, the seven new external A-2 TEMP
+roots and the earlier A-1/tools roots until the later installed-app round ends.
+Then verify exact containment/process release and clean only those fixtures,
+retaining evidence. No fixture cleanup occurred here. Concurrent release edits
+in CHANGELOG, README, M1_PLAN and the HANDOFF tail remain excluded from commits.
+The next action requires the user's release/app-testing transition; existing
+release gates remain open under their owning register.

@@ -43,9 +43,10 @@ immediately, and unexamined cells remain pending across a stop.
 `build/bughunt-20261104/README.md` owns scratch layout. Reports and receipts
 live in `evidence/`, runtime state in `fixtures/`. Fixtures are retained through
 the later installed-app round and removed at that round's end, leaving evidence.
-Current status: both finite discovery phases completed against `fbd969f0`.
-The 12-component by 7-invariant matrix closes with 67 bounded clears, 16
-reasoned inapplicable cells and one open finding; no cells remain pending.
+Both finite discovery phases completed against `fbd969f0`. At sweep close,
+the 12-component by 7-invariant matrix had 67 bounded clears, 16 reasoned
+inapplicable cells and one finding, corrected in the approved follow-up below;
+no cells remain pending.
 All 311 original BUGS entries have a semantic-family/owner disposition, with
 explicit historical/tooling/later-platform limits rather than individual rerun
 claims. Fresh behavioral siblings supplement focused regression witnesses.
@@ -61,12 +62,13 @@ for 2,196 distinct passes after native/external-temp qualification. Recovery
 `208ad744` was not merged or cherry-picked; its useful scope/finding content
 was rebuilt into reviewed records.
 
-A-2 remains OPEN: redirected cp1252 CLI history output fails on Japanese
-filenames with a partial report/exit 4; Python UTF-8 mode succeeds. Successful
-filesystem, ledger, audit and integrity results remain intact. BUGS owns the
-defect; `evidence/integration-output-encoding.json` owns the reproduction.
-No further product defect was demonstrated. A modest database-role/history-
-window test-fixture consolidation opportunity is recorded, without changes.
+A-2 is corrected in the approved follow-up below: redirected cp1252 output now
+uses visible markers for unencodable Japanese characters; UTF-8 retains their
+spelling. Successful filesystem, ledger, audit and integrity results remain
+intact. BUGS owns the defect; `evidence/integration-output-encoding.json` retains
+the original reproduction and `evidence/fix-a2-*` the correction. No further
+product defect was demonstrated. The identified database-role/history-window
+test-fixture consolidation is also completed below.
 Installed-app behavior testing awaits the user's transition; this discovery
 closure does not grant release acceptance or close existing release gates.
 
@@ -79,11 +81,14 @@ and coherent commit; repository safety/recurrence stops remain in force.
 
 | Outcome | Finite population, preserved guarantees and gate | Status |
 | --- | --- | --- |
-| A-2 correction | CLI output boundary in `interfaces/cli.py`, direct `test_cli.py` regressions and COMMANDLINE documentation. Preserve the selected stream encoding, readable encodable text, unambiguous existing control markers, caller stream ownership and real write/flush errors. Escape unencodable text before writing across runtime output and parser diagnostics. Reproduce the Japanese-filename failure first; verify real cp1252/UTF-8 module/console review, result and history paths, stream/error controls, then interfaces department and independent review. BUGS owns defect disposition. | Active. |
+| A-2 correction | CLI output boundary in `interfaces/cli.py`, direct `test_cli.py` regressions and COMMANDLINE documentation. Preserve the selected stream encoding, readable encodable text, unambiguous existing control markers, caller stream ownership and existing write/flush error handling. Escape unencodable text before writing across runtime output and parser diagnostics. BUGS owns defect disposition. | Complete: original failure reproduced, real module/console cp1252/UTF-8 review/result/history paths pass, 112 focused CLI passes and 2,204 interfaces department passes. Original retained history now exits 0 in both encodings. Fresh independent review approved; `evidence/fix-a2-final-manifest.json` binds source, receipts and retained fixtures. |
 | Database/history test setup | Only `test_db_schema.py` repeated in-memory role/schema setup and `test_db_history.py` repeated fixed-clock store/session/observer setup in bounded-window cases. Local helpers retain fault-specific SQL, expectations, test identities, parameters and window values. No product, global fixture or department-manifest changes. | Complete: four schema and six history test functions consolidated; 261 identical cases pass before/after, 461 database department passes, all 122 test definitions retain assertions/fault controls. Independent review approved; `evidence/db-consolidation-*` retains receipts. |
 
+Both outcomes are complete; this session is paused at the user's requested
+release boundary. Database/history consolidation is committed as `a40fd2f7`.
 No release packaging, installed-app round, runtime persistence refactor or new
-test-authority policy is included. Fixtures remain until the later app round.
+test-authority policy was undertaken. Fixtures remain until the later app round;
+`evidence/followup-manifest.json` records additional registered TEMP roots.
 
 The 2026-11-04 CLI follow-up covers visible filename controls and the installed
 `namisync` and `namisync-gui` launchers. [COMMANDLINE](COMMANDLINE.md) owns the

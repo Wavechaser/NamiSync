@@ -228,8 +228,12 @@ as ASCII `[U+XXXX]` markers in review, progress, results, history and diagnostic
 including parser errors. Literal `[` becomes `[[`, so a filename containing
 `[U+0085]` remains distinguishable from an actual U+0085 control. Marker output
 also works with redirected Windows code-page streams; ordinary Unicode and
-Windows path separators retain their spelling, subject to the selected output
-encoding. Rendering does not alter filesystem paths or operation identity.
+Windows path separators retain their spelling when the selected output encoding
+can represent them. Unencodable characters use the same ASCII `[U+XXXX]`
+markers, including in parser diagnostics, so redirected output remains complete.
+The CLI preserves the stream's encoding and ownership; real write or flush
+failures retain their existing handling. Rendering does not alter filesystem
+paths or operation identity.
 Runtime validation names missing/nonexistent/unusable paths
 and the corrective action. Mirror deletion is not exposed. Database defaults
 remain local and outside managed roots.

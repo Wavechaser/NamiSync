@@ -42,9 +42,37 @@ _LAYOUT_CONTROL = re.compile(
 )
 
 
+class _OutputStream:
+    """Render otherwise unencodable text without taking ownership of a stream."""
+
+    def __init__(self, stream: TextIO) -> None:
+        self._stream = stream
+
+    def write(self, text: str) -> None:
+        encoding = getattr(self._stream, "encoding", None)
+        if encoding:
+            try:
+                text.encode(encoding)
+            except UnicodeEncodeError:
+                replacements = {}
+                for character in set(text):
+                    try:
+                        character.encode(encoding)
+                    except UnicodeEncodeError:
+                        replacements[ord(character)] = f"[U+{ord(character):04X}]"
+                text = text.translate(replacements)
+        self._stream.write(text)
+
+    def flush(self) -> None:
+        self._stream.flush()
+
+
 class _ArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         super().error(_safe(message))
+
+    def _print_message(self, message: str, file: TextIO | None = None) -> None:
+        super()._print_message(message, _OutputStream(file or sys.stderr))
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -158,8 +186,8 @@ def main(
 ) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     input_stream = sys.stdin if stdin is None else stdin
-    output = sys.stdout if stdout is None else stdout
-    errors = sys.stderr if stderr is None else stderr
+    output = _OutputStream(sys.stdout if stdout is None else stdout)
+    errors = _OutputStream(sys.stderr if stderr is None else stderr)
     if not arguments_within_ingress_bound(arguments):
         print(INVALID_COMMAND_REQUEST, file=errors)
         return EXIT_USAGE
