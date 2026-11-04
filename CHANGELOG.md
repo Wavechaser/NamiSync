@@ -318,6 +318,17 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Complete the behavioral invariant and sibling sweep (2026-11-04)
+
+- Close all 84 component/invariant cells with bounded evidence or explicit
+  applicability: 67 clear, 16 inapplicable, one open redirected-output finding.
+- Account for all 311 historical BUGS entries by semantic mechanism and owner;
+  add fresh native, persistence, lifecycle, ingress and presentation seam probes.
+- Record the cp1252 CLI history rendering defect and UTF-8 reproduction; retain
+  fixtures through the later installed-app round and preserve original failures.
+- Independently review coverage and recovery evidence. Installed-app and release
+  acceptance remain separate; concurrent release preparation is excluded.
+
 #### Bound GUI command-line requests (2026-11-04)
 
 - Share complete-request admission between the console and GUI launchers,

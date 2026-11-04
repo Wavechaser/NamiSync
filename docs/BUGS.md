@@ -2489,6 +2489,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Output rendering
 
+- MODERATE - OPEN (2026-11-04). Redirected-output encoding mismatch. On this
+  Windows cp1252 environment, redirecting normal CLI history output for a run
+  containing a Japanese filename returns exit 4 with a partial report and a
+  charmap error. The identical read in Python UTF-8 mode completes. Cause:
+  filename rendering preserves ordinary Unicode, then writes to the default
+  redirected stream without handling unencodable characters. This is a report
+  rendering failure; the retained successful run and file bytes are intact.
+  Evidence: `build/bughunt-20261104/evidence/integration-output-encoding.json`.
+
 - SEVERE - FIXED (2026-11-04). Review-text layout-control injection.
   CLI review displayed legal filenames containing U+0085 or bidi controls as
   active text, allowing a filename to split review lines or visually reorder

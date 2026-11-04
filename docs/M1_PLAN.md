@@ -43,22 +43,32 @@ immediately, and unexamined cells remain pending across a stop.
 `build/bughunt-20261104/README.md` owns scratch layout. Reports and receipts
 live in `evidence/`, runtime state in `fixtures/`. Fixtures are retained through
 the later installed-app round and removed at that round's end, leaving evidence.
-Current status: A-1 corrected after approval on 2026-11-04; resume the same
-sweep after the fix gate and independent review. The correction owns shared CLI/GUI argument admission, launcher
-and CLI boundary tests, and matching interface/command-line documentation.
-Gate: original native-argv reproducer refuses before interface/path construction,
-exact-ceiling and first-excess tests for both GUI spellings, existing CLI
-regressions, interfaces department and fresh adversarial review. Preserve lazy
-startup and raw argument identity. One reviewed fix commit precedes resumption.
-Recovery `208ad744` retains the superseded stop; its scope and finding are
-rebuilt into this correction without merging or cherry-picking the recovery.
+Current status: both finite discovery phases completed against `fbd969f0`.
+The 12-component by 7-invariant matrix closes with 67 bounded clears, 16
+reasoned inapplicable cells and one open finding; no cells remain pending.
+All 311 original BUGS entries have a semantic-family/owner disposition, with
+explicit historical/tooling/later-platform limits rather than individual rerun
+claims. Fresh behavioral siblings supplement focused regression witnesses.
+`evidence/summary-resumed.md` owns consolidated evidence and links each lane's
+cell rationale, category map and raw receipts. Independent review reconciled
+the ownership map and verified native trash recovery evidence.
 
-The stop was caused by GUI launcher whole-request ingress omission.
-A real Windows argument vector carrying 66,123 UTF-8 bytes fits the native
-command-line limit and constructed a GUI request before admission. The mandatory
-stop led to this approved correction. Remaining cells and sibling probes are pending,
-not cleared. `evidence/adapters-report.md` contains the contained reproducer and
-contract mapping. Later installed-app testing awaits the user's transition.
+A-1 (GUI complete-request bound omission) is corrected in `fbd969f0`, after
+user approval and independent review. Shared CLI/GUI admission rejects the
+66,123-byte native reproducer before value construction; exact-ceiling,
+first-excess and both spelling regressions pass. The interfaces gate accounts
+for 2,196 distinct passes after native/external-temp qualification. Recovery
+`208ad744` was not merged or cherry-picked; its useful scope/finding content
+was rebuilt into reviewed records.
+
+A-2 remains OPEN: redirected cp1252 CLI history output fails on Japanese
+filenames with a partial report/exit 4; Python UTF-8 mode succeeds. Successful
+filesystem, ledger, audit and integrity results remain intact. BUGS owns the
+defect; `evidence/integration-output-encoding.json` owns the reproduction.
+No further product defect was demonstrated. A modest database-role/history-
+window test-fixture consolidation opportunity is recorded, without changes.
+Installed-app behavior testing awaits the user's transition; this discovery
+closure does not grant release acceptance or close existing release gates.
 
 The 2026-11-04 CLI follow-up covers visible filename controls and the installed
 `namisync` and `namisync-gui` launchers. [COMMANDLINE](COMMANDLINE.md) owns the
