@@ -326,6 +326,10 @@ explicit, reviewable and regression-backed.
 - Allow Add pair to capture its private snapshot during a check. Preserve
   independent batch admission, stale-edit/refusal guards and single-attempt
   ownership; no change to explicit Plan review before execution.
+- Let Create batch start immediately after an editable path loses focus;
+  unrelated live-row checks no longer discard the action. Keep the existing
+  saved-pair approval reuse and candidate admission behavior. The follow-up
+  passes its red/green probe, 2,208 interface cases and three installed cases.
 - Centralize Setup feedback to the left of its action buttons, retaining
   accessible path descriptions and avoiding error text beneath the path rows.
 - Verify focused race/refusal controls, all 2,208 interface cases across the

@@ -695,6 +695,47 @@ for (const mode of ["sync-plan", "inventory"]) {
   assert.equal(queued.target.location, null, "late admission cannot rewrite captured input");
 }
 
+// Leaving an editable path must not swallow Create batch: queued rows own
+// their saved candidates/options independently of the live form's check.
+for (const rowName of ["source", "target"]) {
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\queued-source");
+  callbacks.onEdit("target", "D:\\queued-target");
+  callbacks.onAddPair();
+  const form = harness.model;
+  const queued = form.batch[0];
+  callbacks.onOption("deletion_policy", "additive");
+  const editedPath = "E:\\editable-folder";
+  callbacks.onEdit(rowName, editedPath);
+  const liveCheck = deferred();
+  const originalAdmit = harness.admitLocation;
+  harness.admitLocation = (purpose, candidate) => {
+    if (candidate.path !== editedPath) return originalAdmit(purpose, candidate);
+    harness.calls.push(["live-check", purpose, structuredClone(candidate)]);
+    return liveCheck.promise;
+  };
+  callbacks.onValidate(rowName); // textbox blur immediately before activation
+  callbacks.onStartBatch();
+  callbacks.onStartBatch();
+  assert.equal(form.batchRunning, true, `${rowName} blur does not refuse Create batch`);
+  await until(() => queued.state === "created", "saved pair starts while live check remains pending");
+  assert.equal(form[rowName].pending, true);
+  assert.deepEqual(harness.calls.filter((call) => call[0] === "admit").map((call) => call.slice(1)), [
+    ["source", { kind: "literal_path", path: "C:\\queued-source", selected_mount: null }],
+    ["target", { kind: "literal_path", path: "D:\\queued-target", selected_mount: null }],
+  ]);
+  const starts = harness.calls.filter((call) => call[0] === "start-plan");
+  assert.equal(starts.length, 1, "repeated activation keeps one batch start");
+  assert.deepEqual(starts[0].slice(1, 4), [TASK_B, CHOICE("1"), CHOICE("2")]);
+  assert.deepEqual(starts[0][4], DEFAULT_OPTIONS, "the queued options are independent of later edits");
+  assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
+  assert.equal(harness.calls.filter((call) => call[0] === "live-check").length, 1);
+  liveCheck.resolve({ ...choice(rowName, "8"), state: "missing", choice_id: null });
+  await until(() => !form[rowName].pending, "unrelated live check settles");
+  assert.equal(queued.state, "created", "live refusal does not rewrite the saved pair result");
+}
+
 {
   const harness = await loadScenario();
   const callbacks = harness.callbacks;

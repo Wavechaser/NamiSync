@@ -1269,7 +1269,12 @@ Without a running check, unresolved rows are admitted normally. Editing the
 form abandons that attempt, and refusal starts no task. Picker and mount-choice
 waits retain their separate guards. Add pair remains a snapshot action and may
 capture a row during an ordinary check; Create batch admits that private
-snapshot later, without retaining the editable row's in-flight promise.
+snapshot later, without retaining the editable row's in-flight promise. Batch
+start is independent of checks running on the editable Source/Target rows.
+A saved pair retains its accepted choice if present (including one captured
+during a recheck); batch reuses that choice, otherwise admits the saved
+candidate. This does not change the workflow's fresh native admission or the
+requirement to review the resulting dry-run Plan before execution.
 
 When a picked folder has multiple current mounted copies, Setup presents the
 current mount choices. Choosing one continues that exact selection through a

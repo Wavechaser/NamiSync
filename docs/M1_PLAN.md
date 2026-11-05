@@ -56,6 +56,20 @@ Both diagnostic runtime roots and all three session pytest roots were removed
 after evidence preservation and process checks. This follow-up is complete;
 AGENTS stop rules apply to any subsequent work.
 
+Create batch follow-up authorized 2026-11-05: remove the editable Source/Target
+pending exclusions from batch start, since queued pairs own their saved inputs.
+Preserve the existing saved-choice behavior: batch reuses a captured accepted
+choice, otherwise admits its captured candidate; it never borrows the editable
+row's running promise. No fresh-recheck policy change is authorized. Population:
+`app.js`, Setup app probe and matching DESKTOP_UI/BUGS/CHANGELOG/HANDOFF updates.
+Gate: red/green blur-then-batch probe, interfaces department, affected installed
+Setup/shell cases, document/diff checks and independent review before one fix
+commit. Evidence: `build/setup-admission-20261104/batch-followup-20261105/`.
+Status: focused red/green probe, all 2,208 interface cases and three installed
+Setup/shell cases pass. Independent review found no blocking code issue;
+matching documentation and both test-owned temporary roots' cleanup are complete.
+Attempt-05 predates this follow-up and was not rebuilt.
+
 ### Behavioral bug hunt — authorized 2026-11-04
 
 The user authorized a coarse-to-fine investigation before the installed-app

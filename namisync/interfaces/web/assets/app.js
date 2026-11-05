@@ -4222,8 +4222,7 @@ async function startPairBatch() {
   if (
     task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
     || fixedOutcome(task.startRecovery) || !formIsEditable(form) || form.mode !== "sync-plan" || form.attempt !== null
-    || form.source.pending || form.target.pending ||
-    batch === null || batch.running !== null
+    || batch === null || batch.running !== null
   ) return;
   if (batch.rows.some((row) => row.originTaskId === task.taskId
       && row.state === "unknown")) return;
