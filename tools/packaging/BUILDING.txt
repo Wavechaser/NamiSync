@@ -1,0 +1,70 @@
+NamiSync v0.1.0 — source and build directions
+
+Preparation copy. Final notice/native-library provenance and candidate acceptance
+are still pending. The current builder produces development artifacts.
+
+Source identity
+---------------
+Distribute the corresponding NamiSync source ZIP, SHA256SUMS.txt,
+source-identity.json, bundle-identity.json and build-environment.txt alongside
+the executable ZIP. Do not substitute a newer source checkout for the source
+that produced a published executable. Verify each archive against SHA256SUMS.txt.
+source-identity.json records the commit and per-file source hashes;
+bundle-identity.json records the files in the executable bundle.
+
+The source ZIP includes NamiSync's editable Python, JavaScript, CSS, HTML,
+artwork, build specification, requirements and license. The reviewed ICO is an
+input: ordinary builds do not rasterize it from SVG. The source repository is:
+  https://github.com/Wavechaser/NamiSync
+Full documentation and tests live in that repository at the recorded commit.
+NamiSync is GPL-3.0-or-later. Upstream components retain their own terms; the
+final notice corpus must identify their versions, sources and license texts.
+
+Build from the recorded repository commit
+----------------------------------------
+Use Windows x64, Git and CPython 3.13.17 x64. A compiler and Node are not required
+by the portable build command. Node 24.22.1 is used for project verification.
+The commands below assume python resolves to that CPython installation and
+source-identity.json is in the starting directory:
+
+  $revision = (Get-Content .\source-identity.json -Raw | ConvertFrom-Json).commit
+  git clone https://github.com/Wavechaser/NamiSync.git NamiSync-source
+  Set-Location NamiSync-source
+  git checkout --detach $revision
+  python -m venv build/package-env
+  .\build\package-env\Scripts\python.exe -m pip install --require-hashes -r tools/packaging/bootstrap.txt
+  .\build\package-env\Scripts\python.exe -m pip install --require-hashes --no-build-isolation -r tools/packaging/requirements.txt
+  .\build\package-env\Scripts\python.exe tools/packaging/build.py build/portable-attempt-01
+
+Stop if any command fails. Use a new environment and output directory per attempt.
+The builder requires a clean committed checkout and the exact locked dependency
+inventory. It records the source revision, selected Python executable hash,
+platform, dependency versions and bundle hashes. Requirements specify download
+hashes; proxy_tools is built from its source archive using the locked bootstrap.
+The source archive's own instructions describe that revision's build behavior.
+
+The source ZIP is also editable source, but contains no Git history. To build
+from it, initialize a local Git repository, commit the extracted source and
+your changes, and keep both the virtual environment and output outside that
+source directory. Run its tools/packaging/build.py with that environment's
+python.exe and a fresh absolute output path. This creates a new source revision;
+do not label its output as the original maintainer's artifact. Obtaining the
+recorded repository commit is the way to retain the original commit identity.
+
+Verification and limits
+-----------------------
+The builder checks executable architecture/subsystems and CLI help. GitHub CI
+runs ordinary tests/import contracts before building. Those checks do not
+replace Windows 11 interactive startup, reviewed-copy, inventory, verification,
+resource acceptance and close checks on the actual candidate.
+
+Matching source and package locks do not promise a byte-identical complete ZIP.
+Installer metadata and serviced Windows/SQLite DLLs can differ between hosts.
+Compare recorded file identities and actual native-library origins before
+reusing evidence. The current preparation also found ambient PATH DLL discovery;
+that input must be resolved before selecting a distributable candidate. Preserve
+the original artifact when comparing a rebuilt one; do not overwrite evidence.
+
+The build command neither signs the executables nor publishes a GitHub release.
+v0.1.0 tester delivery is planned to be unsigned. Final asset names, checksums,
+source/notice contents and handoff are approved at the candidate checkpoint.

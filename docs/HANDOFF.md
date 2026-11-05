@@ -1,67 +1,70 @@
-# Latest session — repeatable builds and hosted CI verified, 2026-11-05
+# Latest session — Action refresh and distribution preparation, 2026-11-05
 
-Implemented and reviewed `b3095886` from base `848450da`. The user explicitly
-requested integration and push on `milestone1`; that fast-forward and push are
-complete. Recovery `987cba84` was not merged/cherry-picked and is not in
-milestone1 ancestry. Its useful changes were rebuilt with the newline correction
-and matching tests/docs. Product source and the reviewed icon were not edited.
+The user requested latest stable Action pins, CI verification, then distribution
+readiness preparation; selected `v0.1.0` without a beta suffix and explicitly
+chose unsigned tester delivery. Branch is `milestone1`.
 
-## Delivered
+## Delivered and verified
 
-Hash-locked existing runtime/freezer downloads plus pip/setuptools bootstrap;
-clean committed-source admission; explicit Git newline conversion settings;
-fixed archive metadata/freezer hash seed; exact dependency inventory; source
-and bundle identities. CI pins Action commits and Python/Node versions and
-fetches full history for the existing custody validators. No validator was
-relaxed. TOOLS owns commands and the bounded repeatability claim.
+`48574eb6` updates checkout to v7.0.1, setup-python/setup-node to v7.1.0 and
+upload-artifact to v7.0.2, all pinned to full commits. Each declares Node 24.
+The project Python 3.13.17/Node 24.22.1 pins, locks, full-history test checkout,
+read-only permissions and workflow scope remain unchanged.
 
-## Verification
+Hosted run https://github.com/Wavechaser/NamiSync/actions/runs/42056121788
+passes 6,371 ordinary tests (35 headed exclusions), twelve import contracts,
+portable build and upload. Saved log contains no Node 20 deprecation warning.
+Artifacts: ordinary-results `13428549363`; development package `13429968717`.
+This session verified upload but did not download/native-test that new artifact.
+Prior b3095886 local/hosted native evidence remains scoped to its exact artifacts.
+Raw refresh evidence: `build/m1-release-20261104/repeatable/action-refresh.log`
+and `action-refresh-jobs.json`.
 
-Evidence: `build/m1-release-20261104/repeatable/`.
+Distribution preparation is documentation and artifact inspection only:
+`tools/packaging/START-HERE.txt` and `BUILDING.txt` prepare tester and matching-
+source rebuild guidance. They are not yet consumed by the builder; the generated
+ZIP guide remains unchanged. README links them as preparation materials.
+TOOLS owns the distribution census/notice gaps; M1_PLAN owns remaining gates.
+The package/About version already is 0.1.0, nickname Gertrud.
 
-- Eight focused tests; ordinary: 6,367 passes, four capability skips, 35 headed
-  exclusions; twelve import contracts. All 35 headed obligations pass across
-  29 original passes and six retry passes (47 total cases in selected retry
-  files). The original five foreground refusals and one unexpected focus
-  observation remain; unchanged retry passed during the user's quiet desktop
-  window. Preservation archives contain 63 original and 26 retry evidence files.
-- Two fresh corrected builds (`build-c`, `build-d`) at `b3095886`: independent
-  Git-tree checks confirm 313 exact source blobs; wheels, source ZIPs and
-  executables match. Four installer metadata files differ with environment
-  paths/launcher hashes. Hash-locked offline installation and wrong-hash
-  rejection pass. Initial builds and failed focused receipts remain retained.
-- Hosted run https://github.com/Wavechaser/NamiSync/actions/runs/42041508978
-  passes 6,371 ordinary tests, twelve imports and portable build/upload on
-  `windows-2025-vs2026` image `20261030.294.1`. Both job logs and status receipts
-  are preserved. The prior shallow-checkout failure remains in hosted-original.log.
-- Downloaded artifact `13424042162` is under `hosted/`. Its wrapper SHA-256
-  `712568b146d5bb9ee5c578c82debc667c96da03e67f51ad1710173c30ad3575e`
-  matches GitHub; all archive/checksum/source/dependency checks pass. Hosted and
-  local source ZIPs, wheels and executables match. Across hosts 48 files differ:
-  four installer metadata files plus 44 Windows/SQLite DLLs; both SQLite file
-  versions are 3.50.4.0. Full ZIP byte identity across hosts is not claimed.
-- Both final local and downloaded hosted frozen GUIs start with WebView2/icon
-  and close normally on Windows 11. `native-smoke-final.json` and
-  `native-smoke-hosted.json` name retained external extractions and isolated
-  `native-profile-07`/`native-profile-08`. No test window remains open.
+## Census and next work
 
-The local CI watcher lost its connection; GitHub continued successfully. The
-stalled gh download was interrupted, and the GitHub connector's artifact was
-saved and verified instead. An initial public push was rejected by automatic
-approval review; the user's explicit milestone1 push instruction resolved it.
-No release/tag was published. The closeout only updates documentation; executable,
-producer, test and workflow inputs remain at the verified commit.
+`build/m1-release-20261104/distribution/census.py` verifies retained local build-d
+at b3095886: all 477 files match its collection sources and bundle manifest.
+`census.json` records both executable analyses (763 distinct source/name pairs),
+entry-point bootstrap/bootloader inputs, source hashes and twenty existing About
+notices. It does not declare redistribution clearance.
 
-## Immediate context
+Actual frozen inputs extend beyond the app's requirements: CPython/native
+libraries, PyInstaller bootstrap, setuptools and its vendored modules, and
+packaging need distribution-wide notices. The old About corpus remains useful
+but cannot certify that whole population. Relevant upstream license/build
+references and the finite notice families are in TOOLS.
 
-Measured attempt-06 from `248b510c` is unchanged, SHA-256
-`d38b452f5102d10060c86c0244f50afecb4bdb16f386b28aeb42b9af9e51fd41`.
-The newly verified hosted development ZIP has SHA-256
-`c9e25aa191e1b3a02ec5c1b1ab9d5078a29f7acbdccd414f59cc139880ef9fb3`.
-Do not silently substitute it in the ongoing resource baseline. The new build
-normalizes archive source newlines; all 303 product files match attempt-06 after
-CRLF normalization, with 101 newline-only differences. Six extra empty pip
-REQUESTED markers reflect explicit dependency locking. This is development
-build/CI closure, not final release acceptance. Notices/source distribution,
-resource acceptance, final candidate gates and release publication remain with
-M1_PLAN. Retain all build evidence and prior packaging extractions/profiles.
+Local build-d also contains 42 API-set DLLs and ucrtbase.dll originating from
+an ambient Codex runtime libheif directory. PyInstaller's Windows resolver falls
+back to PATH. This is a native-input provenance gap; no supported sync failure,
+data-loss finding or malicious DLL claim is made. The earlier hosted artifact
+has different Windows DLL bytes, but its origin tables were not uploaded; do
+not infer its origins from the local build.
+
+Next settle native collection inputs and retain their origins for both local
+and CI builds, then complete/export notices and integrate the prepared guides.
+A changed native runtime invalidates affected installed/resource evidence; use
+fresh candidate attempts and preserve the baseline. Do not claim that input
+hashes or successful startup alone resolve distribution provenance.
+
+## Preservation and remaining gates
+
+Measured package remains `build/m1-release-20261104/attempt-06/` from 248b510c,
+ZIP SHA-256 d38b452f5102d10060c86c0244f50afecb4bdb16f386b28aeb42b9af9e51fd41.
+No baseline package, runtime, source product, icon, native profile or retained
+failure receipt was changed. Recovery 987cba84 remains historical and was not
+merged/cherry-picked. Keep all earlier repeatable-build and native evidence.
+
+R2 is in preparation, not closed. R3 resource acceptance, R4 final candidate
+verification and R5 handoff/publication remain open. Delivery location still
+needs selecting before handoff. No release/tag, installer, updater, signing
+configuration or extra publication permissions were created. Documentation
+closeout uses [skip ci]: no executable/workflow/test input changes after the
+successful Action-refresh run. Local diff/link and evidence reviews cover it.

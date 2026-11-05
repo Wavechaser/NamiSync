@@ -71,10 +71,52 @@ license/source bundle remains release closure work. CI fetches full history for
 ordinary tests because custody validators consult historical Git objects. Its
 Actions are pinned by commit, with exact Python/Node versions. The current
 checkout v7.0.1, setup-python/setup-node v7.1.0 and upload-artifact v7.0.2
-Actions run on Node 24 independently of the Node installed for project tests. The hosted runner
+Actions run on Node 24 independently of the Node installed for project tests.
+The hosted runner
 image remains serviced; record its identity from each run before comparing
 artifacts. Development test dependencies remain governed by the project dev
 extra; they are isolated from the locked portable build environment.
+
+### Distribution preparation
+
+The selected tester identity is `v0.1.0` (`0.1.0` in package/About), unsigned.
+[`START-HERE.txt`](../tools/packaging/START-HERE.txt) prepares extraction,
+prerequisites, checksum/unsigned-warning handling, first use, profile retention,
+upgrade and feedback instructions. [`BUILDING.txt`](../tools/packaging/BUILDING.txt)
+prepares matching-source and clean-commit build directions, including the
+distinction between a repository commit and an extracted source ZIP without Git
+history. These are reviewed preparation inputs, not yet consumed by `build.py`;
+its generated development guide remains unchanged. Integrate them with the
+complete notice corpus after native inputs are settled. No accepted release or
+download location is implied.
+
+The 2026-11-05 census verifies all 477 files of retained local `build-d` against
+both its freezer collection table and bundle manifest at `b3095886`, plus the
+two entry-point analyses (763 distinct source/name pairs), bootloader and
+bootstrap inputs. `build/m1-release-20261104/distribution/census.py` and
+`census.json` retain paths, hashes, source owners and the twenty existing About
+notices. This is a finite distribution census, not a license-clearance claim.
+The earlier hosted bundle was independently verified, but its native-library
+origin tables were not uploaded, so local origins cannot be attributed to it.
+
+| Population | Existing coverage and remaining preparation |
+| --- | --- |
+| NamiSync, direct/transitive runtime packages, embedded web assets, WebView2 SDK and .NET compatibility assemblies | Existing GPL and twenty About records retain versions, sources and full texts. Export/reconcile them into a distribution-wide notice bundle; do not infer that a wheel's METADATA covers embedded components. |
+| CPython 3.13.17 and its stdlib/native extensions | Add the Windows installation's license and incorporated-software notices; account for OpenSSL 3.5.9, SQLite 3.50.4, Expat 2.8.5, zlib 1.3.1, mpdecimal 4.0.0, bzip2, libffi and XZ using the selected build's sources. Preserve Microsoft binary-distribution conditions separately from NamiSync's GPL. |
+| Freezer bootstrap and implicit Python packages | Actual analyses include PyInstaller hooks, setuptools 83.0.0 and packaging 26.2. Setuptools also brings vendored backports.tarfile, jaraco packages, more-itertools, packaging, tomli and wheel. Review their actual included versions and notice texts, not just top-level runtime requirements. PyInstaller's bootloader exception and file-specific licenses remain relevant. |
+| Native files outside the Python installation/locked environment | Local collection includes 42 API-set DLLs and `ucrtbase.dll` from an ambient Codex runtime's libheif directory. PyInstaller's Windows dependency resolver falls back to PATH. Their recorded hashes identify bytes but do not establish distribution provenance. Resolve the input policy and rerun the resulting artifact checks before candidate distribution. |
+| Corresponding source and build evidence | Pair source/executable archives and checksums with their identities; preserve source/build directions and upstream attributions. Retain native origin tables for future local and hosted candidates. Whole-ZIP equality remains unclaimed. |
+
+The native-origin finding is about build inputs, not evidence that the measured
+package lost data or violated a sync guarantee. Do not silently replace that
+package. A correction that changes loaded native runtime bytes requires
+dependency-scoped reassessment of installed/resource evidence before R4.
+M1_PLAN owns the remaining R2 gate and release decisions.
+Upstream references: [CPython 3.13.17 incorporated-software notices](https://github.com/python/cpython/blob/v3.13.17/Doc/license.rst),
+[its Windows external dependency inputs](https://github.com/python/cpython/blob/v3.13.17/PCbuild/get_externals.bat),
+[PyInstaller licensing](https://pyinstaller.org/en/stable/license.html) and
+[Microsoft redistribution guidance](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170).
+Final text selection must follow the actual distributed versions and provenance.
 
 ## Icon maintenance
 

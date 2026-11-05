@@ -1,0 +1,80 @@
+NamiSync v0.1.0 "Gertrud" — tester guide
+
+Preparation copy: final distribution contents and release verification are still
+pending. This file does not turn a development ZIP into an accepted release.
+
+Start the app
+-------------
+Use Windows 11 x64 with Microsoft Edge WebView2 Runtime and .NET Framework 4.8
+or a compatible later .NET Framework 4.x runtime. Python is included in the app.
+
+1. Obtain the ZIP and its SHA256SUMS.txt from the maintainer's agreed delivery
+   location. In PowerShell, run Get-FileHash -Algorithm SHA256 on the downloaded
+   ZIP and compare the result with its entry in SHA256SUMS.txt. If it differs,
+   do not run the app; download it again or contact the maintainer.
+2. Extract the entire ZIP to a new folder outside folders you intend to sync.
+   Keep namisync-gui.exe, namisync.exe and _internal together. Do not launch
+   directly inside the ZIP or copy just an executable elsewhere.
+3. Run namisync-gui.exe as your normal user. The app does not require an
+   administrator launch. Settings > About should show version 0.1.0.
+
+This tester build is unsigned. Windows may show an unknown-publisher or
+reputation warning. Confirm the source and checksum before deciding to run it.
+A checksum confirms matching bytes, not a publisher signature. If Windows or
+your organization's policy blocks it, send the exact message to the maintainer;
+do not disable antivirus, Smart App Control or organizational protections.
+
+If startup reports a missing runtime, install it from Microsoft's official site
+and try again. The full .NET Framework is different from the modern .NET runtime.
+WebView2: https://developer.microsoft.com/microsoft-edge/webview2/
+.NET Framework: https://dotnet.microsoft.com/download/dotnet-framework
+If startup still fails, preserve the message and report it before retrying work.
+
+First use
+---------
+Start with disposable test folders and known sample files. Set the source and
+target, inspect the dry-run plan, and confirm only the changes you intend.
+NamiSync mirrors one way; it does not merge changes from the target back into
+the source. Avoid other programs changing either folder while execution runs.
+Review filesystem, verification, recording and audit outcomes separately.
+
+Tasks and unexecuted plans do not survive an app restart. Cloud-folder results
+describe local filesystem work; they do not certify upload or remote-copy
+completion. Windows ARM64 native execution, automatic updates and an installer
+are not part of this distribution.
+
+Application data and updates
+----------------------------
+Portable means extract-and-run deployment. Settings, evidence, history and logs
+normally live under %LOCALAPPDATA%\NamiSync, separately from the app folder.
+Deleting or replacing the app folder does not erase that data or managed files.
+
+For an isolated test profile, run this from the extracted app folder in PowerShell:
+  .\namisync-gui.exe --data-dir C:\NamiSync-Test-Profile
+Choose a new absolute local directory outside the source and target folders.
+This option applies to the GUI; the CLI has separate database-path options.
+
+Before replacing a build, finish or cancel active work and close the app. Keep
+the old app folder, and copy the entire data directory while the app is closed
+if you want a backup of its evidence/settings. Extract the new build into a
+separate folder. Do not merge _internal directories or share a profile between
+different running builds. Database compatibility across development builds is
+not promised: if startup refuses an incompatible profile, preserve it and use a
+fresh test profile or ask the maintainer. Never delete only one database to try
+to repair startup. Restoring app evidence does not undo file operations.
+
+Feedback
+--------
+Send the maintainer the version, ZIP SHA-256, Windows version, steps to reproduce,
+expected result, actual result, and whether a fresh profile changes the result.
+For failures, include the exact visible message and relevant log excerpt from
+%LOCALAPPDATA%\NamiSync\logs\namisync.log (or your chosen profile's logs folder).
+Review logs and screenshots for personal paths or filenames before sharing.
+Do not send source files, complete databases or an entire profile by default.
+For a suspected wrong copy/delete or inconsistent result, stop using that test
+pair and preserve the affected files and evidence before attempting recovery.
+
+The console entry point is namisync.exe; run .\namisync.exe --help for commands.
+NamiSync is GPL-3.0-or-later; see LICENSE. Third-party notices and matching source
+must accompany the final distribution. About contains the existing app notices;
+the distribution-wide notice review remains pending in this preparation copy.

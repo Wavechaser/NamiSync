@@ -369,6 +369,13 @@ explicit, reviewable and regression-backed.
 - Refresh all four Actions to latest stable immutable pins using Node 24;
   retain the project toolchain and read-only workflow permissions. Select
   `v0.1.0` for distribution without a beta suffix.
+- Verify the refreshed Actions in hosted run `42056121788`: 6,371 tests,
+  twelve imports and portable upload pass without the Node 20 warning.
+- Prepare unsigned tester and corresponding-source/build guides. Census all
+  477 retained bundle files and both executable analyses; identify notices for
+  implicit freezer dependencies and unresolved ambient native DLL origins.
+  Keep notice integration, native-input correction and candidate acceptance
+  open; do not replace the user's measured package.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
   release publication remains open.
