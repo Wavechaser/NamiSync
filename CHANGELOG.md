@@ -25,14 +25,16 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
-#### Prepare updated-package resource measurements (2026-11-06)
+#### Measure updated-package startup and prepare workload profiles (2026-11-06)
 
 - Define startup, metadata/path-size, retained-task, streamed-payload and
   repeated-close diagnostic profiles with process-role attribution, fixed idle
   windows, correctness witnesses and explicit incomplete-run handling.
-- Census the supplied executor corpus and latest local repeatable package;
-  preserve runtime-provenance and release-budget limitations. Preparation
-  launches no app and changes no corpus or target files.
+- Record three independently checked build-d startup runs: settled whole-app
+  private memory 352.90–363.41 MiB, with host/WebView2 attribution and normal
+  shutdown. Preserve runtime-provenance and release-budget limitations.
+- Stop at the user's request after failed native-input pilots; no workload
+  measurement or sync ran. Retain evidence and isolate cleanup to study fixtures.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

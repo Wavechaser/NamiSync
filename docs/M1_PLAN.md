@@ -433,17 +433,22 @@ tester build; the delivery location remains a decision before handoff,
 not reasons to delay local preparation. No tag, upload or publication is made
 by this preparation record.
 
-R3 preparation on 2026-11-06: the user requested detailed resource measurements
+R3 study on 2026-11-06: the user requested detailed resource measurements
 and selected the latest settled repeatable package, authorizing the supplied
 executor corpus and new targets under `H:\test_dir\`. PERFORMANCE owns the
-diagnostic size/task-count/repeated-use matrix and execution controls. Read-only
-census and package hashing are complete; no workload or acceptance budget yet.
-Latest completed local build-d still has R2's native-input provenance gap;
-freeze any replacement before collection. This preparation changes only
-PERFORMANCE, this register, HANDOFF and CHANGELOG, with temporary census evidence
-under `build/resource-study-20261106/`. Gate: census consistency, links/diff and
-adversarial method review; one documentation commit. No product changes,
-release acceptance, corpus mutation or target creation belong to preparation.
+diagnostic size/task-count/repeated-use matrix and execution controls. Collection
+against unchanged build-d completed three startup runs: settled 352.90–363.41
+MiB, normal exit 0 and empty Jobs, independently checked. Automatic activation
+failed twice before typing; after reviewed manual-activation reorganization,
+one handoff timed out and one UIA path write failed readback before planning.
+The user explicitly stopped after startup. No workload measurement or acceptance
+budget exists. Latest completed local build-d retains R2's native-input provenance
+gap. PERFORMANCE owns observations; HANDOFF owns resumption. Evidence and failed
+pilot specimens live under `build/resource-study-20261106/`. Gate: independent
+sample/identity/window checks, failed-attempt accounting, task-owned cleanup,
+links/diff and adversarial review; one documentation commit. No product changes,
+release acceptance or supplied-corpus mutation. Larger profiles remain open;
+resume only with a reviewed control approach, not more local activation retries.
 
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |

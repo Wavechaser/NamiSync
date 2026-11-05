@@ -10,7 +10,77 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
-## Updated portable resource study — prepared 2026-11-06
+## Updated portable resource study — 2026-11-06
+
+Collection stopped at the user's request after the three startup runs below.
+The workload matrix remains unmeasured. No runtime replacement was scheduled;
+the user authorized collection against the exact build-d artifact described here.
+
+### Collected startup observations
+
+Three fresh processes and isolated profiles each remained open for 90 seconds
+after their native window was observed. Sampling starts at launch; final
+15-second medians describe settled use. This is fresh-process startup with
+uncontrolled filesystem cache, not forced OS-cache-cold startup. The package
+and all 477 extracted files matched before and after every run, as did the
+frozen driver/checker/helper/method dependencies. WebView2 process image paths
+identify version 156.0.4314.58. Host: Windows 11 Pro build 26200, i7-13700K,
+63.69 GiB visible RAM, Balanced power plan; F: and H: are NTFS/NVMe. No workflow
+or filesystem copy was started. All three normal closes returned exit 0 and
+empty Jobs, without forced termination.
+
+| Run | Sampled whole-Job peak, MiB | Settled whole-Job, MiB | Host | Renderer | GPU | Other WebView2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 | 380.58 | 363.41 | 94.03 | 35.67 | 166.29 | 67.40 |
+| 2 | 359.77 | 357.80 | 93.63 | 36.80 | 163.06 | 64.31 |
+| 3 | 355.55 | 352.90 | 93.56 | 33.54 | 162.00 | 63.79 |
+
+Role columns are independent settled medians and need not sum exactly to the
+median total. GPU-process private bytes are not GPU VRAM usage. Unknown process
+roles were included but contributed zero here.
+Of 558 raw samples, 550 are complete; the eight incomplete samples occur at
+startup/shutdown membership transitions. All three settled windows have 30
+complete samples. Maximum observed sample gap is 0.5143 seconds and maximum
+observer duration is 0.1061 seconds. Fixed-window validation rejects incomplete
+selected samples or gaps above 1 second, including window edges. This is an
+observer-fidelity criterion, not a product memory budget. Peaks include launch
+and close observation and remain lower bounds on transient peaks.
+
+The independently checked settled range is 352.90–363.41 MiB (median 357.80).
+This gives a current startup baseline and process-role attribution, not a
+task-size coefficient, retained-growth bound, release pass or leak conclusion.
+R3/SH-G-15 remains open; build-d's native-input provenance limitation remains.
+
+### Workload control attempts and stop
+
+Two automatic dry-run pilots stopped before typing: Windows denied foreground
+activation, then the one reviewed caption-activation retry found no visible
+owned HTCAPTION point. Both retained source and target unchanged. After the
+recurrence review, the user authorized manual activation followed by guarded
+automation. The first manual handoff exceeded its three-minute wait and the
+harness normally closed the window before processing the reply; no app crash
+or path input occurred. A new pilot with a ten-minute handoff accepted the
+manual acknowledgement and reached input, but UIA SetValue failed immediate
+path readback before Create plan. That is an observer/input failure; this
+evidence does not establish whether delivery was delayed or ignored by the app.
+Source/target filesystem checks remained unchanged; no Plan or Execute was
+issued. All four failed pilots have normal exit 0 and empty Jobs. Their short
+or human-wait samples are excluded from measured startup results.
+
+The user then chose to stop after startup, declining further manual-phase
+collection for now. There is no successful workload-control pilot and no valid
+metadata, retained-task, payload or repeated-lifecycle measurement. Resume with
+a reviewed control method; do not repeat the failed automatic activation or
+typing attempts as another local workaround. Preserve failed receipts and
+fixture/profile specimens before task-owned cleanup. Evidence lives under
+`build/resource-study-20261106/`, with per-run frozen dependencies, raw samples,
+reports and independent checker results. All 24 registered temporary roots
+were removed after independent preservation/cleanup review; the verified
+specimen archive retains 5,035 files, with only exact regenerable package
+extractions omitted. Original corpus and pre-existing targets were excluded.
+No product source was changed.
+
+### Prepared method and corpus
 
 This is a diagnostic study, not SH-G-15 acceptance or a calibrated ceiling.
 The user selected the latest settled repeatable package and authorized reading
@@ -116,14 +186,15 @@ automatically a leak; stable private bytes alone do not prove graph release.
 Any object-retention instrumentation is a separately identified source-build
 diagnostic and cannot be folded into the unchanged-package observations.
 
-### Preparation boundary and execution controls
+### Collection boundary and execution controls
 
-This session prepares the method and census only. Before collection, freeze
-the selected artifact and generator/driver/checker dependencies, perform the
-control pilot, and verify the exact fixture oracle. Extend the old passive
-driver for these profiles rather than running its hard-coded attempt-03,
-256-file/three-cycle recipe unchanged. Its existing sampler can be reused;
-the extended driver and independent result checker are not yet implemented.
+The initial preparation created the method and census only. Collection then
+implemented dry-run pilot/startup/metadata drivers and an independent checker,
+reusing the passive sampler rather than the old attempt-03, 256-file/three-cycle
+recipe. Only startup completed. Before resuming, freeze the artifact and all
+generator/driver/checker dependencies, settle a usable control pilot and verify
+the exact fixture oracle. Larger/mutating profile drivers and checkers remain
+unimplemented. No automatic Execute capability was enabled in this session.
 
 Use a 30-minute stage deadline and two-hour process deadline; a timeout means
 incomplete evidence, not product failure or success. Resource emergency stops
@@ -139,7 +210,8 @@ Preserve raw samples, events, all failed attempts, screenshot/phase witnesses,
 content/history receipts, exact inputs and analysis before cleanup. Remove only
 registered task-owned staging/targets/profiles after the complete session;
 retain unresolved-failure inputs. No app launch, target creation or corpus
-mutation occurred during preparation. R3/SH-G-15 remains open. A later budget
+mutation occurred during preparation; subsequent collection is accounted above.
+R3/SH-G-15 remains open. A later budget
 derived from these observations requires DEFENSE's calibration/holdout separation;
 these measurements cannot validate a ceiling fitted to themselves.
 
