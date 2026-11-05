@@ -1,70 +1,59 @@
-# Latest session — Action refresh and distribution preparation, 2026-11-05
+# Latest session — Resource study preparation, 2026-11-06
 
-The user requested latest stable Action pins, CI verification, then distribution
-readiness preparation; selected `v0.1.0` without a beta suffix and explicitly
-chose unsigned tester delivery. Branch is `milestone1`.
+The user requested detailed updated-package measurement preparation, authorized
+the full/partial `F:\NamiSyncExecutorBenchSource\` corpus and new targets under
+`H:\test_dir\`, and selected the latest settled repeatable package. No app,
+measured workload, external fixture or sync was launched. Branch is
+`milestone1`; inspected base is `825c5618`.
 
-## Delivered and verified
+## Prepared
 
-`48574eb6` updates checkout to v7.0.1, setup-python/setup-node to v7.1.0 and
-upload-artifact to v7.0.2, all pinned to full commits. Each declares Node 24.
-The project Python 3.13.17/Node 24.22.1 pins, locks, full-history test checkout,
-read-only permissions and workflow scope remain unchanged.
+PERFORMANCE owns seven diagnostic profiles: startup, metadata size, long
+Japanese paths, retained tasks, streamed file sizes, repeated lifecycle and
+a combined corpus journey. It specifies repetitions, idle windows, process-role
+attribution, correctness/history evidence, failed-run handling, cleanup and
+separate lab emergency stops. No release memory budget is derived or accepted.
+M1_PLAN records preparation and leaves R3/SH-G-15 open.
 
-Hosted run https://github.com/Wavechaser/NamiSync/actions/runs/42056121788
-passes 6,371 ordinary tests (35 headed exclusions), twelve import contracts,
-portable build and upload. Saved log contains no Node 20 deprecation warning.
-Artifacts: ordinary-results `13428549363`; development package `13429968717`.
-This session verified upload but did not download/native-test that new artifact.
-Prior b3095886 local/hosted native evidence remains scoped to its exact artifacts.
-Raw refresh evidence: `build/m1-release-20261104/repeatable/action-refresh.log`
-and `action-refresh-jobs.json`.
+`build/resource-study-20261106/census.py` read corpus metadata and package
+hashes. `census.json` records 1,581 payload files/5,171,478,528 bytes in five
+groups, no reparses, and about 401 GiB available on H: at preparation. It is
+not a content-hash verification. No external fixture exists to clean up yet.
+README defines evidence layout and eventual cleanup boundaries. Product/test
+source is unchanged. Independent review passed with no blocking findings and
+recomputed corpus totals and identity hashes. Links pass (32 documents, 378
+links) and diff checks are clean. This is not product testing or a resource
+acceptance run; the review receipt is retained beside the census.
 
-Distribution preparation is documentation and artifact inspection only:
-`tools/packaging/START-HERE.txt` and `BUILDING.txt` prepare tester and matching-
-source rebuild guidance. They are not yet consumed by the builder; the generated
-ZIP guide remains unchanged. README links them as preparation materials.
-TOOLS owns the distribution census/notice gaps; M1_PLAN owns remaining gates.
-The package/About version already is 0.1.0, nickname Gertrud.
+## Artifact and immediate continuation
 
-## Census and next work
+Latest completed local repeatable package is
+`build/m1-release-20261104/repeatable/build-d/NamiSync-windows-x64-dev.zip`,
+SHA-256 `1d73619bb23e567f5c461e15fb9c82595853b419e1da169dafb17c165e7cf552`,
+477 files, product source b3095886. R2's native-input provenance gap remains:
+API-set/UCRT DLL collection included ambient PATH inputs. No malicious-input
+or supported sync-failure claim was made. If packaging replaces the runtime,
+freeze that replacement before collection; never pool differing package runs.
 
-`build/m1-release-20261104/distribution/census.py` verifies retained local build-d
-at b3095886: all 477 files match its collection sources and bundle manifest.
-`census.json` records both executable analyses (763 distinct source/name pairs),
-entry-point bootstrap/bootloader inputs, source hashes and twenty existing About
-notices. It does not declare redistribution clearance.
+Next implement the profile driver and separate checker, reusing the passive
+Job sampler and successful single-click native input seam. The old passive
+driver is hard-coded to attempt-03 and must not run unchanged. Start with an
+unmeasured control pilot, then startup/small functional runs; review fidelity
+before large cases. No full-tree live UIA polling. Manual phase witnessing
+remains an authorized fallback. Hashing/staging and tests/builds stay outside
+measured intervals. The full matrix takes hours.
 
-Actual frozen inputs extend beyond the app's requirements: CPython/native
-libraries, PyInstaller bootstrap, setuptools and its vendored modules, and
-packaging need distribution-wide notices. The old About corpus remains useful
-but cannot certify that whole population. Relevant upstream license/build
-references and the finite notice families are in TOOLS.
+## Preserved release context
 
-Local build-d also contains 42 API-set DLLs and ucrtbase.dll originating from
-an ambient Codex runtime libheif directory. PyInstaller's Windows resolver falls
-back to PATH. This is a native-input provenance gap; no supported sync failure,
-data-loss finding or malicious DLL claim is made. The earlier hosted artifact
-has different Windows DLL bytes, but its origin tables were not uploaded; do
-not infer its origins from the local build.
+Hosted run 42056121788 at `48574eb6` passed 6,371 ordinary tests, twelve import
+contracts, build/upload and Node-24 Action checks. It did not native-test the
+new hosted artifact. Existing build-d native evidence is scoped to its exact
+artifact. Attempt-06 (`248b510c`) remains preserved, ZIP SHA-256
+`d38b452f5102d10060c86c0244f50afecb4bdb16f386b28aeb42b9af9e51fd41`.
 
-Next settle native collection inputs and retain their origins for both local
-and CI builds, then complete/export notices and integrate the prepared guides.
-A changed native runtime invalidates affected installed/resource evidence; use
-fresh candidate attempts and preserve the baseline. Do not claim that input
-hashes or successful startup alone resolve distribution provenance.
-
-## Preservation and remaining gates
-
-Measured package remains `build/m1-release-20261104/attempt-06/` from 248b510c,
-ZIP SHA-256 d38b452f5102d10060c86c0244f50afecb4bdb16f386b28aeb42b9af9e51fd41.
-No baseline package, runtime, source product, icon, native profile or retained
-failure receipt was changed. Recovery 987cba84 remains historical and was not
-merged/cherry-picked. Keep all earlier repeatable-build and native evidence.
-
-R2 is in preparation, not closed. R3 resource acceptance, R4 final candidate
-verification and R5 handoff/publication remain open. Delivery location still
-needs selecting before handoff. No release/tag, installer, updater, signing
-configuration or extra publication permissions were created. Documentation
-closeout uses [skip ci]: no executable/workflow/test input changes after the
-successful Action-refresh run. Local diff/link and evidence reviews cover it.
+R2 remains preparation: settle native inputs/origin evidence, complete/export
+notices, integrate prepared START-HERE/BUILDING guides. TOOLS owns that census.
+User selected unsigned v0.1.0 Gertrud tester delivery; delivery location remains
+undecided. R3 resource acceptance, R4 final candidate checks and R5 handoff/
+publication remain open. No release/tag/publication occurred. Historical
+recovery 987cba84 remains unmerged; preserve earlier package/native evidence.

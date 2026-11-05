@@ -433,6 +433,18 @@ tester build; the delivery location remains a decision before handoff,
 not reasons to delay local preparation. No tag, upload or publication is made
 by this preparation record.
 
+R3 preparation on 2026-11-06: the user requested detailed resource measurements
+and selected the latest settled repeatable package, authorizing the supplied
+executor corpus and new targets under `H:\test_dir\`. PERFORMANCE owns the
+diagnostic size/task-count/repeated-use matrix and execution controls. Read-only
+census and package hashing are complete; no workload or acceptance budget yet.
+Latest completed local build-d still has R2's native-input provenance gap;
+freeze any replacement before collection. This preparation changes only
+PERFORMANCE, this register, HANDOFF and CHANGELOG, with temporary census evidence
+under `build/resource-study-20261106/`. Gate: census consistency, links/diff and
+adversarial method review; one documentation commit. No product changes,
+release acceptance, corpus mutation or target creation belong to preparation.
+
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
 | R0 | Inspect current package/version/launchers, INTERFACES/BRIDGE/DESKTOP_UI release criteria, TESTS commands, DEFENSE/PERFORMANCE evidence policy and relevant archived packaging dispositions. Record audience, format, missing work and serialized closeout. Documentation-only commit; local links and diff checks plus adversarial scope review. | Complete initial inspection; at that baseline, wheel metadata and installed-wheel witnesses existed but release CI, a dependency lock and frozen-app specification were absent. SH-G-15 has no budgets/artifacts; current-source bridge timing acceptance is also open. |

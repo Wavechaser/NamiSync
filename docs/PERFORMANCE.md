@@ -10,6 +10,139 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Updated portable resource study — prepared 2026-11-06
+
+This is a diagnostic study, not SH-G-15 acceptance or a calibrated ceiling.
+The user selected the latest settled repeatable package and authorized reading
+`F:\NamiSyncExecutorBenchSource\` and syncing to new test folders beneath
+`H:\test_dir\`. Preparation inspected `825c5618`. The latest completed local
+repeatable artifact is `build/m1-release-20261104/repeatable/build-d/`
+`NamiSync-windows-x64-dev.zip`, SHA-256
+`1d73619bb23e567f5c461e15fb9c82595853b419e1da169dafb17c165e7cf552`,
+with 477 files. Its native-input provenance gap remains open under TOOLS/R2;
+do not treat this as the final settled distribution runtime. If R2 supplies a
+replacement before collection, bind the new ZIP, source, bundle and runtime
+identities before the first run. Never pool samples across those builds.
+
+Preparation evidence is `build/resource-study-20261106/`: its read-only census
+records all corpus paths/sizes/mtimes, package hashes and disk space. It does
+not hash corpus contents or establish physical drive type. The five groups are
+1,000 x 4 KiB, 512 x 128 KiB, 64 x 4 MiB, 4 x 128 MiB and 1 x 4 GiB:
+1,581 payload files, 5,171,478,528 bytes. Exclude the root benchmark marker
+from payload workloads. Never edit the supplied corpus. At preparation H:
+had 430,374,912,000 bytes free; recheck before staging/execution.
+
+### Questions and finite workload matrix
+
+Measure total process-tree private bytes and host versus WebView2 attribution.
+Separate metadata population, file-content size, open-task retention and repeat
+count. Measurements test behavior at these points; they do not prove asymptotic
+complexity or an analytical whole-runtime bound.
+
+| Profile | Fixture and actions | Repetitions |
+| --- | --- | --- |
+| Startup | Fresh profile, blank app, 90 seconds idle, normal close | 3 fresh processes |
+| Metadata | Synthetic 1,000 / 10,000 / 100,000 files, 32 bytes each, 100 files per directory; source-only COPY plan against empty target; Details, sort, filter, clear filter, close task | Each size in 3 fresh processes; rotate size order per repetition |
+| Path shape | 10,000 files with nested Japanese directory/file names, depth 8 and relative path length 180–220 UTF-16 units; same Plan gestures as metadata profile | 3 fresh processes; diagnostic contrast with 10,000 short-path case, not an isolated text-length effect |
+| Retained tasks | Eight distinct 10,000-file source-only Plan tasks, common immutable source and separate empty targets; observe at 1/2/4/8 open cards, then close in reverse order | 3 fresh processes |
+| Streamed payload | Each supplied corpus group separately: review COPY plan, Execute, Verify copied, close; recreate Plan against completed target to witness all NOOP, close | Each group in 3 fresh processes, rotated group order; fresh empty target per repetition |
+| Repeated lifecycle | Synthetic 1,000-file, 4 KiB fixture; 20 Plan/Execute/Verify copied/Close cycles. First copies all; later cycles change one owned source file and preserve its old target version | 3 fresh processes; cycles 1–3 are disclosed warm-up, not discarded raw data |
+| Combined larger journey | All five corpus groups in one isolated source staging root; reviewed COPY, Execute, Verify copied, close; then NOOP Plan and close | 1 fresh process; functional/diagnostic observation only |
+
+Synthetic fixtures live in a registered study-owned F: directory. Generate
+deterministic content and old, fixed mtimes; enumerate complete expected paths,
+directories, operations and hashes before launch. The 100,000-file fixture has
+1,000 directories: count actual projection rows instead of claiming exactly
+100,000 rows. Short-path names and the long-path generator must be frozen in
+the run manifest before use. Stage the combined payload by ordinary copying
+outside measurement, with no links or reparse points, excluding the marker.
+Validate staging against original hashes; never use the supplied source as an
+update fixture. Distinct empty targets are newly registered children of
+`H:\test_dir\NamiSync-resource-<unique-id>\`; no pre-existing target is reused.
+
+Run Startup, the 1,000-file metadata case and one small payload journey first.
+Review observer fidelity and correctness before the heavier profiles. Then run
+metadata/path shape, retained tasks, payload, repeated lifecycle and combined
+journey serially. This is a multi-hour study, not one short hands-off interval.
+No other tests, builds, hashing or fixture generation run during measurement.
+Treat filesystem cache as warm/uncontrolled; do not claim OS-cache-cold I/O.
+
+### Observation, correctness and analysis
+
+Reuse the existing passive Job sampler's PID/creation-time bracketing and raw
+per-process private-byte/handle/thread records. Exclude only the launch wrapper;
+include unknown descendant roles in totals. Record executable and WebView2
+runtime versions/hashes, OS, RAM, CPU, volume/filesystem facts and power context.
+Sample every 0.5 seconds. Preserve actual gaps, observer duration, missing reads
+and process-topology changes. A sampled peak is a lower bound on transient peak.
+Report frozen host, renderer, GPU, other WebView2 and unknown groups separately
+when command-role identity supports them; never force unknowns into a role.
+
+Use unchanged installed executable/assets with isolated app data. Native input
+must bind the owned window and correct control. Use the successful post-fix
+single-click journey as the input basis, but do not restore repeated full-tree
+UIA polling. Run a bounded, unmeasured control pilot first. Between actions use
+passive sampling; a bounded targeted observation or manual acknowledgement
+records phase completion. Keep human wait and observer time explicit. A failed
+click is not repaired by blindly double-clicking. If targeted UIA fails, stop
+that driver attempt; preserve evidence and use the already authorized manual
+phase-witness method rather than repeat the failed observation mechanism.
+
+For each process record 60 seconds of initial idle (startup profile uses 90),
+30 seconds after each stable Plan/completed verification/task-count checkpoint,
+30 seconds after each task close, and 120 seconds after the final close. Use
+the last 15 seconds of each ordinary window and last 30 seconds of final idle.
+Checkpoint windows begin only after witnessed completion; incomplete windows
+cannot be substituted with shorter ones. Record action/request, acknowledgement,
+completion, capture and idle boundaries separately; manual timings are not
+pure operation latency. Phase peaks include all samples in the named interval.
+
+Before Execute, witness exact source/target, operation counts and destructive
+intent. Empty-target workloads permit only expected copies/directory creation;
+one-file update cycles require explicit confirmation of that owned update.
+After timed phases, verify complete target namespace, content hashes, preserved
+versions and source metadata/content. Reconcile durable sync/verification runs
+with actual gestures, including any extra verification, without relabeling a
+deviation as the declared workload. Hash outside measurement; no measured
+phase spans these checks. Do not infer correct execution from resource samples.
+
+Report per-run sampled peak, fixed-window median/range, final-minus-initial
+idle and incremental retained memory at 1/2/4/8 tasks. For repeated lifecycle,
+report every post-close value, cycles 4–20 slope (MiB/cycle), median of cycles
+4–8 versus 16–20, and final idle. Preserve individual fresh-process results
+and their min/median/max; do not pool time samples as independent replications
+or report p95 from three processes. Growth is evidence to investigate, not
+automatically a leak; stable private bytes alone do not prove graph release.
+Any object-retention instrumentation is a separately identified source-build
+diagnostic and cannot be folded into the unchanged-package observations.
+
+### Preparation boundary and execution controls
+
+This session prepares the method and census only. Before collection, freeze
+the selected artifact and generator/driver/checker dependencies, perform the
+control pilot, and verify the exact fixture oracle. Extend the old passive
+driver for these profiles rather than running its hard-coded attempt-03,
+256-file/three-cycle recipe unchanged. Its existing sampler can be reused;
+the extended driver and independent result checker are not yet implemented.
+
+Use a 30-minute stage deadline and two-hour process deadline; a timeout means
+incomplete evidence, not product failure or success. Resource emergency stops
+at whole-Job private bytes above 8 GiB for ten consecutive complete samples
+or system available physical RAM below 4 GiB for ten samples. These conservative
+lab stops are not product budgets. Record the stop and request normal cancellation
+and closure; never kill during an unconfirmed active mutation merely to finish
+measurement. Observer failure does not authorize closing an active task. Existing
+mandatory safety stops apply. Record failed normal teardown and obtain recovery
+adjudication rather than silently treating forced termination as a normal close.
+
+Preserve raw samples, events, all failed attempts, screenshot/phase witnesses,
+content/history receipts, exact inputs and analysis before cleanup. Remove only
+registered task-owned staging/targets/profiles after the complete session;
+retain unresolved-failure inputs. No app launch, target creation or corpus
+mutation occurred during preparation. R3/SH-G-15 remains open. A later budget
+derived from these observations requires DEFENSE's calibration/holdout separation;
+these measurements cannot validate a ceiling fitted to themselves.
+
 ## Portable development-package diagnostics — 2026-11-04
 
 Attempt-03's portable ZIP SHA-256 is
