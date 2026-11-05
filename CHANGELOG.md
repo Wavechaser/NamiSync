@@ -347,7 +347,7 @@ explicit, reviewable and regression-backed.
 - Reconcile the accumulated handoff into current resumption context and account
   for task-owned fixture cleanup while retaining evidence.
 
-#### Build the first portable M1 debug package (2026-11-04)
+#### Build the portable M1 debug package (2026-11-04 – 2026-11-05)
 
 - Activate M1-Release for a small tester group receiving a portable Windows x64
   app; retain existing per-user data placement and GUI/console entry points.
@@ -364,6 +364,10 @@ explicit, reviewable and regression-backed.
   or imposing an exact-byte artwork oracle.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted execution and later release publication remain open.
+- Refresh the development package from clean `939e57c1`, including the Setup
+  admission/feedback fix. Verify source and bundled assets, archive checksums,
+  executable classification, console help and extracted native startup/close.
+  Previous artifacts remain intact; final release acceptance stays open.
 
 #### Sample Setup action visibility before navigation (2026-11-04)
 

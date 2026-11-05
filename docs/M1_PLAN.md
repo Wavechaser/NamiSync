@@ -268,6 +268,16 @@ exit 0 (`native-smoke-04.json`). The reviewed ICO contains nine declared sizes;
 builds never regenerate it. Windows shell identity is `NamiSync.Desktop`,
 independent of version, data directory and internal task identities.
 
+The 2026-11-05 refresh is `attempt-05/NamiSync-windows-x64-dev.zip`, built
+from clean `939e57c1` with the Setup admission/feedback fix and unchanged pinned
+dependencies. `artifact-check-05.json` verifies 312 source entries, 211 bundled
+assets and archive/checksum integrity; `native-smoke-05.json` records extracted
+WebView2 startup, icon and normal exit 0 with an isolated profile. Console help
+and x64 executable subsystem checks pass. Attempt-04 retains a sandbox pip
+temporary-directory permission failure; attempt-05 used the normal native
+environment. This refresh does not rerun behavioral/resource acceptance or
+close the remaining release gates. Prior artifacts remain intact.
+
 R1 has a working debug delivery; final hash-locked downloads and clean-candidate
 release proof remain open. The GitHub workflow is authored, not yet executed
 on GitHub: ordinary/import gates precede artifact upload, with no publication
