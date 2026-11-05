@@ -301,8 +301,8 @@ and checksums; `native-smoke-06.json` records extracted WebView2 startup/icon an
 normal exit 0. CLI help and PE checks pass. No behavioral/resource acceptance
 is claimed by this rebuild; earlier artifacts and receipts remain historical.
 
-R1 has a working debug delivery; final hash-locked downloads and clean-candidate
-release proof remain open. The 2026-11-05 build/CI continuation starts at
+R1 has a verified repeatable build path; final release-candidate proof remains
+open. The 2026-11-05 build/CI continuation starts at
 `848450da`, while the user independently baselines attempt-06 resource use.
 Finite scope: packaging driver/specification and dependency locks, the existing
 Windows workflow, focused build tests and TOOLS/TESTS delivery documentation.
@@ -316,6 +316,10 @@ commit follows local review; hosted results get a documentation closeout.
 Evidence belongs in `build/m1-release-20261104/repeatable/`: downloads under
 `downloads/`, disposable environments under `env-*/`, builds under `build-*/`,
 and named logs/JSON receipts at the root. No release publication is included.
+`hosted/` stores downloaded CI artifacts; native receipt preservation archives
+remain alongside the build logs. The user explicitly authorized pushing the
+reviewed work on `milestone1`; `b3095886` is pushed and run `42041508978`
+is the hosted verification target.
 The existing hosted run `41864478291` failed two historical custody checks
 because shallow checkout omitted frozen Git objects; 6,361 tests passed.
 Full-history checkout is the remedy; no evidence validator is relaxed.
@@ -330,12 +334,22 @@ explicit Git newline settings correct it. All 35 headed obligations pass across
 29 original passes and six native-input retries (47 total cases in the selected
 retry files). The first run retains five foreground refusals and one unexpected
 focus observation; the unchanged retry passed during the user's quiet desktop
-window. Corrected-source build comparison and hosted rerun remain pending;
-no final release is claimed.
+window. Corrected builds at `b3095886` independently match all 313 committed
+source blobs and have identical source ZIPs, wheels and executables; the same
+four installer metadata differences remain. Final local frozen startup/close
+passes. Hosted run `42041508978` passes 6,371 ordinary tests (35 headed
+exclusions), twelve import contracts and portable build/upload on
+`windows-2025-vs2026` image `20261030.294.1`. Downloaded artifact `13424042162`
+matches GitHub's archive digest and its own manifests/checksums; its source
+archive, wheel and executables match local builds. Across hosts, 48 files differ:
+four installer metadata files and 44 Windows/SQLite runtime DLLs (both SQLite
+file versions are 3.50.4.0). Native startup/icon/normal close of that exact hosted
+GUI passes on Windows 11. `hosted-artifact-check.json` and
+`native-smoke-hosted.json` retain the scope and identities; complete ZIP byte
+identity across hosts is not claimed. No final release is claimed.
 
-Final dependency-installation and clean-candidate proof remain open. The
-existing GitHub run reached ordinary tests; its portable job was blocked by
-the checkout failures above. Ordinary/import gates precede artifact upload,
+Final clean-candidate release proof remains open. The corrected GitHub workflow
+now passes ordinary/import gates before artifact upload,
 with no publication permission. Draft-release automation follows first-release decisions. The
 artifact is available for the user's next installed/cold-install debug pass;
 that pass and resource acceptance do not block creating this debug package.
@@ -396,7 +410,7 @@ by this preparation record.
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
 | R0 | Inspect current package/version/launchers, INTERFACES/BRIDGE/DESKTOP_UI release criteria, TESTS commands, DEFENSE/PERFORMANCE evidence policy and relevant archived packaging dispositions. Record audience, format, missing work and serialized closeout. Documentation-only commit; local links and diff checks plus adversarial scope review. | Complete initial inspection; at that baseline, wheel metadata and installed-wheel witnesses existed but release CI, a dependency lock and frozen-app specification were absent. SH-G-15 has no budgets/artifacts; current-source bridge timing acceptance is also open. |
-| R1 | Build the portable packaging path: tools owns build script/specification/locked build inputs; interfaces owns existing entry points, resources and version metadata; tests owns artifact verification. Include package assets, native host assemblies, distribution metadata, GUI/console subsystem classification and corresponding source identity. Verify from a clean staged source on Windows x64, then extract to a path outside the checkout and exercise both actual executables under standard integrity without relying on development Python. Keep required clean-wheel checks. One coherent packaging commit with matching TOOLS/INTERFACES/TESTS documentation. | Development package delivered and native startup/close verified. Build versions are pinned; download hashes, hosted CI execution and final clean-candidate proof remain open. TOOLS owns structure and build commands. |
+| R1 | Build the portable packaging path: tools owns build script/specification/locked build inputs; interfaces owns existing entry points, resources and version metadata; tests owns artifact verification. Include package assets, native host assemblies, distribution metadata, GUI/console subsystem classification and corresponding source identity. Verify from a clean staged source on Windows x64, then extract to a path outside the checkout and exercise both actual executables under standard integrity without relying on development Python. Keep required clean-wheel checks. One coherent packaging commit with matching TOOLS/INTERFACES/TESTS documentation. | Repeatable build path, hash-locked installation, native startup/close and hosted CI pass at `b3095886`. Exact source/tool/environment identities and scoped build comparison are recorded. Final release-candidate proof remains with R4. TOOLS owns structure and build commands. |
 | R2 | Complete the distribution contents and user journey: exact bundled dependency/asset census, notices/license texts and corresponding-source/build directions, beta version, extraction/start/prerequisite guidance, supported limitations, feedback instructions and upgrade/data-retention guidance. Owners: INTERFACES, README, FEATURES and existing notice corpus; packaging consumes them. Verify against actual ZIP contents, About/startup identity and clean-machine or isolated supported-host launch. One coherent distribution-documentation/asset commit. | After R1 fixes the bundle population. Existing About notices do not cover newly bundled Python/freezer/native components automatically. Full-color executable/window icon integration is delivered with native decoding and startup evidence; final license census and user-facing release materials remain open. |
 | R3 | Close quantitative release obligations under existing owners. INTERFACES/DEFENSE own SH-G-15 acceptance; PERFORMANCE owns exact profiles, workload corpus, process identities, repetitions/durations, quiescence, statistics, raw records and validator provenance. Predeclare separate cold peak/settled, retained-growth and trend budgets before acceptance measurements. Map current BR-G-42 timing and retained history/projection obligations to current validators/evidence by dependency. Commit each coherent acceptance mechanism with its subject docs and tests. | Design follows artifact/runtime selection; measurements follow settled inputs. No invented passing budget, diagnostic-to-acceptance promotion, retired BR-G-45 revival or universal leak-freedom claim. Missing policy choices or invalidated authority require adjudication under DEFENSE. |
 | R4 | Freeze a clean candidate after debugging/cleanup integration. Record commit, source/dependency/tool/runtime identities and artifact hashes; provide repeatable Windows build/CI configuration, with interactive native evidence separately identified. Run the complete TESTS release command with default exclusions cleared and no department filter, imports, applicable settlement and every BR-G/SH-G obligation. Map every active DESKTOP_UI acceptance item to evidence or an explicitly approved deferral. Add portable-artifact startup, packaged resource, standard-integrity, real reviewed-copy/inventory/verify and close witnesses; wheel evidence alone cannot certify the executable. | After R1–R3 and concurrent work settle. All `test_br_g` cases must collect/pass without skip/xfail; account for other capability skips. Changed source, producer, checker, driver or runtime invalidates affected evidence. One reviewed candidate closeout commit; no broad gate yet. |

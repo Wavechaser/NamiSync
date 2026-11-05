@@ -51,6 +51,10 @@ Installed `.dist-info/RECORD` launcher hashes and `direct_url.json` wheel paths
 can vary with the disposable environment. Keep these metadata differences
 visible in bundle manifests; compare them separately from executable/resource
 bytes rather than hiding them or declaring equal ZIP checksums.
+Serviced Windows/SQLite DLL bytes may also differ between local and hosted
+Python installations despite matching Python and SQLite version strings.
+Bundle manifests and runner-image receipts preserve those identities; final
+acceptance must name the actual distributed artifact.
 These hashes identify distributed bytes; they are not an artwork-regeneration
 oracle. The icon is never rendered during this process. Explicit maintenance
 uses `tools/packaging/render_icon.py` (initial renderer: resvg-py 0.5.0 and

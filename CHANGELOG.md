@@ -367,11 +367,19 @@ explicit, reviewable and regression-backed.
   Track the reviewed ICO; tests decode all nine sizes without regenerating it
   or imposing an exact-byte artwork oracle.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
-  package artifacts. Hosted execution and later release publication remain open.
+  package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
+  release publication remains open.
 - Lock portable dependency downloads and bootstrap tools by hash; build from a
   clean commit with explicit newline handling, fixed archive metadata and
   source/bundle manifests. Pin CI Action commits and Python/Node versions;
   fetch full history so frozen custody evidence remains available to tests.
+- Verify two fresh builds with identical source archives, wheels and executables;
+  retain four environment-specific installer metadata differences. Local ordinary,
+  headed and import gates pass; hosted ordinary passes all 6,371 cases.
+- Download and verify the hosted artifact's digest, contents and source/dependency
+  identity; its GUI starts and closes normally on Windows 11. Source archives,
+  wheels and executables also match across hosts; platform DLL and installer
+  metadata differences prevent a whole-ZIP byte-reproducibility claim.
 - Refresh the development package from clean `939e57c1`, then `248b510c`, including
   the Setup and Create batch fixes. Verify source and bundled assets, archive checksums,
   executable classification, console help and extracted native startup/close.
