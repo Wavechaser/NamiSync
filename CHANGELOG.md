@@ -368,8 +368,8 @@ explicit, reviewable and regression-backed.
   or imposing an exact-byte artwork oracle.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted execution and later release publication remain open.
-- Refresh the development package from clean `939e57c1`, including the Setup
-  admission/feedback fix. Verify source and bundled assets, archive checksums,
+- Refresh the development package from clean `939e57c1`, then `248b510c`, including
+  the Setup and Create batch fixes. Verify source and bundled assets, archive checksums,
   executable classification, console help and extracted native startup/close.
   Previous artifacts remain intact; final release acceptance stays open.
 

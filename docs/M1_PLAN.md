@@ -292,6 +292,15 @@ temporary-directory permission failure; attempt-05 used the normal native
 environment. This refresh does not rerun behavioral/resource acceptance or
 close the remaining release gates. Prior artifacts remain intact.
 
+The later 2026-11-05 refresh, `attempt-06/NamiSync-windows-x64-dev.zip`,
+supersedes attempt-05 for debugging and measurement. It is built from clean
+`248b510c`, including Create batch admission, with unchanged build inputs apart
+from the updated source. The user confirmed no testing used the early-afternoon
+package. `artifact-check-06.json` verifies 312 source entries, 211 bundled assets
+and checksums; `native-smoke-06.json` records extracted WebView2 startup/icon and
+normal exit 0. CLI help and PE checks pass. No behavioral/resource acceptance
+is claimed by this rebuild; earlier artifacts and receipts remain historical.
+
 R1 has a working debug delivery; final hash-locked downloads and clean-candidate
 release proof remain open. The GitHub workflow is authored, not yet executed
 on GitHub: ordinary/import gates precede artifact upload, with no publication
