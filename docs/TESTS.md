@@ -10,6 +10,12 @@ affect only its primary owner. Changes to public contracts add the affected
 consumer departments explicitly; uncertain or broad changes use the ordinary
 repository suite.
 
+Packaging tests cover clean-commit admission (including untracked inputs),
+canonical source bytes across checkout newline policies, exact build dependency
+versions and stable archive order/timestamps. Actual isolated builds and hosted
+CI provide composition evidence; these unit cases do not certify a portable
+release or the serviced Windows runner image.
+
 ## Run levels
 
 ### 1. Focused

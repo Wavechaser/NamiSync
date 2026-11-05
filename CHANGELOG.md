@@ -368,6 +368,10 @@ explicit, reviewable and regression-backed.
   or imposing an exact-byte artwork oracle.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted execution and later release publication remain open.
+- Lock portable dependency downloads and bootstrap tools by hash; build from a
+  clean commit with explicit newline handling, fixed archive metadata and
+  source/bundle manifests. Pin CI Action commits and Python/Node versions;
+  fetch full history so frozen custody evidence remains available to tests.
 - Refresh the development package from clean `939e57c1`, then `248b510c`, including
   the Setup and Create batch fixes. Verify source and bundled assets, archive checksums,
   executable classification, console help and extracted native startup/close.

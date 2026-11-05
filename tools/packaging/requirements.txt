@@ -1,17 +1,18 @@
-# Build environment, Windows x64 / CPython 3.13. Runtime pins retain tested inputs.
-pyinstaller==6.22.3
-pyinstaller-hooks-contrib==2026.9
-altgraph==0.17.5
-pefile==2024.8.26
-pywin32-ctypes==0.2.3
-packaging==26.2
-setuptools==83.0.0
-pywebview==6.2.1
-pythonnet==3.1.0
-bottle==0.13.4
-xxhash==3.8.1
-clr_loader==0.3.1
-cffi==2.1.0
-pycparser==3.0
-proxy_tools==0.1.0
-typing_extensions==4.16.0
+# Windows x64 / CPython 3.13.17. Install bootstrap.txt first.
+# Exact downloaded distributions; proxy_tools builds with locked setuptools.
+-r bootstrap.txt
+altgraph==0.17.5 --hash=sha256:f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597
+bottle==0.13.4 --hash=sha256:045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e
+cffi==2.1.0 --hash=sha256:8e74a6135550c4748af665b1b1118b6aab33b1fc6a16f9aff630af107c3b4512
+clr_loader==0.3.1 --hash=sha256:cbad189de20d202a7d621956b0fc38049e13c9bf7ca2923441eff725cd121aa1
+packaging==26.2 --hash=sha256:5fc45236b9446107ff2415ce77c807cee2862cb6fac22b8a73826d0693b0980e
+pefile==2024.8.26 --hash=sha256:76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f
+proxy_tools==0.1.0 --hash=sha256:ccb3751f529c047e2d8a58440d86b205303cf0fe8146f784d1cbcd94f0a28010
+pycparser==3.0 --hash=sha256:b727414169a36b7d524c1c3e31839a521725078d7b2ff038656844266160a992
+pyinstaller==6.22.3 --hash=sha256:500bd58c7bf7e584a8435adccbd763a0b918d5c12b08d74ff50fd79b2915458b
+pyinstaller_hooks_contrib==2026.9 --hash=sha256:fb3e67dd64122561724c48ad0366ac9e8c16e638b63bf7d85de03bf3fdbf06c3
+pythonnet==3.1.0 --hash=sha256:7bdd4de03df3547a48122a3989265c8b31d5be0d19dadffa009eec7df8085e0b
+pywebview==6.2.1 --hash=sha256:9d07275f53894ab4d5e2e0e996227193e7187dec276d9b624dccbce029216b46
+pywin32_ctypes==0.2.3 --hash=sha256:8a1513379d709975552d202d942d9837758905c8d01eb82b8bcc30918929e7b8
+typing_extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+xxhash==3.8.1 --hash=sha256:538f5f865df6cd8c32dd63158a0e5b4f5dd08d732a7da8b7228a5a0776c8ce55

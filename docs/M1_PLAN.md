@@ -302,9 +302,41 @@ normal exit 0. CLI help and PE checks pass. No behavioral/resource acceptance
 is claimed by this rebuild; earlier artifacts and receipts remain historical.
 
 R1 has a working debug delivery; final hash-locked downloads and clean-candidate
-release proof remain open. The GitHub workflow is authored, not yet executed
-on GitHub: ordinary/import gates precede artifact upload, with no publication
-permission. Draft-release automation follows first-release decisions. The
+release proof remain open. The 2026-11-05 build/CI continuation starts at
+`848450da`, while the user independently baselines attempt-06 resource use.
+Finite scope: packaging driver/specification and dependency locks, the existing
+Windows workflow, focused build tests and TOOLS/TESTS delivery documentation.
+Preserve product bytes, reviewed ICO, runtime dependencies and existing gates.
+Use committed source, fixed toolchain/dependency downloads and recorded inputs;
+compare fresh builds without assuming cross-machine byte reproducibility.
+Verify dirty-source refusal, source/archive identities, dependency installation,
+two isolated builds and the hosted ordinary/import/portable jobs. Keep expensive
+local work separate from the user's measurement window. One coherent build/CI
+commit follows local review; hosted results get a documentation closeout.
+Evidence belongs in `build/m1-release-20261104/repeatable/`: downloads under
+`downloads/`, disposable environments under `env-*/`, builds under `build-*/`,
+and named logs/JSON receipts at the root. No release publication is included.
+The existing hosted run `41864478291` failed two historical custody checks
+because shallow checkout omitted frozen Git objects; 6,361 tests passed.
+Full-history checkout is the remedy; no evidence validator is relaxed.
+The user cleared local verification. Eight focused build tests and 6,367
+ordinary cases pass, with four capability skips and 35 headed exclusions;
+twelve import contracts pass. Fresh offline hash-locked installs and a wrong-
+hash rejection control pass. Initial isolated builds have identical wheels,
+source archives and executables; four installer metadata files differ because
+of environment-local launcher hashes and wheel URLs. Those differences remain
+visible. The focused newline test exposed Git archive's implicit conversion;
+explicit Git newline settings correct it. All 35 headed obligations pass across
+29 original passes and six native-input retries (47 total cases in the selected
+retry files). The first run retains five foreground refusals and one unexpected
+focus observation; the unchanged retry passed during the user's quiet desktop
+window. Corrected-source build comparison and hosted rerun remain pending;
+no final release is claimed.
+
+Final dependency-installation and clean-candidate proof remain open. The
+existing GitHub run reached ordinary tests; its portable job was blocked by
+the checkout failures above. Ordinary/import gates precede artifact upload,
+with no publication permission. Draft-release automation follows first-release decisions. The
 artifact is available for the user's next installed/cold-install debug pass;
 that pass and resource acceptance do not block creating this debug package.
 

@@ -10,7 +10,12 @@ their behavior; measurement output remains subject to the authority rules below.
 ## Portable build preparation
 
 `tools/packaging/` owns Windows portable-build inputs: Python entry shims,
-the PyInstaller specification, pinned build requirements and the build driver.
+the PyInstaller specification, hash-locked build requirements and the build driver.
+`bootstrap.txt` locks pip/setuptools for source-distribution preparation;
+`requirements.txt` locks the complete Windows x64 runtime/freezer environment.
+Only `proxy_tools` requires a source archive; prepare it without build isolation
+so its build uses the locked bootstrap. Refresh locks deliberately from the
+selected published distributions, retaining download/hash evidence in `build/`.
 It contains no product policy. `.github/workflows/` owns CI YAML; ordinary
 verification and portable artifact builds run there, while interactive Windows
 11 acceptance remains separately recorded. Generated environments, unpacked
@@ -19,20 +24,33 @@ directory per attempt; never overwrite an earlier candidate or failed receipt.
 `namisync/interfaces/branding/` retains SVG masters and derived Windows ICO
 assets. Build-time artwork tools are not runtime dependencies.
 
-Build a development package in a disposable CPython 3.13 x64 environment:
+Build a development package from a clean commit in a disposable CPython
+3.13.17 x64 environment:
 
 ```powershell
 python -m venv build/package-env
-build/package-env/Scripts/python.exe -m pip install -r tools/packaging/requirements.txt
+build/package-env/Scripts/python.exe -m pip install --require-hashes -r tools/packaging/bootstrap.txt
+build/package-env/Scripts/python.exe -m pip install --require-hashes --no-build-isolation -r tools/packaging/requirements.txt
 build/package-env/Scripts/python.exe tools/packaging/build.py build/portable-attempt-01
 ```
 
-Choose a new output directory for each run. The driver snapshots tracked and
-nonignored package/build inputs, records file identities, builds and installs
-a wheel into that disposable environment, then freezes two correctly classified
+Choose a new output directory for each run. The driver refuses staged, unstaged
+or nonignored untracked files and environments that differ from the lock (an
+old NamiSync installation is replaced). It snapshots canonical Git blobs at
+HEAD, independent of checkout newline conversion, records file identities,
+builds and installs a wheel into that disposable environment, then freezes two correctly classified
 executables sharing `_internal/`. It validates PE architecture/subsystems and
 runs the actual console help command. Outputs include the development ZIP,
-source ZIP, wheel, SHA-256 checksums, source manifest and resolved environment.
+source ZIP, wheel, SHA-256 checksums, source and bundle manifests and resolved
+environment. The Python executable hash and host platform are recorded. Commit
+time supplies SOURCE_DATE_EPOCH and ZIP timestamps; freezer subprocesses use a
+fixed PYTHONHASHSEED. ZIP order/attributes are stable. Repeatability means fixed
+source and dependency inputs with independently comparable outputs; this does
+not promise byte-identical binaries across Windows images or toolchain changes.
+Installed `.dist-info/RECORD` launcher hashes and `direct_url.json` wheel paths
+can vary with the disposable environment. Keep these metadata differences
+visible in bundle manifests; compare them separately from executable/resource
+bytes rather than hiding them or declaring equal ZIP checksums.
 These hashes identify distributed bytes; they are not an artwork-regeneration
 oracle. The icon is never rendered during this process. Explicit maintenance
 uses `tools/packaging/render_icon.py` (initial renderer: resvg-py 0.5.0 and
@@ -44,8 +62,13 @@ interactive Windows 11 acceptance. It has read-only repository permissions and
 does not publish releases. After the first release, extend the same validated
 build path to a manually approved draft-release job; final native evidence and
 artifact identity must still be accounted before publication. Exact dependency
-versions are pinned here; hash-locked downloads and the final distribution-wide
-license/source bundle remain release closure work.
+versions and download hashes are pinned here; the final distribution-wide
+license/source bundle remains release closure work. CI fetches full history for
+ordinary tests because custody validators consult historical Git objects. Its
+Actions are pinned by commit, with exact Python/Node versions. The hosted runner
+image remains serviced; record its identity from each run before comparing
+artifacts. Development test dependencies remain governed by the project dev
+extra; they are isolated from the locked portable build environment.
 
 ## Icon maintenance
 

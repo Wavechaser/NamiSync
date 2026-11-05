@@ -1,34 +1,46 @@
-# Latest session — Create batch package refresh, 2026-11-05
+# Latest session — repeatable builds and CI verification, 2026-11-05
 
-Built the requested portable development package from clean
-`248b510c0be36f0ce708c1652a0b71430b019a16`, including both Setup action and Create
-batch fixes. No product, dependency, version or icon changes in this session.
+User cleared local verification while resource baselining proceeds separately.
+Product, reviewed icon and measured attempt-06 remain unchanged. Build/CI work
+starts from `848450da`; recovery `987cba84` is preservation only and must not be
+merged/cherry-picked. Reconstruct the reviewed task delta on a normal branch.
 
-Current artifact: `build/m1-release-20261104/attempt-06/NamiSync-windows-x64-dev.zip`
-SHA-256: `d38b452f5102d10060c86c0244f50afecb4bdb16f386b28aeb42b9af9e51fd41`.
-Extract the entire ZIP and run `NamiSync/namisync-gui.exe`. Source ZIP, wheel,
-checksums, source identity and environment record are adjacent. Existing
-per-user data placement and optional absolute `--data-dir` remain unchanged.
+## Changes and local verification
 
-This supersedes attempt-05 for new debugging/measurement. The user confirmed
-no testing between 13:12 and this request used that early-afternoon package.
-Earlier artifacts/receipts remain historical; use attempt-06 going forward.
+Hash-lock existing runtime/freezer downloads plus pip/setuptools bootstrap.
+Build from clean committed source with explicit Git newline settings, fixed
+archive metadata/freezer hash seed, exact environment admission and source/bundle
+manifests. Pin Action commits and Python/Node versions; ordinary CI fetches full
+history for frozen custody evidence. Tools/tests/docs are the only changed owners.
 
-## Verification and evidence
+Evidence: `build/m1-release-20261104/repeatable/`.
+Eight focused checks pass (`focused-final.xml`); ordinary: 6,367 passed, four
+capability skips, 35 headed deselected (`ordinary.xml`). Twelve import contracts
+pass. Headed: 29 original passes plus six retry passes, with 47 total selected
+cases in `headed-retry.xml`. Original five foreground refusals and one unexpected
+focus observation remain in `headed.log`; the unchanged retry passed with the
+user leaving test windows in front. All test windows are closed.
 
-Reused the pinned disposable packaging environment; installed the new wheel
-before freezing. `build-06.log` records successful pip check, x64 PE/subsystem
-checks and actual console help. `artifact-check-06.json` verifies 312 source
-entries, 211 bundled assets and archive/checksum integrity. ICO correspondence
-is provenance, not a fixed rendering oracle; no artwork was regenerated.
-`native-smoke-06.json` records external extraction, isolated `native-profile-06`,
-WebView2 startup, native icon and normal exit 0. Its exact temporary extraction
-is retained for debugging; no test window remains open. Earlier packaging
-extractions/profiles remain untouched.
+Fresh offline locked installs and wrong-hash rejection pass. `build-a`/`build-b`
+have equal wheels, source ZIPs and executables; four environment-specific
+installer metadata files differ. `comparison-build-a-build-b.json` verifies
+archives/manifests/checksums. A focused test exposed implicit Git archive newline
+conversion; explicit settings fix it. These initial builds precede that correction;
+corrected-source builds and hosted verification are next. Earlier failed focused
+receipts remain; no source/product test authority was relaxed.
 
-The fix's 2,208 interface passes and three installed Setup/shell witnesses are
-recorded at `248b510c` and under
-`build/setup-admission-20261104/batch-followup-20261105/`. This rebuild checked
-packaging/startup only; it did not repeat behavioral or resource acceptance.
-M1_PLAN owns dependency hash locks, hosted CI, notices/distribution, resource
-acceptance and final candidate gates. No push or publication occurred.
+## Hosted run and remaining work
+
+Prior run https://github.com/Wavechaser/NamiSync/actions/runs/41864478291 had
+6,361 passes/two failures caused by shallow history; portable was skipped.
+`hosted-original.log` preserves evidence. Corrected hosted ordinary/import/portable
+jobs have not yet run. Next: reviewed task commit on `codex/m1-release-repeatable`,
+corrected isolated builds, remote CI branch run and exact artifact checks, then
+closeout. No release publication is part of this task. Source snapshots and
+serviced Windows runtime identities qualify repeatability; ZIP byte identity is
+not claimed across installer paths or different hosts.
+
+Measured package remains attempt-06 from `248b510c`, SHA-256
+`d38b452f5102d10060c86c0244f50afecb4bdb16f386b28aeb42b9af9e51fd41`.
+M1_PLAN owns remaining distribution/resource/final release gates. Packaging
+smoke extractions/profiles and all failed receipts remain preserved.
