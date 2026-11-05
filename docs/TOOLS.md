@@ -69,7 +69,9 @@ artifact identity must still be accounted before publication. Exact dependency
 versions and download hashes are pinned here; the final distribution-wide
 license/source bundle remains release closure work. CI fetches full history for
 ordinary tests because custody validators consult historical Git objects. Its
-Actions are pinned by commit, with exact Python/Node versions. The hosted runner
+Actions are pinned by commit, with exact Python/Node versions. The current
+checkout v7.0.1, setup-python/setup-node v7.1.0 and upload-artifact v7.0.2
+Actions run on Node 24 independently of the Node installed for project tests. The hosted runner
 image remains serviced; record its identity from each run before comparing
 artifacts. Development test dependencies remain governed by the project dev
 extra; they are isolated from the locked portable build environment.

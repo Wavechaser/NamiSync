@@ -366,6 +366,9 @@ explicit, reviewable and regression-backed.
 - Establish stable Windows shell identity and wire the ratified full-color icon.
   Track the reviewed ICO; tests decode all nine sizes without regenerating it
   or imposing an exact-byte artwork oracle.
+- Refresh all four Actions to latest stable immutable pins using Node 24;
+  retain the project toolchain and read-only workflow permissions. Select
+  `v0.1.0` for distribution without a beta suffix.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
   release publication remains open.
