@@ -12,11 +12,14 @@ method and limitations. Raw events, process samples, asset hashes and cleanup
 receipts are in `build/render-fix-20261106/`. The comparison targets,
 package extracts and profiles were removed. No supplied corpus files were used.
 
-The separate shutdown fix addresses an in-flight pywebview return after the
-renderer dies. The pilot's original log did not identify the blocked worker.
-A controlled native crash at the same seam captured its stack and the
-close-status stack in `build/dead-page-1441cbff/`. Keep shutdown verification
-and integration separate from the two renderer-only comparisons.
+Renderer fix `ea0daac2` and the separate native-host fix have distinct
+witnesses. A controlled native crash captured the blocked pywebview return
+worker and close-status stack in `build/dead-page-1441cbff/`. On the corrected
+host the crash during a pending reply reached `shutdown.complete` and exit 0
+(`build/dead-page-202f2869/namisync.log`). The host waited for actual worker
+exit. That crash witness did not count surviving Job processes. A temporary
+WebView2 profile cleanup warning was logged. All five crash-probe profiles
+were subsequently removed. Host and bridge focused checks passed (169).
 
 R3 remains open. Rebuild from the integrated fixes before running the resource
 matrix, then assess the observed behavior. The original pilot drivers' fixed

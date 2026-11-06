@@ -1405,15 +1405,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
-- MODERATE - OPEN (2026-11-06). Dead-page shutdown dependency. After the
-  renderer OOM above, closing the window did not exit the app: `namisync.log`
-  records two `shutdown.attempt_failed` / `_DesktopQuiescenceError` entries
-  ("bridge handlers did not quiesce before the deadline") about a minute apart,
-  and the harness ended the process by Job termination after 130 seconds. The
-  sync had already completed durably, so no state was lost; a user would need
-  Task Manager. Cause: desktop shutdown requires in-flight bridge handlers to
-  quiesce, and they did not after the page died; the exact blocked handler is
-  unidentified. Whether a later attempt would eventually exit is unobserved.
+- MODERATE - FIXED (2026-11-06). Dead-page shutdown dependency. After the
+  pilot renderer crashed, the host failed to close within 130 seconds despite
+  a durably completed sync. A controlled crash captured the native return
+  worker and close-status update waiting inside pywebview's script evaluator.
+  Even a direct WebView2 script task can remain pending after process loss.
+  The host now wakes script waits on confirmed browser or main renderer exit.
+  Subframe failures and unresponsiveness leave those waits intact. Closure
+  still requires admitted workers to exit. The same native crash during a
+  reply now reaches `shutdown.complete` and exits with code 0.
 - MINOR - FIXED (2026-10-02). Native observation budget mismatch. The existing
   live host witness could time out after correctly canceled navigation because
   its local native-completion and worker-join waits ended before the matching

@@ -41,6 +41,8 @@ owning contracts.
   after renderer death. Log both in BUGS and stop until the renderer is fixed.
 - Coalesce execution progress paints and reuse unchanged committed Plan rows.
   Verify the renderer correction on the 1,000- and 10,000-file pilot workloads.
+- Let native script callers finish when their browser or main renderer exits.
+  A controlled crash during a bridge reply now allows orderly host shutdown.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

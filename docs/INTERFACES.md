@@ -992,8 +992,9 @@ The supported desktop stack is CPython 3.13 on Windows 11 x64, `pywebview==6.2.1
 The window's native return adapter consumes a one-shot marker from the bridge's
 existing document generation after command processing. It contains obsolete
 pywebview JavaScript callback failures across reload without canceling or
-repeating command effects. Stable-generation JavaScript failures and non-JS
-failures remain visible; handler custody still waits for true worker exit.
+repeating command effects. A confirmed renderer or browser exit also releases
+script delivery to the dead page so native return workers can exit. Other
+evaluation failures remain visible and handler custody waits for true worker exit.
 [BRIDGE.md](BRIDGE.md#current-envelopes-and-admission) owns the precise containment
 boundary and its race limitation. It also protects the small admission return
 for asynchronous commands; asynchronous completion does not remove that race.

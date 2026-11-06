@@ -202,6 +202,7 @@ class FakeCoreWebView2:
         self.NewWindowRequested = EventHook()
         self.SourceChanged = EventHook()
         self.ContentLoading = EventHook()
+        self.ProcessFailed = EventHook()
 
 
 class BeforeLoadHook:
@@ -2689,6 +2690,76 @@ def test_async_small_close_timeout_is_retryable_until_command_worker_exits() -> 
     resume.set()
     bridge.wait_for_handlers(1.0)
     assert bridge.dispatch(command)["error"]["code"] == "bridge_unavailable"
+
+
+@pytest.mark.parametrize("exit_kind", ["RenderProcessExited", "BrowserProcessExited"])
+def test_renderer_exit_releases_pending_script_and_replacement_can_evaluate(
+    exit_kind: str,
+) -> None:
+    import clr  # Initialize pythonnet's System import hook.
+    from System import AggregateException, String
+    from System.Threading.Tasks import Task, TaskCompletionSource
+
+    from namisync.interfaces.web import host
+
+    core = FakeCoreWebView2()
+    submitted = Event()
+    pending = TaskCompletionSource[String]()
+    scripts: list[str] = []
+
+    def execute(script: str) -> object:
+        scripts.append(script)
+        if script == "pending":
+            submitted.set()
+            return pending.Task
+        if script == "canceled task":
+            canceled = TaskCompletionSource[String]()
+            canceled.SetCanceled()
+            return canceled.Task
+        return Task.FromResult[String](json.dumps('{"ok":true}'))
+
+    control = SimpleNamespace(
+        Invoke=lambda callback: callback(), ExecuteScriptAsync=execute,
+    )
+    browser = SimpleNamespace(webview=control)
+    host._bind_edge_script_evaluator(browser, core)
+    failures: list[Exception] = []
+
+    def wait_for_script() -> None:
+        try:
+            browser.evaluate_js("pending", True)
+        except Exception as error:
+            failures.append(error)
+
+    worker = Thread(target=wait_for_script)
+    worker.start()
+    try:
+        assert submitted.wait(2)
+        for kind in (
+            "RenderProcessUnresponsive", "FrameRenderProcessExited",
+            "UtilityProcessExited", "GpuProcessExited",
+        ):
+            core.ProcessFailed.emit(SimpleNamespace(ProcessFailedKind=kind))
+        assert browser.evaluate_js("same renderer", True) == {"ok": True}
+        with pytest.raises(AggregateException):
+            browser.evaluate_js("canceled task", True)
+        assert worker.is_alive()
+        core.ProcessFailed.emit(SimpleNamespace(ProcessFailedKind=exit_kind))
+        worker.join(2)
+        assert not worker.is_alive()
+        assert [type(error) for error in failures] == [host._RendererExitedError]
+        with pytest.raises(host._RendererExitedError):
+            browser.evaluate_js("dead renderer", True)
+        core.ContentLoading.emit(SimpleNamespace())
+        assert browser.evaluate_js("replacement raw", False) == '{"ok":true}'
+        assert browser.evaluate_js("replacement parsed", True) == {"ok": True}
+        assert scripts == [
+            "pending", "same renderer", "canceled task",
+            "replacement raw", "replacement parsed",
+        ]
+    finally:
+        pending.SetResult("null")
+        worker.join(2)
 
 
 def test_document_loading_filters_canceled_and_obsolete_pywebview_injection() -> None:

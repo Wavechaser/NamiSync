@@ -223,14 +223,24 @@ The host contains obsolete pywebview return callbacks using that same document
 generation. An existing native worker arms one thread-local return marker only
 after dispatch finishes; the window evaluator consumes it once. Already retired
 returns are skipped. A `JavascriptException` during return evaluation is contained
-only if that captured generation retired; stable-generation JS errors, non-JS
-errors and unrelated evaluations still propagate. No lock spans native evaluation.
+only if that captured generation retired. Stable-generation JS errors and other
+evaluation failures propagate. No lock spans native evaluation.
 This addresses callback destruction on reload, not an atomic JavaScript delivery
 fence: a JS error racing retirement is treated as obsolete delivery. Command
 effects, replay, response custody and actual worker-exit accounting are unchanged.
 The adapter is pinned to pywebview's fresh-worker, single-return evaluation shape;
 compatibility tests exercise that installed return path. Small asynchronous
 commands still use that native path for their admission return.
+
+The host submits each script to WebView2 on the UI thread. Its caller waits
+on the native task with a token for that renderer. A browser or top-level
+renderer exit wakes pending evaluations and prevents new submissions to the
+dead renderer. A new document can evaluate with a fresh token and remains
+subject to the existing replacement-document admission policy. A marked
+native return and the cosmetic close-status update can discard delivery to
+an exited renderer. An unresponsive renderer, subframe or utility failure
+cannot retire those waits. Service close still requires actual exit of every
+admitted native and command worker.
 
 ### Small asynchronous native commands
 

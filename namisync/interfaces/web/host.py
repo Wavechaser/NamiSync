@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 import importlib
 import importlib.resources
+import json
 import logging
 import os
 import sys
@@ -676,6 +677,8 @@ class _DesktopCloseController:
                     _render_close_status_target(status, phase)
                 else:
                     self._render_status(self._window, phase)
+            except _RendererExitedError:
+                return
             except Exception as error:
                 _log_presentation_failure("shutdown.status_render_failed", error)
 
@@ -1316,6 +1319,8 @@ def _contain_obsolete_native_returns(window: object, dispatcher: object) -> None
             return None
         try:
             return evaluate(*args, **kwargs)
+        except _RendererExitedError:
+            return None
         except JavascriptException as error:
             if dispatcher._is_document_generation_current(generation):
                 raise
@@ -1361,6 +1366,60 @@ def _desktop_index_path(index_path: str | Path | None) -> str:
     return str(resolve_local_index_path(index_path))
 
 
+class _RendererExitedError(RuntimeError):
+    """Script delivery lost its owning WebView2 process."""
+
+
+def _bind_edge_script_evaluator(browser: object, core: object) -> None:
+    """Wake script callers if WebView2 loses their renderer before completion."""
+
+    from System import Func, Object, OperationCanceledException
+    from System.Threading import CancellationTokenSource
+
+    control = browser.webview
+    renderer = CancellationTokenSource()
+
+    def process_failed(_sender: object, args: object) -> None:
+        if str(args.ProcessFailedKind) in {
+            "BrowserProcessExited", "RenderProcessExited",
+        }:
+            renderer.Cancel()
+
+    def content_loading(_sender: object, _args: object) -> None:
+        nonlocal renderer
+        if renderer.IsCancellationRequested:
+            renderer = CancellationTokenSource()
+
+    def evaluate_js(script: str, parse_json: bool) -> object:
+        def start() -> object:
+            token = renderer.Token
+            if token.IsCancellationRequested:
+                return None
+            return control.ExecuteScriptAsync(script), token
+
+        submission = control.Invoke(Func[Object](start))
+        if submission is None:
+            raise _RendererExitedError("the WebView2 renderer exited")
+        task, token = submission
+        try:
+            task.Wait(token)
+        except OperationCanceledException:
+            if not token.IsCancellationRequested:
+                raise
+            raise _RendererExitedError("the WebView2 renderer exited") from None
+        value = json.loads(task.Result)
+        if parse_json and isinstance(value, str):
+            try:
+                return json.loads(value)
+            except (ValueError, RecursionError):
+                pass
+        return value
+
+    core.ProcessFailed += process_failed
+    core.ContentLoading += content_loading
+    browser.evaluate_js = evaluate_js
+
+
 def _configure_window_security(
     window: object,
     trusted_url: str,
@@ -1369,11 +1428,16 @@ def _configure_window_security(
 ) -> None:
     from .bridge import configure_pywebview2_security
 
+    def bind_native_runtime(version: str) -> None:
+        browser = window.native.browser
+        _bind_edge_script_evaluator(browser, browser.webview.CoreWebView2)
+        renderer_callback(version)
+
     configure_pywebview2_security(
         window,
         trusted_url,
         document=document,
-        on_browser_version=renderer_callback,
+        on_browser_version=bind_native_runtime,
     )
 
 

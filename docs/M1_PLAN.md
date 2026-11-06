@@ -457,8 +457,9 @@ that SH-G-15 be judged on measured behavior, not a predeclared apparatus. The
 first workload pilot found a severe renderer allocation defect (2.5 GiB
 at 1,000 files, OOM at 10,100 items) and a shutdown failure after renderer
 death. The pilot and its drivers were preserved in `edd02012`. The renderer
-correction has targeted workload evidence in PERFORMANCE. BUGS owns the
-shutdown finding. R3 still needs measurements on a rebuilt candidate and a
+correction has targeted workload evidence in PERFORMANCE. A controlled
+renderer crash verifies the separate host shutdown fix recorded in BUGS.
+R3 still needs measurements on a rebuilt candidate and a
 judgment on the full schedule.
 
 | Step | Finite outcome, owners and verification | Dependency / status |
