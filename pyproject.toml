@@ -44,6 +44,8 @@ addopts = '-m "not headed"'
 testpaths = ["tests"]
 filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 markers = [
+    "background_headed: page-directed headed journey with unattended launch and input",
+    "native_desktop: headed scenario that exercises real Windows activation or a native dialog",
     "headed: requires an interactive Windows desktop and the real WebView2 host",
     "supplemental_node: optional deterministic JavaScript probe using NAMISYNC_TEST_NODE or PATH",
 ]

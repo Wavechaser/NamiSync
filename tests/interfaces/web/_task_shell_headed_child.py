@@ -16,7 +16,7 @@ from typing import Any, Callable
 from unittest.mock import patch
 
 from _headed_evidence import EvidencePaths, EvidencePublisher
-from _headed_cdp import NativeCdp, runtime_value, failure_site
+from _headed_cdp import NativeCdp, on_background_page_loaded, runtime_value, failure_site
 from _plan_again_trace import (
     PlanAgainHostTrace,
     trace_registry_plan_again,
@@ -1977,7 +1977,6 @@ def _drive_plan_confirmation(
     screenshot: Path,
 ) -> Callable[[BaseException, object | None], None]:
     from System import Action
-    from _headed_native import foreground_window_handle, wait_for_foreground
 
     failed = False
     last_driver_step = "start"
@@ -2232,12 +2231,6 @@ def _drive_plan_confirmation(
             last_plan_context_readiness = _bounded_plan_context_readiness(facts)
             if type(facts) is not dict or not facts or any(value is not True for value in facts.values()):
                 raise RuntimeError("Plan context input target is unavailable")
-            observed_handle = foreground_window_handle()
-            if observed_handle != int(native.Handle.ToInt64()):
-                record_foreground({"reason": "foreground-changed",
-                                   "observedHandle": observed_handle,
-                                   "ownedHandle": int(native.Handle.ToInt64())})
-                raise RuntimeError("Plan context input window is not foreground")
             key, virtual_key = (("Escape", 27) if name.endswith("-escape")
                                 else ("F10", 121) if name == "shift" else ("ContextMenu", 93))
             events = key_events(key, key, virtual_key)
@@ -2253,21 +2246,7 @@ def _drive_plan_confirmation(
                 lambda _ack: plan_context(index + 1), "plan_context_ack_" + name,
             ), "plan_context_" + name)
 
-        def record_foreground(facts: dict[str, object]) -> None:
-            screenshot.with_name("plan-context-foreground-diagnostic.json").write_text(
-                json.dumps({"stage": name, **facts}, sort_keys=True), encoding="utf-8",
-            )
-
-        def refused(facts: dict[str, object]) -> None:
-            record_foreground(facts)
-            fail(RuntimeError("Plan context input foreground deadline expired"))
-
-        last_driver_step = "wait_plan_context_foreground_" + name
-        wait_for_foreground(
-            int(native.Handle.ToInt64()), activate=native.Activate,
-            ready=lambda: evaluate(expression, send, "wait_plan_context_" + name),
-            refused=refused, retained=retained,
-        )
+        evaluate(expression, send, "wait_plan_context_" + name)
 
     wait_execute = r"""
 (async () => {
@@ -2720,26 +2699,18 @@ def _configure_probe(
 ) -> object:
     controller = original(window, *args, **kwargs)
 
-    def loaded() -> None:
-        from System import Action
+    def begin() -> None:
+        if large_window and control.stage == "initial":
+            scale = window.native.DeviceDpi / 96
+            window.native.Width += int(160 * scale)
+            window.native.Height += int(100 * scale)
+        _begin_probe(window, recorder, control, retained, screenshot)
 
-        def begin() -> None:
-            try:
-                if large_window and control.stage == "initial":
-                    scale = window.native.DeviceDpi / 96
-                    window.native.Width += int(160 * scale)
-                    window.native.Height += int(100 * scale)
-                _begin_probe(window, recorder, control, retained, screenshot)
-            except BaseException as error:
-                control.release_probe_holds()
-                recorder.failure("page_probe", error)
+    def fail(error: BaseException) -> None:
+        control.release_probe_holds()
+        recorder.failure("page_probe", error)
 
-        action = Action(begin)
-        retained.append(action)
-        window.native.BeginInvoke(action)
-
-    retained.append(loaded)
-    window.events.loaded += loaded
+    on_background_page_loaded(window, retained, begin, fail)
     return controller
 
 

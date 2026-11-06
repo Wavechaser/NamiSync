@@ -10,6 +10,29 @@ from pathlib import Path
 from typing import Callable
 
 
+def on_background_page_loaded(
+    window: object, retained: list[object], begin: Callable[[], None],
+    fail: Callable[[BaseException], None],
+) -> None:
+    """Give the page DOM focus for keyboard tests without activating its HWND."""
+    from System import Action
+
+    def loaded() -> None:
+        def start() -> None:
+            native = window.native
+            cdp = NativeCdp(native, native.browser.webview.CoreWebView2, retained,
+                            lambda error, _task, _step, _method: fail(error))
+            cdp.call("Emulation.setFocusEmulationEnabled", {"enabled": True},
+                     lambda _response: begin(), "page-focus")
+
+        action = Action(start)
+        retained.append(action)
+        window.native.BeginInvoke(action)
+
+    retained.append(loaded)
+    window.events.loaded += loaded
+
+
 def runtime_value(task: object) -> object:
     if task.IsFaulted or task.IsCanceled:
         raise RuntimeError("native CDP task failed")

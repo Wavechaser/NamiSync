@@ -248,6 +248,7 @@ print(json.dumps({
     )
 
 
+@pytest.mark.native_desktop
 def test_sh_g_2_relative_data_root_is_refused_before_creation(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,
@@ -300,6 +301,7 @@ def test_sh_g_2_relative_data_root_is_refused_before_creation(
     assert list(evidence.root.iterdir()) == []
 
 
+@pytest.mark.native_desktop
 def test_sh_g_5_database_contract_refusal_is_visible_and_read_only(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,
@@ -427,6 +429,7 @@ def test_sh_g_10_distinct_injected_headed_identities_coexist(
                 terminate_process_tree(process, deadline=deadline)
 
 
+@pytest.mark.native_desktop
 def test_br_g_31_second_injected_launch_uses_real_native_activation(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,
@@ -490,6 +493,7 @@ def test_br_g_31_second_injected_launch_uses_real_native_activation(
                 terminate_process_tree(process, deadline=deadline)
 
 
+@pytest.mark.native_desktop
 def test_br_g_31_foreground_refusal_is_visible_and_nonerror(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,

@@ -41,6 +41,7 @@ _CHILD = Path(__file__).with_name("_transport_gate_child.py")
 _TEST_ASSETS = Path(__file__).parents[2] / "assets" / "transport_gate"
 _BOOTSTRAP_DRIVER = _TEST_ASSETS.parent / "bootstrap_test_bridge.js"
 _PRODUCTION_ASSETS = (
+    "row_menu.js",
     "bridge.js",
     "readiness.js",
     "render.js",
@@ -1090,6 +1091,7 @@ def test_transport_gate_off_origin_fault_removes_only_top_level_precommit_guard(
 
 
 @pytest.mark.headed
+@pytest.mark.native_desktop
 def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_sink(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
@@ -1142,11 +1144,13 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
 
 
 @pytest.mark.headed
+@pytest.mark.native_desktop
 def test_br_g_32_native_picker_keeps_real_paths_in_server_slots(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
     evidence = headed_transport_evidence.transport()
     calls = evidence.result["service_start_plan_calls"]
+    assert evidence.result["report"]["picker_dismissed_menu"] is True
 
     assert len(calls) == 5
     assert [
@@ -1210,6 +1214,7 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
 
 
 @pytest.mark.headed
+@pytest.mark.native_desktop
 def test_br_g_33_real_next_events_is_concurrent_and_shutdown_wakes_it(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
@@ -1228,6 +1233,7 @@ def test_br_g_33_real_next_events_is_concurrent_and_shutdown_wakes_it(
 
 
 @pytest.mark.headed
+@pytest.mark.native_desktop
 def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:
@@ -1397,6 +1403,7 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
 
 
 @pytest.mark.headed
+@pytest.mark.native_desktop
 def test_sh_g_3_headed_renderer_and_hostile_dispatch_are_logged_safely(
     headed_transport_evidence: _HeadedTransportEvidence,
 ) -> None:

@@ -421,6 +421,31 @@ async function proveBrowserGate(sourceId, targetId) {
   };
 }
 
+async function pickSourceWithOpenMenu() {
+  const { createRowMenu } = await import("./row_menu.js");
+  const owner = document.createElement("section");
+  const anchor = document.createElement("button");
+  owner.append(anchor);
+  document.body.append(owner);
+  const menu = createRowMenu(owner);
+  let blurred = false;
+  const onBlur = (event) => { blurred ||= event.isTrusted; };
+  window.addEventListener("blur", onBlur);
+  try {
+    menu.open(new Event("keydown"), anchor, anchor, [
+      {id: "test-action", label: "Test action", run() {}},
+    ], () => true);
+    const popup = owner.querySelector('[role="menu"]');
+    const open = !popup.hidden && document.hasFocus() && popup.contains(document.activeElement);
+    const source = await pickFolder("source");
+    return { source, dismissed: open && blurred && popup.hidden };
+  } finally {
+    window.removeEventListener("blur", onBlur);
+    menu.dispose();
+    owner.remove();
+  }
+}
+
 async function run() {
   browserStage = "private-receiver-probe";
   await probeRawPrivateReceiverNames();
@@ -429,7 +454,7 @@ async function run() {
   const initialScriptCount = document.scripts.length;
   renderText(hostileTarget, bootstrap.corpus);
 
-  const source = await pickFolder("source");
+  const { source, dismissed } = await pickSourceWithOpenMenu();
   const target = await pickFolder("target");
   if (source === null || target === null) {
     throw new Error("native folder selection was cancelled");
@@ -444,6 +469,7 @@ async function run() {
       phase: "complete",
       observed: hostileTarget.textContent,
       source_id: source.choice_id,
+      picker_dismissed_menu: dismissed,
       target_id: target.choice_id,
       source_keys: Object.keys(source).sort(),
       target_keys: Object.keys(target).sort(),

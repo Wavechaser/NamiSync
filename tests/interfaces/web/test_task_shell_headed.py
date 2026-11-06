@@ -16,7 +16,6 @@ import pytest
 import _task_shell_headed_child as child
 from _headed_evidence import EvidencePaths, EvidenceReader, require_host_final
 from _headed_native import (
-    FOREGROUND_GUIDANCE,
     clean_child_environment,
     close_window,
     require_absolute_local_test_root,
@@ -37,54 +36,8 @@ from _plan_again_trace import (
 _CHILD = Path(__file__).with_name("_task_shell_headed_child.py")
 
 
-def _require_task_shell_process_output(stdout: str, stderr: str) -> None:
-    lines = stdout.splitlines()
-    assert len(lines) <= 4 and all(line == FOREGROUND_GUIDANCE for line in lines), stdout
-    if stderr:
-        raise AssertionError(stderr)
-
-
-def test_foreground_recovery_guidance_does_not_poison_shell_receipt(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
-) -> None:
-    import sys
-    from types import SimpleNamespace
-    import _headed_native as native
-
-    class Event(list):
-        def __iadd__(self, callback):
-            self.append(callback)
-            return self
-
-    timer = SimpleNamespace(Tick=Event(), Start=lambda: None,
-                            Stop=lambda: None, Dispose=lambda: None)
-    monkeypatch.setitem(sys.modules, "System.Windows.Forms",
-                        SimpleNamespace(Timer=lambda: timer))
-    foreground = [99]
-    monkeypatch.setattr(native, "foreground_window_handle", lambda: foreground[0])
-    monkeypatch.setattr(native, "_user32", lambda: SimpleNamespace(FlashWindow=lambda *_: None))
-    inputs, refusals = [], []
-    native.wait_for_foreground(
-        42, activate=lambda: None, ready=lambda: inputs.append(True),
-        refused=refusals.append, retained=[],
-    )
-    assert inputs == []
-    foreground[0] = 42
-    timer.Tick[0]()
-    assert inputs == [True] and refusals == []
-    streams = capsys.readouterr()
-    assert streams.out == FOREGROUND_GUIDANCE + "\n"
-    _require_task_shell_process_output(streams.out, streams.err)
-    with pytest.raises(AssertionError, match="unexpected error"):
-        _require_task_shell_process_output(streams.out, "unexpected error")
-    with pytest.raises(AssertionError, match="unexpected output"):
-        _require_task_shell_process_output("unexpected output\n", "")
-    with pytest.raises(AssertionError):
-        _require_task_shell_process_output(streams.out * 5, "")
-
-
 @pytest.mark.parametrize("escape", [False, True])
-def test_native_context_ack_allows_foreground_wait_and_still_terminates(
+def test_plan_context_ack_accepts_delayed_input_and_still_terminates(
     tmp_path: Path, escape: bool,
 ) -> None:
     from _frontend_test_support import _node_executable, run_node_probe
@@ -108,7 +61,7 @@ globalThis.setTimeout = (callback, delay) => {
   callback();
 };
 """ + statement + r"""
-assert.equal(elapsed, 14900, "native ACK can arrive near the foreground deadline");
+assert.equal(elapsed, 14900, "delayed CDP input can still be acknowledged");
 elapsed = 0;
 supplyAck = false;
 window.__namiPlanContextAck = null;
@@ -327,6 +280,7 @@ def test_task_shell_page_failure_releases_held_fixture_workers(
 
 @pytest.mark.headed
 @pytest.mark.parametrize("large_window", [False, True], ids=["default", "larger"])
+@pytest.mark.background_headed
 def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,
@@ -657,7 +611,8 @@ def _run_task_shell_scenario(
     assert final["host_returned"] is True
     assert "post_ready_failure" not in final
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    _require_task_shell_process_output(completed.stdout, completed.stderr)
+    assert completed.stdout == "", completed.stdout
+    assert completed.stderr == "", completed.stderr
     assert initial["schema_version"] == 1
     assert initial["phase"] == "complete"
     assert initial["startup_errors"] == []

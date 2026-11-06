@@ -15,9 +15,8 @@ from pathlib import Path
 from typing import Callable
 from unittest.mock import patch
 
-from _headed_cdp import NativeCdp, decode_png, failure_site
+from _headed_cdp import NativeCdp, on_background_page_loaded, decode_png, failure_site
 from _headed_evidence import EvidencePaths, EvidencePublisher
-from _headed_native import foreground_window_handle, wait_for_foreground
 from _startup_test_support import headed_command_extension
 
 
@@ -836,9 +835,6 @@ class _ExecutionReviewJourney:
     def verify_files(self) -> None:
         self.exact.verify_files()
         self.blocked.verify_files()
-
-    def finished_ready(self) -> bool:
-        return self.exact.finished_ready() and self.blocked.finished_ready()
 
     def snapshot(self) -> dict[str, object]:
         return {"exact": self.exact.snapshot(), "blocked": self.blocked.snapshot()}
@@ -1686,24 +1682,6 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
             json.dumps(value, sort_keys=True), encoding="utf-8",
         )
 
-    def write_selection_foreground_diagnostic(
-        stage: str, observed_handle: int | None, owned_handle: int,
-        reason: str = "foreground-changed",
-    ) -> None:
-        if (stage not in {"wait-selection-callback", "selection-target-callback"}
-                or (observed_handle is not None and type(observed_handle) is not int)
-                or type(owned_handle) is not int or owned_handle <= 0):
-            raise RuntimeError("selection foreground diagnostic is invalid")
-        recorder.driver.with_name("selection-foreground-diagnostic.json").write_text(
-            json.dumps({
-                "stage": stage,
-                "observedHandle": observed_handle,
-                "ownedHandle": owned_handle,
-                "reason": reason,
-            }, sort_keys=True),
-            encoding="utf-8",
-        )
-
     def select_fallback(point: object) -> None:
         nonlocal failed
         if type(point) is dict and point.get("timeout") is True:
@@ -1711,31 +1689,11 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
             failed = True
             recorder.fail("wait-selection", "RuntimeError")
             return
-        owned_handle = int(native.Handle.ToInt64())
-        def refused(facts: dict[str, object]) -> None:
-            write_selection_foreground_diagnostic(
-                "wait-selection-callback", facts["observedHandle"], owned_handle,
-                facts["reason"],
-            )
-            fail(RuntimeError("native execution foreground deadline expired"),
-                 None, "wait-selection-foreground", "foreground")
-        wait_for_foreground(
-            owned_handle, activate=native.Activate,
-            ready=lambda: cdp.evaluate("window.__executionReviewSelectionTarget()",
-                                       dispatch_fallback, "selection-target"),
-            refused=refused, retained=retained,
-        )
+        cdp.evaluate("window.__executionReviewSelectionTarget()", dispatch_fallback, "selection-target")
 
     def dispatch_fallback(point: object) -> None:
         if type(point) is not dict or set(point) != {"x", "y"}:
             raise RuntimeError("selection point missing")
-        observed_handle = foreground_window_handle()
-        owned_handle = int(native.Handle.ToInt64())
-        if observed_handle != owned_handle:
-            write_selection_foreground_diagnostic(
-                "selection-target-callback", observed_handle, owned_handle,
-            )
-            raise RuntimeError("native execution window is not foreground")
         cdp.call(
             "Input.dispatchMouseEvent",
             {"type": "mousePressed", "button": "left", "buttons": 1, "clickCount": 1, **point},
@@ -1755,13 +1713,18 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
             return
         if dimensions is None:
             raise RuntimeError("page completed before native capture decode")
-        if (type(value) is not dict or set(value.get("geometry", {})) != _GEOMETRY
-                or set(value.get("retention", {})) != _RETENTION
-                or set(value.get("actions", {})) != _ACTIONS
-                or any(item is not True for item in value["retention"].values())
-                or any(item is not True for item in value["actions"].values())
-                or not phase.finished_ready()):
-            raise RuntimeError("execution geometry evidence is invalid")
+        # finished() already validates the result shape. Record only bounded
+        # assertion names if final browser facts and host receipts disagree.
+        unmet = [key for group in ("retention", "actions")
+                 for key, fact in value[group].items() if fact is not True]
+        for branch in (phase.exact, phase.blocked):
+            if not branch.finished_ready():
+                unmet.append(f"{branch.branch}-receipts")
+        if unmet:
+            recorder.driver.with_name("completion-checks.json").write_text(
+                json.dumps(sorted(unmet)), encoding="utf-8",
+            )
+            raise RuntimeError("execution review did not satisfy completion checks")
         phase.verify_files()
         recorder.complete({
             "geometry": value["geometry"], "retention": value["retention"],
@@ -1794,21 +1757,11 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
             raise RuntimeError("execute point missing")
         phase.bind_visible_label(point["taskLabel"])
         def dispatch_execute(current: object) -> None:
-            if (type(current) is not dict
-                    or foreground_window_handle() != int(native.Handle.ToInt64())):
+            if type(current) is not dict or set(current) != {"x", "y"}:
                 raise RuntimeError("native Execute target is unavailable")
             cdp.call("Input.dispatchMouseEvent", {"type":"mousePressed","button":"left","buttons":1,"clickCount":1,**current}, lambda _v: cdp.call("Input.dispatchMouseEvent", {"type":"mouseReleased","button":"left","buttons":0,"clickCount":1,**current}, confirmed, "execute-up"), "execute-down")
 
-        def refused(facts: dict[str, object]) -> None:
-            recorder.driver.with_name("execute-foreground-diagnostic.json").write_text(
-                json.dumps(facts, sort_keys=True), encoding="utf-8",
-            )
-            fail(RuntimeError("native Execute foreground deadline expired"),
-                 None, "execute-foreground", "foreground")
-
-        wait_for_foreground(
-            int(native.Handle.ToInt64()), activate=native.Activate,
-            ready=lambda: cdp.evaluate(r"""(() => {
+        cdp.evaluate(r"""(() => {
               const button = document.querySelector('.nami-plan-review [data-action="execute"]');
               if (!button?.isConnected || button.disabled || !document.hasFocus()
                   || document.activeElement !== button) throw new Error('Execute focus changed');
@@ -1820,9 +1773,7 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
                 throw new Error('Execute hit target changed');
               }
               return point;
-            })()""", dispatch_execute, "execute-current-target"),
-            refused=refused, retained=retained,
-        )
+            })()""", dispatch_execute, "execute-current-target")
 
     cdp.evaluate(_PAGE, finished, "page")
     cdp.evaluate(wait_execute, execute, "wait-execute")
@@ -1872,21 +1823,14 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
 
     def configure(window: object, *args: object, **kwargs: object) -> object:
         controller = original(window, *args, **kwargs)
-        def loaded() -> None:
-            from System import Action
-            def begin() -> None:
-                if arguments.large_window:
-                    scale = window.native.DeviceDpi / 96
-                    window.native.Width += int(160 * scale)
-                    window.native.Height += int(100 * scale)
-                window.native.Activate()
-                window.native.browser.webview.Focus()
-                _drive(window, phase, recorder, retained, arguments.screenshot)
-            action = Action(begin)
-            retained.append(action)
-            window.native.BeginInvoke(action)
-        retained.append(loaded)
-        window.events.loaded += loaded
+        def begin() -> None:
+            if arguments.large_window:
+                scale = window.native.DeviceDpi / 96
+                window.native.Width += int(160 * scale)
+                window.native.Height += int(100 * scale)
+            _drive(window, phase, recorder, retained, arguments.screenshot)
+        on_background_page_loaded(window, retained, begin,
+                                  lambda error: recorder.fail("startup", type(error).__name__))
         return controller
 
     with ExitStack() as stack:

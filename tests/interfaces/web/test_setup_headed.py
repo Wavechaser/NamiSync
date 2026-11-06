@@ -56,6 +56,7 @@ def test_setup_child_keeps_the_production_host_and_captures_real_screenshots() -
 
 
 @pytest.mark.headed
+@pytest.mark.background_headed
 def test_m1_6_installed_setup_flow(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,

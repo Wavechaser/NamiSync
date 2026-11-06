@@ -110,6 +110,7 @@ def test_inventory_stage_diagnostic_names_wait_and_bounds_replacement_facts() ->
 
 
 @pytest.mark.headed
+@pytest.mark.background_headed
 def test_installed_inventory_refresh_acknowledge_restore_and_close(
     headed_installed_wheel: HeadedInstalledWheel, tmp_path: Path,
 ) -> None:
@@ -143,17 +144,6 @@ def test_installed_inventory_refresh_acknowledge_restore_and_close(
             pytest.fail(f"inventory journey child failed: {initial}")
         assert milestone == "ready"
         assert initial["report"]["native_clicks"] == {
-            "refresh": True, "filter-open": True, "filter-present": True,
-            "filter-escape": True, "filter-reopen": True, "filter-all": True,
-            "details": True, "acknowledge": True, "restore": True,
-            "context-open": True, "context-escape": True, "context-keyboard": True,
-            "context-keyboard-escape": True, "context-menu": True,
-            "context-acknowledge": True, "context-restore": True, "selected-hide-details": True,
-            "selected-activate": True, "selected-arrow-first": True,
-            "selected-arrow-second": True, "selected-context-menu": True, "selected-refresh": True,
-            **_INTEGRITY_INPUT,
-        }
-        assert initial["report"]["foreground_owned"] == {
             "refresh": True, "filter-open": True, "filter-present": True,
             "filter-escape": True, "filter-reopen": True, "filter-all": True,
             "details": True, "acknowledge": True, "restore": True,

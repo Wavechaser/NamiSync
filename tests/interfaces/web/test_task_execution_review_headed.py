@@ -759,6 +759,7 @@ def test_execution_review_evidence_ready_failure_final_and_privacy(tmp_path: Pat
 
 @pytest.mark.headed
 @pytest.mark.parametrize("large_window", [False, True], ids=["default", "larger"])
+@pytest.mark.background_headed
 def test_installed_task_execution_review_real_copy_and_capture(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,

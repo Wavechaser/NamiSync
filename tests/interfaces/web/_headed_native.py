@@ -32,10 +32,6 @@ _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
 _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000
 _JOB_OBJECT_LIMIT_JOB_MEMORY = 0x00000200
 _HOST_CHILD = Path(__file__).with_name("_headed_host_child.py")
-FOREGROUND_GUIDANCE = (
-    "Native input waiting: leave the NamiSync test window in front; "
-    "input will be refused after 15 seconds."
-)
 
 
 class _JobObjectBasicLimitInformation(ctypes.Structure):
@@ -166,31 +162,11 @@ def start_headed_process(
     gate = kernel32.CreateEventW(None, True, False, gate_name)
     if not gate:
         raise ctypes.WinError(ctypes.get_last_error())
-    job = kernel32.CreateJobObjectW(None, None)
-    if not job:
+    try:
+        job = create_headed_job(job_memory_limit_bytes)
+    except BaseException:
         kernel32.CloseHandle(gate)
-        raise ctypes.WinError(ctypes.get_last_error())
-    information = _JobObjectExtendedLimitInformation()
-    information.BasicLimitInformation.LimitFlags = (
-        _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
-    )
-    if job_memory_limit_bytes is not None:
-        if job_memory_limit_bytes <= 0:
-            kernel32.CloseHandle(job)
-            kernel32.CloseHandle(gate)
-            raise ValueError("job memory limit must be positive")
-        information.BasicLimitInformation.LimitFlags |= _JOB_OBJECT_LIMIT_JOB_MEMORY
-        information.JobMemoryLimit = job_memory_limit_bytes
-    if not kernel32.SetInformationJobObject(
-        job,
-        _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
-        ctypes.byref(information),
-        ctypes.sizeof(information),
-    ):
-        error = ctypes.get_last_error()
-        kernel32.CloseHandle(job)
-        kernel32.CloseHandle(gate)
-        raise ctypes.WinError(error)
+        raise
 
     wrapper_command = (
         os.fspath(Path(sys._base_executable)),
@@ -663,56 +639,6 @@ def foreground_window_handle() -> int | None:
     return int(handle) if handle else None
 
 
-def wait_for_foreground(
-    owned_handle: int,
-    *,
-    activate: Callable[[], None],
-    ready: Callable[[], None],
-    refused: Callable[[dict[str, object]], None],
-    retained: list[object],
-) -> None:
-    """Yield the UI thread while acquiring foreground, for at most 15 seconds."""
-
-    from System.Windows.Forms import Timer
-
-    deadline = scenario_deadline(15.0)
-    timer = Timer()
-    timer.Interval = 50
-    activation_attempted = False
-    settled = False
-
-    def tick(*_args: object) -> None:
-        nonlocal activation_attempted, settled
-        if settled:
-            return
-        observed = foreground_window_handle()
-        if time.monotonic() >= deadline.expires_at:
-            settled = True
-            timer.Stop()
-            timer.Dispose()
-            if activation_attempted:
-                _user32().FlashWindow(owned_handle, False)
-            refused({"reason": "foreground-deadline", "observedHandle": observed,
-                     "ownedHandle": owned_handle})
-        elif observed == owned_handle:
-            settled = True
-            timer.Stop()
-            timer.Dispose()
-            if activation_attempted:
-                _user32().FlashWindow(owned_handle, False)
-            ready()
-        elif not activation_attempted:
-            activation_attempted = True
-            print(FOREGROUND_GUIDANCE, flush=True)
-            activate()
-            _user32().FlashWindow(owned_handle, True)
-
-    timer.Tick += tick
-    retained.extend((timer, tick))
-    timer.Start()
-    tick()
-
-
 def _bounded_reap(
     process: subprocess.Popen[str],
     *,
@@ -804,6 +730,27 @@ def _find_window(
     return None
 
 
+def create_headed_job(memory_limit: int | None = None) -> int:
+    """Return a kill-on-close Job handle owned by the test launcher."""
+    information = _JobObjectExtendedLimitInformation()
+    information.BasicLimitInformation.LimitFlags = _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if memory_limit is not None:
+        if memory_limit <= 0:
+            raise ValueError("job memory limit must be positive")
+        information.BasicLimitInformation.LimitFlags |= _JOB_OBJECT_LIMIT_JOB_MEMORY
+        information.JobMemoryLimit = memory_limit
+    kernel = _kernel32()
+    job = kernel.CreateJobObjectW(None, None)
+    if not job:
+        raise ctypes.WinError(ctypes.get_last_error())
+    if not kernel.SetInformationJobObject(job, _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+                                          ctypes.byref(information), ctypes.sizeof(information)):
+        error = ctypes.get_last_error()
+        kernel.CloseHandle(job)
+        raise ctypes.WinError(error)
+    return job
+
+
 def _enumerate_windows() -> tuple[int, ...]:
     user32 = _user32()
     handles: list[int] = []
@@ -814,8 +761,12 @@ def _enumerate_windows() -> tuple[int, ...]:
         handles.append(int(handle))
         return True
 
+    ctypes.set_last_error(0)
     if not user32.EnumWindows(collect, 0):
-        raise ctypes.WinError(ctypes.get_last_error())
+        error = ctypes.get_last_error()
+        # A newly created desktop can have zero windows until its host starts.
+        if error or handles:
+            raise ctypes.WinError(error)
     return tuple(handles)
 
 
@@ -966,6 +917,4 @@ def _user32():
     user32.GetDlgItem.restype = wintypes.HWND
     user32.GetForegroundWindow.argtypes = ()
     user32.GetForegroundWindow.restype = wintypes.HWND
-    user32.FlashWindow.argtypes = (wintypes.HWND, wintypes.BOOL)
-    user32.FlashWindow.restype = wintypes.BOOL
     return user32

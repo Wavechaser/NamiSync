@@ -54,6 +54,9 @@ owning contracts.
   browser process and a unique NamiSync page before sending input.
 - Restore the table-loading probe's post-render measurement at the updated
   Plan progress read.
+- Move eleven installed page tests to an unattended private desktop,
+  preserving trusted browser input and real filesystem outcomes. Exercise
+  native blur and activation separately on Windows.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

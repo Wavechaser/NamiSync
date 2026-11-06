@@ -453,6 +453,7 @@ def _test_spec(
             "phase",
             "observed",
             "source_id",
+            "picker_dismissed_menu",
             "target_id",
             "source_keys",
             "target_keys",
@@ -478,6 +479,7 @@ def _test_spec(
             browser_report = payload["browser_gate"]
             if (
                 type(observed) is str
+                and type(payload["picker_dismissed_menu"]) is bool
                 and type(source_id) is str
                 and _SLOT_ID.fullmatch(source_id) is not None
                 and type(target_id) is str

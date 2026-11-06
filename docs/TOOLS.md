@@ -7,6 +7,10 @@ launcher. `tools/icons.py` maintains the fixed local icon vocabulary from
 `tools/icons.json`. None is part of the shipped `namisync` package. Pytest covers
 their behavior; measurement output remains subject to the authority rules below.
 
+For unattended WebView2 page journeys, `python -m tools.headed_background`
+starts pytest on a private Windows desktop. [TESTS](TESTS.md#run-levels)
+describes which native checks still need the input desktop.
+
 ## Portable build preparation
 
 `tools/packaging/` owns Windows portable-build inputs: Python entry shims,

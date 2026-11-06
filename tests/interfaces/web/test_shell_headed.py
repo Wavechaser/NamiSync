@@ -219,6 +219,7 @@ def test_accessibility_evidence_preserves_incomplete_normalized_facts() -> None:
 
 
 @pytest.mark.headed
+@pytest.mark.background_headed
 def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     shell_gate_evidence: _ShellGate,
 ) -> None:

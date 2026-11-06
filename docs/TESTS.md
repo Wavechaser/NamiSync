@@ -190,23 +190,22 @@ before sending input. A user focus change makes that attempt incomplete; it is
 not evidence that a gesture is disabled. Keep the failed receipt, restore any
 temporary window/cursor state and rerun after the interference ends. This does
 not require attendance for ordinary tests or probes that do not send input.
-Shell context-menu and execution input stages yield the UI thread while waiting
-up to 15 seconds for foreground, with one native activation attempt, a window
-flash and guidance to leave the test window in front. Recheck the focused/hit target after acquisition;
-expiry records the observed/owned handles and refusal reason and sends no input.
+The execution review, task shell and Inventory journeys direct their mouse and
+key events to the owned WebView2 page through its native CDP interface. CDP
+focus emulation lets the page process keyboard gestures. Each journey checks
+the DOM hit target, the trusted event and the resulting application behavior.
 The Inventory journey settles a preparatory row gesture's committed highlight
 publication before arming the next stage. Trusted-input witnesses attach to a
 stable ancestor and match node/action identity, since accepted window publication
 may replace row elements. Post-gesture settlement uses the actual trusted event
 target, not an earlier checked element. The existing failure hook records the
 pending page-wait label, checked-element connectivity and popup open/close counts;
-parent timeout must not erase which page wait was pending. These diagnostics do
-not relax foreground, focus, hit-target, trusted-input or effect assertions.
-The shell's native context-menu acknowledgement waits allow 30 seconds, covering
-foreground acquisition and dispatch; its ordinary browser-state waits remain
-7.5 seconds. Execution's existing acknowledgement waits already allow 30 seconds.
-Guidance uses stdout. The shell parent accepts at most four exact guidance lines
-(one for each context-menu stage); unexpected stdout or any stderr still fails.
+parent timeout must not erase which page wait was pending.
+The native folder-picker journey opens an installed row menu before the
+dialog, observes a trusted window blur and checks that the menu was dismissed.
+It runs on the input desktop alongside real Windows activation/refusal and
+startup-error dialogs. Tests sharing the picker scenario have the same
+`native_desktop` marker.
 The optional Plan-again trace suppresses repeated identical eligibility/projection
 observations within each phase while retaining transitions and every event. Its
 48-entry bound and strict overflow rejection remain unchanged. The shell's
@@ -318,6 +317,25 @@ Evidence: `build/ab8-20260926/installed-native-evidence/`,
 `build/incident-trace-20260927/native_trace.py`. AB-7's later larger-shell failure
 is not a proven second reproduction: its intermediate script was not preserved,
 preventing exact line attribution.
+
+For unattended page journeys, run the following from the Windows workspace:
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.headed_background
+```
+
+The launcher creates a uniquely named private Win32 desktop in the current
+interactive session. It starts pytest suspended, admits it to a kill-on-close
+Job before resuming, and returns its exit code. The user's input desktop stays
+selected. The `background_headed` marker selects both task-shell and execution
+review sizes, Inventory, Setup, the keyboard tree, and the component gallery.
+Invoking pytest with the marker alone still creates windows on the caller's
+desktop. This route was exercised in a signed-in interactive session. The
+ordinary non-headed default is unchanged.
+
+Reserve the input desktop for `-m native_desktop` (real activation, native
+dialogs and the shared picker scenario). The complete headed command also runs
+material, startup, transport and host checks outside those targeted selections:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed

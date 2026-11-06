@@ -15,9 +15,8 @@ from pathlib import Path
 from typing import Callable
 from unittest.mock import patch
 
-from _headed_cdp import NativeCdp, decode_png, failure_site, runtime_value
+from _headed_cdp import NativeCdp, on_background_page_loaded, decode_png, failure_site, runtime_value
 from _headed_evidence import EvidencePaths, EvidencePublisher
-from _headed_native import foreground_window_handle
 from _startup_test_support import headed_command_extension
 
 
@@ -43,7 +42,6 @@ _OWN_FAILURES = frozenset({
     "inventory action identities or actual effects differ",
     "inventory publication was not replaced",
     "native inventory page result is invalid",
-    "native inventory window is not foreground",
     "native inventory point is invalid",
     "native inventory click target is unavailable",
     "inventory fixture identity is unavailable",
@@ -1188,13 +1186,10 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
            retained: list[object], screenshot: Path) -> None:
     native = window.native
     core = native.browser.webview.CoreWebView2
-    owned_handle = int(native.Handle.ToInt64())
     failed = False
     checkpoint = "page-pending"
     page_result: dict[str, object] | None = None
-    observed_handle: int | None = None
     click_target: dict[str, object] | None = None
-    foreground_owned = {name: False for name in ("refresh", "filter-open", "filter-present", "filter-escape", "filter-reopen", "filter-all", "details", "acknowledge", "restore", "context-open", "context-escape", "context-keyboard", "context-keyboard-escape", "context-menu", "context-acknowledge", "context-restore", "selected-hide-details", "selected-activate", "selected-arrow-first", "selected-arrow-second", "selected-context-menu", "selected-refresh", *_RANGE_STAGES, *_INTEGRITY_STAGES)}
 
     def fail(error: BaseException, task: object | None, step: str, _method: str) -> None:
         nonlocal failed
@@ -1205,10 +1200,9 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         phase.verify_release.set()
         diagnostic = failure_site(task)
         diagnostic.update({"checkpoint": checkpoint, "page_result": page_result,
-                           "foreground_owned": foreground_owned, "phase": phase.diagnostic(),
+                           "phase": phase.diagnostic(),
                            "assertion": _owned_failure(error),
                            "click_target": click_target,
-                           "owned_handle": owned_handle, "observed_handle": observed_handle,
                            "confirmation_exit": None, "integrity_custody": None, "follow_custody": None,
                            "stage_facts": None, "refresh_viewport": None})
 
@@ -1275,12 +1269,10 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                       "await new Promise(r=>setTimeout(r,25));}throw new Error('stage');})()")
 
         def click(_ready: object) -> None:
-            nonlocal observed_handle
-            focus_deadline = monotonic() + 60.0 if name == "refresh" else None
             runner_deadline = monotonic() + 60.0 if name in {"pause", "cancel"} else None
 
             def dispatch_owned(checked: object) -> None:
-                nonlocal observed_handle, click_target
+                nonlocal click_target
                 if type(checked) is not dict or type(checked.get("facts")) is not dict:
                     raise RuntimeError("native inventory point is invalid")
                 facts = checked["facts"]
@@ -1290,10 +1282,6 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                 point = checked.get("point")
                 if type(point) is not dict or set(point) != {"x", "y"}:
                     raise RuntimeError("native inventory point is invalid")
-                observed_handle = foreground_window_handle()
-                if observed_handle != owned_handle:
-                    raise RuntimeError("native inventory window is not foreground")
-                foreground_owned[name] = True
                 def released(_value: object) -> None:
                     def acknowledge() -> None:
                         cdp.evaluate(f"window.__inventoryNativeAck='{name}';true", lambda _ack: next_stage(index + 1), f"ack-{name}")
@@ -1338,28 +1326,17 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
                         "button": mouse_button, "buttons": 0, "clickCount": 1, "modifiers": modifiers, **point},
                         released, f"{name}-up"), f"{name}-down")
 
-            def require_foreground() -> None:
-                nonlocal observed_handle
-                observed_handle = foreground_window_handle()
-                if observed_handle == owned_handle:
+            def check_target() -> None:
+                cdp.evaluate("window.__inventoryNativeCheck()", dispatch_owned, f"preclick-{name}")
+
+            def require_runner_entry() -> None:
+                if runner_deadline is None or phase.observe_verify_runner_entry(name):
                     if name == "refresh":
                         fixture = phase.remove_fixture_file()
                         cdp.evaluate(f"window.__inventoryFixture={json.dumps(fixture)};true",
                                      lambda _value: check_target(), "fixture-identity")
                     else:
                         check_target()
-                elif focus_deadline is not None and monotonic() < focus_deadline:
-                    cdp.evaluate("new Promise(resolve => setTimeout(() => resolve(true), 100))",
-                                 lambda _value: require_foreground(), "wait-foreground")
-                else:
-                    raise RuntimeError("native inventory window is not foreground")
-
-            def check_target() -> None:
-                cdp.evaluate("window.__inventoryNativeCheck()", dispatch_owned, f"preclick-{name}")
-
-            def require_runner_entry() -> None:
-                if runner_deadline is None or phase.observe_verify_runner_entry(name):
-                    require_foreground()
                 elif monotonic() < runner_deadline:
                     cdp.evaluate("new Promise(resolve => setTimeout(() => resolve(true), 100))",
                                  lambda _value: require_runner_entry(), f"wait-{name}-runner-entry")
@@ -1383,7 +1360,6 @@ def _drive(window: object, phase: _InventoryPhase, recorder: _Recorder,
         report = phase.report()
         report["blank_scanning_shell"] = phase.initial_scan_entered.is_set() and phase.initial_scan_release.is_set()
         report.update(value)
-        report["foreground_owned"] = dict(foreground_owned)
         cdp.capture(screenshot, lambda: captured(report), "capture")
 
     def captured(report: dict[str, object]) -> None:
@@ -1439,17 +1415,10 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
 
     def configure(window: object, *args: object, **kwargs: object) -> object:
         controller = original_appearance(window, *args, **kwargs)
-        def loaded() -> None:
-            from System import Action
-            def begin() -> None:
-                window.native.Activate()
-                window.native.browser.webview.Focus()
-                _drive(window, phase, recorder, retained, arguments.screenshot)
-            action = Action(begin)
-            retained.append(action)
-            window.native.BeginInvoke(action)
-        retained.append(loaded)
-        window.events.loaded += loaded
+        on_background_page_loaded(
+            window, retained, lambda: _drive(window, phase, recorder, retained, arguments.screenshot),
+            lambda error: recorder.fail("startup", type(error).__name__),
+        )
         return controller
 
     with ExitStack() as stack:

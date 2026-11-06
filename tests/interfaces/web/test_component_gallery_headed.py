@@ -2615,6 +2615,7 @@ def test_component_gallery_enables_dom_before_css_pseudo_state_agent(
 
 
 @pytest.mark.headed
+@pytest.mark.background_headed
 def test_br_g_46_theme_selector_reconciles_only_accepted_state(
     component_gallery_evidence: _GalleryEvidence,
 ) -> None:
@@ -2643,6 +2644,7 @@ def test_br_g_46_theme_selector_reconciles_only_accepted_state(
 
 
 @pytest.mark.headed
+@pytest.mark.background_headed
 def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
     component_gallery_evidence: _GalleryEvidence,
 ) -> None:
@@ -3270,6 +3272,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
 
 
 @pytest.mark.headed
+@pytest.mark.background_headed
 def test_sh_g_13_component_gallery_honors_reduced_motion(
     component_gallery_evidence: _GalleryEvidence,
 ) -> None:
@@ -3339,6 +3342,7 @@ def _maximum_duration_ms(value: str) -> float:
 
 
 @pytest.mark.headed
+@pytest.mark.background_headed
 def test_sh_g_14_component_gallery_uses_closed_local_icon_registry(
     component_gallery_evidence: _GalleryEvidence,
 ) -> None:
