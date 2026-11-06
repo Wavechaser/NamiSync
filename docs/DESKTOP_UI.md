@@ -1453,6 +1453,9 @@ buttons with accessible action names and tooltips. Go keeps its ordinary neutral
 button styling and autoscroll keeps its primary accent emphasis. Each button sits
 on its own opaque neutral wrapper at rest, hover and press, without blur or
 acrylic; button interaction fills follow the ordinary shared styles. Go
+uses the item at click time even if the next file starts before the jump
+completes. Between files the controls retain the last known target. A gap,
+pane change or retired verification session discards a pending jump. Go
 performs a one-time jump in the current view, without enabling follow or changing
 sort/filters. If the target and ancestors are excluded, report that fact. Enable
 appears only when follow is eligible and off. With no active target, controls

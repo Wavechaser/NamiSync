@@ -344,6 +344,8 @@ explicit, reviewable and regression-backed.
 - Display live throughput as a rate and remaining time as ETA.
 - Follow the latest settled execution operation between files and land on the
   final row even when the last operation was a no-op.
+- Keep Go and Follow available between files. A click takes the user to the
+  item that was current when they clicked, even if another file starts.
 
 #### Preserve Setup actions during folder validation (2026-11-04 – 2026-11-05)
 

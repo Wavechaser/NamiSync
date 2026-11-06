@@ -1809,6 +1809,29 @@ assert.equal(alignedAction("enable-item-follow").classList.contains("nami-button
 alignedAction("go-current-item").click();
 alignedAction("enable-item-follow").click();
 assert.deepEqual(followCalls, [[alignedReview, false], [alignedReview, true]]);
+for (const actionState of [{pending:true}, {accepted:true}]) {
+  alignedTask.inventoryAction = actionState;
+  alignedPane.render(alignedTask);
+  assert.equal(alignedAction("go-current-item").disabled, false,
+    "unrelated integrity action feedback leaves current-item navigation usable");
+  assert.equal(alignedAction("enable-item-follow").disabled, false);
+}
+alignedTask.inventoryAction = null;
+for (const reason of ["close", "loading", "view"]) {
+  alignedTask.closePending = reason === "close";
+  alignedTask.inventoryLoading = reason === "loading";
+  alignedReview.pending = reason === "view" ? "view" : null;
+  alignedPane.render(alignedTask);
+  const beforeBlocked = followCalls.length;
+  alignedAction("go-current-item").click();
+  alignedAction("enable-item-follow").click();
+  assert.equal(alignedAction("go-current-item").disabled, true);
+  assert.equal(alignedAction("enable-item-follow").disabled, true);
+  assert.equal(followCalls.length, beforeBlocked, `${reason} keeps navigation fenced`);
+}
+alignedTask.closePending = false;
+alignedTask.inventoryLoading = false;
+alignedReview.pending = null;
 alignedReview.follow.enabled = true;
 alignedPane.render(alignedTask);
 assert.equal(alignedAction("enable-item-follow").hidden, true);

@@ -1015,6 +1015,21 @@ for (const [action, label, glyph] of [
   assert.equal(findByClass(control, `nami-icon--${glyph}`).ariaHidden, "true");
 }
 const overrideCount = calls.filter(([name]) => name === "onFollowOverride").length;
+for (const reason of ["close", "loading", "view"]) {
+  review.pending = reason === "view" ? "view" : null;
+  panel.render({...task, closePending:reason === "close", reviewLoading:reason === "loading"});
+  const beforeBlocked = calls.filter(([name]) => name === "onNavigateCurrent").length;
+  for (const action of ["go-current-operation", "enable-operation-follow"]) {
+    const control = findAction(panel.element, action);
+    assert.equal(control.disabled, true);
+    control.dispatch("click");
+  }
+  assert.equal(calls.filter(([name]) => name === "onNavigateCurrent").length, beforeBlocked,
+    `${reason} keeps current-operation navigation fenced`);
+}
+review.pending = null;
+panel.render(task);
+assert.equal(findAction(panel.element, "go-current-operation").disabled, false);
 viewport.dispatch("wheel");
 viewport.scrollTop = ROW_HEIGHT * 10 + 1;
 viewport.dispatch("scroll");

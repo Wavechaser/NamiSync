@@ -1491,6 +1491,56 @@ app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2
 await tick();
 assert.equal(followAnchors.length, 2, "same loaded target progress does not resolve again");
 assert.equal(followReview.follow.scrollOffset, null, "same target progress does not reposition");
+
+followReview.follow.enabled = false;
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null));
+assert.equal(followReview.follow.hasTarget, true, "a settled-file handoff retains a real navigation target");
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false); await tick();
+assert.equal(followReview.follow.scrollOffset, 296, "Go remains usable in the gap between files");
+followReview.follow.anchorKey = null;
+followReview.follow.anchorIndex = null;
+heldFollowAnchor = defer();
+const clickedAnchor = heldFollowAnchor;
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+const clickedAnchorCount = followAnchors.length;
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:3"));
+assert.equal(followAnchors.length, clickedAnchorCount, "progress cannot replace a pending explicit Go");
+heldFollowAnchor = null;
+clickedAnchor.resolve({disposition:"current", view_revision:followReview.summary.view_revision,
+  node_id:real.node_id, index:300});
+await tick();
+assert.ok(followReview.follow.anchorKey.endsWith(":1:2"), "Go finishes for the real item captured by the click");
+assert.equal(followReview.follow.scrollOffset, 296);
+heldFollowAnchor = defer();
+const supersededAnchor = heldFollowAnchor;
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+heldFollowAnchor = null;
+const beforeLatestGo = followWindows.length;
+supersededAnchor.resolve({disposition:"current", view_revision:followReview.summary.view_revision,
+  node_id:real.node_id, index:300});
+await tick();
+assert.ok(followWindows.length > beforeLatestGo);
+assert.ok(followWindows.slice(beforeLatestGo).every(offset => offset === 36),
+  "a later explicit Go supersedes the earlier target, including a queued overlay refresh");
+assert.equal(followReview.follow.scrollOffset, 36);
+followReview.follow.enabled = true;
+followReview.follow.anchorKey = null;
+followReview.follow.anchorIndex = null;
+heldFollowAnchor = defer();
+const enabledExplicit = heldFollowAnchor;
+const beforeEnabledExplicit = followAnchors.length;
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, true);
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
+heldFollowAnchor = null;
+enabledExplicit.resolve({disposition:"current", view_revision:followReview.summary.view_revision,
+  node_id:real.node_id, index:40});
+await tick(); await tick();
+assert.deepEqual(followAnchors.slice(beforeEnabledExplicit).map(value => value.itemId), ["1:1", "1:2"],
+  "enabled Follow catches up once after the captured explicit jump settles");
+assert.equal(followReview.follow.anchorIndex, 300);
+await tick();
 globalThis.inventoryCallbacks.onFollowOverride(followReview, 300, 310);
 assert.equal(followReview.follow.enabled, true);
 globalThis.inventoryCallbacks.onFollowOverride(followReview, 0, 10);
@@ -1520,6 +1570,42 @@ assert.equal(followAnchors.length, duringLoad + 1, "load completion resolves the
 assert.equal(followReview.follow.enabled, true);
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("unmapped-scan", "operation"));
 assert.equal(followReview.follow.hasTarget, false, "non-integrity progress cannot invent an Inventory row");
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null));
+assert.equal(followReview.follow.hasTarget, false, "a non-integrity item retires the retained target");
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
+app.acceptTaskUpdate(followTask, followTask.sessionId, null,
+  {...followSnapshot(null), session_state:"completed"});
+assert.equal(followReview.follow.hasTarget, false, "terminal settlement retires current-item navigation");
+for (const boundary of ["gap", "raw gap", "terminal", "pane", "no target"]) {
+  followReview.follow.enabled = false;
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
+  followReview.follow.anchorKey = null;
+  followReview.follow.anchorIndex = null;
+  followReview.follow.scrollOffset = null;
+  heldFollowAnchor = defer();
+  const retiredExplicit = heldFollowAnchor;
+  globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+  const windowsBeforeBoundary = followWindows.length;
+  if (boundary === "pane") followTask.paneRevision += 1;
+  else if (boundary === "no target") {
+    followTask.progressPresentation = {activeItem:{item_id:"unmapped", item_type:"operation"}};
+    globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+  }
+  else if (boundary === "raw gap") app.acceptTaskUpdate(followTask, followTask.sessionId,
+    {update_type:"event", event:{body_type:"Gap", body:{first_missed_seq:8}}});
+  else app.acceptTaskUpdate(followTask, followTask.sessionId, null,
+    {...followSnapshot(null), ...(boundary === "gap" ? {gap_first_missed_seq:7} : {session_state:"completed"})});
+  if (boundary !== "pane") assert.equal(followReview.follow.hasTarget, false,
+    `${boundary} retires the retained ordinary target`);
+  heldFollowAnchor = null;
+  retiredExplicit.resolve({disposition:"current", view_revision:followReview.summary.view_revision,
+    node_id:real.node_id, index:40});
+  await tick();
+  assert.ok(followWindows.slice(windowsBeforeBoundary).every(offset => offset !== 36),
+    `${boundary} prevents a delayed explicit anchor from dispatching its old window`);
+  assert.equal(followReview.follow.scrollOffset, null, `${boundary} cannot publish the retired jump`);
+}
+followReview.follow.enabled = true;
 heldFollowAnchor = defer();
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
 const closingAnchor = heldFollowAnchor;

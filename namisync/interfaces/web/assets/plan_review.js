@@ -673,8 +673,10 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     if (!detailsState.expanded && diagnostics.contains(document.activeElement)) detailsToggle.focus?.();
     updateDiagnostics();
   });
-  goCurrent.addEventListener("click", () => current !== null && callbacks.onNavigateCurrent(current, false));
-  enableFollow.addEventListener("click", () => current !== null && callbacks.onNavigateCurrent(current, true));
+  goCurrent.addEventListener("click", () => current !== null && !goCurrent.disabled
+    && callbacks.onNavigateCurrent(current, false));
+  enableFollow.addEventListener("click", () => current !== null && !enableFollow.disabled
+    && callbacks.onNavigateCurrent(current, true));
 
   function updateDiagnostics() {
     detailsToggle.hidden = current === null;
@@ -1222,6 +1224,8 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       || follow?.eligible !== true || follow?.enabled === true;
     goCurrentSurface.hidden = goCurrent.hidden;
     enableFollowSurface.hidden = enableFollow.hidden;
+    goCurrent.disabled = Boolean(task.closePending || task.reviewLoading || review.pending);
+    enableFollow.disabled = goCurrent.disabled;
     floatingControls.hidden = goCurrent.hidden && enableFollow.hidden;
     if (review.window !== previousWindow) table.setWindow(review.window);
     element.dataset.pending = review.pending ?? "";

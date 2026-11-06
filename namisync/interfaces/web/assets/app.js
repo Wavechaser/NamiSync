@@ -569,8 +569,11 @@ function tableReadOwner(task, inventory = false) {
 
 function inventoryActiveItem(task) {
   const item = task.progressPresentation?.activeItem;
-  return task.sessionState === "active" && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)
-    && item?.item_type === "integrity" ? item.item_id : null;
+  if ((task.snapshot?.session_state ?? task.sessionState) !== "active"
+      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)) return null;
+  if (item !== null && item !== undefined) return item.item_type === "integrity" ? item.item_id : null;
+  const follow = task.inventoryReview?.follow;
+  return follow?.sessionId === task.sessionId ? follow.targetId ?? null : null;
 }
 
 function planFollowTarget(task) {
@@ -586,10 +589,11 @@ function inventoryFollow(task, review) {
     review.follow = {sessionId: task.sessionId,
       enabled: ["baseline", "verify", "rebaseline"].includes(task.sessionKind) && followEligible(review),
       eligible: followEligible(review), hasTarget: false, generation: 0,
-      anchorKey: null, anchorIndex: null, scrollOffset: null, message: null};
+      targetId: null, anchorKey: null, anchorIndex: null, scrollOffset: null, message: null};
   }
   review.follow.eligible = followEligible(review);
-  review.follow.hasTarget = inventoryActiveItem(task) !== null;
+  review.follow.targetId = inventoryActiveItem(task);
+  review.follow.hasTarget = review.follow.targetId !== null;
   return review.follow;
 }
 
@@ -647,17 +651,20 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
   const operationId = adapter.target(task);
   review.follow.hasTarget = operationId !== null;
   if (operationId === null) {
+    cancelReviewFollow(review);
     review.follow.message = `No ${adapter.subject} is active.`;
     review.message = review.follow.message;
     renderTasks();
     return;
   }
   if (enableFollow) review.follow.enabled = review.follow.eligible;
+  if (!explicit && review.followRead?.explicit) return;
   const sessionId = adapter.session(task);
   const viewRevision = review.summary.view_revision;
   const actionRevision = review.actionRevision;
   const followGeneration = review.follow.generation;
   const navigation = navigationRevision;
+  const paneRevision = task.paneRevision;
   const anchorKey = `${sessionId}:${viewRevision}:${operationId}`;
   if (review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
       && review.follow.anchorIndex >= review.window.offset
@@ -666,16 +673,18 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
     if (explicit) { review.follow.scrollOffset = navigationWindowOffset(review.follow.anchorIndex); renderTasks(); }
     return;
   }
-  if (review.followRead?.key === anchorKey && review.followRead.generation === followGeneration) return;
+  if (review.followRead?.key === anchorKey && review.followRead.generation === followGeneration
+      && (!explicit || review.followRead.explicit)) return;
   review.followRead?.job.cancel();
   const owner = tableReadOwner(task, adapter.inventory);
   const release = owner.beginForeground();
   const current = () => adapter.owner(review) === task
     && !settingsVisible && !task.closePending && !adapter.loading(task) && review.pending === null
     && navigationRevision === navigation
+    && task.paneRevision === paneRevision
     && adapter.session(task) === sessionId && review.summary.view_revision === viewRevision
     && review.actionRevision === actionRevision && review.follow.generation === followGeneration
-    && adapter.target(task) === operationId;
+    && (explicit || adapter.target(task) === operationId);
   const job = owner.request(current, async (stillCurrent) => {
     const anchor = review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
       ? {disposition: "current", index: review.follow.anchorIndex}
@@ -685,7 +694,7 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
     const window = await adapter.window(task.taskId, viewRevision, navigationWindowOffset(anchor.index), 256);
     return {anchor, window};
   });
-  const request = {key: anchorKey, generation: followGeneration, job};
+  const request = {key: anchorKey, generation: followGeneration, explicit, job};
   review.followRead = request;
   void job.promise.then((result) => {
     if (result === null || !current()) return;
@@ -711,8 +720,11 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
       renderTasks();
     }
   }).finally(() => {
-    if (review.followRead === request) review.followRead = null;
+    const owned = review.followRead === request;
+    if (owned) review.followRead = null;
     release();
+    if (owned && explicit && review.follow.enabled && review.follow.eligible
+        && adapter.target(task) !== null && adapter.target(task) !== operationId) queueReviewFollow(review, adapter);
   });
 }
 
@@ -935,6 +947,22 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     return;
   }
   const execution = task.sessionKind === "sync-execution";
+  const rawGap = update?.event?.body_type === "Gap";
+  const newGap = snapshot?.gap_first_missed_seq != null
+    && snapshot.gap_first_missed_seq !== task.snapshot?.gap_first_missed_seq;
+  if (rawGap || newGap) {
+    task.progressPresentation = null;
+    if (execution) task.executionPresentation = null;
+    const review = execution ? task.review : task.inventoryReview;
+    if (review?.follow != null) {
+      cancelReviewFollow(review);
+      review.follow.hasTarget = false;
+      review.follow.targetId = null;
+      review.follow.anchorKey = null;
+      review.follow.anchorIndex = null;
+      review.follow.scrollOffset = null;
+    }
+  }
   if (execution) {
     task.executionWindowDirty = true;
     task.executionWindowDirtyRevision += 1;
@@ -947,8 +975,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     || update?.update_type === "record" || update?.event?.body_type === "Gap"
     || task.snapshot?.gap_first_missed_seq !== snapshot?.gap_first_missed_seq;
   if (snapshot !== null) {
-    if (snapshot.gap_first_missed_seq != null
-        && snapshot.gap_first_missed_seq !== task.snapshot?.gap_first_missed_seq) invalidateInventoryReview(task);
+    if (newGap) invalidateInventoryReview(task);
     task.snapshot = snapshot;
     task.progressPresentation = {
       phase: snapshot.phase,
@@ -1041,7 +1068,8 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
   }
   if (task.review !== null && task.sessionKind === "sync-execution") {
     task.review.follow.hasTarget = planFollowTarget(task) !== null;
-    if (task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
+    if (!task.review.follow.hasTarget) cancelReviewFollow(task.review);
+    else if (task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
   }
   if (task.inventoryReview !== null && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
     followInventory(task);

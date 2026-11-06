@@ -841,7 +841,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     enableFollow.hidden = goCurrent.hidden || follow?.eligible !== true || follow?.enabled === true;
     goCurrentSurface.hidden = goCurrent.hidden;
     enableFollowSurface.hidden = enableFollow.hidden;
-    goCurrent.disabled = Boolean(blocked());
+    goCurrent.disabled = Boolean(value.closePending || value.inventoryLoading || review?.pending);
     enableFollow.disabled = goCurrent.disabled;
     floatingControls.hidden = goCurrent.hidden && enableFollow.hidden;
     const syncTask = value.taskKind === "sync-plan" && value.executionStarted;
