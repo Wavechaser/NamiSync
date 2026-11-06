@@ -900,10 +900,21 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Planning refusal presentation
 
+- SEVERE - OPEN (2026-11-06). Supported-scale plan refused at half the
+  target. A 100,000 × 32 B copy into an empty target (101,000 operations,
+  1,000 directories) was refused with `ReviewFactLimitExceeded`
+  (plan/domain/rows, 120,000); 50,000 files (50,500 operations) planned. The
+  user's stated policy is a performance guarantee up to 120,000 items with
+  larger plans allowed but unguaranteed, so no refusal is expected here.
+  Cause, from source: plan-review preflight retains one source and one target
+  subject per operation and checks `paths`/`stats` against the domain wall
+  (`modules/preflight.py` `_operation_subjects` and the observation loop), so
+  a copy plan trips at about 60,000 operations. DEFENSE's population-wall list
+  still describes the earlier refuse-at-first-excess policy, so the contract
+  and the stated intent disagree; the wall set needs owner adjudication before
+  a fix. Evidence: `build/resource-study-20261106b/full/runs/scale-100k-01`.
 - MODERATE - OPEN (2026-11-06). Review-limit refusal shown as retryable
-  failure. A driven 100,000 × 32 B copy (1,000 directories, empty target) on
-  the rebuilt package was correctly refused at the 120,000-row plan domain
-  wall (`ReviewFactLimitExceeded`, plan/domain/rows), so no plan was saved.
+  failure. When the plan above was refused, no plan was saved.
   The page still requested the Plan view; `open_plan_view` hit the missing
   plan (`KeyError` in `runtime.get_plan`), the bridge returned
   `internal_error`, and the task showed "Plan unavailable. Select the task to
