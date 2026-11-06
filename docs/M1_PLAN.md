@@ -21,6 +21,19 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Small-file copy cost — 2026-11-06
+
+Baseline `b2e872e6`. Compare ordinary successful-copy event delivery on a
+private headed desktop, and native attribute-only descendant checks in the
+executor rig, independently. Each favorable change requires its own reviewed
+commit, matching behavioral tests and a matched comparison. Event delivery
+must preserve ordered receipts, immediate urgent wakeups, bounded custody,
+replay and terminal release. Native checks must retain their access boundaries,
+failure dispositions and full metadata wherever consumed. Inspect Plan-window
+reads after measuring delivery, and profile the actual durable recorder before
+selecting any SQL change. PERFORMANCE owns measurements. Grouped ledger commits
+and parent flushes are deferred to M2 with small-file copy batching.
+
 ### Live execution and verification presentation — delivered 2026-11-06
 
 Automatic verification opens Verify using the original run's operation IDs

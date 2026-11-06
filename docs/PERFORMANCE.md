@@ -168,6 +168,24 @@ inside a loaded GUI run remains a valid single observation. Evidence in
 `build/copyonly-20261106/`: `copy.jsonl`, `*-calls.json`, `gui-summary.json`, `gui.xml`
 and `delay.xml`.
 
+### Durable copy recording — 2026-11-06
+
+Six source-service runs each copied 1,000 × 4 KiB in ten directories on F:
+to a fresh F: target with automatic verification off. Each independently
+checked the mirror hashes, all 1,000 durable identities and copy operations,
+SQLite integrity and the successful terminal record. With only outer timers,
+`record_copied` averaged 0.662 and 0.700 ms/file. Two instrumented runs gave
+0.747–0.786 ms/file, including 0.404–0.416 in commit, 0.201–0.211 in the
+transaction body and 0.045–0.051 in the payload hash. The identity SELECT
+took about 0.003 ms/file. Timers nest and include instrumentation overhead.
+
+Two instrumented private trials suppressing repeated, identical busy-timeout
+assignments gave 0.729 and 0.782 ms/file. The ranges overlap; retain the
+writer's existing timeout and per-item commit behavior. See
+`build/copy-record-opt/summary.json` for raw receipt paths, driver hash,
+instrumentation boundaries and producer provenance. Recorder dependencies were
+stable; concurrent native executor edits exclude whole-executor comparisons.
+
 ## Driven package resource pilot — 2026-11-06 (continuation)
 
 A new session took over the study below with a simpler control method and

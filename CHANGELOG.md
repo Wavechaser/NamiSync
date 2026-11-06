@@ -67,6 +67,9 @@ owning contracts.
 - Compare copy-only executor time across matched revisions, the durable service
   and the live GUI. Attribute service recording cost and measure the effect of
   fewer event reads with a test-only intervention.
+- Profile real durable copy transactions. Commit averaged 0.40–0.42 ms/file
+  on the local fixture; suppressing repeated timeout assignments showed no
+  clear improvement. Defer grouped durability to M2 with small-file batching.
 - Keep the 120,000-item performance envelope and admit best-effort workloads
   up to 150,000 logical rows and 300,000 ordered results. Record the exact
   refusal in history v8. Prior database pairs require the manual archive and
