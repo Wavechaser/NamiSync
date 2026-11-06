@@ -130,6 +130,7 @@ class _ExecutionReviewPhase:
         self.execution_detail_attempt: dict[str, object] | None = None
         self.inventory_open: dict[str, object] | None = None
         self.inventory_window: dict[str, object] | None = None
+        self.window_trace: dict[str, int | bool | None] = {}
         self.refresh: dict[str, object] | None = None
         self.refresh_admissions = 0
         self.selection: dict[str, object] | None = None
@@ -429,6 +430,14 @@ class _ExecutionReviewPhase:
             if result.get("view_revision") != payload.expected_revision:
                 raise ValueError("inventory window revision changed")
             integrity = result.get("integrity")
+            self.window_trace = {
+                "requestedOffset": getattr(payload, "offset", None),
+                "requestedLimit": getattr(payload, "limit", None),
+                "eligibleRows": sum(type(row) is dict and row.get("row_id") is not None
+                                    for row in result["rows"]) if type(result.get("rows")) is list else None,
+                "integrityRevision": integrity.get("revision") if type(integrity) is dict else None,
+                "integrityGap": integrity.get("gap") if type(integrity) is dict else None,
+            }
             self.inventory_window = {
                 "admitted": admitted, "completed": completed,
                 "view_revision": result.get("view_revision"),
@@ -656,41 +665,86 @@ class _ExecutionReviewPhase:
         with self.lock:
             return {"type": self.failure, "command": self.failure_command}
 
-    def finished_ready(self) -> bool:
+    def completion_trace(self) -> tuple[dict[str, bool], dict[str, object]]:
         with self.lock:
             owner = self.ordinary
-            owner_released = self._owner_released_locked(owner)
+            execution, release, window = self.execution, self.release, self.window
+            overlay = self.inventory_window
             actions = [(item["command"], item["action"]) for item in self.controls]
+            checks = {
+                "registryPresent": self.registry is not None,
+                "executionObserved": execution is not None,
+                "releaseObserved": release is not None,
+                "windowObserved": window is not None,
+                "overlayObserved": overlay is not None,
+                "planObserved": self.plan is not None,
+                "recordingHealthy": self.failure is None,
+                "originalLifecycleReleased": bool(execution and self._session_released_locked(execution["session_id"])),
+                "executionBeforeRelease": bool(execution and release and execution["completed"] < release["admitted"]),
+                "releaseBeforeWindow": bool(release and window and release["completed"] < window["admitted"]),
+                "actionsMatch": actions == [("control_integrity", "pause"), ("control_integrity", "resume")],
+                "overlaySessionMatches": bool(overlay and owner and overlay["integrity_session_id"] == owner["session_id"]),
+                "overlayComplete": bool(overlay and overlay["integrity_complete"] is True),
+                "overlayCountMatches": bool(overlay and overlay["integrity_item_count"] == len(self.fixture)),
+                "closeObserved": self.close is not None,
+            }
+            release_receipts = {}
+            for role, session in (("ordinary", owner), ("refresh", self.refresh)):
+                if role == "refresh" and self.branch == "exact":
+                    continue
+                receipt = next((item for item in self.auxiliary_releases
+                                if session and item["session_id"] == session["session_id"]), None)
+                release_receipts[role + "Release"] = receipt
+                checks.update({
+                    role + "Observed": session is not None,
+                    role + "ReleaseObserved": receipt is not None,
+                    role + "BeforeRelease": bool(session and receipt and session["completed"] < receipt["admitted"]),
+                    role + "LifecycleReleased": bool(session and self._session_released_locked(session["session_id"])),
+                })
             if self.branch == "exact":
-                overlay_ready = bool(
-                    self.inventory_window is not None and self.ordinary is not None
-                    and self.inventory_window["integrity_session_id"] == self.ordinary["session_id"]
-                    and self.inventory_window["integrity_complete"] is True
-                    and self.inventory_window["integrity_item_count"] == len(self.fixture)
+                detail = self.detail
+                checks.update({
+                    "detailObserved": detail is not None,
+                    "detailOperationMatchesWindow": bool(detail and window and detail["operation_id"] == window["operation_id"]),
+                    "detailRevisionMatchesWindow": bool(detail and window and detail["execution_revision"] == window["execution_revision"]),
+                })
+            else:
+                selection = self.selection
+                checks.update({
+                    "selectionCountMatches": bool(selection and selection["selected_file_count"] == len(self.fixture)),
+                    "selectionRequestMatches": bool(selection and self.refresh and selection["request_id"] == self.refresh["request_id"]),
+                    "selectionBeforeOrdinary": bool(selection and owner and selection["completed"] < owner["admitted"]),
+                })
+            observations = {}
+            if not all(checks.values()):
+                observations = {
+                    **self.window_trace,
+                    "fixtureFiles": len(self.fixture),
+                    "controlCount": len(actions),
+                    "pauseCount": actions.count(("control_integrity", "pause")),
+                    "resumeCount": actions.count(("control_integrity", "resume")),
+                    "firstControlWasPause": actions[:1] == [("control_integrity", "pause")],
+                    "returnedRows": overlay.get("row_count") if overlay else None,
+                    "overlayItems": overlay.get("integrity_item_count") if overlay else None,
+                    "overlayComplete": overlay.get("integrity_complete") if overlay else None,
+                }
+                for name, receipt in (("execution", execution), ("release", release),
+                                      ("ordinary", owner), ("refresh", self.refresh), ("selection", self.selection),
+                                      *release_receipts.items(), ("window", window),
+                                      ("detail", self.detail), ("overlay", overlay), ("close", self.close)):
+                    observations[name + "Admitted"] = receipt.get("admitted") if receipt else None
+                    observations[name + "Completed"] = receipt.get("completed") if receipt else None
+                boolean_fields = {"overlayComplete", "integrityGap", "firstControlWasPause"}
+                observations = {
+                    key: value if (
+                        type(value) is bool if key in boolean_fields else
+                        type(value) is int and 0 <= value <= 9007199254740991
+                    ) else None for key, value in observations.items()
+                }
+                observations["failureCommand"] = (
+                    self.failure_command if self.failure_command in _COMMANDS else None
                 )
-                required = [("control_integrity", "pause"), ("control_integrity", "resume")]
-                return bool(
-                    self._detail_ready_locked() and owner_released
-                    and actions == required and overlay_ready and self.close is not None
-                )
-            refresh_released = self._owner_released_locked(self.refresh)
-            overlay_ready = bool(
-                self.inventory_window is not None and self.ordinary is not None
-                and self.inventory_window["integrity_session_id"] == self.ordinary["session_id"]
-                and self.inventory_window["integrity_complete"] is True
-                and self.inventory_window["integrity_item_count"] == len(self.fixture)
-            )
-            required = [("control_integrity", "pause"), ("control_integrity", "resume")]
-            return bool(
-                self._original_review_receipts_locked() and refresh_released
-                and self.selection is not None
-                and self.selection["selected_file_count"] == len(self.fixture)
-                and self.selection["request_id"] == self.refresh["request_id"]
-                and self.ordinary is not None
-                and self.selection["completed"] < self.ordinary["admitted"]
-                and owner_released and actions == required and overlay_ready
-                and self.close is not None
-            )
+            return checks, observations
 
     def set_identity(self, phase: str, value: object) -> None:
         if phase not in {"pre", "post"} or type(value) is not dict:
@@ -1400,6 +1454,25 @@ _PAGE = r"""
 """
 
 
+def _require_completion(driver: Path, branches: tuple[_ExecutionReviewPhase, ...],
+                        unmet: list[str]) -> None:
+    receipt_trace = {}
+    for branch in branches:
+        checks, observations = branch.completion_trace()
+        if not all(checks.values()):
+            receipt_trace[branch.branch] = {"checks": checks, "observations": observations}
+            unmet.append(f"{branch.branch}-receipts")
+    if unmet:
+        driver.with_name("completion-checks.json").write_text(
+            json.dumps(sorted(unmet)), encoding="utf-8",
+        )
+        if receipt_trace:
+            driver.with_name("completion-receipt-trace.json").write_text(
+                json.dumps(receipt_trace, sort_keys=True), encoding="utf-8",
+            )
+        raise RuntimeError("execution review did not satisfy completion checks")
+
+
 def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, retained: list[object], screenshot: Path) -> None:
     native = window.native
     core = native.browser.webview.CoreWebView2
@@ -1713,18 +1786,11 @@ def _drive(window: object, phase: _ExecutionReviewJourney, recorder: _Recorder, 
             return
         if dimensions is None:
             raise RuntimeError("page completed before native capture decode")
-        # finished() already validates the result shape. Record only bounded
-        # assertion names if final browser facts and host receipts disagree.
+        # finished() validates the browser result shape. Retain the failed
+        # assertion names and allowlisted host facts from the same verdict.
         unmet = [key for group in ("retention", "actions")
                  for key, fact in value[group].items() if fact is not True]
-        for branch in (phase.exact, phase.blocked):
-            if not branch.finished_ready():
-                unmet.append(f"{branch.branch}-receipts")
-        if unmet:
-            recorder.driver.with_name("completion-checks.json").write_text(
-                json.dumps(sorted(unmet)), encoding="utf-8",
-            )
-            raise RuntimeError("execution review did not satisfy completion checks")
+        _require_completion(recorder.driver, (phase.exact, phase.blocked), unmet)
         phase.verify_files()
         recorder.complete({
             "geometry": value["geometry"], "retention": value["retention"],

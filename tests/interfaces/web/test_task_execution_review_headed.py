@@ -516,9 +516,46 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     phase.close = {"session_id": ordinary_session_id}
     tasks.clear()
     assert phase.capture_ready() is False
-    assert phase.finished_ready() is True
+    assert all(phase.completion_trace()[0].values()) is True
+    driver = tmp_path / "driver.json"
+    sidecar = driver.with_name("completion-receipt-trace.json")
+    child._require_completion(driver, (phase,), [])
+    assert not sidecar.exists()
+    phase.window["operation_id"] = "9" * 32
+    assert {name for name, passed in phase.completion_trace()[0].items() if not passed} == {
+        "detailOperationMatchesWindow",
+    }
+    phase.window["operation_id"] = phase.detail["operation_id"]
+    phase.inventory_open = {}
+    phase.record(
+        "get_inventory_window", 100, 101,
+        SimpleNamespace(task_id=task_id, expected_revision=7, offset=1, limit=2),
+        {"disposition": "current", "view_revision": 7, "rows": [{"row_id": None}],
+         "integrity": {"session_id": ordinary_session_id, "complete": True,
+                       "gap": False, "revision": 8, "items": []}},
+    )
+    checks, observations = phase.completion_trace()
+    assert {key for key, passed in checks.items() if not passed} == {"overlayCountMatches"}
+    assert observations["requestedOffset"] == 1 and observations["requestedLimit"] == 2
+    assert observations["eligibleRows"] == observations["overlayItems"] == 0
+    assert observations["returnedRows"] == observations["fixtureFiles"] == 1
+    assert observations["integrityRevision"] == 8 and observations["integrityGap"] is False
+    phase.window_trace["integrityRevision"] = "do not persist"
+    phase.failure_command = "do not persist"
+    with pytest.raises(RuntimeError, match="did not satisfy completion checks"):
+        child._require_completion(driver, (phase,), [])
+    trace = json.loads(sidecar.read_text(encoding="utf-8"))["exact"]
+    assert trace["checks"] == checks
+    assert trace["observations"]["integrityRevision"] is None
+    assert trace["observations"]["failureCommand"] is None
+    assert trace["observations"]["pauseCount"] == trace["observations"]["resumeCount"] == 1
+    assert trace["observations"]["executionCompleted"] < trace["observations"]["releaseAdmitted"]
+    assert json.loads(driver.with_name("completion-checks.json").read_text()) == ["exact-receipts"]
+    phase.inventory_window["integrity_item_count"] = 1
     phase.auxiliary_releases.clear()
-    assert phase.finished_ready() is False
+    assert {name for name, passed in phase.completion_trace()[0].items() if not passed} == {
+        "ordinaryReleaseObserved", "ordinaryBeforeRelease",
+    }
 
 
 def test_phase_rejects_early_and_mismatched_current_detail(tmp_path: Path) -> None:
@@ -646,20 +683,20 @@ def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) ->
         "integrity_complete": True, "integrity_item_count": 1,
     }
     phase.close = {"session_id": ordinary_session}
-    assert phase.finished_ready() is True
+    assert all(phase.completion_trace()[0].values()) is True
     selection = phase.selection
     phase.selection = None
-    assert phase.finished_ready() is False
+    assert all(phase.completion_trace()[0].values()) is False
     phase.selection = selection
     phase.auxiliary_releases[0]["admitted"] = phase.refresh["completed"]
-    assert phase.finished_ready() is False
+    assert all(phase.completion_trace()[0].values()) is False
     phase.auxiliary_releases[0]["admitted"] = 9
     active_sessions.add(refresh_session)
-    assert phase.finished_ready() is False
+    assert all(phase.completion_trace()[0].values()) is False
     active_sessions.remove(refresh_session)
-    assert phase.finished_ready() is True
+    assert all(phase.completion_trace()[0].values()) is True
     phase.auxiliary_releases.pop()
-    assert phase.finished_ready() is False
+    assert all(phase.completion_trace()[0].values()) is False
 
 
 def test_task_execution_review_scenarios_own_disjoint_evidence_paths(tmp_path: Path) -> None:

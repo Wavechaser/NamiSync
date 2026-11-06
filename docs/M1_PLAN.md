@@ -36,8 +36,9 @@ delivery keep their component-owned gates.
 The final ordinary suite passed 6,412 with four skips and all twelve import
 contracts passed. All 35 installed cases have passing evidence across runs;
 the aggregate run and isolated input-desktop retry retain an unresolved
-default-window host receipt failure. [HANDOFF](HANDOFF.md) records the
-private-desktop pass and diagnostic evidence.
+default-window host receipt failure. The same case failed at `b2e872e6`.
+Its cause remains open. [TESTS](TESTS.md#execution-review-completion-trace)
+describes the evidence to retain on recurrence.
 
 ### Live execution and verification presentation — delivered 2026-11-06
 

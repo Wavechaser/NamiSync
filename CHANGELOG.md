@@ -78,6 +78,9 @@ owning contracts.
   reduced event reads by 83% and executor time by 22% on the measured fixture.
 - Prioritize Follow's foreground Plan read on ordinary execution paints.
   The matched visible runs needed 10 window reads instead of 16 (medians).
+- Trace the individual host receipt checks when the installed execution
+  review fails at completion. The default-window failure reproduced on
+  both the baseline and the optimized build.
 - Keep the 120,000-item performance envelope and admit best-effort workloads
   up to 150,000 logical rows and 300,000 ordered results. Record the exact
   refusal in history v8. Prior database pairs require the manual archive and

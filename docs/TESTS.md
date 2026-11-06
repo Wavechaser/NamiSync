@@ -318,6 +318,24 @@ Evidence: `build/ab8-20260926/installed-native-evidence/`,
 is not a proven second reproduction: its intermediate script was not preserved,
 preventing exact line attribution.
 
+#### Execution review completion trace
+
+When the installed execution review fails its final host receipt check,
+retain `completion-receipt-trace.json` alongside `completion-checks.json`,
+`execution-review-driver.json` and the failure/final milestones from the
+same scenario's `evidence/` directory. The summary identifies the branch
+(`exact` exercises Verify copied files, `blocked` exercises Verify selected
+after Refresh). The trace identifies individual host conditions at the final
+decision. Both window sizes use the same trace.
+
+For a count mismatch, compare the requested Inventory slice, the number of
+eligible rows returned, the count of attached integrity results and the
+fixture size. A complete verification session can serve a partial page.
+For an ordering or release mismatch, inspect the corresponding command and
+release receipts. Preserve the first failure before retrying.
+
+#### Running installed journeys
+
 For unattended page journeys, run the following from the Windows workspace:
 
 ```powershell
