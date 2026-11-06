@@ -1064,9 +1064,9 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
           task.executionPaintTimer = null;
           if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
               || task.sessionState !== "active" || task.drainUnavailable) return;
-          if (task.executionWindowDirty) void refreshExecutionWindow(task);
           renderTasks();
           if (task.review?.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
+          if (task.executionWindowDirty) void refreshExecutionWindow(task);
         }, 500);
       }
       return;

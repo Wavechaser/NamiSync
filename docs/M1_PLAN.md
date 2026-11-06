@@ -21,28 +21,23 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
-### Small-file copy cost — 2026-11-06
+### Small-file copy cost — delivered 2026-11-06
 
-Baseline `b2e872e6`. Compare ordinary successful-copy event delivery on a
-private headed desktop, and native attribute-only descendant checks in the
-executor rig, independently. Each favorable change requires its own reviewed
-commit, matching behavioral tests and a matched comparison. Event delivery
-must preserve ordered receipts, immediate urgent wakeups, bounded custody,
-replay and terminal release. Native checks must retain their access boundaries,
-failure dispositions and full metadata wherever consumed. Inspect Plan-window
-reads after measuring delivery, and profile the actual durable recorder before
-selecting any SQL change. PERFORMANCE owns measurements. Grouped ledger commits
-and parent flushes are deferred to M2 with small-file copy batching.
-
-Native descendant checks passed the executor department, the unchanged
-30-scenario settlement oracle three times and the matched five-run comparison.
-The per-file durable recorder remains unchanged after profiling.
-Ordinary COPY-result collection passed eight source-host comparisons and
-the interfaces department. The installed suite passed 34 of 35 together;
-the Inventory Resume preclick case passed separately. Retain both receipts
-under `build/copy-drain-opt/`. Visible Follow still shared paint ticks with
-background reads; test scheduling the foreground read first before changing
-the page.
+From `b2e872e6`, matched comparisons supported attribute-only Windows
+descendant checks (`746e56d1`), bounded collection of ordinary successful
+COPY receipts (`5c7e40cd`) and foreground Follow before ordinary Plan refresh.
+The combined visible-Plan median was 5.31 ms/file versus 7.51 on the original
+source. The [measurement record](PERFORMANCE.md#visible-plan-refresh-during-follow--2026-11-06)
+owns the fixture, raw receipts and limits. The actual recorder profile
+(`d7ee4f53`) and two-site source-admission probe justified no further changes.
+Grouped ledger commits and parent flushes belong to M2 with small-file copy
+batching. Settlement, root admission, reliable event order and urgent control
+delivery keep their component-owned gates.
+The final ordinary suite passed 6,412 with four skips and all twelve import
+contracts passed. All 35 installed cases have passing evidence across runs;
+the aggregate run and isolated input-desktop retry retain an unresolved
+default-window host receipt failure. [HANDOFF](HANDOFF.md) records the
+private-desktop pass and diagnostic evidence.
 
 ### Live execution and verification presentation — delivered 2026-11-06
 

@@ -335,6 +335,13 @@ update the display as soon as their snapshot arrives. A background refresh of
 the same committed projection, highlight and row range retains the row DOM and
 focus. Only cells with changed execution facts or active progress need updating.
 
+An ordinary paint admits automatic Follow before requesting a dirty Plan-window
+refresh. A Follow read that takes foreground ownership defers the refresh until
+the reader becomes idle, preserving its dirty demand. A cached target or a
+Follow request that cannot start leaves the refresh free to run on the same tick.
+This ordering avoids issuing a background read that Follow immediately retires;
+it does not change dirty revisions or immediate-transition presentation.
+
 Full Plan reloads obey the same foreground ownership rule: a reload admitted
 before or during a user interaction cannot replace the review owning that
 interaction. Compatible authoritative summary facts reconcile in place without

@@ -200,6 +200,14 @@ unchanged source and scoped teardown. See `build/copy-native-opt/`:
 `samples-v2.jsonl`, `provenance.json` and `driver-v2-provenance.json`.
 Earlier v1 diagnostics lacked the complete rig-result check and are excluded.
 
+A follow-up on `5c7e40cd` timed the two explicit source-root checks in
+`_prepare_copy` immediately preceding source predicates. Three instrumented
+1,000-file runs each made 2,000 calls at those sites. Their combined time
+was 69.16–69.83 ms per run, including the held-handle queries. This is a ceiling of about
+0.070 ms/file before any replacement admission work. Retain both checks.
+Receipts and driver: `build/copy-native-opt/source-root-price/` and
+`build/copy-native-opt/source_root_price.py`.
+
 ### Headed COPY-result collection — 2026-11-06
 
 Eight source WebView2 runs on a private desktop used the same 1,000-file,
@@ -223,6 +231,36 @@ deadline. See `build/copy-drain-opt/summary.json`, the per-run delivery,
 timing and close receipts, and the final candidate-v2 manifest. Earlier
 startup failures produced no copy samples and remain in the evidence.
 The native executor optimization above was excluded from both variants.
+
+### Visible Plan refresh during Follow — 2026-11-06
+
+Two forward/reverse pairs per Plan visibility condition used the integrated
+`5c7e40cd` executor and event drain, with only the order of Follow and
+background refresh varied. The fixture again used 1,000 × 4 KiB in ten
+directories, durable recording, fresh F: targets and verification off.
+Letting Follow claim the foreground read first reduced visible window reads
+from 16 to 10 (medians) and bridge thread CPU for those reads from 0.266 to
+0.172 s. Reads per anchor fell in both visible pairs. Executor time was
+5.386 → 4.931 ms/file with the Plan visible and 4.665 → 4.569 covered; the
+covered runs each made one window read. Visible click-to-terminal time was
+6.031 → 5.535 s. All eight runs passed receipt-order, terminal, hash and
+shutdown checks. The page still showed completed filesystem and recording
+results. `build/copy-plan-read-opt/` retains the prior decision rule,
+source and driver manifests, initial driver failure, and per-run receipts
+indexed by `summary.json` and `audit.json`.
+
+A separate four-run visible-Plan comparison measured the combined changes
+directly against `b2e872e6`. Fresh baseline/candidate/candidate/baseline
+sessions used the same source fixture and driver checks. Executor time was
+7.52 / 5.12 / 5.50 / 7.49 ms/file, with medians of 7.51 and 5.31 ms/file
+(29% less). Median Execute-click to terminal fell from 8.03 to 6.03 s.
+Event reads fell from 1,007.5 to 158.5 and Plan-window reads from 26.5 to
+13 (medians). All four sessions delivered every COPY receipt in order,
+showed completed filesystem and OK recording, matched the source hashes and
+closed normally with an empty Job. These local F:-to-F: observations cover
+copy execution with automatic verification off. Raw evidence and exact
+product differences are in `build/copy-net-opt/summary.json` and `audit.json`
+in that directory.
 
 ## Driven package resource pilot — 2026-11-06 (continuation)
 

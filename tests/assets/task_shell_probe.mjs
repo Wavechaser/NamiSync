@@ -3485,20 +3485,39 @@ flushExecutionPaint();
 await until(() => planAnchors.length === enabledBurstAnchorBase + 1);
 assert.deepEqual(calls.at(-1), ["plan-operation-anchor", noopTaskId, noopSessionId,
   noopSummary.view_revision, noopOperation(20)], "one tick locates only the latest settled NOOP");
-planWindows[enabledBurstWindowBase].resolve(noopWindow(0));
+assert.equal(planWindows.length, enabledBurstWindowBase,
+  "ordinary paint admits Follow before an old-viewport refresh can start");
 planAnchors.at(-1).resolve({disposition: "current", index: 1023});
-await until(() => planWindows.length === enabledBurstWindowBase + 2);
+await until(() => planWindows.length === enabledBurstWindowBase + 1);
 planWindows.at(-1).resolve(noopWindow(1019));
 await until(() => noopTask.review.followRead == null);
 if (noopTask.executionWindowRefreshRunning) {
-  await until(() => planWindows.length === enabledBurstWindowBase + 3);
+  await until(() => planWindows.length === enabledBurstWindowBase + 2);
   planWindows.at(-1).resolve(noopWindow(1019));
   await until(() => !noopTask.executionWindowRefreshRunning);
 }
 assert.equal(noopTask.review.follow.scrollOffset, 1019);
 assert.equal(planAnchors.length, enabledBurstAnchorBase + 1, "the NOOP burst has one automatic anchor lookup");
-assert.ok(planWindows.length <= enabledBurstWindowBase + 3, "the NOOP burst has bounded window work per tick");
+assert.equal(planWindows.length, enabledBurstWindowBase + 2,
+  "Follow lands once and retained dirty demand refreshes once after ownership releases");
+assert.equal(noopTask.executionWindowDirty, false);
+assert.equal(noopTask.planReads.foregroundReaders, 0);
 assert.ok(reviewRenders.length <= enabledBurstPaintBase + 4, "the NOOP burst paints only bounded tick/read settlements");
+
+// A cached target does not take the read lane: its dirty overlay must still
+// refresh on this tick without a later event or a forced scroll.
+noopTask.review.follow.scrollOffset = null;
+const cachedTickWindows = planWindows.length;
+const cachedTickAnchors = planAnchors.length;
+noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+  {phase: "execute", last_settled_operation_id: noopOperation(20)}));
+flushExecutionPaint();
+await until(() => planWindows.length === cachedTickWindows + 1);
+assert.equal(planAnchors.length, cachedTickAnchors);
+planWindows.at(-1).resolve(noopWindow(1019));
+await until(() => !noopTask.executionWindowRefreshRunning);
+assert.equal(noopTask.executionWindowDirty, false, "cached Follow cannot strand dirty demand");
+assert.equal(noopTask.review.follow.scrollOffset, null, "cached automatic Follow preserves within-window scroll");
 
 const terminalNoopResult = executionResult({headline: "all-noop"});
 const terminalNoopAnchorBase = planAnchors.length;
