@@ -200,6 +200,30 @@ unchanged source and scoped teardown. See `build/copy-native-opt/`:
 `samples-v2.jsonl`, `provenance.json` and `driver-v2-provenance.json`.
 Earlier v1 diagnostics lacked the complete rig-result check and are excluded.
 
+### Headed COPY-result collection — 2026-11-06
+
+Eight source WebView2 runs on a private desktop used the same 1,000-file,
+ten-directory, 4 KiB fixture, fresh F: targets and durable recording. Each
+Plan-visible/Settings-covered condition ran twice per variant in balanced
+order. The frozen `b2e872e6` packages differed only in event delivery.
+Verification was off. Measurements below cover executor execution alone.
+
+| Plan during copy | Baseline ms/file | 25 ms collection ms/file | Median event reads, before → after |
+| --- | ---: | ---: | ---: |
+| Visible | 7.328 | 5.680 | 1,007 → 167.5 |
+| Covered | 6.675 | 5.543 | 1,009 → 171.5 |
+
+Every completed run returned 1,000 distinct successful COPY receipts in
+the same path order, zero gaps, one terminal event and record, an exact
+SHA-256 mirror, and an empty Job on normal exit. Visible Plan-window reads
+fell from 26 to 19 (medians). A passive 50 ms page timer's p95 rose from
+about 54 to 62 ms; its maximum was 68.2 ms. It does not measure control
+delivery latency. Focused drain tests exercise urgent wakeups and the fixed
+deadline. See `build/copy-drain-opt/summary.json`, the per-run delivery,
+timing and close receipts, and the final candidate-v2 manifest. Earlier
+startup failures produced no copy samples and remain in the evidence.
+The native executor optimization above was excluded from both variants.
+
 ## Driven package resource pilot — 2026-11-06 (continuation)
 
 A new session took over the study below with a simpler control method and

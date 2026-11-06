@@ -37,6 +37,12 @@ and parent flushes are deferred to M2 with small-file copy batching.
 Native descendant checks passed the executor department, the unchanged
 30-scenario settlement oracle three times and the matched five-run comparison.
 The per-file durable recorder remains unchanged after profiling.
+Ordinary COPY-result collection passed eight source-host comparisons and
+the interfaces department. The installed suite passed 34 of 35 together;
+the Inventory Resume preclick case passed separately. Retain both receipts
+under `build/copy-drain-opt/`. Visible Follow still shared paint ticks with
+background reads; test scheduling the foreground read first before changing
+the page.
 
 ### Live execution and verification presentation — delivered 2026-11-06
 

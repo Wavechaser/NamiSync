@@ -2432,6 +2432,122 @@ def test_br_g_33_reliable_events_bypass_progress_linger(body_type: str) -> None:
         ] == [(2, "Progress"), (3, body_type)]
 
 
+def _copy_result(sequence: int, **changes: object) -> SessionEventView:
+    body = ItemOutcome(f"{sequence:032x}", OperationKind.COPY,
+                       f"file-{sequence}", Outcome.SUCCEEDED)
+    return _execution_event(SESSION, sequence, replace(body, **changes))
+
+
+def test_copy_result_collection_has_one_fixed_25ms_deadline() -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
+        waiting.clock.advance_to(1.0)
+        waiting.service.sink(_copy_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        assert not waiting.done.is_set()
+        waiting.clock.advance_to(1.020)
+        waiting.service.sink(_copy_result(3))
+        waiting.service.sink(_event(4, "Progress"))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 4)
+        assert not waiting.done.is_set()
+        waiting.clock.advance_to(1.025)
+        _wake_task(waiting.registry, waiting.task_id)
+        result = waiting.finish()
+        assert [update.event.sequence for update in result.updates] == [2, 3, 4]
+
+
+@pytest.mark.parametrize("successor", [
+    _event(3, "StateChanged"), _event(3, "Gap"), _event(3, "Terminal"),
+    _record(), _copy_result(3, kind=OperationKind.UPDATE),
+    _copy_result(3, outcome=Outcome.FAILED, reason="io-error"),
+    _copy_result(3, detail_omitted_count=1),
+    _copy_result(3, detail={"durability_warnings": ("parent flush unsupported",)}),
+    _copy_result(3, recording=RecordingStatus.DEGRADED,
+                 recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED),
+])
+def test_nonordinary_results_bypass_copy_collection(successor) -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
+        waiting.service.sink(_copy_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        waiting.service.sink(successor)
+        result = waiting.finish()
+        assert result.updates[0].event.sequence == 2
+        assert len(result.updates) == 2
+        assert waiting.clock() == 0.0
+
+
+def test_full_reliable_queue_bypasses_copy_collection_without_loss() -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
+        for sequence in range(2, 66):
+            waiting.service.sink(_copy_result(sequence))
+        result = waiting.finish()
+        assert [update.event.sequence for update in result.updates] == list(range(2, 66))
+        assert waiting.clock() == 0.0
+
+
+def test_copy_collection_keeps_outer_drain_deadline() -> None:
+    with _progress_wait(drain_wait=1.0, progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
+        waiting.clock.advance_to(0.990)
+        waiting.service.sink(_copy_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        waiting.clock.advance_to(1.0)
+        _wake_task(waiting.registry, waiting.task_id)
+        assert waiting.finish().updates[0].event.sequence == 2
+
+
+def test_copy_collection_supersession_and_shutdown_leave_reliable_queue_intact() -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        task = waiting.registry._tasks[waiting.task_id]
+        task.session_kind = EXECUTION_KIND
+        waiting.service.sink(_copy_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        with pytest.raises(DrainBusyError):
+            waiting.registry.drain(waiting.task_id, SESSION, "6" * 32,
+                                   replay_from=None)
+        assert waiting.finish().updates == ()
+        assert [update.sequence for update in task.queue] == [2]
+        assert waiting.clock() == 0.0
+    with _progress_wait(progress_sequence=None) as waiting:
+        task = waiting.registry._tasks[waiting.task_id]
+        task.session_kind = EXECUTION_KIND
+        waiting.service.sink(_copy_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        waiting.registry.begin_close()
+        assert waiting.done.wait(1)
+        waiting.thread.join(1)
+        assert len(waiting.errors) == 1
+        assert isinstance(waiting.errors[0], TaskUnavailableError)
+        assert [update.sequence for update in task.queue] == [2]
+
+
+def test_copy_results_outside_execution_and_replay_bypass_collection() -> None:
+    clock = _ManualClock()
+    registry, service = _registry(clock=clock)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    service.sink(_copy_result(2))
+    assert registry.drain(start.task_id, SESSION, "5" * 32,
+                          replay_from=None).updates[0].event.sequence == 2
+    assert clock() == 0.0
+
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            sink(_copy_result(from_sequence))
+            return self.reobserve_result
+
+    service = Service()
+    registry, _ = _registry(service, clock=clock)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    registry._tasks[start.task_id].session_kind = EXECUTION_KIND
+    recovered = registry.drain(start.task_id, SESSION, "5" * 32, replay_from=2)
+    assert recovered.updates[0].event.sequence == 2
+    assert clock() == 0.0
+
+
 def test_br_g_33_terminal_record_bypasses_progress_linger() -> None:
     with _progress_wait() as waiting:
         terminal = _record()

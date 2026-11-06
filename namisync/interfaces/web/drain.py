@@ -70,6 +70,7 @@ _START_RESPONSE_CAPACITY = 48
 _CLOSE_RECEIPT_CAPACITY = 48
 _DRAIN_WAIT_SECONDS = 25.0
 _PROGRESS_LINGER_SECONDS = 0.150
+_COPY_RESULT_LINGER_SECONDS = 0.025
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
 _LOG = logging.getLogger(__name__)
@@ -173,6 +174,21 @@ def _raise_recovery_failure(failure_code: str) -> Never:
 
 def _is_progress_update(update: TaskDeliveryUpdate) -> bool:
     return type(update) is SessionEventView and update.body_type == "Progress"
+
+
+def _is_ordinary_copy_result(update: TaskDeliveryUpdate) -> bool:
+    if type(update) is not SessionEventView or update.body_type != "ItemOutcome":
+        return False
+    body = update.body
+    return (
+        body["phase"] == "execute"
+        and body["kind"] == "copy"
+        and body["result"] == "succeeded"
+        and body["reason"] is None
+        and body["recording"] == "ok"
+        and body["detail_omitted_count"] == 0
+        and not body["detail"]
+    )
 
 
 @dataclass(slots=True)
@@ -2751,13 +2767,26 @@ class TaskRegistry:
                 self._recover(task, session_id, replay_from)
             report_inconsistent = False
             with task.condition:
+                copy_deadline = None
                 while not claim.superseded and not task.closing:
-                    if replay_from is not None or task.terminal_pending or any(
-                        not _is_progress_update(update) for update in task.queue
+                    if replay_from is not None or task.terminal_pending:
+                        break
+                    reliable = tuple(
+                        update for update in task.queue
+                        if not _is_progress_update(update)
+                    )
+                    if reliable and (
+                        task.session_kind != "sync-execution"
+                        or len(task.queue) >= _CAPACITY
+                        or not all(_is_ordinary_copy_result(update) for update in reliable)
                     ):
                         break
                     now = self._clock()
-                    if task.queue:
+                    if reliable:
+                        if copy_deadline is None:
+                            copy_deadline = now + _COPY_RESULT_LINGER_SECONDS
+                        wake_deadline = min(deadline, copy_deadline)
+                    elif task.queue:
                         if task.progress_available_at is None:
                             task.progress_available_at = now
                         wake_deadline = min(

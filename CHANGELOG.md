@@ -73,6 +73,9 @@ owning contracts.
 - Read Windows attributes directly when checking descendants for reparse
   points. On the matched 1,000-file executor fixture the median fell from
   3.51 to 2.90 ms/file.
+- Collect ordinary successful COPY receipts for up to 25 ms per headed drain
+  while urgent updates wake it immediately. The visible-Plan comparison
+  reduced event reads by 83% and executor time by 22% on the measured fixture.
 - Keep the 120,000-item performance envelope and admit best-effort workloads
   up to 150,000 logical rows and 300,000 ordered results. Record the exact
   refusal in history v8. Prior database pairs require the manual archive and
