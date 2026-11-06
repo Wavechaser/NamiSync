@@ -1882,6 +1882,11 @@ An accepted pause renders **Pausing…** until custody actually reaches
 remains available. Terminal presentation releases only that exact session while
 review artifacts remain.
 
+A planning session that exceeds a review limit produces no Plan. Its task card
+and panel show the limit named by the terminal result, and the panel directs the
+user to create a task with a smaller folder pair. Re-selecting that task retains
+the explanation. A saved Plan blocked by preflight still opens for review.
+
 Pause/Resume, Cancel, Inventory Refresh and the Baseline dropdown use square
 32px targets with centered glyphs.
 

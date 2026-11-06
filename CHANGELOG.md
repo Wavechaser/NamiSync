@@ -62,6 +62,8 @@ owning contracts.
   across the executor, service and WebView2, including verified readback.
 - Count reviewed operations once across preflight observation and adoption.
   The reported 101,000-operation Plan now reaches review with both endpoints checked.
+- Show the specific terminal Plan limit on release and reselection. A refused
+  Plan keeps Execute disabled and no longer prompts a retry of a missing artifact.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

@@ -114,6 +114,23 @@ function terminalDigest(result, fallbackState, capacityOnly) {
   return { title, state, detail, fallbackState };
 }
 
+export function planReviewRefusal(task) {
+  const fact = task?.snapshot?.terminal_result?.review_refusal;
+  return task?.sessionKind === "sync-plan" && task.snapshot?.session_id === task.sessionId
+    && fact?.tree_kind === "plan" ? fact : null;
+}
+
+function planLimitDetail(fact) {
+  const notices = fact.population === "informational";
+  if (fact.axis === "rows") {
+    return `The review exceeds ${fact.row_limit.toLocaleString("en-US")} ${notices ? "notices" : "plan items"}.`;
+  }
+  if (fact.axis === "logical-bytes") {
+    return `The estimated space required exceeds ${BigInt(fact.byte_limit).toLocaleString("en-US")} bytes.`;
+  }
+  return `The review exceeds ${formatByteCount(fact.byte_limit)} of ${notices ? "notice data" : "plan data"}.`;
+}
+
 function ordinaryTerminalDigest(result, fallbackState, mode) {
   const label = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[mode];
   if (label === undefined || !["completed", "failed", "refused", "canceled"].includes(fallbackState)) return null;
@@ -165,6 +182,7 @@ export function terminalStatusLine(execution, sessionState = null) {
 
 export function taskStatusDigest(task) {
   const summary = task?.review?.summary ?? null;
+  const refusal = planReviewRefusal(task);
   const form = task?.form ?? null;
   const snapshot = task?.snapshot != null && task.snapshot.session_id === task?.sessionId
     ? task.snapshot : null;
@@ -225,6 +243,7 @@ export function taskStatusDigest(task) {
   if (releaseMessage !== null || (task?.error !== null && task?.error !== undefined)) {
     [title, state] = ["Error", "error"];
   }
+  else if (refusal !== null) [title, state] = ["Plan limit exceeded", "error"];
   else if (checkingFolders) [title, state] = ["Checking folders", "planning"];
   else if (attempt !== null && !attempt.running) [title, state] = ["Outcome unknown", "error"];
   else if (scanning) [title, state] = ["Scanning", "planning"];
@@ -254,6 +273,7 @@ export function taskStatusDigest(task) {
   let detail;
   if (releaseMessage !== null) detail = releaseMessage;
   else if (typeof task?.error === "string") detail = task.error;
+  else if (refusal !== null) detail = planLimitDetail(refusal);
   else if (attempt?.recovery?.message) detail = attempt.recovery.message;
   else if (checkingFolders) detail = "Checking the selected folders before starting.";
   else if (scanning) detail = "Inventory scan in progress.";

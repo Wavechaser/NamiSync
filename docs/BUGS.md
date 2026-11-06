@@ -913,18 +913,19 @@ defect, and move implementation-level test choreography out of the log.
   observations against the Plan's scope. The original fixture produced a saved
   review with every operation and an empty target. Evidence:
   `build/coverage-study-20261106/{refusal,fixed-plan}.json`.
-- MODERATE - OPEN (2026-11-06). Review-limit refusal shown as retryable
+- MODERATE - FIXED (2026-11-06). Review-limit refusal shown as retryable
   failure. When the plan above was refused, no plan was saved.
   The page still requested the Plan view; `open_plan_view` hit the missing
   plan (`KeyError` in `runtime.get_plan`), the bridge returned
   `internal_error`, and the task showed "Plan unavailable. Select the task to
   retry. Check the task settings and try again." Retrying cannot succeed and
-  the limit is never named. The wire already carries the validated
+  the limit was never named. The wire already carries the validated
   `terminal_result.review_refusal`. Terminal release and task selection both
-  reach `loadPlanReview`, which accepts a request ID without checking that fact.
-  Handle typed refusal there and in task feedback, preserving retry for real
-  read failures and review of saved blocked plans. Evidence: service replay above
-  and `build/resource-study-20261106b/debug_gui_exceptions.log`.
+  reached `loadPlanReview` without checking that fact. Release and reselection
+  now retain the current session's specific refusal, retire stale reads and
+  leave Execute disabled. Genuine read failures remain retryable and saved
+  blocked plans remain reviewable. Private-desktop witness:
+  `build/refusal-ui-20261106/runs/refusal/verified.json`.
 
 ### Setup folder admission
 

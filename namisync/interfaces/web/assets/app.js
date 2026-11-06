@@ -58,6 +58,7 @@ import { installAboutNotices } from "./about.js";
 import { createExecutionConfirmation } from "./execution_confirmation.js";
 import { createWorkPanel } from "./panels.js";
 import { createTaskRail } from "./rail.js";
+import { planReviewRefusal } from "./task_status.js";
 import { renderText } from "./render.js";
 
 const app = document.querySelector("#app");
@@ -68,6 +69,7 @@ const themeRefresh = document.querySelector("#theme-refresh");
 const settingsView = document.querySelector("#settings-view");
 const themeOptions = document.querySelector("#theme-options");
 const UNKNOWN_OUTCOME_GUIDANCE = "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.";
+const PLAN_UNAVAILABLE = "Plan unavailable. Select the task to retry.";
 if (
   !(app instanceof HTMLElement)
   || !(status instanceof HTMLElement)
@@ -1008,6 +1010,12 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
       && snapshot.phase === "verify"
       ? snapshot.active_item?.item_id ?? task.executionPresentation?.verificationFollowItemId ?? null : null;
     task.snapshot = snapshot;
+    if (planReviewRefusal(task) !== null) {
+      // An earlier read can still be waiting when the terminal fact arrives.
+      task.reviewRevision += 1;
+      task.reviewLoading = false;
+      if (task.error === PLAN_UNAVAILABLE) task.error = null;
+    }
     task.progressPresentation = {
       phase: snapshot.phase,
       activeItem: snapshot.active_item,
@@ -2672,6 +2680,7 @@ async function loadPlanReview(task, force = false) {
     task === undefined || tasks.get(task.taskId) !== task
     || (selectedTaskId === task.taskId && !executionPaneVisible(task))
     || task.taskKind !== "sync-plan" || task.planRequestId === null
+    || planReviewRefusal(task) !== null
     || task.reviewLoading
     || task.review?.pending === "selection"
     || (!force && task.review !== null && task.reviewSessionId === task.executionSessionId)
@@ -2717,7 +2726,7 @@ async function loadPlanReview(task, force = false) {
       if (task.review !== null) task.review.message = "Execution status refresh delayed. Select the task to retry.";
       else if (task.sessionState !== "active"
           && ["sync-plan", "sync-execution"].includes(task.sessionKind)) {
-        task.error = "Plan unavailable. Select the task to retry.";
+        task.error = PLAN_UNAVAILABLE;
       }
       return;
     }
@@ -2826,9 +2835,9 @@ async function loadPlanReview(task, force = false) {
         || !["sync-plan", "sync-execution"].includes(task.sessionKind))
     ) {
       if (["sync-plan", "sync-execution"].includes(task.sessionKind)) {
-        task.error = "Plan unavailable. Select the task to retry.";
+        task.error = PLAN_UNAVAILABLE;
       } else if (task.review !== null) {
-        task.review.message = "Plan unavailable. Select the task to retry.";
+        task.review.message = PLAN_UNAVAILABLE;
       }
     }
   } finally {

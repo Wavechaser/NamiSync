@@ -9,6 +9,7 @@ import { formatByteCount, formatFilesystemPath, formatLocalDateTime, renderFiles
 import {
   executionHeadline,
   isCapacityOnlyExecution,
+  planReviewRefusal,
   projectActiveOperationProgress,
   selectTaskExecution,
   taskStatusDigest,
@@ -1222,7 +1223,8 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       filterMenu.render([], {}, true);
       disableActions();
       delete element.dataset.pending;
-      updateText(sourceValue, task.form?.source?.text ?? "Loading reviewed plan…", true);
+      const refused = planReviewRefusal(task) !== null;
+      updateText(sourceValue, task.form?.source?.text ?? (refused ? "" : "Loading reviewed plan…"), true);
       updateText(targetValue, task.form?.target?.text ?? "", true);
       sourcePath.title = task.form?.source?.text ?? "";
       targetPath.title = task.form?.target?.text ?? "";
@@ -1233,7 +1235,8 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         ? "Waiting for the original start outcome." : digest.detail));
       const recovery = task.form?.attempt?.recovery;
       updateText(status, recovery?.message ?? (task.error ? "Check the task settings and try again."
-        : "Wait for the plan before reviewing changes."));
+        : refused ? "Create a new task with a smaller folder pair."
+          : "Wait for the plan before reviewing changes."));
       status.hidden = false;
       retryOutcome.hidden = recovery?.canCheck !== true;
       retryOutcome.disabled = recovery?.checking === true || task.form?.attempt?.running !== true;

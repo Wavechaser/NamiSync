@@ -405,6 +405,22 @@ for (const action of ["execute", "plan-again", "pause", "cancel"]) {
 assert.equal(findByClass(panel.element, "nami-plan-review__control-group").hidden, true);
 panel.render({ ...task, review: null, reviewLoading: false, error: "Plan unavailable" });
 assert.equal(executeButton.disabled, true, "failed review cannot leave Execute available");
+for (const [population, axis, row_limit, byte_limit, detail] of [
+  ["domain", "rows", 120000, null, /120,000 plan items/],
+  ["informational", "rows", 120000, null, /120,000 notices/],
+  ["domain", "retained-bytes", null, "134217728", /128.00 MiB of plan data/],
+  ["informational", "retained-bytes", null, "201326592", /192.00 MiB of notice data/],
+  ["domain", "logical-bytes", null, "9223372036854775807", /estimated space required exceeds 9,223,372,036,854,775,807 bytes/],
+]) {
+  panel.render({...task, review: null, sessionKind: "sync-plan", sessionId: planGap.session_id,
+    snapshot: {...planGap, session_state: "refused", presentation: {},
+      terminal_result: {review_refusal: {reason: "review_fact_limit_exceeded", tree_kind: "plan",
+        population, axis, row_limit, byte_limit}}}});
+  assert.equal(tierStatus.textContent, "Plan limit exceeded");
+  assert.match(findByClass(panel.element, "nami-plan-review__status-summary").textContent, detail);
+  assert.match(findByClass(panel.element, "nami-plan-review__status").textContent, /smaller folder pair/);
+  assert.equal(executeButton.disabled, true);
+}
 panel.render(task);
 assert.equal(executeButton.disabled, false, "loaded review restores its allowed action");
 review.summary = summary;
@@ -2224,6 +2240,7 @@ const scrollPanelsUrl = moduleUrl((await readFile(join(dirname(process.argv[2]),
   .replace("./setup.js", unusedPanelUrl).replace("./inventory_review.js", unusedPanelUrl));
 for (const [key, value] of Object.entries({
   "./bridge.js": scrollBridgeUrl, "./render.js": renderUrl, "./panels.js": scrollPanelsUrl,
+  "./task_status.js": taskStatusUrl,
   "./readiness.js": moduleUrl("export const installReadinessReceiver = () => ({ revision: () => 0 });"),
   "./appearance.js": moduleUrl("export const installAppearanceReceiver = () => {};"),
   "./theme.js": moduleUrl("export const installThemeCombobox = () => ({}); export const installThemeSelector = () => ({ refresh() {} });"),

@@ -311,6 +311,7 @@ def test_modules_use_only_local_explicit_js_imports(
             "./execution_confirmation.js",
             "./panels.js",
             "./rail.js",
+            "./task_status.js",
             "./render.js",
         ],
         "appearance.js": [],

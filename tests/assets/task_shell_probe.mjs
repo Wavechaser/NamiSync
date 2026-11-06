@@ -3554,4 +3554,30 @@ assert.equal(noopTask.review.window.offset, 256, "release reload preserves newer
 assert.equal(noopTask.review.follow.enabled, false);
 assert.equal(planAnchors.length, noopReleaseAnchorBase, "release reload does not re-enable automatic landing");
 deferAnchor = false;
+
+const limitSession = "7a".repeat(16);
+const limitTask = globalThis.taskHarness.adoptTask({
+  task_id: "task-" + limitSession, session_id: limitSession, session_state: "active",
+  session_released: false, task_kind: "sync-plan", request_id: limitSession,
+  plan_request_id: limitSession, session_kind: "sync-plan",
+});
+taskButton(limitTask.label).click();
+const previousOpen = planOpens.at(-1);
+const limitOpenCount = planOpens.length;
+const limitDrain = drains.get(limitTask.taskId);
+const limitResult = executionResult({headline: "refused", disposition: "unrun", filesystem: "refused",
+  review_refusal: {reason: "review_fact_limit_exceeded", tree_kind: "plan", population: "domain",
+    axis: "rows", row_limit: 120000, byte_limit: null}});
+limitDrain.acceptUpdate({update_type: "record", record: {kind: "sync-plan", state: "refused", result: limitResult}},
+  pageSnapshot(limitTask.taskId, limitSession, {session_state: "refused", terminal_result: limitResult}));
+previousOpen.reject(new Error("late response to an active planning read"));
+await turns();
+limitDrain.acceptRelease(limitTask.taskId, limitSession);
+taskButton(limitTask.label).click();
+void globalThis.taskHarness.forceReview(limitTask, true);
+await turns();
+assert.equal(planOpens.length, limitOpenCount, "a typed refusal has no Plan to reload or retry");
+assert.equal(limitTask.error, null, "the obsolete open failure cannot replace the typed refusal");
+assert.equal(taskStatusDigest(limitTask).title, "Plan limit exceeded");
+assert.match(taskStatusDigest(limitTask).detail, /120,000 plan items/);
 process.stdout.write("ok");
