@@ -174,9 +174,10 @@ Headed acceptance requires an interactive supported Windows desktop and the
 real WebView2 host. Run the interface-owned headed gate when desktop behavior,
 packaging, or headed harnesses change.
 The shell tree's native Tab witness mounts its production-rendered fixture in
-the exclusive work body and enters from the rail's Settings control. Theme and
-Create focus are checked separately; the tree witness must not assume Theme
-is the last focusable control on the Settings page.
+the exclusive work body and enters from the rail's Settings control. The
+separate Theme witness tabs through Settings until the exact Theme control
+has focus, with traversal bounded by the number of form controls. Create
+focus is checked independently.
 The live host cancellation witness keeps its whole-scenario containment while
 allowing correlated native completion to arrive after cancellation is observed.
 Its waits are test containment, not a product latency criterion; cancellation,

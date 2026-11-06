@@ -97,7 +97,9 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert 'document.querySelector("#theme-mode")' in source
     assert 'selector?.querySelector(".nami-combobox__trigger")' in source
     assert 'popup_role: popup?.getAttribute("role")' in source
-    assert 'document.querySelector(".nami-task-rail__settings").click();' in source
+    assert 'const settings = document.querySelector(".nami-task-rail__settings");' in source
+    assert "settings.click(); settings.focus();" in source
+    assert "tab_to_theme(remaining - 1)" in source
     assert "HTMLSelectElement" not in source
     assert '"Input.dispatchMouseEvent"' in source
     assert '"type": "mouseWheel"' in source

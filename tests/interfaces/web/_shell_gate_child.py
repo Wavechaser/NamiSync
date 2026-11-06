@@ -1331,15 +1331,25 @@ def _begin_probe(
 
     def after_keyboard_tree(value: object) -> None:
         page["keyboard_tree"] = value
-        evaluate('document.querySelector(".nami-task-rail__settings").click(); document.querySelector(".nami-task-rail__settings").focus(); ({ready: true});',
-                 lambda _value: press("Tab", "Tab", 9, after_theme_tab))
+        evaluate(
+            'const settings = document.querySelector(".nami-task-rail__settings"); '
+            'settings.click(); settings.focus(); '
+            '({controls: document.querySelectorAll("#settings-view button, #settings-view input, '
+            '#settings-view select, #settings-view textarea").length});',
+            lambda result: tab_to_theme(result["controls"]),
+        )
 
-    def after_theme_tab(_value: object) -> None:
-        evaluate(_THEME_FOCUS_PROBE, after_theme_focus)
+    def tab_to_theme(remaining: int) -> None:
+        def after_tab(value: object) -> None:
+            if value["active"]:
+                page["theme_focus"] = value
+                evaluate('document.querySelector(".nami-task-rail__create").focus(); ({ready: true});', after_create_tab)
+            elif remaining > 1:
+                tab_to_theme(remaining - 1)
+            else:
+                raise AssertionError(f"Tab traversal did not reach Theme; last focus: {value}")
 
-    def after_theme_focus(value: object) -> None:
-        page["theme_focus"] = value
-        evaluate('document.querySelector(".nami-task-rail__create").focus(); ({ready: true});', after_create_tab)
+        press("Tab", "Tab", 9, lambda _value: evaluate(_THEME_FOCUS_PROBE, after_tab))
 
     def after_create_tab(_value: object) -> None:
         evaluate(_CREATE_FOCUS_PROBE, after_create_focus)

@@ -43,6 +43,8 @@ owning contracts.
   Verify the renderer correction on the 1,000- and 10,000-file pilot workloads.
 - Let native script callers finish when their browser or main renderer exits.
   A controlled crash during a bridge reply now allows orderly host shutdown.
+- Update the installed shell keyboard test to reach Theme by tabbing through
+  the Setup defaults controls that precede it.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 
