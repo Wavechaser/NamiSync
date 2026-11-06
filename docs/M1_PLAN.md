@@ -454,12 +454,12 @@ Continuation, same day: a new session replaced native input with loopback
 DevTools-protocol control of the unchanged package (environment variable only)
 and simplified collection to one collector/validator pair. The user directed
 that SH-G-15 be judged on measured behavior, not a predeclared apparatus. The
-first workload pilot found an OPEN SEVERE renderer allocation defect (2.5 GiB
-at 1,000 files, OOM at 10,100 items) and an OPEN MODERATE shutdown failure
-after renderer death; see BUGS. The user chose to log and stop. R3 resource
-judgment is blocked on that fix; the baseline then reruns the full schedule in
-PERFORMANCE. Drivers in `tools/performance/resources.py` and
-`validate_resources.py` are uncommitted.
+first workload pilot found a severe renderer allocation defect (2.5 GiB
+at 1,000 files, OOM at 10,100 items) and a shutdown failure after renderer
+death. The pilot and its drivers were preserved in `edd02012`. The renderer
+correction has targeted workload evidence in PERFORMANCE. BUGS owns the
+shutdown finding. R3 still needs measurements on a rebuilt candidate and a
+judgment on the full schedule.
 
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |

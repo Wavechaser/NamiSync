@@ -39,6 +39,8 @@ owning contracts.
   workload pilots found renderer memory growing to 2.5 GiB at 1,000 files and
   an Out of Memory crash at 10,100 items, plus a shutdown that cannot finish
   after renderer death. Log both in BUGS and stop until the renderer is fixed.
+- Coalesce execution progress paints and reuse unchanged committed Plan rows.
+  Verify the renderer correction on the 1,000- and 10,000-file pilot workloads.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

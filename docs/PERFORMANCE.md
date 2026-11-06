@@ -25,7 +25,7 @@ peak ≤ 2 GiB, all-tasks-closed ≤ 1 GiB and soak growth ≤ 0.2 MiB/cycle.
 `--remote-debugging-port`; trusted CDP mouse/text input drives the page, so no
 window focus, UIA or native typing is involved. Each run is a fresh process,
 `--data-dir` profile and kill-on-close Job, sampled passively at 1 Hz (private
-bytes, working set, handles, GDI/USER, CPU per process and role). Uncommitted
+bytes, working set, handles, GDI/USER, CPU per process and role). Pilot
 drivers: `tools/performance/resources.py` (collector, schedule, fixtures,
 mirror/trash checks, cleanup) and `validate_resources.py` (window statistics);
 pilot runs used shortened profiles via `build/resource-baseline-20261106/pilot.py`.
@@ -50,7 +50,31 @@ task card briefly reported status `completed` with title "Completed".
 Resume after the renderer fix with the full collector schedule: startup ×3
 plain and ×3 driven (port overhead), 100-cycle soak ×3, 10k/100k scale ×3,
 4 GiB and 64 × 4 MiB payload, and 60-minute idle with an open task. Pilot
-fixtures remain registered in `pilot/fixtures.jsonl` for `resources cleanup`.
+fixtures remain registered in `pilot/fixtures.jsonl`. Before removing them,
+independently resolve and verify each owned root. The collector's cleanup
+command trusts paths in the collection records. The validator's historical
+PASS/FAIL output does not decide SH-G-15.
+
+### Renderer fix comparison
+
+The two `verified-*` runs in `build/render-fix-20261106/` used fresh
+extractions of the same verified build-d archive. Only `app.js` and
+`plan_review.js` were replaced with the candidate bytes. Each run used the
+original source fixture, a new empty target, automatic verification, the
+pilot's CDP controls and 1 Hz Job sampling. Each file matched by SHA-256,
+both windows closed with exit 0, and both Jobs emptied.
+
+| Files | Whole-app peak, original → fixed (MiB) | Renderer peak, original → fixed (MiB) | Whole app after 15 s idle, fixed (MiB) |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 3,029 → 553 | 2,668 → 192 | 549 |
+| 10,000 × 32 B (10,100 plan items) | 7,799 → 1,307 | 7,409 → 899 | 991 |
+
+Grouping paints alone brought the 10k run to completion. Preserving stable
+rows across background reads further reduced terminal DOM nodes from 94,453
+to 16,061. At 10k the final run still had 394 MiB of live-or-uncollected JS
+heap at terminal sampling. No forced GC was used. Each size ran once for the
+final comparison, and other verification overlapped part of the 10k run.
+The longer resource profiles on a rebuilt package remain open.
 
 ## Updated portable resource study — 2026-11-06
 

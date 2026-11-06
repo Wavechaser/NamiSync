@@ -326,6 +326,15 @@ remain current. Independently invalidated reads preserve one dirty replay at the
 accepted offset and cannot publish result facts or retire exact detail, including
 when the total population is larger.
 
+During sync execution the browser adopts each drain snapshot immediately. Ordinary
+snapshots share a 500 ms timer per task for repainting, following the current
+operation and requesting its Plan window. Events preceding the snapshot in a
+drain batch immediately invalidate older reads without a separate paint. The
+first snapshot, control transitions, newly observed gaps and the terminal record
+update the display as soon as their snapshot arrives. A background refresh of
+the same committed projection, highlight and row range retains the row DOM and
+focus. Only cells with changed execution facts or active progress need updating.
+
 Full Plan reloads obey the same foreground ownership rule: a reload admitted
 before or during a user interaction cannot replace the review owning that
 interaction. Compatible authoritative summary facts reconcile in place without

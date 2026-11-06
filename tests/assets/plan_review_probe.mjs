@@ -1755,6 +1755,18 @@ liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(liveIntent.dataset.lifecycle, "completed", "retirement keeps copy outcome");
 assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null);
 assert.ok(document.activeElement === liveElement, "retirement keeps row focus");
+const priorIntent = liveIntent;
+const refreshedWindow = { ...liveReview.window, executionRefresh: true,
+  rows: structuredClone(liveReview.window.rows) };
+liveReview.window = refreshedWindow;
+livePanel.render(liveTask);
+assertSameNode(findByClass(liveElement, "nami-plan-row__intent"), priorIntent,
+  "an unchanged execution overlay retains the operation cells");
+liveReview.window = { ...refreshedWindow, rows: [{...liveRow, execution: null}] };
+livePanel.render(liveTask);
+assertSameNode(findByDataset(livePanel.element, "nodeId", liveRow.node_id), liveElement);
+assert.notEqual(findByClass(liveElement, "nami-plan-row__intent").dataset.lifecycle, "completed");
+assert.ok(document.activeElement === liveElement, "a changed execution overlay retains focus");
 liveTask.snapshot = {
   session_id: liveTask.sessionId, session_state: "active", phase: "execute", terminal_result: null,
   presentation: {

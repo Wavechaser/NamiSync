@@ -887,19 +887,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Live execution rendering
 
-- SEVERE - OPEN (2026-11-06). Render allocation outpacing collection. During
-  Execute with verify on, the unchanged build-d renderer grows about 70 MiB/s:
-  1,000 × 4 KiB files peak at 2.5 GiB renderer private memory, and a 10,100-item
-  plan of 32-byte files reached ~7 GiB, showed WebView2's "Out of Memory" page,
-  reloaded, then died again. Execution is paced by the page (10k files/320 KB
-  took 5 minutes; 1,000 files ~36 s). Durable state stayed truthful and the
-  target mirrored exactly. Cause, as far as verified: collectable garbage, not
-  retention — JS heap reached 914 MiB with 61k DOM nodes and one forced GC
-  returned 2.9 MiB/5.7k nodes, while CPU was layout/style, `getBoundingClientRect`
-  (`table_columns.js` resizer refresh), `cloneJsonValue` and Plan render.
-  Per-event full-window redraw is the leading, unconfirmed hypothesis. After
-  all tasks close the renderer keeps ~2.3 GiB private. Evidence:
-  `build/resource-baseline-20261106/` (`pilot/`, `diag/`).
+- SEVERE - FIXED (2026-11-06). Render allocation outpacing collection. A
+  10,100-item Execute with automatic verification exhausted the renderer twice.
+  The bridge delivers every event but publishes one snapshot per batch. The
+  page repainted even when an event supplied no new snapshot, reread up to
+  256 Plan rows, and rebuilt the row elements on each accepted window.
+  Execution now invalidates stale reads immediately and groups ordinary
+  visible updates. A background refresh of the same committed projection
+  updates changed cells in place. Controls, terminal records and foreground
+  navigation keep their own ordering. See [PERFORMANCE](PERFORMANCE.md)
+  for the original pilot and the two workload comparisons.
 
 ### Setup folder admission
 

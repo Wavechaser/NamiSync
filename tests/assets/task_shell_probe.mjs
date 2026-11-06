@@ -78,7 +78,14 @@ globalThis.document = {
 };
 
 const windowListeners = new Map();
+const executionPaints = new Set();
 globalThis.window = {
+  setTimeout(callback, delay) {
+    assert.equal(delay, 500);
+    executionPaints.add(callback);
+    return callback;
+  },
+  clearTimeout(callback) { executionPaints.delete(callback); },
   chrome: { webview: {} },
   addEventListener(name, callback) {
     const callbacks = windowListeners.get(name) ?? [];
@@ -1524,6 +1531,7 @@ await until(() => readsFor(retainedAdmissionReview).foregroundReaders === 1);
 executionDrain.acceptUpdate(stateUpdate("paused"),
   pageSnapshot(TASK_G, executionSession, { control_state: "paused" }));
 const selectionFeedbackDuringReload = retainedAdmissionReview.message;
+flushExecutionPaint();
 selectionRecoveryReload.reject(new Error("selection recovery reload failed"));
 await until(() => !reviewRenders.at(-1).reviewLoading);
 assert.equal(retainedAdmissionReview.message, selectionFeedbackDuringReload,
@@ -1578,8 +1586,38 @@ const conflictWindow = (reviewSummary) => ({
 });
 const executionDirtyUpdate = { update_type: "event", event: { body_type: "Progress", body: {} } };
 const conflictOpenBase = planOpens.length;
+function publishExecutionProgress() {
+  executionDrain.acceptUpdate(executionDirtyUpdate,
+    pageSnapshot(TASK_G, executionSession, { control_state: liveTask.executionControlState,
+      active_item: liveTask.executionPresentation?.activeItem ?? null }));
+  flushExecutionPaint();
+}
+function flushExecutionPaint() {
+  assert.equal(executionPaints.size, 1);
+  const [paint] = executionPaints;
+  executionPaints.delete(paint);
+  paint();
+}
+const renderCount = reviewRenders.length;
+const windowCount = planWindows.length;
+const pendingPaintCount = executionPaints.size;
+for (let index = 0; index < 20; index += 1) executionDrain.acceptUpdate(executionDirtyUpdate);
+assert.equal(executionPaints.size, pendingPaintCount, "intermediate events add no presentation work");
+for (let index = 0; index < 10; index += 1) {
+  executionDrain.acceptUpdate(executionDirtyUpdate,
+    pageSnapshot(TASK_G, executionSession, { control_state: liveTask.executionControlState }));
+}
+assert.equal(executionPaints.size, 1, "ordinary snapshots share one pending presentation");
+const dirtyBeforeGap = liveTask.executionWindowDirtyRevision;
+executionDrain.acceptUpdate({ update_type: "event", event: { body_type: "Gap" } });
+assert.equal(liveTask.executionWindowDirtyRevision, dirtyBeforeGap + 1,
+  "a gap before its recovery snapshot immediately invalidates prior reads");
+assert.equal(liveTask.executionWindowDirty, true);
+assert.equal(executionPaints.size, 1, "the pending presentation owns the reread");
+assert.equal(planWindows.length, windowCount);
+assert.equal(reviewRenders.length, renderCount);
 let conflictWindowBase = planWindows.length;
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await until(() => planWindows.length === conflictWindowBase + 1);
 planWindows.at(-1).resolve(conflictWindow(committedReview));
 await until(() => planOpens.length === conflictOpenBase + 1);
@@ -1595,9 +1633,9 @@ assert.equal(planOpens.length, conflictOpenBase + 1, "a conflict gets one forced
 assert.match(liveTask.review.message, /refresh delayed/);
 
 const conflictedReview = liveTask.review;
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await until(() => planWindows.length === conflictWindowBase + 3);
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 assert.equal(planWindows.length, conflictWindowBase + 3, "a newer live event cannot open a parallel window read");
 planWindows.at(-1).resolve(conflictWindow(committedReview));
 await until(() => planWindows.length === conflictWindowBase + 4);
@@ -1649,7 +1687,7 @@ const arbitrationWindowBase = planWindows.length;
 assert.equal(liveTask.executionWindowRefreshRunning, false);
 
 globalThis.planReviewHarness.callbacks.onWindow(liveReview, 256);
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 assert.equal(planWindows.length, arbitrationWindowBase + 1, "scroll-first dirty refresh waits");
 planWindows[arbitrationWindowBase].resolve(executionWindow(committedReview, 256, 2));
 await until(() => planWindows.length === arbitrationWindowBase + 2);
@@ -1657,7 +1695,7 @@ planWindows[arbitrationWindowBase + 1].resolve(executionWindow(committedReview, 
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(liveReview.window.offset, 256);
 
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await until(() => planWindows.length === arbitrationWindowBase + 3);
 globalThis.planReviewHarness.callbacks.onWindow(liveReview, 512);
 planWindows[arbitrationWindowBase + 3].resolve(executionWindow(committedReview, 512, 3));
@@ -1676,7 +1714,7 @@ assert.equal(liveReview.window.execution.started_at, "2026-09-23T01:00:00+00:00"
 assert.equal(liveReview.window.execution.ended_at, "2026-09-23T01:01:05+00:00");
 assert.equal(liveReview.executionDetail, null);
 
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await until(() => planWindows.length === arbitrationWindowBase + 6);
 globalThis.planReviewHarness.callbacks.onWindow(liveReview, null);
 planWindows[arbitrationWindowBase + 5].resolve(executionWindow(committedReview, 512, 3));
@@ -1686,7 +1724,7 @@ planWindows[arbitrationWindowBase + 6].resolve(executionWindow(committedReview, 
 await until(() => !liveTask.executionWindowRefreshRunning);
 assert.equal(readsFor(liveReview).foregroundReaders, 0);
 
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await until(() => planWindows.length === arbitrationWindowBase + 8);
 globalThis.planReviewHarness.callbacks.onWindow(liveReview, 768);
 planWindows[arbitrationWindowBase + 7].resolve(executionWindow(committedReview, 512, 4));
@@ -1697,7 +1735,7 @@ await until(() => planWindows.length === arbitrationWindowBase + 10);
 planWindows[arbitrationWindowBase + 9].resolve(executionWindow(committedReview, 768, 5));
 await until(() => !liveTask.executionWindowRefreshRunning);
 
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await until(() => planWindows.length === arbitrationWindowBase + 11);
 globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1024);
 planWindows[arbitrationWindowBase + 11].resolve(executionWindow(committedReview, 1024, 5));
@@ -1708,7 +1746,7 @@ assert.equal(liveReview.window.offset, 1024, "late equal-revision refresh cannot
 planWindows[arbitrationWindowBase + 12].resolve(executionWindow(committedReview, 1024, 5));
 await until(() => !liveTask.executionWindowRefreshRunning);
 
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await until(() => planWindows.length === arbitrationWindowBase + 14);
 globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1280);
 assert.equal(readsFor(liveReview).foregroundReaders, 1);
@@ -1727,7 +1765,7 @@ const foregroundViewUpdate = planViewUpdates.length;
 const viewWindowBefore = liveReview.window;
 deferAnchor = true;
 globalThis.planReviewHarness.callbacks.onViewChange(liveReview, { sortColumn: "size" });
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await until(() => liveTask.executionWindowDirty === true);
 assert.equal(planWindows.length, foregroundViewWindowBase, "dirty refresh defers through view mutation");
 const liveViewSummary = planSummary({
@@ -1761,13 +1799,13 @@ const autoDetailsBefore = executionDetails.length;
 deferHighlight = true;
 globalThis.planReviewHarness.callbacks.onHighlight(liveReview, "replace", liveReview.window.rows[0].node_id);
 await until(() => planHighlights.length === 1);
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 await turns();
 assert.equal(planWindows.length, foregroundHighlightWindowBase, "highlight mutation itself holds dirty replay");
 planHighlights[0].resolve(liveHighlightSummary);
 deferHighlight = false;
 await until(() => planWindows.length === foregroundHighlightWindowBase + 1);
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 assert.equal(planWindows.length, foregroundHighlightWindowBase + 1, "dirty refresh defers through highlight window");
 planWindows[foregroundHighlightWindowBase].resolve(executionWindow(liveHighlightSummary, 1280, 6));
 await until(() => planWindows.length === foregroundHighlightWindowBase + 2);
@@ -1787,7 +1825,7 @@ deferHighlight = true;
 globalThis.planReviewHarness.callbacks.onHighlight(liveReview, "replace", liveReview.window.rows[0].node_id);
 await until(() => planHighlights.length === 2);
 const rejectedHighlight = liveReview.highlightQueue.catch(() => {});
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 planHighlights[1].reject(new Error("highlight request failed"));
 await rejectedHighlight;
 deferHighlight = false;
@@ -1798,7 +1836,7 @@ planWindows[failedForegroundBase].resolve(executionWindow(liveReview.summary, 12
 await until(() => !liveTask.executionWindowRefreshRunning);
 const windowBeforeScrollError = liveReview.window;
 globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1536);
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 planWindows[failedForegroundBase + 1].reject(new Error("scroll request failed"));
 await until(() => planWindows.length === failedForegroundBase + 3);
 assert.equal(readsFor(liveReview).foregroundReaders, 0, "rejected scroll cannot strand dirty refresh");
@@ -1813,7 +1851,7 @@ for (const destination of ["settings", "task"]) {
   const navigationBase = planWindows.length;
   const retainedWindow = liveReview.window;
   const retainedResult = liveReview.window.execution.result;
-  executionDrain.acceptUpdate(executionDirtyUpdate);
+  publishExecutionProgress();
   await until(() => planWindows.length === navigationBase + 1);
   if (destination === "settings") settingsButton().click();
   else taskButton("Task 6").click();
@@ -1978,7 +2016,7 @@ planWindows.splice(followWindowBase);
 liveReview.follow.scrollOffset = null; // the renderer consumed the first jump; the user scrolled within this window
 const sameTargetWindowBase = planWindows.length;
 const sameTargetAnchorBase = planAnchors.length;
-executionDrain.acceptUpdate(executionDirtyUpdate);
+publishExecutionProgress();
 assert.equal(liveReview.follow.scrollOffset, null,
   "an automatic byte tick does not snap the same visible target back into place");
 assert.equal(planAnchors.length, sameTargetAnchorBase,

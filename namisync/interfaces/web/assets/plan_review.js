@@ -902,26 +902,41 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const focusNodeId = review.summary.highlight_focus_node_id;
     const restoreFocusNodeId = review.keyboardRevealWindow === review.window
       ? focusNodeId : activeRow?.dataset?.nodeId;
-    if (renderedRows?.review === review && renderedRows.window === review.window
-    ) {
-      if (renderedRows.progressPresentation !== task.executionPresentation) {
-        const activeOperationId = task.executionPresentation?.activeItem?.item_id ?? null;
-        for (const operationId of new Set([renderedRows.activeOperationId, activeOperationId])) {
-          if (operationId === null) continue;
-          const index = review.window.rows.findIndex((row) => row.operation_id === operationId);
-          if (index < 0) continue;
-          const rowElement = renderedRows.rows[index];
-          const intent = rowElement.querySelector(".nami-plan-row__intent");
-          if (intent === null) continue;
-          const replacement = document.createElement("div");
-          renderPlanRow(replacement, rowView(
-            review.window.rows[index], disabled, committed, task.executionPresentation,
-          ));
-          intent.replaceWith(replacement.querySelector(".nami-plan-row__intent"));
+    const previous = renderedRows?.window;
+    const sameProjection = previous !== review.window && review.window.executionRefresh === true
+      && task.executionStarted && task.sessionState === "active"
+      && review.keyboardRevealWindow !== review.window && renderedRows?.review === review
+      && committed && renderedRows.committed && renderedRows.highlightRevision === highlightRevision
+      && previous.view_revision === review.window.view_revision && previous.offset === review.window.offset
+      && previous.total === review.window.total && previous.rows.length === review.window.rows.length
+      && previous.rows.every((row, index) => row.node_id === review.window.rows[index].node_id);
+    if (renderedRows?.review === review && (previous === review.window || sameProjection)) {
+      const changed = new Set();
+      if (previous !== review.window) {
+        for (const [index, row] of review.window.rows.entries()) {
+          const old = previous.rows[index].execution;
+          if (old !== row.execution && JSON.stringify(old) !== JSON.stringify(row.execution)) changed.add(index);
         }
-        renderedRows.progressPresentation = task.executionPresentation;
-        renderedRows.activeOperationId = activeOperationId;
       }
+      const activeOperationId = task.executionPresentation?.activeItem?.item_id ?? null;
+      if (renderedRows.progressPresentation !== task.executionPresentation) {
+        for (const id of [renderedRows.activeOperationId, activeOperationId]) {
+          if (id === null) continue;
+          const index = review.window.rows.findIndex((row) => row.operation_id === id);
+          if (index >= 0) changed.add(index);
+        }
+      }
+      for (const index of changed) {
+        const element = renderedRows.rows[index];
+        const replacement = document.createElement("div");
+        renderPlanRow(replacement, rowView(review.window.rows[index], disabled, committed, task.executionPresentation));
+        for (const cell of [".nami-plan-row__intent", ".nami-plan-row__checksum", ".nami-file-row__notes"]) {
+          element.querySelector(cell).replaceWith(replacement.querySelector(cell));
+        }
+      }
+      renderedRows.window = review.window;
+      renderedRows.progressPresentation = task.executionPresentation;
+      renderedRows.activeOperationId = activeOperationId;
       if (renderedRows.disabled !== disabled || renderedRows.committed !== committed) {
         for (const [index, checkbox] of renderedRows.checkboxes.entries()) {
           if (checkbox !== null) checkbox.disabled = disabled || committed

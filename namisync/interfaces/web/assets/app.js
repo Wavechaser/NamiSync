@@ -926,6 +926,18 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
     return;
   }
+  const execution = task.sessionKind === "sync-execution";
+  if (execution) {
+    task.executionWindowDirty = true;
+    task.executionWindowDirtyRevision += 1;
+  }
+  if (execution && snapshot === null) {
+    if (update?.event?.body_type === "Gap") void refreshExecutionWindow(task);
+    return;
+  }
+  const immediate = task.snapshot === null || task.executionControlState !== snapshot?.control_state
+    || update?.update_type === "record" || update?.event?.body_type === "Gap"
+    || task.snapshot?.gap_first_missed_seq !== snapshot?.gap_first_missed_seq;
   if (snapshot !== null) {
     if (snapshot.gap_first_missed_seq != null
         && snapshot.gap_first_missed_seq !== task.snapshot?.gap_first_missed_seq) invalidateInventoryReview(task);
@@ -969,7 +981,26 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
       void refreshInventoryOverlay(task, sessionId);
     }
   }
-  if (task.sessionKind === "sync-execution") markExecutionWindowDirty(task);
+  if (execution) {
+    if (!immediate) {
+      if (task.executionPaintTimer == null) {
+        task.executionPaintTimer = window.setTimeout(() => {
+          task.executionPaintTimer = null;
+          if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
+              || task.sessionState !== "active" || task.drainUnavailable) return;
+          if (task.executionWindowDirty) void refreshExecutionWindow(task);
+          renderTasks();
+          if (task.review?.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
+        }, 500);
+      }
+      return;
+    }
+    if (task.executionPaintTimer != null) {
+      window.clearTimeout(task.executionPaintTimer);
+      task.executionPaintTimer = null;
+    }
+    void refreshExecutionWindow(task);
+  }
   if (update?.update_type === "record") {
     task.recoveryRetry = null;
     task.recoverySessionId = null;
@@ -2386,6 +2417,7 @@ async function refreshExecutionWindow(task) {
   if (
     tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId || settingsVisible
     || task.workPane === "verify"
+    || task.executionPaintTimer != null
     || task.review === null || task.reviewLoading || task.executionWindowRefreshRunning
     || tableReadOwner(task).busy
   ) return;
@@ -2433,7 +2465,7 @@ async function refreshExecutionWindow(task) {
           void loadPlanReview(task, true);
           return;
         }
-        adoptExecutionWindow(review, window);
+        adoptExecutionWindow(review, { ...window, executionRefresh: true });
         renderTasks();
       } catch (_error) {
         const disposition = refreshDisposition();
