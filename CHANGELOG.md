@@ -64,6 +64,9 @@ owning contracts.
   The reported 101,000-operation Plan now reaches review with both endpoints checked.
 - Show the specific terminal Plan limit on release and reselection. A refused
   Plan keeps Execute disabled and no longer prompts a retry of a missing artifact.
+- Compare copy-only executor time across matched revisions, the durable service
+  and the live GUI. Attribute service recording cost and measure the effect of
+  fewer event reads with a test-only intervention.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

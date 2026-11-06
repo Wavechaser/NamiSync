@@ -123,6 +123,47 @@ the full 148–233 s packaged spread. Evidence in `build/coverage-study-20261106
 `copy.jsonl`, `timed-owners.json`, `profiled-0eb01313-calls.json`, and the
 matching run's events and verification receipt.
 
+### Copy phase only — matched revision and GUI comparisons, 2026-11-06
+
+The table measures wall time **inside executor execution**, including its
+filesystem guards, publication, recording and settlement. Planning, execution
+preflight and post-copy verification are outside the timer. Service and GUI
+runs explicitly disabled verification. The historical and current code ran
+from separate Git snapshots (`23589bd` and `a91bf617`) in fresh processes,
+using the same source, Python environment and fresh H: targets. Every mirror
+passed SHA-256. These are small sample ranges on shared hardware.
+
+| 1,000 × 4 KiB, F: → H: | Samples | ms/file |
+| --- | ---: | ---: |
+| Original flat corpus, historical executor | 2 | 3.79–3.79 |
+| Original flat corpus, current executor | 2 | 2.82–2.84 |
+| Ten-directory GUI fixture, historical executor | 3 | 4.85–4.88 |
+| Same fixture, current executor | 3 | 3.18–3.22 |
+| Same fixture, current service and durable ledger | 3 | 4.09–4.15 |
+| Same fixture, source GUI with Settings covering the Plan | 2 | 6.05–6.20 |
+| Same fixture, source GUI with Plan visible | 2 | 6.53–6.95 |
+
+The current executor beat the historical one on both folder layouts. Its
+byte-copy backend took about 0.10 s per nested run versus 0.42 s historically.
+In separate instrumented runs, recording took 0.636 s through the service
+versus 0.014 s in the ledgerless rig. That explains much of the roughly
+0.9 ms/file service increment.
+
+Counting calls that started inside the executor interval, the visible Plan
+issued 1,004–1,010 event reads and 25–26 Plan window reads. Hiding the Plan
+reduced window reads to 0–1 but left event reads near 1,010. A test-only
+25 ms delay before each event read in the session reduced executor-interval
+reads to 174 visible and 164 hidden in one trial each. Executor time fell to
+5.23 and 4.74 ms/file, respectively. Visible window reads also fell to 11.
+All six GUI runs issued zero verification calls, returned matching mirrors
+and exited normally with an empty Job. The diagnostic implicates event-drain
+frequency independently of visible-window work. It does not establish a
+production delay: latency, replay gaps, cancellation and terminal delivery
+need separate checks for any batching change. The previously observed ~10 ms
+inside a loaded GUI run remains a valid single observation. Evidence in
+`build/copyonly-20261106/`: `copy.jsonl`, `*-calls.json`, `gui-summary.json`, `gui.xml`
+and `delay.xml`.
+
 ## Driven package resource pilot — 2026-11-06 (continuation)
 
 A new session took over the study below with a simpler control method and

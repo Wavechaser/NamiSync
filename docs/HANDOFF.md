@@ -12,4 +12,11 @@ The page retains the terminal refusal on release and reselection. A focused
 WebView2 journey exercised a real refusal on a small fixture, with no target
 changes and normal exit. All 65 frontend checks passed. Evidence:
 `build/refusal-ui-20261106/runs/refusal/verified.json`. The bounded
-above-envelope policy and matched copy-only timings follow.
+above-envelope policy is being verified.
+
+PERFORMANCE records the copy phase alone on frozen sources `23589bd` and
+`a91bf617` using identical input and target drives. The 10-directory corpus
+ran at 3.18–3.22 ms/file in the current rig, 4.09–4.15 through the service
+and 6.53–6.95 with the Plan visible. A test-only poll delay reduced the
+visible executor time to 5.23 ms/file; no production timing was changed.
+Evidence and exact-hash receipts: `build/copyonly-20261106/`.
