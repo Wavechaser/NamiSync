@@ -898,6 +898,22 @@ defect, and move implementation-level test choreography out of the log.
   navigation keep their own ordering. See [PERFORMANCE](PERFORMANCE.md)
   for the original pilot and the two workload comparisons.
 
+### Planning refusal presentation
+
+- MODERATE - OPEN (2026-11-06). Review-limit refusal shown as retryable
+  failure. A driven 100,000 × 32 B copy (1,000 directories, empty target) on
+  the rebuilt package was correctly refused at the 120,000-row plan domain
+  wall (`ReviewFactLimitExceeded`, plan/domain/rows), so no plan was saved.
+  The page still requested the Plan view; `open_plan_view` hit the missing
+  plan (`KeyError` in `runtime.get_plan`), the bridge returned
+  `internal_error`, and the task showed "Plan unavailable. Select the task to
+  retry. Check the task settings and try again." Retrying cannot succeed and
+  the limit is never named. Cause, as far as verified: the page loads Plan
+  review after any terminal planning session and never presents the validated
+  `review_fact_limit` terminal fact. Reproduced from source with exception
+  logging. Evidence: `build/resource-study-20261106b/` (`full/runs/scale-100k-01`,
+  `debug100k/`, `debug_gui_exceptions.log`).
+
 ### Setup folder admission
 
 - MINOR - FIXED (2026-11-05). In-flight validation gesture loss. Leaving a
