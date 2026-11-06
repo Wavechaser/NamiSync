@@ -54,6 +54,7 @@ globalThis.inventoryHarness = {
     return Promise.resolve(planWindowResponse);
   },
   getExecutionDetail() { throw new Error("unexpected execution detail"); },
+  getPlanOperationAnchor() { throw new Error("unexpected plan anchor"); },
   mutateInventoryHighlight() { throw new Error("unexpected inventory highlight"); },
   setInventoryHighlightedSelection() { throw new Error("unexpected highlighted selection"); },
   openInventoryView(taskId) { calls.push(["open", taskId]); return delayedOpen?.promise ?? Promise.resolve({
@@ -203,6 +204,7 @@ const replacements = {
   });`),
   "./rail.js": url("export const createTaskRail = () => ({ element: new HTMLElement('nav'), render() {} });"),
   "./panels.js": url(`export const createWorkPanel = (setup, plan, settings, inventory) => {
+    globalThis.inventoryPlanCallbacks = plan;
     globalThis.inventoryCallbacks = inventory;
     return { element: new HTMLElement('section'), render(task) { globalThis.inventoryRenders.push(task); }, renderSettings() {} };
   };`),
@@ -210,7 +212,7 @@ const replacements = {
 globalThis.inventoryRenders = renders;
 globalThis.inventoryConfirmations = [];
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
-source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryNavigationWindow, readInventoryDetail, readExecutionDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks, queueRowHighlight, interruptPlanHighlight, refreshInventoryOverlay };";
+source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryNavigationWindow, readInventoryDetail, readExecutionDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks, queueRowHighlight, interruptPlanHighlight, refreshInventoryOverlay, observeLinkedVerification, planFollowTarget };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
@@ -797,7 +799,8 @@ const executionTask = app.adoptTask(planSnapshot);
 const executionReview = {summary:{task_id:executionTaskId, request_id:planRequestId,
   selection_state:"reviewing", selection_revision:5,
   requires_destructive_confirmation:false, destructive_operation_count:0,
-  view_revision:0, highlight_revision:0},
+    view_revision:0, highlight_revision:0, search_query:"", filters:[],
+    sort_column:"path", sort_direction:"ascending"},
   window:{offset:0, rows:[], execution:null},
   actionRevision:0, pending:null, message:null, follow:null};
 executionTask.review = executionReview;
@@ -823,6 +826,70 @@ assert.equal(executionTask.sessionId, executionSessionId);
 assert.equal(executionTask.planRequestId, planRequestId,
   "accepted execution retains the original Plan request independently");
 inventoryOpenRequests.set(executionTaskId, executionRequestId);
+const executeProgressSnapshot = {
+  task_id:executionTaskId, session_id:executionSessionId, session_state:"active", control_state:"running",
+  phase:"execute", active_item:null, gap_first_missed_seq:null,
+  presentation:{value:50, determinate:true, indeterminate:false, item_percent:null,
+    items_done:1, items_total:2, throughput_bytes_per_second:20, eta_seconds:2}, terminal_result:null,
+};
+executionReview.follow = {enabled:false, eligible:false, hasTarget:false, generation:0};
+app.acceptTaskUpdate(executionTask, executionSessionId, null, executeProgressSnapshot);
+const opensBeforeLinkedVerify = calls.filter(([name]) => name === "open").length;
+app.acceptTaskUpdate(executionTask, executionSessionId, null,
+  {...executeProgressSnapshot, phase:"verify", active_item:{item_id:"5".repeat(32), item_type:"operation"},
+    presentation:{...executeProgressSnapshot.presentation, value:0}});
+assert.equal(executionTask.workPane, "verify", "automatic verification opens its pane at first phase observation");
+assert.equal(calls.filter(([name]) => name === "open").length, opensBeforeLinkedVerify,
+  "active linked Verify does not open a ledger Inventory publication");
+app.switchTaskPane(executionTask, "plan");
+app.acceptTaskUpdate(executionTask, executionSessionId, null,
+  {...executeProgressSnapshot, phase:"verify", control_state:"paused", presentation:{...executeProgressSnapshot.presentation, value:10}});
+assert.equal(executionTask.workPane, "plan", "later verification progress respects a manual return to Plan");
+app.switchTaskPane(executionTask, "verify");
+assert.equal(app.planFollowTarget(executionTask), "5".repeat(32),
+  "linked Verify keeps its last real verification target between files");
+app.acceptTaskUpdate(executionTask, executionSessionId, null,
+  {...executeProgressSnapshot, phase:null, gap_first_missed_seq:7, control_state:"paused"});
+assert.equal(app.planFollowTarget(executionTask), null, "a new Gap retires the linked verification target");
+app.acceptTaskUpdate(executionTask, executionSessionId, null,
+  {...executeProgressSnapshot, phase:"verify", gap_first_missed_seq:8, control_state:"paused",
+    active_item:{item_id:"6".repeat(32), item_type:"operation"}});
+app.acceptTaskUpdate(executionTask, executionSessionId, null,
+  {...executeProgressSnapshot, phase:"verify", gap_first_missed_seq:8, control_state:"running"});
+assert.equal(app.planFollowTarget(executionTask), "6".repeat(32),
+  "fresh active verification evidence in a recovered snapshot remains the next between-file target");
+app.acceptTaskUpdate(executionTask, executionSessionId,
+  {update_type:"event", event:{body_type:"Gap", body:{first_missed_seq:9}}}, null);
+assert.equal(app.planFollowTarget(executionTask), null, "a raw synthetic Gap safely clears linked navigation");
+const fastLinked = {sessionKind:"sync-execution", linkedVerificationStarted:false, review:null,
+  workPane:"plan", paneRevision:0};
+app.observeLinkedVerification(fastLinked, {phase:null, terminal_result:{phases:[{phase:"execute", items_done:1}]}}, null);
+assert.equal(fastLinked.workPane, "plan", "skipped verification does not open Verify");
+app.observeLinkedVerification(fastLinked, {phase:null, terminal_result:{phases:[{phase:"verify", items_done:1}]}}, null);
+assert.equal(fastLinked.workPane, "verify", "a completed drain batch opens actual linked verification");
+const phaseOnly = {...fastLinked, linkedVerificationStarted:false, workPane:"plan"};
+app.observeLinkedVerification(phaseOnly, null,
+  {event:{body_type:"PhaseChanged", body:{phase:"verify"}}});
+assert.equal(phaseOnly.workPane, "verify", "reliable phase evidence survives a terminal snapshot in the same batch");
+const terminalLinkedAnchor = defer();
+globalThis.inventoryHarness.getPlanOperationAnchor = () => terminalLinkedAnchor.promise;
+app.acceptTaskUpdate(executionTask, executionSessionId, null,
+  {...executeProgressSnapshot, phase:"verify", control_state:"paused",
+    active_item:{item_id:"5".repeat(32), item_type:"operation"}});
+globalThis.inventoryPlanCallbacks.onNavigateCurrent(executionReview, false);
+assert.equal(executionReview.followRead?.explicit, true, "linked Verify admits the explicit Go with Follow off");
+const terminalLinkedWindowBase = calls.length;
+app.acceptTaskUpdate(executionTask, executionSessionId,
+  {update_type:"record", record:{state:"completed"}},
+  {...executeProgressSnapshot, phase:"verify", control_state:"paused", session_state:"completed", active_item:null});
+assert.equal(executionTask.sessionReleased, false, "the terminal record precedes release");
+assertSameNode(executionReview.followRead, null, "terminal linked Verify retires the captured Go even with Follow off");
+assert.equal(executionReview.follow.hasTarget, false);
+terminalLinkedAnchor.resolve({disposition:"current", index:40});
+await tick();
+assert.equal(calls.slice(terminalLinkedWindowBase).some(([name, , , offset]) => name === "plan-window" && offset === 36), false,
+  "a delayed linked Verify anchor cannot dispatch its jump after the terminal record");
+assert.equal(executionReview.follow.scrollOffset, null);
 executionTask.sessionState = "completed";
 app.acceptTaskRelease(executionTask, executionSessionId);
 await tick();
@@ -1006,6 +1073,10 @@ function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId
       has_successful_copied_files:true,
       result:{headline, disposition:"ran", recording:headline === "degraded" ? "degraded" : "ok"}}}};
   app.observeOriginalExecution(owner, requestId, owner.review.window.execution);
+  owner.executionPresentation = {phase:null, activeItem:null, itemPercent:null,
+    lastSettledOperationId:"a".repeat(32), verificationFollowItemId:null};
+  owner.review.follow = {enabled:false, eligible:false, hasTarget:true, generation:0};
+  const originalPresentation = owner.executionPresentation;
   owner.inventoryReview = {...currentD1Review,
     summary:{...currentD1Review.summary, task_id:taskId, request_id:requestId,
       selected_file_count:1, selectable_file_count:3, hidden_selected_file_count:0,
@@ -1013,6 +1084,8 @@ function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId
   owner = app.adoptTask({task_id:taskId, session_id:currentSessionId,
     session_state:"completed", session_released:true, task_kind:"sync-plan",
     request_id:requestId, plan_request_id:requestId, session_kind:"inventory"});
+  assertSameNode(owner.executionPresentation, originalPresentation,
+    "an auxiliary session preserves the original terminal execution cursor");
   owner.inventoryReviewSessionId = currentSessionId;
   owner.inventoryViewUnconfirmed = false;
   taskSnapshot = {task_id:taskId, session_id:currentSessionId, session_state:"completed",
@@ -1024,6 +1097,11 @@ function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId
 const copiedTask = attachReleasedExecutionTask("task-" + "1".repeat(32),
   "2".repeat(32), "3".repeat(32), "4".repeat(32));
 app.selectTask(copiedTask.taskId);
+assert.equal(copiedTask.review.follow.hasTarget, true);
+app.switchTaskPane(copiedTask, "verify");
+assert.equal(copiedTask.review.follow.hasTarget, false, "an auxiliary Verify pane has no original linked target");
+app.switchTaskPane(copiedTask, "plan");
+assert.equal(copiedTask.review.follow.hasTarget, true, "returning to Plan restores its retained operation target");
 app.switchTaskPane(copiedTask, "verify"); await tick();
 const copiedReview = copiedTask.inventoryReview;
 const copiedFact = copiedTask.originalExecutionFact;
@@ -1747,4 +1825,36 @@ detailSummary = {...detailSummary, view_revision:82, highlight_focus_visible_ind
 await app.loadInventoryReview(alignedTask, true); await tick();
 assert.equal(alignedTask.inventoryReview.detail, null, "a filter-suppressed focus has no stale details or invented neighbor");
 }
+// A reliable verification phase can arrive before the initial review load's
+// final snapshot. The retired load must reopen against the new pane revision.
+const raceTaskId = "task-" + "b".repeat(32), raceSessionId = "c".repeat(32), raceRequestId = "d".repeat(32);
+const raceExecution = {session_id:raceSessionId, execution_revision:1, result:null,
+  refusal:null, gap:null, trash_location:null};
+planSummaryResponse = {task_id:raceTaskId, request_id:raceRequestId, view_revision:0, highlight_revision:0,
+  selection_state:"committed", search_query:"", filters:[], sort_column:"path", sort_direction:"ascending",
+  highlight_focus_node_id:null, execution:raceExecution};
+planWindowResponse = {disposition:"current", view_revision:0, highlight_revision:0, offset:0, total:0,
+  rows:[], execution:raceExecution};
+delayedPlanOpen = defer();
+const initialRaceOpen = delayedPlanOpen;
+const raceTask = app.adoptTask({task_id:raceTaskId, session_id:raceSessionId, session_state:"active",
+  session_released:false, task_kind:"sync-plan", session_kind:"sync-execution",
+  request_id:raceRequestId, plan_request_id:raceRequestId});
+raceTask.executionStarted = true;
+app.selectTask(raceTaskId);
+assert.equal(raceTask.reviewLoading, true);
+assertSameNode(raceTask.review, null);
+const raceOpensBeforePhase = calls.filter(([name, taskId]) => name === "plan-open" && taskId === raceTaskId).length;
+app.acceptTaskUpdate(raceTask, raceSessionId,
+  {update_type:"event", event:{body_type:"PhaseChanged", body:{phase:"verify"}}}, null);
+assert.equal(raceTask.workPane, "verify", "raw PhaseChanged ingress opens zero-item linked verification");
+delayedPlanOpen = null;
+initialRaceOpen.resolve(planSummaryResponse);
+await tick(); await tick();
+assert.ok(raceTask.review !== null, "phase handoff during the initial load eventually installs the review");
+assert.equal(raceTask.reviewLoading, false);
+assert.equal(raceTask.reviewSessionId, raceSessionId);
+assert.equal(raceTask.workPane, "verify");
+assert.ok(calls.filter(([name, taskId]) => name === "plan-open" && taskId === raceTaskId).length > raceOpensBeforePhase,
+  "the pane-retired initial read is retried against current ownership");
 process.stdout.write("ok\n");

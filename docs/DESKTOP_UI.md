@@ -27,7 +27,8 @@ controls rather than selectable text. This follows Microsoft's
 Plan and Inventory highlights paint inside the row without changing column
 geometry. Their selected view segment retains its accent and normal button
 interaction on either page; clicking it keeps the current page. The other
-destination remains disabled until available, including during original execution.
+destination remains disabled during copying and becomes available when linked
+verification begins or the original execution is released.
 Unselected disabled destinations keep their disabled appearance. Selection remains visually distinct, as in Microsoft's
 [Fluent tabs specification](https://github.com/microsoft/fluentui/blob/master/packages/react-components/react-tabs/library/docs/Spec.md).
 
@@ -36,6 +37,25 @@ unsettled outcome; existing Check outcome recovery remains available. Execution
 Pause/Resume and Cancel use icon-only buttons with accessible names and tooltips
 in the headline's top action row. Cancel retains its five-second, two-click
 confirmation. This follows Microsoft's [Fluent button guidance](https://fluent2.microsoft.design/components/web/react/core/button/usage/).
+
+Automatic post-copy verification opens Verify once when its phase is observed.
+Until the original run is released, Verify uses the existing bounded execution
+review and operation identities, including live verification progress and the
+original run's Pause/Resume and Cancel controls. It does not open or mutate an
+Inventory publication. Users may return to Plan, whose execution-phase progress
+stays settled while verification continues. The switch does not repeat after a
+manual return. Release replaces Verify with the ordinary target Inventory pane;
+the original Plan and its operation results remain available.
+Between verification files, Go to current retains the last observed verification
+subject without reading each file separately. A new gap, phase change, terminal
+record or session replacement retires that target. Plan does not present a lossy
+partial execution sample as final counters; the terminal execute-phase result
+supplies those counters when available.
+Verify's headline, activity feedback and terminal counters describe the
+verification phase, including paused, canceled, failed and incomplete outcomes;
+recovery feedback and original-run control custody remain authoritative.
+Successful verification still shows independent recording/audit warnings and
+omitted issue details with attention styling; mismatch retains error styling.
 
 Plan and Inventory show a 16px Microsoft Fluent plain cloud with a 6px
 gap after names with positive scan-time recall evidence, independently of
@@ -1431,7 +1451,8 @@ sort/reset starts at offset zero. Automatic following
 is available only in canonical path-key order with no search or filters. It
 starts enabled for a new eligible execution or ordinary integrity session and
 follows its active operation/item or nearest visible collapsed ancestor. Plan
-uses original execution/linked-verification activity; Inventory uses current
+uses execution activity and retains the latest settled operation between files
+and at terminal. Live linked Verify follows its own verification activity. Inventory uses current
 ordinary baseline/verify/rebaseline activity, including copied-file Verify. User
 scrolling the target out of view, or changing sort/search/filter, disables it;
 only explicit action resumes it, even after returning to an eligible view.

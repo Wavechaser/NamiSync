@@ -59,7 +59,8 @@ export function createWorkPanel(setupCallbacks, planReviewCallbacks, settings, i
     }
     renderedTaskId = task.taskId;
     const starting = task.form?.attempt?.kind;
-    if (task.taskKind === "sync-plan" && task.executionStarted && task.workPane === "verify") {
+    if (task.taskKind === "sync-plan" && task.executionStarted && task.workPane === "verify"
+        && (task.sessionKind !== "sync-execution" || task.sessionReleased)) {
       showTaskPane(inventory.element, review.element);
       inventory.render(task);
       return;

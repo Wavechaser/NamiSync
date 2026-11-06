@@ -422,6 +422,8 @@ function setOriginalExecutionSession(task, sessionId) {
   if (task.executionSessionId === sessionId) return;
   task.executionSessionId = sessionId;
   task.originalExecutionFact = null;
+  task.executionPresentation = null;
+  task.linkedVerificationStarted = false;
 }
 
 function observeOriginalExecution(task, planRequestId, execution) {
@@ -437,7 +439,22 @@ function observeOriginalExecution(task, planRequestId, execution) {
 function verifyPaneAvailable(task) {
   return task.taskKind === "sync-plan" && task.executionStarted
     && task.executionSessionId !== null
-    && (task.sessionKind !== "sync-execution" || task.sessionReleased);
+    && (task.sessionKind !== "sync-execution" || task.sessionReleased || task.linkedVerificationStarted);
+}
+
+function executionPaneVisible(task) {
+  return task.workPane !== "verify" || (task.sessionKind === "sync-execution" && !task.sessionReleased);
+}
+
+function observeLinkedVerification(task, snapshot, update) {
+  const phaseChanged = update?.event?.body_type === "PhaseChanged" && update.event.body.phase === "verify";
+  const verifiedPhase = snapshot?.terminal_result?.phases?.find(phase => phase.phase === "verify");
+  if (task.sessionKind !== "sync-execution" || task.linkedVerificationStarted
+      || (snapshot?.phase !== "verify" && !phaseChanged && !(verifiedPhase?.items_done > 0))) return;
+  task.linkedVerificationStarted = true;
+  if (task.review !== null) interruptPlanNavigation(task.review);
+  task.workPane = "verify";
+  task.paneRevision += 1;
 }
 
 function switchTaskPane(task, paneName) {
@@ -449,7 +466,12 @@ function switchTaskPane(task, paneName) {
   if (paneName === "verify") {
     if (task.review !== null) interruptPlanNavigation(task.review);
     task.workPane = "verify";
+    if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
     renderTasks();
+    if (executionPaneVisible(task)) {
+      if (task.executionWindowDirty) void refreshExecutionWindow(task);
+      return;
+    }
     void loadInventoryReview(task);
     followInventory(task);
     return;
@@ -460,6 +482,7 @@ function switchTaskPane(task, paneName) {
     if (task.inventoryReview.detail?.state === "loading") retireInventoryDetail(task.inventoryReview);
   }
   task.workPane = "plan";
+  if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
   renderTasks();
   if (task.executionWindowDirty) void refreshExecutionWindow(task);
 }
@@ -579,7 +602,9 @@ function inventoryActiveItem(task) {
 function planFollowTarget(task) {
   const presentation = task.executionPresentation;
   const active = presentation?.activeItem?.item_id ?? null;
-  if (task.workPane === "verify") return presentation?.phase === "verify" ? active : null;
+  if (task.workPane === "verify") return task.sessionKind === "sync-execution"
+    && task.sessionState === "active" && presentation?.phase === "verify"
+    ? active ?? presentation.verificationFollowItemId ?? null : null;
   return (presentation?.phase !== "verify" ? active : null)
     ?? presentation?.lastSettledOperationId ?? null;
 }
@@ -781,6 +806,7 @@ function adoptTask(summary) {
       executionSessionState: null,
       executionSnapshot: null,
       executionPresentation: null,
+      linkedVerificationStarted: false,
       closePending: false,
       closeRecovery: null,
       closeAwaitingTerminal: false,
@@ -878,8 +904,6 @@ function adoptTask(summary) {
     }
     if (task.sessionKind === "sync-execution" && summary.session_kind !== "sync-execution") {
       task.executionSessionState = task.sessionState;
-      task.executionPresentation = null;
-      if (task.review?.follow != null) task.review.follow.hasTarget = false;
     }
     task.sessionId = summary.session_id;
     task.sessionState = summary.session_state;
@@ -888,6 +912,7 @@ function adoptTask(summary) {
     task.requestId = summary.request_id;
     task.planRequestId = summary.plan_request_id;
     task.sessionKind = summary.session_kind;
+    if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
     if (summary.session_kind === "sync-execution") setOriginalExecutionSession(task, summary.session_id);
   }
   if (task.form !== null) task.form.sessionState = task.sessionState;
@@ -968,20 +993,27 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     task.executionWindowDirtyRevision += 1;
   }
   if (execution && snapshot === null) {
+    observeLinkedVerification(task, null, update);
     if (update?.event?.body_type === "Gap") void refreshExecutionWindow(task);
     return;
   }
   const immediate = task.snapshot === null || task.executionControlState !== snapshot?.control_state
+    || task.snapshot?.phase !== snapshot?.phase
     || update?.update_type === "record" || update?.event?.body_type === "Gap"
     || task.snapshot?.gap_first_missed_seq !== snapshot?.gap_first_missed_seq;
   if (snapshot !== null) {
     if (newGap) invalidateInventoryReview(task);
+    observeLinkedVerification(task, snapshot, update);
+    const verificationFollowItemId = execution && snapshot.session_state === "active"
+      && snapshot.phase === "verify"
+      ? snapshot.active_item?.item_id ?? task.executionPresentation?.verificationFollowItemId ?? null : null;
     task.snapshot = snapshot;
     task.progressPresentation = {
       phase: snapshot.phase,
       activeItem: snapshot.active_item,
       itemPercent: snapshot.presentation.item_percent,
       lastSettledOperationId: snapshot.last_settled_operation_id,
+      verificationFollowItemId,
     };
     if (task.sessionKind === "sync-execution") {
       task.executionSnapshot = snapshot;
@@ -2452,7 +2484,7 @@ function markExecutionWindowDirty(task) {
 async function refreshExecutionWindow(task) {
   if (
     tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId || settingsVisible
-    || task.workPane === "verify"
+    || !executionPaneVisible(task)
     || task.executionPaintTimer != null
     || task.review === null || task.reviewLoading || task.executionWindowRefreshRunning
     || tableReadOwner(task).busy
@@ -2476,7 +2508,7 @@ async function refreshExecutionWindow(task) {
         tasks.get(task.taskId) === task && task.review === review
         && task.executionSessionId === sessionId && task.planRequestId === planRequestId,
         selectedTaskId === task.taskId && !settingsVisible
-        && task.workPane !== "verify" && task.paneRevision === paneRevision
+        && executionPaneVisible(task) && task.paneRevision === paneRevision
         && !task.reviewLoading && task.reviewRevision === reviewRevision
         && review.summary.request_id === requestId && review.actionRevision === action
         && review.summary.view_revision === viewRevision && review.window.offset === offset,
@@ -2626,7 +2658,7 @@ async function readExecutionDetail(review, row) {
 
 function currentReviewTask(review) {
   const task = currentTask();
-  return task !== null && task.workPane !== "verify" && task.review === review ? task : null;
+  return task !== null && executionPaneVisible(task) && task.review === review ? task : null;
 }
 
 function retainedReviewTask(review) {
@@ -2638,7 +2670,7 @@ function retainedReviewTask(review) {
 async function loadPlanReview(task, force = false) {
   if (
     task === undefined || tasks.get(task.taskId) !== task
-    || (selectedTaskId === task.taskId && task.workPane === "verify")
+    || (selectedTaskId === task.taskId && !executionPaneVisible(task))
     || task.taskKind !== "sync-plan" || task.planRequestId === null
     || task.reviewLoading
     || task.review?.pending === "selection"
@@ -2669,7 +2701,7 @@ async function loadPlanReview(task, force = false) {
     if (
       tasks.get(task.taskId) !== task || task.reviewRevision !== request
       || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId
-      || (selectedTaskId === task.taskId && (task.workPane === "verify" || task.paneRevision !== paneRevision))
+      || (selectedTaskId === task.taskId && (!executionPaneVisible(task) || task.paneRevision !== paneRevision))
     ) return;
     const foregroundInvalidated = reviewOwner !== null && reads.refreshDisposition(
       ticket, true, task.review === reviewOwner, task.executionWindowDirtyRevision) === "reread";
@@ -2780,7 +2812,7 @@ async function loadPlanReview(task, force = false) {
     const disposition = reads.refreshDisposition(ticket, tasks.get(task.taskId) === task
         && task.reviewRevision === request && task.executionSessionId === sessionId
         && task.planRequestId === planRequestId
-        && selectedTaskId === task.taskId && !settingsVisible && task.workPane !== "verify"
+        && selectedTaskId === task.taskId && !settingsVisible && executionPaneVisible(task)
         && task.paneRevision === paneRevision, task.review === reviewOwner,
         task.executionWindowDirtyRevision);
     if (disposition !== "current") {
@@ -2803,6 +2835,7 @@ async function loadPlanReview(task, force = false) {
     if (tasks.get(task.taskId) === task && task.reviewRevision === request) {
       task.reviewLoading = false;
       renderTasks();
+      if (task.paneRevision !== paneRevision && executionPaneVisible(task)) void loadPlanReview(task);
       if (task.executionWindowDirty) void refreshExecutionWindow(task);
       if (task.review?.follow?.enabled && task.review.follow.eligible
           && planFollowTarget(task) !== null) queuePlanFollow(task.review);

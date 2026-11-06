@@ -1761,8 +1761,90 @@ livePanel.render(liveTask);
 liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(liveIntent.dataset.lifecycle, "completed", "copy outcome survives verification");
 assert.ok(findText(liveIntent, "Completed"));
+assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null,
+  "Plan retains execution results instead of painting live verification");
+liveTask.workPane = "verify";
+liveTask.linkedVerificationStarted = true;
+liveTask.sessionKind = "sync-execution";
+liveTask.sessionReleased = false;
+livePanel.render(liveTask);
+liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__list").ariaLabel, "Automatic verification");
+assert.ok(findText(livePanel.element, "Verification detail"), "Verify has verification columns");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__path--source").hidden, true);
+assert.equal(findAction(livePanel.element, "execute").hidden, true);
+assert.equal(findByClass(liveElement, "nami-checkbox").hidden, true,
+  "linked Verify exposes no file-selection mutation");
+assert.equal(findText(liveIntent, "Completed"), false, "Verify primary state describes verification");
 assert.equal(findByClass(liveIntent, "nami-plan-row__verification")
   .querySelector(".nami-progress").ariaValueNow, "40");
+assert.ok(findByDataset(livePanel.element, "nodeId", liveRow.node_id) === liveElement,
+  "switching to Verify preserves the bounded tree row");
+const linkedMessageBefore = liveReview.message;
+liveReview.message = "Execution running.";
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Verifying");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes("Verification running."), true);
+liveTask.executionControlState = "paused";
+liveReview.message = "Execution paused. Resume available.";
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Verification paused");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes("Verification paused. Resume available."), true);
+liveReview.recovery = {message:"Original control outcome is pending."};
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes("Original control outcome is pending."), true,
+  "phase wording preserves authoritative recovery feedback");
+liveReview.recovery = null;
+const linkedSnapshotBefore = liveTask.snapshot;
+for (const [phaseStatus, integrity, title] of [
+  ["completed", "verified", "Verification completed"], ["completed", "mismatch", "Verification mismatch"],
+  ["incomplete", "incomplete", "Verification incomplete"], ["failed", "incomplete", "Verification failed"],
+  ["canceled", "incomplete", "Verification canceled"],
+]) {
+  liveTask.snapshot = {session_id:liveTask.sessionId, session_state:"completed", phase:null,
+    presentation:{value:0, determinate:false, indeterminate:false},
+    terminal_result:{...terminalResult, integrity, error:"verification-error-sentinel",
+      phases:[{phase:"execute", status:"completed", items_done:42, items_total:42, error:null},
+        {phase:"verify", status:phaseStatus, items_done:1, items_total:3, error:null}]}};
+  livePanel.render(liveTask);
+  assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, title);
+  assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent,
+    `1 of 3 verification items · ${phaseStatus[0].toUpperCase()}${phaseStatus.slice(1)}`,
+    "terminal-before-release Verify uses verification phase counters");
+  const linkedAdvice = findByClass(livePanel.element, "nami-plan-review__status").textContent;
+  assert.equal(linkedAdvice.includes("verification-error-sentinel"), true);
+  assert.equal(linkedAdvice.includes("Execution running."), false);
+}
+liveTask.snapshot = {session_id:liveTask.sessionId, session_state:"completed", phase:null,
+  presentation:{value:0, determinate:false, indeterminate:false},
+  terminal_result:{...terminalResult, headline:"degraded", filesystem:"completed", integrity:"verified", error:null,
+    recording:"degraded", audit:"degraded",
+    recording_issues:[{reason:"final-flush-failed", detail:"history-recording-warning"}],
+    phases:[{phase:"execute", status:"completed", items_done:3, items_total:3, error:null},
+      {phase:"verify", status:"completed", items_done:3, items_total:3, error:null}]}};
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Verification completed");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__summary").dataset.status, "attention",
+  "a verified hash preserves attention for independent recording and audit warnings");
+const completedWarningAdvice = findByClass(livePanel.element, "nami-plan-review__status").textContent;
+for (const warning of ["Item recording: Degraded", "Audit: Degraded", "history-recording-warning",
+  "2 producer details omitted", "3 presentation details omitted"]) {
+  assert.equal(completedWarningAdvice.includes(warning), true, `Verify discloses ${warning} without a result or phase error`);
+}
+liveTask.snapshot.terminal_result.integrity = "mismatch";
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__summary").dataset.status, "error",
+  "independent warnings do not downgrade a verification mismatch");
+liveTask.snapshot = linkedSnapshotBefore;
+liveTask.executionControlState = "running";
+liveReview.message = linkedMessageBefore;
+liveRow.execution.automatic_verification = {result:"verified", reason:null, recording:"ok", detail_omitted_count:0};
+liveTask.executionPresentation = {phase:"verify", activeItem:null, itemPercent:null};
+livePanel.render(liveTask);
+assert.equal(findText(findByClass(liveElement, "nami-plan-row__intent"), "Verified"), true,
+  "Verify rows replace live progress with the actual verification result");
+liveRow.execution.automatic_verification = null;
+liveTask.workPane = "plan";
 liveTask.progressPresentation = { phase: "verify", activeItem: null, itemPercent: null };
 liveTask.executionPresentation = liveTask.progressPresentation;
 livePanel.render(liveTask);
@@ -1770,6 +1852,7 @@ liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(liveIntent.dataset.lifecycle, "completed", "retirement keeps copy outcome");
 assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null);
 assert.ok(document.activeElement === liveElement, "retirement keeps row focus");
+liveTask.linkedVerificationStarted = false;
 const priorIntent = liveIntent;
 const refreshedWindow = { ...liveReview.window, executionRefresh: true,
   rows: structuredClone(liveReview.window.rows) };
@@ -1794,6 +1877,24 @@ livePanel.render(liveTask);
 assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summary"),
   "16.00 PiB/s"), "the approximate large rate renders without violating the exact byte formatter");
 assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summary"), "13s ETA"));
+liveTask.linkedVerificationStarted = true;
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Execution phase finished");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__progress").hidden, true,
+  "a lossy partial execution sample cannot be presented as final execution progress");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent,
+  "Execution phase finished. Final counts follow verification.");
+const beforeFinalSnapshot = liveTask.snapshot;
+liveTask.snapshot = {...beforeFinalSnapshot, session_state:"completed", phase:null,
+  terminal_result:{...terminalResult, phases:[{phase:"execute", status:"completed", items_done:2, items_total:2,
+    bytes_done:"80", bytes_total:"80", error:null}]}};
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Execution completed");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent,
+  "2 of 2 execution items · Completed", "Plan uses terminal execute-phase counters");
+liveTask.snapshot = beforeFinalSnapshot;
+liveTask.linkedVerificationStarted = false;
+livePanel.render(liveTask);
 assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent.includes("estimate"), false,
   "throughput and ETA omit redundant estimate suffixes");
 findAction(livePanel.element, "pause").dispatch("click");

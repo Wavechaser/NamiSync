@@ -346,6 +346,9 @@ explicit, reviewable and regression-backed.
   final row even when the last operation was a no-op.
 - Keep Go and Follow available between files. A click takes the user to the
   item that was current when they clicked, even if another file starts.
+- Open Verify when automatic post-copy verification begins. Show progress
+  against the original operations, keep settled execution results on Plan,
+  and open the ordinary target Inventory when the run releases.
 
 #### Preserve Setup actions during folder validation (2026-11-04 – 2026-11-05)
 

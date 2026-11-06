@@ -137,7 +137,7 @@ function button(label, className = "nami-button") {
   return element;
 }
 
-function rowView(row, busy, committed, progressPresentation = null) {
+function rowView(row, busy, committed, progressPresentation = null, verificationView = false) {
   const hideReason = row.risk === "none" && row.blocked_reason === null
     && row.selection_exclusion_reason === null && HIDDEN_REASONS.has(row.reason);
   const reason = hideReason ? null : reasonLabel(row.reason);
@@ -152,7 +152,7 @@ function rowView(row, busy, committed, progressPresentation = null) {
   const modified = modifiedText(row.mtime_ns);
   const activeProgress = projectActiveOperationProgress(progressPresentation, row.operation_id);
   const lifecycle = activeProgress?.lifecycleKey ?? execution.lifecycle;
-  return {
+  const view = {
     checked: row.selection === "selected",
     mixed: row.selection === "mixed",
     selectionDisabled: busy || committed || row.selection === "disabled",
@@ -172,6 +172,26 @@ function rowView(row, busy, committed, progressPresentation = null) {
     modifiedText: modified,
     notesText: notes === "" ? risk : risk === "" ? notes : `${risk} · ${notes}`,
   };
+  if (verificationView) {
+    const automatic = row.execution?.automatic_verification;
+    const pending = row.execution?.operation?.result === "succeeded"
+      && ["copy", "update", "move_update"].includes(row.operation_kind);
+    view.intentText = automatic != null ? executionLabel(automatic.result)
+      : activeProgress?.verification ? "" : pending ? "Pending verification" : "—";
+    view.intentKey = "";
+    delete view.lifecycleKey;
+    delete view.progressPercent;
+    if (automatic != null) view.lifecycleKey = ["verified", "baselined"].includes(automatic.result)
+      ? "completed" : automatic.result === "canceled" ? "canceled" : "failed";
+    view.notesText = automatic == null ? "" : [automatic.reason == null ? null : executionLabel(automatic.reason),
+      automatic.recording === "ok" ? null : `Recording: ${executionLabel(automatic.recording)}`].filter(Boolean).join(" · ");
+  }
+  return view;
+}
+
+function rowProgress(task) {
+  return task?.workPane !== "verify" && task?.executionPresentation?.phase === "verify"
+    ? null : task?.executionPresentation;
 }
 
 function eventInControl(event, row) {
@@ -405,6 +425,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
   columnHeader.className = "nami-file-list__header nami-table__header";
   columnHeader.setAttribute("role", "row");
   const sortHeaders = new Map();
+  const columnLabels = new Map();
   const columnNames = ["selection", "name", "primary", "secondary", "size", "modified", "notes"];
   for (const [index, [label, column]] of [
     ["Select", null], ["Name", "filename"], ["Action", null],
@@ -423,7 +444,10 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         if (current !== null) callbacks.onScopeSelect(current, selectAll.checked);
       });
     } else if (column === null) {
-      renderText(cell, label);
+      const text = document.createElement("span");
+      renderText(text, label);
+      columnLabels.set(index, text);
+      cell.append(text);
     } else {
       const sortButton = button("", "nami-plan-review__sort");
       sortButton.dataset.sortColumn = column;
@@ -797,9 +821,22 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       updateDiagnostics();
       return;
     }
+    if (currentTask?.workPane === "verify") {
+      const automatic = row.execution?.automatic_verification;
+      appendDetailFact("Verification", automatic == null ? "Awaiting verification result" : executionLabel(automatic.result));
+      appendDetailFact("Target", current.summary.target_path, { filesystem: true });
+      const selected = detail?.state === "current" ? detail.response.automatic_verification : null;
+      if (selected?.path != null) appendDetailFact("Verification path", formatFilesystemPath(current.summary.target_path, selected.path), { filesystem: true });
+      if (automatic?.reason != null) appendDetailFact("Reason", executionLabel(automatic.reason));
+      if (automatic != null) appendDetailFact("Verification recording", executionLabel(automatic.recording));
+      updateText(detailStatus, "Automatic post-copy verification uses the original execution's copied files.");
+      detailStatus.hidden = false;
+      updateDiagnostics();
+      return;
+    }
     const response = detail?.operationId === row.operation_id && detail.state === "current" ? detail.response : null;
     const operation = response?.operation ?? row.execution?.operation ?? null;
-    const action = rowView({ ...row, execution: response ?? row.execution }, false, false, currentTask?.executionPresentation);
+    const action = rowView({ ...row, execution: response ?? row.execution }, false, false, rowProgress(currentTask));
     const actionFact = appendDetailFact(operation === null ? "Planned action" : "Operation", "");
     actionFact.classList.add("nami-plan-row__intent");
     if (action.lifecycleKey !== undefined) actionFact.dataset.lifecycle = action.lifecycleKey;
@@ -920,8 +957,12 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
           if (old !== row.execution && JSON.stringify(old) !== JSON.stringify(row.execution)) changed.add(index);
         }
       }
-      const activeOperationId = task.executionPresentation?.activeItem?.item_id ?? null;
-      if (renderedRows.progressPresentation !== task.executionPresentation) {
+      const activeOperationId = rowProgress(task)?.activeItem?.item_id ?? null;
+      if (renderedRows.progressPresentation !== rowProgress(task) || renderedRows.verificationView !== (task.workPane === "verify")) {
+        if (renderedRows.verificationView !== (task.workPane === "verify")) {
+          for (let index = 0; index < review.window.rows.length; index += 1) changed.add(index);
+          for (const checkbox of renderedRows.checkboxes) if (checkbox !== null) checkbox.hidden = task.workPane === "verify";
+        }
         for (const id of [renderedRows.activeOperationId, activeOperationId]) {
           if (id === null) continue;
           const index = review.window.rows.findIndex((row) => row.operation_id === id);
@@ -931,13 +972,14 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       for (const index of changed) {
         const element = renderedRows.rows[index];
         const replacement = document.createElement("div");
-        renderPlanRow(replacement, rowView(review.window.rows[index], disabled, committed, task.executionPresentation));
+        renderPlanRow(replacement, rowView(review.window.rows[index], disabled, committed, rowProgress(task), task.workPane === "verify"));
         for (const cell of [".nami-plan-row__intent", ".nami-plan-row__checksum", ".nami-file-row__notes"]) {
           element.querySelector(cell).replaceWith(replacement.querySelector(cell));
         }
       }
       renderedRows.window = review.window;
-      renderedRows.progressPresentation = task.executionPresentation;
+      renderedRows.progressPresentation = rowProgress(task);
+      renderedRows.verificationView = task.workPane === "verify";
       renderedRows.activeOperationId = activeOperationId;
       if (renderedRows.disabled !== disabled || renderedRows.committed !== committed) {
         for (const [index, checkbox] of renderedRows.checkboxes.entries()) {
@@ -996,7 +1038,8 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         row,
         disabled,
         committed,
-        task.executionPresentation,
+        rowProgress(task),
+        task.workPane === "verify",
       ));
       if (row.recall) {
         const availability = document.createElement("span");
@@ -1019,6 +1062,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         checkbox.ariaLabel = "Select highlighted operations only";
       }
       checkboxes.push(checkbox ?? null);
+      if (checkbox !== null) checkbox.hidden = task.workPane === "verify";
       checkbox?.addEventListener("change", (event) => {
         if (element.dataset.highlighted === "true") {
           callbacks.onHighlightedSelect(review, event.currentTarget.checked);
@@ -1121,8 +1165,9 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       review, window: review.window, disabled, committed, checkboxes,
       rows: rowElements,
       highlightRevision,
-      progressPresentation: task.executionPresentation,
-      activeOperationId: task.executionPresentation?.activeItem?.item_id ?? null,
+      progressPresentation: rowProgress(task),
+      verificationView: task.workPane === "verify",
+      activeOperationId: rowProgress(task)?.activeItem?.item_id ?? null,
     };
   }
 
@@ -1133,11 +1178,20 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       || task.executionAttempt != null;
     const verifyAvailable = task.taskKind === "sync-plan" && task.executionStarted
       && task.executionSessionId !== null
-      && (task.sessionKind !== "sync-execution" || task.sessionReleased);
-    planPane.ariaChecked = "true";
+      && (task.sessionKind !== "sync-execution" || task.sessionReleased || task.linkedVerificationStarted);
+    const linkedVerify = task.workPane === "verify" && task.sessionKind === "sync-execution" && !task.sessionReleased;
+    element.dataset.view = linkedVerify ? "linked-verify" : "plan";
+    list.ariaLabel = linkedVerify ? "Automatic verification" : "Reviewed plan";
+    planPane.ariaChecked = String(!linkedVerify);
     planPane.disabled = false;
-    verifyPane.ariaChecked = "false";
+    verifyPane.ariaChecked = String(linkedVerify);
     verifyPane.disabled = !verifyAvailable;
+    sourcePath.hidden = settings.hidden = linkedVerify;
+    filters.hidden = linkedVerify;
+    search.placeholder = search.ariaLabel = linkedVerify ? "Search verification files" : "Search this plan";
+    updateText(columnLabels.get(2), linkedVerify ? "Verification" : "Action");
+    updateText(columnLabels.get(6), linkedVerify ? "Verification detail" : "Notes");
+    if (scopeCheckbox instanceof HTMLInputElement) scopeCheckbox.hidden = linkedVerify;
     if (controlTaskId !== task.taskId || controlSessionId !== task.sessionId) {
       filterMenu.close();
       disarmCancel();
@@ -1257,7 +1311,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const breakdown = FILTERS.filter((key) => key !== "recall" && review.summary.filter_counts?.[key] > 0)
       .map((key) => `${displayLabel(key)} ${review.summary.filter_counts[key]}`);
     updateText(planBreakdown, `Plan actions: ${breakdown.join(" · ")}`);
-    planBreakdown.hidden = breakdown.length === 0;
+    planBreakdown.hidden = linkedVerify || breakdown.length === 0;
     const { snapshot, sessionState, execution } = selectTaskExecution(task);
     const executionState = task.executionStarted ? sessionState : null;
     const canExecuteSelection = review.summary.preflight_ready
@@ -1267,37 +1321,68 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const displayExecution = execution;
     const terminalState = task.executionStarted
       && ["completed", "failed", "refused", "canceled"].includes(executionState);
+    const settledExecute = task.linkedVerificationStarted && !linkedVerify;
+    const executePhase = displayExecution.result?.phases?.find(phase => phase.phase === "execute");
+    const verifyPhase = displayExecution.result?.phases?.find(phase => phase.phase === "verify");
+    const verifyOutcome = verifyPhase?.status === "completed"
+      ? displayExecution.result?.integrity === "mismatch" ? "mismatch"
+        : ["verified", "baselined"].includes(displayExecution.result?.integrity) ? "completed" : "incomplete"
+      : verifyPhase?.status ?? "incomplete";
+    const verifyTitle = ({completed: "Verification completed", failed: "Verification failed",
+      canceled: "Verification canceled", incomplete: "Verification incomplete", mismatch: "Verification mismatch"})[verifyOutcome]
+      ?? "Verification needs review";
+    const displaySnapshot = settledExecute ? null : snapshot;
     const executionPresentation = renderExecution(displayExecution, terminalState,
       task.executionStarted ? snapshot : null);
-    const controlTitle = task.executionStarted && !terminalState
-      ? ({paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[task.executionControlState]
+    const linkedWarnings = linkedVerify ? [
+      displayExecution.result?.recording === "degraded" ? "Item recording: Degraded" : null,
+      displayExecution.result?.audit === "degraded" ? "Audit: Degraded" : null,
+      executionIssues.textContent,
+    ].filter(Boolean).join(" · ") : "";
+    const controlTitle = task.executionStarted && !terminalState && !settledExecute
+      ? (linkedVerify ? {paused: "Verification paused", pausing: "Pausing verification", canceling: "Canceling verification"}
+        : {paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[task.executionControlState]
       : null;
-    updateText(statusTitle, controlTitle ?? (terminalState && displayExecution.result === null
+    const executeTitle = executePhase == null ? "Execution phase finished"
+      : ({completed: "Execution completed", failed: "Execution failed", canceled: "Execution canceled",
+        incomplete: "Execution needs review"})[executePhase.status] ?? "Execution needs review";
+    updateText(statusTitle, settledExecute ? executeTitle : controlTitle ?? (linkedVerify
+      ? terminalState ? verifyTitle : "Verifying"
+      : terminalState && displayExecution.result === null
       ? digest.title : executionPresentation.title ?? (task.executionStarted ? "Execution" : digest.title)));
-    const executionProgress = snapshot?.presentation ?? null;
-    const progressFacts = task.executionStarted && snapshot?.phase != null
+    const executionProgress = displaySnapshot?.presentation ?? null;
+    const progressFacts = task.executionStarted && displaySnapshot?.phase != null
       ? [
-        snapshot.phase === "verify" ? "Verifying" : "Executing",
+        settledExecute ? "Execution phase finished" : displaySnapshot.phase === "verify" ? "Verifying" : "Executing",
         executionProgress.items_total == null ? null : `${executionProgress.items_done} of ${executionProgress.items_total} items`,
         executionProgress.determinate ? `${Math.round(executionProgress.value)}%` : null,
-        executionProgress.throughput_bytes_per_second == null ? null
+        settledExecute || executionProgress.throughput_bytes_per_second == null ? null
           : `${formatByteCount(BigInt(Math.round(executionProgress.throughput_bytes_per_second)))}/s`,
-        executionProgress.eta_seconds == null ? null
+        settledExecute || executionProgress.eta_seconds == null ? null
           : `${Math.ceil(executionProgress.eta_seconds)}s ETA`,
       ].filter(Boolean).join(" · ")
       : null;
-    const statusFacts = terminalState ? terminalStatusLine(displayExecution, executionState)
+    const statusFacts = settledExecute ? executePhase == null ? "Execution phase finished. Final counts follow verification."
+      : `${executePhase.items_done}${executePhase.items_total == null ? "" : ` of ${executePhase.items_total}`} execution items · ${executionLabel(executePhase.status)}`
+      : terminalState && linkedVerify ? verifyPhase == null ? "Verification results are unavailable."
+        : `${verifyPhase.items_done}${verifyPhase.items_total == null ? "" : ` of ${verifyPhase.items_total}`} verification items · ${executionLabel(verifyPhase.status)}`
+      : terminalState ? terminalStatusLine(displayExecution, executionState)
       : executionPresentation.title === null ? planFacts
         : progressFacts ?? digest.detail;
     updateText(facts, snapshot?.progress_inconsistent === true
       ? [statusFacts, "Some progress updates were inconsistent."].filter(Boolean).join(" · ")
       : statusFacts);
-    summary.dataset.status = terminalState && displayExecution.result === null
+    summary.dataset.status = settledExecute ? executePhase == null ? "completed"
+      : ({completed: "completed", canceled: "canceled"})[executePhase.status] ?? "error"
+      : linkedVerify ? terminalState ? ({completed: linkedWarnings === "" ? "completed" : "attention", canceled: "canceled", incomplete: "attention"})[verifyOutcome] ?? "error"
+        : task.executionControlState === "paused" ? "paused" : "verifying"
+      : terminalState && displayExecution.result === null
       ? "error" : task.executionStarted && !terminalState && task.executionControlState === "paused"
         ? "paused" : executionPresentation.status ?? (task.executionStarted ? "executing" : digest.state);
     const progressValue = executionProgress?.value ?? 0;
+    progress.hidden = settledExecute;
     progress.dataset.lifecycle = executionState ?? "completed";
-    if (executionProgress?.indeterminate) {
+    if (!settledExecute && executionProgress?.indeterminate) {
       progress.classList.add("nami-progress--indeterminate");
     } else {
       progress.classList.remove?.("nami-progress--indeterminate");
@@ -1337,7 +1422,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const checkExecution = task.executionAttempt?.state === "submitting"
       && task.executionAttempt.recovery?.canCheck
       && !task.executionAttempt.recovery.checking;
-    execute.hidden = review.summary.selection_state !== "reviewing";
+    execute.hidden = linkedVerify || review.summary.selection_state !== "reviewing";
     updateText(execute, checkExecution ? "Check outcome" : "Execute");
     execute.disabled = (review.pending !== null && !checkExecution)
       || (task.executionAttempt !== null && !checkExecution)
@@ -1370,15 +1455,31 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const primaryRecovery = review.pending === "execute" || task.executionAttempt?.state === "uncertain"
       ? task.executionAttempt?.recovery
       : review.pending === "plan-again" ? task.form?.attempt?.recovery : review.recovery;
-    const controlGuidance = task.executionControlState === "paused" ? "Execution is paused. Resume when ready."
+    const controlGuidance = task.executionControlState === "paused"
+      ? `${linkedVerify ? "Verification" : "Execution"} is paused. Resume when ready.`
       : task.executionControlState === "pausing" ? "Pausing at the next safe checkpoint."
-        : task.executionControlState === "canceling" ? "Canceling at the next safe checkpoint." : "Execution is in progress.";
-    const actionMessage = [...new Set([primaryRecovery?.message ?? review.message,
-      independentCancel?.recovery?.message ?? independentCancel?.message,
+        : task.executionControlState === "canceling" ? "Canceling at the next safe checkpoint."
+          : linkedVerify ? "Verifying successfully copied files. The Plan's tree and filters apply."
+            : "Execution is in progress.";
+    const controlMessages = [primaryRecovery?.message ?? review.message,
+      independentCancel?.recovery?.message ?? independentCancel?.message].map(message => {
+        if (!linkedVerify) return message;
+        const verificationMessage = ({"Execution waiting.": "Verification waiting.",
+          "Execution running.": "Verification running.", "Pausing execution…": "Pausing verification…",
+          "Execution paused. Resume available.": "Verification paused. Resume available.",
+          "Canceling execution…": "Canceling verification…", "Follow live execution status.": "Follow live verification status."})[message];
+        return verificationMessage === undefined ? message
+          : terminalState ? "Review verification results in Details." : verificationMessage;
+      });
+    const actionMessage = [...new Set([...controlMessages,
+      linkedWarnings,
+      linkedVerify ? verifyPhase?.error : null,
+      linkedVerify ? displayExecution.result?.error : null,
       executionPresentation.advisory,
       controlTitle ? controlGuidance : "",
       isCapacityOnlyExecution(displayExecution) ? "Free target space, then restart task with Plan Again." : ""].filter(Boolean))].join(" ")
-      || (task.executionStarted ? terminalState ? "Review item results in Details." : controlGuidance
+      || (task.executionStarted ? terminalState ? "Review item results in Details."
+        : settledExecute ? "Automatic verification is running. Open Verify for its live progress." : controlGuidance
           : "Review the selected changes before executing.");
     updateText(globalStatus, [facts.textContent, actionMessage].filter(Boolean).join(" · "));
     updateText(status, actionMessage);
@@ -1408,6 +1509,11 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       else if (focusedPlanRow?.node_id !== focusNodeId) focusedPlanRow = null;
     }
     renderDetail(review.executionDetail ?? null, focusedPlanRow);
+    if (linkedVerify) {
+      executionReview.hidden = true;
+      executionIssues.hidden = true;
+      executionTrash.hidden = true;
+    }
     rowMenu.reconcile();
     columns.freeze();
     columns.refresh();

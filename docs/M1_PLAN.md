@@ -21,18 +21,16 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
-### Live execution and verification presentation — authorized 2026-11-06
+### Live execution and verification presentation — delivered 2026-11-06
 
-Show automatic verification on Verify using the existing execution identity
-and progress, then open ordinary Inventory after release. Keep the execution
-phase available on Plan. Stabilize Go/Follow between files, follow the last
-settled execution operation including no-ops, and simplify throughput and ETA
-labels. Use the existing bounded execution paint and window-read cadence.
-The batch covers interface presentation, its direct consumers and test
-fixtures. Sync, hashing, ledger admission and command effects stay with their
-existing owners. Verify the phase transition, settled-row navigation, control
-activation across file transitions and unchanged row identity under a burst,
-then run interface and affected headed checks. Review each outcome before commit.
+Automatic verification opens Verify using the original run's operation IDs
+and opens ordinary target Inventory at release. Plan retains the execution
+phase and its results. The reviewed batch includes simpler rate/ETA labels
+(`37304cde`), a single settled execution cursor (`8511c4ae`), and stable
+Go/Follow controls (`6c39313e`). Sync, hashing and ledger admission stay
+with their existing owners. Evidence in `build/gui-live-20261106/` covers
+the fast no-op terminal landing, constant snapshot population, installed
+execution/Inventory journeys and a real-window 200-file automatic verification.
 
 ### Setup admission sequencing — authorized 2026-11-04
 
