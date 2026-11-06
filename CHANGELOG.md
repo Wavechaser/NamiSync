@@ -60,6 +60,8 @@ owning contracts.
 - Trace both 100k planning defects to the preflight observation count and
   the Plan reader's handling of a typed refusal. Measure small-file sync
   across the executor, service and WebView2, including verified readback.
+- Count reviewed operations once across preflight observation and adoption.
+  The reported 101,000-operation Plan now reaches review with both endpoints checked.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

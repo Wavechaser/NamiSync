@@ -169,7 +169,9 @@ The following population and process-live admission walls are active now:
   informational source populations at 120,000 rows, before normalization,
   omission, sorting, indexing, or retained-artifact construction. The first
   excess is classified by its owning workflow and no partial artifact is
-  published.
+  published. Preflight derives source, target, prior-target and parent
+  observations from the admitted plan operations. It validates the observations
+  against that scope and charges their retained slots to the artifact byte limit.
 - A standalone-integrity candidate admits at most 120,000 unique inventory-
   domain rows before selection retention or verifier start. This count is
   independent of any inventory-tree population.

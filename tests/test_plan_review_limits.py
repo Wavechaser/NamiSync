@@ -868,6 +868,27 @@ def test_world_construction_canonicalizes_utc_alias_and_adoption_keeps_identity(
     assert verdict.observed is captured
 
 
+def test_one_admitted_operation_retains_both_endpoints_and_prior_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target, mapping, _ = _parity_case("identity")
+    review = _xset(plan(source, target, mapping, SyncOptions()))
+    assert [op.kind for op in review.plan.operations] == [OperationKind.MOVE]
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
+    admission = PlanReviewProducerAdmission()
+    world = observe(
+        review, _ObservationFileSystem(source, target),
+        plan_review=True, review_admission=admission,
+    )
+    assert world.paths == {
+        Subject("source", "NEW.BIN"): "new.bin",
+        Subject("target", "NEW.BIN"): "new.bin",
+        Subject("target", "OLD.BIN"): "old.bin",
+    }
+    assert world.stats.keys() == world.paths.keys()
+    assert adopt_plan_observed_world(world, review, admission, plan_review=True) is world
+
+
 @pytest.mark.parametrize("root_id", ("source", "target"))
 def test_plan_review_adoption_rejects_omitted_noop_subject(root_id: str) -> None:
     source = _scan(SOURCE_ROOT, files=(_file("same.bin"),))
@@ -1636,10 +1657,6 @@ def test_run_plan_retires_phase_failure_frames_without_changing_identity(
         ("mapping-disqualified-target", 1),
         ("plan-assignment", 1),
         ("plan-operations", 1),
-        ("world-stats", 1),
-        ("world-paths", 1),
-        ("world-parents", 1),
-        ("world-roots", 1),
         ("verdict-refusals", 2),
     ),
 )
@@ -1699,17 +1716,6 @@ def test_each_raw_population_refuses_first_excess_before_save(
                     ScanWarning(ScanWarningCode.DISAPPEARED, "two.bin"),
                 ),
             )
-        if population.startswith("world-"):
-            identity = FileIdentity(root.root_id.upper(), 1)
-            return _scan(
-                root,
-                files=(
-                    _file(
-                        "new.bin" if root.root_id == "source" else "old.bin",
-                        identity=identity,
-                    ),
-                ),
-            )
         if population == "verdict-refusals":
             return _scan(
                 root,
@@ -1740,23 +1746,6 @@ def test_each_raw_population_refuses_first_excess_before_save(
         target: ScanResult,
     ) -> MappingSnapshot:
         calls.append("correspondence")
-        if population.startswith("world-"):
-            source_identity = source.files[0].file_identity
-            target_identity = target.files[0].file_identity
-            assert source_identity is not None and target_identity is not None
-            return MappingSnapshot(
-                source.volume_id,
-                target.volume_id,
-                pairs=(
-                    MappingPair(
-                        normalize_relative_path("new.bin"),
-                        "old.bin",
-                        normalize_relative_path("old.bin"),
-                        source_identity,
-                        target_identity,
-                    ),
-                ),
-            )
         values = _two_mapping_items()
         mapping_fields = {
             "mapping-pairs": "pairs",
@@ -1806,30 +1795,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
     ) -> ObservedWorld:
         del review_admission
         calls.append("observer")
-        world = observe(execution_set, fs, plan_review=plan_review)  # type: ignore[arg-type]
-        if population == "world-stats":
-            return replace(
-                world,
-                paths={},
-                roots={},
-            )
-        if population == "world-paths":
-            return replace(
-                world,
-                stats={},
-                roots={},
-            )
-        if population == "world-parents":
-            return replace(
-                world,
-                stats={},
-                paths={},
-                target_parent_paths=frozenset({"one", "two"}),
-                roots={},
-            )
-        if population == "world-roots":
-            return replace(world, stats={}, paths={})
-        return world
+        return observe(execution_set, fs, plan_review=plan_review)  # type: ignore[arg-type]
 
     def preflight_callback(
         execution_set: ExecutionReview,
@@ -1879,8 +1845,6 @@ def test_each_raw_population_refuses_first_excess_before_save(
         assert "observer" not in calls
         if population == "plan-operations":
             assert "planner-return" in calls
-    elif population.startswith("world-"):
-        assert "observer" in calls and "preflight" not in calls
     else:
         assert "preflight" in calls
     assert saved == []

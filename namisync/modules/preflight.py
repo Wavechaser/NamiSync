@@ -529,16 +529,10 @@ def _operation_subjects(
     review: ExecutionReview,
     *,
     plan_review: bool = False,
-    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> tuple[
     dict[Subject, tuple[Root, str, CapabilityProfile]],
     frozenset[str],
 ]:
-    if (
-        review_admission is not None
-        and type(review_admission) is not PlanReviewProducerAdmission
-    ):
-        raise TypeError("preflight review admission has the wrong type")
     subjects: dict[Subject, tuple[Root, str, CapabilityProfile]] = {}
     target_parents: set[str] = set()
     review = _require_execution_review(review)
@@ -553,13 +547,6 @@ def _operation_subjects(
         if subject in subjects and not replace_existing:
             return
         subjects[subject] = value
-
-    def retain_parent(parent: str) -> None:
-        if parent in target_parents:
-            return
-        if review_admission is not None:
-            review_admission.require_source_rows(len(target_parents) + 1)
-        target_parents.add(parent)
 
     for operation in review.remaining():
         observe_files = not (plan_review and operation.kind is OperationKind.NOOP)
@@ -585,7 +572,7 @@ def _operation_subjects(
             )
         parent = str(PureWindowsPath(operation.target_rel_path).parent)
         parent = "" if parent == "." else parent
-        retain_parent(parent)
+        target_parents.add(parent)
         if parent:
             parent_subject = Subject(plan.target_root.root_id, normalize_relative_path(parent))
             retain_subject(
@@ -606,7 +593,7 @@ def _operation_subjects(
                 )
             prior_parent = str(PureWindowsPath(operation.prior_target_rel_path).parent)
             prior_parent = "" if prior_parent == "." else prior_parent
-            retain_parent(prior_parent)
+            target_parents.add(prior_parent)
             if prior_parent:
                 parent_subject = Subject(plan.target_root.root_id, normalize_relative_path(prior_parent))
                 retain_subject(
@@ -649,11 +636,11 @@ def observe(
     ):
         raise TypeError("preflight review admission has the wrong type")
     review = _require_execution_review(review)
+    if review_admission is not None:
+        review_admission.require_source_rows(len(review.plan.operations))
     scope = getattr(fs, "root_scope", None)
     with nullcontext() if scope is None else scope():
-        return _observe(
-            review, fs, plan_review=plan_review, review_admission=review_admission
-        )
+        return _observe(review, fs, plan_review=plan_review)
 
 
 def _observe(
@@ -661,7 +648,6 @@ def _observe(
     fs: ObservationFileSystem,
     *,
     plan_review: bool,
-    review_admission: PlanReviewProducerAdmission | None,
 ) -> ObservedWorld:
     plan = review.plan
 
@@ -682,21 +668,9 @@ def _observe(
     authorities: dict[str, RootAuthority] = {}
     admitted_roots: dict[str, bool] = {}
 
-    def retain_root(root_id: str, observation: RootObservation) -> None:
-        if root_id not in roots and review_admission is not None:
-            review_admission.require_source_rows(len(roots) + 1)
-        roots[root_id] = observation
-
     def reject_root(root: Root, error: RootAuthorityError) -> None:
-        retain_root(
-            root.root_id,
-            RootObservation(
-                None,
-                None,
-                None,
-                logical_error_text(error),
-                error.issue,
-            ),
+        roots[root.root_id] = RootObservation(
+            None, None, None, logical_error_text(error), error.issue,
         )
         admitted_roots[root.root_id] = False
 
@@ -711,10 +685,10 @@ def _observe(
             observation = RootObservation(
                 None, None, None, logical_error_text(error)
             )
-            retain_root(root.root_id, observation)
+            roots[root.root_id] = observation
             admitted_roots[root.root_id] = False
         else:
-            retain_root(root.root_id, observation)
+            roots[root.root_id] = observation
             admitted_roots[root.root_id] = _classify_root_facts(
                 authority.expected_volume_id,
                 authority.reviewed_anchor,
@@ -724,14 +698,10 @@ def _observe(
     subjects, target_parents = _operation_subjects(
         review,
         plan_review=plan_review,
-        review_admission=review_admission,
     )
     stats: dict[Subject, StatObservation] = {}
     paths: dict[Subject, str] = {}
     for subject, (root, rel_path, profile) in sorted(subjects.items()):
-        if review_admission is not None:
-            review_admission.require_source_rows(len(paths) + 1)
-            review_admission.require_source_rows(len(stats) + 1)
         paths[subject] = rel_path
         if not admitted_roots.get(root.root_id, False):
             root_observation = roots.get(root.root_id)
@@ -945,26 +915,18 @@ def adopt_plan_observed_world(
             )
     if type(value.target_parent_paths) is not frozenset:
         raise TypeError("observed target parent paths must be an exact frozenset")
-    admission.require_source_rows(len(value.target_parent_paths))
+    admission.require_source_rows(len(review.plan.operations))
 
     allowed_paths, allowed_parents = plan_observation_scope(
         review, plan_review=plan_review
     )
-    for raw_index, (raw_subject, raw_observation) in enumerate(
-        value.stats.items(),
-        start=1,
-    ):
-        admission.require_source_rows(raw_index)
+    for raw_subject, raw_observation in value.stats.items():
         subject = _validate_subject(raw_subject, review)
         if subject not in allowed_paths:
             raise ValueError("observer returned a subject outside the plan")
         _validate_stat_observation(raw_observation)
 
-    for raw_index, (raw_subject, raw_path) in enumerate(
-        value.paths.items(),
-        start=1,
-    ):
-        admission.require_source_rows(raw_index)
+    for raw_subject, raw_path in value.paths.items():
         subject = _validate_subject(raw_subject, review)
         if type(raw_path) is not str:
             raise TypeError("observed paths must contain text values")
@@ -985,11 +947,7 @@ def adopt_plan_observed_world(
         if raw_parent != parent or parent not in allowed_parents:
             raise ValueError("observer returned an unknown target parent")
 
-    for raw_index, (raw_root_id, raw_observation) in enumerate(
-        value.roots.items(),
-        start=1,
-    ):
-        admission.require_source_rows(raw_index)
+    for raw_root_id, raw_observation in value.roots.items():
         if type(raw_root_id) is not str or (
             raw_root_id != review.plan.source_root.root_id
             and raw_root_id != review.plan.target_root.root_id

@@ -82,9 +82,12 @@ changed world; preflight never silently adopts those changes into an old plan.
 During each preflight cycle, workflow creates one exact immutable
 `ExecutionReview` and passes that same instance to observation and judgment.
 Plan review supplies empty status; execution and resume copy current status only
-after capturing the existing mutable execution authority. Observation gates its
-selected subjects, target parents, roots, paths, stats, and backend-returned
-mappings independently before first excess. The preflight module admits the
+after capturing the existing mutable execution authority. Observation and
+result adoption check the plan operation count before deriving the scope.
+Each remaining operation can contribute a source, destination, prior target
+and the two target parents. These root-qualified observations describe the
+same operation, even when the source and destination use identical relative
+paths. Their keys must belong to the derived scope. The preflight module admits the
 observer's exact `ObservedWorld` without rebuilding it, rejects out-of-plan
 subjects, paths, parents, roots, or mismatched stat/path keys, and workflow
 passes that same world identity directly to judgment. Verdict admission requires

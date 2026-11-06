@@ -490,7 +490,8 @@ with bounded construction and validation of the derived observations. Check
 the independent scanner, planner, retained-byte and reliable-result limits
 against the intended workload before promising an end-to-end supported size.
 The page can independently present the typed terminal refusal without opening
-a missing Plan. Both defects remain open in BUGS. Matched copy and verification
+a missing Plan. The 101,000-operation service dry run now succeeds after the
+preflight fix. The refusal UI and bounded above-target redesign follow. Matched copy and verification
 diagnostics are in PERFORMANCE; release budgets remain open.
 
 | Step | Finite outcome, owners and verification | Dependency / status |

@@ -900,7 +900,7 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Planning refusal presentation
 
-- SEVERE - OPEN (2026-11-06). Supported-scale plan refused at half the
+- SEVERE - FIXED (2026-11-06). Supported-scale plan refused at half the
   target. A 100,000 × 32 B copy into an empty target (101,000 operations,
   1,000 directories) was refused with `ReviewFactLimitExceeded`
   (plan/domain/rows, 120,000); 50,000 files (50,500 operations) planned. The
@@ -909,10 +909,10 @@ defect, and move implementation-level test choreography out of the log.
   A service replay counted 202,000 distinct observation subjects (101,000 per
   root) and 1,001 target parents. Preflight built the subject map, then refused
   on observation 120,001. Observed-world adoption checks both maps again.
-  Distinguish logical item admission from per-root evidence at both boundaries
-  and reconcile the independent first-excess contracts in DEFENSE before changing
-  them. No review was saved and the target stayed empty. Evidence:
-  `build/coverage-study-20261106/refusal.json`.
+  Both boundaries now admit the logical operation count and validate derived
+  observations against the Plan's scope. The original fixture produced a saved
+  review with every operation and an empty target. Evidence:
+  `build/coverage-study-20261106/{refusal,fixed-plan}.json`.
 - MODERATE - OPEN (2026-11-06). Review-limit refusal shown as retryable
   failure. When the plan above was refused, no plan was saved.
   The page still requested the Plan view; `open_plan_view` hit the missing
