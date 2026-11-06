@@ -483,6 +483,16 @@ refusal presentation). The user paused collection after `scale-50k-01` to
 adjudicate that refusal. Soak, payload, idle-open and repeat scale runs remain,
 and no SH-G-15 judgment is made yet.
 
+The 100k service replay confirmed a counting mismatch: 101,000 operations
+produced 202,000 distinct root-qualified observations. Preflight refused
+observation 120,001; no artifact was saved. Reconcile logical item counting
+with bounded construction and validation of the derived observations. Check
+the independent scanner, planner, retained-byte and reliable-result limits
+against the intended workload before promising an end-to-end supported size.
+The page can independently present the typed terminal refusal without opening
+a missing Plan. Both defects remain open in BUGS. Matched copy and verification
+diagnostics are in PERFORMANCE; release budgets remain open.
+
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
 | R0 | Inspect current package/version/launchers, INTERFACES/BRIDGE/DESKTOP_UI release criteria, TESTS commands, DEFENSE/PERFORMANCE evidence policy and relevant archived packaging dispositions. Record audience, format, missing work and serialized closeout. Documentation-only commit; local links and diff checks plus adversarial scope review. | Complete initial inspection; at that baseline, wheel metadata and installed-wheel witnesses existed but release CI, a dependency lock and frozen-app specification were absent. SH-G-15 has no budgets/artifacts; current-source bridge timing acceptance is also open. |

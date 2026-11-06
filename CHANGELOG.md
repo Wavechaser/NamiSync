@@ -57,6 +57,9 @@ owning contracts.
 - Move eleven installed page tests to an unattended private desktop,
   preserving trusted browser input and real filesystem outcomes. Exercise
   native blur and activation separately on Windows.
+- Trace both 100k planning defects to the preflight observation count and
+  the Plan reader's handling of a typed refusal. Measure small-file sync
+  across the executor, service and WebView2, including verified readback.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

@@ -906,24 +906,25 @@ defect, and move implementation-level test choreography out of the log.
   (plan/domain/rows, 120,000); 50,000 files (50,500 operations) planned. The
   user's stated policy is a performance guarantee up to 120,000 items with
   larger plans allowed but unguaranteed, so no refusal is expected here.
-  Cause, from source: plan-review preflight retains one source and one target
-  subject per operation and checks `paths`/`stats` against the domain wall
-  (`modules/preflight.py` `_operation_subjects` and the observation loop), so
-  a copy plan trips at about 60,000 operations. DEFENSE's population-wall list
-  still describes the earlier refuse-at-first-excess policy, so the contract
-  and the stated intent disagree; the wall set needs owner adjudication before
-  a fix. Evidence: `build/resource-study-20261106b/full/runs/scale-100k-01`.
+  A service replay counted 202,000 distinct observation subjects (101,000 per
+  root) and 1,001 target parents. Preflight built the subject map, then refused
+  on observation 120,001. Observed-world adoption checks both maps again.
+  Distinguish logical item admission from per-root evidence at both boundaries
+  and reconcile the independent first-excess contracts in DEFENSE before changing
+  them. No review was saved and the target stayed empty. Evidence:
+  `build/coverage-study-20261106/refusal.json`.
 - MODERATE - OPEN (2026-11-06). Review-limit refusal shown as retryable
   failure. When the plan above was refused, no plan was saved.
   The page still requested the Plan view; `open_plan_view` hit the missing
   plan (`KeyError` in `runtime.get_plan`), the bridge returned
   `internal_error`, and the task showed "Plan unavailable. Select the task to
   retry. Check the task settings and try again." Retrying cannot succeed and
-  the limit is never named. Cause, as far as verified: the page loads Plan
-  review after any terminal planning session and never presents the validated
-  `review_fact_limit` terminal fact. Reproduced from source with exception
-  logging. Evidence: `build/resource-study-20261106b/` (`full/runs/scale-100k-01`,
-  `debug100k/`, `debug_gui_exceptions.log`).
+  the limit is never named. The wire already carries the validated
+  `terminal_result.review_refusal`. Terminal release and task selection both
+  reach `loadPlanReview`, which accepts a request ID without checking that fact.
+  Handle typed refusal there and in task feedback, preserving retry for real
+  read failures and review of saved blocked plans. Evidence: service replay above
+  and `build/resource-study-20261106b/debug_gui_exceptions.log`.
 
 ### Setup folder admission
 

@@ -78,6 +78,51 @@ rejected another Job, completed a verified copy, and exited with an empty Job
 fresh collection directory for this driver; reproducing the earlier collection
 requires its recorded driver and artifacts.
 
+### Small-file copy attribution — 2026-11-06
+
+Source diagnostics used the rebuilt-package study's F: source trees and a
+new empty H: target for each sync run and checked the mirror by SHA-256.
+The 1,000-file comparison ran the three paths in forward then reverse order.
+The five-run 3.627 s executor median at `23589bd` used F: to G: and timed
+only execution. A later user rerun reported 3.150 s for the same size band.
+
+| F: to H: elapsed seconds | 1,000 × 4 KiB | 10,000 × 32 B |
+| --- | ---: | ---: |
+| Prepared executor, preflight timed separately | 5.03, 3.80 | 57.63 |
+| Service, execution request to terminal, verification off | 6.53, 5.11 | — |
+| Service, same interval, automatic verification on | 8.40, 8.30 | 150.92 |
+| Source WebView2, Execute click to terminal, automatic verification on | 21.61 | — |
+| Earlier rebuilt package, same click/terminal interval | 14.67 | 148 smoke, 233 full |
+
+A second 10k verified service run took 148.93 s. Inclusive timers measured
+62.46 s in executor work and 80.01 s in post-copy verification. Inside those
+phases the native byte-copy calls totaled 1.65 s, copied-record writes 9.28 s,
+verification candidates 78.62 s (including 7.62 s of integrity-record writes),
+and verification completion/event updates 1.31 s. Timers nest. The verification
+phase consumed 8.00 ms/file at this size, even without a page or renderer.
+
+To separate verification reads from recording, a read-only probe ran the
+production verifier classifier and native reader over 64 retained 32-byte
+files on H: (local fixed NTFS) and checked all 64 against their F: digests. Classification
+averaged 6.04 ms/file. Opening the verification file took 4.62 ms/file,
+the unbuffered read 0.45 ms, final-path corroboration 0.23 ms and digest
+work about 0.007 ms. These host-specific timings localize the delay to the
+open call but do not distinguish storage, cache management and filesystem
+filters. The next comparison should isolate native open behavior on the
+same files and preserve the verifier's access, path and integrity guarantees.
+Probe and receipt: `build/background-cdp-20261106/`.
+
+The instrumented source GUI at 1k measured 10.06 s in execution and 10.74 s
+in verification. In the same interval the bridge served 58 Plan windows
+(1.66 s total, 1.53 s thread CPU) and 2,010 event polls (14.03 s including
+waits, 0.50 s thread CPU). These requests overlap the workflow. The host
+exited normally with an empty Job. Runs used shared hardware under variable
+load, including a concurrent 100k planning probe during the source GUI run.
+They distinguish code paths but cannot price a fixed GUI overhead or explain
+the full 148–233 s packaged spread. Evidence in `build/coverage-study-20261106/`:
+`copy.jsonl`, `timed-owners.json`, `profiled-0eb01313-calls.json`, and the
+matching run's events and verification receipt.
+
 ## Driven package resource pilot — 2026-11-06 (continuation)
 
 A new session took over the study below with a simpler control method and

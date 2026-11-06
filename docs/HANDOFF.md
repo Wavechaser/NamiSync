@@ -27,5 +27,16 @@ ordinary suite passed 6,378 with four skips. Receipts: `headed.xml` and
 
 Earlier package/fixture receipts remain under
 `build/resource-study-20261106b/` (full, smoke, retention, debug100k). The
-100k scale refusal and misleading retry guidance remain open in BUGS. R2
-provenance, R3 resource judgment, R4 checks and R5 handoff remain open.
+100k replay counted 101,000 operations, 202,000 observation subjects, and a
+typed refusal at subject 120,001. The Plan was never saved. BUGS records the
+preflight producer/adopter boundary and the GUI's independent artifact lookup.
+Both defects remain open for product work.
+
+PERFORMANCE records matched F: to H: timings. The 10k instrumented service
+run spent 62.46 s executing and 80.01 s verifying. In a separate 64-file
+verifier probe, opening a 32-byte target took 4.62 ms/file. The underlying
+open latency and the 148–233 s spread between packaged runs remain unexplained.
+Raw receipts and scripts: `build/coverage-study-20261106/` and
+`build/background-cdp-20261106/verifier-readback-64.json`. The new diagnostic
+targets, local ledgers and profiled browser data were removed after verification.
+R2 provenance, R3 resource judgment, R4 checks and R5 handoff remain open.
