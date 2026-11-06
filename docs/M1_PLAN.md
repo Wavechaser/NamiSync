@@ -534,6 +534,16 @@ empty. A separate session test retained all 130,000 copy and 130,000 verify
 receipts in order. These are capacity witnesses. SH-G-15 resource judgment
 and acceptance on a rebuilt release candidate remain open.
 
+Full resource schedule, 2026-11-06/07: a clean `b6a4fefe` package completed
+all 17 runs in about 6.5 hours of driven use. Startup ×6, 10k and 100k ×3
+(101,000-item plans admitted), 4 GiB and 64 × 4 MiB payload, three 100-cycle
+soaks and a 60-minute open-task idle all produced exact mirrors and normal exits.
+PERFORMANCE records the session's assessment: no leak, flat soaks and idle,
+and memory that scales with task size. A 100k task peaks at 2.4–2.6 GiB and
+keeps ~2 GiB, mostly uncollected renderer garbage. SH-G-15 acceptance on
+measured behavior remains the user's decision. Renderer per-item allocation is
+the candidate improvement if large-task memory is judged too heavy.
+
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
 | R0 | Inspect current package/version/launchers, INTERFACES/BRIDGE/DESKTOP_UI release criteria, TESTS commands, DEFENSE/PERFORMANCE evidence policy and relevant archived packaging dispositions. Record audience, format, missing work and serialized closeout. Documentation-only commit; local links and diff checks plus adversarial scope review. | Complete initial inspection; at that baseline, wheel metadata and installed-wheel witnesses existed but release CI, a dependency lock and frozen-app specification were absent. SH-G-15 has no budgets/artifacts; current-source bridge timing acceptance is also open. |

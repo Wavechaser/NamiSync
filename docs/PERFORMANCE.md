@@ -10,7 +10,68 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Full resource schedule on `b6a4fefe` — 2026-11-06/07
+
+**Artifact.** `build/resource-study-20261106c/package/NamiSync-windows-x64-dev.zip`,
+SHA-256 `a4b1a042404d6a9abf69f16e9af6e47349acaefc31e8df7e28d4367f0320b98d`,
+built by `tools/packaging/build.py` from clean `b6a4fefe` (plan-refusal fixes,
+150,000-row headroom, small-file copy optimizations). Host: 24 logical CPUs,
+63.7 GiB RAM. The collector (`tools/performance/resources.py`, tool hashes in
+`full/collection.json`) now attaches DevTools to the launched profile's own
+browser. All 17 scheduled runs completed in one invocation with exit 0: exact
+SHA-256 mirrors, expected `.synctrash` counts, normal close (exit 0, empty
+Job), and unchanged corpus and bundle. `validation.json` holds the window
+statistics. Its PASS/FAIL against the pilot yardsticks is informational only;
+the judgment below is on measured behavior, as the user directed.
+
+| Profile (runs) | Peak, whole app | Settled after close | Notes |
+| --- | ---: | ---: | --- |
+| Startup (3 plain, 3 DevTools) | 346–374 MiB | 342–372 MiB | Idle CPU 0.19–0.69 %. Host 93 MiB, GPU 149–178, renderer 32–34. DevTools port +10.6 MiB median. |
+| 10,000 × 32 B (3) | 950–976 MiB | 826–842 MiB | Execute 85–130 s. Renderer peak 499–541 MiB. Host 180 MiB peak, 162–166 after close. |
+| 100,000 × 32 B, 101,000 items (3) | 2,365–2,557 MiB | 1,999–2,126 MiB | Plans now admitted. Execute 834–1,372 s. Renderer peak 1.32–1.50 GiB and kept after close. Host 383–385 MiB with plan open, 766–796 peak, 344–418 after close. |
+| Payload: 1 × 4 GiB and 64 × 4 MiB (1) | 444 MiB | 423 MiB | Streaming adds no size-dependent memory. |
+| Soak: 1,000 × 4 KiB, 100 cycles of 10 updates (3) | 732–781 MiB | 643–753 MiB per cycle (cycles 21–100) | See below. |
+| 10k task open, idle 60 min (1) | 962 MiB | 804 MiB | 845 MiB while idle open; slope −3.6 MiB/10 min. |
+
+**Leak and stability.** Over cycles 21–100 the whole app moved +0.14, −0.02
+and +0.30 MiB per cycle (last-20 minus first-20 medians: +10, −6, +21 MiB).
+Renderer garbage sawtooth dominates; every soak ended 662–677 MiB. Host
+private memory rose steadily but slightly: +0.04 to +0.09 MiB/cycle, 4–9 MiB
+per 100 syncs. GUI objects stayed flat (142–151). Host handles swing 590–1,950
+with no trend. WebView2 browser-process handles climbed about 2 per cycle in
+soaks 01–02 to ~1,430–1,450, and soak-03 held at 1,413–1,442 throughout. That
+pattern is a plateau, not growth. The 60-minute open-task idle drifted
+slightly downward. No crash, hang, failed close or mirror error occurred in
+about 6.5 hours of driven use.
+
+**Where memory goes at scale.** Execute leaves uncollected renderer garbage,
+and idle V8 does not collect it. On the previous package a 10k task left
+~400 MiB of JS heap, and a forced GC returned the renderer to ~90–120 MiB.
+Here the renderer held ~0.4 GiB after 10k and 1.3–1.5 GiB after 100k.
+Collection is not proven at 100k.
+After close, host memory reaches a first-task high-water mark rather than
+growing per task: three 10k tasks in one process settled at 167, 177 and
+178 MiB. 100k repetition in one process was not measured.
+
+**Throughput.** 100k execution averaged 8.3–13.6 ms per item wall; the first
+run took 1,372 s with 11.3 ms host CPU per item. This is about half the
+earlier package's ~21 ms per item at 50k. 10k runs took 8.4–12.9 ms per item.
+
+**Assessment.** The app's resource behavior is stable, with no observed leak:
+startup, payload streaming, repeated use and long idle are flat and modest.
+Memory scales with task size, and the highest figure is the renderer's
+uncollected garbage. A 100k task needs ~2.4–2.6 GiB at peak and keeps ~2 GiB
+until later work. That is acceptable on this 64 GiB host but heavy for 8 GiB
+machines near the 120,000-item support target. The clearest improvement is
+per-item renderer allocation during Execute. Prompting collection when a task
+closes would only lower the settled figure, and that assumes the 100k garbage
+proves collectable like the 10k garbage. Host per-sync creep
+(~5 MiB/100 syncs) is too small to act on now but should be watched over
+longer use.
+
 ## Rebuilt package resource study — 2026-11-06 (paused)
+
+Superseded by the full schedule above; its resume instructions no longer apply.
 
 **Artifact.** `build/resource-study-20261106b/package/NamiSync-windows-x64-dev.zip`,
 SHA-256 `30e83c33b27503691775d8c99326b2e03163d18647af6fbcfaa6d648d273eb91`,

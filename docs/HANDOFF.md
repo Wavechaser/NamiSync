@@ -1,4 +1,41 @@
-# Latest session — Plan table churn probe, 2026-11-07
+# Latest sessions — full resource schedule and Plan table churn probe, 2026-11-07
+
+## Full resource schedule on `b6a4fefe`
+
+The reviewed plan-refusal fixes, the 150,000-row headroom and the small-file
+optimizations showed no blockers. A clean package was built from `b6a4fefe`
+(SHA-256 `a4b1a042…b98d`, `build/resource-study-20261106c/package/`). Later
+commits through `d86e987b` change only tests and docs, so these results still
+describe current product bytes.
+
+All 17 collector runs completed with exit 0 in about 6.5 hours, with exact
+mirrors and normal closes:
+
+- **Startup:** 342–372 MiB settled.
+- **Scale:** 10k peaks below 1 GiB. 100k (101,000 items, now admitted) peaks at
+  2.4–2.6 GiB and keeps ~2 GiB after close, mostly uncollected renderer garbage.
+- **Long-run:** payload, three 100-cycle soaks and the 60-minute open-task idle
+  stay flat.
+
+[PERFORMANCE](PERFORMANCE.md) ("Full resource schedule on `b6a4fefe`") holds
+the table and the session's assessment: no leak, and renderer per-item
+allocation is the main large-task cost. `validation.json` is the validator's
+informational run against the pilot yardsticks: 100k peak/closed, two soak
+handle slopes and one noisy soak slope exceed them.
+
+Still open:
+
+- SH-G-15 acceptance is the user's call.
+- Unmeasured: forced-GC collectability at 100k and 100k repetition within one
+  process.
+- Watch item: ~5 MiB/100 syncs host creep.
+
+Analysis scripts are in the evidence directory: `summarize.py`,
+`soak_trend.py`, `handle_roles.py` and `cpu_split.py`. Study fixtures stay on
+`F:\` and `H:\test_dir\`, registered in `full/fixtures.jsonl` there and in the
+`b` study's registries.
+
+## Plan table churn probe
 
 The ordinary Plan component probe now replays eight successive copy receipts
 against fresh window payloads. Each changed row must show completion, and

@@ -87,6 +87,11 @@ owning contracts.
   up to 150,000 logical rows and 300,000 ordered results. Record the exact
   refusal in history v8. Prior database pairs require the manual archive and
   fresh-start procedure.
+- Run the full 17-run resource schedule on a `b6a4fefe` package. Startup settles
+  at 342–372 MiB; 10k peaks below 1 GiB; 100k peaks at 2.4–2.6 GiB and keeps
+  ~2 GiB of mostly renderer garbage. Soaks, payload and the 60-minute idle stay
+  flat, with exact mirrors and normal exits throughout. Assess as no leak, with
+  renderer allocation the main large-task cost.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 
