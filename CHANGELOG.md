@@ -45,6 +45,11 @@ owning contracts.
   A controlled crash during a bridge reply now allows orderly host shutdown.
 - Update the installed shell keyboard test to reach Theme by tabbing through
   the Setup defaults controls that precede it.
+- Rebuild the package from `48b1f708` and resume collection: startup settles at
+  352–378 MiB; 10k and 50k syncs peak at 1.4 and 1.9 GiB with exact mirrors.
+  Show that post-close renderer memory is collectable garbage. Log the 100k plan
+  refusal below the supported item target and its retry-only presentation, then
+  pause at the user's request.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

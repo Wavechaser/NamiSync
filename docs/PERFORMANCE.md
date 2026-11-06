@@ -10,6 +10,65 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Rebuilt package resource study — 2026-11-06 (paused)
+
+**Artifact.** `build/resource-study-20261106b/package/NamiSync-windows-x64-dev.zip`,
+SHA-256 `30e83c33b27503691775d8c99326b2e03163d18647af6fbcfaa6d648d273eb91`,
+built by `tools/packaging/build.py` from clean `48b1f708` (renderer and
+dead-page shutdown fixes plus later GUI fixes) in a fresh locked environment
+from the 2026-11-04 downloads. Same control and 1 Hz Job sampling as the
+continuation below; collector `tools/performance/resources.py` unchanged
+since `edd02012`. Each run is a fresh process and profile; workload runs use
+automatic verification and end with an exact SHA-256 mirror check.
+
+**Startup** (3 plain, 3 with the DevTools port; final 60 s median, whole Job):
+352–378 MiB settled, ≤ 388 MiB peak, 0.24–0.32 % idle CPU across all six;
+the port adds no measurable cost. GPU process 159–191 MiB, host 93–97 MiB,
+renderer 32–36 MiB.
+
+**Workloads** (whole-Job private MiB; renderer in parentheses):
+
+| Run | Idle before | Execute | Peak | Task open after | All tasks closed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1,000 × 4 KiB, 3 cycles (smoke) | 345 (34) | 15 s, then 3.5 s for 10 updates | 662 (252) | — | 596–633 (225–248) per cycle; 582 (200) after 2 min |
+| 10,000 × 32 B (smoke) | 360 (38) | 148 s | 1,234 (787) | 1,157 (723) | 1,141 (720) |
+| 10,000 × 32 B (`scale-10k-01`) | 405 (36) | 233 s | 1,390 (947) | 1,376 (940) | 1,380 (946) |
+| 50,000 × 32 B, 50,500 items (`scale-50k-01`) | 362 (35) | 1,202 s | 1,877 (1,195) | 1,851 (1,147) | 1,673 (1,149) |
+
+Every mirror, `.synctrash` count and close (exit 0, empty Job) passed. Against
+the original pilot (3,029 MiB at 1,000 files; OOM at 10,100 items) the renderer
+fix holds across sizes, and renderer peak grows sublinearly (947 → 1,195 MiB
+for 5× the items).
+
+**Retention is uncollected garbage, not accumulation.** A diagnostic run
+(`retention/`) executed three 10k tasks in one process. After each close the
+JS heap held ~400 MiB and the renderer ~610–660 MiB. One forced GC
+(`HeapProfiler.collectGarbage`) dropped the heap to 3.6–3.9 MiB and the
+renderer to 88, 109 and 120 MiB, and the whole app to 520–548 MiB. Idle V8 does not
+collect it without allocation pressure, so a closed 10k/50k task leaves the
+app at ~1.1–1.7 GiB until later work. The ~15 MiB/task post-GC drift over
+three tasks is too short to call. At 50k the host also kept ~270 MiB after
+close (93 MiB at start); not yet attributed.
+
+**Throughput.** Execution is now host-bound: at 10k the host used 132 s CPU
+of 148 s wall (renderer 28 s) in the smoke run, 226 of 233 s in
+`scale-10k-01`, and 1,055 of 1,202 s at 50k (~21 ms host CPU per item). The
+smoke/full 10k difference is unexplained.
+
+**Not measured.** The 100k scale point was refused at planning (BUGS,
+Interfaces › Planning refusal presentation). By source reading, a copy plan
+trips the 120,000-row domain wall at about 60,000 operations; the exact
+boundary was not measured. The user paused the
+study after `scale-50k-01` to look into that refusal. Not yet run:
+`scale-10k-02/03`, `scale-50k-02/03`, payload (4 GiB and 64 × 4 MiB), the
+three 100-cycle soaks and the 60-minute idle-open run. `scale-10k-02-interrupted`
+is a launch-only stub from stopping the collector. `resume.py` substitutes
+`scale-50k-0N` for the refused 100k entries; continue with
+`resume.py collect … --out build/resource-study-20261106b/full --only …` and
+the remaining names. Fixtures are registered in `full/fixtures.jsonl`,
+`retention/fixtures.jsonl` and `debug100k/fixtures.jsonl`; the 100k source
+is `F:\NamiSync-resource-scale-100k-7f8dda2c`.
+
 ## Driven package resource pilot — 2026-11-06 (continuation)
 
 A new session took over the study below with a simpler control method and

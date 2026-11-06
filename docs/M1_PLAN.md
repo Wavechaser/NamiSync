@@ -473,6 +473,16 @@ renderer crash verifies the separate host shutdown fix recorded in BUGS.
 R3 still needs measurements on a rebuilt candidate and a
 judgment on the full schedule.
 
+Rebuilt-package collection, same day: a clean `48b1f708` package ran startup ×6,
+10k and 50k scale, a three-cycle smoke and a 10k retention diagnostic with no
+crash, exact mirrors and normal exits (PERFORMANCE). The 100k point was refused
+at planning. The user states the intended policy as guaranteed performance up
+to 120,000 items, with larger plans allowed but unguaranteed. The refusal and
+DEFENSE's first-excess wall list therefore conflict with intent (BUGS, Planning
+refusal presentation). The user paused collection after `scale-50k-01` to
+adjudicate that refusal. Soak, payload, idle-open and repeat scale runs remain,
+and no SH-G-15 judgment is made yet.
+
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
 | R0 | Inspect current package/version/launchers, INTERFACES/BRIDGE/DESKTOP_UI release criteria, TESTS commands, DEFENSE/PERFORMANCE evidence policy and relevant archived packaging dispositions. Record audience, format, missing work and serialized closeout. Documentation-only commit; local links and diff checks plus adversarial scope review. | Complete initial inspection; at that baseline, wheel metadata and installed-wheel witnesses existed but release CI, a dependency lock and frozen-app specification were absent. SH-G-15 has no budgets/artifacts; current-source bridge timing acceptance is also open. |
