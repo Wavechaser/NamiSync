@@ -35,6 +35,10 @@ owning contracts.
   shutdown. Preserve runtime-provenance and release-budget limitations.
 - Stop at the user's request after failed native-input pilots; no workload
   measurement or sync ran. Retain evidence and isolate cleanup to study fixtures.
+- Continue with DevTools-protocol control of the unchanged package; the first
+  workload pilots found renderer memory growing to 2.5 GiB at 1,000 files and
+  an Out of Memory crash at 10,100 items, plus a shutdown that cannot finish
+  after renderer death. Log both in BUGS and stop until the renderer is fixed.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

@@ -10,6 +10,48 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Driven package resource pilot — 2026-11-06 (continuation)
+
+A new session took over the study below with a simpler control method and
+stopped at the first workload pilot because it exposed a renderer memory
+defect (BUGS, Interfaces › Live execution rendering). No baseline beyond the
+earlier startup runs is claimed. At the user's direction, SH-G-15 acceptance is
+treated as a judgment on measured behavior rather than a predeclared apparatus;
+the proposed yardsticks were startup settled ≤ 450 MiB / peak ≤ 600 MiB, work
+peak ≤ 2 GiB, all-tasks-closed ≤ 1 GiB and soak growth ≤ 0.2 MiB/cycle.
+
+**Control.** The unchanged build-d package runs with only
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` adding a loopback
+`--remote-debugging-port`; trusted CDP mouse/text input drives the page, so no
+window focus, UIA or native typing is involved. Each run is a fresh process,
+`--data-dir` profile and kill-on-close Job, sampled passively at 1 Hz (private
+bytes, working set, handles, GDI/USER, CPU per process and role). Uncommitted
+drivers: `tools/performance/resources.py` (collector, schedule, fixtures,
+mirror/trash checks, cleanup) and `validate_resources.py` (window statistics);
+pilot runs used shortened profiles via `build/resource-baseline-20261106/pilot.py`.
+
+**Pilot observations** (whole-Job private MiB; renderer in parentheses):
+
+| Run | Idle before | Sampled peak | After task close |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB, cycle 1 copy | 371 (36) | 3,029 (2,668) | 2,053 (1,703) |
+| Same, cycles 2–3 (10 updates each) | — | 2,738 (2,364) | 2,680 (2,319), flat through 2-minute final idle |
+| 10,100 items, 32 B files | 342 (33) | 7,799 (7,409), OOM twice | renderer gone; forced Job end |
+
+Host peak private memory was 127 MiB in the soak and 178 MiB at 10k. A diagnostic 1,000-file run
+recorded JS heap 2.4 → 914 MiB and DOM nodes 5.2k → 61k during execution, back
+to 2.9 MiB/5.7k after one forced GC; CPU samples were dominated by native
+layout/style and `getBoundingClientRect`. All mirror checks, `.synctrash`
+counts, durable run rows (10,100 succeeded, verify phase, recording/audit ok)
+and normal-closed runs passed; the 10k run could not close normally (BUGS,
+Interfaces › Desktop bridge and native-owner lifecycle). While planning, the
+task card briefly reported status `completed` with title "Completed".
+
+Resume after the renderer fix with the full collector schedule: startup ×3
+plain and ×3 driven (port overhead), 100-cycle soak ×3, 10k/100k scale ×3,
+4 GiB and 64 × 4 MiB payload, and 60-minute idle with an open task. Pilot
+fixtures remain registered in `pilot/fixtures.jsonl` for `resources cleanup`.
+
 ## Updated portable resource study — 2026-11-06
 
 Collection stopped at the user's request after the three startup runs below.

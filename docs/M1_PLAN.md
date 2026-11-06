@@ -450,6 +450,17 @@ links/diff and adversarial review; one documentation commit. No product changes,
 release acceptance or supplied-corpus mutation. Larger profiles remain open;
 resume only with a reviewed control approach, not more local activation retries.
 
+Continuation, same day: a new session replaced native input with loopback
+DevTools-protocol control of the unchanged package (environment variable only)
+and simplified collection to one collector/validator pair. The user directed
+that SH-G-15 be judged on measured behavior, not a predeclared apparatus. The
+first workload pilot found an OPEN SEVERE renderer allocation defect (2.5 GiB
+at 1,000 files, OOM at 10,100 items) and an OPEN MODERATE shutdown failure
+after renderer death; see BUGS. The user chose to log and stop. R3 resource
+judgment is blocked on that fix; the baseline then reruns the full schedule in
+PERFORMANCE. Drivers in `tools/performance/resources.py` and
+`validate_resources.py` are uncommitted.
+
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
 | R0 | Inspect current package/version/launchers, INTERFACES/BRIDGE/DESKTOP_UI release criteria, TESTS commands, DEFENSE/PERFORMANCE evidence policy and relevant archived packaging dispositions. Record audience, format, missing work and serialized closeout. Documentation-only commit; local links and diff checks plus adversarial scope review. | Complete initial inspection; at that baseline, wheel metadata and installed-wheel witnesses existed but release CI, a dependency lock and frozen-app specification were absent. SH-G-15 has no budgets/artifacts; current-source bridge timing acceptance is also open. |

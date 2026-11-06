@@ -1,70 +1,74 @@
-# Latest session — Startup measurements; user stop, 2026-11-06
+# Latest session — Driven resource pilot; renderer defect logged, 2026-11-06
 
-The user authorized collection and desktop control against the existing latest
-repeatable package, with no runtime replacement scheduled. After control-pilot
-failures, the user explicitly chose **stop after startup results for now**.
-Do not resume workload measurements automatically. Branch is `milestone1`;
-preparation commit is `69f01d79`. Product/test source is unchanged.
+Branch `milestone1`, starting from `bde11e88`. Product source is unchanged.
+The user chose **log it, stop for now** after the first workload pilots found a
+renderer memory defect. Do not resume the resource baseline until it is fixed.
 
-## Completed results
+## What changed
 
-Three fresh build-d processes/profiles each received 90 seconds of passive
-sampling after native window observation. Independent checks pass: 558 raw /
-550 complete samples; all settled windows contain 30 complete samples. Settled
-whole-Job private memory is 363.408 / 357.805 / 352.902 MiB; sampled peaks are
-380.578 / 359.773 / 355.547 MiB. Host settled near 94 MiB; GPU-process private
-memory 162–166 MiB (not VRAM usage).
-All runs exited normally with exit 0 and empty Jobs. Frozen package and helper
-identities match before/after. PERFORMANCE owns exact method, attribution and
-limits; these are diagnostics, not SH-G-15 acceptance or workload/leak evidence.
+- Control approach settled: the unchanged build-d package runs with only
+  `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` adding a loopback
+  `--remote-debugging-port`. Trusted CDP mouse/text input drives the page; no
+  window focus, UIA or native typing is needed. The previous session's
+  activation and typing failures do not recur.
+- The user directed that SH-G-15 be judged on measured behavior rather than a
+  predeclared budget/validator apparatus. M1_PLAN records this.
+- New, **uncommitted** drivers: `tools/performance/_cdp.py`, `resources.py`
+  (collector: frozen schedule, registry-first fixtures, mirror/`.synctrash`
+  checks, `cleanup`) and `validate_resources.py` (window statistics and
+  yardsticks), plus `tests/test_resource_acceptance.py` registered in the
+  tools department. Decide whether to keep their acceptance framing before
+  committing them; the docs change only records observations.
+- BUGS gains two OPEN entries: SEVERE render allocation outpacing collection
+  (Interfaces › Live execution rendering) and MODERATE dead-page shutdown
+  dependency (Desktop bridge and native-owner lifecycle). PERFORMANCE records
+  the pilot table and method; CHANGELOG extends the 2026-11-06 task.
 
-Artifact: `build/m1-release-20261104/repeatable/build-d/`
-`NamiSync-windows-x64-dev.zip`, SHA-256
-`1d73619bb23e567f5c461e15fb9c82595853b419e1da169dafb17c165e7cf552`,
-477 files, source b3095886. Windows build 26200, i7-13700K, 63.69 GiB RAM,
-Balanced power, WebView2 process paths version 156.0.4314.58. Native-DLL
-provenance gap under R2 remains; no final-distribution-runtime acceptance.
+## Findings
 
-## Failed pilots and resumption boundary
+Execute with verify on grows renderer memory ~70 MiB/s: 1,000 × 4 KiB files
+peak 3,029 MiB whole-app (2,668 renderer), and stay ~2.3 GiB after every task
+closes. A 10,100-item plan reached 7.8 GiB, crashed with WebView2's Out of
+Memory page, reloaded and died again. Diagnosis shows collectable garbage
+(JS heap 914 MiB → 2.9 MiB after one forced GC; DOM 61k → 5.7k nodes) and CPU in
+layout/style, `getBoundingClientRect` (`table_columns.js` `refreshResizers`),
+`cloneJsonValue` and Plan render. The page paces execution: 10k tiny files took
+5 minutes. Per-event full-window redraw is the leading hypothesis, unconfirmed.
+After renderer death, window close failed twice with `_DesktopQuiescenceError`;
+the harness ended the Job at 130 seconds. That sync had already completed
+durably (10,100 succeeded, verify, recording/audit ok) and the target mirrors
+exactly. Also seen: while planning, the task card briefly shows "Completed".
 
-Evidence root `build/resource-study-20261106/` retains all scripts, frozen run
-dependencies, raw samples, reports, independent checker/control receipts and
-review. `pilot-01`: foreground refused before typing. `pilot-02`: reviewed
-caption fallback found no visible owned HTCAPTION point, also before typing.
-The recurrence table is `focus-reorganization-review.md`; no third automatic
-activation workaround is authorized by that disposition.
+Host memory stayed 93–178 MiB. The earlier startup baseline (settled ~358 MiB)
+is unaffected.
 
-User approved manual activation with guarded automation. `pilot-manual-01`
-timed out at three minutes before acknowledgement, and the harness normally
-closed it. This was harness coordination, not an app crash. `pilot-manual-02`
-used a ten-minute handoff, accepted acknowledgement and reached typing, but
-UIA SetValue failed immediate path readback before Create plan. Delayed versus
-ignored delivery is unresolved. All four pilots exited normally; source and
-target checks are unchanged. No Plan or Execute ran, and no workload result is
-claimed. User declined further manual-phase collection for now.
+## Verification
 
-If resumed, settle the control approach first. Fully manual phase witnessing
-with passive sampling was proposed but not started. Do not repeat automatic
-activation/typing patches. The seven-profile matrix remains open, including
-task-size/count, supplied payload corpus and repeated lifecycle. Drivers cover
-only dry-run pilot/startup/metadata; no automatic Execute was implemented.
+`tests/test_resource_acceptance.py` plus department policy: 22 passed. Pilot
+soak (3 cycles), 50-file and update-cycle explorations: mirror and trash
+counts correct, normal exit 0 and empty Jobs. No run synced from the supplied
+corpus; the collector only recorded its metadata.
 
-## Preservation and release context
+## Resumption
 
-Eight run manifests registered 24 study-owned extraction/profile, synthetic
-source and empty target roots; all 24 are now removed after independent archive
-and cleanup review. `metadata-1000-01` was prepared but never launched.
-`fixtures-preserved.zip` retains 5,035 files, including failed profiles, source
-and target specimens; SHA-256
-`63bca956bfbd77261180e21caef65a31cb6392b95965c5283342cc462c0e87f4`.
-Only hash-verified regenerable package extractions were omitted. Cleanup receipt
-`cleanup-result-20261105-170301-1b8912e4dba143f6a492f2d3ebe8dbca.json`
-uses UTC naming; user-facing session date is November 6. Original corpus and
-all pre-existing H: targets were excluded. No test windows/processes remain.
+1. Fix the renderer churn (frontend/bridge owners), then reuse
+   `build/resource-baseline-20261106/diag.py` on 1,000 and 10,000 files as the
+   before/after check, and fix or adjudicate the shutdown dependency.
+2. Rebuild a package and rerun the full schedule: `python -m
+   tools.performance.resources collect --archive ... --out NEW_DIR --corpus
+   F:\NamiSyncExecutorBenchSource --source-parent F:\ --target-parent
+   H:\test_dir`, then `python -m tools.performance.validate_resources NEW_DIR`.
+   About 4.5 hours; run nothing else meanwhile.
 
-R2 remains open: native input/origin evidence, notices and guide integration.
-User selected unsigned v0.1.0 Gertrud tester delivery; delivery location is
-undecided. Hosted run 42056121788 at `48574eb6` passed ordinary tests/imports/
-build upload; it did not native-test that artifact. Attempt-06 and prior package
-evidence remain preserved; recovery 987cba84 remains unmerged. R3 acceptance,
-R4 final candidate checks and R5 handoff/publication remain open. No publication.
+Evidence: `build/resource-baseline-20261106/` (`runs/explore-0*`, `pilot/`,
+`diag/` with CPU profile and heap snapshot). Registered pilot fixtures remain
+under `F:\NamiSync-resource-*` and `H:\test_dir\NamiSync-resource-*`, listed in
+`pilot/fixtures.jsonl`; remove with `resources cleanup --out
+build\resource-baseline-20261106\pilot` once no longer needed. The earlier
+exploration pair `NamiSync-resource-explore-7dc1e22b` (F: and H:\test_dir) is
+recorded in `build/resource-baseline-20261106/fixtures.jsonl` and must be
+removed by hand.
+Prior study evidence remains in `build/resource-study-20261106/`.
+
+R2 (native-input provenance, notices, guide integration), R3 acceptance, R4
+candidate checks and R5 handoff remain open. No publication.

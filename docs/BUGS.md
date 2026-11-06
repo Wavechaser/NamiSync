@@ -885,6 +885,22 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Live execution rendering
+
+- SEVERE - OPEN (2026-11-06). Render allocation outpacing collection. During
+  Execute with verify on, the unchanged build-d renderer grows about 70 MiB/s:
+  1,000 × 4 KiB files peak at 2.5 GiB renderer private memory, and a 10,100-item
+  plan of 32-byte files reached ~7 GiB, showed WebView2's "Out of Memory" page,
+  reloaded, then died again. Execution is paced by the page (10k files/320 KB
+  took 5 minutes; 1,000 files ~36 s). Durable state stayed truthful and the
+  target mirrored exactly. Cause, as far as verified: collectable garbage, not
+  retention — JS heap reached 914 MiB with 61k DOM nodes and one forced GC
+  returned 2.9 MiB/5.7k nodes, while CPU was layout/style, `getBoundingClientRect`
+  (`table_columns.js` resizer refresh), `cloneJsonValue` and Plan render.
+  Per-event full-window redraw is the leading, unconfirmed hypothesis. After
+  all tasks close the renderer keeps ~2.3 GiB private. Evidence:
+  `build/resource-baseline-20261106/` (`pilot/`, `diag/`).
+
 ### Setup folder admission
 
 - MINOR - FIXED (2026-11-05). In-flight validation gesture loss. Leaving a
@@ -1392,6 +1408,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - OPEN (2026-11-06). Dead-page shutdown dependency. After the
+  renderer OOM above, closing the window did not exit the app: `namisync.log`
+  records two `shutdown.attempt_failed` / `_DesktopQuiescenceError` entries
+  ("bridge handlers did not quiesce before the deadline") about a minute apart,
+  and the harness ended the process by Job termination after 130 seconds. The
+  sync had already completed durably, so no state was lost; a user would need
+  Task Manager. Cause: desktop shutdown requires in-flight bridge handlers to
+  quiesce, and they did not after the page died; the exact blocked handler is
+  unidentified. Whether a later attempt would eventually exit is unobserved.
 - MINOR - FIXED (2026-10-02). Native observation budget mismatch. The existing
   live host witness could time out after correctly canceled navigation because
   its local native-completion and worker-join waits ended before the matching
