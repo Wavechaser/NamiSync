@@ -111,7 +111,7 @@ const pageSnapshot = (taskId, sessionId, facts = {}) => {
   return {
     wire_version: 2, task_id: taskId, session_id: sessionId, revision,
     session_state: "active", control_state: "running", phase: null,
-    progress_inconsistent: false, active_item: null,
+    progress_inconsistent: false, active_item: null, last_settled_operation_id: null,
     presentation: { item_percent: null,
       items_done: null, items_total: null, throughput_bytes_per_second: null,
       eta_seconds: null, value: 0, determinate: false, indeterminate: true },
@@ -1600,13 +1600,18 @@ function flushExecutionPaint() {
 }
 const renderCount = reviewRenders.length;
 const windowCount = planWindows.length;
+const burstAnchorCount = planAnchors.length;
 const pendingPaintCount = executionPaints.size;
 for (let index = 0; index < 20; index += 1) executionDrain.acceptUpdate(executionDirtyUpdate);
 assert.equal(executionPaints.size, pendingPaintCount, "intermediate events add no presentation work");
 for (let index = 0; index < 10; index += 1) {
   executionDrain.acceptUpdate(executionDirtyUpdate,
-    pageSnapshot(TASK_G, executionSession, { control_state: liveTask.executionControlState }));
+    pageSnapshot(TASK_G, executionSession, { control_state: liveTask.executionControlState,
+      last_settled_operation_id: index.toString(16).padStart(32, "0") }));
 }
+assert.equal(liveTask.executionPresentation.lastSettledOperationId, "9".padStart(32, "0"),
+  "a batch of fast outcomes retains only its latest processed operation before painting");
+assert.equal(planAnchors.length, burstAnchorCount, "fast settled operations launch no per-file anchor requests");
 assert.equal(executionPaints.size, 1, "ordinary snapshots share one pending presentation");
 const dirtyBeforeGap = liveTask.executionWindowDirtyRevision;
 executionDrain.acceptUpdate({ update_type: "event", event: { body_type: "Gap" } });
@@ -2053,6 +2058,32 @@ await turns();
 assert.equal(liveReview.follow.enabled, false, "Enable cannot turn on follow without an active operation");
 assert.equal(planAnchors.length, noActiveAnchorCount, "no active operation launches no anchor lookup");
 assert.equal(liveReview.follow.message, "No operation is active.");
+const settledCursor = "a".repeat(32);
+const settledAnchorBase = planAnchors.length;
+const settledWindowBase = planWindows.length;
+liveTask.executionPresentation = {
+  phase: "verify", activeItem: {item_id: "b".repeat(32), item_type: "operation"},
+  lastSettledOperationId: settledCursor,
+};
+deferAnchor = true;
+globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, false);
+await until(() => planAnchors.length === settledAnchorBase + 1);
+assert.deepEqual(calls.at(-1), ["plan-operation-anchor", TASK_G, executionSession,
+  liveReview.summary.view_revision, settledCursor],
+  "Plan navigation retains the last execute operation while verification has its own active item");
+planAnchors.at(-1).resolve({disposition: "current", index: 1280});
+await until(() => planWindows.length === settledWindowBase + 1);
+planWindows.at(-1).resolve(contextExecutionWindow());
+await until(() => liveReview.followRead == null);
+assert.equal(liveReview.follow.hasTarget, true);
+liveTask.executionPresentation = { activeItem: null };
+liveReview.follow.hasTarget = false;
+liveReview.follow.anchorKey = null;
+liveReview.follow.anchorIndex = null;
+liveReview.follow.scrollOffset = null;
+planAnchors.splice(settledAnchorBase);
+planWindows.splice(settledWindowBase);
+deferAnchor = false;
 liveReview.summary = followSummaryBefore;
 
 const replacedControlBase = executionControls.length;
@@ -3402,4 +3433,125 @@ globalThis.planReviewHarness.callbacks.onNavigateCurrent(auxiliaryTask.review, f
 await turns();
 assert.equal(planAnchors.length, auxiliaryAnchorBase,
   "current auxiliary operation cannot become an original Plan follow target");
+// Fast NOOP execution follows one latest cursor per paint tick and lands on
+// the final operation even when terminal delivery precedes the next tick.
+const noopTaskId = "task-" + "01".repeat(16);
+const noopSessionId = "02".repeat(16);
+const noopRequestId = "03".repeat(16);
+const noopOperation = (index) => index.toString(16).padStart(32, "0");
+const noopSummary = planSummary({task_id: noopTaskId, request_id: noopRequestId,
+  selection_state: "committed", visible_row_count: 2048,
+  execution: {...committedReview.execution, session_id: noopSessionId}});
+const noopWindow = (offset, result = null) => ({
+  ...executionWindow(noopSummary, offset, result === null ? 1 : 2, result),
+  rows: Array.from({length: Math.min(5, 2048 - offset)}, (_, index) => ({
+    ...executionWindow(noopSummary, offset, result === null ? 1 : 2, result).rows[0],
+    node_id: `node-${noopOperation(offset + index)}`, operation_id: noopOperation(offset + index),
+    visible_index: offset + index, operation_kind: "noop", presentation_kind: "noop",
+  })),
+  execution: {...executionWindow(noopSummary, offset, result === null ? 1 : 2, result).execution,
+    session_id: noopSessionId},
+});
+const noopOpenBase = planOpens.length;
+const noopInitialWindowBase = planWindows.length;
+const noopTask = globalThis.taskHarness.adoptTask({task_id: noopTaskId,
+  session_id: noopSessionId, session_state: "active", session_released: false,
+  task_kind: "sync-plan", session_kind: "sync-execution", request_id: noopRequestId,
+  plan_request_id: noopRequestId});
+await until(() => planOpens.length === noopOpenBase + 1);
+planOpens.at(-1).resolve(noopSummary);
+await until(() => planWindows.length === noopInitialWindowBase + 1);
+planWindows.at(-1).resolve(noopWindow(0));
+await until(() => noopTask.review !== null && !noopTask.reviewLoading);
+taskButton(noopTask.label).click();
+const noopDrain = drains.get(noopTaskId);
+noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId, {phase: "execute"}));
+await until(() => planWindows.length === noopInitialWindowBase + 2);
+planWindows.at(-1).resolve(noopWindow(0));
+await until(() => !noopTask.executionWindowRefreshRunning);
+noopTask.review.follow.enabled = true;
+deferAnchor = true;
+const enabledBurstPaintBase = reviewRenders.length;
+const enabledBurstAnchorBase = planAnchors.length;
+const enabledBurstWindowBase = planWindows.length;
+for (let index = 1; index <= 20; index += 1) {
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase: "execute", last_settled_operation_id: noopOperation(index)}));
+}
+assert.equal(reviewRenders.length, enabledBurstPaintBase, "enabled Follow does not repaint each fast NOOP");
+assert.equal(planAnchors.length, enabledBurstAnchorBase, "enabled Follow waits for the presentation tick before locating NOOPs");
+assert.equal(planWindows.length, enabledBurstWindowBase, "enabled Follow does not request per-NOOP windows");
+flushExecutionPaint();
+await until(() => planAnchors.length === enabledBurstAnchorBase + 1);
+assert.deepEqual(calls.at(-1), ["plan-operation-anchor", noopTaskId, noopSessionId,
+  noopSummary.view_revision, noopOperation(20)], "one tick locates only the latest settled NOOP");
+planWindows[enabledBurstWindowBase].resolve(noopWindow(0));
+planAnchors.at(-1).resolve({disposition: "current", index: 1023});
+await until(() => planWindows.length === enabledBurstWindowBase + 2);
+planWindows.at(-1).resolve(noopWindow(1019));
+await until(() => noopTask.review.followRead == null);
+if (noopTask.executionWindowRefreshRunning) {
+  await until(() => planWindows.length === enabledBurstWindowBase + 3);
+  planWindows.at(-1).resolve(noopWindow(1019));
+  await until(() => !noopTask.executionWindowRefreshRunning);
+}
+assert.equal(noopTask.review.follow.scrollOffset, 1019);
+assert.equal(planAnchors.length, enabledBurstAnchorBase + 1, "the NOOP burst has one automatic anchor lookup");
+assert.ok(planWindows.length <= enabledBurstWindowBase + 3, "the NOOP burst has bounded window work per tick");
+assert.ok(reviewRenders.length <= enabledBurstPaintBase + 4, "the NOOP burst paints only bounded tick/read settlements");
+
+const terminalNoopResult = executionResult({headline: "all-noop"});
+const terminalNoopAnchorBase = planAnchors.length;
+const terminalNoopWindowBase = planWindows.length;
+noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+  {phase: "execute", last_settled_operation_id: noopOperation(2047)}));
+assert.equal(executionPaints.size, 1);
+noopDrain.acceptUpdate({update_type: "record", record: {kind: "sync-execution",
+  state: "completed", result: terminalNoopResult}}, pageSnapshot(noopTaskId, noopSessionId,
+  {session_state: "completed", last_settled_operation_id: noopOperation(2047),
+    terminal_result: terminalNoopResult}));
+assert.equal(executionPaints.size, 0, "terminal delivery retires the outstanding ordinary paint");
+await until(() => planAnchors.length === terminalNoopAnchorBase + 1);
+assert.deepEqual(calls.at(-1), ["plan-operation-anchor", noopTaskId, noopSessionId,
+  noopSummary.view_revision, noopOperation(2047)], "terminal delivery follows the final NOOP identity");
+planWindows[terminalNoopWindowBase].resolve(noopWindow(1019, terminalNoopResult));
+planAnchors.at(-1).resolve({disposition: "current", index: 2047});
+await until(() => planWindows.length === terminalNoopWindowBase + 2);
+planWindows.at(-1).resolve(noopWindow(2043, terminalNoopResult));
+await until(() => noopTask.review.followRead == null);
+if (noopTask.executionWindowRefreshRunning) {
+  await until(() => planWindows.length === terminalNoopWindowBase + 3);
+  planWindows.at(-1).resolve(noopWindow(2043, terminalNoopResult));
+  await until(() => !noopTask.executionWindowRefreshRunning);
+}
+assert.equal(noopTask.review.follow.scrollOffset, 2043, "terminal all-NOOP execution lands on its last row");
+assert.equal(noopTask.review.window.offset, 2043);
+assert.equal(noopTask.review.window.rows.at(-1).operation_id, noopOperation(2047),
+  "the final adopted window contains the last processed row");
+assert.equal(noopTask.executionPresentation.activeItem, null);
+
+// A release reload cannot override a newer manual viewport gesture.
+const noopReleaseOpenBase = planOpens.length;
+const noopReleaseWindowBase = planWindows.length;
+const noopReleaseAnchorBase = planAnchors.length;
+noopDrain.acceptRelease(noopTaskId, noopSessionId);
+await until(() => planOpens.length === noopReleaseOpenBase + 1);
+globalThis.planReviewHarness.callbacks.onFollowOverride(noopTask.review);
+globalThis.planReviewHarness.callbacks.onWindow(noopTask.review, 256, () => true);
+await until(() => planWindows.length === noopReleaseWindowBase + 1);
+planWindows.at(-1).resolve(noopWindow(256, terminalNoopResult));
+await until(() => noopTask.review.window.offset === 256);
+planOpens.at(-1).resolve({...noopSummary, execution: {...noopSummary.execution, result: terminalNoopResult}});
+await until(() => planWindows.length === noopReleaseWindowBase + 2);
+planWindows.at(-1).resolve(noopWindow(0, terminalNoopResult));
+await until(() => !noopTask.reviewLoading);
+if (noopTask.executionWindowRefreshRunning) {
+  await until(() => planWindows.length === noopReleaseWindowBase + 3);
+  planWindows.at(-1).resolve(noopWindow(256, terminalNoopResult));
+  await until(() => !noopTask.executionWindowRefreshRunning);
+}
+assert.equal(noopTask.review.window.offset, 256, "release reload preserves newer user viewport navigation");
+assert.equal(noopTask.review.follow.enabled, false);
+assert.equal(planAnchors.length, noopReleaseAnchorBase, "release reload does not re-enable automatic landing");
+deferAnchor = false;
 process.stdout.write("ok");

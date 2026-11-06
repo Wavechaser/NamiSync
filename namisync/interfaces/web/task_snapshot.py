@@ -73,6 +73,7 @@ class TaskPresentationState:
     phase_authority: str = "unknown"
     progress: dict[str, object] | None = None
     active_item: dict[str, object] | None = None
+    last_settled_operation_id: str | None = None
     aggregate_high_water: float | None = None
     item_high_water: float | None = None
     sample_at: float | None = None
@@ -134,6 +135,7 @@ class TaskPresentationState:
             return replace(
                 self._clear_progress(), revision=self.revision + 1,
                 gap_first_missed_seq=minimum,
+                last_settled_operation_id=None,
             )
         if event.sequence <= self.last_reduced_sequence:
             return self
@@ -150,6 +152,8 @@ class TaskPresentationState:
             except ProgressPresentationError:
                 state = replace(state._clear_progress(), progress_inconsistent=True)
         elif kind in {"ItemOutcome", "IntegrityOutcome"}:
+            if kind == "ItemOutcome" and body["phase"] == "execute":
+                state = replace(state, last_settled_operation_id=body["item_id"])
             if state.phase == body["phase"] and state.active_item is not None:
                 active = state.active_item
                 matches = active["item_id"] == body["item_id"] and (
@@ -281,6 +285,7 @@ class TaskPresentationState:
             "active_item": None if active is None else {
                 "item_id": active["item_id"], "item_type": active["item_type"],
             },
+            "last_settled_operation_id": self.last_settled_operation_id,
             "presentation": {
                 "item_percent": item_percent,
                 "items_done": None if progress is None else progress["items_done"],

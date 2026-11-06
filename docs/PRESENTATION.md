@@ -526,7 +526,10 @@ Sort is process-live view state, never durable preference; it preserves tree ide
 
 Follow resolves the active Plan operation or ordinary Inventory integrity item to the nearest
 visible ancestor-or-self under the current collapse, filter, search, sort and
-revision. Nothing visible means no target; never mutate filters or invent a
+revision. Between execution items, Plan can follow the latest settled
+operation, including a no-op. A terminal snapshot retains that position.
+The cursor is separate from active progress and updates the viewport at the
+existing execution paint cadence. Nothing visible means no target; never mutate filters or invent a
 root. Automatic follow is restricted to unfiltered, search-free canonical order.
 User scroll-away or changing sort/search/filter disables it until explicit enable;
 returning to canonical alone does not resume it. One-shot Go to the current item

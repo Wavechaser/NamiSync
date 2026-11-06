@@ -805,7 +805,9 @@ def test_large_plan_task_snapshot_does_not_publish_an_outcome_map() -> None:
     assert published["updates"] == []
     assert published["snapshot"] == state.snapshot()
     assert published["snapshot"]["terminal_result"] is None
-    assert not any(str(operation.op_id) in json.dumps(published["snapshot"])
+    snapshot = dict(published["snapshot"])
+    assert snapshot.pop("last_settled_operation_id") == str(artifact.plan.operations[-1].op_id)
+    assert not any(str(operation.op_id) in json.dumps(snapshot)
                    for operation in (artifact.plan.operations[0], artifact.plan.operations[-1]))
 
 

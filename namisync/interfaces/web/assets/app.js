@@ -573,6 +573,14 @@ function inventoryActiveItem(task) {
     && item?.item_type === "integrity" ? item.item_id : null;
 }
 
+function planFollowTarget(task) {
+  const presentation = task.executionPresentation;
+  const active = presentation?.activeItem?.item_id ?? null;
+  if (task.workPane === "verify") return presentation?.phase === "verify" ? active : null;
+  return (presentation?.phase !== "verify" ? active : null)
+    ?? presentation?.lastSettledOperationId ?? null;
+}
+
 function inventoryFollow(task, review) {
   if (review.follow?.sessionId !== task.sessionId) {
     review.follow = {sessionId: task.sessionId,
@@ -602,7 +610,7 @@ const PLAN_FOLLOW = Object.freeze({
   inventory: false, subject: "operation", owner: currentReviewTask,
   loading: task => task.reviewLoading,
   session: task => task.executionSessionId,
-  target: task => task.executionPresentation?.activeItem?.item_id ?? null,
+  target: planFollowTarget,
   anchor: getPlanOperationAnchor, window: getPlanWindow,
   adopt(review, window) {
     if (window.highlight_revision !== review.summary.highlight_revision) return false;
@@ -946,6 +954,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
       phase: snapshot.phase,
       activeItem: snapshot.active_item,
       itemPercent: snapshot.presentation.item_percent,
+      lastSettledOperationId: snapshot.last_settled_operation_id,
     };
     if (task.sessionKind === "sync-execution") {
       task.executionSnapshot = snapshot;
@@ -974,7 +983,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
       }
     }
     if (task.review?.follow != null && task.sessionKind === "sync-execution") {
-      task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
+      task.review.follow.hasTarget = planFollowTarget(task) !== null;
     }
     if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
       if (task.inventoryReview !== null) inventoryFollow(task, task.inventoryReview);
@@ -1030,8 +1039,8 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
   } else {
     renderTasks();
   }
-  if (task.review !== null && task.sessionKind === "sync-execution" && task.sessionState === "active") {
-    task.review.follow.hasTarget = task.executionPresentation?.activeItem?.item_id != null;
+  if (task.review !== null && task.sessionKind === "sync-execution") {
+    task.review.follow.hasTarget = planFollowTarget(task) !== null;
     if (task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
   }
   if (task.inventoryReview !== null && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
@@ -1561,8 +1570,7 @@ function acceptTaskRelease(task, sessionId) {
   task.sessionReleased = true;
   if (task.sessionKind === "sync-execution") {
     task.executionSessionState = task.sessionState;
-    task.executionPresentation = null;
-    if (task.review?.follow != null) task.review.follow.hasTarget = false;
+    if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
     task.executionWindowDirty = true;
     task.executionWindowDirtyRevision += 1;
   } else if (task.taskKind === "sync-plan" && task.executionStarted
@@ -2723,7 +2731,7 @@ async function loadPlanReview(task, force = false) {
       follow: {
         enabled: retainedFollow === null ? task.executionStarted && eligibleFollow : retainedFollow.enabled,
         eligible: eligibleFollow,
-        hasTarget: task.executionPresentation?.activeItem?.item_id != null,
+        hasTarget: planFollowTarget(task) !== null,
         message: null,
         anchorKey: retainedFollow?.anchorKey ?? null,
         anchorIndex: retainedFollow?.anchorIndex ?? null,
@@ -2768,6 +2776,8 @@ async function loadPlanReview(task, force = false) {
       task.reviewLoading = false;
       renderTasks();
       if (task.executionWindowDirty) void refreshExecutionWindow(task);
+      if (task.review?.follow?.enabled && task.review.follow.eligible
+          && planFollowTarget(task) !== null) queuePlanFollow(task.review);
     }
   }
 }

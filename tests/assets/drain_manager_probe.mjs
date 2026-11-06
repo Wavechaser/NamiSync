@@ -288,6 +288,7 @@ function snapshotFor(pending, updates, overrides = {}) {
     control_state: "running",
     phase: null,
     active_item: null,
+    last_settled_operation_id: null,
     progress_inconsistent: false,
     presentation: {
       item_percent: null,
@@ -727,6 +728,7 @@ const activePresentation = {
 };
 const activeFacts = {
   phase: "execute", active_item: activeItem,
+  last_settled_operation_id: "47".repeat(16),
   presentation: activePresentation,
 };
 const snapshot0 = await nextRequest(requests.length);
@@ -743,6 +745,7 @@ assert.equal(acceptedSnapshots[0].snapshot, null,
 assert.equal(acceptedSnapshots[1].update.event.body.bytes_done,
   "9007199254740993", "Scalar64 stays exact text");
 assert.deepEqual(acceptedSnapshots[1].snapshot.active_item, activeItem);
+assert.equal(acceptedSnapshots[1].snapshot.last_settled_operation_id, activeFacts.last_settled_operation_id);
 assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot));
 assert.ok(Object.isFrozen(acceptedSnapshots[1].snapshot.active_item));
 assert.equal(refusedSnapshots.length, 0);
@@ -762,6 +765,8 @@ const invalidSnapshots = [
   ["invalid active identity", {
     ...activeFacts, active_item: { ...activeItem, item_id: 42 },
   }],
+  ["invalid settled identity", { last_settled_operation_id: 42 }],
+  ["empty settled identity", { last_settled_operation_id: "" }],
   ["unsafe display count", {
     ...activeFacts, presentation: { ...activePresentation,
       items_done: Number.MAX_SAFE_INTEGER + 1 },
@@ -786,8 +791,13 @@ for (const [label, invalid] of invalidSnapshots) {
   nextSnapshotSequence += 2;
 }
 assert.equal(refusedSnapshots.length, 0);
-success(pendingSnapshot, [terminalRecord(snapshotSession)]);
+success(pendingSnapshot, [terminalRecord(snapshotSession)], {
+  last_settled_operation_id: activeFacts.last_settled_operation_id,
+});
 await turns();
+assert.equal(acceptedSnapshots.at(-1).snapshot.active_item, null);
+assert.equal(acceptedSnapshots.at(-1).snapshot.last_settled_operation_id,
+  activeFacts.last_settled_operation_id, "terminal delivery retains the settled operation cursor");
 stopSnapshots();
 
 // The cross-boundary fixture supplies both event envelopes and snapshots from

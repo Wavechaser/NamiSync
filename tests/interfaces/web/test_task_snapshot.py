@@ -142,6 +142,44 @@ def test_large_byte_counters_stay_exact_decimal_strings() -> None:
     assert state.snapshot()["presentation"]["value"] == 100.0
 
 
+def test_settled_operation_cursor_survives_lossy_progress_verification_and_terminal() -> None:
+    state = _state().advance(_event(1, _progress(done=0, item=ITEM_A)), 0)
+    state = state.advance(_event(
+        2, ItemOutcome(ITEM_A, "noop", "same-a.bin", Outcome.SKIPPED, reason="noop"),
+    ), 1)
+    # The next operation's Progress may be throttled away; reliable outcomes
+    # still identify the last processed operation without claiming it is active.
+    latest = _event(
+        3, ItemOutcome(ITEM_B, "noop", "same-b.bin", Outcome.SKIPPED, reason="noop"),
+    )
+    state = state.advance(latest, 2)
+    assert state.snapshot()["last_settled_operation_id"] == ITEM_B
+    assert state.snapshot()["active_item"] is None
+    assert state.advance(_event(
+        2, ItemOutcome(ITEM_A, "noop", "same-a.bin", Outcome.SKIPPED, reason="noop"),
+    ), 3) == state
+    state = state.advance(_event(4, PhaseChanged("verify")), 4)
+    assert state.snapshot()["last_settled_operation_id"] == ITEM_B
+    state = state.advance(_record(), 5)
+    assert state.snapshot()["last_settled_operation_id"] == ITEM_B
+    assert state.snapshot()["active_item"] is None
+    assert state.advance(latest, 6) == state
+
+
+def test_gap_clears_settled_operation_cursor_until_a_new_reliable_outcome() -> None:
+    first = _event(1, ItemOutcome(ITEM_A, "noop", "same.bin", Outcome.SKIPPED, reason="noop"))
+    state = _state().advance(first, 0)
+    state = state.advance(_event(2, Gap(2)), 1)
+    assert state.snapshot()["last_settled_operation_id"] is None
+    state = state.advance(_event(3, _progress(done=0, phase="verify", item=ITEM_B)), 2)
+    assert state.snapshot()["last_settled_operation_id"] is None
+    state = state.advance(_event(
+        4, ItemOutcome(ITEM_B, "noop", "latest.bin", Outcome.SKIPPED, reason="noop"),
+    ), 3)
+    assert state.snapshot()["last_settled_operation_id"] == ITEM_B
+    assert _state().snapshot()["last_settled_operation_id"] is None
+
+
 def test_monotonic_rate_and_eta_reset_on_pause_attempt_gap_and_terminal() -> None:
     state = _state().advance(_event(1, _progress(
         done=0, item=ITEM_A, attempt=ATTEMPT_A, item_done=0, item_total=100,

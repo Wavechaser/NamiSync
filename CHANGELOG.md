@@ -342,6 +342,8 @@ explicit, reviewable and regression-backed.
 #### Refine live execution and verification feedback (2026-11-06)
 
 - Display live throughput as a rate and remaining time as ETA.
+- Follow the latest settled execution operation between files and land on the
+  final row even when the last operation was a no-op.
 
 #### Preserve Setup actions during folder validation (2026-11-04 – 2026-11-05)
 
