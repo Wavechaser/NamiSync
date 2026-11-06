@@ -7,6 +7,8 @@ browser PID against the launched Job, then binds its page session. The
 mirror equality, exit 0 and an empty Job. A foreign-Job control was refused.
 Evidence: `build/cdp-isolation-20261106/`. Nine focused tests passed; the
 tools department also reported two stale table-loading instrumentation cases.
+The corrected anchor hooks the same post-render point. All 424 applicable
+tools tests subsequently passed, with three skips.
 Keep the old driver's identity with its existing measurements.
 
 The broader background/native test split and Plan refusal/copy-performance

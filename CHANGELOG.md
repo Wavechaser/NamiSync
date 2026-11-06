@@ -52,6 +52,8 @@ owning contracts.
   pause at the user's request.
 - Bind packaged DevTools automation to a per-launch endpoint, its owned
   browser process and a unique NamiSync page before sending input.
+- Restore the table-loading probe's post-render measurement at the updated
+  Plan progress read.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 
