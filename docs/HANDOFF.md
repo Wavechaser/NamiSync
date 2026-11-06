@@ -34,3 +34,10 @@ conditions and all passed; the failing condition remains unknown. The original
 case then passed on its documented private desktop. Preserve
 `build/copy-plan-read-opt/{installed-headed,default-rerun,default-private}.xml`
 and `review-diagnosis/` for the next release gate. No validator was relaxed.
+
+A later interleaved input-desktop comparison repeated only that unmodified
+default case from detached worktrees. Baseline `b2e872e6` failed 2 of 12 and
+`6745868d` 2 of 12, plus 0 of 4 in an unbalanced first session. Every failure
+reported only `exact-receipts`. The failure therefore predates the small-file
+commits; its cause is still unknown. Receipts, preserved failure evidence and
+the repeat plugin are in `build/receipt-rate-20261106/` (`summary.json`).
