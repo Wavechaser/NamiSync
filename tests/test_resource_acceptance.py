@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import itertools
+import json
+
 import pytest
 
+from tools.performance import _cdp
 from tools.performance import validate_resources as v
 
 MIB = v.MIB
@@ -83,3 +87,48 @@ def test_missing_runs_fail_the_verdict(tmp_path):
     (tmp_path / "runs").mkdir()
     verdict = v.validate(tmp_path)
     assert verdict["verdict"] == "FAIL" and len(verdict["missing_runs"]) == len(v.EXPECTED_RUNS)
+
+
+@pytest.mark.parametrize("owner,duplicate", [(True, False), (False, False), (True, True)])
+def test_packaged_input_requires_the_profile_browser_job_and_unique_page(tmp_path, monkeypatch, owner, duplicate):
+    active = tmp_path / "webview2" / "EBWebView" / "DevToolsActivePort"
+    active.parent.mkdir(parents=True)
+    active.write_text("44321\n/devtools/browser/1b847f2d-1492-4571-9924-b208f8c66bb4", encoding="ascii")
+    page = {"type": "page", "title": "NamiSync", "url": "http://127.0.0.1:52191/index.html", "targetId": "app"}
+    targets = [{**page, "url": "http://example.test/index.html", "targetId": "other"}, page]
+    if duplicate:
+        targets.append({**page, "targetId": "duplicate"})
+    commands = []
+    closed = []
+
+    def connect(session, ws_url, timeout):
+        assert ws_url == "ws://127.0.0.1:44321/devtools/browser/1b847f2d-1492-4571-9924-b208f8c66bb4"
+        session._ids = itertools.count(1)
+        session._target_session = None
+
+    def receive(session):
+        request = commands[-1]
+        results = {
+            "SystemInfo.getProcessInfo": {"processInfo": [{"type": "browser", "id": 200}]},
+            "Target.getTargets": {"targetInfos": targets},
+            "Target.attachToTarget": {"sessionId": "page-session"},
+            "Input.insertText": {},
+        }
+        return {"id": request["id"], "sessionId": request.get("sessionId"), "result": results[request["method"]]}
+
+    monkeypatch.setattr(_cdp.Session, "__init__", connect)
+    monkeypatch.setattr(_cdp.Session, "_send", lambda _, text: commands.append(json.loads(text)))
+    monkeypatch.setattr(_cdp.Session, "_receive", receive)
+    monkeypatch.setattr(_cdp.Session, "close", lambda _: closed.append(True))
+    if owner and not duplicate:
+        session, receipt = _cdp.connect_page(tmp_path, lambda: {200}, timeout=1)
+        assert receipt == {"browser_pid": 200, "port": 44321, "target_id": "app"}
+        assert commands[-1]["params"] == {"targetId": "app", "flatten": True}
+        session.call("Input.insertText", text="only this app")
+        assert commands[-1]["sessionId"] == "page-session"
+    else:
+        reason = "ambiguous" if duplicate else "outside the launched Job"
+        with pytest.raises(RuntimeError, match=reason):
+            _cdp.connect_page(tmp_path, lambda: {200} if owner else {300}, timeout=1)
+        assert all(command["method"] != "Target.attachToTarget" for command in commands)
+        assert closed == [True]

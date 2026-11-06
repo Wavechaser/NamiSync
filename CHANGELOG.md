@@ -50,6 +50,8 @@ owning contracts.
   Show that post-close renderer memory is collectable garbage. Log the 100k plan
   refusal below the supported item target and its retry-only presentation, then
   pause at the user's request.
+- Bind packaged DevTools automation to a per-launch endpoint, its owned
+  browser process and a unique NamiSync page before sending input.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

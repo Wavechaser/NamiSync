@@ -43,7 +43,6 @@ from _headed_native import (  # noqa: E402
 from tools.performance import _cdp  # noqa: E402
 from tools.performance.bridge_event import _process_metadata  # noqa: E402
 
-PORT = 9333
 INTERVAL = 1.0
 EMERGENCY_PRIVATE_BYTES = 8 * 1024**3
 FIXED_MTIME = 1_577_836_800  # 2020-01-01T00:00:00Z
@@ -207,7 +206,7 @@ class Run:
         environment.pop("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS", None)
         if self.cdp:
             environment["WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"] = (
-                f"--disable-features=ElasticOverscroll --remote-debugging-port={PORT}")
+                "--disable-features=ElasticOverscroll --remote-debugging-port=0")
         self._log = (self.dir / "app.log").open("xb")
         self.started = time.perf_counter()
         self.process = start_headed_process(
@@ -217,8 +216,8 @@ class Run:
         self._thread.start()
         self.event("launched", cdp=self.cdp)
         if self.cdp:
-            page = _cdp.wait_for_page(PORT, 90)
-            self.session = _cdp.Session(page["webSocketDebuggerUrl"], timeout=120)
+            self.session, endpoint = _cdp.connect_page(self.profile, self.process.process_ids, timeout=90)
+            self.event("devtools-attached", **endpoint)
             self.wait_for(lambda: self.js("!!document.getElementById('setup-source-path')"), 90, "setup ready")
             self.event("ready")
 

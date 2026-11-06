@@ -69,6 +69,15 @@ the remaining names. Fixtures are registered in `full/fixtures.jsonl`,
 `retention/fixtures.jsonl` and `debug100k/fixtures.jsonl`; the 100k source
 is `F:\NamiSync-resource-scale-100k-7f8dda2c`.
 
+The current packaged collector requests a new DevTools port per launch and
+discovers its browser endpoint through the fresh profile's `DevToolsActivePort`.
+Before sending page commands it checks that the browser belongs to the launched
+Job and that exactly one local NamiSync page matches. A rebuilt-package pilot
+rejected another Job, completed a verified copy, and exited with an empty Job
+(`build/cdp-isolation-20261106/`). This changes the driver identity. Use a
+fresh collection directory for this driver; reproducing the earlier collection
+requires its recorded driver and artifacts.
+
 ## Driven package resource pilot — 2026-11-06 (continuation)
 
 A new session took over the study below with a simpler control method and
