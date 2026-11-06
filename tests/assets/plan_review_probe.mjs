@@ -151,6 +151,8 @@ class ElementFake {
 }
 
 class DocumentFake {
+  elementsCreated = 0;
+
   constructor() {
     this.activeElement = null;
     this.documentElement = new ElementFake("html", this);
@@ -195,7 +197,10 @@ class DocumentFake {
   addEventListener(name, callback) { this.listeners.set(name, [...(this.listeners.get(name) ?? []), callback]); }
   removeEventListener(name, callback) { this.listeners.set(name, (this.listeners.get(name) ?? []).filter((value) => value !== callback)); }
   dispatch(name, event = {}) { for (const callback of this.listeners.get(name) ?? []) callback(event); }
-  createElement(tagName) { return new ElementFake(tagName, this); }
+  createElement(tagName) {
+    this.elementsCreated += 1;
+    return new ElementFake(tagName, this);
+  }
   createDocumentFragment() { return new ElementFake("#fragment", this); }
 }
 
@@ -1748,6 +1753,39 @@ const liveTask = {
   },
 };
 liveTask.executionPresentation = liveTask.progressPresentation;
+// Replay the same eight copy receipts with more unchanged rows in view.
+// Count even transient elements that a final DOM-size check would miss.
+function refreshAllocations(windowSize) {
+  const rows = Array.from({length: windowSize}, (_, index) => {
+    const id = (index + 1).toString(16).padStart(32, "0");
+    return {...liveRow, operation_id: id, node_id: `node-${id}`, display: `file-${index}.bin`};
+  });
+  const review = {...liveReview, planDetail: null, window: {...liveReview.window, rows, total: windowSize}};
+  const task = {...liveTask, review, executionPresentation: null, progressPresentation: null};
+  const panel = createPlanReviewPanel(callbacks);
+  panel.render(task);
+  const allocations = [];
+  for (let index = 0; index < 8; index += 1) {
+    const next = structuredClone(review.window);
+    next.executionRefresh = true;
+    next.execution.execution_revision += 1;
+    next.rows[index].execution = {operation: executionRow.execution.operation, automatic_verification: null, evidence: null};
+    review.window = next;
+    const before = document.elementsCreated;
+    panel.render(task);
+    allocations.push(document.elementsCreated - before);
+    const rendered = findByDataset(panel.element, "nodeId", rows[index].node_id);
+    assert.equal(findByClass(rendered, "nami-plan-row__intent").dataset.lifecycle, "completed");
+  }
+  panel.dispose();
+  return allocations;
+}
+const narrowRefresh = refreshAllocations(8);
+const wideRefresh = refreshAllocations(64);
+for (const [index, count] of wideRefresh.entries()) {
+  assert.ok(count <= narrowRefresh[index],
+    `copy receipt ${index + 1} created ${count} elements with 64 rows vs ${narrowRefresh[index]} with 8`);
+}
 livePanel.render(liveTask);
 const liveElement = findByDataset(livePanel.element, "nodeId", liveRow.node_id);
 let liveIntent = findByClass(liveElement, "nami-plan-row__intent");

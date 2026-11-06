@@ -50,6 +50,9 @@ Go/Follow controls (`6c39313e`). Sync, hashing and ledger admission stay
 with their existing owners. Evidence in `build/gui-live-20261106/` covers
 the fast no-op terminal landing, constant snapshot population, installed
 execution/Inventory journeys and a real-window 200-file automatic verification.
+The ordinary Plan component probe also compares element creation for identical
+copy receipts in 8-row and 64-row windows. Packaged memory measurements remain
+with the concurrent resource study.
 
 ### Setup admission sequencing — authorized 2026-11-04
 

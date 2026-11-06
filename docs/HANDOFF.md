@@ -1,4 +1,15 @@
-# Latest session — trace the execution review receipt failure, 2026-11-06
+# Latest session — Plan table churn probe, 2026-11-07
+
+The ordinary Plan component probe now replays eight successive copy receipts
+against fresh window payloads. Each changed row must show completion, and
+adding 56 unchanged rows must not increase element creation for a receipt.
+All four focused pytest cases passed. A disposable renderer copy forced to
+repaint every row failed on receipt one (768 elements versus 96). The probe
+uses Node's fake DOM. Renderer memory and GC remain package measurements.
+
+The overnight measurement run owns the desktop. No package or desktop actions
+were taken. The outstanding installed-test diagnostic from the preceding
+session is summarized below for resumption after the study.
 
 The installed default-window execution review failed its final `exact` host
 check twice in 12 interleaved runs at `b2e872e6` and twice in 12 at
@@ -24,14 +35,7 @@ the test compares the latest window's item count with the entire fixture.
 The four prior diagnostic reruns each saw 24 rows and 24 items. An actual
 failed trace is needed to attribute the intermittent failure.
 
-All 26 nonheaded cases in the execution review module passed using pytest's
-normal temp location. Two earlier runs with workspace temp directories timed
-out during the composition test's initial Plan drain, before tracing. A
-controlled mismatch exercised the real failure writer; its sample is in
-`build/receipt-trace-unit-complete/test_execution_review_phase_ac0/completion-receipt-trace.json`.
-
-The concurrent resource and stability study owns its app and workload.
-Both headed sizes were deselected for this change. For an attended diagnostic
+For an attended diagnostic
 after the study, use an available input desktop to match the original
 reproducer. This command selects the default case and gives its evidence a
 fresh location under the system temp directory. Routine unattended journeys

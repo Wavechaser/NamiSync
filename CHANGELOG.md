@@ -25,7 +25,7 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
-#### Measure updated-package startup and prepare workload profiles (2026-11-06)
+#### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-07)
 
 - Define startup, metadata/path-size, retained-task, streamed-payload and
   repeated-close diagnostic profiles with process-role attribution, fixed idle
@@ -41,6 +41,8 @@ owning contracts.
   after renderer death. Log both in BUGS and stop until the renderer is fixed.
 - Coalesce execution progress paints and reuse unchanged committed Plan rows.
   Verify the renderer correction on the 1,000- and 10,000-file pilot workloads.
+- Replay eight copy receipts in narrow and wide Plan windows in the ordinary
+  component probe to detect element creation that scales with unchanged rows.
 - Let native script callers finish when their browser or main renderer exits.
   A controlled crash during a bridge reply now allows orderly host shutdown.
 - Update the installed shell keyboard test to reach Theme by tabbing through
