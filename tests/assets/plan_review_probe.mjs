@@ -1772,12 +1772,15 @@ liveTask.snapshot = {
   presentation: {
     value: 0, determinate: false, indeterminate: true,
     items_done: 0, items_total: 1,
-    throughput_bytes_per_second: 18014398509481984, eta_seconds: null,
+    throughput_bytes_per_second: 18014398509481984, eta_seconds: 12.4,
   },
 };
 livePanel.render(liveTask);
 assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summary"),
-  "16.00 PiB/s estimate"), "the approximate large rate renders without violating the exact byte formatter");
+  "16.00 PiB/s"), "the approximate large rate renders without violating the exact byte formatter");
+assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summary"), "13s ETA"));
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent.includes("estimate"), false,
+  "throughput and ETA omit redundant estimate suffixes");
 findAction(livePanel.element, "pause").dispatch("click");
 assert.deepEqual(calls.at(-1), ["onControl", liveReview, "pause"],
   "real composed row leaves controls dispatchable");

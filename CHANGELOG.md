@@ -339,6 +339,10 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Refine live execution and verification feedback (2026-11-06)
+
+- Display live throughput as a rate and remaining time as ETA.
+
 #### Preserve Setup actions during folder validation (2026-11-04 – 2026-11-05)
 
 - Keep Create plan and Create inventory responsive during blur-triggered folder

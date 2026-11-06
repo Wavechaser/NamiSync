@@ -2480,7 +2480,8 @@ automatic verification preserves the settled operation lifecycle.
 - ETA is `(bytes_total - bytes_done) / smoothed_rate` for this phase only.
   Unknown totals or a zero/unavailable rate give unavailable ETA; throughput can
   remain available without a total. Estimates never predict subsequent verify
-  work from execute, or survive terminal settlement. Label them as estimates.
+  work from execute, or survive terminal settlement. Display the measured rate
+  in bytes per second and the remaining duration as ETA.
 - Equal/backward sample times simply rebase sampling and make the estimate
   unavailable until another positive interval; do not reject valid progress.
   Ordinary item handoffs retain aggregate sampling, including handoff after a

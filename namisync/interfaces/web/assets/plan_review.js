@@ -1277,9 +1277,9 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         executionProgress.items_total == null ? null : `${executionProgress.items_done} of ${executionProgress.items_total} items`,
         executionProgress.determinate ? `${Math.round(executionProgress.value)}%` : null,
         executionProgress.throughput_bytes_per_second == null ? null
-          : `${formatByteCount(BigInt(Math.round(executionProgress.throughput_bytes_per_second)))}/s estimate`,
+          : `${formatByteCount(BigInt(Math.round(executionProgress.throughput_bytes_per_second)))}/s`,
         executionProgress.eta_seconds == null ? null
-          : `${Math.ceil(executionProgress.eta_seconds)}s ETA estimate`,
+          : `${Math.ceil(executionProgress.eta_seconds)}s ETA`,
       ].filter(Boolean).join(" · ")
       : null;
     const statusFacts = terminalState ? terminalStatusLine(displayExecution, executionState)
