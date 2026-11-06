@@ -1403,6 +1403,36 @@ def test_runner_success_merges_prior_pause_and_new_items_in_emission_order() -> 
     assert outcome.result.items == (prior, current)
 
 
+def test_runner_retains_130000_copies_and_verifications_in_order() -> None:
+    count = 130_000
+
+    def work(context):
+        for index in range(count):
+            context.emit(ItemOutcome(f"{index:032x}", "copy", str(index), Outcome.SUCCEEDED))
+        for index in range(count):
+            context.emit(IntegrityOutcome(
+                f"{index:032x}", str(index), "1", str(index), IntegrityResult.VERIFIED,
+            ))
+        return OperationResult(SessionState.COMPLETED)
+
+    outcome = run_session(
+        work,
+        emit=lambda body: None,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+    )
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.COMPLETED
+    assert len(outcome.result.items) == 2 * count
+    for index in range(count):
+        copy = outcome.result.items[index]
+        verify = outcome.result.items[count + index]
+        assert type(copy) is ItemOutcome and type(verify) is IntegrityOutcome
+        assert copy.item_id == verify.item_id == f"{index:032x}"
+
+
 def test_runner_rejects_an_excess_resume_accumulator_before_work() -> None:
     item = ItemOutcome("4" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
     prior = [item] * (MAX_SESSION_RESULT_ITEMS + 1)
@@ -1472,7 +1502,7 @@ def test_runner_allows_the_last_item_and_refuses_only_the_first_excess() -> None
     prior_item = ItemOutcome("4" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
     last_item = ItemOutcome("5" * 32, "copy", "last.txt", Outcome.SUCCEEDED)
     excess_item = ItemOutcome("6" * 32, "copy", "excess.txt", Outcome.SUCCEEDED)
-    prior = [prior_item] * (MAX_SESSION_RESULT_ITEMS - 1)
+    prior = [prior_item] * 299_999
     emitted: list[object] = []
 
     def work(context):

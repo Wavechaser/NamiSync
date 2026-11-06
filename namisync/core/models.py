@@ -17,6 +17,7 @@ from .pathing import (
 from .scalars import (
     MAX_DIAGNOSTIC_UTF8_BYTES,
     MAX_FILE_INDEX_128,
+    MAX_POPULATION_ROWS,
     MAX_REQUEST_ID_UTF8_BYTES,
     MAX_SAFE_INTEGER,
     file_index_128_to_text,
@@ -42,7 +43,7 @@ MAX_ROOT_ID_UTF8_BYTES = (
     + len(":refresh:".encode("utf-8"))
     + len(str(MAX_SAFE_INTEGER).encode("ascii"))
 )
-SCAN_SCOPE_ENTRY_LIMIT = 120_000
+SCAN_SCOPE_ENTRY_LIMIT = MAX_POPULATION_ROWS
 
 
 class EntryKind(StrEnum):
@@ -525,7 +526,7 @@ def _canonical_scope_paths(
     if type(paths) not in {tuple, list}:
         raise TypeError("scan scope paths must be a tuple or list")
     if len(paths) > SCAN_SCOPE_ENTRY_LIMIT:
-        raise ValueError("scan scope exceeds the 120000-entry limit")
+        raise ValueError(f"scan scope exceeds the {SCAN_SCOPE_ENTRY_LIMIT}-entry limit")
     by_key: dict[str, str] = {}
     for path in paths:
         canonical = validate_relative_path(path, allow_root=allow_root)
@@ -546,7 +547,7 @@ def _require_scope_population(
     if type(subtree_roots) not in {tuple, list}:
         raise TypeError(f"{context} subtree roots must be a tuple or list")
     if len(selected_paths) > SCAN_SCOPE_ENTRY_LIMIT - len(subtree_roots):
-        raise ValueError("scan scope exceeds the 120000-entry limit")
+        raise ValueError(f"scan scope exceeds the {SCAN_SCOPE_ENTRY_LIMIT}-entry limit")
 
 
 def _minimal_subtree_roots(roots: tuple[str, ...]) -> tuple[str, ...]:

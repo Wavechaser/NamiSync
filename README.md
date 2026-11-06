@@ -109,7 +109,7 @@ the [defense model](docs/DEFENSE.md) states the active limits and support scope.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 restart, and committed nonterminal history returns as `incomplete`. The active
-local database pair is ledger v4/history v7 at data epoch 7. Incompatible or
+local database pair is ledger v4/history v8 at data epoch 8. Incompatible or
 incomplete pairs are refused; startup never resets them automatically. Cold
 validation briefly retries observed file changes and gives retry guidance if
 activity persists. Unavailable files do not receive reset advice. For confirmed

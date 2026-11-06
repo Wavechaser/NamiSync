@@ -605,11 +605,16 @@ def test_pending_history_shape_does_not_retain_item_projection() -> None:
     )
 
 
+@pytest.mark.parametrize(("fact", "axis", "rows_limit", "bytes_limit"), [
+    (ReviewFactLimitExceeded.plan_logical_bytes(), "logical-bytes", None, (1 << 63) - 1),
+    (ReviewFactLimitExceeded.plan_domain_rows(), "rows", 150_000, None),
+    (replace(ReviewFactLimitExceeded.plan_domain_rows(), row_limit=120_000), "rows", 120_000, None),
+])
 def test_history_review_fact_columns_are_all_null_or_reconstruct_exact_truth(
-    tmp_path: Path,
+    tmp_path: Path, fact: ReviewFactLimitExceeded, axis: str,
+    rows_limit: int | None, bytes_limit: int | None,
 ) -> None:
     record = _record()
-    fact = ReviewFactLimitExceeded.plan_logical_bytes()
     with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
         store.observer(
             record,
@@ -647,9 +652,9 @@ def test_history_review_fact_columns_are_all_null_or_reconstruct_exact_truth(
         "review_fact_limit_exceeded",
         "plan",
         "domain",
-        "logical-bytes",
-        None,
-        (1 << 63) - 1,
+        axis,
+        rows_limit,
+        bytes_limit,
     )
     assert default.review_fact_limit is None
     assert refused.review_fact_limit == fact
@@ -670,6 +675,15 @@ def test_history_schema_rejects_a_partial_review_fact_group(tmp_path: Path) -> N
                           SET review_reason = 'review_fact_limit_exceeded'
                         WHERE run_token = 'run-partial-review'"""
                 )
+            for limit in (None, 119_999, 120_001, 149_999, 150_001):
+                with pytest.raises(sqlite3.IntegrityError):
+                    connection.execute(
+                        """UPDATE history_runs SET review_reason = 'review_fact_limit_exceeded',
+                                  review_tree_kind = 'plan', review_population = 'domain',
+                                  review_axis = 'rows', review_row_limit = ?
+                            WHERE run_token = 'run-partial-review'""",
+                        (limit,),
+                    )
 
 
 def test_history_terminal_recording_witnesses_round_trip_exactly(

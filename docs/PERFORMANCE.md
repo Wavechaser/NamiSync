@@ -69,6 +69,10 @@ the remaining names. Fixtures are registered in `full/fixtures.jsonl`,
 `retention/fixtures.jsonl` and `debug100k/fixtures.jsonl`; the 100k source
 is `F:\NamiSync-resource-scale-100k-7f8dda2c`.
 
+The subsequent source fix completed this 100k Plan and a separate 130k-file
+dry run. Both are planning correctness witnesses. The packaged 100k execution,
+memory and throughput point still needs a rebuilt candidate and a fresh profile.
+
 The current packaged collector requests a new DevTools port per launch and
 discovers its browser endpoint through the fresh profile's `DevToolsActivePort`.
 Before sending page commands it checks that the browser belongs to the launched

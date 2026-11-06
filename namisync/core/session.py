@@ -18,13 +18,15 @@ from namisync.core.review import (
     snapshot_review_fact_limit,
 )
 from namisync.core.scalars import (
+    MAX_POPULATION_ROWS,
     bounded_utf8_text,
     require_safe_int,
     require_signed_64,
 )
 
 SessionId = NewType("SessionId", str)
-MAX_SESSION_RESULT_ITEMS = 240_000
+# A copied file can earn both an execution result and a linked integrity result.
+MAX_SESSION_RESULT_ITEMS = 2 * MAX_POPULATION_ROWS
 MAX_OPERATION_RESULT_PHASES = 3
 
 _RESULT_ITEM_ACCUMULATOR_TYPE = "TypeError"

@@ -1,21 +1,21 @@
 # Database Module
 
 Status: schema bones, safe connection factories, ledger/repositories, inventory
-reconciliation, bounded receipt-journal history, the ledger-v4/history-v7
-data-epoch-7 reset boundary, and the semantic settings store are implemented.
+reconciliation, bounded receipt-journal history, the ledger-v4/history-v8
+data-epoch-8 reset boundary, and the semantic settings store are implemented.
 General migrations, retention, and backup/protection workflows remain
 unrealized.
 
-## Active V4/V7 Persistence Boundary
+## Active V4/V8 Persistence Boundary
 
-Status: ledger-v4/history-v7 shapes, shared data epoch 7, and the corrected
+Status: ledger-v4/history-v8 shapes, shared data epoch 8, and the corrected
 ledger contract id are active. This is a coordinated pre-release reset, not an
 in-place migration.
 
 | Database | Schema | `data_epoch` | `contract_id` |
 | --- | ---: | ---: | --- |
-| ledger | 4 | 7 | `m1-ledger-v4-event-v5-evidence-v2` |
-| history | 7 | 7 | `m1-history-v7-event-v5-recording-v1` |
+| ledger | 4 | 8 | `m1-ledger-v4-event-v5-evidence-v2` |
+| history | 8 | 8 | `m1-history-v8-event-v5-recording-v1` |
 
 Version, contract id, and epoch values are mandatory. Two absent main files
 with no sidecars remain the only fresh state. Any old or mixed pair,
@@ -26,20 +26,22 @@ NamiSync and archive or delete both database mains and all sidecars together.
 Incomplete pairs, journal presence, access failures, and observed activity
 instead receive non-destructive inspection or retry guidance; startup does not
 migrate, repair, or delete artifacts. A standalone read-only history command may
-open one exact history-v7 database without creating or requiring its ledger
+open one exact history-v8 database without creating or requiring its ledger
 peer; it still validates the history role, version, contract id, epoch, and
 complete topology through the shared nonmutating file preflight.
 
 Epoch 6 separated the corrected identity-bearing hash preimages from epoch 5's
 numeric file-index preimages under the former ledger-v4/history-v6 pair. Those
 hash-preimage facts and their frozen receipt fixtures remain historical
-evidence. The v7 reset does not reinterpret them or change core-event v5; it
-changes the history schema and contract id because the unconditional append-only
-UPDATE guard makes the duplicate-link UPDATE guard redundant.
+evidence. History v7 removed the redundant duplicate-link UPDATE guard.
+History v8 changes the SQL row-limit constraint so current refusals can record
+150,000 exactly. It also recognizes the prior 120,000 fact. The ledger keeps
+its v4 shape and contract id; both databases advance to epoch 8.
 
 Old epoch-5 pair fixtures, including their historical 5/6 mixed directions,
 remain refusal evidence. Every prior epoch-6 pair and either mixed 6/7 direction
 is also refused, including when its old markers are committed only in WAL.
+An epoch-7 pair and either mixed 7/8 direction require the same manual cutover.
 Recreating the pair discards the active app inventory, baselines, attestations,
 mappings, receipts, and audit history; archived files may be kept for separate
 inspection but are not migrated into the new pair. It does not delete or modify
@@ -48,14 +50,14 @@ rebuild current observations, not the discarded historical baselines,
 attestations, receipts, or audit trail. No application startup or reader
 performs this destructive reset automatically.
 
-Captured epoch-5 markers in the identity fixture seed synthetic historical
-ledger-v4/history-v6 refusal cases. Repeated probes, pair admission,
-initializers, and repositories refuse those old databases and historical 5/6
-mixed directions, every epoch-6 pair, and either mixed 6/7 direction. WAL-only
+Captured epoch-5 markers in the identity fixture seed synthetic refusal cases.
+Current tests exercise old markers on both roles or one role beside a current
+peer, including the epoch-6 ledger's prior contract ID. WAL-only
 old markers refuse with or without source SHM; source main/WAL/SHM/journal
 membership and bytes remain unchanged. Existing epoch-4 and journal-presence
-negatives remain independent controls. Fresh epoch-7 pairs reopen only with the
-exact ledger-v4/history-v7 markers and current history contract id. These tests
+negatives remain independent controls. Read-only refusal tests also cover both
+epoch-7 markers together and each beside a current peer. Fresh epoch-8 pairs reopen only with the
+exact ledger-v4/history-v8 markers and current history contract id. These tests
 never reset user data.
 
 Ledger v4 stores complete file identities as canonical `FileIndex128` text and
@@ -69,7 +71,7 @@ At the active cutover, ledger numeric and native-identity storage follows
 domain or codec variant. `HISTORY.md` owns canonical event-envelope
 persistence.
 
-History v7 admits only its coordinated core-event version and adds a nullable,
+History v8 admits only its coordinated core-event version and retains a nullable,
 all-or-complete review-limit terminal group. `HISTORY.md` owns its durable
 observer/finalization consequences; `namisync/core/events.py` owns the exact shared internal shape.
 Presentation-only omission state is never stored. The duplicate-link INSERT
@@ -249,10 +251,10 @@ publish a torn or partial population, and SQLite's numeric affinity cannot make
 a noncanonical saved spelling satisfy exact missing-row validation. The direct
 exact-path reader may retain one normalized lookahead key so SQL mode
 eligibility, rather than raw request cardinality, decides that boundary; the
-workflow request itself admits at most 120,000 raw selected paths. The request bound above is the database-facing admission contract. Retained graph and aggregate-byte estimates are outside this repository policy; database reads remain count-bounded and refuse before publishing a partial population.
-Repository input and output gates use core's stateless population measure and
-excess comparison only. Inventory and integrity still own separate local row
-constants and exact error/fact outcomes; raw occurrences are checked before
+workflow request itself admits at most 150,000 raw selected paths. Database
+reads refuse before publishing a partial population. Repository input and
+output gates use the core population ceiling and excess comparison.
+Inventory and integrity own their exact error/fact outcomes; raw occurrences are checked before
 normalization or deduplication, and returned rows before first-excess typed
 projection.
 
@@ -321,7 +323,7 @@ state is interface-owned and never shares this file.
 
 ## Implemented Foundation
 
-`schema.py` creates a version-4 ledger and version-7 history schema. The ledger
+`schema.py` creates a version-4 ledger and version-8 history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
 correspondence, run/operation tokens, generic annotations, and nullable hardlink
@@ -371,7 +373,7 @@ concurrent commit cannot split one selection across different database
 snapshots. Row-ID lookups are location-scoped, deduplicate in
 first-requested order, and omit malformed or missing identifiers rather than
 broadening the query. Every supplied path, row-id, and mapping-identity
-occurrence also consumes its independent 120,000-entry request wall before
+occurrence also consumes its independent 150,000-entry request wall before
 normalization, deduplication, sorting, or query construction. Thus duplicates,
 malformed ids, and absent keys within the wall preserve their established
 result semantics, while the first raw excess refuses without consuming another
@@ -382,7 +384,7 @@ integrity, and mapping-pair statements use at most the batch size plus two
 parameters, row-ID statements use at most the batch size plus one, and
 two-column identity statements use at most twice the batch size plus one.
 
-History version 7 creates a provisional `history_runs` row at the first durable
+History version 8 creates a provisional `history_runs` row at the first durable
 window and appends disposition-bound reliable receipts to `history_events`.
 Canonical and exact-duplicate rows retain their envelopes; a supported
 oversized event retains only bounded metadata, reason, and its original payload
@@ -436,15 +438,13 @@ resumable without future durable custody.
 
 The current schemas carry exact whole-contract metadata: ledger
 `contract_id=m1-ledger-v4-event-v5-evidence-v2`, history
-`contract_id=m1-history-v7-event-v5-recording-v1`, and shared `data_epoch=7`.
-Opening ledger v1-v3, history v1-v6, or a current database with a
+`contract_id=m1-history-v8-event-v5-recording-v1`, and shared `data_epoch=8`.
+Opening ledger v1-v3, history v1-v7, or a current database with a
 missing/mismatched marker raises the same actionable
 `SchemaResetRequired` family without altering the old tables or version stamp.
 During this pre-release window the user must close NamiSync and manually delete
 or archive both local database files and their sidecars before restarting.
-There is no migration into this coordinated event-v5/evidence epoch: older
-pairs either lack required facts or retain the superseded identity-bearing hash
-convention. Advancing the epoch does not reinterpret their stored receipts.
+Each archived pair retains the event and evidence constraints of its own epoch.
 `reset_databases()` is an explicit
 development/test helper that validates both exact paths before deleting their
 database/WAL/SHM/journal artifacts and recreates both current schemas; normal startup
@@ -522,7 +522,7 @@ The initial schema reserves the expensive identity/evidence bones:
   independent of plan or interface view state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
-At the active epoch-7 persistence boundary, file-index columns and repository
+At the active epoch-8 persistence boundary, file-index columns and repository
 binds use canonical `FileIndex128` text rather than SQLite numeric affinity.
 The exact identity domain and native-source rule remain owned by `BRIDGE.md`
 and `DEFENSE.md` §1.3.

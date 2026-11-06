@@ -13,7 +13,7 @@ the active count and request bounds described in `DEFENSE.md`.
 The external bridge contract is owned by `BRIDGE.md`; scalar and containment
 walls are owned by `DEFENSE.md` §1.3. Scoped recording continuation and terminal
 checkpoint cleanup are active below. Live events use v5; current persistence
-uses ledger v4/history v7 at data epoch 7, including the corrected ledger/plan
+uses ledger v4/history v8 at data epoch 8, including the corrected ledger/plan
 identity hash contract. Prior event epochs
 have no supported decode or compatibility route; public paths reject them and
 no positive compatibility fixture remains.
@@ -325,9 +325,9 @@ items into private custody and clears the externally reachable list while work
 runs, then republishes detached copies before paused settlement and at every
 exit. The logical accumulator is retained across pause attempts, so a resumed session
 that later cancels or fails includes reliable outcomes earned before the pause.
-The accumulator is an exact list and admits at most 240,000 ordered occurrences
-over that complete paused/resumed lifetime. This is the closed maximum of one
-120,000-operation execution plus its 120,000 linked-integrity outcomes. The
+The accumulator is an exact list and admits at most 300,000 ordered occurrences
+over that complete paused/resumed lifetime. This allows one execution at the
+150,000-operation hard ceiling and one linked-integrity outcome per operation. The
 runner turns a nonexact, invalid-content, or already-excess accumulator into an
 ordinary internal `FAILED` settlement before workflow entry; its exact failure
 is respectively `TypeError` plus `item accumulator must be an exact list`,
@@ -541,7 +541,7 @@ transition table, authority order, and Gap/replay rules live in
 Supported producers emit only event v5. Persisted readback requires an exact v5
 envelope, while live browser delivery requires the v5 transport marker and
 recognized tag; trusted internal projections are not decoded again. The
-coordinated ledger-v4 / history-v7 reset means no readable current database can
+coordinated ledger-v4 / history-v8 reset means no readable current database can
 contain an older event epoch. Live and durable wrappers consume the same
 admitted immutable core snapshot without treating either representation as the
 other's decoder.
@@ -686,7 +686,7 @@ path even if optional detail contains malformed Unicode: construction omits
 that whole detail to the existing empty-string representation. Valid detail is
 kept complete through 1,024 UTF-8 bytes; a larger complete value is omitted
 rather than truncated, and nontext detail is a type error. `ScanScope` admits
-at most 120,000 combined raw selected-path and subtree-root entries before it
+at most 150,000 combined raw selected-path and subtree-root entries before it
 constructs canonical dictionaries, sets, or sorted tuples; duplicate and
 covered paths retain their established canonicalization after that admission.
 

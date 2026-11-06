@@ -22,6 +22,10 @@ not support pause; execution and integrity sessions do. A fast terminal result m
 queue and release path just as a later result does. Exact source-owned record
 validation remains in `task_port.py` and its browser consumer.
 
+For a row-limit refusal, the event-v5 and browser result validators recognize
+the current 150,000 and historical 120,000 row limits. Both are JSON integers
+with a null byte limit. The displayed value comes from the terminal fact.
+
 `next_events` is the current observation operation. It identifies the task, exact session, fresh drain id, and optional positive replay sequence, returns the longest response-byte-admitted ordered prefix of zero to 64 updates and consumes only that prefix. The 8 MiB response wall may admit fewer than 64. The server wait is at most 25 seconds and the browser deadline is 30 seconds. A valid reliable envelope is at most 1,048,576 canonical UTF-8 bytes before sequence, queue, replay, subscriber, or audit mutation, so one valid queue head fits the response wall.
 
 Progress is lossy and may be coalesced; numeric sequence holes alone do not trigger recovery. An explicit `Gap` is visible, stops later batch application, and starts recovery from its first missing sequence. Transport uncertainty uses a new drain id and replay from the last accepted non-Gap sequence plus one. The browser validates the whole response before adoption: an invalid wrapper, order, lifecycle relation, Gap cursor or snapshot changes no accepted cursor and runs no callback. A matching leading Gap on recovery proves the prefix is gone; preserve it, apply the available tail, and do not loop. A terminal record stops draining without erasing a visible loss.

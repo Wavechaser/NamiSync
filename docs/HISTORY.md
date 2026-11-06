@@ -1,16 +1,16 @@
 # History Module
 
-Status: history schema v7 records exact core-event-v5 reliable receipts in
+Status: history schema v8 records exact core-event-v5 reliable receipts in
 bounded, incrementally durable windows and exposes bounded summary, item-page,
 and event-page reads. Retention, export, durable task custody, and execution
 resume remain unrealized.
 
-## Active Schema-V7 Persistence Boundary
+## Active Schema-V8 Persistence Boundary
 
 Status: active beside ledger v4. `DATABASE.md` owns the pair metadata, refusal
 boundary, and reset instructions; there is no in-place migration.
 
-History v7 accepts only the coordinated exact core-event-v5 receipts, including
+History v8 accepts only the coordinated exact core-event-v5 receipts, including
 duplicate and bounded rejection receipts; it has no mixed-version page or
 compatibility decoder. The observer stores the canonical envelope and matching
 typed projection from the same admitted snapshot. At admission it projects an
@@ -35,6 +35,9 @@ group. Writer and SQL validation reject partial or mismatched groups before
 publication; the group remains independent of audit and participates in
 authentication, repeat equality, reconstruction, bounded summary readback, and
 CLI rendering. Presentation-only omission state never enters history.
+Current producers emit 150,000 for the row axis. Event-v5, history-v8 and
+browser readers also accept the previous exact value of 120,000 and preserve
+which value the producer supplied. Other row limits are invalid.
 
 Numeric persistence follows `DEFENSE.md` §1.3 and the mapped bridge decision.
 This document owns only the durable consequence: relational values are checked
@@ -65,16 +68,18 @@ uses execute as the top-level byte domain. History records what NamiSync
 attempted and reported; reliable item receipts and the independent filesystem
 ledger, not this aggregate byte pair, own settlement and publication truth.
 
-## Schema V7 And Reset Boundary
+## Schema V8 And Reset Boundary
 
 The current exact marker is
-`contract_id=m1-history-v7-event-v5-recording-v1` with
-`HISTORY_SCHEMA_VERSION = 7` and `data_epoch=7`. The trigger reduction advances the history schema and shared epoch together.
-NamiSync refuses history v1-v6 and a v7 database with a missing or mismatched
+`contract_id=m1-history-v8-event-v5-recording-v1` with
+`HISTORY_SCHEMA_VERSION = 8` and `data_epoch=8`. The new row-limit constraint
+advances the history schema and shared epoch together.
+NamiSync refuses history v1-v7 and a v8 database with a missing or mismatched
 marker through a read-only connection. Refusal
 must not alter the database or its WAL, SHM, or journal sidecars. This remains
-a pre-release reset-only boundary: close every NamiSync process and reset the
-ledger and history databases together. Startup never deletes either file and
+a pre-release reset-only boundary: close every NamiSync process and archive the
+ledger and history databases together with all SQLite sidecars before starting
+fresh. Startup never deletes either file and
 there is no migration from an older event/evidence epoch.
 
 `history_runs` is created provisionally by the first committed window. It holds
@@ -312,7 +317,7 @@ receipts instead expose `body=None`. The coordinated reset makes a mixed-version
 page unrepresentable: old, mixed, markerless, or incomplete database pairs
 refuse before mutating commands. The payload hash remains the identity of the
 retained envelope. Core source contains only the exact v5 decoder; no
-history-v7 row or repository route can select an older event decoder.
+history-v8 row or repository route can select an older event decoder.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including

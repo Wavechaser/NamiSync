@@ -744,7 +744,7 @@ of broadening it. A stale-before run consumes the repository's stale query
 directly and fetches only exact already-completed rows needed for settlement.
 Explicit selected-path and intentional full Verify All behavior are unchanged.
 
-Standalone integrity now enforces the independent 120,000-row candidate wall
+Standalone integrity enforces the independent 150,000-row candidate wall
 while freezing that selection. Repository SQL applies fresh mode eligibility
 before the limit; stale and completed rows form one deduplicated population;
 saved resume validates every exact id and order. The first post-refresh excess

@@ -15,10 +15,10 @@ from .connections import (
 
 
 LEDGER_SCHEMA_VERSION = 4
-HISTORY_SCHEMA_VERSION = 7
-DATA_EPOCH = 7
+HISTORY_SCHEMA_VERSION = 8
+DATA_EPOCH = 8
 LEDGER_CONTRACT_ID = "m1-ledger-v4-event-v5-evidence-v2"
-HISTORY_CONTRACT_ID = "m1-history-v7-event-v5-recording-v1"
+HISTORY_CONTRACT_ID = "m1-history-v8-event-v5-recording-v1"
 MAX_HISTORY_PHASE_NAME_BYTES = 1_024
 MAX_HISTORY_ERROR_TYPE_BYTES = 1_024
 MAX_HISTORY_ERROR_MESSAGE_BYTES = 1_024
@@ -556,7 +556,8 @@ CREATE TABLE IF NOT EXISTS history_runs (
             AND (
                 (
                     review_axis = 'rows'
-                    AND review_row_limit = 120000
+                    AND review_row_limit IS NOT NULL
+                    AND review_row_limit IN (120000, 150000)
                     AND review_byte_limit IS NULL
                 )
                 OR (
@@ -1111,7 +1112,7 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
     database = "history" if history else "ledger"
     raise SchemaResetRequired(
         f"unsupported {database} schema version {version}; "
-        "NamiSync M1 requires ledger v4 and history v7 at data epoch 7. "
+        "NamiSync M1 requires ledger v4 and history v8 at data epoch 8. "
         "Close every NamiSync process, then archive or delete both database "
         "main files and all of their -wal, -shm, and -journal sidecars "
         "together before restarting."
@@ -1131,7 +1132,7 @@ def _require_contract_id(
         value = "missing" if actual is None else actual
         raise SchemaResetRequired(
             f"unsupported {database} schema contract {value}; "
-            "NamiSync M1 requires ledger v4 and history v7 at data epoch 7. "
+            "NamiSync M1 requires ledger v4 and history v8 at data epoch 8. "
             "Close every NamiSync process, then archive or delete both database "
             "main files and all of their -wal, -shm, and -journal sidecars "
             "together before restarting."
@@ -1145,7 +1146,7 @@ def _require_contract_id(
         value = "missing" if epoch is None else epoch
         raise SchemaResetRequired(
             f"unsupported {database} data epoch {value}; "
-            "NamiSync M1 requires ledger v4 and history v7 at data epoch 7. "
+            "NamiSync M1 requires ledger v4 and history v8 at data epoch 8. "
             "Close every NamiSync process, then archive or delete both database "
             "main files and all of their -wal, -shm, and -journal sidecars "
             "together before restarting."

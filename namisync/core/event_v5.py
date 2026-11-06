@@ -20,6 +20,7 @@ from .integrity import (
     RecordDisposition,
 )
 from .planning import BlockedReason, OperationKind
+from .review import REVIEW_FACT_ROW_LIMITS
 from .scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64, scalar_64_from_text
 from .session import Disposition, PhaseStatus, SessionState, validate_result_cancellation
 
@@ -624,7 +625,7 @@ def _validate_review_fact(value: object) -> None:
     row_limit = _optional_safe_int(fact["row_limit"], "review row_limit")
     byte_limit = _optional_scalar_64(fact["byte_limit"], "review byte_limit")
     if axis == "rows":
-        if row_limit != 120_000 or byte_limit is not None:
+        if row_limit not in REVIEW_FACT_ROW_LIMITS or byte_limit is not None:
             raise ValueError("row review fact has invalid limits")
         return
     if row_limit is not None or byte_limit is None:

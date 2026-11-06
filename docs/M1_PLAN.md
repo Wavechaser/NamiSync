@@ -476,23 +476,41 @@ judgment on the full schedule.
 Rebuilt-package collection, same day: a clean `48b1f708` package ran startup ×6,
 10k and 50k scale, a three-cycle smoke and a 10k retention diagnostic with no
 crash, exact mirrors and normal exits (PERFORMANCE). The 100k point was refused
-at planning. The user states the intended policy as guaranteed performance up
-to 120,000 items, with larger plans allowed but unguaranteed. The refusal and
-DEFENSE's first-excess wall list therefore conflict with intent (BUGS, Planning
-refusal presentation). The user paused collection after `scale-50k-01` to
-adjudicate that refusal. Soak, payload, idle-open and repeat scale runs remain,
+at planning. The user paused collection after `scale-50k-01` to investigate
+that refusal. Soak, payload, idle-open and repeat scale runs remain,
 and no SH-G-15 judgment is made yet.
 
 The 100k service replay confirmed a counting mismatch: 101,000 operations
 produced 202,000 distinct root-qualified observations. Preflight refused
-observation 120,001; no artifact was saved. Reconcile logical item counting
-with bounded construction and validation of the derived observations. Check
-the independent scanner, planner, retained-byte and reliable-result limits
-against the intended workload before promising an end-to-end supported size.
-The page can independently present the typed terminal refusal without opening
-a missing Plan. The 101,000-operation service dry run now succeeds after the
-preflight fix. The refusal UI and bounded above-target redesign follow. Matched copy and verification
-diagnostics are in PERFORMANCE; release budgets remain open.
+observation 120,001 and saved no artifact. Preflight now admits logical
+operations and validates the derived observations. The same dry run now saves
+a reviewable Plan. For genuine refusals the page displays the specific limit
+on release and reselection and keeps Execute disabled. BUGS records both fixes.
+
+**Above-envelope policy, 2026-11-06.** Keep the 100,000 + 20,000 item
+performance envelope. Allow a best-effort range through 150,000 logical
+items per applicable population and 300,000 ordered result occurrences per
+session. The 25% headroom is a product choice, not a measured throughput or
+memory guarantee. Each sync operation can retain its execution outcome and,
+for copied files, a verification outcome. Preserve every ordered occurrence
+through pause, resume and terminal publication. Keep independent retained-byte,
+request, event-size and concurrency checks. Producers, readers, selection,
+assignment and review projections must agree on the ceiling. Refuse the first
+excess without publishing a partial review or silently dropping a receipt.
+
+New row-refusal facts require a coordinated history format because the v7
+SQLite check encoded 120,000. Use the existing pre-release pair cutover:
+retain the ledger table shapes, validate the old/mixed pair without writing,
+and require operator archiving and a fresh pair. No automatic deletion or
+migration. Verify a Plan beyond 120,000, copy and verify outcomes beyond
+240,000 including the terminal read, new and prior pair handling, and
+first-excess cases. The policy and its persisted representation ship together.
+
+The source service saved a reviewable Plan for 130,000 files and 1,300
+directories with 262,600 root-qualified observations. The target remained
+empty. A separate session test retained all 130,000 copy and 130,000 verify
+receipts in order. These are capacity witnesses. SH-G-15 resource judgment
+and acceptance on a rebuilt release candidate remain open.
 
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |

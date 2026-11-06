@@ -67,6 +67,10 @@ owning contracts.
 - Compare copy-only executor time across matched revisions, the durable service
   and the live GUI. Attribute service recording cost and measure the effect of
   fewer event reads with a test-only intervention.
+- Keep the 120,000-item performance envelope and admit best-effort workloads
+  up to 150,000 logical rows and 300,000 ordered results. Record the exact
+  refusal in history v8. Prior database pairs require the manual archive and
+  fresh-start procedure.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

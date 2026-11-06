@@ -10,6 +10,8 @@ MAX_SIGNED_64 = (1 << 63) - 1
 MAX_FILE_INDEX_128 = (1 << 128) - 1
 MAX_PATH_UTF16_UNITS = 32_767
 MAX_DIAGNOSTIC_UTF8_BYTES = 1_024
+# Logical row ceiling for each independently admitted runtime population.
+MAX_POPULATION_ROWS = 150_000
 # Complete external command envelopes are capped at this many UTF-8 bytes.
 # A request identifier cannot occupy more bytes than its containing envelope.
 MAX_REQUEST_ID_UTF8_BYTES = 65_536

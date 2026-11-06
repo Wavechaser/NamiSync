@@ -35,6 +35,7 @@ from .pathing import (
 from .root_authority import RootAuthority
 from .session import ResultItem, RunContext
 from .scalars import (
+    MAX_POPULATION_ROWS,
     bounded_utf8_text,
     checked_add_signed_64,
     require_safe_int,
@@ -102,12 +103,12 @@ class IntegrityMode(StrEnum):
     REBASELINE = "rebaseline"
 
 
-INTEGRITY_CANDIDATE_ROW_LIMIT = 120_000
+INTEGRITY_CANDIDATE_ROW_LIMIT = MAX_POPULATION_ROWS
 INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT = 201_326_592
 MAX_VERIFIER_CHUNK_SIZE = 4 * 1024 * 1024
 INTEGRITY_CANDIDATE_ROWS_MESSAGE = (
-    "This integrity scope contains more than 120,000 items. Narrow the selected "
-    "folders, then try again."
+    f"This integrity scope contains more than {INTEGRITY_CANDIDATE_ROW_LIMIT:,} items. "
+    "Narrow the selected folders, then try again."
 )
 INTEGRITY_CANDIDATE_RETAINED_BYTES_MESSAGE = (
     "This integrity scope contains more item detail than NamiSync can retain safely. "

@@ -2854,7 +2854,7 @@ function validateReviewFactV5(value) {
     return false;
   }
   if (value.axis === "rows") {
-    return value.row_limit === 120000 && value.byte_limit === null;
+    return (value.row_limit === 120000 || value.row_limit === 150000) && value.byte_limit === null;
   }
   if (value.row_limit !== null || value.byte_limit === null) {
     return false;

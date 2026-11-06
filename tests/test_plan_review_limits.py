@@ -312,7 +312,7 @@ def test_review_limit_facts_are_exact_typed_contracts(
     ("charge", "fact"),
     (
         (
-            {"domain_rows": MAX_PLAN_REVIEW_ROWS},
+            {"domain_rows": 150_000},
             ReviewFactLimitExceeded.plan_domain_rows(),
         ),
         (
@@ -320,7 +320,7 @@ def test_review_limit_facts_are_exact_typed_contracts(
             ReviewFactLimitExceeded.plan_domain_retained_bytes(),
         ),
         (
-            {"informational_rows": MAX_PLAN_REVIEW_ROWS},
+            {"informational_rows": 150_000},
             ReviewFactLimitExceeded.plan_informational_rows(),
         ),
         (

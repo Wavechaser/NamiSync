@@ -46,8 +46,8 @@ select candidates without mutating them.
 
 General inventory, stale, missing, and row-id readers stream directly into
 `InventorySnapshot` values and stop before retaining the first returned row
-beyond 120,000. Requested paths, row ids, and mapping identities have a
-separate raw 120,000-occurrence wall applied before normalization,
+beyond 150,000. Requested paths, row ids, and mapping identities have a
+separate raw 150,000-occurrence wall applied before normalization,
 deduplication, sorting, or SQL construction. Absent or ineligible values within
 that wall can still produce an empty result; duplicates and malformed row ids
 retain their existing selection semantics, but none bypasses raw request
@@ -100,7 +100,7 @@ refreshes physical inventory but reconstructs the original ordered candidate
 set without reapplying those mode filters, so evidence drift cannot drop
 pending work and a newly appeared row cannot enter an admitted session.
 Fresh full, selected-path, and stale candidate reads apply their eligibility in
-SQL and admit at most 120,000 unique rows. The reconstruction queries only
+SQL and admit at most 150,000 unique rows. The reconstruction queries only
 location-owned row IDs in 400-ID chunks under the same repository read snapshot;
 it does not materialize the complete location and preserves the frozen order.
 Foreign or missing saved identifiers refuse rather than widening selection.
@@ -155,7 +155,7 @@ cancellation remain resumable only when every accepted outcome has matching
 continuation completion.
 
 Inventory scan scopes independently charge the combined raw selected-path and
-subtree-root population against 120,000 before canonical path dictionaries,
+subtree-root population against 150,000 before canonical path dictionaries,
 sets, sorting, or codec tuple copies. Duplicate and covered paths still
 canonicalize with their established semantics after that raw-shape charge.
 Resolution detail follows complete-value omission at 1,024 UTF-8 bytes; it is
@@ -232,7 +232,7 @@ location-scoped tree owns path and domain indexes and complete-folder membership
 Warnings use a separate identity domain, attach as ordered root leaves and enter
 none of those domain indexes or rollups. They retain their informational path
 without making it action authority. Domain and warning source occurrences each
-keep their existing 120,000-row admission; implicit ancestors do not introduce
+admit up to 150,000 rows independently; implicit ancestors do not introduce
 a new total-row wall. Scan completeness is separate workflow evidence and is
 not a pure projection admission decision.
 

@@ -141,7 +141,7 @@ reservation model and independent validator.
 Core policy admission bounds the raw shape before canonicalization. A filter
 snapshot is an exact tuple of at most 64 nonempty valid-Unicode patterns, each
 at most 1,024 UTF-8 bytes and together at most 16,384 bytes. An assignment is
-an exact tuple of at most 120,000 typed items. Destination-policy name/version
+an exact tuple of at most 150,000 typed items. Destination-policy name/version
 and optional group/conflict annotations have no narrower production grammar;
 each value is capped by the plan-domain ceiling, and their complete combined
 occurrences remain outside active publication-graph admission.

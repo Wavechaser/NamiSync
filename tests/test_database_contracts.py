@@ -369,7 +369,7 @@ def test_matching_database_pair_is_ready_and_read_only(tmp_path: Path) -> None:
     service.close()
 
 
-def test_fresh_identity_epoch_seven_pair_reopens_with_exact_current_markers(
+def test_fresh_identity_epoch_eight_pair_reopens_with_exact_current_markers(
     tmp_path: Path,
 ) -> None:
     service, ledger, history = _service(tmp_path)
@@ -378,7 +378,7 @@ def test_fresh_identity_epoch_seven_pair_reopens_with_exact_current_markers(
         assert service.validate_database_contracts().state == "ready"
         for path, version, contract_id in (
             (ledger, "4", "m1-ledger-v4-event-v5-evidence-v2"),
-            (history, "7", "m1-history-v7-event-v5-recording-v1"),
+            (history, "8", "m1-history-v8-event-v5-recording-v1"),
         ):
             with closing(sqlite3.connect(
                 path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True,
@@ -386,7 +386,7 @@ def test_fresh_identity_epoch_seven_pair_reopens_with_exact_current_markers(
                 markers = dict(connection.execute("SELECT key, value FROM schema_metadata"))
             assert markers == {
                 "schema_version": version,
-                "data_epoch": "7",
+                "data_epoch": "8",
                 "contract_id": contract_id,
             }
         before = _snapshot(ledger, history)
@@ -438,7 +438,7 @@ def _assert_epoch_pair_refused_without_mutation(
     for role in refused_roles:
         selected = ledger if role == "ledger" else history
         for _ in range(2):
-            with pytest.raises(SchemaResetRequired, match="data epoch 7"):
+            with pytest.raises(SchemaResetRequired, match="data epoch 8"):
                 file_contracts.probe_database_file_contract(selected, history=role == "history")
             assert _snapshot(ledger, history) == before
         for consumer in (
@@ -447,7 +447,7 @@ def _assert_epoch_pair_refused_without_mutation(
         ):
             with pytest.raises(
                 SchemaResetRequired,
-                match="data epoch 7.*archive or delete both database main files",
+                match="data epoch 8.*archive or delete both database main files",
             ) as raised:
                 consumer(selected)
             assert "Close every NamiSync process" in str(raised.value)
@@ -470,9 +470,25 @@ def _assert_epoch_pair_refused_without_mutation(
     assert _snapshot(ledger, history) == before
 
 
+@pytest.mark.parametrize("old_roles", [("ledger",), ("history",), ("ledger", "history")])
+def test_epoch_seven_and_mixed_pairs_are_refused_read_only(
+    tmp_path: Path, old_roles: tuple[str, ...],
+) -> None:
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    for role in old_roles:
+        markers = {"data_epoch": "7"}
+        if role == "history":
+            markers.update(schema_version="7", contract_id="m1-history-v7-event-v5-recording-v1")
+        with closing(sqlite3.connect(ledger if role == "ledger" else history)) as connection:
+            with connection:
+                _write_markers(connection, markers)
+    _assert_epoch_pair_refused_without_mutation(ledger, history, old_roles)
+
+
 @pytest.mark.parametrize(
     "shape",
-    ["both-captured-five", "ledger-five-history-six", "ledger-six-history-five", "six-old-ledger-id"],
+    ["both-captured-five", "ledger-five-history-current", "ledger-current-history-five", "six-old-ledger-id"],
 )
 def test_identity_epoch_cut_refuses_old_and_mixed_pairs_without_repair(
     tmp_path: Path, shape: str,
@@ -481,7 +497,7 @@ def test_identity_epoch_cut_refuses_old_and_mixed_pairs_without_repair(
     history = initialize_history(tmp_path / "history.db")
     refused_roles = (
         ("ledger", "history") if shape == "both-captured-five"
-        else ("history",) if shape == "ledger-six-history-five" else ("ledger",)
+        else ("history",) if shape == "ledger-current-history-five" else ("ledger",)
     )
     for role in refused_roles:
         selected = ledger if role == "ledger" else history
@@ -524,11 +540,11 @@ def test_identity_epoch_cut_sees_old_markers_committed_only_in_wal(
         )) as main_reader:
             current_markers = dict(main_reader.execute("SELECT key, value FROM schema_metadata"))
         assert current_markers == {
-            "schema_version": "4" if role == "ledger" else "7",
-            "data_epoch": "7",
+            "schema_version": "4" if role == "ledger" else "8",
+            "data_epoch": "8",
             "contract_id": (
                 "m1-ledger-v4-event-v5-evidence-v2" if role == "ledger"
-                else "m1-history-v7-event-v5-recording-v1"
+                else "m1-history-v8-event-v5-recording-v1"
             ),
         }
         _write_markers(writer, markers)

@@ -817,7 +817,7 @@ def test_filter_contract_charges_raw_shape_before_canonicalization() -> None:
 def test_scan_scope_combined_source_population_has_exact_preallocation_wall(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    exact = ("a",) * model_contracts.SCAN_SCOPE_ENTRY_LIMIT
+    exact = ("a",) * 150_000
     assert model_contracts.ScanScope.selected(exact).selected_paths == ("a",)
 
     def forbidden_normalize(*_args, **_kwargs):
@@ -828,10 +828,10 @@ def test_scan_scope_combined_source_population_has_exact_preallocation_wall(
         "normalize_relative_path",
         forbidden_normalize,
     )
-    with pytest.raises(ValueError, match="120000-entry limit"):
+    with pytest.raises(ValueError, match="150000-entry limit"):
         model_contracts.ScanScope.scoped(
-            selected_paths=("a",) * 60_000,
-            subtree_roots=("b",) * 60_001,
+            selected_paths=("a",) * 75_000,
+            subtree_roots=("b",) * 75_001,
         )
 
 

@@ -454,7 +454,7 @@ def test_integrity_candidate_reader_enforces_complete_population_row_wall(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
-    limit = INTEGRITY_CANDIDATE_ROW_LIMIT
+    limit = 150_000
     _insert_minimal_inventory_rows(
         setup.recorder.path,
         setup.source_location_id,
@@ -474,6 +474,7 @@ def test_integrity_candidate_reader_enforces_complete_population_row_wall(
                 IntegrityMode.VERIFY,
             )
             assert len(full) == limit
+            assert repository.get_inventory(setup.source_location_id) == full
             del full
 
             selected = repository.get_integrity_candidates(

@@ -97,7 +97,7 @@ here instead of reproducing these limits.
   bytes or omit the whole value. Filters accept an exact tuple of at most 64
   nonempty valid-Unicode spellings, each at most 1,024 UTF-8 bytes and together
   at most 16,384 bytes, charged before slash normalization, deduplication, or
-  sorting. One scan scope charges at most 120,000 supplied selected/subtree
+  sorting. One scan scope charges at most 150,000 supplied selected/subtree
   entries before canonical maps or sets are allocated. Root ids are nonempty
   valid Unicode and use a mechanically derived byte ceiling: the request-id
   maximum plus the UTF-8 lengths of the longest inventory namespace/suffix and
@@ -148,34 +148,27 @@ here instead of reproducing these limits.
   nanoseconds, and file identity must stay outside the scalar domain. Values are
   never clamped, wrapped, or narrowed.
 
-Across plan, inventory, and standalone integrity, 120,000 items in each
-applicable admitted population is one shared M1 performance-and-safety support
-target. M1 makes no support promise above that scale, and the target is not
-evidence that item 120,001 or any larger population would fail. The current
-independently owned first-excess behaviors remain active through M1. Specific
-time or memory acceptance still requires the evidence authority in §7; the
-shared target alone is not measurement evidence. A later milestone may adjust
-or remove the production walls only under its own ratified evidence and
-compatibility boundary.
-
-The repeated values express one domain-neutral target, and one domain-neutral
-definition is accepted but unrealized. Each active gate nevertheless retains
-its independently owned constant, count semantics, precedence, and typed first-
-excess outcome; those repeated constants do not define separate support targets.
+The M1 performance envelope is 100,000 operations plus 20,000 supporting
+items in the reference Plan workload. Plan, inventory and standalone integrity
+retain their 120,000-item support target. Larger populations may proceed on
+a best-effort basis. The hard row ceiling is 150,000 per applicable population,
+giving 25% headroom. Each owner still defines what it counts and checks its
+independent byte, input and retention limits. This policy sets capacity; time
+and memory acceptance require the evidence in §7.
 
 The following population and process-live admission walls are active now:
 
 - Planning and inventory each admit their independent raw domain and
-  informational source populations at 120,000 rows, before normalization,
+  informational source populations at 150,000 rows, before normalization,
   omission, sorting, indexing, or retained-artifact construction. The first
   excess is classified by its owning workflow and no partial artifact is
   published. Preflight derives source, target, prior-target and parent
   observations from the admitted plan operations. It validates the observations
   against that scope and charges their retained slots to the artifact byte limit.
-- A standalone-integrity candidate admits at most 120,000 unique inventory-
+- A standalone-integrity candidate admits at most 150,000 unique inventory-
   domain rows before selection retention or verifier start. This count is
   independent of any inventory-tree population.
-- One dispatcher session admits at most 240,000 ordered reliable result-item
+- One dispatcher session admits at most 300,000 ordered reliable result-item
   occurrences across its complete process-live paused/resumed lifetime. A
   repeated reference remains a retained occurrence. Admission precedes event
   publication, audit observation, and accumulator mutation; an excess producer

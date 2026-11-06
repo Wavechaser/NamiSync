@@ -394,9 +394,10 @@ def test_dormant_v5_terminal_accepts_every_task_recording_issue_reason(
     ("tree_kind", "population", "axis", "row_limit", "byte_limit"),
     (
         *(
-            (tree_kind, population, "rows", 120_000, None)
+            (tree_kind, population, "rows", limit, None)
             for tree_kind in ("plan", "inventory")
             for population in ("domain", "informational")
+            for limit in (120_000, 150_000)
         ),
         ("plan", "domain", "retained-bytes", None, "134217728"),
         ("plan", "informational", "retained-bytes", None, "201326592"),
@@ -433,6 +434,11 @@ def test_dormant_v5_accepts_every_review_limit_population_and_axis(
 @pytest.mark.parametrize(
     "fact",
     (
+        *(
+            dict(reason="review_fact_limit_exceeded", tree_kind="plan", population="domain",
+                 axis="rows", row_limit=limit, byte_limit=None)
+            for limit in (119_999, 120_001, 149_999, 150_001)
+        ),
         {
             "reason": "review_fact_limit_exceeded",
             "tree_kind": "plan",

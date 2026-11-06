@@ -19,10 +19,15 @@ from .models import (
     VolumeId,
 )
 from .scalars import (
+    MAX_POPULATION_ROWS,
     MAX_SIGNED_64,
     require_safe_int,
     require_signed_64,
 )
+
+
+# Stored review refusals carry the exact ceiling enforced when they were issued.
+REVIEW_FACT_ROW_LIMITS = (120_000, MAX_POPULATION_ROWS)
 
 
 class ReviewTreeKind(StrEnum):
@@ -77,7 +82,7 @@ class ReviewFactLimitExceeded:
         if self.byte_limit is not None:
             require_signed_64(self.byte_limit, "review byte_limit")
         if self.axis is ReviewLimitAxis.ROWS:
-            if self.row_limit != 120_000 or self.byte_limit is not None:
+            if self.row_limit not in REVIEW_FACT_ROW_LIMITS or self.byte_limit is not None:
                 raise ValueError("row review fact has invalid limits")
             return
         if self.row_limit is not None or self.byte_limit is None:
@@ -117,7 +122,7 @@ class ReviewFactLimitExceeded:
             tree_kind=ReviewTreeKind.PLAN,
             population=ReviewPopulation.DOMAIN,
             axis=ReviewLimitAxis.ROWS,
-            row_limit=120_000,
+            row_limit=MAX_POPULATION_ROWS,
             byte_limit=None,
         )
 
@@ -139,7 +144,7 @@ class ReviewFactLimitExceeded:
             tree_kind=ReviewTreeKind.PLAN,
             population=ReviewPopulation.INFORMATIONAL,
             axis=ReviewLimitAxis.ROWS,
-            row_limit=120_000,
+            row_limit=MAX_POPULATION_ROWS,
             byte_limit=None,
         )
 
@@ -186,7 +191,7 @@ def snapshot_review_fact_limit(value: object) -> ReviewFactLimitExceeded:
     )
 
 
-MAX_PLAN_REVIEW_ROWS = 120_000
+MAX_PLAN_REVIEW_ROWS = MAX_POPULATION_ROWS
 MAX_PLAN_DOMAIN_RETAINED_BYTES = 134_217_728
 MAX_PLAN_INFORMATIONAL_RETAINED_BYTES = 201_326_592
 PLAN_SOURCE_REFERENCE_BYTES = 8

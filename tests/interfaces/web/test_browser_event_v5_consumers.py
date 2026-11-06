@@ -164,6 +164,16 @@ def test_required_node_operation_result_keeps_review_fact_truth() -> None:
             "value": invalid,
         })
 
+    for limit in (119_999, 120_000, 120_001, 149_999, 150_000, 150_001):
+        row_value = deepcopy(value)
+        row_value["review_refusal"].update(axis="rows", row_limit=limit, byte_limit=None)
+        cases.append({
+            "name": f"row-limit-{limit}",
+            "kind": "result",
+            "expected": limit in (120_000, 150_000),
+            "value": row_value,
+        })
+
     _assert_node_cases(cases)
 
 
