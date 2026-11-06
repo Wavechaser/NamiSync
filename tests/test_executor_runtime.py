@@ -3525,13 +3525,13 @@ def test_runtime_target_resolution_held_root_skips_duplicate_volume_probe(
     assert root_authority_module._WINDOWS is not None
     assert executor_module._WINDOWS is not None
     walked: list[Path] = []
-    original_guard = fs._reject_reparse
+    original_guard = fs._get_attributes
 
     def guard(path):
         walked.append(path)
         return original_guard(path)
 
-    monkeypatch.setattr(fs, "_reject_reparse", guard)
+    monkeypatch.setattr(fs, "_get_attributes", guard)
     monkeypatch.setattr(
         executor_module,
         "_resolved_logical_path",
@@ -3555,15 +3555,15 @@ def test_runtime_target_resolution_held_root_skips_duplicate_volume_probe(
     ) == leaf
     assert queries == [0]
     assert walked == [leaf]
-    original_lstat = Path.lstat
+    original_attributes = executor_module._WINDOWS.get_attributes
     native_leaf = executor_module.to_extended_length_path(str(leaf))
 
-    def lstat(path, *args, **kwargs):
+    def attributes(path):
         if str(path) == native_leaf:
-            return SimpleNamespace(st_mode=stat_module.S_IFLNK, st_file_attributes=0)
-        return original_lstat(path, *args, **kwargs)
+            return 0x400
+        return original_attributes(path)
 
-    monkeypatch.setattr(Path, "lstat", lstat)
+    monkeypatch.setattr(executor_module._WINDOWS, "get_attributes", attributes)
     with pytest.raises(UnsafeExecutionPath, match="reparse points"):
         executor_runtime._resolve_target_path(
             fs, xset, target, leaf, must_exist=True

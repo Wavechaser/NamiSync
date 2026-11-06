@@ -186,6 +186,20 @@ writer's existing timeout and per-item commit behavior. See
 instrumentation boundaries and producer provenance. Recorder dependencies were
 stable; concurrent native executor edits exclude whole-executor comparisons.
 
+### Windows descendant attribute check — 2026-11-06
+
+The native executor rig copied 1,000 × 4 KiB across ten directories on F: to
+fresh F: targets, with ledgerless recording. Five fresh processes per variant
+ran in ABBAABBAAB order. Frozen source trees differed only in the Windows
+descendant walk in `native.py` against `b2e872e6`. Baseline executor wall
+time was 3.446–3.545 s, median 3.513 s. Attribute-only reads gave
+2.810–2.944 s, median 2.905 s, or 0.609 ms less per file on this fixture.
+Every sample had both roots held, 1,010 successful operations, 1,000 matching
+file hashes and publications, successful terminal/recording/audit results,
+unchanged source and scoped teardown. See `build/copy-native-opt/`:
+`samples-v2.jsonl`, `provenance.json` and `driver-v2-provenance.json`.
+Earlier v1 diagnostics lacked the complete rig-result check and are excluded.
+
 ## Driven package resource pilot — 2026-11-06 (continuation)
 
 A new session took over the study below with a simpler control method and

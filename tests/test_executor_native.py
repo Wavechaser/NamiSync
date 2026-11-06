@@ -306,22 +306,19 @@ def test_native_invocation_hold_skips_physical_resolution_and_releases(
         with pytest.raises(FileNotFoundError):
             fs.resolve(root, "missing.bin", must_exist=True)
         assert resolutions == []
-        original_lstat = Path.lstat
+        original_attributes = executor_module._WINDOWS.get_attributes
         native_child = to_extended_length_path(str(child))
 
-        def lstat(path, *args, **kwargs):
+        def attributes(path):
             if str(path) == native_child:
-                return SimpleNamespace(
-                    st_mode=stat_module.S_IFLNK,
-                    st_file_attributes=0,
-                )
-            return original_lstat(path, *args, **kwargs)
+                return 0x10 | 0x400
+            return original_attributes(path)
 
-        monkeypatch.setattr(Path, "lstat", lstat)
+        monkeypatch.setattr(executor_module._WINDOWS, "get_attributes", attributes)
         with pytest.raises(UnsafeExecutionPath, match="reparse points"):
             fs.resolve(root, "child", must_exist=True)
         assert resolutions == []
-        monkeypatch.setattr(Path, "lstat", original_lstat)
+        monkeypatch.setattr(executor_module._WINDOWS, "get_attributes", original_attributes)
         fs._reject_reparse_chain(child)
         with pytest.raises(OSError) as refused:
             root.rename(tmp_path / "renamed")
@@ -462,6 +459,15 @@ def test_held_root_reuse_requires_current_attributes_without_diagnostic_queries(
             return original_lstat(path, *args, **kwargs)
 
         monkeypatch.setattr(Path, "lstat", observe_lstat)
+        assert executor_module._WINDOWS is not None
+        original_attributes = executor_module._WINDOWS.get_attributes
+
+        def observe_attributes(path):
+            if str(path) == native_leaf:
+                descendants.append(tmp_path / "untouched.bin")
+            return original_attributes(path)
+
+        monkeypatch.setattr(executor_module._WINDOWS, "get_attributes", observe_attributes)
         if state == "ordinary":
             _reuse_held_root(fs, tmp_path, volume, selector)
             expected_descendants = (
@@ -1354,6 +1360,7 @@ def test_unsupported_preallocation_falls_back_through_real_copy(
         information_size,
     ):
         if information_class == executor_module._FILE_ALLOCATION_INFO_CLASS:
+            ctypes.set_last_error(winerror)
             return 0
         return set_file_information(
             handle,
@@ -1363,9 +1370,6 @@ def test_unsupported_preallocation_falls_back_through_real_copy(
         )
 
     monkeypatch.setattr(bindings, "set_file_information", fail_allocation_only)
-    monkeypatch.setattr(
-        executor_module.ctypes, "get_last_error", lambda: winerror
-    )
 
     result, _, recorder = _run(
         _xset(_plan(source, target, (operation,))),
@@ -2407,6 +2411,16 @@ def test_executor_descendant_walk_observes_each_component_once_in_order(
     native_components = {to_extended_length_path(str(path)): path for path in components}
     observations, dispatched = [], []
     original_stat, original_lstat = os.stat, os.lstat
+    if os.name == "nt":
+        assert executor_module._WINDOWS is not None
+        original_attributes = executor_module._WINDOWS.get_attributes
+
+        def attributes(current):
+            if str(current) in native_components:
+                observations.append((native_components[str(current)], False))
+            return original_attributes(current)
+
+        monkeypatch.setattr(executor_module._WINDOWS, "get_attributes", attributes)
 
     def stat(current, *args, **kwargs):
         if str(current) in native_components:
@@ -2419,6 +2433,10 @@ def test_executor_descendant_walk_observes_each_component_once_in_order(
         return original_lstat(current, *args, **kwargs)
 
     class _ObservedFileSystem(NativeFileSystem):
+        def _get_attributes(self, path):
+            dispatched.append(path)
+            return super()._get_attributes(path)
+
         def _reject_reparse(self, path):
             dispatched.append(path)
             return super()._reject_reparse(path)
@@ -2656,7 +2674,8 @@ def test_executor_descendant_walk_stops_only_at_first_missing_component(
     second = first / "second"
     first.mkdir()
     fs = NativeFileSystem()
-    original = fs._reject_reparse
+    method = "_get_attributes" if os.name == "nt" else "_reject_reparse"
+    original = getattr(fs, method)
     visited = []
 
     def observe(path):
@@ -2665,7 +2684,7 @@ def test_executor_descendant_walk_stops_only_at_first_missing_component(
             raise failure
         return original(path)
 
-    monkeypatch.setattr(fs, "_reject_reparse", observe)
+    monkeypatch.setattr(fs, method, observe)
     if isinstance(failure, FileNotFoundError):
         fs._validate_existing_chain(tmp_path, second / "unvisited-leaf")
     else:
@@ -2673,6 +2692,67 @@ def test_executor_descendant_walk_stops_only_at_first_missing_component(
             fs._validate_existing_chain(tmp_path, second / "unvisited-leaf")
         assert refused.value is failure
     assert visited == [first, second]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows attribute error mapping")
+@pytest.mark.parametrize("winerror", [2, 3, 5, 267, 1117])
+def test_executor_descendant_attribute_errors_keep_missing_and_failure_dispositions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    winerror: int,
+) -> None:
+    first = tmp_path / "first"
+    second = first / "second"
+    observed = []
+    assert executor_module._WINDOWS is not None
+
+    def attributes(path):
+        observed.append(str(path))
+        if str(path) == to_extended_length_path(str(second)):
+            ctypes.set_last_error(winerror)
+            return 0xFFFFFFFF
+        return 0x10
+
+    monkeypatch.setattr(executor_module._WINDOWS, "get_attributes", attributes)
+    fs = NativeFileSystem()
+    if winerror in {2, 3}:
+        fs._validate_existing_chain(tmp_path, second / "unvisited")
+    else:
+        with pytest.raises(PermissionError if winerror == 5 else OSError) as refused:
+            fs._validate_existing_chain(tmp_path, second / "unvisited")
+        assert refused.value.winerror == winerror
+    assert observed == [to_extended_length_path(str(first)), to_extended_length_path(str(second))]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows junction descendant guard")
+@pytest.mark.parametrize("held", [False, True])
+def test_executor_descendant_attributes_refuse_real_junction_without_following(
+    tmp_path: Path,
+    held: bool,
+) -> None:
+    root, sibling = _roots(tmp_path)
+    marker = sibling / "untouched.bin"
+    marker.write_bytes(b"unchanged sibling")
+    link = root / "link"
+    _require_directory_reparse(tmp_path, sibling)
+    _create_directory_reparse(link, sibling)
+    fs = NativeFileSystem()
+    volume = root_authority_module.observe_native_volume(root)
+    scoped = executor_module._InvocationRoot("target", RootAuthority(
+        str(root), volume.evidence.device_id, volume.volume_id,
+    ))
+    scope = executor_module._root_invocation_scope(fs, object(), (scoped,), None) if held else nullcontext()
+    try:
+        with scope:
+            if held:
+                fs.revalidate_root(root, expected_volume=volume.volume_id)
+                assert scoped.held
+            with pytest.raises(UnsafeExecutionPath, match="reparse points"):
+                fs.resolve(root, "link\\untouched.bin", must_exist=True)
+        assert marker.read_bytes() == b"unchanged sibling"
+        assert list(sibling.iterdir()) == [marker]
+    finally:
+        link.rmdir()
 
 
 @pytest.mark.parametrize("method", ["trash_destination", "revalidate_trash_destination"])
@@ -2684,17 +2764,18 @@ def test_executor_trash_consumers_refuse_unreadable_destination(
     destination = tmp_path / ".synctrash" / str(RUN_ID) / "parent" / "unreadable.bin"
     destination.parent.mkdir(parents=True)
     fs = NativeFileSystem()
-    original = Path.lstat
+    guard_method = "_get_attributes" if os.name == "nt" else "_reject_reparse"
+    original = getattr(fs, guard_method)
     denied = PermissionError(5, "denied")
     visited = []
 
     def observe(path, *args, **kwargs):
-        if str(path) == executor_module._win32_path(destination):
+        if path == destination:
             visited.append(path)
             raise denied
         return original(path, *args, **kwargs)
 
-    monkeypatch.setattr(Path, "lstat", observe)
+    monkeypatch.setattr(fs, guard_method, observe)
     with pytest.raises(PermissionError) as refused:
         if method == "trash_destination":
             fs.trash_destination(tmp_path, RUN_ID, "parent\\unreadable.bin")
@@ -2707,23 +2788,35 @@ def test_executor_trash_consumers_refuse_unreadable_destination(
     assert not destination.exists()
 
 
-@pytest.mark.parametrize("mode,attributes", [(stat_module.S_IFLNK, 0), (stat_module.S_IFREG, 0x400)])
+@pytest.mark.parametrize("backend", ["native", "fallback-link", "fallback-attributes"])
 def test_executor_descendant_walk_propagates_checked_leaf_reparse_refusal(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    mode: int,
-    attributes: int,
+    backend: str,
 ) -> None:
     first = tmp_path / "first"
     leaf = first / "leaf"
     native_leaf = to_extended_length_path(str(leaf))
     observed = []
 
+    if backend == "native":
+        if os.name != "nt":
+            pytest.skip("native Windows attribute observation")
+        assert executor_module._WINDOWS is not None
+
+        def attributes(path):
+            observed.append(str(path))
+            return 0x400 if str(path) == native_leaf else 0x10
+
+        monkeypatch.setattr(executor_module._WINDOWS, "get_attributes", attributes)
+    else:
+        monkeypatch.setattr(executor_module, "os", SimpleNamespace(name="posix"))
+
     def lstat(path):
         observed.append(str(path))
         return SimpleNamespace(
-            st_mode=mode if str(path) == native_leaf else stat_module.S_IFDIR,
-            st_file_attributes=attributes if str(path) == native_leaf else 0,
+            st_mode=(stat_module.S_IFLNK if backend == "fallback-link" else stat_module.S_IFREG) if str(path) == native_leaf else stat_module.S_IFDIR,
+            st_file_attributes=0x400 if backend == "fallback-attributes" and str(path) == native_leaf else 0,
         )
 
     monkeypatch.setattr(Path, "lstat", lstat)
@@ -2751,7 +2844,7 @@ def test_executor_descendant_walk_keeps_containment_conversion_and_error_order(
             Path, "lstat", lambda *_args, **_kwargs: pytest.fail("invalid path reached lstat")
         )
     else:
-        monkeypatch.setattr(fs, "_reject_reparse", observe)
+        monkeypatch.setattr(fs, "_get_attributes" if os.name == "nt" else "_reject_reparse", observe)
     if boundary == "equal-root":
         monkeypatch.setattr(executor_module, "_win32_path", lambda _path: pytest.fail("root equality reached a descendant conversion"))
         fs._validate_existing_chain(tmp_path, tmp_path)

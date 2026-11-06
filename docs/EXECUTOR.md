@@ -225,7 +225,11 @@ retain the fresh leaf-volume probe and its errors. Stored identity adaptation is
 unchanged; the stat serial comparison does not expand filesystem support.
 
 The existing descendant walk also checks each visited component, including the
-leaf, with one no-follow reparse observation. Only a missing component ends the
+leaf, with one no-follow reparse observation. On Windows this walk reads only
+attributes with `GetFileAttributesW`, refusing every reparse-point bit without
+opening the descendant for full metadata. Non-Windows paths retain `lstat`.
+Root admission, its second directory observations, leaf stats and consumers of
+full metadata retain their existing observations. Only a missing component ends the
 walk. Permission, I/O, unsafe-entry and path-conversion failures propagate rather
 than admitting an unobserved path. This applies to resolve and both owned-trash
 consumers, which retain their independent directory and volume checks.

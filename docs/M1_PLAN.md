@@ -34,6 +34,10 @@ reads after measuring delivery, and profile the actual durable recorder before
 selecting any SQL change. PERFORMANCE owns measurements. Grouped ledger commits
 and parent flushes are deferred to M2 with small-file copy batching.
 
+Native descendant checks passed the executor department, the unchanged
+30-scenario settlement oracle three times and the matched five-run comparison.
+The per-file durable recorder remains unchanged after profiling.
+
 ### Live execution and verification presentation — delivered 2026-11-06
 
 Automatic verification opens Verify using the original run's operation IDs

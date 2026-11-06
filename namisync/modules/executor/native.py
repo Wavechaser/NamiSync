@@ -1579,7 +1579,13 @@ class NativeFileSystem:
         for part in relative.parts:
             current = current / part
             try:
-                self._reject_reparse(current)
+                if os.name == "nt":
+                    if self._get_attributes(current) & _REPARSE_POINT:
+                        raise UnsafeExecutionPath(
+                            f"reparse points are not executable: {current}"
+                        )
+                else:
+                    self._reject_reparse(current)
             except UnsafeExecutionPath:
                 raise
             except FileNotFoundError:

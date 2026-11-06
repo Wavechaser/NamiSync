@@ -70,6 +70,9 @@ owning contracts.
 - Profile real durable copy transactions. Commit averaged 0.40–0.42 ms/file
   on the local fixture; suppressing repeated timeout assignments showed no
   clear improvement. Defer grouped durability to M2 with small-file batching.
+- Read Windows attributes directly when checking descendants for reparse
+  points. On the matched 1,000-file executor fixture the median fell from
+  3.51 to 2.90 ms/file.
 - Keep the 120,000-item performance envelope and admit best-effort workloads
   up to 150,000 logical rows and 300,000 ordered results. Record the exact
   refusal in history v8. Prior database pairs require the manual archive and
