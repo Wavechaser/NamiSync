@@ -153,7 +153,14 @@ admission errors.
 Confirmed holds replace repeated root-prefix admission until
 the call finishes all settlement and cleanup. Each reuse first reads current
 attributes from that same held handle and refuses reparse or placeholder state.
-This applies to the root-revalidation shortcut, the held-root anchor for a
+Within the active native invocation, root revalidation reuses exact admitted
+root and reviewed-anchor spellings without repeating their lexical conversion.
+Reviewed volume matching and the fresh held-handle query still run. Other
+spellings undergo lexical conversion and follow the existing admission policy;
+unavailable holds and adapters without native ownership retain per-access
+admission. This shared boundary serves byte-producing and non-byte
+operations alike; it retains no per-file spelling cache or filesystem observation.
+Fresh attribute validation applies to the root-revalidation shortcut, the held-root anchor for a
 descendant walk, exact-root volume reuse, and stat-derived leaf volume reuse.
 Query failure retains the existing
 consumer error policy and cannot authorize access. Diagnostic mode reporting

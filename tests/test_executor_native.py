@@ -603,6 +603,82 @@ def _held_path_scope(tmp_path: Path):
 
 
 @pytest.mark.skipif(os.name != "nt", reason="native Windows held path composition")
+@pytest.mark.parametrize("with_anchor", (False, True))
+@pytest.mark.parametrize("with_volume", (False, True))
+def test_root_revalidation_reuses_exact_spellings_but_queries_current_hold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    with_anchor: bool,
+    with_volume: bool,
+) -> None:
+    with _held_path_scope(tmp_path) as (fs, root, state):
+        authority = state.require_authority()
+        assert state.hold is not None
+        query = state.hold.require_ordinary
+        queries = []
+
+        def require_ordinary():
+            queries.append(root)
+            return query()
+
+        monkeypatch.setattr(state.hold, "require_ordinary", require_ordinary)
+        monkeypatch.setattr(
+            executor_module, "_lexical_logical_path",
+            lambda _path: pytest.fail("exact admitted spelling was normalized again"),
+        )
+        fs.revalidate_root(
+            root,
+            trusted_anchor=Path(authority.reviewed_anchor) if with_anchor else None,
+            expected_volume=authority.expected_volume_id if with_volume else None,
+        )
+        assert queries == [root]
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows root spelling fallbacks")
+@pytest.mark.parametrize("variation", ("root-alias", "anchor-alias", "wrong-anchor", "wrong-volume", "other-owner", "inactive"))
+def test_root_revalidation_spelling_reuse_preserves_fallbacks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    variation: str,
+) -> None:
+    lexical = executor_module._lexical_logical_path
+    conversions = []
+
+    def convert(path):
+        conversions.append(str(path))
+        return lexical(path)
+
+    with _held_path_scope(tmp_path) as (fs, root, state):
+        authority = state.require_authority()
+        anchor = Path(authority.reviewed_anchor)
+        volume = authority.expected_volume_id
+        captured = copy_context()
+        if variation == "root-alias":
+            root = Path(str(root)[0].swapcase() + str(root)[1:])
+        elif variation == "anchor-alias":
+            anchor = Path(str(anchor)[0].swapcase() + str(anchor)[1:])
+        elif variation == "wrong-anchor":
+            anchor = root
+        elif variation == "wrong-volume":
+            assert volume is not None
+            volume = VolumeId(volume.serial, "DIFFERENT")
+        elif variation == "other-owner":
+            fs = NativeFileSystem()
+        if variation != "inactive":
+            monkeypatch.setattr(executor_module, "_lexical_logical_path", convert)
+            expectation = (
+                pytest.raises(UnsafeExecutionPath)
+                if variation in {"wrong-anchor", "wrong-volume"} else nullcontext()
+            )
+            with expectation:
+                fs.revalidate_root(root, trusted_anchor=anchor, expected_volume=volume)
+    if variation == "inactive":
+        monkeypatch.setattr(executor_module, "_lexical_logical_path", convert)
+        captured.run(fs.revalidate_root, root, trusted_anchor=anchor, expected_volume=volume)
+    assert conversions
+
+
+@pytest.mark.skipif(os.name != "nt", reason="native Windows held path composition")
 def test_held_native_paths_match_full_conversion_without_revalidating_full_path(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

@@ -10,6 +10,44 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Shared executor root spelling consolidation — 2026-11-07
+
+The follow-up to the investigation below reuses exact admitted root and reviewed
+anchor spellings in native root revalidation. Active invocation/adapter ownership,
+reviewed evidence matching and fresh held-root attribute queries remain. The
+shared method benefits COPY, UPDATE, MOVE_UPDATE and non-byte operation guards;
+there is no operation-specific cache or descendant-walk change.
+
+Evidence lives in `build/path-consolidation-20261107/`, based on `323b5377` with
+the native source hashes recorded for each variant. The retained native COPY
+driver runs 48 fresh 4 KiB files, sixteen each at relative depths 1, 2 and 5.
+Both variants pass exact SHA-256 mirror, 48 published-evidence entries, source
+preservation, terminal/recording and owned-fixture cleanup checks. Within each COPY body,
+lexical conversions fall from 30 to 10 and held-native spelling calls fall by
+20. Fresh held-root queries remain 19, descendant attribute reads remain
+10/20/50 by depth, and six leaf stats plus three existence checks remain.
+Outer operation-entry guards are outside these counts. Instrumented timings
+are inclusive diagnostics, not an end-to-end speed comparison.
+
+A separate microbenchmark exercises real held-root revalidation with exact root,
+anchor and volume arguments, including the fresh native attribute query. Five
+paired fresh processes per variant alternate order; each uses 100 warmups and
+five batches of 1,000 calls. The median of process medians is 15.20 µs before
+(range 14.98–16.15) versus 2.09 µs after (2.08–2.20); paired savings range
+12.78–14.06 µs per call. The baseline method is loaded from its frozen source
+with unchanged collaborators. These isolated diagnostics do not establish a
+per-file or headed-session throughput gain. Raw samples, driver/source hashes
+and aggregation are retained beside the counted traces.
+
+Verification passes 203 native tests (193 baseline plus ten new exact/fallback
+cases), all 658 executor tests and the unchanged settlement oracle's 30 scenarios
+over three runs. An initial restricted-Temp setup failure is retained separately;
+the successful native and department runs use the normal Windows Temp route.
+
+The earlier verification-overlap and post-Close retention records below remain
+unchanged research context. The user defers verification pipelining to M2 and
+declines further post-task-close collection work.
+
 ## Copy paths, verification overlap and host retention — 2026-11-07
 
 This investigation inspects `2ca0b291`; it changes no product code or safety

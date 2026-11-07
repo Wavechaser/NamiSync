@@ -27,6 +27,13 @@ owning contracts.
 
 #### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-07)
 
+- Reuse exact admitted root/anchor spellings in shared executor revalidation,
+  benefiting copy and other operation guards while preserving fresh filesystem
+  checks. Native COPY traces remove twenty lexical conversions per body;
+  isolated guarded revalidation improves without an end-to-end speed claim.
+  Pass 203 native tests, 658 executor tests and the unchanged 30-scenario
+  settlement oracle over three runs. Keep verification pipelining in M2 and
+  retain post-Close investigation findings without adding further GC policy.
 - Investigate remaining COPY path work without changing freshness guards.
   Verify 48 native copies at three depths; pure-helper replay identifies about
   0.1 ms of repeated root/anchor spelling work on the depth-two fixture, with

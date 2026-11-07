@@ -584,14 +584,24 @@ class NativeFileSystem:
         trusted_anchor: Path | None = None,
         expected_volume: VolumeId | None = None,
     ) -> None:
-        logical = _lexical_logical_path(root)
+        invocation = _ROOT_INVOCATION.get()
+        scoped = (
+            self._scoped_root(root)
+            if invocation is not None and invocation.active else None
+        )
+        known_spelling = scoped is not None and scoped.native_prefix is not None
+        # The confirmed invocation already validated these exact spellings.
+        # Reuse strings only; current held attributes are still checked below.
+        logical = root if known_spelling else _lexical_logical_path(root)
         try:
-            scoped = self._scoped_root(logical)
+            if not known_spelling:
+                scoped = self._scoped_root(logical)
             reviewed = None if scoped is None else scoped.authority
             matching = reviewed is not None and (
                 expected_volume is None or expected_volume == reviewed.expected_volume_id
             ) and (
                 trusted_anchor is None
+                or (known_spelling and str(trusted_anchor) == reviewed.reviewed_anchor)
                 or str(_lexical_logical_path(trusted_anchor)) == reviewed.reviewed_anchor
             )
             if matching and scoped is not None and self._require_held_root(scoped):

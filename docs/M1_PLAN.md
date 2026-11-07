@@ -21,6 +21,27 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Shared executor root spelling — delivered 2026-11-07
+
+Apply the user's approved copy-path consolidation at the native executor's
+shared root revalidation boundary, including other operation kinds using that
+same boundary. Reuse exact admitted root/anchor spellings only; preserve active
+invocation ownership, reviewed volume/anchor matching, every fresh held-handle
+attribute query, descendant observations, fallback admission and effect ordering.
+No successful filesystem observation or task-sized path cache is added.
+
+The implementation changes executor `native.py` and focused native tests, with
+runtime operation dispatch, tracing adapters and settlement helpers as direct
+consumers. All 203 native tests, 658 executor tests and the unchanged settlement
+oracle's 30 scenarios over three runs pass. Counted native COPY work removes
+twenty lexical conversions per body without reducing filesystem queries;
+isolated revalidation timing is diagnostic, not a throughput claim. Evidence and
+independent review live under `build/path-consolidation-20261107/`;
+[PERFORMANCE](PERFORMANCE.md#shared-executor-root-spelling-consolidation--2026-11-07)
+owns the measurement limits. Descendant-walk redesign, observation
+fusion, verifier pipelining and further post-Close GC are excluded. Verification
+pipelining stays M2; the prior investigation records remain available below.
+
 ### Copy paths, verification overlap and host retention — investigated 2026-11-07
 
 Read-only investigation at `2ca0b291`; no implementation is activated.
