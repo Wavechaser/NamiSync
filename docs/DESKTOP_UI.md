@@ -1993,7 +1993,9 @@ known failure or degradation cannot remain labelled as green completion while
 retained capacity counts are still being captured.
 
 Rows present the operation result, automatic linked verification, recording
-state and current stored evidence as independent axes. Structural operation
+state and current stored evidence as independent axes. In linked Verify, a
+successful copy or update awaiting its verification result shows **Pending**
+until progress or a result is available for that row. Structural operation
 containers may carry projected rollups without pretending to be a detail
 subject. Missing means unknown, and a successful zero-byte operation is still
 reported as ran. One explicit row action may load full operation detail; the
@@ -2083,11 +2085,11 @@ Terminal detail includes a concise outcome, local completion time when known,
 and nonnegative elapsed wall time from the matching session's end and start;
 null or invalid timing is omitted, and overlapping error categories are never
 summed into an invented total.
-UI dates use local `yyyy-MM-DD HH:mm` consistently for Plan/Verify modified
-times, terminal completion and detail dates. Missing dates retain their existing
-blank, omitted or Unavailable presentation. Raw nanoseconds stay out of Inventory
-detail text; machine values and operation diagnostics remain unchanged. Sorting and elapsed time use the
-original facts rather than the minute-resolution display.
+UI dates use local `yyyy-MM-DD HH:mm` for Plan, Verify and Inventory Modified
+values, Inventory Modified hover text, terminal completion and detail dates.
+Missing dates retain their existing blank, omitted or Unavailable presentation.
+Machine values and operation diagnostics retain the original values. Sorting
+and elapsed time use those values at full precision.
 The default/minimum windows remain 1280×800/1024×640; Details preserves the
 bounded table viewport and its virtual scrolling at both sizes. The global and
 item cards wrap long text and retain separately reachable scrolling and focus.
@@ -2513,7 +2515,10 @@ automatic verification preserves the settled operation lifecycle.
   Unknown totals or a zero/unavailable rate give unavailable ETA; throughput can
   remain available without a total. Estimates never predict subsequent verify
   work from execute, or survive terminal settlement. Display the measured rate
-  in bytes per second and the remaining duration as ETA.
+  in bytes per second and append **remaining** to the estimated duration. Round
+  up to whole seconds first. Show seconds below one minute, minutes and seconds
+  through three minutes, whole minutes above three minutes, and hours and whole
+  minutes from one hour on. Omit zero units except in **0 seconds remaining**.
 - Equal/backward sample times simply rebase sampling and make the estimate
   unavailable until another positive interval; do not reject valid progress.
   Ordinary item handoffs retain aggregate sampling, including handoff after a

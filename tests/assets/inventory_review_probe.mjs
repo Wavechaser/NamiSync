@@ -375,7 +375,7 @@ assert.ok(rowElements().every((value) => value.children.length === 7));
 const real = fixture.views.default.window.rows.find((row) => row.row_id === "1");
 const realElement = rowElements().find((value) => value.dataset.nodeId === real.node_id);
 assert.equal(realElement.children[5].textContent, "2262-04-11 23:47");
-assert.equal(realElement.children[5].title, "Own modified time: 9223372036854775807 ns");
+assert.equal(realElement.children[5].title, "Own modified time: 2262-04-11 23:47");
 assert.equal(realElement.querySelector(".nami-file-state-label").textContent, "Verified");
 assert.equal(rowElements().find((value) => value.dataset.nodeId === fixture.views.default.window.rows.find((row) => row.warning !== null).node_id)
   .querySelector(".nami-file-row__notes").textContent, "read failed");

@@ -157,7 +157,14 @@ missing/extra/duplicate/identity controls preserve the original coverage.
 Evidence is retained in `build/verify-follow-20261107/`. The user authorized
 separate test and Verify Follow commits, then recovery-branch cleanup.
 
-### Live execution and verification presentation — delivered 2026-11-06–07
+### Live execution and verification presentation — delivered 2026-11-06–08
+
+The November 8 presentation polish uses human-readable remaining durations,
+shortens Pending verification to Pending and removes raw nanoseconds from
+Inventory's Modified tooltip. The absolute-date sweep found no other desktop
+format mismatch. The finite action/presence label audit found Move + update
+tight within the minimum Action track's padding but no proven visible clipping;
+its wording remains unchanged. No timestamp, progress or domain contract changes.
 
 The reviewed Follow correction adds one reliable integrity-result cursor to
 snapshot v3 and its exact validator/direct consumers. Automatic and ordinary

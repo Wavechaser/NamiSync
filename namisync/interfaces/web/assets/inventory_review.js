@@ -537,8 +537,9 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     size.title = row.warning !== null ? "" : row.is_container
       ? `Complete folder files: ${sizeText}${row.rollup.size_overflow ? " (overflow)" : row.rollup.size_partial ? " (partial)" : ""}. Own object size: ${bytes(row.size)}.`
       : `Own file size: ${sizeText}.`;
-    const modified = element("div", "nami-file-row__cell nami-plan-row__modified nami-inventory-row__modified", row.warning === null ? modifiedTime(row.mtime_ns) : "");
-    modified.title = row.mtime_ns === null ? "" : `Own modified time: ${row.mtime_ns} ns`;
+    const modifiedText = modifiedTime(row.mtime_ns);
+    const modified = element("div", "nami-file-row__cell nami-plan-row__modified nami-inventory-row__modified", row.warning === null ? modifiedText : "");
+    modified.title = row.mtime_ns === null ? "" : `Own modified time: ${modifiedText}`;
     const notesText = [row.warning?.detail, row.acknowledged ? "Acknowledged" : null,
       row.warning === null && row.is_container && row.rollup.size_overflow ? "Size overflow" : null,
       row.warning === null && row.is_container && row.rollup.size_partial ? "Partial size" : null]

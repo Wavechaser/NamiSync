@@ -1821,6 +1821,9 @@ liveTask.workPane = "verify";
 liveTask.linkedVerificationStarted = true;
 liveTask.sessionKind = "sync-execution";
 liveTask.sessionReleased = false;
+livePanel.render({...liveTask, executionPresentation: {phase:"verify", activeItem:null, itemPercent:null}});
+assert.equal(findByClass(liveElement, "nami-file-state-label").textContent, "Pending",
+  "Verify shows the pending label for a completed copy awaiting verification");
 livePanel.render(liveTask);
 liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(findByClass(livePanel.element, "nami-plan-review__list").ariaLabel, "Automatic verification");
@@ -1928,9 +1931,22 @@ liveTask.snapshot = {
   },
 };
 livePanel.render(liveTask);
-assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summary"),
-  "16.00 PiB/s"), "the approximate large rate renders without violating the exact byte formatter");
-assert.ok(findText(findByClass(livePanel.element, "nami-plan-review__status-summary"), "13s ETA"));
+const liveFacts = findByClass(livePanel.element, "nami-plan-review__status-summary");
+const liveProgressFacts = "Executing · 0 of 1 items · 16.00 PiB/s";
+for (const [etaSeconds, remaining] of [
+  [0, "0 seconds remaining"], [1, "1 second remaining"], [12.4, "13 seconds remaining"],
+  [40, "40 seconds remaining"], [59, "59 seconds remaining"], [60, "1 minute remaining"],
+  [61, "1 minute 1 second remaining"], [130, "2 minutes 10 seconds remaining"],
+  [179, "2 minutes 59 seconds remaining"], [180, "3 minutes remaining"], [181, "3 minutes remaining"],
+  [1920, "32 minutes remaining"], [3599, "59 minutes remaining"], [3600, "1 hour remaining"],
+  [3660, "1 hour 1 minute remaining"], [11700, "3 hours 15 minutes remaining"], [null, null],
+]) {
+  const snapshot = {...liveTask.snapshot,
+    presentation: {...liveTask.snapshot.presentation, eta_seconds: etaSeconds}};
+  livePanel.render({...liveTask, snapshot});
+  assert.equal(liveFacts.textContent, [liveProgressFacts, remaining].filter(Boolean).join(" · "),
+    `phase progress facts with ${etaSeconds} seconds of estimated time remaining`);
+}
 liveTask.linkedVerificationStarted = true;
 livePanel.render(liveTask);
 assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Execution phase finished");

@@ -443,7 +443,12 @@ explicit, reviewable and regression-backed.
   coverage. Fault controls reject missing, extra, duplicate and substituted
   results. Both installed execution window sizes pass; production is unchanged.
 
-#### Refine live execution and verification feedback (2026-11-06 – 2026-11-07)
+#### Refine live execution and verification feedback (2026-11-06 – 2026-11-08)
+
+- Display human-readable time remaining, using seconds for short estimates,
+  minutes above three minutes and hours from one hour. Shorten linked Verify's
+  waiting label to Pending. Format Inventory's Modified tooltip consistently
+  with local `yyyy-MM-DD HH:mm` table/detail dates.
 
 - Follow reliable completed integrity items in automatic and ordinary Verify,
   baseline and rebaseline even when fast files never appear in active progress.
@@ -452,7 +457,7 @@ explicit, reviewable and regression-backed.
   release transition. Enabled ordinary Inventory Follow can land on the final
   completed item in the same retained session and view.
 
-- Display live throughput as a rate and remaining time as ETA.
+- Display live throughput as a rate.
 - Follow the latest settled execution operation between files and land on the
   final row even when the last operation was a no-op.
 - Keep Go and Follow available between files. A click takes the user to the

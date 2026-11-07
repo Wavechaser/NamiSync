@@ -55,6 +55,18 @@ function modifiedText(mtime) {
   return formatLocalDateTime(Number(BigInt(mtime) / 1000000n)) ?? "";
 }
 
+function formatRemainingTime(estimate) {
+  const seconds = Math.ceil(estimate);
+  const duration = [
+    [Math.floor(seconds / 3600), "hour"],
+    [Math.floor(seconds / 60) % 60, "minute"],
+    [seconds <= 180 ? seconds % 60 : 0, "second"],
+  ].filter(([count]) => count > 0)
+    .map(([count, unit]) => `${count} ${unit}${count === 1 ? "" : "s"}`)
+    .join(" ");
+  return `${duration || "0 seconds"} remaining`;
+}
+
 const EXECUTION_LABELS = Object.freeze({
   succeeded: "Completed", skipped: "Skipped", failed: "Failed", canceled: "Canceled",
   deferred: "Deferred", blocked: "Blocked", verified: "Verified", baselined: "Baselined",
@@ -178,7 +190,7 @@ function rowView(row, busy, committed, progressPresentation = null, verification
     const pending = row.execution?.operation?.result === "succeeded"
       && ["copy", "update", "move_update"].includes(row.operation_kind);
     view.intentText = automatic != null ? executionLabel(automatic.result)
-      : activeProgress?.verification ? "" : pending ? "Pending verification" : "—";
+      : activeProgress?.verification ? "" : pending ? "Pending" : "—";
     view.intentKey = "";
     delete view.lifecycleKey;
     delete view.progressPercent;
@@ -1362,7 +1374,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         settledExecute || executionProgress.throughput_bytes_per_second == null ? null
           : `${formatByteCount(BigInt(Math.round(executionProgress.throughput_bytes_per_second)))}/s`,
         settledExecute || executionProgress.eta_seconds == null ? null
-          : `${Math.ceil(executionProgress.eta_seconds)}s ETA`,
+          : formatRemainingTime(executionProgress.eta_seconds),
       ].filter(Boolean).join(" · ")
       : null;
     const statusFacts = settledExecute ? executePhase == null ? "Execution phase finished. Final counts follow verification."
