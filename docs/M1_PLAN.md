@@ -21,33 +21,28 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
-### Execution allocation and GC diagnosis — 2026-11-07
+### Execution allocation and GC diagnosis — delivered 2026-11-07
 
-Reduce redundant browser allocation during execution, then probe reclamation
-on the optimized build. Start with private parsed bridge responses and drain
-snapshots; retain validation, callback isolation, terminal retry custody,
-immutable presentation and release ordering. No transport redesign, verifier
-concurrency, copy-guard change or M2 grouped recording is included.
-Owners/population: `assets/bridge.js`, its direct browser probes and BRIDGE;
-diagnostic drivers and raw samples stay in ignored `build/`, with provenance
-and results in PERFORMANCE. M1_PLAN, CHANGELOG and HANDOFF record delivery.
-Verification: affected browser/native composition checks, interfaces department,
-matched execution allocation observations and independent adversarial review.
-Commit the allocation outcome before the GC investigation closes. The latter
-compares terminal/closed memory, forced collection and, if available, the native
-WebView2 memory target with restoration and responsiveness observations. It
-authorizes diagnostic experiments only, not a production GC policy. Preserve
-the measured no-leak baseline with repeated-use memory/handle observations;
-sampled results are diagnostics, not new memory ceilings. Existing repository
-safety stops apply; preserve any failed receipt before diagnosing or retrying.
+`cbf3f090` removes redundant parsed-response and snapshot copies while retaining
+validation, terminal retry isolation and native receipt/release ordering. The
+2,224 ordinary interface tests and six installed native transport tests pass.
+Four matched 10k execution samples show 15.82% lower mean allocation, with
+higher profiled peak/closed private memory and no throughput gain. Two unprofiled
+20-cycle soaks pass all 40 mirrors/preservation checks and normal closes, with
+comparable late browser memory and handle counts.
 
-Allocation implementation is verified: 2,224 ordinary interface tests and six
-installed native transport tests pass. Four matched 10k execution samples show
-15.82% lower mean allocation, with higher profiled peak/closed private memory
-and no throughput gain. Two unprofiled 20-cycle soaks pass all mirrors and
-normal closes, with comparable late browser memory and handle counts. PERFORMANCE
-records the limits and evidence. GC/Low-target investigation remains next;
-no production reclamation policy is authorized by this diagnostic checkpoint.
+Separate unprofiled 10k/100k GC probes verify collectable retained JS heaps:
+214.87/718.12 MiB fall to 3.08/4.55 MiB, with large renderer-private reductions.
+A native Low/Normal source-host probe shows lower reported working set and GPU
+private memory without substantial JS-heap reduction during its 60-second Low
+window; Normal restoration and a second Plan succeed. All reported windows are
+complete and all three final probes pass exact mirrors, unchanged inputs and
+normal empty-Job exits.
+[PERFORMANCE](PERFORMANCE.md#post-allocation-reclamation-probes--2026-11-07)
+owns methods, evidence and limits. These are diagnostics, not new memory or
+pause ceilings, and no production GC/memory-target policy was added. Transport
+redesign, verifier concurrency and copy-guard changes remain outside this
+outcome; grouped recording/flushes and small-file batching remain M2 work.
 
 ### Small-file copy cost — delivered 2026-11-06
 

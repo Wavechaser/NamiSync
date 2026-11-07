@@ -33,6 +33,12 @@ owning contracts.
   higher, so this is not a process-memory or throughput improvement claim.
   Pass the interface and installed transport gates plus matched 20-cycle
   repeated-use checks with all 40 mirrors correct and normal exits.
+- Verify that the optimized renderer's retained heap is collectable at 10k and
+  100k files, falling to about 3–5 MiB after explicit GC. Probe the native Low
+  memory target separately: reported working set and GPU private memory fall
+  without substantial JS-heap reduction in the measured idle windows.
+  Preserve Normal restoration, responsiveness, exact mirrors and normal exits;
+  add no production reclamation policy.
 - Define startup, metadata/path-size, retained-task, streamed-payload and
   repeated-close diagnostic profiles with process-role attribution, fixed idle
   windows, correctness witnesses and explicit incomplete-run handling.

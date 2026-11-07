@@ -10,6 +10,116 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Post-allocation reclamation probes — 2026-11-07
+
+These diagnostics use the candidate committed as `cbf3f090`. They do not add a
+production GC policy. Evidence and exact producer/runtime/input identities are
+in `build/memory-probe-20261107/`; `candidate-commit-binding.json` binds the
+private candidate asset to the committed source. `gc-report.json` selects valid
+measurement windows and rejects incomplete resource samples. JS heap numbers
+are instantaneous CDP observations; process values below are final-15-second
+window medians, in MiB. No heap-allocation sampling was active in these probes.
+
+**Forced collection, 10k native packaged run.** `candidate-gc-10k` completed
+automatic verification, waited 30 seconds with the task open, collected through
+CDP, then observed another 30 seconds. It subsequently closed the task, waited
+30 seconds and collected again. Thus its closed measurements follow the earlier
+open-task GC; they are not an independent unforced-after-close experiment.
+
+| Observation | Open, unforced | After open-task GC |
+| --- | ---: | ---: |
+| JS heap | 214.87 | 3.08 |
+| Renderer private | 353.20 | 95.45 |
+| Renderer working set | 378.70 | 148.45 |
+| Whole-app private | 781.90 | 524.34 |
+
+The open collection command took 38.03 ms round trip over CDP, not an isolated
+stop-the-world pause measurement. A later closed-task collection took 12.75 ms
+and reduced renderer private from 92.89 to 78.96 MiB, with heap already near
+3 MiB. Subsequent five animation-frame response probes at each stage took
+about 1–9 ms. The exact mirror, unchanged source/bundle and normal exit with
+empty Job all passed. This demonstrates collectability for this optimized 10k
+run; it is not a claim that production should force GC or that pauses are bounded.
+
+**Forced collection, 100k native packaged run.** `candidate-gc-100k` uses the
+same sequence on 100,000 × 32 B files (101,000 planned items including folders).
+Execution and automatic verification took 847.807 seconds. Source identity
+preparation and final independent filesystem checks are outside that timing.
+Terminal JS heap was 865.57 MiB and fell naturally to 718.12 MiB during the
+30-second unforced idle. Then:
+
+| Observation | Open, unforced | After open-task GC |
+| --- | ---: | ---: |
+| JS heap | 718.12 | 4.55 |
+| Renderer private | 1,141.58 | 131.31 |
+| Renderer working set | 977.92 | 183.13 |
+| Whole-app private | 2,160.61 | 1,150.34 |
+
+The open GC command took 83.06 ms round trip. After closing the task, whole-app
+private memory was 725.06 MiB; a second collection took 21.64 ms and reduced
+it to 706.57 MiB, with renderer private falling from 133.74 to 116.25 MiB.
+Post-GC frame-response checks remained about 1–9 ms. Every reported resource
+window is complete and has a stable renderer identity. Independent source
+hash/metadata, exact target mirror, bundle hashes and normal exit/empty Job
+all passed. This closes the previously unmeasured 100k collectability question
+for this candidate/run; it does not establish repeated-100k stability, bounds
+on GC pauses, or behavior under system memory pressure.
+
+**Native memory target, separate 10k source host.** `candidate-low-10k-02`
+uses a frozen candidate source copy and the recorded pinned Python/pywebview/
+WebView2 environment, with interpreter and SDK DLL hashes in `low-runtime.json`.
+A diagnostic UI-thread wrapper reads and sets the actual native property.
+This host differs from the packaged executable: compare its own Normal/Low
+windows, not its absolute host memory with the packaged run. After execution
+it waits 60 seconds at Normal, 60 at Low, restores Normal for 15 seconds,
+closes, then creates and closes another no-op Plan. There is no forced GC.
+
+| Observation | Normal control | Low | Normal restored |
+| --- | ---: | ---: | ---: |
+| JS heap | 202.38 | 202.40 | 202.41 |
+| Renderer private | 341.41 | 337.41 | 337.61 |
+| Renderer working set | 374.64 | 0.00 | 14.06 |
+| GPU private | 189.65 | 113.21 | 113.20 |
+| Whole-app private | 770.75 | 690.28 | 690.47 |
+
+The Low renderer working-set zero is the actual OS counter in all 15 complete
+tail samples for the same live process, not an absent role or default value.
+Private memory and JS heap remain substantial. This is consistent with residency
+trimming; it does not demonstrate JS-heap reclamation. Neither disk paging nor
+the exact trimming mechanism was measured. After subsequent app activity, the
+reported working set increased:
+after the restored no-op Plan, renderer working set was 229.68 MiB. Its Plan
+took 4.036 seconds.
+
+The native target read back Normal, Low and Normal as requested. Matched
+self-stopping frame counters watched approximately the first five seconds of
+the control and each transition: maximum gaps were 50.1 ms for Normal control
+and 8.8 ms for Low and restoration, with no gaps above 50 ms in those two
+transition samples. Later frame-response probes took about 1–9 ms. This is
+limited responsiveness evidence, not a no-jank guarantee. The same-process
+sequence is not randomized; elapsed time and natural collection remain
+confounders. Microsoft's [memory-target contract](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2.memoryusagetargetlevel)
+describes a best-effort hint, continued script execution and explicit restoration
+to Normal, rather than forced collection.
+
+The first Low pilot, `candidate-low-10k`, passed its behavioral/mirror/closure
+checks but the packaged collector classified both Python redirector and real
+host as host, invalidating aggregate-sample completeness. Preserve and exclude
+those aggregate values. The corrected diagnostic wrapper distinguishes exact
+executable paths, includes both processes in totals and retains normal
+completeness checks; every reported Low/Normal/closed/replan window is complete.
+The corrected run also passed mirror, unchanged inputs and normal empty-Job exit.
+
+**Disposition.** The optimized renderer retains a large collectable heap after
+large executions. Explicit GC demonstrates reclamation at both named sizes;
+the native Low target showed lower reported working set and GPU private memory,
+with no substantial JS-heap reduction during either 60-second Low window.
+Do not use that hint as a promised JS cleanup mechanism. No production timer,
+terminal-triggered GC or memory-target policy was added. An inactive-window
+policy would need its own activity/restore
+design and memory-pressure/resume evidence; these idle diagnostics do not settle
+that user-experience tradeoff.
+
 ## Execution allocation reduction — 2026-11-07
 
 From `ade6ba75`, the browser adopts private parsed native responses without

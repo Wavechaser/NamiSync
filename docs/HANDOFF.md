@@ -1,54 +1,75 @@
-# Latest session — execution allocation and pending GC probes, 2026-11-07
+# Latest session — allocation reduction and GC findings, 2026-11-07
 
-## Allocation outcome
+## Delivered
 
-From `ade6ba75`, remove redundant copies of freshly parsed native direct and
-observed responses, freeze ordinary snapshots in place, and share the frozen
-terminal snapshot across retries. Keep terminal update copies per callback,
-initial terminal capture, shared completion-event capture, validation and
-native receipt/release ordering. BRIDGE documents ownership; the interactive
-test exercises installed pywebview's actual return parser and backing mutation.
+Allocation change committed as `cbf3f090`. The bridge adopts private parsed
+responses without redundant copies, freezes ordinary snapshots in place, and
+shares the frozen terminal snapshot across retries. Terminal update copies,
+shared completion-event capture, validation and native custody/release ordering
+remain intact. No production GC timer or memory-target policy was added.
 
-Verification: 166 focused tests, 2,224 ordinary interface tests and six installed
-native transport cases passed. An earlier department run produced setup errors
-without traceback and was interrupted; the clean fail-fast rerun passed. Its
-partial log is retained, not treated as passing evidence. Independent review
-checked source/test ownership, diagnostic methods and raw measurement receipts.
+Four matched 10k executions sampled 15.82% less allocation (512.00 → 431.00 MiB
+mean, two processes per arm). Profiled private memory was higher in the candidate;
+throughput did not improve. Unprofiled 20-cycle baseline/candidate runs passed all
+40 mirror/preservation checks and normal closes, with comparable late browser
+memory/handles. These bounded observations do not replace the earlier full
+stability schedule.
 
-Four matched 10k execution samples in B,C,C,B order show 15.82% lower mean
-sampled allocation (512.00 → 431.00 MiB). Profiled private memory was higher
-in the candidate and throughput did not improve. Two unprofiled 20-cycle soaks
-passed all 40 mirrors/preserved-version checks and normal closes, with comparable
-late browser memory/handle counts. This is a bounded regression observation,
-not a replacement for the previous full stability schedule. PERFORMANCE holds
-the tables, provenance and caveats, including the post-close memory tradeoff.
+GC diagnostics on the optimized candidate:
 
-Evidence:
+| Open task, after unforced idle → forced GC | 10k files | 100k files |
+| --- | ---: | ---: |
+| JS heap, MiB | 214.87 → 3.08 | 718.12 → 4.55 |
+| Renderer private, MiB | 353.20 → 95.45 | 1,141.58 → 131.31 |
+| CDP collection round trip | 38.03 ms | 83.06 ms |
 
-- `build/allocation-20261107/`: frozen microbench inputs/hashes, six Node
-  receipts, builder review notes, interrupted department log and passing gates.
-- `build/memory-probe-20261107/`: private baseline/candidate bundles and
-  manifests, four verified sample runs, two verified soaks, comparison JSON,
-  fixtures registry and raw profiles/resources. `baseline-sample-01` failed on
-  sandbox loopback access and is excluded; later native launches used escalation.
-- Original full-study evidence remains `build/resource-study-20261106c/`;
-  PERFORMANCE retains its baseline conclusions. No original package or fixture
-  was modified. Test targets are under the task-owned ignored build tree.
+The command durations are not isolated GC pause measurements. Closed-task GC
+measurements follow prior open-task GC. The 100k run completed execution and
+automatic verification in 847.807 seconds; source preparation and independent
+post-run checks are outside that timing.
 
-## Immediate next work
+A separate frozen source-host experiment verified native Normal → Low → Normal.
+Low left JS heap around 202 MiB and renderer private around 337 MiB, while the
+OS-reported renderer working set fell to zero in all 15 complete tail samples.
+GPU private fell about 76 MiB. This is consistent with residency trimming,
+without substantial net JS-heap reduction or proof of disk paging. Normal
+restoration and a second no-op Plan passed. No frame gap exceeded 50 ms in the
+five-second Low/restore observations; later response checks took about 1–9 ms.
+These are not latency
+guarantees. PERFORMANCE records exact windows, runtime differences and limits.
 
-After committing this allocation outcome, run the prepared candidate GC probes
-at 10k and 100k, then the separate native Low/Normal target probe. These are
-diagnostic experiments only; do not introduce a production GC policy. Preserve
-unforced memory windows, distinguish JS heap/private bytes/working set, verify
-normal restoration and a new Plan, and report responsiveness plus exact mirrors
-and normal process closure. Driver details are in the evidence README and M1_PLAN.
-The original successful allocation driver is frozen as `probe_allocation.py`;
-GC/Low progress logging has separate producer hashes.
+## Verification and evidence
 
-Commit updated findings and HANDOFF promptly at completion to avoid collision
-with another session's context update. No other session's processes were changed.
-The longstanding installed execution-review `exact-receipts` failure remains
-unresolved; `fcb72b37` added a failure trace. TESTS describes preserving that
-sidecar. Existing paired failure evidence remains `build/receipt-rate-20261106/`.
-Grouped ledger commits/parent flushes and small-file batching remain M2 work.
+- 166 focused tests, 2,224 ordinary interface tests and six installed native
+  transport cases passed. Independent adversarial reviews covered allocation
+  ownership, tests, measurement producers, raw receipts and final reporting.
+- Both native GC runs and the corrected Low run passed exact mirrors,
+  unchanged source/bundle checks and normal exit with empty owned Jobs. Every
+  reported resource window is complete. All owned apps are closed.
+- `build/allocation-20261107/` retains frozen microbench inputs/hashes, six
+  Node receipts and test evidence. An earlier department run with setup errors
+  was interrupted without traceback; the clean fail-fast rerun passed.
+- `build/memory-probe-20261107/` retains private bundles, fixtures, manifests,
+  raw runs and `allocation-comparison.json`, `soak-comparison.json`,
+  `soak-final.json` and `gc-report.json`. `candidate-commit-binding.json`
+  binds the measured asset to the commit. Drivers/versions are frozen separately.
+- Excluded measurements remain preserved: `baseline-sample-01` was denied
+  sandbox loopback access; the first Low pilot passed behavior/closure but
+  misclassified its Python redirector, invalidating aggregate completeness.
+  The corrected diagnostic wrapper changed no product or common collector.
+- Original study evidence remains `build/resource-study-20261106c/`. Its
+  package and fixtures were untouched. New targets/profile copies are registered
+  under this session's ignored build tree; no unrelated processes were changed.
+
+## Operational context
+
+The requested optimization and probing are complete. A future inactive-window
+memory policy needs an activity/restore design and pressure/resume evidence;
+Low is not a promised JS cleanup mechanism. Repeated 100k use and behavior under
+system memory pressure remain unmeasured. No such follow-up is scheduled here.
+
+The findings and HANDOFF travel together in this documentation commit. The
+longstanding installed execution-review `exact-receipts` failure remains unresolved;
+`fcb72b37` added its failure trace. TESTS describes preserving that sidecar;
+paired old failures remain in `build/receipt-rate-20261106/`. Grouped recording,
+parent flushes and small-file batching remain M2 work.
