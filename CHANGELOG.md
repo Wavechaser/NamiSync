@@ -92,6 +92,11 @@ owning contracts.
   ~2 GiB of mostly renderer garbage. Soaks, payload and the 60-minute idle stay
   flat, with exact mirrors and normal exits throughout. Assess as no leak, with
   renderer allocation the main large-task cost.
+- Measure six simultaneously open 10k tasks: 1.26 GiB against ~2.4 GiB for
+  summed single-task deltas, since renderer garbage is reused and collectable.
+  Attribute renderer allocation to bridge transport and response cloning, and
+  verification time to the antivirus first-open scan of new files. List
+  optimization candidates for their owners.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 

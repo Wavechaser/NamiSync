@@ -1,4 +1,4 @@
-# Latest sessions — full resource schedule and Plan table churn probe, 2026-11-07
+# Latest sessions — resource schedule, multi-task attribution and Plan table churn probe, 2026-11-07
 
 ## Full resource schedule on `b6a4fefe`
 
@@ -23,17 +23,37 @@ allocation is the main large-task cost. `validation.json` is the validator's
 informational run against the pilot yardsticks: 100k peak/closed, two soak
 handle slopes and one noisy soak slope exceed them.
 
+The user judged these results non-blocking for SH-G-15, with room for
+improvement.
+
+**Follow-up, 2026-11-07.** Six simultaneously open 10k tasks (four executed,
+two at Plan) peaked at 1.27 GiB, against ~2.4 GiB for summed single-task
+deltas. A forced GC left 84 MiB of live renderer state. Same-volume tasks
+serialize in admission, so a second plan waited 87 s behind an execution.
+Attribution runs found:
+
+- **Renderer:** about half of per-item allocation is pywebview's
+  script-per-response return path, and ~27% is `cloneJsonValue` copying
+  freshly parsed responses.
+- **Host:** verification spends 3.3 of 5.1 ms/file in Defender's first-open
+  scan of each new file. Copy guards take ~2.4 ms/file.
+
+PERFORMANCE ("Multiple open tasks and cost attribution") holds the tables
+and seven unscheduled optimization candidates.
+
 Still open:
 
-- SH-G-15 acceptance is the user's call.
-- Unmeasured: forced-GC collectability at 100k and 100k repetition within one
-  process.
-- Watch item: ~5 MiB/100 syncs host creep.
+- Unmeasured: forced-GC collectability at 100k, 100k repetition within one
+  process, and concurrent executions on disjoint volumes.
+- Watch item: ~5 MiB/100 syncs host creep. Host retention after close
+  follows peak use and is unattributed.
 
 Analysis scripts are in the evidence directory: `summarize.py`,
-`soak_trend.py`, `handle_roles.py` and `cpu_split.py`. Study fixtures stay on
-`F:\` and `H:\test_dir\`, registered in `full/fixtures.jsonl` there and in the
-`b` study's registries.
+`soak_trend.py`, `handle_roles.py`, `cpu_split.py`, and for the follow-up
+`multitask.py`, `multi_summary.py`, `heapsample.py`, `hosttimers.py`,
+`hostprofile.py`, `openprobe.py` and `freshopen.py`. Study fixtures stay on
+`F:\` and `H:\test_dir\`, registered in `full/fixtures.jsonl` and
+`multi/fixtures.jsonl` there and in the `b` study's registries.
 
 ## Plan table churn probe
 

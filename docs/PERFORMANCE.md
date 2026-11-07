@@ -10,6 +10,120 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Multiple open tasks and cost attribution on `b6a4fefe` — 2026-11-07
+
+Same package and host as the full schedule below. Drivers and receipts are in
+`build/resource-study-20261106c/`: `multitask.py`, `heapsample.py`,
+`hosttimers.py`, `hostprofile.py`, `openprobe.py`, `freshopen.py`; runs
+`multi/runs/multi-02` and `multi/runs/heapsample-01`; host reports in
+`profiling/`. Fixtures are registered in `multi/fixtures.jsonl`. `multi-01-aborted`
+is a stopped first attempt whose driver tracked rail rows by index (the rail lists
+newest first).
+
+**Several open tasks.** One process opened six 10k-file tasks on the shared
+10k source with fresh H: targets. Tasks 1, 3, 5 and 6 executed with
+verification; tasks 2 and 4 stayed at Plan. All four mirrors matched, both
+unexecuted targets stayed empty, and the app closed with exit 0 and an empty
+Job. Whole-app private MiB, last 30 s of each window:
+
+| State | Whole app | Host | Renderer |
+| --- | ---: | ---: | ---: |
+| Startup idle | 360 | 93 | 36 |
+| 1 executed | 735 | 175 | 315 |
+| + 1 at Plan | 766 | 200 | 327 |
+| 2 executed, 1 at Plan | 1,030 | 262 | 514 |
+| 2 executed, 2 at Plan | 1,051 | 285 | 519 |
+| 4 executed, 2 at Plan (peak 1,274) | 1,260 | 380 | 617 |
+| Same, after one forced GC | 764 | 380 | 120 |
+| All six closed | 660 | 287 | 118 |
+
+Adding single-task deltas (+465–485 MiB per executed 10k task, +77–102 per
+open Plan) predicts ~2.4 GiB for this state. The app used 1.26 GiB. Renderer
+garbage is reused across tasks rather than stacking, and one forced GC left
+84 MiB of live renderer state for all six tasks. Host memory is roughly
+additive: about +50–90 MiB per executed open task. Closing all six released
+93 MiB, and the host settled at 285 MiB. A single 10k task settled at
+162–166 MiB, so host retention follows peak use. A second same-volume task
+does not run concurrently. Task 6 spent 87 s in planning while task 5
+executed on the same F:/H: volumes. Its plan normally takes 5 s. This
+matches the dispatcher's per-volume admission queues
+([DISPATCHER](DISPATCHER.md)). Peak memory therefore reflects one execution
+at a time for same-volume tasks. Concurrent executions on disjoint volumes
+were not measured.
+
+**Renderer allocation.** `heapsample-01` ran V8 sampling heap profiling,
+including later-collected objects, from Execute to terminal on one verified
+10k task. It sampled 552 MiB, about 55 KB per item. The JS heap was 210 MiB at
+terminal and 3 MiB after one forced GC. Attribution, inclusive:
+
+- About half (~280 MiB): pywebview's return path. Each bridge response arrives as a new
+  script that embeds the JSON (`(anonymous):1`, `(V8 API)`, `(PARSER)`,
+  bytecode compiler, `_returnValuesCallbacks`, `stringify`).
+- About 27% (151 MiB): `cloneJsonValue` in `bridge.js` deep-copies responses
+  pywebview has just parsed, including through `acceptNativeResponse`.
+  Its `Object.entries` arrays account for 86 MiB of that.
+- About 3–5% each: drain arming/ID minting, Plan-window row validation, and
+  Plan row rendering.
+
+**Host execution cost.** Two source-service runs used the same 10k source with
+verification on and no GUI. Product bytes are unchanged since `b6a4fefe`.
+`hosttimers.py` wraps hot functions with nested inclusive wall timers. Its
+run took 99 s, with 55 s of process CPU. It spent 43.5 s in execute and
+52.8 s in verify. Per file:
+
+| Path | ms/file | Calls/file |
+| --- | ---: | ---: |
+| Verification candidate | 5.13 | 1 |
+| — open of the just-copied file | 3.32 | 1 |
+| — integrity recording (ledger commit) | 0.54 | 1 |
+| — unbuffered read | 0.43 | 1 |
+| Copy operation | 4.01 | 1 |
+| — `_prepare_copy` | 2.37 | 1 |
+| — path `resolve` / attribute reads / root-hold queries | 1.17 / 0.59 / 0.32 | 10 / 20 / 25 |
+| — completion (copied-record commit 0.64) | 1.25 | 1 |
+| — `finalize_temp` / file flush / parent-directory flush | 0.69 / 0.63 / 0.37 | 1 / 1 / 1 |
+
+`openprobe.py` timed raw `CreateFileW` on retained study files at 0.01–0.04 ms
+for every flag set. `freshopen.py` wrote 500 new 32 B files per variant on H:.
+Each file's first data open cost 3.3–3.7 ms, buffered or unbuffered, flushed or
+not. Its second open cost 0.03–0.07 ms, and an attributes-only open 0.01–0.02 ms.
+Defender real-time protection is on, so the 3.3 ms verification open is the
+first-access scan of a new file, not `FILE_FLAG_NO_BUFFERING`. The
+`hostprofile.py` stack sampler over-weights GIL-releasing calls. Use it for
+call paths only, not shares.
+
+**Optimization candidates** (observations, not accepted changes; owners decide):
+
+1. Renderer: stop deep-cloning freshly parsed bridge responses and
+   drain snapshots. These are private parse results; the owner must confirm no
+   aliasing contract depends on the copy. That removes up to ~27% of
+   per-item allocation. Owner: [BRIDGE](BRIDGE.md).
+2. Renderer: reduce response volume during Execute or move returns off
+   per-response script evaluation. The current path compiles every payload
+   (about half). Fewer Plan-window rereads during Follow is the smaller step; a
+   message-channel return path is the larger one.
+3. Renderer settled memory: the garbage is collectable, from 617 to 120 MiB
+   with six tasks open. The packaged WebView2 SDK (1.0.3856) exposes
+   `CoreWebView2.MemoryUsageTargetLevel`. Lowering it after terminal/close and
+   restoring it on activity could return memory without waiting for V8. Its
+   side effects need a probe.
+4. Verification on small files spends ~65% of its time in the antivirus
+   first-open scan. The open is latency-bound, so overlapping a few opens
+   could hide most of it. That needs verifier concurrency and ordering
+   review. Targets excluded from scanning avoid it, but that is a user
+   security choice.
+5. Copy guards: each copied file costs 10 path resolutions, 20 attribute reads
+   and 25 root-hold queries, ~2.4 ms in `_prepare_copy`. Coalescing repeats
+   inside one operation may save ~1 ms/file. It needs
+   [EXECUTOR](EXECUTOR.md) safety review, since repeated checks may be
+   intentional time-of-use guards.
+6. Already assigned to M2: grouped ledger commits (two commits/file,
+   ~1.2 ms) and parent-directory flushes (0.37 ms/file).
+7. Host retention after close follows peak use: 285 MiB after six 10k tasks
+   and 344–418 MiB after 100k. It is unattributed; a `tracemalloc` snapshot
+   comparison would show whether it is allocator high-water or retained
+   objects.
+
 ## Full resource schedule on `b6a4fefe` — 2026-11-06/07
 
 **Artifact.** `build/resource-study-20261106c/package/NamiSync-windows-x64-dev.zip`,

@@ -540,9 +540,12 @@ all 17 runs in about 6.5 hours of driven use. Startup ×6, 10k and 100k ×3
 soaks and a 60-minute open-task idle all produced exact mirrors and normal exits.
 PERFORMANCE records the session's assessment: no leak, flat soaks and idle,
 and memory that scales with task size. A 100k task peaks at 2.4–2.6 GiB and
-keeps ~2 GiB, mostly uncollected renderer garbage. SH-G-15 acceptance on
-measured behavior remains the user's decision. Renderer per-item allocation is
-the candidate improvement if large-task memory is judged too heavy.
+keeps ~2 GiB, mostly uncollected renderer garbage. On 2026-11-07 the user
+judged these results non-blocking for SH-G-15, with room for improvement.
+A follow-up with six open 10k tasks used 1.26 GiB, not the ~2.4 GiB
+single-task sum. PERFORMANCE ("Multiple open tasks and cost attribution")
+lists renderer, verification and copy-guard optimization candidates. None is
+scheduled.
 
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
