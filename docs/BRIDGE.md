@@ -71,7 +71,7 @@ sort or execution mutation is authorized by lookup. Execution and linked post-co
 verification share operation identity. Ordinary integrity uses the separate
 Inventory anchor below.
 The client coalesces to the latest target with bounded outstanding work and
-retires replies after manual navigation or identity/view change. This is the
+retires replies after manual navigation or session/view change. This is the
 only R0 command extension; the Plan execution-summary response also carries
 the terminal record times described above. Progress timestamp retention uses
 existing event fields. PRESENTATION and DESKTOP_UI own view/interaction semantics.
@@ -86,9 +86,12 @@ snapshot fields and reduces captured observations under the drain's existing
 task owner. Browser
 admission checks version, identity, revision, canonical scalars and renderable
 shape before one atomic adoption. It does not replay progress or attempt rules.
-The current internal snapshot version is 2. It publishes derived display facts
-and active item identity, not the reducer's raw Progress, phase-authority,
-attempt/counter copies or duplicate aggregate percentage.
+The current internal snapshot version is 3. It publishes derived display facts,
+active item identity and separate latest settled execution and integrity item
+IDs. It omits raw Progress, phase authority, attempt counters and duplicate
+aggregate percentages. Each settled ID comes from its reliable outcome in the
+admitted prefix. A new Gap clears both IDs. Terminal delivery retains them, as
+does replay of an older Gap when the reducer is already ahead.
 
 Snapshot bytes participate in the same complete response ceiling as the event
 prefix. Reduction and byte admission are staged from captured values; failure

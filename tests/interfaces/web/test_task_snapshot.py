@@ -13,6 +13,7 @@ from namisync.core.events import (
     StateChanged,
 )
 from namisync.core.execution import TaskRecordingIssue, TaskRecordingIssueReason
+from namisync.core.integrity import IntegrityOutcome, IntegrityResult
 from namisync.core.session import (
     OperationResult, PhaseResult, PhaseStatus, SessionId, SessionState,
 )
@@ -178,6 +179,42 @@ def test_gap_clears_settled_operation_cursor_until_a_new_reliable_outcome() -> N
     ), 3)
     assert state.snapshot()["last_settled_operation_id"] == ITEM_B
     assert _state().snapshot()["last_settled_operation_id"] is None
+
+
+@pytest.mark.parametrize("phase,first,latest", [
+    ("verify", ITEM_A, ITEM_B),
+    ("verify", "location:1", "location:2"),
+    ("baseline", "location:1", "location:2"),
+    ("rebaseline", "location:1", "location:2"),
+])
+def test_integrity_cursor_uses_reliable_outcomes_without_active_progress(
+    phase: str, first: str, latest: str,
+) -> None:
+    state = _state().advance(_event(
+        1, ItemOutcome(ITEM_A, "noop", "same.bin", Outcome.SKIPPED, reason="noop"),
+    ), 0)
+    state = state.advance(_event(2, PhaseChanged(phase)), 0)
+
+    def outcome(sequence: int, item: str) -> TaskEventUpdateView:
+        return _event(sequence, IntegrityOutcome(
+            item, None, None, "fast.bin", IntegrityResult.VERIFIED, phase=phase,
+        ))
+
+    state = state.advance(outcome(3, first), 0).advance(outcome(4, latest), 0)
+    snapshot = state.snapshot()
+    assert snapshot["active_item"] is None
+    assert snapshot["last_settled_operation_id"] == ITEM_A
+    assert snapshot["last_settled_integrity_item_id"] == latest
+    assert state.advance(outcome(3, first), 0) is state
+    replay_gap = state.advance(_event(3, Gap(3)), 0)
+    assert replay_gap.snapshot()["last_settled_integrity_item_id"] == latest
+    cleared = state.advance(_event(5, Gap(5)), 0)
+    assert cleared.snapshot()["last_settled_integrity_item_id"] is None
+    assert cleared.advance(outcome(6, first), 0).snapshot()["last_settled_integrity_item_id"] == first
+    terminal = state.advance(_record(), 0)
+    assert terminal.snapshot()["last_settled_integrity_item_id"] == latest
+    assert terminal.snapshot()["active_item"] is None
+    assert _state().snapshot()["last_settled_integrity_item_id"] is None
 
 
 def test_monotonic_rate_and_eta_reset_on_pause_attempt_gap_and_terminal() -> None:

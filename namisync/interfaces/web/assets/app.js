@@ -452,7 +452,8 @@ function observeLinkedVerification(task, snapshot, update) {
   const phaseChanged = update?.event?.body_type === "PhaseChanged" && update.event.body.phase === "verify";
   const verifiedPhase = snapshot?.terminal_result?.phases?.find(phase => phase.phase === "verify");
   if (task.sessionKind !== "sync-execution" || task.linkedVerificationStarted
-      || (snapshot?.phase !== "verify" && !phaseChanged && !(verifiedPhase?.items_done > 0))) return;
+      || (snapshot?.phase !== "verify" && !phaseChanged && snapshot?.last_settled_integrity_item_id == null
+        && !(verifiedPhase?.items_done > 0))) return;
   task.linkedVerificationStarted = true;
   if (task.review !== null) interruptPlanNavigation(task.review);
   task.workPane = "verify";
@@ -592,21 +593,22 @@ function tableReadOwner(task, inventory = false) {
   return task[key];
 }
 
-function inventoryActiveItem(task) {
-  const item = task.progressPresentation?.activeItem;
-  if ((task.snapshot?.session_state ?? task.sessionState) !== "active"
-      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)) return null;
+function inventoryFollowTarget(task, explicit = false) {
+  if (!["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+      || (explicit && (task.snapshot?.session_state ?? task.sessionState) !== "active")) return null;
+  const presentation = task.progressPresentation;
+  const item = presentation?.activeItem;
   if (item !== null && item !== undefined) return item.item_type === "integrity" ? item.item_id : null;
-  const follow = task.inventoryReview?.follow;
-  return follow?.sessionId === task.sessionId ? follow.targetId ?? null : null;
+  return presentation?.lastSettledIntegrityItemId ?? null;
 }
 
 function planFollowTarget(task) {
   const presentation = task.executionPresentation;
   const active = presentation?.activeItem?.item_id ?? null;
   if (task.workPane === "verify") return task.sessionKind === "sync-execution"
-    && task.sessionState === "active" && presentation?.phase === "verify"
-    ? active ?? presentation.verificationFollowItemId ?? null : null;
+    && task.sessionState === "active"
+    ? (presentation?.phase === "verify" && presentation.activeItem?.item_type === "operation" ? active : null)
+      ?? presentation?.lastSettledIntegrityItemId ?? null : null;
   return (presentation?.phase !== "verify" ? active : null)
     ?? presentation?.lastSettledOperationId ?? null;
 }
@@ -616,11 +618,10 @@ function inventoryFollow(task, review) {
     review.follow = {sessionId: task.sessionId,
       enabled: ["baseline", "verify", "rebaseline"].includes(task.sessionKind) && followEligible(review),
       eligible: followEligible(review), hasTarget: false, generation: 0,
-      targetId: null, anchorKey: null, anchorIndex: null, scrollOffset: null, message: null};
+      anchorKey: null, anchorIndex: null, scrollOffset: null, message: null};
   }
   review.follow.eligible = followEligible(review);
-  review.follow.targetId = inventoryActiveItem(task);
-  review.follow.hasTarget = review.follow.targetId !== null;
+  review.follow.hasTarget = inventoryFollowTarget(task, true) !== null;
   return review.follow;
 }
 
@@ -628,7 +629,8 @@ function followInventory(task) {
   if (task.inventoryReview === null) return;
   const review = task.inventoryReview;
   const follow = inventoryFollow(task, review);
-  if (!follow.hasTarget) cancelReviewFollow(review);
+  if (!follow.hasTarget && review.followRead?.explicit) cancelReviewFollow(review);
+  if (inventoryFollowTarget(task) === null) cancelReviewFollow(review);
   else if (follow.enabled && follow.eligible) queueReviewFollow(review, INVENTORY_FOLLOW);
 }
 
@@ -652,7 +654,7 @@ const PLAN_FOLLOW = Object.freeze({
 const INVENTORY_FOLLOW = Object.freeze({
   inventory: true, subject: "item", owner: currentInventoryTask,
   loading: task => task.inventoryLoading,
-  session: task => task.sessionId, target: inventoryActiveItem,
+  session: task => task.sessionId, target: inventoryFollowTarget,
   anchor: getInventoryItemAnchor, window: readInventoryWindow,
   adopt(review, window) {
     const summary = inventoryWindowSummary(review, window, review.summary.view_revision);
@@ -675,8 +677,8 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
   if (task === null || task.closePending || adapter.loading(task) || review.pending !== null
       || adapter.session(task) === null || review.follow == null) return;
   review.follow.eligible = followEligible(review);
-  const operationId = adapter.target(task);
-  review.follow.hasTarget = operationId !== null;
+  const operationId = adapter.target(task, explicit);
+  review.follow.hasTarget = adapter.target(task, true) !== null;
   if (operationId === null) {
     cancelReviewFollow(review);
     review.follow.message = `No ${adapter.subject} is active.`;
@@ -685,7 +687,7 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
     return;
   }
   if (enableFollow) review.follow.enabled = review.follow.eligible;
-  if (!explicit && review.followRead?.explicit) return;
+  if (!explicit && review.followRead?.generation === review.follow.generation) return;
   const sessionId = adapter.session(task);
   const viewRevision = review.summary.view_revision;
   const actionRevision = review.actionRevision;
@@ -697,11 +699,15 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
       && review.follow.anchorIndex >= review.window.offset
       && review.follow.anchorIndex < review.window.offset + review.window.rows.length
       && (!explicit || navigationWindowOffset(review.follow.anchorIndex) >= review.window.offset)) {
-    if (explicit) { review.follow.scrollOffset = navigationWindowOffset(review.follow.anchorIndex); renderTasks(); }
+    if (explicit) {
+      cancelReviewFollow(review);
+      review.follow.scrollOffset = navigationWindowOffset(review.follow.anchorIndex);
+      renderTasks();
+    }
     return;
   }
   if (review.followRead?.key === anchorKey && review.followRead.generation === followGeneration
-      && (!explicit || review.followRead.explicit)) return;
+      && review.followRead.explicit) return;
   review.followRead?.job.cancel();
   const owner = tableReadOwner(task, adapter.inventory);
   const release = owner.beginForeground();
@@ -711,7 +717,7 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
     && task.paneRevision === paneRevision
     && adapter.session(task) === sessionId && review.summary.view_revision === viewRevision
     && review.actionRevision === actionRevision && review.follow.generation === followGeneration
-    && (explicit || adapter.target(task) === operationId);
+    && (explicit || (review.follow.enabled && review.follow.eligible && adapter.target(task) !== null));
   const job = owner.request(current, async (stillCurrent) => {
     const anchor = review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
       ? {disposition: "current", index: review.follow.anchorIndex}
@@ -724,9 +730,10 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
   const request = {key: anchorKey, generation: followGeneration, explicit, job};
   review.followRead = request;
   void job.promise.then((result) => {
-    if (result === null || !current()) return;
+    if (result === null || review.followRead !== request || !current()) return;
     const {anchor, window} = result;
     if (window === null) {
+      if (!explicit && adapter.target(task) !== operationId) return;
       review.follow.message = `The current ${adapter.subject} is excluded from this view.`;
       review.message = review.follow.message;
     } else {
@@ -741,7 +748,7 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
     }
     renderTasks();
   }).catch(() => {
-    if (current()) {
+    if (review.followRead === request && current() && (explicit || adapter.target(task) === operationId)) {
       review.follow.message = `Current ${adapter.subject} navigation is unavailable. Try again.`;
       review.message = review.follow.message;
       renderTasks();
@@ -749,9 +756,13 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
   }).finally(() => {
     const owned = review.followRead === request;
     if (owned) review.followRead = null;
+    // Let one automatic jump land, then read the latest target if it advanced.
+    // A pending Plan paint already owns that next opportunity.
+    const next = adapter.target(task);
+    if (owned && current() && review.follow.enabled && review.follow.eligible
+        && next !== null && next !== operationId
+        && (explicit || adapter.inventory || task.executionPaintTimer == null)) queueReviewFollow(review, adapter);
     release();
-    if (owned && explicit && review.follow.enabled && review.follow.eligible
-        && adapter.target(task) !== null && adapter.target(task) !== operationId) queueReviewFollow(review, adapter);
   });
 }
 
@@ -984,7 +995,6 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (review?.follow != null) {
       cancelReviewFollow(review);
       review.follow.hasTarget = false;
-      review.follow.targetId = null;
       review.follow.anchorKey = null;
       review.follow.anchorIndex = null;
       review.follow.scrollOffset = null;
@@ -1006,9 +1016,6 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
   if (snapshot !== null) {
     if (newGap) invalidateInventoryReview(task);
     observeLinkedVerification(task, snapshot, update);
-    const verificationFollowItemId = execution && snapshot.session_state === "active"
-      && snapshot.phase === "verify"
-      ? snapshot.active_item?.item_id ?? task.executionPresentation?.verificationFollowItemId ?? null : null;
     task.snapshot = snapshot;
     if (planReviewRefusal(task) !== null) {
       // An earlier read can still be waiting when the terminal fact arrives.
@@ -1021,7 +1028,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
       activeItem: snapshot.active_item,
       itemPercent: snapshot.presentation.item_percent,
       lastSettledOperationId: snapshot.last_settled_operation_id,
-      verificationFollowItemId,
+      lastSettledIntegrityItemId: snapshot.last_settled_integrity_item_id,
     };
     if (task.sessionKind === "sync-execution") {
       task.executionSnapshot = snapshot;

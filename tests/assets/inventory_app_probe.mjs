@@ -19,7 +19,11 @@ globalThis.document = {
   body: new ElementFake("body"), documentElement: new ElementFake("html"),
   querySelector(key) { if (!nodes.has(key)) nodes.set(key, new ElementFake("div")); return nodes.get(key); },
 };
-globalThis.window = { chrome: { webview: {} }, addEventListener() {} };
+let executionPaint = null;
+globalThis.window = { chrome: { webview: {} }, addEventListener() {},
+  setTimeout(callback, delay) { assert.equal(delay, 500); return executionPaint = callback; },
+  clearTimeout() { executionPaint = null; },
+};
 const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
 const calls = [], renders = [], drains = [], stoppedDrains = [];
@@ -836,14 +840,15 @@ executionReview.follow = {enabled:false, eligible:false, hasTarget:false, genera
 app.acceptTaskUpdate(executionTask, executionSessionId, null, executeProgressSnapshot);
 const opensBeforeLinkedVerify = calls.filter(([name]) => name === "open").length;
 app.acceptTaskUpdate(executionTask, executionSessionId, null,
-  {...executeProgressSnapshot, phase:"verify", active_item:{item_id:"5".repeat(32), item_type:"operation"},
+  {...executeProgressSnapshot, phase:"verify", last_settled_integrity_item_id:"5".repeat(32),
     presentation:{...executeProgressSnapshot.presentation, value:0}});
 assert.equal(executionTask.workPane, "verify", "automatic verification opens its pane at first phase observation");
 assert.equal(calls.filter(([name]) => name === "open").length, opensBeforeLinkedVerify,
   "active linked Verify does not open a ledger Inventory publication");
 app.switchTaskPane(executionTask, "plan");
 app.acceptTaskUpdate(executionTask, executionSessionId, null,
-  {...executeProgressSnapshot, phase:"verify", control_state:"paused", presentation:{...executeProgressSnapshot.presentation, value:10}});
+  {...executeProgressSnapshot, phase:"verify", control_state:"paused", last_settled_integrity_item_id:"5".repeat(32),
+    presentation:{...executeProgressSnapshot.presentation, value:10}});
 assert.equal(executionTask.workPane, "plan", "later verification progress respects a manual return to Plan");
 app.switchTaskPane(executionTask, "verify");
 assert.equal(app.planFollowTarget(executionTask), "5".repeat(32),
@@ -855,7 +860,8 @@ app.acceptTaskUpdate(executionTask, executionSessionId, null,
   {...executeProgressSnapshot, phase:"verify", gap_first_missed_seq:8, control_state:"paused",
     active_item:{item_id:"6".repeat(32), item_type:"operation"}});
 app.acceptTaskUpdate(executionTask, executionSessionId, null,
-  {...executeProgressSnapshot, phase:"verify", gap_first_missed_seq:8, control_state:"running"});
+  {...executeProgressSnapshot, phase:"verify", gap_first_missed_seq:8, control_state:"running",
+    last_settled_integrity_item_id:"6".repeat(32)});
 assert.equal(app.planFollowTarget(executionTask), "6".repeat(32),
   "fresh active verification evidence in a recovered snapshot remains the next between-file target");
 app.acceptTaskUpdate(executionTask, executionSessionId,
@@ -871,6 +877,43 @@ const phaseOnly = {...fastLinked, linkedVerificationStarted:false, workPane:"pla
 app.observeLinkedVerification(phaseOnly, null,
   {event:{body_type:"PhaseChanged", body:{phase:"verify"}}});
 assert.equal(phaseOnly.workPane, "verify", "reliable phase evidence survives a terminal snapshot in the same batch");
+const recoveredLinked = {...fastLinked, linkedVerificationStarted:false, workPane:"plan"};
+app.observeLinkedVerification(recoveredLinked, {phase:null, last_settled_integrity_item_id:"7".repeat(32)}, null);
+assert.equal(recoveredLinked.workPane, "verify", "a reliable outcome identifies linked Verify after a missed phase change");
+
+const firstLinkedRead = defer(), linkedAnchors = [], linkedWindows = [];
+const ordinaryPlanWindow = globalThis.inventoryHarness.getPlanWindow;
+const linkedId = index => index.toString(16).padStart(32, "0");
+const linkedSnapshot = index => ({...executeProgressSnapshot, phase:"verify",
+  last_settled_integrity_item_id:linkedId(index)});
+globalThis.inventoryHarness.getPlanOperationAnchor = (_task, _session, _view, id) => {
+  linkedAnchors.push(id);
+  return linkedAnchors.length === 1 ? firstLinkedRead.promise : Promise.resolve({disposition:"current", index:300});
+};
+globalThis.inventoryHarness.getPlanWindow = (_task, revision, offset) => {
+  linkedWindows.push(offset);
+  return Promise.resolve({disposition:"current", view_revision:revision, highlight_revision:0,
+    offset, rows:[], execution:{session_id:executionSessionId, execution_revision:1}});
+};
+executionReview.follow.enabled = true;
+executionReview.follow.eligible = true;
+app.acceptTaskUpdate(executionTask, executionSessionId, null, linkedSnapshot(1));
+assert.deepEqual(linkedAnchors, [linkedId(1)]);
+for (let index = 2; index <= 20; index += 1) {
+  app.acceptTaskUpdate(executionTask, executionSessionId, null, linkedSnapshot(index));
+}
+assert.deepEqual(linkedAnchors, [linkedId(1)], "fast linked outcomes share one pending paint");
+executionPaint();
+assert.deepEqual(linkedAnchors, [linkedId(1)], "the next paint keeps the captured automatic read");
+firstLinkedRead.resolve({disposition:"current", index:40});
+await tick(); await tick();
+assert.deepEqual(linkedAnchors, [linkedId(1), linkedId(20)], "linked Follow catches up once to the latest reliable outcome");
+assert.ok(linkedWindows.includes(36) && linkedWindows.includes(296));
+assert.equal(executionReview.follow.scrollOffset, 296);
+assert.equal(executionTask.executionPresentation.activeItem, null);
+globalThis.inventoryHarness.getPlanWindow = ordinaryPlanWindow;
+executionReview.follow.enabled = false;
+executionReview.follow.scrollOffset = null;
 const terminalLinkedAnchor = defer();
 globalThis.inventoryHarness.getPlanOperationAnchor = () => terminalLinkedAnchor.promise;
 app.acceptTaskUpdate(executionTask, executionSessionId, null,
@@ -881,10 +924,12 @@ assert.equal(executionReview.followRead?.explicit, true, "linked Verify admits t
 const terminalLinkedWindowBase = calls.length;
 app.acceptTaskUpdate(executionTask, executionSessionId,
   {update_type:"record", record:{state:"completed"}},
-  {...executeProgressSnapshot, phase:"verify", control_state:"paused", session_state:"completed", active_item:null});
+  {...executeProgressSnapshot, phase:null, control_state:"paused", session_state:"completed",
+    last_settled_integrity_item_id:linkedId(21)});
 assert.equal(executionTask.sessionReleased, false, "the terminal record precedes release");
 assertSameNode(executionReview.followRead, null, "terminal linked Verify retires the captured Go even with Follow off");
 assert.equal(executionReview.follow.hasTarget, false);
+assert.equal(executionTask.executionPresentation.lastSettledIntegrityItemId, linkedId(21));
 terminalLinkedAnchor.resolve({disposition:"current", index:40});
 await tick();
 assert.equal(calls.slice(terminalLinkedWindowBase).some(([name, , , offset]) => name === "plan-window" && offset === 36), false,
@@ -1074,7 +1119,7 @@ function attachReleasedExecutionTask(taskId, originalSessionId, currentSessionId
       result:{headline, disposition:"ran", recording:headline === "degraded" ? "degraded" : "ok"}}}};
   app.observeOriginalExecution(owner, requestId, owner.review.window.execution);
   owner.executionPresentation = {phase:null, activeItem:null, itemPercent:null,
-    lastSettledOperationId:"a".repeat(32), verificationFollowItemId:null};
+    lastSettledOperationId:"a".repeat(32), lastSettledIntegrityItemId:null};
   owner.review.follow = {enabled:false, eligible:false, hasTarget:true, generation:0};
   const originalPresentation = owner.executionPresentation;
   owner.inventoryReview = {...currentD1Review,
@@ -1523,6 +1568,7 @@ followTask.inventoryReview = {...currentD1Review, detail:null, pending:null, act
 followTask.inventoryReviewSessionId = followTask.sessionId;
 followTask.inventoryViewUnconfirmed = false;
 const followAnchors = [], followWindows = [];
+let heldFollowWindow = null;
 let heldFollowAnchor = defer();
 globalThis.inventoryHarness.getInventoryItemAnchor = (taskId, sessionId, revision, itemId) => {
   followAnchors.push({taskId, sessionId, revision, itemId});
@@ -1534,25 +1580,30 @@ const followWindow = (revision, offset) => ({...fixture.views.maximum.window,
   offset, rows:fixture.views.maximum.window.rows.slice(0, Math.min(256, fixture.views.maximum.window.total - offset))
     .map((row, index) => ({...row, visible_index:offset + index}))});
 globalThis.inventoryHarness.getInventoryWindow = (taskId, revision, offset) => {
-  followWindows.push(offset); return Promise.resolve(followWindow(revision, offset));
+  followWindows.push(offset);
+  return heldFollowWindow?.offset === offset ? heldFollowWindow.promise : Promise.resolve(followWindow(revision, offset));
 };
-const followSnapshot = (itemId, itemType = "integrity") => ({session_id:followTask.sessionId,
+const followSnapshot = (itemId, itemType = "integrity", settledId = null) => ({session_id:followTask.sessionId,
   session_state:"active", control_state:"running", phase:"verify",
-  active_item:itemId === null ? null : {item_id:itemId, item_type:itemType}, presentation:{item_percent:10}});
+  active_item:itemId === null ? null : {item_id:itemId, item_type:itemType},
+  last_settled_integrity_item_id:settledId, presentation:{item_percent:itemId === null ? null : 10}});
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
 assert.equal(followAnchors.length, 0, "a hidden Inventory pane launches no Follow read");
 app.switchTaskPane(followTask, "verify");
 assert.equal(followAnchors.length, 1, "pane return resolves the last current active item without another event");
 const oldFollow = heldFollowAnchor;
-app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
+for (let index = 20; index > 1; index -= 1) {
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null, "integrity", `1:${index}`));
+}
+assert.equal(followAnchors.length, 1, "fast ordinary outcomes keep one automatic read in flight");
 heldFollowAnchor = null;
 oldFollow.resolve({disposition:"current", view_revision:followTask.inventoryReview.summary.view_revision,
   node_id:real.node_id, index:40});
-await tick();
+await tick(); await tick();
 assert.equal(followAnchors.length, 2);
 assert.deepEqual(followAnchors.map(value => value.itemId), ["1:1", "1:2"]);
 assert.ok(followWindows.includes(296), "Follow requests four rows of context before the target");
-assert.equal(followWindows.includes(40), false, "a retired item anchor cannot dispatch its window");
+assert.ok(followWindows.includes(36), "a captured automatic read lands even when outcomes keep advancing");
 let followReview = followTask.inventoryReview;
 assert.equal(followReview.follow.anchorIndex, 300, "context offset never replaces the target index");
 followReview.window = followWindow(followReview.summary.view_revision, 300);
@@ -1570,8 +1621,22 @@ await tick();
 assert.equal(followAnchors.length, 2, "same loaded target progress does not resolve again");
 assert.equal(followReview.follow.scrollOffset, null, "same target progress does not reposition");
 
+heldFollowAnchor = defer();
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1", "integrity", "1:2"));
+const beforeCachedGo = followWindows.length;
+assert.equal(followAnchors.at(-1).itemId, "1:1");
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null, "integrity", "1:2"));
+globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+assert.equal(followReview.followRead, null, "a cached Go retires the competing automatic jump");
+heldFollowAnchor.resolve({disposition:"current", view_revision:followReview.summary.view_revision,
+  node_id:real.node_id, index:40});
+heldFollowAnchor = null;
+await tick(); await tick();
+assert.ok(followWindows.slice(beforeCachedGo).every(offset => offset !== 36));
+assert.equal(followReview.follow.scrollOffset, 296, "the automatic reply cannot override the cached Go");
+
 followReview.follow.enabled = false;
-app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null));
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null, "integrity", "1:2"));
 assert.equal(followReview.follow.hasTarget, true, "a settled-file handoff retains a real navigation target");
 globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false); await tick();
 assert.equal(followReview.follow.scrollOffset, 296, "Go remains usable in the gap between files");
@@ -1650,10 +1715,42 @@ app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("unm
 assert.equal(followReview.follow.hasTarget, false, "non-integrity progress cannot invent an Inventory row");
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null));
 assert.equal(followReview.follow.hasTarget, false, "a non-integrity item retires the retained target");
+
+const retiredWindow = defer();
+heldFollowWindow = {...retiredWindow, offset:36};
+const beforeRetiredWindow = followWindows.length;
+app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
+await tick();
+assert.ok(followWindows.slice(beforeRetiredWindow).includes(36), "the retired automatic jump reached its window read");
+heldFollowWindow = null;
+heldFollowAnchor = defer();
+const recoveredAnchor = heldFollowAnchor;
+retiredWindow.resolve(followWindow(followReview.summary.view_revision, 36));
+// Retire the request after its job settles and before its queued adoption.
+queueMicrotask(() => queueMicrotask(() => {
+  app.acceptTaskUpdate(followTask, followTask.sessionId,
+    {update_type:"event", event:{body_type:"Gap", body:{first_missed_seq:5}}});
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null,
+    {...followSnapshot(null, "integrity", "1:2"), gap_first_missed_seq:5});
+}));
+await tick();
+assert.equal(followAnchors.at(-1).itemId, "1:2", "recovery queues only the current target");
+assert.equal(followReview.follow.anchorIndex, null, "a resolved job cannot publish its anchor after Gap retirement");
+assert.equal(followReview.follow.scrollOffset, null, "the queued adoption cannot restore retired scroll");
+heldFollowAnchor = null;
+recoveredAnchor.resolve({disposition:"current", view_revision:followReview.summary.view_revision,
+  node_id:real.node_id, index:300});
+await tick(); await tick();
+assert.equal(followReview.follow.scrollOffset, 296, "the recovered target can still land");
+
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
 app.acceptTaskUpdate(followTask, followTask.sessionId, null,
-  {...followSnapshot(null), session_state:"completed"});
+  {...followSnapshot(null, "integrity", "1:1"), session_state:"completed"});
 assert.equal(followReview.follow.hasTarget, false, "terminal settlement retires current-item navigation");
+await tick(); await tick();
+assert.equal(followReview.follow.anchorIndex, 40, "enabled Inventory Follow lands on the final settled row");
+assert.equal(followReview.follow.scrollOffset, 36);
+followReview.window = followWindow(followReview.summary.view_revision, 0);
 for (const boundary of ["gap", "raw gap", "terminal", "pane", "no target"]) {
   followReview.follow.enabled = false;
   app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
@@ -1672,7 +1769,8 @@ for (const boundary of ["gap", "raw gap", "terminal", "pane", "no target"]) {
   else if (boundary === "raw gap") app.acceptTaskUpdate(followTask, followTask.sessionId,
     {update_type:"event", event:{body_type:"Gap", body:{first_missed_seq:8}}});
   else app.acceptTaskUpdate(followTask, followTask.sessionId, null,
-    {...followSnapshot(null), ...(boundary === "gap" ? {gap_first_missed_seq:7} : {session_state:"completed"})});
+    boundary === "gap" ? {...followSnapshot(null), gap_first_missed_seq:7}
+      : {...followSnapshot(null, "integrity", "1:2"), session_state:"completed"});
   if (boundary !== "pane") assert.equal(followReview.follow.hasTarget, false,
     `${boundary} retires the retained ordinary target`);
   heldFollowAnchor = null;

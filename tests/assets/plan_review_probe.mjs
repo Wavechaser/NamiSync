@@ -1381,7 +1381,7 @@ const liveTerminalReview = { ...executionReviewState, window: {
     started_at: null, ended_at: null },
 } };
 const terminalPageSnapshot = (result, patch = {}) => ({
-  wire_version: 2, session_id: executionSummary.session_id, session_state: "failed",
+  wire_version: 3, session_id: executionSummary.session_id, session_state: "failed",
   terminal_result: result, started_at: "2026-09-23T01:00:00+00:00",
   ended_at: "2026-09-23T01:01:05+00:00",
   progress_inconsistent: false, phase: null, gap_first_missed_seq: null,

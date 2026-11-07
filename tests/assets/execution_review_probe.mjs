@@ -39,7 +39,7 @@ const {
 
 const digestSession = "8".repeat(32);
 const activeSnapshot = {
-  wire_version: 2,
+  wire_version: 3,
   session_id: digestSession,
   session_state: "active",
   progress_inconsistent: false,
@@ -302,7 +302,7 @@ assert.deepEqual(
   },
 );
 const terminalSnapshot = (terminalResult, sessionId = railCapacityExecution.session_id) => ({
-  wire_version: 2, session_id: sessionId, session_state: "failed",
+  wire_version: 3, session_id: sessionId, session_state: "failed",
   terminal_result: terminalResult,
   progress_inconsistent: false, phase: null, started_at: null, ended_at: null,
   presentation: { value: 0, determinate: false, indeterminate: false,

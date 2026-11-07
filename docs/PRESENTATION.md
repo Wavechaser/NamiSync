@@ -533,11 +533,13 @@ Sort is process-live view state, never durable preference; it preserves tree ide
 
 Follow resolves the active Plan operation or ordinary Inventory integrity item to the nearest
 visible ancestor-or-self under the current collapse, filter, search, sort and
-revision. Between execution items, Plan can follow the latest settled
-operation, including a no-op. A terminal snapshot retains that position.
-The cursor is separate from active progress and updates the viewport at the
-existing execution paint cadence. Nothing visible means no target; never mutate filters or invent a
-root. Automatic follow is restricted to unfiltered, search-free canonical order.
+revision. Between items, Plan follows the latest settled execution operation,
+including a no-op. Linked Verify and ordinary Inventory integrity use the latest
+settled integrity item in their respective lookup namespaces. These cursors come
+from reliable outcomes, so they advance even when no active-item progress is
+published. Execution and linked Verify use the existing execution paint cadence.
+Nothing visible means no target. Automatic Follow is restricted to unfiltered,
+search-free canonical order.
 User scroll-away or changing sort/search/filter disables it until explicit enable;
 returning to canonical alone does not resume it. One-shot Go to the current item
 remains available in other views without enabling follow. DESKTOP_UI owns the
@@ -554,13 +556,18 @@ verification. Inventory uses its projection's row index and the same ancestor
 walk, bound to the current ordinary baseline/verify/rebaseline session, location,
 frozen scope and view revision. Copied scope uses workflow-owned pure admission;
 lookup never changes scope associations or reads the ledger. A scan-created row
-absent from the displayed projection has no target. Scan, terminal and no-active
-states do not invent one. Existing Plan node-anchor callers are unchanged;
+absent from the displayed projection has no target. Plan keeps its terminal
+execution cursor. With Follow enabled, ordinary Inventory integrity can land on
+its last settled row at terminal while the same session and view own the pane.
+The terminal record retires explicit integrity Go and linked Verify navigation.
+Linked Verify changes to the Inventory publication on release. Existing Plan node-anchor callers are unchanged;
 BRIDGE owns the exact read-only requests.
 
 One app-local Follow transaction uses the shared table reader for anchor and
-bounded window lookup. Each domain supplies identity and adoption rules. Pane,
-session, view and user-intent changes retire the exact request. Passive Inventory
+bounded window lookup. Each domain supplies identity and adoption rules. One
+captured automatic jump can finish while targets advance. Its successor samples
+the latest target, so a burst cannot cancel each jump or build a queue per item.
+Pane, session, view, gap and user-intent changes retire the exact request. Passive Inventory
 publication/reveal uses the existing tree painter and controller. It retains the
 active node identity and keyboard position while that row is outside the loaded
 window, removing only `aria-activedescendant` until the row renders again. It

@@ -7347,7 +7347,12 @@ def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_pat
         ids = iter(f"{index:032x}" for index in range(100, 400))
         def finish(start):
             _wait_terminal(service._dispatcher, start.session_id)
-            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            updates = _drain_until_record(registry, start.task_id, start.session_id, ids)
+            items = [update.event.body["item_id"] for update in updates
+                     if update.update_type == "event" and update.event.body_type == "IntegrityOutcome"]
+            snapshot = registry._tasks[start.task_id].presentation_state.snapshot()
+            assert snapshot["last_settled_integrity_item_id"] == (items[-1] if items else None)
+            assert snapshot["active_item"] is None
             registry.release_terminal_session(start.task_id, start.session_id)
             return registry.open_inventory_view(start.task_id)
         shell = registry.create_task_shell("1" * 32)

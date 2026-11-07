@@ -2552,9 +2552,10 @@ function validEstimate(value) {
 function validateTaskSnapshot(snapshot, task, updates) {
   if (!isExactObject(snapshot, [
     "wire_version", "task_id", "session_id", "revision", "session_state",
-    "control_state", "phase", "active_item", "last_settled_operation_id", "progress_inconsistent",
+    "control_state", "phase", "active_item", "last_settled_operation_id",
+    "last_settled_integrity_item_id", "progress_inconsistent",
     "presentation", "gap_first_missed_seq", "terminal_result", "started_at", "ended_at",
-  ]) || snapshot.wire_version !== 2 || snapshot.task_id !== task.taskId
+  ]) || snapshot.wire_version !== 3 || snapshot.task_id !== task.taskId
     || snapshot.session_id !== task.sessionId || !isNonnegativeInteger(snapshot.revision)
     || (task.snapshotRevision !== null && snapshot.revision < task.snapshotRevision)
     || !isOneOf(snapshot.session_state, ["active", ...TERMINAL_STATES])
@@ -2563,6 +2564,8 @@ function validateTaskSnapshot(snapshot, task, updates) {
       && snapshot.phase.length > 0 && isValidUnicode(snapshot.phase)))
     || !(snapshot.last_settled_operation_id === null
       || isBoundedV5Text(snapshot.last_settled_operation_id, true))
+    || !(snapshot.last_settled_integrity_item_id === null
+      || isBoundedV5Text(snapshot.last_settled_integrity_item_id, true))
     || typeof snapshot.progress_inconsistent !== "boolean"
     || !isNullableNonnegativeInteger(snapshot.gap_first_missed_seq)
     || snapshot.gap_first_missed_seq === 0

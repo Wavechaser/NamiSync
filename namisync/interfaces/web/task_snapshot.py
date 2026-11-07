@@ -74,6 +74,7 @@ class TaskPresentationState:
     progress: dict[str, object] | None = None
     active_item: dict[str, object] | None = None
     last_settled_operation_id: str | None = None
+    last_settled_integrity_item_id: str | None = None
     aggregate_high_water: float | None = None
     item_high_water: float | None = None
     sample_at: float | None = None
@@ -136,6 +137,7 @@ class TaskPresentationState:
                 self._clear_progress(), revision=self.revision + 1,
                 gap_first_missed_seq=minimum,
                 last_settled_operation_id=None,
+                last_settled_integrity_item_id=None,
             )
         if event.sequence <= self.last_reduced_sequence:
             return self
@@ -154,6 +156,8 @@ class TaskPresentationState:
         elif kind in {"ItemOutcome", "IntegrityOutcome"}:
             if kind == "ItemOutcome" and body["phase"] == "execute":
                 state = replace(state, last_settled_operation_id=body["item_id"])
+            elif kind == "IntegrityOutcome":
+                state = replace(state, last_settled_integrity_item_id=body["item_id"])
             if state.phase == body["phase"] and state.active_item is not None:
                 active = state.active_item
                 matches = active["item_id"] == body["item_id"] and (
@@ -275,7 +279,7 @@ class TaskPresentationState:
             display_percent = max(0.0, min(100.0, progress["items_done"] / progress["items_total"] * 100))
         active_session = self.session_state == "active" and self.control_state != "paused"
         return {
-            "wire_version": 2,
+            "wire_version": 3,
             "task_id": self.task_id,
             "session_id": self.session_id,
             "revision": self.revision,
@@ -286,6 +290,7 @@ class TaskPresentationState:
                 "item_id": active["item_id"], "item_type": active["item_type"],
             },
             "last_settled_operation_id": self.last_settled_operation_id,
+            "last_settled_integrity_item_id": self.last_settled_integrity_item_id,
             "presentation": {
                 "item_percent": item_percent,
                 "items_done": None if progress is None else progress["items_done"],

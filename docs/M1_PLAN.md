@@ -117,7 +117,27 @@ missing/extra/duplicate/identity controls preserve the original coverage.
 Evidence is retained in `build/verify-follow-20261107/`. The user authorized
 separate test and Verify Follow commits, then recovery-branch cleanup.
 
-### Live execution and verification presentation — delivered 2026-11-06
+### Live execution and verification presentation — delivered 2026-11-06–07
+
+The reviewed Follow correction adds one reliable integrity-result cursor to
+snapshot v3 and its exact validator/direct consumers. Automatic and ordinary
+Verify, baseline and rebaseline can follow fast items omitted from active
+progress. One automatic read finishes while newer targets coalesce, retaining
+the existing execution cadence. Cached Go retires competing work; result/error
+publication requires exact request ownership after the reviewed retirement
+correction. Manual navigation, Gap, session and view fences remain intact.
+Enabled ordinary Inventory can land on its final item in the same session/view;
+linked Verify still hands off to Inventory at release without delaying release
+or mapping execution IDs into Inventory. Domain behavior remains unchanged.
+
+The user authorized this correction and the separate installed receipt fix
+(`1d1917c3`) as individual milestone1 commits, followed by recovery cleanup.
+Evidence in `build/verify-follow-20261107/` covers all 2,257 interface cases
+across the full run and final duplicate controls, both installed execution
+sizes, the unaffected Inventory pass, independent reverse controls and review.
+The recovery payload was reconstructed rather than merged; all 306 package
+source files match the tested candidate. Performance and release budgets remain
+with their existing owners.
 
 Automatic verification opens Verify using the original run's operation IDs
 and opens ordinary target Inventory at release. Plan retains the execution

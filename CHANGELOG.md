@@ -430,7 +430,14 @@ explicit, reviewable and regression-backed.
   coverage. Fault controls reject missing, extra, duplicate and substituted
   results. Both installed execution window sizes pass; production is unchanged.
 
-#### Refine live execution and verification feedback (2026-11-06)
+#### Refine live execution and verification feedback (2026-11-06 – 2026-11-07)
+
+- Follow reliable completed integrity items in automatic and ordinary Verify,
+  baseline and rebaseline even when fast files never appear in active progress.
+  Let one automatic navigation read finish while newer targets coalesce;
+  preserve user overrides, session/view guards and the automatic Inventory
+  release transition. Enabled ordinary Inventory Follow can land on the final
+  completed item in the same retained session and view.
 
 - Display live throughput as a rate and remaining time as ETA.
 - Follow the latest settled execution operation between files and land on the

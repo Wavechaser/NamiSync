@@ -1452,8 +1452,11 @@ is available only in canonical path-key order with no search or filters. It
 starts enabled for a new eligible execution or ordinary integrity session and
 follows its active operation/item or nearest visible collapsed ancestor. Plan
 uses execution activity and retains the latest settled operation between files
-and at terminal. Live linked Verify follows its own verification activity. Inventory uses current
-ordinary baseline/verify/rebaseline activity, including copied-file Verify. User
+and at terminal. Live linked Verify and ordinary Inventory baseline, verify and
+rebaseline follow the active item or the last settled integrity result, including
+when fast verification publishes no active-item progress. Enabled ordinary
+Inventory Follow can land on the last settled row as the run ends. Linked Verify
+navigation ends at the terminal record and Inventory opens on release. User
 scrolling the target out of view, or changing sort/search/filter, disables it;
 only explicit action resumes it, even after returning to an eligible view.
 Programmatic scroll does not disable follow. Pause/phase changes preserve the
