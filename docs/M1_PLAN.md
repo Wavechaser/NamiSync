@@ -106,10 +106,16 @@ batching. Settlement, root admission, reliable event order and urgent control
 delivery keep their component-owned gates.
 The final ordinary suite passed 6,412 with four skips and all twelve import
 contracts passed. All 35 installed cases have passing evidence across runs;
-the aggregate run and isolated input-desktop retry retain an unresolved
-default-window host receipt failure. The same case failed at `b2e872e6`.
-Its cause remains open. [TESTS](TESTS.md#execution-review-completion-trace)
-describes the evidence to retain on recurrence.
+the aggregate run and isolated input-desktop retry recorded a default-window
+host receipt failure. The same case failed at `b2e872e6`.
+The receipt failure was traced on 2026-11-07 to comparing a bounded Inventory
+page with the complete fixture. The separately reviewed test correction checks
+exact page membership and independently reads the retained full-fixture result
+at release. Forty focused checks and both installed execution sizes pass;
+missing/extra/duplicate/identity controls preserve the original coverage.
+[TESTS](TESTS.md#execution-review-completion-trace) owns the corrected oracle.
+Evidence is retained in `build/verify-follow-20261107/`. The user authorized
+separate test and Verify Follow commits, then recovery-branch cleanup.
 
 ### Live execution and verification presentation — delivered 2026-11-06
 

@@ -130,6 +130,7 @@ class _ExecutionReviewPhase:
         self.execution_detail_attempt: dict[str, object] | None = None
         self.inventory_open: dict[str, object] | None = None
         self.inventory_window: dict[str, object] | None = None
+        self.inventory_fixture: dict[str, object] | None = None
         self.window_trace: dict[str, int | bool | None] = {}
         self.refresh: dict[str, object] | None = None
         self.refresh_admissions = 0
@@ -347,6 +348,8 @@ class _ExecutionReviewPhase:
                         "admitted": admitted, "completed": completed,
                         "session_id": result.session_id,
                     })
+                    if self.ordinary is not None and payload.session_id == self.ordinary["session_id"]:
+                        self._record_inventory_fixture_locked(payload.task_id)
             else:
                 raise ValueError("released session does not match execution or an observed activity")
             return
@@ -430,21 +433,28 @@ class _ExecutionReviewPhase:
             if result.get("view_revision") != payload.expected_revision:
                 raise ValueError("inventory window revision changed")
             integrity = result.get("integrity")
+            rows = result["rows"]
+            items = integrity["items"] if type(integrity) is dict else []
+            row_ids = [row["row_id"] for row in rows if row["row_id"] is not None]
+            verified_ids = {item["row_id"] for item in items if item["result"] == "verified"}
             self.window_trace = {
                 "requestedOffset": getattr(payload, "offset", None),
                 "requestedLimit": getattr(payload, "limit", None),
-                "eligibleRows": sum(type(row) is dict and row.get("row_id") is not None
-                                    for row in result["rows"]) if type(result.get("rows")) is list else None,
+                "eligibleRows": len(row_ids),
                 "integrityRevision": integrity.get("revision") if type(integrity) is dict else None,
                 "integrityGap": integrity.get("gap") if type(integrity) is dict else None,
             }
             self.inventory_window = {
                 "admitted": admitted, "completed": completed,
                 "view_revision": result.get("view_revision"),
-                "row_count": len(result.get("rows", [])),
+                "row_count": len(rows),
+                "integrity_request_id": integrity.get("request_id") if type(integrity) is dict else None,
                 "integrity_session_id": integrity.get("session_id") if type(integrity) is dict else None,
                 "integrity_complete": integrity.get("complete") if type(integrity) is dict else None,
-                "integrity_item_count": len(integrity.get("items", [])) if type(integrity) is dict else None,
+                "integrity_item_count": len(items) if type(integrity) is dict else None,
+                "integrity_coverage_matches": (
+                    len(row_ids) == len(items) == len(verified_ids) and set(row_ids) == verified_ids
+                ),
             }
             return
         if name == "refresh_inventory":
@@ -520,6 +530,20 @@ class _ExecutionReviewPhase:
                 "session_id": payload.session_id, "disposition": result.disposition,
             }
             return
+
+    def _record_inventory_fixture_locked(self, task_id: str) -> None:
+        # Release retains the full result until Close, independently of the current page.
+        retained = self.registry._lifecycle.read_task_inventory_integrity(task_id)
+        self.inventory_fixture = {
+            "identity_matches": (
+                (retained.task_id, retained.request_id, retained.session_id, retained.mode)
+                == (task_id, self.ordinary["request_id"], self.ordinary["session_id"], "verify")
+            ),
+            "coverage_matches": len(retained.items) == len(self.fixture) and {
+                item.path for item in retained.items if item.result == "verified"
+            } == self.fixture.keys(),
+            "item_count": len(retained.items),
+        }
 
     def _session_released_locked(self, session_id: object) -> bool:
         if self.registry is None or type(session_id) is not str:
@@ -670,6 +694,7 @@ class _ExecutionReviewPhase:
             owner = self.ordinary
             execution, release, window = self.execution, self.release, self.window
             overlay = self.inventory_window
+            fixture = self.inventory_fixture
             actions = [(item["command"], item["action"]) for item in self.controls]
             checks = {
                 "registryPresent": self.registry is not None,
@@ -684,8 +709,11 @@ class _ExecutionReviewPhase:
                 "releaseBeforeWindow": bool(release and window and release["completed"] < window["admitted"]),
                 "actionsMatch": actions == [("control_integrity", "pause"), ("control_integrity", "resume")],
                 "overlaySessionMatches": bool(overlay and owner and overlay["integrity_session_id"] == owner["session_id"]),
+                "overlayRequestMatches": bool(overlay and owner and overlay["integrity_request_id"] == owner["request_id"]),
                 "overlayComplete": bool(overlay and overlay["integrity_complete"] is True),
-                "overlayCountMatches": bool(overlay and overlay["integrity_item_count"] == len(self.fixture)),
+                "overlayCoverageMatches": bool(overlay and overlay["integrity_coverage_matches"]),
+                "fixtureIdentityMatches": bool(fixture and fixture["identity_matches"]),
+                "fixtureCoverageMatches": bool(fixture and fixture["coverage_matches"]),
                 "closeObserved": self.close is not None,
             }
             release_receipts = {}
@@ -727,6 +755,7 @@ class _ExecutionReviewPhase:
                     "returnedRows": overlay.get("row_count") if overlay else None,
                     "overlayItems": overlay.get("integrity_item_count") if overlay else None,
                     "overlayComplete": overlay.get("integrity_complete") if overlay else None,
+                    "fixtureItems": fixture.get("item_count") if fixture else None,
                 }
                 for name, receipt in (("execution", execution), ("release", release),
                                       ("ordinary", owner), ("refresh", self.refresh), ("selection", self.selection),

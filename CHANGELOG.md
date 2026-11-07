@@ -421,6 +421,15 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Separate Inventory page and full-run verification evidence (2026-11-07)
+
+- Correct the installed execution test's fixture-wide comparison against a
+  scrolled Inventory page. Check exact verified row/result membership for the
+  page and independently check all fixture paths in the retained release result.
+- Preserve request/session identity, lifecycle ordering and whole-fixture
+  coverage. Fault controls reject missing, extra, duplicate and substituted
+  results. Both installed execution window sizes pass; production is unchanged.
+
 #### Refine live execution and verification feedback (2026-11-06)
 
 - Display live throughput as a rate and remaining time as ETA.

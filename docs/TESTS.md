@@ -328,9 +328,13 @@ same scenario's `evidence/` directory. The summary identifies the branch
 after Refresh). The trace identifies individual host conditions at the final
 decision. Both window sizes use the same trace.
 
-For a count mismatch, compare the requested Inventory slice, the number of
-eligible rows returned, the count of attached integrity results and the
-fixture size. A complete verification session can serve a partial page.
+The latest current Inventory slice must attach one verified result per returned
+eligible row and no others, with the ordinary Verify request and session IDs.
+A complete verification session can serve a partial page. Separately, the
+ordinary release receipt captures the retained terminal result before Close
+retires it. The result must name the exact task, request and session and contain
+one verified outcome for each fixture path, including paths outside the page.
+The trace distinguishes slice coverage and retained fixture coverage failures.
 For an ordering or release mismatch, inspect the corresponding command and
 release receipts. Preserve the first failure before retrying.
 

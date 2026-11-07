@@ -510,9 +510,11 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
         {"command": "control_integrity", "action": "resume"},
     ]
     phase.inventory_window = {
+        "integrity_request_id": phase.ordinary["request_id"],
         "integrity_session_id": ordinary_session_id,
-        "integrity_complete": True, "integrity_item_count": 1,
+        "integrity_complete": True, "integrity_coverage_matches": True,
     }
+    phase.inventory_fixture = {"identity_matches": True, "coverage_matches": True, "item_count": 1}
     phase.close = {"session_id": ordinary_session_id}
     tasks.clear()
     assert phase.capture_ready() is False
@@ -529,16 +531,18 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     phase.inventory_open = {}
     phase.record(
         "get_inventory_window", 100, 101,
-        SimpleNamespace(task_id=task_id, expected_revision=7, offset=1, limit=2),
-        {"disposition": "current", "view_revision": 7, "rows": [{"row_id": None}],
-         "integrity": {"session_id": ordinary_session_id, "complete": True,
+        SimpleNamespace(task_id=task_id, expected_revision=7, offset=0, limit=2),
+        {"disposition": "current", "view_revision": 7, "rows": [{"row_id": "1"}],
+         "integrity": {"request_id": phase.ordinary["request_id"],
+                       "session_id": ordinary_session_id, "complete": True,
                        "gap": False, "revision": 8, "items": []}},
     )
     checks, observations = phase.completion_trace()
-    assert {key for key, passed in checks.items() if not passed} == {"overlayCountMatches"}
-    assert observations["requestedOffset"] == 1 and observations["requestedLimit"] == 2
-    assert observations["eligibleRows"] == observations["overlayItems"] == 0
+    assert {key for key, passed in checks.items() if not passed} == {"overlayCoverageMatches"}
+    assert observations["requestedOffset"] == 0 and observations["requestedLimit"] == 2
+    assert observations["eligibleRows"] == 1 and observations["overlayItems"] == 0
     assert observations["returnedRows"] == observations["fixtureFiles"] == 1
+    assert observations["fixtureItems"] == 1
     assert observations["integrityRevision"] == 8 and observations["integrityGap"] is False
     phase.window_trace["integrityRevision"] = "do not persist"
     phase.failure_command = "do not persist"
@@ -551,7 +555,7 @@ def test_execution_review_phase_accepts_latest_settled_receipt_and_stable_captur
     assert trace["observations"]["pauseCount"] == trace["observations"]["resumeCount"] == 1
     assert trace["observations"]["executionCompleted"] < trace["observations"]["releaseAdmitted"]
     assert json.loads(driver.with_name("completion-checks.json").read_text()) == ["exact-receipts"]
-    phase.inventory_window["integrity_item_count"] = 1
+    phase.inventory_window["integrity_coverage_matches"] = True
     phase.auxiliary_releases.clear()
     assert {name for name, passed in phase.completion_trace()[0].items() if not passed} == {
         "ordinaryReleaseObserved", "ordinaryBeforeRelease",
@@ -669,7 +673,8 @@ def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) ->
         "node_id": "8" * 32, "expected_revision": 0,
         "view_revision": 1, "selected_file_count": 1,
     }
-    phase.ordinary = {"admitted": 13, "completed": 14, "session_id": ordinary_session}
+    phase.ordinary = {"admitted": 13, "completed": 14, "request_id": "9" * 32,
+                      "session_id": ordinary_session}
     phase.auxiliary_releases = [
         {"admitted": 9, "completed": 10, "session_id": refresh_session},
         {"admitted": 15, "completed": 16, "session_id": ordinary_session},
@@ -679,9 +684,11 @@ def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) ->
         {"command": "control_integrity", "action": "resume"},
     ]
     phase.inventory_window = {
+        "integrity_request_id": phase.ordinary["request_id"],
         "integrity_session_id": ordinary_session,
-        "integrity_complete": True, "integrity_item_count": 1,
+        "integrity_complete": True, "integrity_coverage_matches": True,
     }
+    phase.inventory_fixture = {"identity_matches": True, "coverage_matches": True, "item_count": 1}
     phase.close = {"session_id": ordinary_session}
     assert all(phase.completion_trace()[0].values()) is True
     selection = phase.selection
@@ -697,6 +704,108 @@ def test_blocked_phase_accepts_preserved_receipts_after_close(tmp_path: Path) ->
     assert all(phase.completion_trace()[0].values()) is True
     phase.auxiliary_releases.pop()
     assert all(phase.completion_trace()[0].values()) is False
+
+
+@pytest.mark.parametrize("offset,fault,failed_check", [
+    (10, None, None),
+    (7, None, None),
+    (10, "missing-page-item", "overlayCoverageMatches"),
+    (10, "all-items-on-partial-page", "overlayCoverageMatches"),
+    (10, "same-count-wrong-row", "overlayCoverageMatches"),
+    (10, "duplicate-page-item", "overlayCoverageMatches"),
+    (10, "wrong-page-session", "overlaySessionMatches"),
+    (10, "wrong-page-request", "overlayRequestMatches"),
+    (10, "missing-off-page-item", "fixtureCoverageMatches"),
+    (10, "extra-fixture-item", "fixtureCoverageMatches"),
+    (10, "same-count-wrong-path", "fixtureCoverageMatches"),
+    (10, "duplicate-fixture-item", "fixtureCoverageMatches"),
+    (10, "wrong-fixture-session", "fixtureIdentityMatches"),
+    (10, "wrong-fixture-request", "fixtureIdentityMatches"),
+])
+def test_completion_receipts_check_partial_page_and_full_fixture_independently(
+    tmp_path: Path, offset: int, fault: str | None, failed_check: str | None,
+) -> None:
+    from namisync.dispatcher import SessionNotFound
+
+    phase = child._ExecutionReviewPhase(tmp_path / "source", tmp_path / "target", file_count=24)
+    task_id, execution_id, session_id, request_id, wrong_id = (digit * 32 for digit in "12345")
+    paths = [f"file-{index:02d}.txt" for index in range(24)]
+    row_ids = [f"{index + 1:032x}" for index in range(24)]
+    retained_paths = {
+        "missing-off-page-item": paths[1:],
+        "extra-fixture-item": [*paths, "unexpected.txt"],
+        "same-count-wrong-path": ["unexpected.txt", *paths[1:]],
+        "duplicate-fixture-item": [*paths, paths[0]],
+    }.get(fault, paths)
+    retained = SimpleNamespace(
+        task_id=task_id, mode="verify",
+        request_id=wrong_id if fault == "wrong-fixture-request" else request_id,
+        session_id=wrong_id if fault == "wrong-fixture-session" else session_id,
+        items=tuple(SimpleNamespace(path=path, result="verified") for path in retained_paths),
+    )
+    reads: list[str] = []
+    released = False
+
+    def release(payload: object) -> object:
+        nonlocal released
+        released = True
+        return payload
+
+    def read_task_inventory_integrity(value: str) -> object:
+        assert released
+        reads.append(value)
+        return retained
+
+    def get_session(_session_id: str) -> object:
+        raise SessionNotFound()
+
+    phase.registry = SimpleNamespace(_lifecycle=SimpleNamespace(
+        read_task_inventory_integrity=read_task_inventory_integrity, get_session=get_session,
+    ))
+    phase.plan = {"task_id": task_id}
+    phase.execution = {"session_id": execution_id, "completed": 2}
+    phase.release = {"admitted": 3, "completed": 4}
+    phase.window = {"admitted": 5, "operation_id": "6" * 32, "execution_revision": 7}
+    phase.detail = {"operation_id": "6" * 32, "execution_revision": 7}
+    phase.inventory_open = {"view_revision": 1}
+    phase.ordinary = {"session_id": session_id, "request_id": request_id, "completed": 10}
+    phase.controls = [
+        {"command": "control_integrity", "action": "pause"},
+        {"command": "control_integrity", "action": "resume"},
+    ]
+    identity = SimpleNamespace(task_id=task_id, session_id=session_id)
+    phase.ordinal = 10
+    assert phase._observe("release_terminal_session", release)(identity) is identity
+    assert reads == [task_id]
+
+    visible_ids = row_ids[offset:]
+    attached_ids = {
+        "missing-page-item": visible_ids[1:],
+        "all-items-on-partial-page": row_ids,
+        "same-count-wrong-row": [row_ids[0], *visible_ids[1:]],
+        "duplicate-page-item": [*visible_ids, visible_ids[0]],
+    }.get(fault, visible_ids)
+    for requested_offset, page, attached in ((0, row_ids, row_ids), (offset, visible_ids, attached_ids)):
+        phase.record(
+            "get_inventory_window", 13 + requested_offset, 14 + requested_offset,
+            SimpleNamespace(task_id=task_id, expected_revision=1, offset=requested_offset, limit=256),
+            {"disposition": "current", "view_revision": 1,
+             "rows": [{"row_id": row_id} for row_id in page],
+             "integrity": {
+                 "request_id": wrong_id if fault == "wrong-page-request" and requested_offset else request_id,
+                 "session_id": wrong_id if fault == "wrong-page-session" and requested_offset else session_id,
+                 "complete": True, "gap": False, "revision": 25,
+                 "items": [{"row_id": row_id, "result": "verified"} for row_id in attached],
+             }},
+        )
+    phase.record("close_task", 30, 31, identity,
+                 SimpleNamespace(task_id=task_id, session_id=session_id, disposition="closed"))
+    checks, _ = phase.completion_trace()
+    assert {name for name, passed in checks.items() if not passed} == (
+        {failed_check} if failed_check else set()
+    )
+    assert phase.inventory_window["row_count"] == 24 - offset
+    assert reads == [task_id]
 
 
 def test_task_execution_review_scenarios_own_disjoint_evidence_paths(tmp_path: Path) -> None:
