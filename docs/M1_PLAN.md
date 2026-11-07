@@ -21,6 +21,34 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Execution allocation and GC diagnosis — 2026-11-07
+
+Reduce redundant browser allocation during execution, then probe reclamation
+on the optimized build. Start with private parsed bridge responses and drain
+snapshots; retain validation, callback isolation, terminal retry custody,
+immutable presentation and release ordering. No transport redesign, verifier
+concurrency, copy-guard change or M2 grouped recording is included.
+Owners/population: `assets/bridge.js`, its direct browser probes and BRIDGE;
+diagnostic drivers and raw samples stay in ignored `build/`, with provenance
+and results in PERFORMANCE. M1_PLAN, CHANGELOG and HANDOFF record delivery.
+Verification: affected browser/native composition checks, interfaces department,
+matched execution allocation observations and independent adversarial review.
+Commit the allocation outcome before the GC investigation closes. The latter
+compares terminal/closed memory, forced collection and, if available, the native
+WebView2 memory target with restoration and responsiveness observations. It
+authorizes diagnostic experiments only, not a production GC policy. Preserve
+the measured no-leak baseline with repeated-use memory/handle observations;
+sampled results are diagnostics, not new memory ceilings. Existing repository
+safety stops apply; preserve any failed receipt before diagnosing or retrying.
+
+Allocation implementation is verified: 2,224 ordinary interface tests and six
+installed native transport tests pass. Four matched 10k execution samples show
+15.82% lower mean allocation, with higher profiled peak/closed private memory
+and no throughput gain. Two unprofiled 20-cycle soaks pass all mirrors and
+normal closes, with comparable late browser memory and handle counts. PERFORMANCE
+records the limits and evidence. GC/Low-target investigation remains next;
+no production reclamation policy is authorized by this diagnostic checkpoint.
+
 ### Small-file copy cost — delivered 2026-11-06
 
 From `b2e872e6`, matched comparisons supported attribute-only Windows

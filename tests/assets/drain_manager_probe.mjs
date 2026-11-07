@@ -182,12 +182,13 @@ testWindow.pywebview = {
       } else {
         requests.push(invocation);
       }
-      return pending.promise.then((response) => ({
+      // Native dispatch serializes before pywebview parses a private JS value.
+      return pending.promise.then((response) => JSON.parse(JSON.stringify({
         transport_version: 1,
         response_token: request.command === "release_terminal_session"
           || request.command === "close_task" ? request.request_id : null,
         response,
-      }));
+      })));
     },
   },
 };
@@ -1007,6 +1008,7 @@ const stopTerminalCallback = bridge.startTaskDrain(
     terminalCallbackSnapshots.push(snapshot);
     if (terminalCallbackAttempts.length === 1) {
       update.record.state = "failed";
+      assert.throws(() => { snapshot.terminal_result.headline = "failure"; }, TypeError);
       throw new Error("private terminal renderer detail");
     }
   },

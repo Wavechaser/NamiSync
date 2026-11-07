@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import gc
+from importlib.util import find_spec
 from dataclasses import asdict
 import json
 import logging
@@ -594,7 +595,7 @@ def test_br_g_32_surrogate_payload_keys_are_refused_before_handler(
     assert handled == []
 
 
-def _run_required_bridge_probe(probe_name: str) -> None:
+def _run_required_bridge_probe(probe_name: str, *extra_paths: Path) -> None:
     node = _node_executable()
     if node is None:
         pytest.fail("This bridge gate requires Node.js; install node on PATH or set NAMISYNC_TEST_NODE.")
@@ -608,7 +609,7 @@ def _run_required_bridge_probe(probe_name: str) -> None:
 
     try:
         completed = run_node_probe(
-            [str(node), str(probe), str(bridge)],
+            [str(node), str(probe), str(bridge), *map(str, extra_paths)],
             timeout=10,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
@@ -872,7 +873,10 @@ def test_br_g_36_node_drain_validates_transport_before_batch_delivery(
 
 
 def test_required_node_interactive_wrapper_is_bounded_single_attempt() -> None:
-    _run_required_bridge_probe("bridge_interactive_probe.mjs")
+    webview_spec = find_spec("webview")
+    assert webview_spec is not None and webview_spec.origin is not None
+    native_api = Path(webview_spec.origin).parent / "js" / "api.js"
+    _run_required_bridge_probe("bridge_interactive_probe.mjs", native_api)
 
 
 def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:

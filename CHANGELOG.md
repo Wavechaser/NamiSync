@@ -27,6 +27,12 @@ owning contracts.
 
 #### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-07)
 
+- Remove redundant parsed-response and snapshot copies in the browser while
+  retaining terminal retry isolation and native receipt custody. Matched 10k
+  executions sampled 15.8% less allocation; observed peak/closed memory was
+  higher, so this is not a process-memory or throughput improvement claim.
+  Pass the interface and installed transport gates plus matched 20-cycle
+  repeated-use checks with all 40 mirrors correct and normal exits.
 - Define startup, metadata/path-size, retained-task, streamed-payload and
   repeated-close diagnostic profiles with process-role attribution, fixed idle
   windows, correctness witnesses and explicit incomplete-run handling.

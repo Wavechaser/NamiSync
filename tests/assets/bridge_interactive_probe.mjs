@@ -2,6 +2,21 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { TestEventTarget } from "./_event_target.mjs";
 
+// Exercise the installed producer's actual return parser, with no native UI.
+const nativeWindow = {};
+new Function("window", await readFile(process.argv[3], "utf8"))(nativeWindow);
+nativeWindow.pywebview._returnValuesCallbacks.dispatch = {};
+let returnId = 0;
+function nativeReturn(value) {
+  const id = String(returnId++);
+  return new Promise((resolve, reject) => {
+    nativeWindow.pywebview._checkValue("dispatch", resolve, reject, id);
+    nativeWindow.pywebview._returnValuesCallbacks.dispatch[id]({
+      value: JSON.stringify(value), isError: false,
+    });
+    assert.equal(Object.keys(nativeWindow.pywebview._returnValuesCallbacks.dispatch).length, 0);
+  });
+}
 
 class TestWindow extends TestEventTarget {
   constructor() {
@@ -14,12 +29,13 @@ class TestWindow extends TestEventTarget {
     this.observations = [];
     this.nextResponseToken = 1;
     this.loseNextAcknowledgment = false;
+    this.changedNativeDisplay = null;
     this.queuedResults = new Map();
     this.commandFailures = new Map();
     this.releaseInteractive = null;
     this.pywebview = {
       api: {
-        dispatch: (requestJson) => this.dispatch(requestJson),
+        dispatch: (requestJson) => this.dispatch(requestJson).then(nativeReturn),
       },
     };
   }
@@ -39,6 +55,11 @@ class TestWindow extends TestEventTarget {
       this.acknowledgedTokens.add(requestJson);
       const acknowledgedResponse = this.nativeResponses.get(requestJson);
       if (acknowledgedResponse !== undefined) {
+        if (this.changedNativeDisplay === null
+            && typeof acknowledgedResponse.response.result?.display === "string") {
+          acknowledgedResponse.response.result.display = "changed native backing value";
+          this.changedNativeDisplay = acknowledgedResponse.response.result.display;
+        }
         acknowledgedResponse.response.result = "mutated after browser detachment";
       }
       if (this.loseNextAcknowledgment) {
@@ -193,6 +214,7 @@ assert.deepEqual(selected, {
   detail: null,
 });
 assert.equal(testWindow.requests.at(-1).command, "pick_folder");
+assert.equal(testWindow.changedNativeDisplay, "changed native backing value");
 assert.equal(testWindow.acknowledgments.length, 2);
 
 testWindow.loseNextAcknowledgment = true;

@@ -141,6 +141,16 @@ The drain callback receives the snapshot with the last applicable update, or
 `(null, snapshot)` for an empty catch-up. Raw-event diagnostics ignore that
 snapshot-only notification rather than counting it as an event sample.
 
+The pinned pywebview return callback parses each serialized native response into
+a private JavaScript value. Direct returns and original-result observations
+adopt that value after the existing validation without another deep copy.
+Drain snapshots are frozen recursively in place before presentation. Terminal
+retry shares its frozen retained snapshot, but still gives each callback a fresh
+copy of the retained terminal update so a failed renderer cannot alter the
+next attempt. Shared completion-event messages still require capture before
+another listener can change them. These ownership boundaries preserve native
+receipt custody and acknowledgment ordering.
+
 ## Command, retry, and concurrency rules
 
 Origin and readiness authorization occur before command dispatch. Document replacement cannot roll back an admitted action. A genuine replacement permanently retires this window's command authority; canceled navigation and same-document history leave it intact. Initial readiness, effect receipts, worker custody and normal close retain their owners. [INTERFACES.md](INTERFACES.md#logging-and-host-startup) owns the unsupported-reload presentation and restart contract. The allowlist, exact payload validation, native picker confinement, hostile-text sinks, and logging privacy are bridge security requirements; external text remains text, never markup, a URL, code, or path authority.

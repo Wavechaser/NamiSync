@@ -1,104 +1,54 @@
-# Latest sessions — resource schedule, multi-task attribution and Plan table churn probe, 2026-11-07
+# Latest session — execution allocation and pending GC probes, 2026-11-07
 
-## Full resource schedule on `b6a4fefe`
+## Allocation outcome
 
-The reviewed plan-refusal fixes, the 150,000-row headroom and the small-file
-optimizations showed no blockers. A clean package was built from `b6a4fefe`
-(SHA-256 `a4b1a042…b98d`, `build/resource-study-20261106c/package/`). Later
-commits through `d86e987b` change only tests and docs, so these results still
-describe current product bytes.
+From `ade6ba75`, remove redundant copies of freshly parsed native direct and
+observed responses, freeze ordinary snapshots in place, and share the frozen
+terminal snapshot across retries. Keep terminal update copies per callback,
+initial terminal capture, shared completion-event capture, validation and
+native receipt/release ordering. BRIDGE documents ownership; the interactive
+test exercises installed pywebview's actual return parser and backing mutation.
 
-All 17 collector runs completed with exit 0 in about 6.5 hours, with exact
-mirrors and normal closes:
+Verification: 166 focused tests, 2,224 ordinary interface tests and six installed
+native transport cases passed. An earlier department run produced setup errors
+without traceback and was interrupted; the clean fail-fast rerun passed. Its
+partial log is retained, not treated as passing evidence. Independent review
+checked source/test ownership, diagnostic methods and raw measurement receipts.
 
-- **Startup:** 342–372 MiB settled.
-- **Scale:** 10k peaks below 1 GiB. 100k (101,000 items, now admitted) peaks at
-  2.4–2.6 GiB and keeps ~2 GiB after close, mostly uncollected renderer garbage.
-- **Long-run:** payload, three 100-cycle soaks and the 60-minute open-task idle
-  stay flat.
+Four matched 10k execution samples in B,C,C,B order show 15.82% lower mean
+sampled allocation (512.00 → 431.00 MiB). Profiled private memory was higher
+in the candidate and throughput did not improve. Two unprofiled 20-cycle soaks
+passed all 40 mirrors/preserved-version checks and normal closes, with comparable
+late browser memory/handle counts. This is a bounded regression observation,
+not a replacement for the previous full stability schedule. PERFORMANCE holds
+the tables, provenance and caveats, including the post-close memory tradeoff.
 
-[PERFORMANCE](PERFORMANCE.md) ("Full resource schedule on `b6a4fefe`") holds
-the table and the session's assessment: no leak, and renderer per-item
-allocation is the main large-task cost. `validation.json` is the validator's
-informational run against the pilot yardsticks: 100k peak/closed, two soak
-handle slopes and one noisy soak slope exceed them.
+Evidence:
 
-The user judged these results non-blocking for SH-G-15, with room for
-improvement.
+- `build/allocation-20261107/`: frozen microbench inputs/hashes, six Node
+  receipts, builder review notes, interrupted department log and passing gates.
+- `build/memory-probe-20261107/`: private baseline/candidate bundles and
+  manifests, four verified sample runs, two verified soaks, comparison JSON,
+  fixtures registry and raw profiles/resources. `baseline-sample-01` failed on
+  sandbox loopback access and is excluded; later native launches used escalation.
+- Original full-study evidence remains `build/resource-study-20261106c/`;
+  PERFORMANCE retains its baseline conclusions. No original package or fixture
+  was modified. Test targets are under the task-owned ignored build tree.
 
-**Follow-up, 2026-11-07.** Six simultaneously open 10k tasks (four executed,
-two at Plan) peaked at 1.27 GiB, against ~2.4 GiB for summed single-task
-deltas. A forced GC left 84 MiB of live renderer state. Same-volume tasks
-serialize in admission, so a second plan waited 87 s behind an execution.
-Attribution runs found:
+## Immediate next work
 
-- **Renderer:** about half of per-item allocation is pywebview's
-  script-per-response return path, and ~27% is `cloneJsonValue` copying
-  freshly parsed responses.
-- **Host:** verification spends 3.3 of 5.1 ms/file in Defender's first-open
-  scan of each new file. Copy guards take ~2.4 ms/file.
+After committing this allocation outcome, run the prepared candidate GC probes
+at 10k and 100k, then the separate native Low/Normal target probe. These are
+diagnostic experiments only; do not introduce a production GC policy. Preserve
+unforced memory windows, distinguish JS heap/private bytes/working set, verify
+normal restoration and a new Plan, and report responsiveness plus exact mirrors
+and normal process closure. Driver details are in the evidence README and M1_PLAN.
+The original successful allocation driver is frozen as `probe_allocation.py`;
+GC/Low progress logging has separate producer hashes.
 
-PERFORMANCE ("Multiple open tasks and cost attribution") holds the tables
-and seven unscheduled optimization candidates.
-
-Still open:
-
-- Unmeasured: forced-GC collectability at 100k, 100k repetition within one
-  process, and concurrent executions on disjoint volumes.
-- Watch item: ~5 MiB/100 syncs host creep. Host retention after close
-  follows peak use and is unattributed.
-
-Analysis scripts are in the evidence directory: `summarize.py`,
-`soak_trend.py`, `handle_roles.py`, `cpu_split.py`, and for the follow-up
-`multitask.py`, `multi_summary.py`, `heapsample.py`, `hosttimers.py`,
-`hostprofile.py`, `openprobe.py` and `freshopen.py`. Study fixtures stay on
-`F:\` and `H:\test_dir\`, registered in `full/fixtures.jsonl` and
-`multi/fixtures.jsonl` there and in the `b` study's registries.
-
-## Plan table churn probe
-
-The ordinary Plan component probe now replays eight successive copy receipts
-against fresh window payloads. Each changed row must show completion, and
-adding 56 unchanged rows must not increase element creation for a receipt.
-All four focused pytest cases passed. A disposable renderer copy forced to
-repaint every row failed on receipt one (768 elements versus 96). The probe
-uses Node's fake DOM. Renderer memory and GC remain package measurements.
-
-The overnight measurement run owns the desktop. No package or desktop actions
-were taken. The outstanding installed-test diagnostic from the preceding
-session is summarized below for resumption after the study.
-
-The installed default-window execution review failed its final `exact` host
-check twice in 12 interleaved runs at `b2e872e6` and twice in 12 at
-`6745868d`. All four preserved driver reports showed matching detail and
-window operation IDs and revision 26 at failure reporting. The browser
-retention/actions passed. The earlier larger-window case also reported
-`["exact-receipts"]`. These reports establish the symptom across revisions
-and sizes. The missing host condition in those runs is unknown.
-
-- Paired trials and the four failure directories: `build/receipt-rate-20261106/`.
-- Earlier larger-window receipt: `build/scale-headroom-20261106/larger-completion-checks.json`.
-- Original default failures, isolated private-desktop pass and four passing
-  diagnostic reruns: `build/copy-plan-read-opt/`. Small-file findings and
-  remaining M2 batching scope are in [PERFORMANCE](PERFORMANCE.md) and
-  [M1_PLAN](M1_PLAN.md).
-
-The headed test now records which host conditions failed in the same
-evaluation that rejects completion. On recurrence retain the scenario
-evidence directory. [TESTS](TESTS.md#execution-review-completion-trace)
-describes the trace. One specific hypothesis is a partial Inventory window:
-the producer attaches integrity items only for the returned row IDs, while
-the test compares the latest window's item count with the entire fixture.
-The four prior diagnostic reruns each saw 24 rows and 24 items. An actual
-failed trace is needed to attribute the intermittent failure.
-
-For an attended diagnostic
-after the study, use an available input desktop to match the original
-reproducer. This command selects the default case and gives its evidence a
-fresh location under the system temp directory. Routine unattended journeys
-use the private desktop described in [TESTS](TESTS.md#running-installed-journeys).
-
-```powershell
-$receiptRoot = Join-Path $env:TEMP ("namisync-review-" + [guid]::NewGuid().ToString("N"))
-.\.venv\Scripts\python.exe -m pytest -q -o "addopts=" -m headed --basetemp $receiptRoot "tests/interfaces/web/test_task_execution_review_headed.py::test_installed_task_execution_review_real_copy_and_capture[default]"
-```
+Commit updated findings and HANDOFF promptly at completion to avoid collision
+with another session's context update. No other session's processes were changed.
+The longstanding installed execution-review `exact-receipts` failure remains
+unresolved; `fcb72b37` added a failure trace. TESTS describes preserving that
+sidecar. Existing paired failure evidence remains `build/receipt-rate-20261106/`.
+Grouped ledger commits/parent flushes and small-file batching remain M2 work.

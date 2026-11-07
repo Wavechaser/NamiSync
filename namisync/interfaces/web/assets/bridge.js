@@ -1525,8 +1525,8 @@ async function acceptNativeResponse(attempt, api, native) {
   }
   if (native.response_token !== null) attempt.responseToken = native.response_token;
   if (direct) {
-    const response = cloneJsonValue(native.response);
-    settleAttemptResponse(attempt, response);
+    // pywebview resolves each dispatch with a private JSON.parse result.
+    settleAttemptResponse(attempt, native.response);
     if (!attempt.observed) acknowledgeNativeAdmission(attempt, api);
     return "direct";
   }
@@ -1709,7 +1709,7 @@ function acceptObservedObservation(attempt, observed) {
     }
   }
   if (observed.state === "ready" && attempt.result === null) {
-    settleAttemptResponse(attempt, cloneJsonValue(observed.response));
+    settleAttemptResponse(attempt, observed.response);
   }
   return observed.state;
 }
@@ -2274,7 +2274,7 @@ function presentTerminalUpdate(task, update, snapshot) {
   try {
     task.acceptUpdate(
       cloneJsonValue(task.pendingTerminalUpdate.update),
-      freezeJsonValue(cloneJsonValue(task.pendingTerminalUpdate.snapshot)),
+      task.pendingTerminalUpdate.snapshot,
     );
   } catch (_error) {
     task.terminalPresentationInProgress = false;
@@ -2305,7 +2305,7 @@ function retryTerminalPresentation(task) {
 
 function deliverTaskUpdate(task, update, previousSequence, snapshot) {
   try {
-    task.acceptUpdate(update, snapshot === null ? null : freezeJsonValue(cloneJsonValue(snapshot)));
+    task.acceptUpdate(update, snapshot === null ? null : freezeJsonValue(snapshot));
     if (snapshot !== null) task.snapshotRevision = snapshot.revision;
     return true;
   } catch (_error) {
