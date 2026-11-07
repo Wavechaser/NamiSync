@@ -70,6 +70,11 @@ const settingsView = document.querySelector("#settings-view");
 const themeOptions = document.querySelector("#theme-options");
 const UNKNOWN_OUTCOME_GUIDANCE = "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.";
 const PLAN_UNAVAILABLE = "Plan unavailable. Select the task to retry.";
+
+function taskStartFailureMessage(error, fallback) {
+  return error?.code === "maintenance_pending"
+    ? error.message : fallback;
+}
 if (
   !(app instanceof HTMLElement)
   || !(status instanceof HTMLElement)
@@ -1882,9 +1887,9 @@ async function submitInventoryIntegrity(task, attempt) {
     } else {
       attempt.pending = false;
       attempt.recovery = null;
-      attempt.message = attempt.scope === "copied"
+      attempt.message = taskStartFailureMessage(error, attempt.scope === "copied"
         ? "Verification did not start. This action needs successful copied files and an available target. You can select files and use Verify selected."
-        : "Integrity work did not start. Try again when you are ready.";
+        : "Integrity work did not start. Try again when you are ready.");
       review.message = attempt.message;
       task.inventoryAction = null;
     }
@@ -2014,11 +2019,11 @@ async function runInventoryAction(review, kind, nodeId) {
     } else {
       attempt.pending = false;
       attempt.recovery = null;
-      attempt.message = error?.code === "inventory_capacity"
+      attempt.message = taskStartFailureMessage(error, error?.code === "inventory_capacity"
         ? "Inventory command capacity is full. Close a task before trying again."
         : kind === "refresh"
           ? "Inventory refresh was refused. Review this task and try again."
-          : "Visibility change was refused. Reload inventory view before trying again.";
+          : "Visibility change was refused. Reload inventory view before trying again.");
     }
   } finally {
     if (stillOwned()) renderTasks();
@@ -3585,9 +3590,9 @@ async function submitReviewedExecution(task, attempt) {
       task.executionAttempt = null;
       if (currentReview !== null) {
         currentReview.pending = null;
-        currentReview.message = currentReview.summary.preflight_ready
+        currentReview.message = taskStartFailureMessage(error, currentReview.summary.preflight_ready
           ? "Execution did not start. Selection remains editable."
-          : "Plan refused. Create a fresh plan.";
+          : "Plan refused. Create a fresh plan.");
       }
     }
     renderTasks();
@@ -4044,9 +4049,10 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
     }
     form.attempt = null;
     task.startRecovery = null;
-    form.actionMessage = "That task could not be started. Review the setup and try again.";
+    form.actionMessage = taskStartFailureMessage(error,
+      "That task could not be started. Review the setup and try again.");
     renderTasks();
-    void loadTaskSetup(task);
+    if (error?.code !== "maintenance_pending") void loadTaskSetup(task);
     return;
   }
   if (currentFormAttempt(task, form, attempt)) {
@@ -4322,7 +4328,8 @@ async function startBatchRow(row, context) {
     } else {
       row.state = "refused";
       row.recovery = null;
-      row.message = "That pair could not be created. Review its folders and settings, then try again.";
+      row.message = taskStartFailureMessage(error,
+        "That pair could not be created. Review its folders and settings, then try again.");
     }
   }
 }

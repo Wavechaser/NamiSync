@@ -25,8 +25,14 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
-#### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-07)
+#### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-08)
 
+- Bound new session admission behind idle renderer collection to one five-second
+  wait budget. Return an explicit retryable refusal without starting a session
+  or releasing the collection reservation. Preserve late completion/retry and
+  provisional-start cleanup. The original native collection/release handler
+  remains completion-bound; no collector timeout or renderer recovery is added.
+  Pass all 2,261 interface tests and independent review.
 - Reuse exact admitted root/anchor spellings in shared executor revalidation,
   benefiting copy and other operation guards while preserving fresh filesystem
   checks. Native COPY traces remove twenty lexical conversions per body;

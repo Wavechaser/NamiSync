@@ -1341,8 +1341,10 @@ assert.deepEqual(
   calls.at(-1),
   ["execute-plan", TASK_G, firstReview.summary.request_id, 1, false],
 );
-planExecutions[0].reject(new Error("certain refusal before admission"));
+planExecutions[0].reject(Object.assign(new Error("maintenance-guidance-sentinel"),
+  { code: "maintenance_pending" }));
 await until(() => reviewRenders.at(-1).executionAttempt === null);
+assert.equal(firstReview.message, "maintenance-guidance-sentinel");
 
 firstReview.summary = planSummary({
   disposition: "current",

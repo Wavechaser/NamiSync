@@ -482,6 +482,7 @@ service shutdown retryable.
 | `command_conflict` | This action no longer matches its first attempt. Start the action again. |
 | `planning_refused` | NamiSync could not start a plan for those folders. Review both folders and try again. |
 | `task_unavailable` | That desktop task is no longer available. |
+| `maintenance_pending` | Renderer maintenance is still pending. Retry or restart NamiSync. |
 | `drain_busy` | That desktop task already has an event request in progress. |
 | `observation_conflict` | That desktop task is already observing different work. |
 | `bridge_busy` | NamiSync is busy. Try this action again. |
@@ -493,6 +494,15 @@ admitted work may instead mean uncertain result delivery; the task-command
 wrappers retain their existing uncertainty recovery. Retry policy belongs to
 immutable command rows and the wrapper, never handler data. No private detail
 is appended to errors.
+
+`maintenance_pending` is a definitive refusal before session admission when
+the five-second idle-maintenance wait budget expires. No task session starts,
+and the refusal triggers no automatic resubmission or uncertain-result recovery.
+Existing pending-response observation may already have begun before the refusal
+arrives; the definitive response settles that wait. Retry
+can succeed once maintenance actually settles. The timeout does not release
+the idle reservation or cancel native collection; [INTERFACES](INTERFACES.md)
+owns that lifecycle boundary.
 
 ## Implemented command map
 

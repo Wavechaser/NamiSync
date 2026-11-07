@@ -7,11 +7,13 @@ from dataclasses import dataclass, field
 from hashlib import sha256
 import re
 from threading import Condition, Lock
+from time import monotonic
 from typing import Literal
 from uuid import uuid4
 
 
 TASK_EFFECT_CAPACITY = 48
+IDLE_MAINTENANCE_ADMISSION_TIMEOUT_SECONDS = 5.0
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _ANY_TASK = object()
 _PLAN_EFFECT_KINDS = frozenset({"plan", "task-plan"})
@@ -40,6 +42,10 @@ class LifecycleAssociationError(LookupError):
 
 class LifecycleTaskCapacityError(RuntimeError):
     """The bounded application task-effect set is full."""
+
+
+class LifecycleMaintenanceTimeoutError(TimeoutError):
+    """Admission waited too long for idle maintenance to settle."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -776,8 +782,12 @@ class TaskLifecycle:
         ):
             raise TypeError("detail owner must be an exact string pair")
         with self._condition:
+            deadline = monotonic() + IDLE_MAINTENANCE_ADMISSION_TIMEOUT_SECONDS
             while self._idle_maintenance and not self._closed:
-                self._condition.wait()
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise LifecycleMaintenanceTimeoutError("idle maintenance is pending")
+                self._condition.wait(remaining)
             if self._closed:
                 raise RuntimeError("service is closed")
             prior_session_id: str | None = None

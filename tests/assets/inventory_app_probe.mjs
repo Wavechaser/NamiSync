@@ -81,7 +81,8 @@ globalThis.inventoryHarness = {
   listTasks() { return Promise.resolve({ tasks: taskSnapshot === null ? [] : [taskSnapshot] }); },
   refreshInventory(...args) {
     calls.push(["refresh", ...args.slice(0, 5)]);
-    if (refuseRefresh) return Promise.reject(Object.assign(new Error("capacity"), { code: "inventory_capacity" }));
+    if (refuseRefresh) return Promise.reject(Object.assign(new Error("maintenance-guidance-sentinel"),
+      { code: refuseRefresh === true ? "inventory_capacity" : refuseRefresh }));
     const [taskId] = args;
     taskSnapshot = { ...taskSnapshot, task_id: taskId, session_id: "7".repeat(32),
       session_state: "active", session_released: false, request_id: "8".repeat(32),
@@ -124,7 +125,8 @@ globalThis.inventoryHarness = {
   },
   startInventoryIntegrity(taskId, requestId, commandId, revision, mode, accepted, onDelayed, scope) {
     calls.push(["integrity-start", taskId, requestId, commandId, revision, mode, accepted, scope]);
-    if (refuseIntegrityStart) return Promise.reject(new Error("integrity refused"));
+    if (refuseIntegrityStart) return Promise.reject(Object.assign(new Error("maintenance-guidance-sentinel"),
+      { code: refuseIntegrityStart === true ? "internal_error" : refuseIntegrityStart }));
     taskSnapshot = {task_id:taskId, session_id:"d".repeat(32), session_state:"active",
       session_released:false, task_kind:taskSnapshot?.task_id === taskId ? taskSnapshot.task_kind : "inventory",
       request_id:"e".repeat(32), plan_request_id:taskSnapshot?.task_id === taskId
@@ -626,6 +628,11 @@ assert.equal(calls.filter(([name]) => name === "restore").length, priorRestoreCo
 refuseRefresh = true;
 await app.runInventoryAction(review, "refresh", null);
 assert.match(task.inventoryAction.message, /Close a task before trying again/);
+refuseRefresh = "maintenance_pending";
+await app.runInventoryAction(review, "refresh", null);
+assert.equal(task.inventoryAction.pending, false);
+assert.equal(task.inventoryAction.message,
+  "maintenance-guidance-sentinel");
 refuseRefresh = false;
 const previousDrainCount = drains.length;
 await app.runInventoryAction(task.inventoryReview, "refresh", null);
@@ -988,6 +995,10 @@ assert.deepEqual(calls.findLast(([name]) => name === "select").slice(1),
 assert.equal(d1Review.summary.selected_file_count, d1Review.summary.selectable_file_count);
 assert.equal(d1Review.scrollTop, 19, "authoritative selection replacement preserves review scroll custody");
 const trigger = new HTMLElement("button");
+refuseIntegrityStart = "maintenance_pending";
+await app.startInventoryIntegrityAction(d1Review, "baseline", trigger);
+assert.equal(d1Task.inventoryAction, null);
+assert.equal(d1Review.message, "maintenance-guidance-sentinel");
 const startsBefore = calls.filter(([name]) => name === "integrity-start").length;
 refuseIntegrityStart = true;
 await app.startInventoryIntegrityAction(d1Review, "baseline", trigger);

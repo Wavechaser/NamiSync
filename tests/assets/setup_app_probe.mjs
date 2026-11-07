@@ -1314,6 +1314,25 @@ for (const action of ["remove", "close"]) {
   assert.equal(harness.model.options.deletion_policy, "additive");
 }
 
+// A maintenance refusal retains setup and routes the bridge's fixed guidance.
+for (const kind of ["inventory", "sync-plan", "plan-again"]) {
+  const harness = await loadScenario();
+  const task = harness.task;
+  const form = task.form;
+  const attempt = { kind, running: true, dispatched: false };
+  form.attempt = attempt;
+  let reloads = 0;
+  harness.readSetup = () => { reloads += 1; throw new Error("unexpected setup reload"); };
+  await harness.dispatchFormAttempt(task, form, attempt, () => Promise.reject(
+    Object.assign(new Error("maintenance-guidance-sentinel"), { code: "maintenance_pending" }),
+  ));
+  await turns();
+  assert.equal(task.form, form, "maintenance refusal retains the editable/frozen setup");
+  assert.equal(form.attempt, null);
+  assert.equal(form.actionMessage, "maintenance-guidance-sentinel");
+  assert.equal(reloads, 0, "a refused admission cannot erase its feedback through setup reload");
+}
+
 // An admitted start is authoritative even when the subsequent task-list read
 // fails or a read launched before admission finishes afterward.
 const lifecycleScenario = process.argv[3] ?? "all";
@@ -1479,6 +1498,19 @@ for (const observation of ["failed", "stale"]) {
   assert.equal(harness.model.batch[0].state, "created");
   assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, 1);
   assert.equal(dispatchError, undefined, "batch observation failure cannot reject an admitted start");
+}
+
+{
+  const harness = await loadScenario();
+  harness.callbacks.onEdit("source", "C:\\batch-source");
+  harness.callbacks.onEdit("target", "D:\\batch-target");
+  harness.callbacks.onAddPair();
+  harness.startPlan = () => Promise.reject(Object.assign(new Error("maintenance-guidance-sentinel"),
+    { code: "maintenance_pending" }));
+  await harness.startPairBatch();
+  assert.equal(harness.model.batch[0].state, "refused");
+  assert.equal(harness.model.batch[0].message,
+    "maintenance-guidance-sentinel");
 }
 
 await turns();

@@ -67,6 +67,10 @@ class TaskUnavailableError(LookupError):
     """A task is absent, closed, or does not own the supplied session."""
 
 
+class TaskMaintenancePendingError(TimeoutError):
+    """No session was admitted because idle maintenance has not settled."""
+
+
 class TaskIntentConflictError(RuntimeError):
     """A task command id was reused for a different resolved intent."""
 

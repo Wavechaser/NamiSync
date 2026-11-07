@@ -3526,6 +3526,38 @@ def _task_capacity_service(
     return service, counts
 
 
+def test_task_start_maintenance_timeout_retires_claim_without_submission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from namisync.interfaces import task_lifecycle as lifecycle_module
+    from namisync.interfaces.task_port import TaskMaintenancePendingError
+
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    service, counts = _task_capacity_service()
+    lifecycle = service._lifecycle
+    assert lifecycle.begin_idle_maintenance()
+    monkeypatch.setattr(lifecycle_module, "IDLE_MAINTENANCE_ADMISSION_TIMEOUT_SECONDS", 0)
+    command_id = f"{97_999:032x}"
+
+    def start():
+        return service.start_task_plan(
+            str(source), str(target), deletion_policy=None,
+            command_id=command_id, delivery_factory=lambda _task_id: lambda _update: None,
+        )
+
+    with pytest.raises(TaskMaintenancePendingError):
+        start()
+    assert (counts.adoptions, counts.submissions) == (0, 0)
+    assert lifecycle._tasks == {} and lifecycle._admissions == {}
+    assert lifecycle._sessions == {} and lifecycle._start_receipts == {}
+    assert not lifecycle.begin_idle_maintenance()
+    lifecycle.end_idle_maintenance()
+    assert start().session_id
+    assert (counts.adoptions, counts.submissions) == (1, 1)
+
+
 @pytest.mark.parametrize("oversized_role", ("source", "target"))
 def test_task_location_bound_precedes_claim_and_native_admission(
     oversized_role: str,

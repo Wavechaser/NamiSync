@@ -21,6 +21,25 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Bound admission behind idle maintenance — delivered 2026-11-08
+
+The user approves a small five-second task-admission wait limit. When idle
+renderer maintenance is still pending, return an explicit retryable refusal
+without admitting a session or releasing the maintenance reservation. Preserve
+late-settlement recovery, service-close wakeup and provisional-start rollback.
+The original GC/release handler still waits for actual completion or renderer
+exit. Timing out admission does not cancel native GC or permit execution beside it.
+
+Interface lifecycle/service and bridge error presentation own this change,
+including registry failure classification and page start-error presentation.
+Deadline/spurious-wakeup, no-effect refusal, provisional cleanup, settlement/retry
+and existing close/failure checks pass. All 2,261 interface tests and independent
+review pass, including the integrated registry/service refusal and page feedback
+paths. Evidence is in `build/gc-admission-timeout-20261108/`, with matching
+INTERFACES, BRIDGE, CHANGELOG and HANDOFF updates. Native collector changes, renderer recovery,
+asynchronous reservation transfer and automatic task resubmission are excluded.
+Repository safety and recurrence stops remain binding.
+
 ### Shared executor root spelling — delivered 2026-11-07
 
 Apply the user's approved copy-path consolidation at the native executor's

@@ -80,6 +80,30 @@ def test_idle_maintenance_requires_all_backend_sessions_released() -> None:
     assert collected == ["all released", "rolled back"]
 
 
+def test_idle_maintenance_admission_deadline_survives_spurious_wakes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = TaskLifecycle()
+    assert lifecycle.begin_idle_maintenance()
+    ticks = iter((10.0, 10.0, 12.0, 14.0, 15.0))
+    monkeypatch.setattr(lifecycle_module, "monotonic", lambda: next(ticks))
+    waits = []
+
+    def wake_without_settlement(timeout=None):
+        waits.append(timeout)
+
+    monkeypatch.setattr(lifecycle._condition, "wait", wake_without_settlement)
+    with pytest.raises(lifecycle_module.LifecycleMaintenanceTimeoutError):
+        lifecycle.begin_admission("inventory", None, ("new",))
+    assert waits == [5.0, 3.0, 1.0]
+    assert lifecycle._admissions == {} and lifecycle._sessions == {}
+    assert lifecycle._start_receipts == {}
+    assert not lifecycle.begin_idle_maintenance()
+    lifecycle.end_idle_maintenance()
+    monkeypatch.setattr(lifecycle_module, "monotonic", lambda: 16.0)
+    assert lifecycle.begin_admission("inventory", None, ("retry",))
+
+
 @pytest.mark.parametrize("fail_collection", [False, True])
 def test_idle_maintenance_holds_new_admission_until_actual_completion(
     monkeypatch: pytest.MonkeyPatch, fail_collection: bool,

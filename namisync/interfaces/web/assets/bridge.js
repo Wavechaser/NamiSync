@@ -256,6 +256,7 @@ const ERROR_MESSAGES = Object.freeze({
   planning_refused:
     "NamiSync could not start a plan for those folders. Review both folders and try again.",
   task_unavailable: "That desktop task is no longer available.",
+  maintenance_pending: "Renderer maintenance is still pending. Retry or restart NamiSync.",
   inventory_capacity: "Inventory command capacity is full. Close a task before trying again.",
   drain_busy: "That desktop task already has an event request in progress.",
   observation_conflict:

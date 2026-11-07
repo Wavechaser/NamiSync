@@ -1,45 +1,48 @@
-# Latest session — shared executor root spelling, 2026-11-07
+# Latest session — bounded admission behind idle GC, 2026-11-08
 
-## Delivered changes
+## Outcome and scope
 
-On base `323b5377`, native executor root revalidation reuses exact admitted
-root/anchor spellings inside its active owning invocation. Reviewed volume and
-anchor matching, fresh held-handle attribute queries, descendant checks and
-operation ordering remain. Aliases and unavailable/foreign holds retain their
-existing validation/admission routes. No path cache, observation fusion or
-public contract change is added.
+On base `2d256012`, the user approved a small five-second admission-wait guard
+while renderer collection is pending. Lifecycle uses one monotonic deadline
+across spurious wakeups. Expiry refuses admission before creating a session;
+service, registry failure reconstruction and bridge preserve the dedicated
+`maintenance_pending` category. Existing task-start error surfaces display
+“Renderer maintenance is still pending. Retry or restart NamiSync.”
 
-The same native method serves COPY, UPDATE, MOVE_UPDATE and non-byte operations;
-no operation-specific optimization is needed. Product changes are confined to
-`namisync/modules/executor/native.py`, with ten new native test cases.
+The reservation remains until actual GC completion or renderer exit. The native
+collector and original release/close handler still wait; this change does not
+cancel GC, allow collection during execution or promise a five-second total
+command response. Pending transport observation may start before the refusal
+arrives, but the definitive response settles it without automatic resubmission.
+Provisional start state is cleaned up and fresh requests can succeed after GC.
 
-Verification pipelining remains M2. No further post-task-close GC is requested.
-Their scope and probe findings remain in PERFORMANCE and M2_PROPOSAL for future
-revisits. Grouped recording, parent flushes and small-file batching remain M2.
+No renderer recovery, new collection trigger, phase-transition collection,
+heap cap or verification pipeline is added. Verification pipelining and small-file
+batching remain M2. Prior post-Close findings remain in PERFORMANCE.
 
 ## Verification and evidence
 
-Evidence: `build/path-consolidation-20261107/` (drivers, hashes, raw receipts,
-summary, findings and independent review). Baseline native tests pass 193;
-candidate native tests pass 203, executor department 658, unchanged settlement
-oracle 30 scenarios over three runs. Initial sandbox Temp setup errors are
-retained; successful runs use the normal Windows Temp route.
+Evidence is in `build/gc-admission-timeout-20261108/`. It retains baseline,
+focused, browser, integrated-registry and department receipts, failed test
+attempts, findings and independent review. The final interfaces department passes
+all 2,261 cases. Independent review approves the final code/tests and confirms
+all 14 changed product/test files match their recorded hashes. Local documentation
+target and diff checks pass.
 
-Native before/after traces each verify 48 fresh 4 KiB copies at three depths,
-exact SHA-256 mirrors, 48 published-evidence entries, source preservation,
-settlement and owned-fixture
-cleanup. COPY-body lexical conversions drop 30 to 10 with all instrumented
-filesystem counts unchanged. Five paired fresh-process isolated guarded
-revalidation samples have median-of-medians 15.20 to 2.09 microseconds. This is
-not an integrated copy or headed throughput claim; PERFORMANCE records limits.
+Review caught two propagation omissions before delivery: the registry's closed
+failure mapping and page-specific fallback messages. Both are direct consumers
+of this same new refusal. Corrections preserve existing generic-failure behavior.
+The first 2,260-case interface pass predates those corrections and is not final
+integrated acceptance. Initial test-only expectation/import errors remain in
+raw logs and are not passing evidence.
 
-No application, measuring-session profile or study fixture was touched. No
-branch/worktree was created. Task-owned probe fixtures are removed by their
-exact-name drivers; ignored evidence remains. No release package was rebuilt.
+No live app, measuring-session artifact or study fixture was touched. No
+branch/worktree was created. No native renderer behavior changed or release
+package was rebuilt. Ignored evidence is retained for review and resumption.
 
-## Immediate context
+## Prior context
 
-The previous Follow/receipt repair is committed as `1d1917c3` and `323b5377`;
-its evidence remains in `build/verify-follow-20261107/`. The old installed
-exact-receipts failure was a page-versus-full-result checker error and is resolved
-there. This session does not rerun or supersede those interface gates.
+Copy-path consolidation is committed as `2d256012`, with evidence in
+`build/path-consolidation-20261107/`. Verification Follow and the older
+exact-receipts checker repair remain `323b5377` and `1d1917c3`, with evidence in
+`build/verify-follow-20261107/`. Their subject records remain authoritative.

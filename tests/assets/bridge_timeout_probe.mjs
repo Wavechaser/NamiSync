@@ -746,6 +746,37 @@ for (const code of ["internal_error", "response_too_large"]) {
     "captured final error acknowledges its exact completion");
 }
 
+// A received maintenance refusal is definitive and starts no recovery observation.
+let maintenanceExchange;
+delivery = (exchange) => {
+  maintenanceExchange = exchange;
+  exchange.message.response = {
+    schema_version: 1, request_id: exchange.request.request_id, ok: false,
+    error: {
+      code: "maintenance_pending",
+      message: "Renderer maintenance is still pending. Retry or restart NamiSync.",
+    },
+  };
+  return immediate(exchange);
+};
+const maintenanceRequests = asyncRequests.length;
+const maintenanceObservations = asyncObservations.length;
+const maintenanceUpdates = [];
+await assert.rejects(asyncBridge.startPlan(taskId, sourceId, targetId, options,
+  (handle) => maintenanceUpdates.push(handle)), {
+  name: "BridgeCommandError", code: "maintenance_pending",
+  message: "Renderer maintenance is still pending. Retry or restart NamiSync.",
+});
+assert.equal(asyncRequests.length, maintenanceRequests + 1);
+assert.equal(asyncObservations.length, maintenanceObservations);
+assert.equal(maintenanceUpdates.at(-1).state, "settled");
+assert.equal(maintenanceUpdates.at(-1).canCheck, false);
+await maintenanceUpdates.at(-1).check();
+assert.equal(asyncObservations.length, maintenanceObservations);
+assert.equal(asyncRequests.length, maintenanceRequests + 1);
+assert.ok(cleanup.includes(`ack:completion:${hostGeneration}:${maintenanceExchange.request.request_id}`
+  + `:${maintenanceExchange.message.completion_token}`));
+
 // Only unresolved delivery-loss attempts own observation slots. All 64 slots
 // fill before the next mutation or mixed async read is refused.
 delivery = (exchange) => exchange.admission;

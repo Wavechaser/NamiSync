@@ -35,6 +35,7 @@ from namisync.interfaces.task_port import (
     TaskSummaryView,
     TaskTerminalDelivery,
     TaskUnavailableError,
+    TaskMaintenancePendingError,
     TaskUpdateView,
 )
 from namisync.workflows.views import (
@@ -90,6 +91,7 @@ class InventoryCommandCapacityError(RuntimeError):
 
 _START_FAILURE_OBSERVATION_CONFLICT = "observation_conflict"
 _START_FAILURE_TASK_UNAVAILABLE = "task_unavailable"
+_START_FAILURE_MAINTENANCE_PENDING = "maintenance_pending"
 _START_FAILURE_INTERRUPTED = "interrupted"
 _START_FAILURE_GENERIC = "start_failed"
 _START_FAILURES = MappingProxyType(
@@ -101,6 +103,10 @@ _START_FAILURES = MappingProxyType(
         _START_FAILURE_TASK_UNAVAILABLE: (
             TaskUnavailableError,
             "task became unavailable during start",
+        ),
+        _START_FAILURE_MAINTENANCE_PENDING: (
+            TaskMaintenancePendingError,
+            "idle maintenance is pending",
         ),
         _START_FAILURE_INTERRUPTED: (
             KeyboardInterrupt,
@@ -137,6 +143,8 @@ _RECOVERY_FAILURES = MappingProxyType(
 
 
 def _classify_start_failure(error: BaseException) -> str:
+    if isinstance(error, TaskMaintenancePendingError):
+        return _START_FAILURE_MAINTENANCE_PENDING
     if isinstance(error, ObservationConflictError):
         return _START_FAILURE_OBSERVATION_CONFLICT
     if isinstance(error, TaskUnavailableError):

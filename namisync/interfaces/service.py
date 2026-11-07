@@ -103,6 +103,7 @@ from namisync.interfaces.session_observer import (
 )
 from namisync.interfaces.task_lifecycle import (
     LifecycleAssociationError,
+    LifecycleMaintenanceTimeoutError,
     LifecycleReceiptConflictError,
     LifecycleTaskCapacityError,
     PlanToken,
@@ -125,6 +126,7 @@ from namisync.interfaces.task_port import (
     TaskStartOutcome,
     TaskTerminalDelivery,
     TaskUnavailableError,
+    TaskMaintenancePendingError,
 )
 
 
@@ -2297,13 +2299,16 @@ class NamiSyncService:
         task_id: str | None = None,
     ) -> tuple[SessionId, StartReceipt]:
         self._require_open()
-        admission = self._lifecycle.begin_admission(
-            effect_kind,
-            command_id,
-            signature,
-            task_id=task_id,
-            detail_owner=detail_owner,
-        )
+        try:
+            admission = self._lifecycle.begin_admission(
+                effect_kind,
+                command_id,
+                signature,
+                task_id=task_id,
+                detail_owner=detail_owner,
+            )
+        except LifecycleMaintenanceTimeoutError:
+            raise TaskMaintenancePendingError("idle maintenance is pending") from None
 
         def rollback() -> None:
             claim = self._lifecycle.begin_admission_rollback(admission)

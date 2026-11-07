@@ -827,8 +827,8 @@ replay path. It restores update delivery, not domain execution or a new session.
 The last successfully presented cursor and snapshot survive suspension; a failed
 presentation restores their prior values. Pending task Close still depends on
 real terminal delivery, with browser retirement fences governed by BRIDGE.
-Failed single-flight starts retain only a closed four-value failure code for
-observation conflict, task unavailability, interruption, or generic start
+Failed single-flight starts retain only a closed five-value failure code for
+observation conflict, task unavailability, pending maintenance, interruption, or generic start
 failure. Every participant and retained failure replay receives a fresh fixed
 exception without chaining; the initiating exception and any domain-cleanup
 failure, including message, type, traceback, cause, context, and attached graph,
@@ -1146,6 +1146,16 @@ task teardown, so it reclaims accumulated garbage rather than promising immediat
 collection of the just-closed task's still-live page objects. There is no periodic
 or phase-transition collection, heap limit, memory-target change, new browser
 command, or workflow barrier.
+
+New session admission uses a five-second wait budget for an existing idle-maintenance
+reservation, with one monotonic deadline across condition wakeups. If maintenance
+is still pending, admission returns a definitive retryable refusal without
+starting a session. Provisional task-start state is retired by the existing
+failure path. The reservation itself remains until actual collection completion
+or renderer exit, and a later request can succeed after settlement. Service close
+still wakes waiting admissions. This bounds admission waiting, not the original
+release/close handler or the native collection operation. A timeout does not
+cancel queued GC or authorize it to overlap execution.
 
 Dispatcher remains each admitted session's custody and control truth; the
 application lifecycle is the sole owner of domain-effect receipts, association,

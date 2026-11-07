@@ -24,7 +24,7 @@ from namisync.dispatcher.event_bus import EventHub
 from namisync.interfaces.task_lifecycle import (
     TASK_EFFECT_CAPACITY,
 )
-from namisync.interfaces.task_port import TaskIntentConflictError
+from namisync.interfaces.task_port import TaskIntentConflictError, TaskMaintenancePendingError
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
     AdmissionRefused,
@@ -48,6 +48,7 @@ from namisync.interfaces.web.commands import (
 from namisync.interfaces.web.commands import production_command_specs
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.interfaces.web.drain import (
+    TaskRegistry,
     TaskCloseRequestView,
     TaskDrainView,
     TaskEventUpdateView,
@@ -128,6 +129,7 @@ ERRORS = {
         "and try again."
     ),
     "task_unavailable": "That desktop task is no longer available.",
+    "maintenance_pending": "Renderer maintenance is still pending. Retry or restart NamiSync.",
     "inventory_capacity": "Inventory command capacity is full. Close a task before trying again.",
     "drain_busy": (
         "That desktop task already has an event request in progress."
@@ -1664,6 +1666,7 @@ def test_br_g_32_picker_failure_uses_its_fixed_public_error() -> None:
         (CommandConflictError("private receipt"), "command_conflict"),
         (PlanningRefusedError("C:\\private\\root"), "planning_refused"),
         (TaskUnavailableError("private task"), "task_unavailable"),
+        (TaskMaintenancePendingError("private maintenance"), "maintenance_pending"),
         (DrainBusyError("private drain"), "drain_busy"),
         (
             ObservationConflictError("private observation"),
@@ -1706,6 +1709,43 @@ def test_br_g_32_incidental_value_error_remains_internal_error() -> None:
         "internal_error",
         ERRORS["internal_error"],
     )
+
+
+def test_maintenance_refusal_survives_real_task_registry_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from namisync.interfaces import task_lifecycle as lifecycle_module
+
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    admitted, _ = _admit_test_plan_locations(str(source), str(target))
+    service = make_service(runtime=SimpleNamespace(
+        admit_location_candidate=lambda _candidate: admitted,
+    ))
+    registry = TaskRegistry(service)
+    shell = registry.create_task_shell("8" * 32)
+    assert service._lifecycle.begin_idle_maintenance()
+    monkeypatch.setattr(lifecycle_module, "IDLE_MAINTENANCE_ADMISSION_TIMEOUT_SECONDS", 0)
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda _payload: registry.start_setup_inventory(
+            shell.task_id, LocationCandidate.literal(str(source)),
+            command_id=REQUEST_ID, wire_intent=("maintenance-test",),
+        ))},
+    )
+
+    assert dispatcher.dispatch(_request()) == _failure(
+        REQUEST_ID, "maintenance_pending", ERRORS["maintenance_pending"],
+    )
+    assert registry._start_responses == {} and registry._provisional == {}
+    task = registry._tasks[shell.task_id]
+    assert task.session_id is None and not task.transition
+    assert task.start_command_id is None
+    assert service._lifecycle._admissions == {} and service._lifecycle._sessions == {}
+    assert service._lifecycle._start_receipts == {}
+    assert not service._lifecycle.begin_idle_maintenance()
+    service._lifecycle.end_idle_maintenance()
 
 
 def test_br_g_32_start_plan_receipt_binds_choice_ids_and_options(
