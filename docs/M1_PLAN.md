@@ -21,6 +21,32 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Copy paths, verification overlap and host retention — investigated 2026-11-07
+
+Read-only investigation at `2ca0b291`; no implementation is activated.
+The [performance record](PERFORMANCE.md#copy-paths-verification-overlap-and-host-retention--2026-11-07)
+owns methods, measurements, source scope and evidence limits. Native COPY
+still repeats pure spelling work: the smallest proposed follow-up recognizes
+exact admitted root/anchor spellings while preserving fresh held-root queries.
+Local descendant-path composition is a separate second candidate; no successful
+filesystem observation is cached and no safety/effect boundary is relaxed.
+
+Recommend verification first-open concurrency discovery in M2, within the
+existing Verify phase. The [M2 index](M2_PROPOSAL.md) records that conditional
+proposal. Earlier locks/refusal observations require review; changed phase,
+checkpoint and recorder ordering for simultaneous copy/verify is a separate
+workflow design, not part of this investigation. Grouped recording, parent
+flushes and small-file batching remain M2; phase-transition GC stays shelved.
+
+Four successful installed-host probes find no retained large task graph after
+Close. Untraced 10k Python GC changes host-private medians only modestly versus
+an adjacent passive idle control; the larger traced change is not a production
+saving. A separate 1k post-frontend collection shows some remaining renderer
+embedder collectability. Neither result activates another GC/trim policy.
+Exact mirrors, durable operation/verification audits, unchanged inputs and
+normal empty-Job exits pass. Independent review and documentation checks close
+this investigation; no product tests or component acceptance gates changed.
+
 ### Idle renderer collection — delivered 2026-11-07
 
 Collect accumulated renderer garbage after successful terminal-session release

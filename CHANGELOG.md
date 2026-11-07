@@ -27,6 +27,16 @@ owning contracts.
 
 #### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-07)
 
+- Investigate remaining COPY path work without changing freshness guards.
+  Verify 48 native copies at three depths; pure-helper replay identifies about
+  0.1 ms of repeated root/anchor spelling work on the depth-two fixture, with
+  no integrated speedup claim. Scope bounded verification open lookahead as
+  conditional M2 discovery, separate from simultaneous copy/verify and batching.
+- Attribute post-Close retention in four isolated native runs. Large task
+  graphs retire; an untraced 10k Python-GC control shows only a modest private
+  memory change. A separate 1k collection after frontend teardown reclaims
+  renderer embedder garbage. Preserve exact mirrors, durable verification,
+  source/product identity and normal empty-Job shutdown; add no new GC policy.
 - Collect renderer garbage after successful terminal release or task close only
   when all backend sessions have released. Reserve that idle interval against
   new admission; pending, running, paused and unreleased terminal sessions defer

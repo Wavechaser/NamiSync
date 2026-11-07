@@ -10,6 +10,208 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Copy paths, verification overlap and host retention — 2026-11-07
+
+This investigation inspects `2ca0b291`; it changes no product code or safety
+contract. The measurements below are diagnostics, not throughput, memory or
+latency acceptance. Evidence lives in `build/path-scope-20261107/`,
+`build/verify-scope-20261107/` and `build/host-retention-20261107/`;
+`build/optimization-scope-20261107/` owns integration and independent review.
+
+### Copy path work
+
+A current-source native executor probe copied 48 fresh 4 KiB files, 16 each at
+relative depths 1, 2 and 5, with local held roots and the ledgerless rig.
+All publications matched expected identities and SHA-256 contents; source
+preservation, complete outcome and fixture teardown checks passed. Wrappers
+counted work only inside `_copy`, excluding directory operations and outer
+operation-entry guards. Instrumented inclusive timings are not additive and
+are not a baseline for predicting savings.
+
+| Calls per COPY body | Depth 1 | Depth 2 | Depth 5 |
+| --- | ---: | ---: | ---: |
+| Native `resolve` | 10 | 10 | 10 |
+| Held-root current-attribute query | 19 | 19 | 19 |
+| Descendant attribute read | 10 | 20 | 50 |
+| `_held_native_path` spelling conversion | 53 | 63 | 93 |
+| Repeated identical input to that conversion | 47 | 55 | 79 |
+
+Each body also performed six no-follow leaf stats and three existence checks.
+Two outer operation-entry guards bring the executor held-root count to 21.
+The earlier cost profile's approximately 25 root-hold queries per file included
+preflight and verifier calls; it is not an executor-only count or evidence of
+a reduction since that profile. `trace-copy.json` records the exact scope,
+driver hash, revision and raw counts.
+
+A separate pure-helper replay used those path arguments and confirmed holds,
+five loops of 1,000 batches per variant in one process, with identical outputs.
+At depth 2, twenty lexical root/anchor conversions took median 100.1 µs per
+batch (95.6–113.8); thirty-three native conversions took 116.1 µs
+(114.5–125.2). Ideal known-spelling lookup and illustrative memo controls cost
+1.2 and 20.1 µs respectively. Those controls omit production ownership checks
+and are not an implementation. The two timings overlap work and must not be
+added. `price-pure.json` supports a roughly 0.1 ms pure-work opportunity for
+exact root spelling on this fixture, not a measured end-to-end saving.
+
+The best remaining local candidates are pure spelling work in
+`modules/executor/native.py`: recognize an exact already-admitted root/anchor
+before repeating lexical conversion in `revalidate_root`, and reuse validated
+relative components/native prefix composition during a single `resolve` walk.
+Keep current held-handle attribute queries and every descendant observation.
+Aliases, unheld roots, custom adapters and unusual spelling retain their
+existing validation/fallback behavior. This is a proposed measured optimization,
+not permission to cache a successful filesystem observation across access
+boundaries. The previous general spelling cache was superseded by admitted-root
+prefix composition at `6157226`; do not reintroduce a task-sized path cache.
+
+Combining source/target stat and resolution, or carrying absence/metadata across
+open, checkpoint, finalization or publication, is a different safety change.
+Fresh COPY preparation already reuses the appropriate observations at publish;
+UPDATE, resumed copies and final target admission have distinct obligations in
+[EXECUTOR](EXECUTOR.md). A local spelling change would need native path/hold/
+fallback tests, runtime retry/root-swap cases, the executor department and its
+unchanged settlement stability gate. No variant or throughput gain is claimed.
+
+### Verification overlap scope
+
+The earlier 10k × 32 B profile measured 5.13 ms per verification candidate,
+including 3.32 ms opening the newly copied file. The serial fresh-file probe
+found similar first-open latency with buffered/unbuffered and flushed/unflushed
+variants, much faster repeat and attributes-only opens, and Defender enabled.
+That is consistent with first-access filtering, but the mechanism was not
+isolated and Defender causality was not proven. It does not establish
+concurrent-open scaling.
+
+Recommend M2 discovery inside the existing automatic Verify phase: compare
+bounded outstanding first opens on fresh matched targets; if that probe helps,
+compare the smallest promising lookahead prototype end to end. One next-file
+open can overlap only the preceding candidate's remaining work (about 1.81 ms
+in that historical profile); it cannot be assumed to hide most of a 3.32 ms
+open stage. More simultaneous opens may serialize in the filter/storage stack
+or worsen HDD seeks. Keep Defender enabled for the comparison.
+
+The narrow candidate retains one ordered read/hash/record/event coordinator,
+the actual guarded readback handle, conditional ledger writes and the existing
+Execute→Verify boundary. Native root admission is invocation- and context-local;
+worker ownership must be explicit rather than sharing a mutable root hold.
+Earlier file locks and earlier sampling of missing, sharing or root refusals
+change observation/effect timing; accepting that change needs an explicit M2
+decision, even when outcome publication stays ordered.
+Bound pending handles and bytes, close/join before pause, cancellation or custody
+release, and freshly admit on resume. A synchronous native open has no current
+force-abort mechanism; a timeout cannot stand in for worker settlement. Keep
+custom readers serial unless their contract explicitly supports the handoff.
+
+Verifying while copying continues is a larger workflow redesign: current
+`VerifyContinuation` requires settled execution, and canceled execution enters
+no verification. Overlap changes candidate availability, target lock lifetimes,
+checkpoint/retry semantics, recorder ordering and phase/progress/history truth.
+It is separate from both verifier lookahead and M2 copy batching. Proposed
+verification starts with native/linked recorder cases, ordered out-of-order-ready
+and blocked-open controls, pause/cancel/resume and handle cleanup, then affected
+verifier/workflow/tools/database/history and interface consumers. The detailed
+source population and proposed experiment are in the ignored scope report;
+neither concurrency nor a new performance threshold is activated.
+
+### Host state after Close
+
+The native retention probe uses the current installed wheel, with all 303
+product files matched to the checkout and the earlier frozen wheel, plus
+recorded runtime/producer identities. It owns separate profiles, fixtures and
+Windows Jobs. An untraced 1k × 32 B run and an allocation-traced 10k × 32 B run
+exercise Plan, Execute, automatic Verify, terminal release and task Close.
+Allocation tracing starts before product imports; its timings and private-memory
+figures are not ordinary production measurements. Owner counts, Python object
+types, SQLite allocator counters and CLR heap estimates distinguish live data
+from process residency. These are bounded observations, not a leak certificate.
+
+At terminal the 10k run had 50,400 `FileStat`, 10,100 `PlanOperation` and 10,000
+`IntegrityOutcome` objects; after Close their census counts were zero. All
+checked task/session/plan/review/start-response/worker/subscription and native
+bridge-response populations were empty. One bounded close receipt remained.
+Source inspection confirms that shared service, dispatcher and database owners
+remain process-lived intentionally; they are not task-owned leftovers.
+
+| Traced live Python memory, 10k run | MiB |
+| --- | ---: |
+| Startup | 24.59 |
+| Terminal task retained | 78.33 |
+| After Close | 26.26 |
+| After diagnostic Python GC | 26.08 |
+
+The explicit idle Python collection reported zero collected objects and took
+16.94 ms. That establishes no large cyclic-garbage population, but does not by
+itself exclude allocator reclamation. In sequential instrumented windows host
+private medians fell 292.64→260.95 MiB around collection and then to 196.96 MiB
+after stopping tracing. Neither delta is an isolated GC benefit or an ordinary
+host footprint: snapshots also allocated substantial temporary memory, and
+renderer memory fell during the Python-only interval. Tracemalloc's own
+tables occupied 12.28 MiB at startup, 47.67 at terminal and 16.63 after Close;
+the diagnostic includes a later stop-tracing interval to expose that overhead.
+The SQLite native allocation counter rose from 0.35 to 6.17 MiB and the CLR
+heap estimate from 11.90 to 18.35 MiB after the 10k task. These are separate
+runtime counters, not a complete partition of host private memory.
+
+A separately frozen untraced 10k repeat tests whether the traced decline recurs
+without tracing. Host-private 10-second-window medians were 88.93 MiB at startup,
+174.66 at terminal, 163.28 after Close, 165.01 in a second passive post-Close
+window, and 161.00 after explicit idle Python GC. Collection reported 95 objects
+and 12.6 ms; the latter times Python collection, not a product latency bound.
+The approximately 4 MiB sequential decline does not support importing the
+traced run's approximately 32 MiB decline into a production policy. About
+72 MiB of process-private growth remained relative to this startup, without
+a corresponding large task graph. SQLite allocations were 6.42 MiB and the CLR
+estimate 16.20 MiB afterward; allocator/native residency was not fully attributed.
+No general host GC, allocator trimming or database-lifetime change is justified
+by this bounded investigation.
+
+Host handle medians in that short run were 688 at startup, 1,259 after Close,
+1,255 in the passive control and 1,255 after GC. The other current-product
+probes vary substantially (the earlier two-task probe returned to 686 at both
+ends). These aggregate handle counts do not identify handle owners or establish
+long-term growth. They neither overturn the prior stability study nor establish
+a new handle-reclamation policy.
+
+The untraced 1k host-private medians were 89.03 MiB at startup, 117.94 at
+terminal and 114.60 after Close; host handles were 688 and 701 at the first
+and last windows. SQLite allocations rose from 0.35 to 3.74 MiB while the CLR
+estimate stayed about 12 MiB. Four SQLite connections and 64 prepared statements
+remained versus two and 21 at startup, consistent with lazy opening of the
+shared history owner/store alongside the ledger owner/reader. Database anchor
+connections preserve admitted database identity; indiscriminate closure would
+change that ownership contract. This modest cache population is not evidence
+that another large task graph remains or that host working-set trimming would
+reclaim equivalent committed memory.
+
+The separately frozen `renderer-post-close-1k-01` producer waits for frontend
+task-card removal before requesting the existing native collector through the
+service's idle reservation. Production Close collection runs before its command
+response and therefore before that teardown. In this diagnostic, an additional
+collection reduced embedder heap 20.26→4.93 MiB and JS heap 2.70→2.63 MiB;
+DOM nodes changed only 5,877→5,814 and listeners 2,225→2,173. Renderer-private
+10-second-window medians changed 76.86→69.79 MiB. That sequential private-memory
+decline also includes idle time and is not a proven production saving. The
+receipt's `native_gc_seconds` includes the subsequent diagnostic census, so it
+must not be quoted as native GC latency. This is evidence of some post-teardown
+collectability, not a reason to cap the heap, collect during execution or
+claim another leak. A later policy change would need to preserve backend-idle
+admission exclusion while coordinating frontend teardown and avoiding duplicate
+collections; this investigation changes no lifecycle policy.
+
+All four successful native runs passed exact source/target namespaces and
+SHA-256 contents, unchanged source metadata/product, clean native terminal axes,
+and independent durable history/inventory audits: 1,010/10,100 operations and
+1,000/10,000 verified target files as appropriate. Database audits use copies
+after normal exit and recheck the original bytes. All reported windows have
+complete samples and stable relevant process identities; all apps exited zero
+with empty owned Jobs. `summary.json` binds raw reports, audits and producers;
+the three manifests distinguish original, renderer and untraced-Python-GC
+drivers. Runtime is Edge 157.0.4341.42 / V8 15.7.11.4 / Python 3.13.17.
+The initial sandboxed loopback startup failure is retained separately; it made
+no target changes and left no owned processes. No measuring-session process,
+profile or fixture was changed. Product/tests are unchanged, so no broad test
+suite is claimed or required for this documentation-only delivery.
+
 ## Backend-idle renderer collection — 2026-11-07
 
 Production collection is now attempted after successful terminal-session release
@@ -343,8 +545,9 @@ run took 99 s, with 55 s of process CPU. It spent 43.5 s in execute and
 for every flag set. `freshopen.py` wrote 500 new 32 B files per variant on H:.
 Each file's first data open cost 3.3–3.7 ms, buffered or unbuffered, flushed or
 not. Its second open cost 0.03–0.07 ms, and an attributes-only open 0.01–0.02 ms.
-Defender real-time protection is on, so the 3.3 ms verification open is the
-first-access scan of a new file, not `FILE_FLAG_NO_BUFFERING`. The
+Defender real-time protection was on. The first-access penalty was insensitive
+to `FILE_FLAG_NO_BUFFERING` in this probe and is consistent with filtering,
+but no provider trace isolated its cause. The
 `hostprofile.py` stack sampler over-weights GIL-releasing calls. Use it for
 call paths only, not shares.
 
@@ -363,16 +566,17 @@ call paths only, not shares.
    `CoreWebView2.MemoryUsageTargetLevel`. Lowering it after terminal/close and
    restoring it on activity could return memory without waiting for V8. Its
    side effects need a probe.
-4. Verification on small files spends ~65% of its time in the antivirus
-   first-open scan. The open is latency-bound, so overlapping a few opens
-   could hide most of it. That needs verifier concurrency and ordering
-   review. Targets excluded from scanning avoid it, but that is a user
-   security choice.
+4. Verification on small files spends ~65% of its candidate time in the
+   first data open. Concurrent opens are an untested latency-hiding hypothesis,
+   not a demonstrated benefit or isolated antivirus cost. The later
+   [scope investigation](#verification-overlap-scope) qualifies the opportunity
+   and recommends M2 discovery without disabling protection.
 5. Copy guards: each copied file costs 10 path resolutions, 20 attribute reads
-   and 25 root-hold queries, ~2.4 ms in `_prepare_copy`. Coalescing repeats
-   inside one operation may save ~1 ms/file. It needs
-   [EXECUTOR](EXECUTOR.md) safety review, since repeated checks may be
-   intentional time-of-use guards.
+   and about 25 aggregate root-hold queries, ~2.4 ms in `_prepare_copy`.
+   The later [copy-path investigation](#copy-path-work) separates native
+   executor counts from other owners and finds repeated spelling work.
+   The original ~1 ms/file saving was an untested estimate; no such gain is
+   established. [EXECUTOR](EXECUTOR.md) owns the distinct time-of-use guards.
 6. Already assigned to M2: grouped ledger commits (two commits/file,
    ~1.2 ms) and parent-directory flushes (0.37 ms/file).
 7. Host retention after close follows peak use: 285 MiB after six 10k tasks
