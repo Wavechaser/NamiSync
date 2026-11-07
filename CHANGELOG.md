@@ -25,7 +25,7 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
-#### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-08)
+#### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-08)
 
 - Bound new session admission behind idle renderer collection to one five-second
   wait budget. Return an explicit retryable refusal without starting a session
@@ -70,6 +70,9 @@ owning contracts.
   without substantial JS-heap reduction in the measured idle windows.
   Preserve Normal restoration, responsiveness, exact mirrors and normal exits;
   add no production reclamation policy.
+
+#### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-07)
+
 - Define startup, metadata/path-size, retained-task, streamed-payload and
   repeated-close diagnostic profiles with process-role attribution, fixed idle
   windows, correctness witnesses and explicit incomplete-run handling.
@@ -449,14 +452,12 @@ explicit, reviewable and regression-backed.
   minutes above three minutes and hours from one hour. Shorten linked Verify's
   waiting label to Pending. Format Inventory's Modified tooltip consistently
   with local `yyyy-MM-DD HH:mm` table/detail dates.
-
 - Follow reliable completed integrity items in automatic and ordinary Verify,
   baseline and rebaseline even when fast files never appear in active progress.
   Let one automatic navigation read finish while newer targets coalesce;
   preserve user overrides, session/view guards and the automatic Inventory
   release transition. Enabled ordinary Inventory Follow can land on the final
   completed item in the same retained session and view.
-
 - Display live throughput as a rate.
 - Follow the latest settled execution operation between files and land on the
   final row even when the last operation was a no-op.
