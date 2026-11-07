@@ -1127,6 +1127,26 @@ is testable without entering a modal event loop.
 
 ## Session And Worker Boundary
 
+The Windows host attempts renderer garbage collection after a successful terminal
+release or completed task close. The service reserves an idle interval only when
+there is no pending admission and every retained session has completed release.
+Release follows dispatcher worker retirement; paused, queued, running and
+terminal-but-unreleased sessions therefore all prevent collection. New session
+admissions wait for that interval to end, while the native operation runs outside
+the lifecycle condition. A busy or overlapping attempt is skipped; a later
+release or close can try again. Retained task cards do not themselves prevent
+collection.
+
+The host submits only `HeapProfiler.collectGarbage` through the existing native
+WebView2 binding, on its UI thread, and waits off that thread for completion or
+renderer exit. The idle reservation lasts through that wait and releases even
+on failure. Collection failure is logged without changing the already settled
+release/close result. This runs before the small command response and frontend
+task teardown, so it reclaims accumulated garbage rather than promising immediate
+collection of the just-closed task's still-live page objects. There is no periodic
+or phase-transition collection, heap limit, memory-target change, new browser
+command, or workflow barrier.
+
 Dispatcher remains each admitted session's custody and control truth; the
 application lifecycle is the sole owner of domain-effect receipts, association,
 compensation, and settlement. The adapter serializes only presentation and

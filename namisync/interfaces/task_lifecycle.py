@@ -211,6 +211,23 @@ class TaskLifecycle:
         self._next_identity = 0
         self._next_claim_id = 0
         self._closed = False
+        self._idle_maintenance = False
+
+    def begin_idle_maintenance(self) -> bool:
+        """Reserve a worker-free interval without calling outside this aggregate."""
+
+        with self._condition:
+            if (self._closed or self._idle_maintenance or self._admissions
+                    or any(not association.session_released
+                           for association in self._sessions.values())):
+                return False
+            self._idle_maintenance = True
+            return True
+
+    def end_idle_maintenance(self) -> None:
+        with self._condition:
+            self._idle_maintenance = False
+            self._condition.notify_all()
 
     def command_guard(self, command_id: str | None):
         self._require_open()
@@ -759,6 +776,8 @@ class TaskLifecycle:
         ):
             raise TypeError("detail owner must be an exact string pair")
         with self._condition:
+            while self._idle_maintenance and not self._closed:
+                self._condition.wait()
             if self._closed:
                 raise RuntimeError("service is closed")
             prior_session_id: str | None = None

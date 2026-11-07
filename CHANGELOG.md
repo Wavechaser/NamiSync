@@ -27,6 +27,14 @@ owning contracts.
 
 #### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-07)
 
+- Collect renderer garbage after successful terminal release or task close only
+  when all backend sessions have released. Reserve that idle interval against
+  new admission; pending, running, paused and unreleased terminal sessions defer
+  collection. Preserve successful command results on collection failure. Add
+  no phase-transition collection, execution-time policy or heap cap. Pass
+  2,239 interface tests and six installed native transport cases; an installed
+  two-task witness verifies deferred collection and a 334.74 → 3.24 MiB heap
+  reduction after final release, with exact mirrors and normal shutdown.
 - Remove redundant parsed-response and snapshot copies in the browser while
   retaining terminal retry isolation and native receipt custody. Matched 10k
   executions sampled 15.8% less allocation; observed peak/closed memory was

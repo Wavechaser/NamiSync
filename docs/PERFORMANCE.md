@@ -10,6 +10,67 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Backend-idle renderer collection — 2026-11-07
+
+Production collection is now attempted after successful terminal-session release
+and completed task close, only after all backend sessions release and pending
+admissions clear. The service reserves that interval against new admissions.
+Paused and terminal-but-unreleased sessions also prevent collection. Busy attempts
+are skipped until a later successful boundary; this is not an idle timer. No
+phase-transition collection, heap cap or Low memory target is introduced.
+[INTERFACES](INTERFACES.md#session-and-worker-boundary) owns this behavior and its
+native-completion/renderer-exit ordering.
+
+Evidence is retained in `build/idle-gc-20261107/`. The 229 focused tests and all
+2,239 ordinary interface tests pass, including concurrent admission, pending and
+unreleased sessions, collection failure, renderer exit and shutdown behavior.
+Six installed native transport cases pass. Earlier temporary-directory failures
+are retained separately: the sandbox default directory could not create fixture
+paths, and a repository-local replacement was refused by the existing custody
+child's source-tree pycache guard. The unchanged candidate passes with normal
+access to the default external temporary directory.
+
+The reclamation witness uses the exact installed wheel from that native gate,
+with all 303 product files matched to the working tree and frozen reference.
+It runs a 10k-file copy plus automatic verification while a second, 1k-file
+execution is paused, then closes the large task, resumes the held execution and
+closes it. An external diagnostic wrapper records existing release/close calls,
+backend association state and the production collector's before/after heap. It
+never requests collection itself. Native heap reads bracket the production call;
+the recorded collection duration excludes those reads but remains an API round
+trip, not an isolated GC pause. Separate profiles/targets, exact mirrors,
+unchanged source hashes/metadata and normal empty-Job shutdown are checked.
+This is installed-wheel evidence, not a rebuilt executable release or a new
+footprint, latency or long-run stability budget.
+
+In `native-paused-10k-01`, the large task's exact Plan release, execution release
+and Close each skipped collection while the other execution stayed paused.
+Its terminal heap was 310.77 MiB during that deferral. After resuming and
+completing the held task, its final release found zero admissions and zero
+unreleased sessions: the production collection reduced JS heap from 334.74 to
+3.24 MiB, taking 70.31 ms native round trip. The subsequent successful task Close
+collected 3.97 to 3.18 MiB in 137.90 ms. These are individual observations, not
+pause or footprint limits. The 10k execution plus automatic verification took
+about 138 seconds in this concurrent-task diagnostic; it is not a matched
+throughput comparison.
+
+Final-15-second renderer-private medians were 745.40 MiB with the large task
+terminal and the other task paused, 109.30 MiB after all sessions released, and
+99.02 MiB after all tasks closed. Whole-Job private medians were 1,186.25,
+528.16 and 507.75 MiB respectively, including the Python launcher. These are
+sequential windows with intervening task Close and resumed 1k work, not isolated
+causal deltas. All reported windows contain complete samples and the same
+renderer identity. Both exact mirrors, unchanged source hashes/metadata,
+unchanged installed/reference product and normal exit with an empty owned Job
+pass. All three observed collection reservations had zero admissions and zero
+unreleased sessions; no native collection failed. All owned apps are closed.
+
+This run used Edge 157.0.4341.42 / V8 15.7.11.4 and Python 3.13.17, unlike the
+earlier 156/15.6 browser diagnostics below. The retained wheel SHA-256 is
+`2e5084e9b26344785874b5e6685ea8e1da5be286f6b01a3e4ae1af11ab9f3ab6`.
+`native-report.json` and its hashed raw inputs record exact windows, producer and
+runtime provenance. No cross-runtime speed or memory comparison is claimed.
+
 ## Post-allocation reclamation probes — 2026-11-07
 
 These diagnostics use the candidate committed as `cbf3f090`. They do not add a

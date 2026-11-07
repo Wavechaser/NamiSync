@@ -2762,6 +2762,67 @@ def test_renderer_exit_releases_pending_script_and_replacement_can_evaluate(
         worker.join(2)
 
 
+@pytest.mark.parametrize("outcome", ["completed", "failed", "renderer-exited"])
+def test_native_collection_waits_for_completion_or_renderer_exit(outcome: str) -> None:
+    import clr  # Initialize pythonnet's System import hook.
+    from System import AggregateException, String
+    from System.Threading.Tasks import Task, TaskCompletionSource
+
+    from namisync.interfaces.web import host
+
+    core = FakeCoreWebView2()
+    pending = TaskCompletionSource[String]()
+    submitted = Event()
+    calls = []
+    failures = []
+
+    def collect(method, payload):
+        calls.append((method, payload))
+        submitted.set()
+        return pending.Task
+
+    core.CallDevToolsProtocolMethodAsync = collect
+    browser = SimpleNamespace(webview=SimpleNamespace(
+        Invoke=lambda callback: callback(),
+        ExecuteScriptAsync=lambda _script: Task.FromResult[String]("true"),
+    ))
+    host._bind_edge_script_evaluator(browser, core)
+
+    def maintain():
+        try:
+            browser.collect_garbage()
+        except Exception as error:
+            failures.append(error)
+
+    worker = Thread(target=maintain)
+    worker.start()
+    try:
+        assert submitted.wait(2)
+        assert worker.is_alive()
+        assert calls == [("HeapProfiler.collectGarbage", "{}")]
+        if outcome == "completed":
+            pending.SetResult("{}")
+        elif outcome == "failed":
+            pending.SetCanceled()
+        else:
+            core.ProcessFailed.emit(SimpleNamespace(ProcessFailedKind="RenderProcessExited"))
+        worker.join(2)
+        assert not worker.is_alive()
+        expected = {"completed": [], "failed": [AggregateException],
+                    "renderer-exited": [host._RendererExitedError]}[outcome]
+        assert [type(error) for error in failures] == expected
+        if outcome == "renderer-exited":
+            with pytest.raises(host._RendererExitedError):
+                browser.collect_garbage()
+            assert calls == [("HeapProfiler.collectGarbage", "{}")]
+            core.ContentLoading.emit(SimpleNamespace())
+        assert browser.evaluate_js("true", True) is True
+    finally:
+        if not pending.Task.IsCompleted:
+            pending.SetResult("{}")
+        worker.join(2)
+
+
 def test_document_loading_filters_canceled_and_obsolete_pywebview_injection() -> None:
     core = FakeCoreWebView2()
     window = _window(core)

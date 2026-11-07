@@ -21,6 +21,28 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Idle renderer collection — delivered 2026-11-07
+
+Collect accumulated renderer garbage after successful terminal-session release
+or task close only when the backend has no admitted/unreleased sessions. Paused,
+pending and terminal-but-unreleased sessions conservatively block collection.
+Reserve that idle interval against new admission until native collection settles;
+perform native work outside lifecycle locks. Collection failure cannot change
+release/close truth. Phase-transition collection is shelved by user decision;
+heap caps, execution-time collection and native Low memory targets are excluded.
+
+Interfaces service/lifecycle and desktop host composition own the implementation;
+the existing release/close handlers are its only triggers. There is no new
+external command or workflow policy. All 229 focused and 2,239 ordinary interface
+tests plus six installed native transport cases pass, including concurrent
+admission and native-failure/shutdown handling. An installed two-task witness
+verifies three skipped boundaries while a second execution remains paused,
+then final-release collection from 334.74 to 3.24 MiB JS heap, exact mirrors and
+normal empty-Job shutdown. [PERFORMANCE](PERFORMANCE.md#backend-idle-renderer-collection--2026-11-07)
+owns observations and runtime/provenance limits; evidence is retained under
+`build/idle-gc-20261107/`. This does not establish a new memory or latency budget
+or replace long-run stability evidence.
+
 ### Execution allocation and GC diagnosis — delivered 2026-11-07
 
 `cbf3f090` removes redundant parsed-response and snapshot copies while retaining

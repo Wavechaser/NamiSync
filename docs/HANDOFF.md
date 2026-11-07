@@ -1,75 +1,59 @@
-# Latest session — allocation reduction and GC findings, 2026-11-07
+# Latest session — backend-idle renderer collection, 2026-11-07
 
-## Delivered
+## Delivered behavior
 
-Allocation change committed as `cbf3f090`. The bridge adopts private parsed
-responses without redundant copies, freezes ordinary snapshots in place, and
-shares the frozen terminal snapshot across retries. Terminal update copies,
-shared completion-event capture, validation and native custody/release ordering
-remain intact. No production GC timer or memory-target policy was added.
+The desktop attempts native renderer GC after successful terminal-session release
+and completed task Close. The backend permits it only when no admissions or
+unreleased sessions remain; paused, queued, running and terminal-but-unreleased
+sessions block it. A lifecycle reservation holds new admissions until native
+completion or renderer exit, with no lifecycle lock held during the native call.
+Collection failure is logged without changing the successful release/close result.
 
-Four matched 10k executions sampled 15.82% less allocation (512.00 → 431.00 MiB
-mean, two processes per arm). Profiled private memory was higher in the candidate;
-throughput did not improve. Unprofiled 20-cycle baseline/candidate runs passed all
-40 mirror/preservation checks and normal closes, with comparable late browser
-memory/handles. These bounded observations do not replace the earlier full
-stability schedule.
-
-GC diagnostics on the optimized candidate:
-
-| Open task, after unforced idle → forced GC | 10k files | 100k files |
-| --- | ---: | ---: |
-| JS heap, MiB | 214.87 → 3.08 | 718.12 → 4.55 |
-| Renderer private, MiB | 353.20 → 95.45 | 1,141.58 → 131.31 |
-| CDP collection round trip | 38.03 ms | 83.06 ms |
-
-The command durations are not isolated GC pause measurements. Closed-task GC
-measurements follow prior open-task GC. The 100k run completed execution and
-automatic verification in 847.807 seconds; source preparation and independent
-post-run checks are outside that timing.
-
-A separate frozen source-host experiment verified native Normal → Low → Normal.
-Low left JS heap around 202 MiB and renderer private around 337 MiB, while the
-OS-reported renderer working set fell to zero in all 15 complete tail samples.
-GPU private fell about 76 MiB. This is consistent with residency trimming,
-without substantial net JS-heap reduction or proof of disk paging. Normal
-restoration and a second no-op Plan passed. No frame gap exceeded 50 ms in the
-five-second Low/restore observations; later response checks took about 1–9 ms.
-These are not latency
-guarantees. PERFORMANCE records exact windows, runtime differences and limits.
+The host wraps the existing commands; there is no new browser command, frontend
+change, workflow barrier, timer, heap cap or Low-memory target. Phase-transition
+GC is shelved by user decision. Busy/overlapping attempts are skipped until a
+later successful release/close; this is not collection on every possible idle
+transition. Collection precedes the small command response, so it does not promise
+immediate reclamation of page objects still live until task teardown.
 
 ## Verification and evidence
 
-- 166 focused tests, 2,224 ordinary interface tests and six installed native
-  transport cases passed. Independent adversarial reviews covered allocation
-  ownership, tests, measurement producers, raw receipts and final reporting.
-- Both native GC runs and the corrected Low run passed exact mirrors,
-  unchanged source/bundle checks and normal exit with empty owned Jobs. Every
-  reported resource window is complete. All owned apps are closed.
-- `build/allocation-20261107/` retains frozen microbench inputs/hashes, six
-  Node receipts and test evidence. An earlier department run with setup errors
-  was interrupted without traceback; the clean fail-fast rerun passed.
-- `build/memory-probe-20261107/` retains private bundles, fixtures, manifests,
-  raw runs and `allocation-comparison.json`, `soak-comparison.json`,
-  `soak-final.json` and `gc-report.json`. `candidate-commit-binding.json`
-  binds the measured asset to the commit. Drivers/versions are frozen separately.
-- Excluded measurements remain preserved: `baseline-sample-01` was denied
-  sandbox loopback access; the first Low pilot passed behavior/closure but
-  misclassified its Python redirector, invalidating aggregate completeness.
-  The corrected diagnostic wrapper changed no product or common collector.
-- Original study evidence remains `build/resource-study-20261106c/`. Its
-  package and fixtures were untouched. New targets/profile copies are registered
-  under this session's ignored build tree; no unrelated processes were changed.
+- 229 focused tests, 2,239 ordinary interface tests and six installed native
+  transport cases pass. Tests cover pending/unreleased sessions, concurrent
+  admission, collection failure, renderer exit and shutdown.
+  Independent adversarial review approved source, tests, artifact identity,
+  raw native evidence and final documentation.
+- The installed-wheel probe native-paused-10k-01 holds a real 1k execution
+  paused while a separate 10k copy/automatic verification completes and closes.
+  Its exact Plan release, execution release and Close all skip collection.
+  After the held execution resumes and completes, production GC reduces JS heap
+  from 334.74 to 3.24 MiB in a 70.31 ms native round trip. Final Close collects
+  3.97 to 3.18 MiB in 137.90 ms. These are not isolated GC pause measurements.
+  Both exact mirrors, unchanged inputs/product and normal exit with an empty
+  owned Job pass. All resource windows are complete; all owned apps are closed.
+  Runtime is now Edge 157.0.4341.42 / V8 15.7.11.4, so these observations are
+  not a matched comparison with the earlier 156/15.6 diagnostics.
+- build/idle-gc-20261107/ retains builder/integration reports, exact test logs,
+  installed wheel and source/runtime/producer manifests, and raw run receipts.
+  All 303 product files match the working tree, frozen reference and installed
+  wheel. The diagnostic observes production collection; it never requests GC.
+  native-report.json selects the complete windows and hashes its raw inputs.
+- Earlier failed test attempts remain preserved: sandbox temporary-directory
+  creation errors, then rejection of a repository-local pycache by the existing
+  custody fixture. Unchanged product/tests pass with normal external temp access.
+
+PERFORMANCE owns detailed observations and their limits. Earlier allocation and
+GC/Low diagnostics remain at cbf3f090 / 2d86b1a0, with evidence under
+build/allocation-20261107/ and build/memory-probe-20261107/. The original
+resource-study package, fixtures and unrelated processes were not modified.
 
 ## Operational context
 
-The requested optimization and probing are complete. A future inactive-window
-memory policy needs an activity/restore design and pressure/resume evidence;
-Low is not a promised JS cleanup mechanism. Repeated 100k use and behavior under
-system memory pressure remain unmeasured. No such follow-up is scheduled here.
+No phase-transition or execution-peak policy is scheduled. This bounded native
+witness does not replace the prior long-run stability schedule or establish
+behavior under system memory pressure. Grouped recording, parent flushes and
+small-file batching remain M2 work.
 
-The findings and HANDOFF travel together in this documentation commit. The
-longstanding installed execution-review `exact-receipts` failure remains unresolved;
-`fcb72b37` added its failure trace. TESTS describes preserving that sidecar;
-paired old failures remain in `build/receipt-rate-20261106/`. Grouped recording,
-parent flushes and small-file batching remain M2 work.
+The longstanding installed execution-review exact-receipts failure remains
+unresolved; fcb72b37 added its trace. TESTS describes preserving the sidecar;
+paired historical failures remain in build/receipt-rate-20261106/.

@@ -1760,6 +1760,17 @@ class NamiSyncService:
     def get_session(self, session_id: str) -> SessionRecordView:
         return session_record_view(self._dispatcher.get(session_id))
 
+    def run_when_idle(self, operation: Callable[[], None]) -> bool:
+        """Run host maintenance after all sessions release, excluding new admission."""
+
+        if not self._lifecycle.begin_idle_maintenance():
+            return False
+        try:
+            operation()
+        finally:
+            self._lifecycle.end_idle_maintenance()
+        return True
+
     def observe(self, session_id: str, sink: SessionSink) -> SessionRecordView:
         self._require_open()
         claim = self._lifecycle.begin_observation(session_id)

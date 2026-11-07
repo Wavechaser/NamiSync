@@ -60,6 +60,118 @@ from _service_fixtures import make_service
 _SESSION = "2" * 32
 
 
+def test_idle_maintenance_requires_all_backend_sessions_released() -> None:
+    lifecycle = TaskLifecycle()
+    service = object.__new__(NamiSyncService)
+    service._lifecycle = lifecycle
+    collected = []
+    first, _, _ = _publish_lifecycle_task(lifecycle, "1" * 32, "2" * 32)
+    second, _, _ = _publish_lifecycle_task(lifecycle, "3" * 32, "4" * 32)
+    assert not service.run_when_idle(lambda: collected.append("active"))
+    _release_lifecycle_task(lifecycle, first.task_id, "2" * 32)
+    assert not service.run_when_idle(lambda: collected.append("one released"))
+    _release_lifecycle_task(lifecycle, second.task_id, "4" * 32)
+    assert service.run_when_idle(lambda: collected.append("all released"))
+    pending = lifecycle.begin_admission("inventory", None, ("pending",))
+    assert not service.run_when_idle(lambda: collected.append("pending admission"))
+    rollback = lifecycle.begin_admission_rollback(pending)
+    lifecycle.complete_admission_rollback(rollback)
+    assert service.run_when_idle(lambda: collected.append("rolled back"))
+    assert collected == ["all released", "rolled back"]
+
+
+@pytest.mark.parametrize("fail_collection", [False, True])
+def test_idle_maintenance_holds_new_admission_until_actual_completion(
+    monkeypatch: pytest.MonkeyPatch, fail_collection: bool,
+) -> None:
+    lifecycle = TaskLifecycle()
+    service = object.__new__(NamiSyncService)
+    service._lifecycle = lifecycle
+    collecting = Event()
+    complete = Event()
+    admission_waiting = Event()
+    admitted = []
+    failures = []
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if condition is lifecycle._condition and current_thread().name == "idle-admission":
+            admission_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+
+    def collect():
+        collecting.set()
+        assert complete.wait(2)
+        if fail_collection:
+            raise RuntimeError("collection failed")
+
+    def maintain():
+        try:
+            service.run_when_idle(collect)
+        except RuntimeError as error:
+            failures.append(str(error))
+
+    collector = Thread(target=maintain)
+    starter = Thread(target=lambda: admitted.append(
+        lifecycle.begin_admission("inventory", None, ("new",)),
+    ), name="idle-admission")
+    collector.start()
+    try:
+        assert collecting.wait(1)
+        assert not service.run_when_idle(lambda: pytest.fail("overlapping collection"))
+        starter.start()
+        assert admission_waiting.wait(1)
+        assert admitted == []
+    finally:
+        complete.set()
+        collector.join(2)
+        if starter.ident is not None:
+            starter.join(2)
+    assert not collector.is_alive() and not starter.is_alive()
+    assert len(admitted) == 1
+    assert failures == (["collection failed"] if fail_collection else [])
+
+
+def test_service_close_wakes_admission_waiting_for_idle_maintenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = TaskLifecycle()
+    assert lifecycle.begin_idle_maintenance()
+    waiting = Event()
+    failures = []
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if condition is lifecycle._condition:
+            waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+
+    def admit():
+        try:
+            lifecycle.begin_admission("inventory", None, ("new",))
+        except RuntimeError as error:
+            failures.append(str(error))
+
+    starter = Thread(target=admit)
+    starter.start()
+    try:
+        assert waiting.wait(1)
+        lifecycle.close()
+        starter.join(2)
+        assert not starter.is_alive()
+        assert failures == ["service is closed"]
+        assert not lifecycle.begin_idle_maintenance()
+    finally:
+        lifecycle.end_idle_maintenance()
+        starter.join(2)
+
+
 @dataclass
 class _Invocation:
     run_action: object

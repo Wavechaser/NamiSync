@@ -34,6 +34,13 @@ The adapter queue is bounded to 64 updates. New Progress replaces queued Progres
 
 Terminal release and explicit task close are distinct operations. Releasing an exact terminal session unsubscribes/closes that session after terminal delivery while retaining the reviewed task; closing explicitly retires the task. No uncertainty route disposes of a task implicitly. Implemented ownership and cleanup sequencing are in `INTERFACES.md`.
 
+The Windows host may collect renderer garbage after either operation succeeds,
+before returning its result, only while the backend holds an idle admission
+reservation. This adds no bridge command or GC authority to the page. Failed or
+pending settlement does not trigger collection, and collection failure does not
+rewrite successful settlement. [INTERFACES.md](INTERFACES.md#session-and-worker-boundary)
+owns the idle criterion and native lifetime.
+
 The Plan execution summary carries nullable `started_at` and `ended_at` in the
 same strict UTC form as `SessionRecordView`. Both are null until a matching
 execution terminal record and retained result have been captured. After capture,

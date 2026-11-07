@@ -22,6 +22,7 @@ from _startup_test_support import (
 )
 
 import namisync.interfaces.web.host as host
+from namisync.interfaces.web.drain import TaskCloseRequestView, TaskSessionReleaseView
 from namisync.core.models import VolumeId
 from namisync.interfaces.web.bridge import AdmissionRefused, BridgeDispatcher
 from namisync.interfaces.web.commands import (
@@ -54,6 +55,61 @@ from namisync.workflows import (
     LocationCandidateResult,
     LocationCandidateState,
 )
+
+
+@pytest.mark.parametrize("command,disposition,collects", [
+    ("release_terminal_session", None, True),
+    ("close_task", "closed", True),
+    ("close_task", "pending", False),
+])
+@pytest.mark.parametrize("collection_fails", [False, True])
+def test_native_collection_follows_only_successful_settlement(
+    command, disposition, collects, collection_fails,
+) -> None:
+    task_id, session_id = "task-" + "1" * 32, "2" * 32
+    calls = []
+    result = (TaskSessionReleaseView(task_id, session_id)
+              if command == "release_terminal_session"
+              else TaskCloseRequestView(task_id, session_id, disposition))
+
+    def settle(*identity):
+        assert identity == (task_id, session_id)
+        calls.append("settled")
+        return result
+
+    def collect():
+        calls.append("collect")
+        if collection_fails:
+            raise RuntimeError("native collection failed")
+
+    commands = host._production_commands(
+        picker=lambda: None, slots=host._folder_slots(),
+        registry=SimpleNamespace(release_terminal_session=settle, request_task_close=settle),
+        cosmetics=_unused_cosmetics(), startup_gate=_startup_gate(), task_settled=collect,
+    )
+    observed = commands[command].invoke(
+        {"task_id": task_id, "session_id": session_id}, context=_OPEN_CONTEXT,
+    )
+    assert observed is result
+    assert calls == (["settled", "collect"] if collects else ["settled"])
+
+
+@pytest.mark.parametrize("command", ["release_terminal_session", "close_task"])
+def test_failed_settlement_does_not_collect(command: str) -> None:
+    def fail(*_identity):
+        raise RuntimeError("settlement remains pending")
+
+    commands = host._production_commands(
+        picker=lambda: None, slots=host._folder_slots(),
+        registry=SimpleNamespace(release_terminal_session=fail, request_task_close=fail),
+        cosmetics=_unused_cosmetics(), startup_gate=_startup_gate(),
+        task_settled=lambda: pytest.fail("failed settlement collected"),
+    )
+    with pytest.raises(RuntimeError, match="settlement remains pending"):
+        commands[command].invoke(
+            {"task_id": "task-" + "1" * 32, "session_id": "2" * 32},
+            context=_OPEN_CONTEXT,
+        )
 
 
 def test_packaged_app_icon_frames_decode_on_windows() -> None:

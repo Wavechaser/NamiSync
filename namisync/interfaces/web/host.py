@@ -10,10 +10,11 @@ import logging
 import os
 import sys
 from ctypes import wintypes
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 from pathlib import Path
 from threading import Event, Lock, Thread, Timer
+from types import MappingProxyType
 from typing import Callable, Protocol, TYPE_CHECKING
 
 from namisync.dispatcher import retire_exception_graph
@@ -806,6 +807,10 @@ def run_desktop(
         document = _pending_document()
         slots = _folder_slots()
         picker = _NativeFolderPicker(webview_module)
+
+        def collect_when_idle() -> None:
+            service.run_when_idle(window.native.browser.collect_garbage)
+
         commands = _production_commands(
             picker=picker,
             slots=slots,
@@ -814,6 +819,7 @@ def run_desktop(
             startup_gate=startup_gate,
             readiness_echo=acknowledge_readiness,
             appearance_acknowledged=acknowledge_appearance,
+            task_settled=collect_when_idle,
         )
         dispatcher = _bridge_dispatcher(document, commands, startup_gate)
         window = webview_module.create_window(
@@ -1226,10 +1232,11 @@ def _production_commands(
     startup_gate: DesktopReadinessGate,
     readiness_echo: Callable[[int, str], bool] | None = None,
     appearance_acknowledged: Callable[[int], None] | None = None,
+    task_settled: Callable[[], None] | None = None,
 ):
     from .commands import production_command_specs
 
-    return production_command_specs(
+    commands = production_command_specs(
         picker=picker,
         slots=slots,
         registry=registry,
@@ -1242,6 +1249,28 @@ def _production_commands(
         ),
         appearance_acknowledged=appearance_acknowledged,
     )
+    if task_settled is None:
+        return commands
+
+    def after_settlement(handler: Callable[[object], object], *, closing: bool):
+        def invoke(payload: object) -> object:
+            result = handler(payload)
+            if not closing or result.disposition == "closed":
+                try:
+                    task_settled()
+                except Exception as error:
+                    _log_presentation_failure("renderer.collection_failed", error)
+            return result
+
+        return invoke
+
+    commands = dict(commands)
+    for name in ("release_terminal_session", "close_task"):
+        spec = commands[name]
+        commands[name] = replace(spec, handler=after_settlement(
+            spec.handler, closing=name == "close_task",
+        ))
+    return MappingProxyType(commands)
 
 
 def _bridge_dispatcher(
@@ -1390,12 +1419,12 @@ def _bind_edge_script_evaluator(browser: object, core: object) -> None:
         if renderer.IsCancellationRequested:
             renderer = CancellationTokenSource()
 
-    def evaluate_js(script: str, parse_json: bool) -> object:
+    def invoke_renderer(operation: Callable[[], object]) -> object:
         def start() -> object:
             token = renderer.Token
             if token.IsCancellationRequested:
                 return None
-            return control.ExecuteScriptAsync(script), token
+            return operation(), token
 
         submission = control.Invoke(Func[Object](start))
         if submission is None:
@@ -1407,7 +1436,15 @@ def _bind_edge_script_evaluator(browser: object, core: object) -> None:
             if not token.IsCancellationRequested:
                 raise
             raise _RendererExitedError("the WebView2 renderer exited") from None
-        value = json.loads(task.Result)
+        return task.Result
+
+    def collect_garbage() -> None:
+        invoke_renderer(lambda: core.CallDevToolsProtocolMethodAsync(
+            "HeapProfiler.collectGarbage", "{}",
+        ))
+
+    def evaluate_js(script: str, parse_json: bool) -> object:
+        value = json.loads(invoke_renderer(lambda: control.ExecuteScriptAsync(script)))
         if parse_json and isinstance(value, str):
             try:
                 return json.loads(value)
@@ -1418,6 +1455,7 @@ def _bind_edge_script_evaluator(browser: object, core: object) -> None:
     core.ProcessFailed += process_failed
     core.ContentLoading += content_loading
     browser.evaluate_js = evaluate_js
+    browser.collect_garbage = collect_garbage
 
 
 def _configure_window_security(
