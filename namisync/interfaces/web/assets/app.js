@@ -679,7 +679,7 @@ function navigationWindowOffset(index) { return Math.max(0, index - 4); }
 
 function queueReviewFollow(review, adapter, enableFollow = false, explicit = false) {
   const task = adapter.owner(review);
-  if (task === null || task.closePending || adapter.loading(task) || review.pending !== null
+  if (task === null || settingsVisible || task.closePending || adapter.loading(task) || review.pending !== null
       || adapter.session(task) === null || review.follow == null) return;
   review.follow.eligible = followEligible(review);
   const operationId = adapter.target(task, explicit);
@@ -700,12 +700,31 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
   const navigation = navigationRevision;
   const paneRevision = task.paneRevision;
   const anchorKey = `${sessionId}:${viewRevision}:${operationId}`;
+  const loadedTarget = !adapter.inventory && review.window.view_revision === viewRevision
+    && review.window.highlight_revision === review.summary.highlight_revision
+    && review.window.execution.session_id === sessionId
+    ? review.window.rows.find((row) => row.operation_id === operationId) : null;
+  if (loadedTarget != null) {
+    if (explicit || review.follow.anchorKey !== anchorKey) {
+      cancelReviewFollow(review);
+      cancelPlanViewport(review);
+      review.follow.anchorKey = anchorKey;
+      review.follow.anchorIndex = loadedTarget.visible_index;
+      review.follow.scrollOffset = Math.max(review.window.offset, navigationWindowOffset(loadedTarget.visible_index));
+      review.follow.message = null;
+      if (["No operation is active.", "The current operation is excluded from this view.",
+        "Current operation navigation is unavailable. Try again."].includes(review.message)) review.message = null;
+      renderTasks();
+    }
+    return;
+  }
   if (review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
       && review.follow.anchorIndex >= review.window.offset
       && review.follow.anchorIndex < review.window.offset + review.window.rows.length
       && (!explicit || navigationWindowOffset(review.follow.anchorIndex) >= review.window.offset)) {
     if (explicit) {
       cancelReviewFollow(review);
+      if (!adapter.inventory) cancelPlanViewport(review);
       review.follow.scrollOffset = navigationWindowOffset(review.follow.anchorIndex);
       renderTasks();
     }
@@ -2553,7 +2572,7 @@ async function refreshExecutionWindow(task) {
           void loadPlanReview(task, true);
           return;
         }
-        adoptExecutionWindow(review, { ...window, executionRefresh: true });
+        adoptExecutionWindow(review, window);
         renderTasks();
       } catch (_error) {
         const disposition = refreshDisposition();
@@ -3163,11 +3182,15 @@ function interruptPlanHighlight(review) {
   if (review.highlightPump != null) review.highlightPump.next = null;
 }
 
-function interruptPlanNavigation(review) {
-  interruptPlanHighlight(review);
+function cancelPlanViewport(review) {
   review.windowRequestRevision += 1;
   review.viewportRead?.cancel();
   review.viewportRead = null;
+}
+
+function interruptPlanNavigation(review) {
+  interruptPlanHighlight(review);
+  cancelPlanViewport(review);
 }
 
 function queuePlanHighlight(review, gesture, nodeId) {

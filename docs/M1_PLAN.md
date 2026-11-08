@@ -21,6 +21,37 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Reduce Plan Follow allocation — delivered 2026-11-08
+
+The user authorizes reducing the repeated Plan-window DOM construction exposed
+by linked verification Follow. Reuse a loaded target for scrolling before a new
+anchor/window read, and reuse overlapping committed execution rows within the
+same review/view/highlight projection. Preserve the new settled-verification
+target, current task/session/action ownership, latest-request coalescing, manual
+Go/Follow behavior, fresh row handlers, focus and authoritative row facts.
+Retain only the current bounded window, without a growing row cache.
+
+Owners are `app.js` Follow and `plan_review.js` rendering, with table-controller
+and existing page/row probes as direct consumers. Verify loaded-target request
+counts, overlapping row identity/allocation and changed-fact/fallback handling,
+then affected interface and installed execution-review checks. Isolated matched
+10k native probes compare DOM and memory diagnostics against `b5b6071b`, with
+exact mirrors, source/runtime/driver identity and normal cleanup required for
+usable evidence. Evidence lives in `build/follow-allocation-20261108/` and
+`build/follow-memory-20261108/`. Independent review precedes one coherent commit
+with PRESENTATION, PERFORMANCE, CHANGELOG and HANDOFF updates. No GC policy,
+backend/protocol change, verification concurrency or weakened ownership guard
+is included. Repository safety and recurrence stops apply.
+
+All 2,261 interface cases and four installed task-shell/execution-review cases
+pass after the navigation-custody corrections. The counted shift witness drops
+from 98/770/3,074 to 26 elements at widths 8/64/256. All four isolated native
+runs pass exact mirrors, durable verification and normal empty-Job exit. At 10k,
+sampled DOM peaks fall from 138–160k to 64–68k and renderer private peaks from
+976–1,080 to 776–779 MiB. Independent review confirms source/evidence ownership.
+[PERFORMANCE](PERFORMANCE.md#plan-follow-allocation-reduction--2026-11-08)
+owns methods and diagnostic limits. No 100k or long-run result is claimed.
+
 ### Bound admission behind idle maintenance — delivered 2026-11-08
 
 The user approves a small five-second task-admission wait limit. When idle
@@ -700,8 +731,8 @@ product (new 1,203–1,258 MiB vs old 951–1,082). Source bisection isolates it
 `323b5377`: the Plan follow now tracks settled verification items, and each
 follow step rebuilds the full 256-row window, so DOM churn continues through
 verification (10k peak ~870 → ~1,400 MiB). Response-copy removal and idle
-collection are cleared. A remedy is open and unscheduled pending the user's
-decision.
+collection are cleared. The user's approved remedy is tracked under
+[Reduce Plan Follow allocation](#reduce-plan-follow-allocation--delivered-2026-11-08).
 Five overnight task runs left WebView2 processes past the collector's close
 grace. Interleaved old/new package controls and source-app collection on/off
 runs closed normally, so the slow close is environmental and not a product

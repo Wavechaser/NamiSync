@@ -27,6 +27,15 @@ owning contracts.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-08)
 
+- Reduce Plan Follow churn by scrolling to an operation already in the loaded
+  window and reusing compatible rows across overlapping execution windows.
+  Preserve verification Follow targets, bounded window retention, current row
+  handlers and navigation ownership. Keep collection policy unchanged.
+  Two paired 10k runs reduce sampled DOM peaks from 138–160k to 64–68k and
+  renderer private peaks from 976–1,080 to 776–779 MiB, with exact mirrors,
+  durable verification and clean shutdown. No throughput or 100k claim is made.
+  Pass 2,261 interface tests and four installed navigation/execution-review
+  cases, with independent source and evidence review.
 - Measure the rebuilt `733f0cb1` package over the full 17-run schedule. Settled
   memory after close falls ~300 MiB at 10k and 1.2–1.4 GiB at 100k; all mirrors
   match. Execution peaks rise (100k 3.3–3.7 GiB); an interleaved 10k control on

@@ -82,6 +82,13 @@ const executionLabel = (value) => Object.prototype.hasOwnProperty.call(EXECUTION
     : "Unknown";
 const isNoChange = (operation) => operation?.result === "skipped" && operation.reason === "noop";
 
+function sameRowStructure(first, second) {
+  const keys = Object.keys(first);
+  return keys.length === Object.keys(second).length && keys.every((key) => key === "execution"
+    || first[key] === second[key] || (first[key] !== null && typeof first[key] === "object"
+      && JSON.stringify(first[key]) === JSON.stringify(second[key])));
+}
+
 function operationLifecycle(operation) {
   if (operation === null) return null;
   if (operation.result === "succeeded"
@@ -955,22 +962,36 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const restoreFocusNodeId = review.keyboardRevealWindow === review.window
       ? focusNodeId : activeRow?.dataset?.nodeId;
     const previous = renderedRows?.window;
-    const sameProjection = previous !== review.window && review.window.executionRefresh === true
+    const compatibleProjection = previous !== review.window
       && task.executionStarted && task.sessionState === "active"
       && review.keyboardRevealWindow !== review.window && renderedRows?.review === review
       && committed && renderedRows.committed && renderedRows.highlightRevision === highlightRevision
-      && previous.view_revision === review.window.view_revision && previous.offset === review.window.offset
-      && previous.total === review.window.total && previous.rows.length === review.window.rows.length
-      && previous.rows.every((row, index) => row.node_id === review.window.rows[index].node_id);
+      && previous.view_revision === review.window.view_revision && previous.total === review.window.total
+      && previous.execution.session_id === review.window.execution.session_id
+      && review.window.execution.session_id !== null
+      && review.window.execution.session_id === task.executionSessionId;
+    const sameProjection = compatibleProjection && previous.offset === review.window.offset
+      && previous.rows.length === review.window.rows.length
+      && previous.rows.every((row, index) => sameRowStructure(row, review.window.rows[index]));
+    const activeOperationId = rowProgress(task)?.activeItem?.item_id ?? null;
+    const progressChanged = renderedRows?.progressPresentation !== rowProgress(task);
+    const verificationChanged = renderedRows?.verificationView !== (task.workPane === "verify");
+    function updateExecutionCells(element, row) {
+      const replacement = document.createElement("div");
+      renderPlanRow(replacement, rowView(row, disabled, committed, rowProgress(task), task.workPane === "verify"));
+      for (const cell of [".nami-plan-row__intent", ".nami-plan-row__checksum", ".nami-file-row__notes"]) {
+        element.querySelector(cell).replaceWith(replacement.querySelector(cell));
+      }
+    }
     if (renderedRows?.review === review && (previous === review.window || sameProjection)) {
       const changed = new Set();
       if (previous !== review.window) {
         for (const [index, row] of review.window.rows.entries()) {
+          renderedRows.bindings[index].row = row;
           const old = previous.rows[index].execution;
           if (old !== row.execution && JSON.stringify(old) !== JSON.stringify(row.execution)) changed.add(index);
         }
       }
-      const activeOperationId = rowProgress(task)?.activeItem?.item_id ?? null;
       if (renderedRows.progressPresentation !== rowProgress(task) || renderedRows.verificationView !== (task.workPane === "verify")) {
         if (renderedRows.verificationView !== (task.workPane === "verify")) {
           for (let index = 0; index < review.window.rows.length; index += 1) changed.add(index);
@@ -984,11 +1005,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       }
       for (const index of changed) {
         const element = renderedRows.rows[index];
-        const replacement = document.createElement("div");
-        renderPlanRow(replacement, rowView(review.window.rows[index], disabled, committed, rowProgress(task), task.workPane === "verify"));
-        for (const cell of [".nami-plan-row__intent", ".nami-plan-row__checksum", ".nami-file-row__notes"]) {
-          element.querySelector(cell).replaceWith(replacement.querySelector(cell));
-        }
+        updateExecutionCells(element, review.window.rows[index]);
       }
       renderedRows.window = review.window;
       renderedRows.progressPresentation = rowProgress(task);
@@ -1033,6 +1050,9 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     }
     const checkboxes = [];
     const rowElements = [];
+    const bindings = [];
+    const reusable = compatibleProjection
+      ? new Map(previous.rows.map((row, index) => [row.node_id, index])) : null;
     const fragment = document.createDocumentFragment();
     const top = document.createElement("div");
     top.className = "nami-plan-review__spacer";
@@ -1046,6 +1066,32 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       fragment.append(empty);
     }
     for (const row of review.window.rows) {
+      const oldIndex = reusable?.get(row.node_id);
+      if (oldIndex !== undefined && sameRowStructure(previous.rows[oldIndex], row)) {
+        const element = renderedRows.rows[oldIndex];
+        const checkbox = renderedRows.checkboxes[oldIndex];
+        const binding = renderedRows.bindings[oldIndex];
+        binding.row = row;
+        if (JSON.stringify(previous.rows[oldIndex].execution) !== JSON.stringify(row.execution)
+            || verificationChanged || (progressChanged
+              && [renderedRows.activeOperationId, activeOperationId].includes(row.operation_id))) {
+          updateExecutionCells(element, row);
+        }
+        if (checkbox !== null) {
+          checkbox.disabled = disabled || committed || row.selection === "disabled";
+          checkbox.hidden = task.workPane === "verify";
+        }
+        const pill = element.querySelector(".nami-plan-move-pill");
+        if (pill !== null) pill.disabled = disabled;
+        element.tabIndex = row.node_id === (focusNodeId ?? review.window.rows[0]?.node_id) ? 0 : -1;
+        checkboxes.push(checkbox);
+        rowElements.push(element);
+        bindings.push(binding);
+        fragment.append(element);
+        continue;
+      }
+      const binding = {row};
+      bindings.push(binding);
       const element = document.createElement("div");
       renderPlanRow(element, rowView(
         row,
@@ -1080,13 +1126,13 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         if (element.dataset.highlighted === "true") {
           callbacks.onHighlightedSelect(review, event.currentTarget.checked);
         } else {
-          callbacks.onSelect(review, row, event.currentTarget.checked);
+          callbacks.onSelect(review, binding.row, event.currentTarget.checked);
         }
       });
       element.addEventListener("click", (event) => {
         if (eventInControl(event, element)) return;
         const gesture = pointerHighlightGesture(event);
-        callbacks.onHighlight(review, gesture, row.node_id);
+        callbacks.onHighlight(review, gesture, binding.row.node_id);
         element.focus?.();
         element.dataset.namiFocusOrigin = "pointer";
       });
@@ -1099,7 +1145,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       element.addEventListener("keydown", (event) => {
         delete element.dataset.namiFocusOrigin;
         if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
-          openRowMenu(event, element, review, row);
+          openRowMenu(event, element, review, binding.row);
         } else if (event.key === "Escape") {
           event.preventDefault();
           callbacks.onHighlight(review, "clear", null);
@@ -1112,14 +1158,14 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
           callbacks.onHighlight(review, gesture, null);
         }
       });
-      element.addEventListener("contextmenu", (event) => openRowMenu(event, element, review, row));
+      element.addEventListener("contextmenu", (event) => openRowMenu(event, element, review, binding.row));
       element.querySelector(".nami-file-row__disclosure")?.addEventListener("click", () => {
         callbacks.onViewChange(review, {
-          collapseNodeId: row.node_id, collapsed: row.expanded === true,
+          collapseNodeId: binding.row.node_id, collapsed: binding.row.expanded === true,
         });
       });
       addGroupDisclosure(element, row, () => callbacks.onViewChange(review, {
-        collapseNodeId: row.node_id, collapsed: row.expanded === true,
+        collapseNodeId: binding.row.node_id, collapsed: binding.row.expanded === true,
       }));
       if (row.prior_name !== null || (row.operation_id !== null
           && ["move", "move_update"].includes(row.presentation_kind))) {
@@ -1148,7 +1194,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         pill.title = row.display;
         pill.ariaLabel = row.display;
         pill.disabled = disabled;
-        pill.addEventListener("click", () => callbacks.onRevealMove(review, row.node_id));
+        pill.addEventListener("click", () => callbacks.onRevealMove(review, binding.row.node_id));
         element.querySelector(".nami-file-row__name-text").replaceWith(pill);
         element.querySelector(".nami-file-row__selection").replaceChildren();
         checkboxes[checkboxes.length - 1] = null;
@@ -1176,7 +1222,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     review.keyboardRevealWindow = null;
     renderedRows = {
       review, window: review.window, disabled, committed, checkboxes,
-      rows: rowElements,
+      rows: rowElements, bindings,
       highlightRevision,
       progressPresentation: rowProgress(task),
       verificationView: task.workPane === "verify",

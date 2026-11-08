@@ -613,6 +613,8 @@ appSource = appSource
   .replace("./panels.js", moduleUrl(preparedPanelSource))
   .replace("./render.js", renderUrl);
 appSource += "\nglobalThis.taskHarness.forceReview = loadPlanReview;\n"
+  + "globalThis.taskHarness.queuePlanFollow = queuePlanFollow;\n"
+  + "globalThis.taskHarness.followInSettings = (review) => { settingsVisible = true; try { queuePlanFollow(review); } finally { settingsVisible = false; } };\n"
   + "globalThis.taskHarness.adoptTask = adoptTask;\n"
   + "globalThis.taskHarness.closeRetainedTask = closeRetainedTask;\n"
   + "globalThis.taskHarness.refreshTasks = refreshTasks;\n";
@@ -2047,6 +2049,67 @@ assert.equal(liveReview.follow.scrollOffset, 0, "targets near the start clamp co
 assert.equal(liveReview.follow.anchorIndex, 2, "clamping does not rewrite the active target");
 liveReview.follow.anchorIndex = 1280;
 liveReview.window = contextWindow;
+// A new direct operation target already in the current window needs only scroll.
+{
+  const saved = {window: liveReview.window, follow: {...liveReview.follow},
+    presentation: liveTask.executionPresentation, pane: liveTask.workPane};
+  const first = "d".repeat(32);
+  const second = "e".repeat(32);
+  const rows = [first, second].map((operation_id, index) => ({
+    ...contextWindow.rows[0], node_id: `loaded-${index}`, operation_id, visible_index: 1280 + index,
+  }));
+  liveReview.window = {...contextWindow, offset: 1280, rows,
+    execution: {...contextWindow.execution, session_id: executionSession}};
+  const retainedWindow = liveReview.window;
+  const anchorCount = planAnchors.length;
+  const windowCount = planWindows.length;
+  liveTask.workPane = "verify";
+  liveTask.executionPresentation = {phase: "verify", activeItem: null, lastSettledIntegrityItemId: first};
+  liveReview.follow.scrollOffset = null;
+  globalThis.taskHarness.followInSettings(liveReview);
+  assert.equal(liveReview.follow.scrollOffset, null, "Settings rejects even a loaded Follow target");
+  assert.equal(liveReview.follow.anchorKey, saved.follow.anchorKey);
+  for (const [index, operationId] of [first, second].entries()) {
+    liveTask.workPane = "verify";
+    liveTask.executionPresentation = {phase: "verify", activeItem: null,
+      lastSettledIntegrityItemId: operationId};
+    liveReview.follow.scrollOffset = null;
+    globalThis.taskHarness.queuePlanFollow(liveReview);
+    assert.equal(liveReview.follow.anchorIndex, 1280 + index);
+    assert.equal(liveReview.follow.scrollOffset, 1280, "leading context stays within loaded coverage");
+    assertSameNode(liveReview.window, retainedWindow, "loaded Follow keeps the exact window");
+  }
+  liveReview.follow.scrollOffset = null;
+  globalThis.taskHarness.queuePlanFollow(liveReview);
+  assert.equal(liveReview.follow.scrollOffset, null, "same-target ticks preserve manual position");
+  assert.equal(planAnchors.length, anchorCount);
+  assert.equal(planWindows.length, windowCount);
+  for (const outcome of ["success", "failure"]) {
+    const settlements = [];
+    const pendingBase = planWindows.length;
+    globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1792, () => false,
+      (state) => settlements.push(state));
+    globalThis.planReviewHarness.callbacks.onWindow(liveReview, 1824, () => false,
+      (state) => settlements.push(state));
+    assert.equal(planWindows.length, pendingBase + 1, "viewport intent coalesces behind one read");
+    globalThis.planReviewHarness.callbacks.onNavigateCurrent(liveReview, false);
+    assert.equal(liveReview.viewportRead, null, "local Go retires the competing viewport intent");
+    if (outcome === "success") planWindows[pendingBase].resolve(executionWindow(liveReview.summary, 1792, 6));
+    else planWindows[pendingBase].reject(new Error("obsolete viewport read"));
+    await until(() => readsFor(liveReview).foregroundReaders === 0);
+    await turns();
+    assertSameNode(liveReview.window, retainedWindow, "late viewport outcome cannot replace local Go");
+    assert.equal(liveReview.follow.scrollOffset, 1280);
+    assert.equal(planWindows.length, pendingBase + 1, "obsolete coalesced viewport cannot retry after local Go");
+    assert.deepEqual(settlements, ["retired", "retired"]);
+    planWindows.splice(pendingBase);
+  }
+  liveReview.window = saved.window;
+  liveReview.follow = saved.follow;
+  liveTask.executionPresentation = saved.presentation;
+  liveTask.workPane = saved.pane;
+}
+
 globalThis.planReviewHarness.callbacks.onFollowOverride(liveReview, 1280, 1289);
 assert.equal(liveReview.follow.enabled, true, "manual travel within the target viewport preserves Follow");
 planWindows.splice(sameTargetWindowBase);

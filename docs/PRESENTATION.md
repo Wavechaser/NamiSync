@@ -331,9 +331,14 @@ snapshots share a 500 ms timer per task for repainting, following the current
 operation and requesting its Plan window. Events preceding the snapshot in a
 drain batch immediately invalidate older reads without a separate paint. The
 first snapshot, control transitions, newly observed gaps and the terminal record
-update the display as soon as their snapshot arrives. A background refresh of
-the same committed projection, highlight and row range retains the row DOM and
-focus. Only cells with changed execution facts or active progress need updating.
+update the display as soon as their snapshot arrives. A refresh of the same
+active committed projection and highlight retains compatible row DOM, including
+rows shared by overlapping windows. Compatibility includes unchanged structural
+row facts; changed structure takes the ordinary rebuild path. Dynamic cells
+update for changed execution facts, active progress or Plan/Verify presentation.
+Reused handlers read
+the current row binding, focus is restored under the existing rules, and rows
+outside the new window are not retained in a cache.
 
 An ordinary paint admits automatic Follow before requesting a dirty Plan-window
 refresh. A Follow read that takes foreground ownership defers the refresh until
@@ -544,6 +549,15 @@ User scroll-away or changing sort/search/filter disables it until explicit enabl
 returning to canonical alone does not resume it. One-shot Go to the current item
 remains available in other views without enabling follow. DESKTOP_UI owns the
 floating controls and override behavior.
+For Plan, an exact operation already present in the current session/view/highlight
+window supplies its visible index directly. Follow scrolls to that row without
+another anchor/window lookup, retaining up to four preceding rows where the
+loaded window permits. This shortcut does not infer collapsed ancestors or node
+identities. Missing targets retain authoritative anchor lookup and its existing
+request-ownership rules. Local Plan landings retire older viewport demand before
+publishing, so a late scroll response cannot replace or retry past the jump.
+Explicit Go still retires competing Follow demand, without canceling highlight
+or selection work. Hidden Settings admits no Follow landing.
 Manual scroll-away still disables Follow while a pending view/selection change,
 inventory action, loading or Close blocks row interaction. That notification does
 not authorize active-row changes or other blocked gestures.

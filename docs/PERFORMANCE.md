@@ -10,6 +10,62 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Plan Follow allocation reduction — 2026-11-08
+
+The follow-up to the execution-peak investigation below changes only Plan Follow
+navigation and row rendering. Loaded exact operation targets scroll within the
+current compatible window. Active committed windows reuse structurally matching
+rows from their overlap, updating current execution cells and handler bindings.
+The retained set remains one bounded window, with no off-window DOM cache.
+
+Counted browser witnesses in `build/follow-allocation-20261108/` verify two
+successive loaded verification targets cause no new Follow anchor/window calls.
+A one-row shift with one entering row and one changed execution row creates
+98/770/3,074 elements before versus 26/26/26 after at window widths 8/64/256.
+The same retained driver executes both renderer variants and counts only the
+shifted render, including temporary cell construction. Retained DOM/listener
+identity, current handler facts, static-change rebuilding and retirement of
+off-window nodes are checked independently of elapsed time. These witnesses
+describe the named workload, not a fixed whole-app memory budget.
+
+The native comparison in `build/follow-memory-20261108/` uses isolated frozen
+source trees and four fresh-process 10k × 32 B runs, ordered baseline/candidate
+then candidate/baseline. Baseline is `b5b6071b`. Candidate uses baseline canonical
+bytes plus the two changed assets, with normalized package identity checked
+against the checkout. Source/runtime/driver manifests, command counts, sampled
+DOM/heaps and process memory remain with the raw runs. Every run uses the same
+two-second terminal pause before Close to avoid conflating the earlier immediate
+close-click race. Collection policy is unchanged. Exact mirrors, source
+preservation, durable verification and normal empty-Job shutdown are required
+before interpreting a sample. This bounded diagnostic is not a repeat of the
+100k or long-run release/resource schedule.
+
+All four runs pass those checks on Edge 157.0.4341.42 / V8 15.7.11.4.
+Each independent post-close database audit verifies exactly 10,100 operation
+records, 10,000 verified target paths and the expected completed phases, with
+original database bytes unchanged. All 303 package files match the frozen
+variant, and only the two approved assets differ between variants. The final
+source freeze supersedes an unrun pre-review candidate retained for provenance.
+
+| Observation, range across two runs per variant | Baseline | Candidate |
+| --- | ---: | ---: |
+| Whole-app private-memory peak, MiB | 1,400.1–1,505.0 | 1,201.1–1,212.1 |
+| Renderer private-memory peak, MiB | 976.2–1,079.8 | 776.3–779.4 |
+| Execute-phase sampled DOM nodes, maximum | 137,903–159,745 | 64,225–68,455 |
+| Execute-phase sampled listeners, maximum | 51,035–59,091 | 16,435–16,466 |
+| Execute-phase sampled embedder heap, MiB | 415.14–483.56 | 212.04–220.83 |
+| Execute-phase sampled V8 used heap, MiB | 372.26–373.16 | 335.01–337.55 |
+| Plan window requests per run | 340–347 | 271–281 |
+| Plan anchor requests per run | 213–219 | 52–57 |
+
+All whole-app peaks occur during `task-execute`, which includes copy and linked
+verification. Heap/counter maxima are sampled independently and are not additive
+parts of one simultaneous private-memory observation. Execute plus Verify takes
+118.3–121.6 seconds before and 117.2–121.2 after, with no throughput improvement
+claim. These two pairs support reduced churn and lower peaks on this fixture,
+not universal memory or leak-freedom claims. `summary.json`, `report.py` and
+per-run raw samples/audits retain the aggregation and provenance.
+
 ## Full resource schedule on `733f0cb1` — 2026-11-07/08
 
 **Artifact.** `build/resource-study-20261108/package/NamiSync-windows-x64-dev.zip`,

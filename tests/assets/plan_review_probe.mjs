@@ -1737,7 +1737,7 @@ const liveReview = {
   window: {
     ...executionReviewState.window,
     rows: [liveRow], total: 1,
-    execution: { ...executionSummary, result: null, gap: null, trash_location: null },
+    execution: { ...executionSummary, session_id: "8".repeat(32), result: null, gap: null, trash_location: null },
   },
   executionDetail: null,
 };
@@ -1767,7 +1767,6 @@ function refreshAllocations(windowSize) {
   const allocations = [];
   for (let index = 0; index < 8; index += 1) {
     const next = structuredClone(review.window);
-    next.executionRefresh = true;
     next.execution.execution_revision += 1;
     next.rows[index].execution = {operation: executionRow.execution.operation, automatic_verification: null, evidence: null};
     review.window = next;
@@ -1786,6 +1785,49 @@ for (const [index, count] of wideRefresh.entries()) {
   assert.ok(count <= narrowRefresh[index],
     `copy receipt ${index + 1} created ${count} elements with 64 rows vs ${narrowRefresh[index]} with 8`);
 }
+
+// Retain only the intersection of ordinary Follow/scroll windows, with current
+// row facts in the existing event handlers.
+function overlapAllocations(windowSize) {
+  const makeRow = (index) => ({...liveRow, node_id: `overlap-${index}`,
+    operation_id: (index + 1).toString(16).padStart(32, "0"),
+    display: `overlap-${index}.bin`, visible_index: index});
+  const rows = Array.from({length: windowSize}, (_, index) => makeRow(index));
+  const review = {...liveReview, window: {...liveReview.window, rows, offset: 0, total: 512}};
+  const task = {...liveTask, review, progressPresentation: null, executionPresentation: null};
+  const panel = createPlanReviewPanel(callbacks);
+  panel.render(task);
+  const departing = findByDataset(panel.element, "nodeId", rows[0].node_id);
+  const retained = findByDataset(panel.element, "nodeId", rows[1].node_id);
+  const listenerCount = [...retained.listeners.values()].reduce((sum, items) => sum + items.length, 0);
+  const nextRows = Array.from({length: windowSize}, (_, index) => makeRow(index + 1));
+  nextRows[0].execution = {operation: executionRow.execution.operation, automatic_verification: null, evidence: null};
+  review.window = {...review.window, offset: 1, rows: nextRows};
+  const before = document.elementsCreated;
+  panel.render(task);
+  const allocations = document.elementsCreated - before;
+  assertSameNode(findByDataset(panel.element, "nodeId", rows[1].node_id), retained);
+  assert.equal(findByDataset(panel.element, "nodeId", rows[0].node_id), null);
+  assert.equal([...retained.listeners.values()].reduce((sum, items) => sum + items.length, 0), listenerCount);
+  assert.equal(findByClass(retained, "nami-plan-row__intent").dataset.lifecycle, "completed");
+  const checkbox = findByClass(retained, "nami-checkbox");
+  checkbox.dispatch("change", {currentTarget: {checked: true}});
+  assertSameNode(calls.at(-1)[2], nextRows[0], "retained handler consumes the current row object");
+  review.window = {...review.window, offset: 0, rows};
+  panel.render(task);
+  assert.ok(findByDataset(panel.element, "nodeId", rows[0].node_id) !== departing,
+    "a departed row has no off-window DOM cache");
+  const beforeChange = findByDataset(panel.element, "nodeId", rows[1].node_id);
+  review.window = {...review.window, rows: rows.map((row, index) => index === 1 ? {...row, display: "changed.bin"} : row)};
+  panel.render(task);
+  assert.ok(findByDataset(panel.element, "nodeId", rows[1].node_id) !== beforeChange,
+    "changed static facts rebuild the affected row");
+  panel.dispose();
+  return allocations;
+}
+const overlapCounts = [8, 64, 256].map(overlapAllocations);
+assert.deepEqual(overlapCounts, [overlapCounts[0], overlapCounts[0], overlapCounts[0]],
+  "one entering row and one changed execution row allocate independently of retained window width");
 livePanel.render(liveTask);
 const liveElement = findByDataset(livePanel.element, "nodeId", liveRow.node_id);
 let liveIntent = findByClass(liveElement, "nami-plan-row__intent");
@@ -1911,7 +1953,7 @@ assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null);
 assert.ok(document.activeElement === liveElement, "retirement keeps row focus");
 liveTask.linkedVerificationStarted = false;
 const priorIntent = liveIntent;
-const refreshedWindow = { ...liveReview.window, executionRefresh: true,
+const refreshedWindow = { ...liveReview.window,
   rows: structuredClone(liveReview.window.rows) };
 liveReview.window = refreshedWindow;
 livePanel.render(liveTask);

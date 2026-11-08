@@ -1,71 +1,56 @@
-# Latest session — rebuilt-package resource schedule, 2026-11-07/08
+# Latest session — Plan Follow allocation, 2026-11-08
 
-## Delivered changes
+## Outcome and scope
 
-Documentation only. CHANGELOG nits fixed in `733f0cb1`: renderer memory and copy
-path work got its own task, and the measurement task's heading and date range
-were restored. A package rebuilt from clean `733f0cb1` then ran the full
-17-run resource schedule overnight; the slow close and the execution-peak rise
-were then investigated with source controls. PERFORMANCE ("Full resource
-schedule on `733f0cb1`"), M1_PLAN and CHANGELOG record the results. No product, test or tool
-source changed.
+Base is `b5b6071b`. The user authorizes reducing the repeated Plan-window DOM
+construction responsible for higher execution peaks after verification Follow
+began tracking settled items. Keep that target behavior, and keep GC policy.
 
-## Results
+Plan Follow now uses a matching operation already in its current session/view/
+highlight window without another Follow anchor/window read. Compatible rows in
+active committed overlapping windows retain DOM and listeners, with current row
+bindings and changed execution cells. Static changes rebuild affected rows.
+Only the current bounded window is retained, without an off-window row cache.
 
-- All 17 runs completed with exact mirrors and exit 0 (`full.log` ends `exit 0`).
-- Settled memory after close: 10k 527–540 MiB (was 826–842); 100k 689–793 MiB
-  (was 1,999–2,126); soak 510–536 MiB per cycle; open-task idle 560 MiB (was 837).
-- Execution peaks rose: 10k 1,101–1,224 MiB, 100k 3,298–3,674 MiB (was
-  2,365–2,557), renderer-driven, during `task-execute`.
-- Soak whole-app slopes +0.28/+0.27/+0.17 MiB/cycle; renderer consistently
-  +0.19–0.20.
-- Five overnight task runs (soak-03, scale-10k ×3, payload) left the WebView2
-  browser and crashpad running past the 10-second close grace. The Job
-  terminated them. From 03:35 local, task runs took 10–14 s to close.
+Review identified two navigation-custody gaps in the new local landing path.
+The common visible-page guard blocks hidden Settings work; local Plan jumps
+retire exact older viewport requests before publishing, preserving highlight
+and selection ownership. `navigation-review.md` records the mechanism review.
+The obsolete refresh-only marker was removed so actual Follow/viewport windows
+can use overlap reuse. No backend/protocol or collector changes are included.
 
-## Findings
+## Verification and evidence
 
-1. **Slow exit: environmental, product cleared.** The 10–14 s tail began at
-   soak-03's close (03:35 local), after an Office Click-to-Run update that left
-   a pending restart, and persisted overnight. In `build/close-probe-20261108/`
-   (scripts and results retained) the following all closed normally:
-   - a bare pywebview window, with or without `collectGarbage` or the debug port;
-   - the source app with collection on or replaced by a no-op;
-   - interleaved old/new packages (2.1–3.8 s, no leftovers).
-   The first old-package control was confounded by time of day and is
-   superseded. The machine still reports a required restart; not rebooted.
-2. **Execution peak: isolated to `323b5377` (remedy open, unscheduled).**
-   Interleaved 10k runs on runtime 157: new package 1,203–1,258 MiB, old
-   951–1,082 MiB. Source bisection (`build/peak-bisect-20261108/`) puts every
-   tree through `2ca0b291` at 741–959 MiB and `323b5377` onward at
-   1,323–1,454 MiB; response-copy removal and idle collection are cleared. The
-   Plan follow now tracks settled verification items, and every follow step to
-   a new item reads and fully rebuilds a 256-row window (`plan_review.js` `renderRows` reuses
-   rows only for an identical offset and node list). Renderer DOM nodes peak
-   117–142k instead of 37–43k. Disabling the commit's new follow chaining did
-   not help. Candidate remedies: skip the window read and rebuild when the new
-   target is already inside the rendered rows (narrow, `app.js`
-   `queueReviewFollow`), or reuse rows by node id across overlapping windows
-   (broader, `plan_review.js`). 100k not measured.
-3. **Unexplained close-click stall.** Two of 19 source runs carrying
-   `323b5377` timed out waiting for the task card to leave after Close was
-   clicked 30–35 ms after completion; none of 19 earlier-tree runs did. Not
-   investigated; `failure.txt` capture exists in the probe for a recurrence.
+Functional evidence is in `build/follow-allocation-20261108/`. Counted renderer
+replays create 98/770/3,074 elements before versus 26/26/26 after for a one-row
+shift and one changed execution row at widths 8/64/256. Identity, handler freshness,
+no off-window cache and static-change fallback witnesses accompany those counts.
+The initial 2,261-case interface pass predates the final navigation-custody
+correction. The final 2,261-case interface run and four installed task-shell/
+execution-review cases pass on the frozen correction. The final headed command
+explicitly clears default addopts. Source/test hashes are recorded in
+`identity.json`.
 
-## Evidence and operational context
+Native comparison evidence is in `build/follow-memory-20261108/`. Four isolated
+10k × 32 B source-app runs use baseline/candidate then candidate/baseline order,
+matching producer/runtime and normal GC. A fixed two-second terminal pause
+avoids mixing the previously observed immediate-close race into this comparison.
+All four runs pass exact mirrors, source preservation, durable operation/Verify
+audits and normal empty-Job exit. Sampled DOM peaks fall from 138–160k to 64–68k,
+embedder heap from 415–484 to 212–221 MiB, and renderer private peaks from
+976–1,080 to 776–779 MiB. PERFORMANCE records exact ranges, methods and limits.
+These are diagnostics, not release acceptance or a 100k/long-soak result.
 
-Evidence: `build/resource-study-20261108/` — `build_package.ps1`, `build.log`,
-`package/` (SHA-256 `c14d1691…a7c082`), `full/` (runs, `fixtures.jsonl`,
-`collection.json`), `full.log`, `validation.json` (FAIL: abnormal closes, soak
-slope, 100k peak), and `oldpkg-runtime157/` plus its log. Analysis helpers are
-the 20261106c `summarize.py` and `soak_trend.py`.
+## Immediate operational context
 
-Peak isolation: `build/peak-bisect-20261108/` — `peak_probe.py`, `wrapper.py`
-(collection on/off and bridge-command counting), `nochain.diff`, and
-`runs/`–`runs4/` with `results.jsonl` and per-run `heap.jsonl`. Its scratch
-worktrees were removed.
+Existing measuring-session processes, profiles and fixtures are untouched.
+New native probe fixtures/profiles and ignored evidence belong to this task and
+remain registered under its evidence root. No task branch/worktree was created.
 
-Study fixtures (sources under `F:\`, targets under `H:\test_dir\`) are
-registered in each output's `fixtures.jsonl` (`full/`, `oldpkg-runtime157/`,
-`newpkg-recheck/`, `close-probe-20261108/app/` and `pkg/*/`, and
-`peak-bisect-20261108/smoke/` and `runs*/`) and were retained. The supplied corpus was not modified. No push.
+The prior 17-run rebuilt-package study and source bisection remain documented
+in PERFORMANCE and under `build/resource-study-20261108/` and
+`build/peak-bisect-20261108/`. Slow overnight exit was attributed to environment;
+two early-close stalls remain unexplained and are outside this change. Prior
+study fixtures remain retained and must not be removed with this task's files.
+Verification pipelining, grouped recording and small-file batching remain M2.
+No further post-task-close GC is added.
