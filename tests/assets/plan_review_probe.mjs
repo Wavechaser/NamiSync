@@ -1876,6 +1876,8 @@ assert.equal(liveIntent.dataset.lifecycle, "completed", "copy outcome survives v
 assert.ok(findText(liveIntent, "Completed"));
 assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null,
   "Plan retains execution results instead of painting live verification");
+const liveFilters = findByClass(livePanel.element, "nami-plan-review__filters");
+const liveFilterTrigger = findAction(liveFilters, "filter-menu");
 liveTask.workPane = "verify";
 liveTask.linkedVerificationStarted = true;
 liveTask.sessionKind = "sync-execution";
@@ -1886,6 +1888,9 @@ assert.equal(findByClass(liveElement, "nami-file-state-label").textContent, "Pen
 livePanel.render(liveTask);
 liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(findByClass(livePanel.element, "nami-plan-review__list").ariaLabel, "Automatic verification");
+assert.equal(liveFilters.hidden, false, "linked Verify retains the Filters slot beside Search");
+assert.equal(liveFilterTrigger.ariaDisabled, "true");
+assert.equal(findAction(livePanel.element, "plan-search").ariaLabel, "Search verification files");
 assert.ok(findText(livePanel.element, "Verification detail"), "Verify has verification columns");
 assert.equal(findByClass(livePanel.element, "nami-plan-review__path--source").hidden, true);
 assert.equal(findAction(livePanel.element, "execute").hidden, true);
@@ -1964,6 +1969,7 @@ liveTask.workPane = "plan";
 liveTask.progressPresentation = { phase: "verify", activeItem: null, itemPercent: null };
 liveTask.executionPresentation = liveTask.progressPresentation;
 livePanel.render(liveTask);
+assert.equal(liveFilterTrigger.ariaDisabled, "false", "returning to Plan restores its filter menu");
 liveIntent = findByClass(liveElement, "nami-plan-row__intent");
 assert.equal(liveIntent.dataset.lifecycle, "completed", "retirement keeps copy outcome");
 assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null);
@@ -1981,6 +1987,14 @@ livePanel.render(liveTask);
 assertSameNode(findByDataset(livePanel.element, "nodeId", liveRow.node_id), liveElement);
 assert.notEqual(findByClass(liveElement, "nami-plan-row__intent").dataset.lifecycle, "completed");
 assert.ok(document.activeElement === liveElement, "a changed execution overlay retains focus");
+const liveFilterPopup = findByClass(liveFilters, "nami-filter-menu__popup");
+liveFilterTrigger.dispatch("click");
+assert.equal(liveFilterPopup.hidden, false);
+livePanel.render({ ...liveTask, workPane: "verify", linkedVerificationStarted: true });
+assert.equal(liveFilterPopup.hidden, true, "entering linked Verify closes Plan's filter menu");
+liveFilterTrigger.dispatch("click");
+assert.equal(liveFilterPopup.hidden, true, "linked Verify cannot open Plan's filter menu");
+livePanel.render(liveTask);
 liveTask.snapshot = {
   session_id: liveTask.sessionId, session_state: "active", phase: "execute", terminal_result: null,
   presentation: {

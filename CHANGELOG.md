@@ -488,8 +488,10 @@ explicit, reviewable and regression-backed.
   coverage. Fault controls reject missing, extra, duplicate and substituted
   results. Both installed execution window sizes pass; production is unchanged.
 
-#### Refine live execution and verification feedback (2026-11-06 – 2026-11-08)
+#### Refine live execution and verification feedback (2026-11-06 – 2026-11-09)
 
+- Restore the disabled Filters control during linked verification, retaining
+  its inherited count and keeping Search in the toolbar's right column.
 - Display human-readable time remaining, using seconds for short estimates,
   minutes above three minutes and hours from one hour. Shorten linked Verify's
   waiting label to Pending. Format Inventory's Modified tooltip consistently

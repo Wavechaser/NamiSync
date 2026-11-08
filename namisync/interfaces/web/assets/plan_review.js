@@ -1254,6 +1254,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       && task.executionSessionId !== null
       && (task.sessionKind !== "sync-execution" || task.sessionReleased || task.linkedVerificationStarted);
     const linkedVerify = task.workPane === "verify" && task.sessionKind === "sync-execution" && !task.sessionReleased;
+    if (linkedVerify && element.dataset.view !== "linked-verify") filterMenu.close();
     element.dataset.view = linkedVerify ? "linked-verify" : "plan";
     list.ariaLabel = linkedVerify ? "Automatic verification" : "Reviewed plan";
     planPane.ariaChecked = String(!linkedVerify);
@@ -1261,7 +1262,6 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     verifyPane.ariaChecked = String(linkedVerify);
     verifyPane.disabled = !verifyAvailable;
     sourcePath.hidden = settings.hidden = linkedVerify;
-    filters.hidden = linkedVerify;
     search.placeholder = search.ariaLabel = linkedVerify ? "Search verification files" : "Search this plan";
     updateText(columnLabels.get(2), linkedVerify ? "Verification" : "Action");
     updateText(columnLabels.get(6), linkedVerify ? "Verification detail" : "Notes");
@@ -1477,7 +1477,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       down.hidden = direction !== "descending";
       sortButton.disabled = review.pending !== null;
     }
-    filterMenu.render(review.summary.filters, review.summary.filter_counts, review.pending !== null,
+    filterMenu.render(review.summary.filters, review.summary.filter_counts, linkedVerify || review.pending !== null,
       review.summary.matched_item_count);
     if (scopeCheckbox instanceof HTMLInputElement) {
       const scopeSelectable = review.summary.scope_selectable_operation_count;

@@ -264,7 +264,11 @@ missing/extra/duplicate/identity controls preserve the original coverage.
 Evidence is retained in `build/verify-follow-20261107/`. The user authorized
 separate test and Verify Follow commits, then recovery-branch cleanup.
 
-### Live execution and verification presentation — delivered 2026-11-06–08
+### Live execution and verification presentation — delivered 2026-11-06–09
+
+The November 9 linked Verify toolbar correction retains the existing Filters
+control, disabled with inherited Plan counts, so Search keeps its right-hand
+column. Plan continues to supply Search and category filters.
 
 The November 8 presentation polish uses human-readable remaining durations,
 shortens Pending verification to Pending and removes raw nanoseconds from

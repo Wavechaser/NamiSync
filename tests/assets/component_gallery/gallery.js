@@ -2627,6 +2627,20 @@ window.addEventListener("unhandledrejection", (event) => {
   diagnosticLayoutEvidence.push(
     await diagnosticLayout("default-expanded-populated", defaultDiagnosticBlockSize, true, true),
   );
+  function assertLinkedVerifyToolbar() {
+    const filter = planReviewPanel.element.querySelector('[data-action="filter-menu"]');
+    const search = planReviewPanel.element.querySelector(".nami-plan-review__search");
+    const planSearch = search.getBoundingClientRect();
+    planReviewPanel.render({ ...renderedGalleryTask, workPane: "verify", sessionReleased: false,
+      sessionState: "active", linkedVerificationStarted: true });
+    const verifySearch = search.getBoundingClientRect();
+    if (!filter.checkVisibility() || filter.ariaDisabled !== "true" || verifySearch.width <= 0
+        || Math.abs(verifySearch.width - planSearch.width) > 1
+        || Math.abs(verifySearch.right - planSearch.right) > 1) {
+      throw new Error("Linked Verify must keep disabled Filters and preserve the Plan Search position");
+    }
+    planReviewPanel.render(renderedGalleryTask);
+  }
   const defaultWindowSize = {
     outer_width: window.outerWidth,
     outer_height: window.outerHeight,
@@ -2637,6 +2651,7 @@ window.addEventListener("unhandledrejection", (event) => {
     validNativeFailureSnapshot,
   );
   let minimumWindowEvidence = null;
+  assertLinkedVerifyToolbar();
   planReviewPanel.element.style.blockSize = "480px";
   planReviewPanel.render(planReviewTask);
   galleryStage = "control_matrix";
@@ -4001,6 +4016,9 @@ window.addEventListener("unhandledrejection", (event) => {
     keyboard_capture_width: nativeKeyboard.dimensions[0],
     keyboard_capture_height: nativeKeyboard.dimensions[1],
   };
+  // Changing panes can queue scroll events. Observe the toolbar after the menu and keyboard checks.
+  galleryMeasurementStep = "native_minimum_layout";
+  assertLinkedVerifyToolbar();
   app.replaceChildren(...catalogNodes);
   app.style.blockSize = catalogRootStyle.blockSize;
   app.style.gridTemplateRows = catalogRootStyle.gridTemplateRows;

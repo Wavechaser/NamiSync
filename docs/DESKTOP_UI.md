@@ -1995,7 +1995,9 @@ retained capacity counts are still being captured.
 Rows present the operation result, automatic linked verification, recording
 state and current stored evidence as independent axes. In linked Verify, a
 successful copy or update awaiting its verification result shows **Pending**
-until progress or a result is available for that row. Structural operation
+until progress or a result is available for that row. Linked Verify uses the
+Plan's existing filters and keeps their Filters button visible and disabled
+in the shared toolbar so Search stays in its usual position. Structural operation
 containers may carry projected rollups without pretending to be a detail
 subject. Missing means unknown, and a successful zero-byte operation is still
 reported as ran. One explicit row action may load full operation detail; the
