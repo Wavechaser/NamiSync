@@ -126,6 +126,13 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
     if (reconcile) resetTravel();
     if (viewport.scrollTop !== previous) expectedScroll = {reconcile, scrollTop: viewport.scrollTop};
   }
+  function setFollowScrollTop(value) {
+    const visibleHeight = height();
+    if (visibleHeight > 0 && (end - offset) * rowHeight >= visibleHeight) {
+      value = Math.max(offset * rowHeight, Math.min(value, end * rowHeight - visibleHeight));
+    }
+    setScrollTop(value);
+  }
   function revealRow(index) {
     if (height() <= 0) return;
     const top = index * rowHeight;
@@ -209,7 +216,7 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
   }
   return Object.freeze({beginWindowRequest, finishWindowRequest, acceptsWindow, setWindow,
     commitWindow, requestKeyboard, invalidateInternalRequest, cancelNavigation,
-    revealRow, setScrollTop, resetTravel, reset, bounds, schedule, dispose,
+    revealRow, setScrollTop, setFollowScrollTop, resetTravel, reset, bounds, schedule, dispose,
     get total() { return total; },
     get keyboardIndex() { return pending?.kind === "keyboard" ? pending.index : null; }});
 }

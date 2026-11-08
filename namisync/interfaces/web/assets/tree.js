@@ -407,7 +407,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   }
   function setPassiveScrollOffset(offset) {
     passiveReveal = true;
-    table.setScrollTop(offset * rowHeight);
+    table.setFollowScrollTop(offset * rowHeight);
   }
   function cancelNavigation() {
     table.cancelNavigation();

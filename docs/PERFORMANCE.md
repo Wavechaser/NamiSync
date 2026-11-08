@@ -10,6 +10,153 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Coalesced table refresh measurements — 2026-11-08–09
+
+This follow-up compares Git `39255ca30672a0d978a9e8ad423b389cbbd27244`
+with the shared automatic scheduler and renderer changes described in
+[PRESENTATION](PRESENTATION.md). Evidence is under
+`build/refresh-cadence-20261108/`, `build/render-costs-20261108/` and
+`build/cadence-measurement-20261108/`. These are diagnostic comparisons, not
+latency, heap-size or throughput acceptance budgets.
+
+A complete baseline/candidate asset comparison at 8/64/256 rows counts 26 versus
+15 created elements for one entering Plan row plus one changed execution row.
+An unchanged dynamic-cell update creates no elements or text writes. Both
+detail bodies retain their current fact nodes and perform no unchanged text
+writes; this is not a zero-allocation claim for the whole pane or its status
+header. The superseded mixed-asset counting receipt is retained, with corrected
+asset/helper/fixture provenance in `row-counts.json`.
+
+The matched native corpus has 10,000 32-byte files in 100 folders. Each arm uses
+a frozen complete package, fresh task-owned profiles/data/targets and the same
+producer/runtime/corpus. Inventory runs Baseline, Verify and Rebaseline; Plan
+runs copy plus linked Verify. Passive private-memory sampling and element
+counters leave execution GC policy unchanged. Exact database-copy audits check
+all expected paths/results; Plan also checks source preservation and the exact
+mirror. Single pairs cannot establish stable speed, leaks or 100k behavior.
+
+The final revision uses independent 500 ms routine full-read and 250 ms local
+paint clocks, plus the approved 25 ms successful integrity collection. Only
+`app.js` changes logically from the prior integrated freeze; `plan.js` also has
+a recorded newline-only byte change after recovery restoration. Complete raw
+hashes and normalized differences are in `final-identity-check.json`, with the
+prior manifest preserved as `manifest.integrated.json`. The performance producer
+and helper bytes remain unchanged. Original → final observations are:
+
+| Workload | Seconds | Full-window reads | Drain commands | Created elements | Renderer private peak MiB |
+| --- | --- | --- | --- | --- | --- |
+| Inventory Baseline | 38.14 → 33.37 | 434 → 72 | 844 → 838 | 168,707 → 115,236 | 1,367 → 357 |
+| Inventory Verify | 40.06 → 29.84 | 371 → 62 | 713 → 746 | 174,437 → 98,501 | 1,285 → 327 |
+| Inventory Rebaseline | 41.00 → 28.91 | 368 → 57 | 713 → 734 | 168,380 → 92,925 | 1,246 → 334 |
+| Plan copy + linked Verify | 157.98 → 135.68 | 320 → 260 | 11,634 → 3,590 | 361,809 → 226,288 | 840 → 644 |
+
+Inventory V8 peaks are 76.96/68.81/72.18 MiB and sampled renderer CPU is
+10.80/11.06/8.69 seconds. Full reads fall 83–85% and sampled renderer peaks
+73–75% versus the original. Plan sampled renderer peak falls 23.4%, full-window
+reads 18.8% and overall duration 14.1%. Plan host CPU falls from 141.48 to 104.33
+seconds, but renderer CPU rises from 38.78 to 43.53 seconds (12.2%). Lower overall
+cost does not establish that every rendering path got cheaper. Local painting,
+bounded row comparison, entering-row/changed-cell construction and full-window
+decode/validation remain work; no compact delta payload or off-window cache was
+introduced. Same-window/shifted Plan read medians are 507/515 ms; Inventory is
+about 504–505/513 ms, including permitted immediate and viewport reads.
+
+All eight native performance runs pass exact audits and frozen-source/runtime
+checks and exit normally with empty Jobs. The separate native delivery receipt
+below remains valid because the drain/bridge dependencies did not change. Final
+installed/API-floor checks pass across five initial cases and two unchanged-candidate
+retries: the first confirmation-dialog Tab observations failed before execution,
+outside the scheduler's active-session path. No product/helper/assertion change
+was made between attempts; both failed and passing receipts are retained under
+`build/read-cadence-20261109/`. `final-summary.md`, `comparison-final.json` and
+the independent final native receipt review own the complete four-way comparison.
+These are single matched observations, not guarantees or a 100k/leak study.
+
+The frontend-only candidate is not an accepted performance delivery. In the
+following table each cell is baseline → candidate; the source freeze and all
+producer/checker identities are retained with `comparison-summary.md` and
+`comparison.json` under the native evidence root.
+
+| Workload | Seconds | Window reads | Drain commands | Created elements | Renderer private peak MiB |
+| --- | --- | --- | --- | --- | --- |
+| Inventory Baseline | 38.14 → 54.89 | 434 → 190 | 844 → 8,244 | 168,707 → 133,376 | 1,367 → 761 |
+| Inventory Verify | 40.06 → 61.37 | 371 → 218 | 713 → 8,282 | 174,437 → 136,090 | 1,285 → 985 |
+| Inventory Rebaseline | 41.00 → 61.34 | 368 → 200 | 713 → 8,511 | 168,380 → 127,255 | 1,246 → 856 |
+| Plan copy + linked Verify | 157.98 → 199.96 | 320 → 697 | 11,634 → 11,882 | 361,809 → 223,957 | 840 → 1,463 |
+
+Inventory same-window/shifted-window median start gaps are approximately
+251/511 ms. Plan changes from 530/544 to 253/511 ms. These include permitted
+explicit, terminal and viewport reads; deterministic tests own automatic cadence
+assertions. Plan returned rows rise from 81,404 to 177,157, and sampled renderer
+CPU from 38.78 to 74.52 seconds. Lower DOM construction alone is insufficient to
+claim lower footprint. The faster loaded-window read policy merits reconsideration.
+
+Inventory renderer CPU falls, but host CPU roughly doubles and cumulative drain
+handler time rises from 3–5 to about 19 seconds per mode. Recorded activity
+durations confirm actual slowdown rather than merely a delayed terminal paint.
+Source review finds an unchanged immediate single-flight browser rearm and
+immediate reliable integrity delivery. Previously synchronous rendering supplied
+incidental backpressure; smaller drain batches are inferred, not measured.
+The stream retains its queue/response/concurrency bounds. Evidence supports
+amplified host/drain work, without isolating GIL, serialization or Defender.
+`drain-amplification-review.md` records the finite review and proposed reuse of
+COPY's wakeable 25 ms collection. A delivery-latency change needs separate scope
+approval; durable recording and verification concurrency remain excluded.
+
+All four runs exit normally with empty Jobs and pass the exact durable/mirror
+audits and frozen source/runtime checks. These audits do not prove exact browser
+event delivery. The premature Plan audit failed before `result.json` existed
+during producer finalization; its receipt is retained and the final rerun passes.
+
+The user then approved extending the existing wakeable 25 ms successful-result
+collection to ordinary and linked integrity outcomes. The integrated source
+freeze differs from the frontend-only freeze only in `drain.py`; the measurement
+producer/helpers are byte-identical, with the original manifest retained as
+`manifest.frontend-only.json`. Original → integrated observations are:
+
+| Workload | Seconds | Window reads | Drain commands | Created elements | Renderer private peak MiB |
+| --- | --- | --- | --- | --- | --- |
+| Inventory Baseline | 38.14 → 44.86 | 434 → 143 | 844 → 1,021 | 168,707 → 118,957 | 1,367 → 567 |
+| Inventory Verify | 40.06 → 41.29 | 371 → 126 | 713 → 951 | 174,437 → 108,290 | 1,285 → 538 |
+| Inventory Rebaseline | 41.00 → 40.79 | 368 → 125 | 713 → 952 | 168,380 → 107,399 | 1,246 → 469 |
+| Plan copy + linked Verify | 157.98 → 199.48 | 320 → 684 | 11,634 → 4,729 | 361,809 → 231,255 | 840 → 1,305 |
+
+Inventory renderer CPU falls to 18.80/13.75/14.52 seconds, with host CPU
+45.94/42.66/42.78 seconds. The exposed drain amplification is largely removed;
+Baseline duration remains 17.6% higher than the original in this single sample,
+so no throughput improvement is claimed. Cumulative drain handler wall time
+now includes intentional collection waits and must not be described as CPU cost.
+Integrated Plan reduces drain traffic, renderer CPU and peak relative to the
+frontend-only candidate, but remains about 26% slower and 55% higher in sampled
+renderer peak than the original. Renderer CPU is 65.44 seconds versus original
+38.78; host CPU is 159.81 versus 141.48. Its full-window traffic remains more
+than twice the original. Exact phase/mirror/durable audits pass and all six
+performance runs close normally; this does not make the cost tradeoff acceptable.
+That combined candidate was preserved as recovery-only `ce09180e`. The user
+subsequently approved 250 ms local paints with 500 ms full-window reads; its
+separate implementation and verification must not inherit this cost result.
+`integrated-summary.md` and
+`comparison-integrated.json` retain the final three-way observations; no stable
+throughput, leak or 100k claim is made.
+
+A separate 256-file native diagnostic uses byte-identical production browser
+bridge callbacks to compare accepted reliable identities against producer order.
+It verifies 1,327 identities over six sessions, including four exact 256-subject
+integrity populations, no Gap, one terminal event/record/release per session,
+both task Close receipts and an empty-Job normal exit. Its source/helper/checker
+hashes and independent raw comparison are under
+`build/integrity-drain-20261108/`. A first diagnostic missed the borrowed helper's
+exact HTML/native title requirements; its populated fixture and failed receipt
+are retained, with normal owned-host closure and a fresh successful retry.
+These delivery observations are separate from the performance producer and
+durable database audits; deterministic tests own fixed-deadline/urgent-wake timing.
+
+The optional table-loading profiler has a pre-existing bridge instrumentation
+anchor mismatch, reproduced on both baseline and candidate. The changed app,
+Plan and tree instrumentation consumers transform and parse successfully;
+this does not certify the whole optional profiler. The mismatch remains
+deferred, with receipts under `build/refresh-cadence-20261108/`.
+
 ## Inventory Follow allocation investigation — 2026-11-08
 
 The Inventory follow-up uses `e80cec1a` as its baseline. The delivered scope

@@ -469,6 +469,7 @@ function switchTaskPane(task, paneName) {
   if (task === null || task === undefined || tasks.get(task.taskId) !== task
       || currentTask() !== task || settingsVisible || !["plan", "verify"].includes(paneName)
       || task.workPane === paneName || (paneName === "verify" && !verifyPaneAvailable(task))) return;
+  cancelAutomaticReview(task);
   navigationRevision += 1;
   task.paneRevision += 1;
   if (paneName === "verify") {
@@ -477,11 +478,11 @@ function switchTaskPane(task, paneName) {
     if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
     renderTasks();
     if (executionPaneVisible(task)) {
-      if (task.executionWindowDirty) void refreshExecutionWindow(task);
+      paintAutomaticReview(task);
       return;
     }
     void loadInventoryReview(task);
-    followInventory(task);
+    paintAutomaticReview(task);
     return;
   }
   if (task.inventoryReview !== null) {
@@ -492,12 +493,14 @@ function switchTaskPane(task, paneName) {
   task.workPane = "plan";
   if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
   renderTasks();
-  if (task.executionWindowDirty) void refreshExecutionWindow(task);
+  if (task.sessionKind === "sync-execution") paintAutomaticReview(task);
+  else if (task.executionWindowDirty) void refreshExecutionWindow(task);
 }
 
 function showSettings() {
   if (settingsVisible) return;
   const task = currentTask();
+  if (task !== null) cancelAutomaticReview(task);
   if (task?.review != null) {
     interruptPlanNavigation(task.review);
     retireExecutionDetail(task.review);
@@ -627,6 +630,8 @@ function inventoryFollow(task, review) {
   }
   review.follow.eligible = followEligible(review);
   review.follow.hasTarget = inventoryFollowTarget(task, true) !== null;
+  if (!review.follow.hasTarget && review.followRead?.explicit) cancelReviewFollow(review);
+  if (inventoryFollowTarget(task) === null) cancelReviewFollow(review);
   return review.follow;
 }
 
@@ -677,10 +682,106 @@ function queuePlanFollow(review, enableFollow = false, explicit = false) {
 
 function navigationWindowOffset(index) { return Math.max(0, index - 4); }
 
+function loadedFollowTarget(task, review, adapter, itemId) {
+  if (review.window.view_revision !== review.summary.view_revision
+      || review.window.highlight_revision !== review.summary.highlight_revision) return null;
+  if (adapter.inventory) {
+    return task.inventoryReviewSessionId === task.sessionId && !task.inventoryViewUnconfirmed
+      ? review.window.rows.find(row => !row.is_container && row.warning === null && row.row_id !== null
+        && `${review.summary.location_id}:${row.row_id}` === itemId) : null;
+  }
+  return review.window.execution.session_id === task.executionSessionId
+    ? review.window.rows.find(row => row.operation_id === itemId) : null;
+}
+
+function cachedFollowTarget(task, review, adapter, itemId) {
+  return review.follow.anchorKey === `${adapter.session(task)}:${review.summary.view_revision}:${itemId}`
+    && Number.isSafeInteger(review.follow.anchorIndex)
+    && review.follow.anchorIndex >= review.window.offset
+    && review.follow.anchorIndex < review.window.offset + review.window.rows.length;
+}
+
+function automaticFollowIsLocal(task) {
+  const inventory = ["baseline", "verify", "rebaseline"].includes(task.sessionKind);
+  const review = inventory ? task.inventoryReview : task.review;
+  const adapter = inventory ? INVENTORY_FOLLOW : PLAN_FOLLOW;
+  const target = adapter.target(task);
+  return review == null || !review.follow?.enabled || !followEligible(review) || target === null
+    || loadedFollowTarget(task, review, adapter, target) != null
+    || cachedFollowTarget(task, review, adapter, target);
+}
+
+function cancelAutomaticReview(task) {
+  if (task.automaticReviewTimer != null) window.clearTimeout(task.automaticReviewTimer);
+  task.automaticReviewTimer = null;
+}
+
+function scheduleAutomaticReview(task, follow = false) {
+  if (tasks.get(task.taskId) !== task || task.closePending || task.drainUnavailable
+      || task.sessionState !== "active" || settingsVisible) return;
+  task.automaticFollowPending ||= follow;
+  task.automaticPaintPending ||= follow;
+  const now = performance.now();
+  task.automaticReviewAt ??= now;
+  task.automaticReadAt ??= now;
+  const due = task.automaticPaintPending
+    ? Math.min(task.automaticReviewAt + 250, task.automaticReadAt + 500)
+    : task.automaticReadAt + 500;
+  if (task.automaticReviewTimer != null && task.automaticReviewDue <= due) return;
+  cancelAutomaticReview(task);
+  task.automaticReviewDue = due;
+  const sessionId = task.sessionId;
+  task.automaticReviewTimer = window.setTimeout(() => {
+    task.automaticReviewTimer = null;
+    if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId || task.closePending
+        || task.sessionState !== "active" || task.drainUnavailable || settingsVisible) return;
+    if (performance.now() < task.automaticReadAt + 500
+        && (!task.automaticPaintPending || performance.now() < task.automaticReviewAt + 250)) {
+      scheduleAutomaticReview(task);
+      return;
+    }
+    paintAutomaticReview(task, task.automaticFollowPending, performance.now() >= task.automaticReadAt + 500);
+  }, Math.max(0, due - now));
+}
+
+function paintAutomaticReview(task, follow = true, read = true) {
+  cancelAutomaticReview(task);
+  const land = read || automaticFollowIsLocal(task);
+  if (land) task.automaticFollowPending = false;
+  task.automaticPaintPending = false;
+  task.automaticReviewAt = performance.now();
+  if (read) task.automaticReadAt = task.automaticReviewAt;
+  task.automaticReviewRunning = true;
+  try {
+    if (task.sessionKind === "sync-execution") {
+      if (task.review?.follow != null) {
+        task.review.follow.hasTarget = planFollowTarget(task) !== null;
+        if (!task.review.follow.hasTarget) cancelReviewFollow(task.review);
+        else if (follow && land && task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
+      }
+      renderTasks();
+      if (read && task.executionWindowDirty) void refreshExecutionWindow(task);
+    } else {
+      if (follow && land) followInventory(task);
+      renderTasks();
+      if (read && task.inventoryOverlayDirty) void refreshInventoryOverlay(task, task.sessionId, false);
+    }
+  } finally {
+    task.automaticReviewRunning = false;
+  }
+  if (!read && (task.automaticFollowPending || task.executionWindowDirty || task.inventoryOverlayDirty)) {
+    scheduleAutomaticReview(task);
+  }
+}
+
 function queueReviewFollow(review, adapter, enableFollow = false, explicit = false) {
   const task = adapter.owner(review);
   if (task === null || settingsVisible || task.closePending || adapter.loading(task) || review.pending !== null
       || adapter.session(task) === null || review.follow == null) return;
+  if (!explicit && task.sessionState === "active" && !task.automaticReviewRunning) {
+    scheduleAutomaticReview(task, true);
+    return;
+  }
   review.follow.eligible = followEligible(review);
   const operationId = adapter.target(task, explicit);
   review.follow.hasTarget = adapter.target(task, true) !== null;
@@ -700,31 +801,30 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
   const navigation = navigationRevision;
   const paneRevision = task.paneRevision;
   const anchorKey = `${sessionId}:${viewRevision}:${operationId}`;
-  const loadedTarget = !adapter.inventory && review.window.view_revision === viewRevision
-    && review.window.highlight_revision === review.summary.highlight_revision
-    && review.window.execution.session_id === sessionId
-    ? review.window.rows.find((row) => row.operation_id === operationId) : null;
+  const loadedTarget = adapter.inventory && explicit ? null : loadedFollowTarget(task, review, adapter, operationId);
   if (loadedTarget != null) {
     if (explicit || review.follow.anchorKey !== anchorKey) {
       cancelReviewFollow(review);
-      cancelPlanViewport(review);
+      if (explicit || review.viewportRead != null) {
+        if (adapter.inventory) cancelInventoryWindow(review);
+        else cancelPlanViewport(review);
+      }
       review.follow.anchorKey = anchorKey;
       review.follow.anchorIndex = loadedTarget.visible_index;
       review.follow.scrollOffset = Math.max(review.window.offset, navigationWindowOffset(loadedTarget.visible_index));
       review.follow.message = null;
-      if (["No operation is active.", "The current operation is excluded from this view.",
-        "Current operation navigation is unavailable. Try again."].includes(review.message)) review.message = null;
-      renderTasks();
+      if ([`No ${adapter.subject} is active.`, `The current ${adapter.subject} is excluded from this view.`,
+        `Current ${adapter.subject} navigation is unavailable. Try again.`].includes(review.message)) review.message = null;
+      if (!task.automaticReviewRunning) renderTasks();
     }
     return;
   }
-  if (review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
-      && review.follow.anchorIndex >= review.window.offset
-      && review.follow.anchorIndex < review.window.offset + review.window.rows.length
+  if (cachedFollowTarget(task, review, adapter, operationId)
       && (!explicit || navigationWindowOffset(review.follow.anchorIndex) >= review.window.offset)) {
     if (explicit) {
       cancelReviewFollow(review);
-      if (!adapter.inventory) cancelPlanViewport(review);
+      if (adapter.inventory) cancelInventoryWindow(review);
+      else cancelPlanViewport(review);
       review.follow.scrollOffset = navigationWindowOffset(review.follow.anchorIndex);
       renderTasks();
     }
@@ -748,14 +848,16 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
       : await adapter.anchor(task.taskId, sessionId, viewRevision, operationId);
     if (!stillCurrent()) return null;
     if (anchor.disposition !== "current" || anchor.index === null) return {anchor, window: null};
+    const demand = adapter.inventory ? task.inventoryOverlayRevision : task.executionWindowDirtyRevision;
+    if (!explicit) task.automaticReadAt = performance.now();
     const window = await adapter.window(task.taskId, viewRevision, navigationWindowOffset(anchor.index), 256);
-    return {anchor, window};
+    return {anchor, window, demand};
   });
   const request = {key: anchorKey, generation: followGeneration, explicit, job};
   review.followRead = request;
   void job.promise.then((result) => {
     if (result === null || review.followRead !== request || !current()) return;
-    const {anchor, window} = result;
+    const {anchor, window, demand} = result;
     if (window === null) {
       if (!explicit && adapter.target(task) !== operationId) return;
       review.follow.message = `The current ${adapter.subject} is excluded from this view.`;
@@ -763,6 +865,7 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
     } else {
       if (window.disposition !== "current" || window.view_revision !== viewRevision
           || !adapter.adopt(review, window)) return;
+      if (!adapter.inventory && task.executionWindowDirtyRevision === demand) task.executionWindowDirty = false;
       review.follow.anchorKey = anchorKey;
       review.follow.anchorIndex = anchor.index;
       review.follow.scrollOffset = navigationWindowOffset(anchor.index);
@@ -780,12 +883,13 @@ function queueReviewFollow(review, adapter, enableFollow = false, explicit = fal
   }).finally(() => {
     const owned = review.followRead === request;
     if (owned) review.followRead = null;
-    // Let one automatic jump land, then read the latest target if it advanced.
-    // A pending Plan paint already owns that next opportunity.
+    // A changed target joins the next cadence cycle instead of chaining reads.
     const next = adapter.target(task);
     if (owned && current() && review.follow.enabled && review.follow.eligible
-        && next !== null && next !== operationId
-        && (explicit || adapter.inventory || task.executionPaintTimer == null)) queueReviewFollow(review, adapter);
+        && next !== null && next !== operationId) {
+      if (task.sessionState === "active") scheduleAutomaticReview(task, true);
+      else queueReviewFollow(review, adapter);
+    }
     release();
   });
 }
@@ -797,6 +901,7 @@ function selectTask(taskId) {
   }
   navigationRevision += 1;
   const previous = selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null;
+  if (previous !== null) cancelAutomaticReview(previous);
   if (previous?.review != null) {
     interruptPlanNavigation(previous.review);
     retireExecutionDetail(previous.review);
@@ -823,7 +928,8 @@ function selectTask(taskId) {
   }
   if (task.executionWindowDirty) void refreshExecutionWindow(task);
   if (task.taskKind === "inventory" || task.executionStarted) void loadInventoryReview(task);
-  followInventory(task);
+  if (["sync-execution", "baseline", "verify", "rebaseline"].includes(task.sessionKind)) paintAutomaticReview(task);
+  else followInventory(task);
 }
 
 function adoptTask(summary) {
@@ -896,6 +1002,11 @@ function adoptTask(summary) {
     tasks.set(task.taskId, task);
   } else {
     if (task.sessionId !== summary.session_id) {
+      cancelAutomaticReview(task);
+      task.automaticReviewAt = null;
+      task.automaticReadAt = null;
+      task.automaticPaintPending = false;
+      task.automaticFollowPending = false;
       task.stopDrain?.();
       task.stopDrain = null;
       if (task.inventoryReview !== null) {
@@ -1009,6 +1120,7 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     return;
   }
   const execution = task.sessionKind === "sync-execution";
+  const integrity = ["baseline", "verify", "rebaseline"].includes(task.sessionKind);
   const rawGap = update?.event?.body_type === "Gap";
   const newGap = snapshot?.gap_first_missed_seq != null
     && snapshot.gap_first_missed_seq !== task.snapshot?.gap_first_missed_seq;
@@ -1028,12 +1140,19 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     task.executionWindowDirty = true;
     task.executionWindowDirtyRevision += 1;
   }
-  if (execution && snapshot === null) {
-    observeLinkedVerification(task, null, update);
-    if (update?.event?.body_type === "Gap") void refreshExecutionWindow(task);
+  if ((execution || integrity) && snapshot === null) {
+    if (execution) observeLinkedVerification(task, null, update);
+    if (rawGap) {
+      if (integrity) {
+        task.inventoryOverlayRevision += 1;
+        task.inventoryOverlayDirty = true;
+      }
+      scheduleAutomaticReview(task, true);
+    }
     return;
   }
   const immediate = task.snapshot === null || task.executionControlState !== snapshot?.control_state
+    || task.snapshot?.session_state !== snapshot?.session_state
     || task.snapshot?.phase !== snapshot?.phase
     || update?.update_type === "record" || update?.event?.body_type === "Gap"
     || task.snapshot?.gap_first_missed_seq !== snapshot?.gap_first_missed_seq;
@@ -1083,30 +1202,18 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (task.review?.follow != null && task.sessionKind === "sync-execution") {
       task.review.follow.hasTarget = planFollowTarget(task) !== null;
     }
-    if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+    if (integrity) {
       if (task.inventoryReview !== null) inventoryFollow(task, task.inventoryReview);
-      void refreshInventoryOverlay(task, sessionId);
+      task.inventoryOverlayRevision += 1;
+      task.inventoryOverlayDirty = true;
     }
   }
-  if (execution) {
+  if (execution || integrity) {
     if (!immediate) {
-      if (task.executionPaintTimer == null) {
-        task.executionPaintTimer = window.setTimeout(() => {
-          task.executionPaintTimer = null;
-          if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
-              || task.sessionState !== "active" || task.drainUnavailable) return;
-          renderTasks();
-          if (task.review?.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
-          if (task.executionWindowDirty) void refreshExecutionWindow(task);
-        }, 500);
-      }
+      scheduleAutomaticReview(task, true);
       return;
     }
-    if (task.executionPaintTimer != null) {
-      window.clearTimeout(task.executionPaintTimer);
-      task.executionPaintTimer = null;
-    }
-    void refreshExecutionWindow(task);
+    cancelAutomaticReview(task);
   }
   if (update?.update_type === "record") {
     task.recoveryRetry = null;
@@ -1134,17 +1241,10 @@ function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
     if (["completed", "failed", "canceled", "refused"].includes(task.sessionState)) {
       void loadTaskSetup(task);
     }
-  } else {
+  } else if (!execution && !integrity) {
     renderTasks();
   }
-  if (task.review !== null && task.sessionKind === "sync-execution") {
-    task.review.follow.hasTarget = planFollowTarget(task) !== null;
-    if (!task.review.follow.hasTarget) cancelReviewFollow(task.review);
-    else if (task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
-  }
-  if (task.inventoryReview !== null && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
-    followInventory(task);
-  }
+  if (execution || integrity) paintAutomaticReview(task);
 }
 
 function acceptTaskRefusal(task, sessionId, error, retry = null) {
@@ -1155,6 +1255,7 @@ function acceptTaskRefusal(task, sessionId, error, retry = null) {
     && !(error instanceof TerminalPresentationError)
     && !(error instanceof TerminalSessionReleaseError);
   if (drainStopped) {
+    cancelAutomaticReview(task);
     task.drainUnavailable = true;
     invalidateInventoryReview(task);
   }
@@ -1191,6 +1292,7 @@ function acceptTaskRecovery(task, sessionId) {
       ? task.executionControlAttempt.message : executionControlMessage(task.executionControlState);
   }
   renderTasks();
+  if (task.executionWindowDirty || task.inventoryOverlayDirty) scheduleAutomaticReview(task, true);
 }
 
 function retryTaskUpdates(taskId) {
@@ -1235,6 +1337,7 @@ async function refreshTasks() {
   }
   for (const [taskId, task] of tasks) {
     if (!retainedIds.has(taskId)) {
+      cancelAutomaticReview(task);
       task.stopDrain?.();
       tasks.delete(taskId);
     }
@@ -1334,6 +1437,7 @@ async function closeRetainedTask(taskId) {
   task.closeAwaitingTerminal = false;
   task.closeManualReady = false;
   task.closePending = true;
+  cancelAutomaticReview(task);
   task.closeRecovery = null;
   task.closeFailed = false;
   task.closeMessage = null;
@@ -2056,17 +2160,24 @@ function currentInventoryTask(review) {
     && (task.taskKind === "inventory" || task.workPane === "verify") ? task : null;
 }
 
-async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
+async function refreshInventoryOverlay(task, sessionId = task.sessionId, dirty = true) {
   if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
       || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)) return;
-  task.inventoryOverlayRevision += 1;
-  task.inventoryOverlayDirty = true;
+  if (dirty) {
+    task.inventoryOverlayRevision += 1;
+    task.inventoryOverlayDirty = true;
+  }
+  if (task.sessionState === "active" && !task.automaticReviewRunning) {
+    scheduleAutomaticReview(task);
+    return;
+  }
   const reads = tableReadOwner(task, true);
   if (task.inventoryOverlayRunning || reads.busy) return;
   task.inventoryOverlayRunning = true;
   let attemptedRevision = task.inventoryOverlayRevision;
   try {
     while (tasks.get(task.taskId) === task && task.sessionId === sessionId) {
+      if (task.sessionState === "active" && !task.automaticReviewRunning) break;
       const request = task.inventoryOverlayRevision;
       attemptedRevision = request;
       const review = task.inventoryReview;
@@ -2084,6 +2195,7 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
       const highlightGeneration = review.highlightGeneration;
       const windowRequest = review.windowRequestRevision;
       const detail = review.detail?.state === "current" ? review.detail : null;
+      task.automaticReadAt = performance.now();
       const [windowRead, detailRead] = await Promise.allSettled([
         readInventoryWindow(task.taskId, revision, offset, 256),
         detail === null ? Promise.resolve(null)
@@ -2127,7 +2239,7 @@ async function refreshInventoryOverlay(task, sessionId = task.sessionId) {
     task.inventoryOverlayRunning = false;
     if (tasks.get(task.taskId) === task && task.inventoryOverlayRevision !== attemptedRevision
         && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
-      void refreshInventoryOverlay(task, task.sessionId);
+      void refreshInventoryOverlay(task, task.sessionId, false);
     }
   }
 }
@@ -2508,7 +2620,7 @@ function adoptExecutionWindow(review, window) {
 function retryInventoryOverlay(task) {
   if (tasks.get(task.taskId) === task && task.inventoryOverlayDirty && !task.inventoryOverlayRunning
       && !tableReadOwner(task, true).busy && task.inventoryReview !== null
-      && currentInventoryTask(task.inventoryReview) === task) void refreshInventoryOverlay(task);
+      && currentInventoryTask(task.inventoryReview) === task) void refreshInventoryOverlay(task, task.sessionId, false);
 }
 
 function markExecutionWindowDirty(task) {
@@ -2524,13 +2636,17 @@ async function refreshExecutionWindow(task) {
   if (
     tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId || settingsVisible
     || !executionPaneVisible(task)
-    || task.executionPaintTimer != null
     || task.review === null || task.reviewLoading || task.executionWindowRefreshRunning
     || tableReadOwner(task).busy
   ) return;
+  if (task.sessionKind === "sync-execution" && task.sessionState === "active" && !task.automaticReviewRunning) {
+    scheduleAutomaticReview(task);
+    return;
+  }
   task.executionWindowRefreshRunning = true;
   try {
     while (task.executionWindowDirty) {
+      if (task.sessionKind === "sync-execution" && task.sessionState === "active" && !task.automaticReviewRunning) return;
       task.executionWindowDirty = false;
       const review = task.review;
       const reads = tableReadOwner(task);
@@ -2553,6 +2669,7 @@ async function refreshExecutionWindow(task) {
         && review.summary.view_revision === viewRevision && review.window.offset === offset,
         task.executionWindowDirtyRevision);
       try {
+        task.automaticReadAt = performance.now();
         const window = await getPlanWindow(task.taskId, viewRevision, offset, 256);
         if (tasks.get(task.taskId) === task && task.review === review
             && task.executionSessionId === sessionId && task.planRequestId === requestId

@@ -326,26 +326,44 @@ remain current. Independently invalidated reads preserve one dirty replay at the
 accepted offset and cannot publish result facts or retire exact detail, including
 when the total population is larger.
 
-During sync execution the browser adopts each drain snapshot immediately. Ordinary
-snapshots share a 500 ms timer per task for repainting, following the current
-operation and requesting its Plan window. Events preceding the snapshot in a
-drain batch immediately invalidate older reads without a separate paint. The
-first snapshot, control transitions, newly observed gaps and the terminal record
-update the display as soon as their snapshot arrives. A refresh of the same
+During sync execution and ordinary Inventory integrity the browser adopts each
+drain snapshot immediately. Automatic painting, Follow and background refresh
+share coalesced per-task demand. Routine automatic full-window reads and potential
+Follow jumps target 500 ms; local cursor/progress paints and exact/cached loaded
+landings target 250 ms. Independent clocks prevent local paints postponing full
+refresh. Actual window dispatch also advances the read clock, so a delayed anchor
+does not admit an early successor. These are scheduling intervals, not guaranteed
+transport completion times. Explicit navigation and
+user-owned reads remain prompt. Plan execution events preceding a drain snapshot
+invalidate older result reads without a separate paint; ordinary Inventory
+overlay demand follows its snapshots and Gap handling. Raw Gap synchronously
+retires navigation authority; the accompanying gap snapshot paints immediately.
+The first snapshot, control/phase transitions, Gap and terminal updates preserve
+their immediate paint/read paths; explicit navigation and pane reentry likewise
+bypass routine cadence. A refresh of the same
 active committed projection and highlight retains compatible row DOM, including
 rows shared by overlapping windows. Compatibility includes unchanged structural
 row facts; changed structure takes the ordinary rebuild path. Dynamic cells
 update for changed execution facts, active progress or Plan/Verify presentation.
+Plan updates the existing intent, checksum and notes cells instead of building
+a temporary complete row. Unchanged dynamic facts leave cell contents intact.
 Reused handlers read
 the current row binding, focus is restored under the existing rules, and rows
 outside the new window are not retained in a cache.
 
-An ordinary paint admits automatic Follow before requesting a dirty Plan-window
-refresh. A Follow read that takes foreground ownership defers the refresh until
+At a read opportunity, the scheduler admits automatic Follow before requesting
+a dirty table-window refresh. A Follow read that takes foreground ownership defers the refresh until
 the reader becomes idle, preserving its dirty demand. A cached target or a
 Follow request that cannot start leaves the refresh free to run on the same tick.
 This ordering avoids issuing a background read that Follow immediately retires;
 it does not change dirty revisions or immediate-transition presentation.
+An accepted Plan Follow window can satisfy unchanged execution-window demand.
+Inventory retains its separate overlay refresh because a Follow window does not
+satisfy the independent exact highlighted detail.
+Background-only replay does not create new Follow demand. Slow or independently
+invalidated reads retain one latest pending refresh through the scheduler.
+Completion routes that retained demand through its cadence deadline, which may
+already have elapsed; a current failure without independent demand does not poll.
 
 Full Plan reloads obey the same foreground ownership rule: a reload admitted
 before or during a user interaction cannot replace the review owning that
@@ -542,7 +560,8 @@ revision. Between items, Plan follows the latest settled execution operation,
 including a no-op. Linked Verify and ordinary Inventory integrity use the latest
 settled integrity item in their respective lookup namespaces. These cursors come
 from reliable outcomes, so they advance even when no active-item progress is
-published. Execution and linked Verify use the existing execution paint cadence.
+published. Automatic Follow uses the 500 ms read / 250 ms local-paint cadence
+above in both tables, including linked Verify.
 Nothing visible means no target. Automatic Follow is restricted to unfiltered,
 search-free canonical order.
 User scroll-away or changing sort/search/filter disables it until explicit enable;
@@ -565,11 +584,20 @@ Reuse is scoped to the same review, publication, active session, view/highlight
 revision and total. Generic tree users retain the default rebuild behavior.
 The current window owns its row and checkbox-control retention through the
 common successful commit path, including direct viewport commits. There is no
-off-window row cache. Follow cadence and the window limit are unchanged.
-Inventory retains its existing authoritative Follow lookup path. A loaded-target
-shortcut is deferred: removing its foreground read lifetime exposed independent
-overlay read amplification in native diagnostics. [PERFORMANCE](PERFORMANCE.md#inventory-follow-allocation-investigation--2026-11-08)
-records that investigation; no refresh scheduler or protocol change is implied.
+off-window row cache; the window limit remains unchanged. Automatic Inventory
+Follow can use an exact file already in the confirmed current session, location,
+view and highlight window. Explicit Inventory Go retains its existing anchor
+lookup and cache rules. Off-window and collapsed targets still resolve through the backend;
+cached authoritative anchors can land locally while their identity remains valid.
+The shared cadence coalesces independent overlay refresh demand, including exact
+highlighted details that a Follow window alone cannot satisfy.
+Passive local landings in both tables stay within loaded viewport coverage when
+the window can fill the viewport, avoiding an incidental edge refill. Short
+windows retain normal coverage requests; user scrolling is unchanged.
+Both detail panels reuse their current fact nodes and skip unchanged text writes,
+while reevaluating every displayed fact. No off-window detail cache is retained.
+[PERFORMANCE](PERFORMANCE.md#inventory-follow-allocation-investigation--2026-11-08)
+retains the earlier uncoalesced shortcut's read-amplification investigation.
 Manual scroll-away still disables Follow while a pending view/selection change,
 inventory action, loading or Close blocks row interaction. That notification does
 not authorize active-row changes or other blocked gestures.

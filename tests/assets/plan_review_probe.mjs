@@ -35,6 +35,7 @@ class ElementFake {
   }
   get textContent() { return this._textContent ?? ""; }
   set textContent(value) {
+    if (this.ownerDocument?.textWriteTargets?.has(this)) this.ownerDocument.textWriteCount += 1;
     this._textContent = value;
     for (const child of this.children ?? []) child.parentElement = null;
     this.children = [];
@@ -1544,6 +1545,22 @@ executionReviewState.executionDetail.state = "current";
 executionReviewState.executionDetail.response = retainedResponse;
 executionPanel.render(executionTask);
 assert.ok(findText(detailBody, hostile), "loading-to-result refreshes the same detail");
+const retainedDetailNodes = [...detailBody.children];
+document.textWriteTargets = new Set([detailBody, ...retainedDetailNodes,
+  ...retainedDetailNodes.flatMap(node => node.children)]);
+document.textWriteCount = 0;
+executionPanel.render(executionTask);
+for (const [index, node] of retainedDetailNodes.entries()) assertSameNode(detailBody.children[index], node,
+  "unchanged Plan detail facts retain their nodes");
+assert.equal(document.textWriteCount, 0, "unchanged Plan details retain their text nodes");
+document.textWriteTargets = null;
+const retainedDetailFocus = executionReviewState.summary.highlight_focus_node_id;
+executionReviewState.summary.highlight_focus_node_id = null;
+executionPanel.render(executionTask);
+assert.equal(detailBody.children.length, 0, "clearing detail focus trims all retained facts");
+executionReviewState.summary.highlight_focus_node_id = retainedDetailFocus;
+executionPanel.render(executionTask);
+assert.ok(findText(detailBody, hostile), "restoring detail focus rebuilds current facts");
 detailsToggle.focus();
 detailsToggle.dispatch("click");
 assert.equal(executionDiagnostics.hidden, true);

@@ -21,6 +21,47 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Coalesce automatic table refresh and reduce rendering allocation — delivered 2026-11-09
+
+Rebuilt from `39255ca3` after the user approved 250 ms local cursor/progress
+painting and 500 ms routine automatic full-window reads in both Plan and
+Inventory. One timer serves independent clocks; local paints cannot postpone
+reads, and actual dispatch stamps fence successors after delayed anchors.
+Explicit navigation, pane reentry and first/control/phase/Gap/terminal paths
+retain immediate priority. Preserve foreground ownership, current-window
+retention, exact highlighted detail, recovery and stale-response retirement.
+
+Automatic Inventory Follow can land on an exact loaded row; passive landings
+stay within loaded coverage when the window fills the viewport. Plan updates
+existing dynamic cells, and both detail panels reuse current fact nodes.
+The user also approved wakeable 25 ms
+collection of successful ordinary and linked integrity outcomes, retaining
+ordered individual delivery and all urgent/queue/response/recovery bypasses.
+[PRESENTATION](PRESENTATION.md) and [BRIDGE](BRIDGE.md) own these behaviors.
+
+Final interface gate: 2,289 passed, 4,237 deselected in 173.16 seconds.
+All seven installed/API-floor cases
+have passing receipts; two pre-execution modal-focus observations passed one
+unchanged-candidate retry, with failures retained. Separate native browser
+delivery verifies 1,327 reliable identities over six sessions, including four
+exact 256-subject integrity populations, no Gap and correct terminal/release.
+Independent source, evidence and documentation reviews pass.
+
+Matched 10k diagnostics resolve the unfavorable intermediate Plan result:
+final Plan is 135.68 versus 157.98 seconds and 644 versus 840 MiB renderer peak;
+Inventory peaks fall 73–75%. Plan renderer CPU remains 12.2% higher; no stable
+throughput, leak or 100k guarantee is claimed. [PERFORMANCE](PERFORMANCE.md)
+owns all eight frozen-source runs, exact audits, original/failed receipts and
+limits. Evidence roots: `build/refresh-cadence-20261108/`,
+`build/read-cadence-20261109/`, `build/render-costs-20261108/`,
+`build/integrity-drain-20261108/` and `build/cadence-measurement-20261108/`.
+
+Recovery `ce09180e` was restored as uncommitted task-owned work, not merged or
+cherry-picked; its reviewed changes were rebuilt with the approved cadence
+revision. Retain that reference/evidence as the superseded candidate. No
+measuring-session resources, row limits, off-window caches, wire payloads,
+GC/heap policy, durable batching or verification concurrency changed.
+
 ### Reduce Inventory Follow allocation — delivered 2026-11-08
 
 Apply row reuse to ordinary Inventory baseline, verify and rebaseline. Native

@@ -1,7 +1,7 @@
 import { createTableController } from "./table_controller.js";
 import { pointerHighlightGesture, keyboardHighlightGesture } from "./row_highlight.js";
 import { createTableColumns } from "./table_columns.js";
-import { renderPlanRow } from "./plan.js";
+import { renderPlanRow, updatePlanRowExecution } from "./plan.js";
 import { createFilterMenu } from "./filter_menu.js";
 import { createRowMenu } from "./row_menu.js";
 import { createIcon } from "./icons.js";
@@ -601,8 +601,9 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
   disableActions();
   const renderedText = new WeakMap();
   function updateText(node, value, filesystem = false) {
-    if (renderedText.get(node) === value) return;
-    renderedText.set(node, value);
+    const previous = renderedText.get(node);
+    if (previous?.value === value && previous.filesystem === filesystem) return;
+    renderedText.set(node, {value, filesystem});
     if (filesystem) renderFilesystemText(node, value);
     else renderText(node, value);
   }
@@ -813,27 +814,41 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     return { ...presentation, advisory: gap === null ? "" : "Execution event history has gaps." };
   }
 
+  let detailIndex = 0;
+  function detailNode(tag, className = "") {
+    let node = detailBody.children[detailIndex];
+    if (node?.tagName !== tag.toUpperCase()) {
+      while (detailBody.children.length > detailIndex) detailBody.children[detailBody.children.length - 1].remove();
+      node = document.createElement(tag);
+      detailBody.append(node);
+    }
+    detailIndex += 1;
+    node.classList.toggle("nami-plan-row__intent", false);
+    node.className = className;
+    node.ariaHidden = className === "nami-detail-divider" ? "true" : null;
+    delete node.dataset.lifecycle;
+    delete node.dataset.intent;
+    return node;
+  }
   function appendDetailFact(label, value, { filesystem = false, fullWidth = filesystem, block = false } = {}) {
-    const term = document.createElement("dt");
-    renderText(term, label);
-    const definition = document.createElement("dd");
-    if (fullWidth) {
-      term.className = definition.className = "nami-detail-full";
+    if (block && detailIndex > 0) {
+      updateText(detailNode("dd", "nami-detail-divider"), "");
     }
-    if (block && detailBody.children.length > 0) {
-      const divider = document.createElement("dd");
-      divider.className = "nami-detail-divider";
-      divider.ariaHidden = "true";
-      detailBody.append(divider);
-    }
-    if (filesystem) renderFilesystemText(definition, value);
-    else renderText(definition, value);
-    detailBody.append(term, definition);
+    const term = detailNode("dt", fullWidth ? "nami-detail-full" : "");
+    const definition = detailNode("dd", fullWidth ? "nami-detail-full" : "");
+    updateText(term, label);
+    if (value !== null) updateText(definition, value, filesystem);
     return definition;
   }
 
   function renderDetail(detail, row) {
-    detailBody.replaceChildren();
+    detailIndex = 0;
+    try { paintDetail(detail, row); }
+    finally {
+      while (detailBody.children.length > detailIndex) detailBody.children[detailBody.children.length - 1].remove();
+    }
+  }
+  function paintDetail(detail, row) {
     updateText(detailTitle, row?.display ?? "Item details", row !== null);
     if (row === null) {
       updateText(detailStatus, "Highlight an item to see its details.");
@@ -857,16 +872,20 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const response = detail?.operationId === row.operation_id && detail.state === "current" ? detail.response : null;
     const operation = response?.operation ?? row.execution?.operation ?? null;
     const action = rowView({ ...row, execution: response ?? row.execution }, false, false, rowProgress(currentTask));
-    const actionFact = appendDetailFact(operation === null ? "Planned action" : "Operation", "");
+    const actionFact = appendDetailFact(operation === null ? "Planned action" : "Operation", null);
     actionFact.classList.add("nami-plan-row__intent");
     if (action.lifecycleKey !== undefined) actionFact.dataset.lifecycle = action.lifecycleKey;
     else if (action.intentKey !== "") actionFact.dataset.intent = action.intentKey;
-    const actionLabel = document.createElement("span");
-    actionLabel.className = "nami-file-state-label";
-    renderText(actionLabel, operation === null ? action.intentText
+    let actionLabel = actionFact.children[0];
+    if (actionLabel?.tagName !== "SPAN") {
+      actionLabel = document.createElement("span");
+      actionLabel.className = "nami-file-state-label";
+      actionFact.replaceChildren(actionLabel);
+    }
+    renderedText.delete(actionFact);
+    updateText(actionLabel, operation === null ? action.intentText
       : isNoChange(operation) ? "No change"
         : `${executionLabel(operation.result)} · ${displayLabel(operation.kind ?? row.operation_kind)}`);
-    actionFact.append(actionLabel);
     if (row.reason !== null) appendDetailFact("Reason", reasonLabel(row.reason));
     if (row.blocked_reason !== null) appendDetailFact("Blocked", reasonLabel(row.blocked_reason));
     if (row.selection_exclusion_reason !== null) appendDetailFact("Excluded", reasonLabel(row.selection_exclusion_reason));
@@ -977,11 +996,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     const progressChanged = renderedRows?.progressPresentation !== rowProgress(task);
     const verificationChanged = renderedRows?.verificationView !== (task.workPane === "verify");
     function updateExecutionCells(element, row) {
-      const replacement = document.createElement("div");
-      renderPlanRow(replacement, rowView(row, disabled, committed, rowProgress(task), task.workPane === "verify"));
-      for (const cell of [".nami-plan-row__intent", ".nami-plan-row__checksum", ".nami-file-row__notes"]) {
-        element.querySelector(cell).replaceWith(replacement.querySelector(cell));
-      }
+      updatePlanRowExecution(element, rowView(row, disabled, committed, rowProgress(task), task.workPane === "verify"));
     }
     if (renderedRows?.review === review && (previous === review.window || sameProjection)) {
       const changed = new Set();
@@ -1552,7 +1567,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
     retryOutcome.disabled = review.recovery?.checking === true || controlAttempt?.recovery?.checking === true;
     renderRows(review, task);
     if (Number.isSafeInteger(review.follow?.scrollOffset)) {
-      table.setScrollTop(review.follow.scrollOffset * ROW_HEIGHT);
+      table.setFollowScrollTop(review.follow.scrollOffset * ROW_HEIGHT);
       review.follow.scrollOffset = null;
     }
     if (Number.isSafeInteger(review.moveScrollOffset)) {

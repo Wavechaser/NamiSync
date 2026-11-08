@@ -1462,6 +1462,18 @@ assert.match(text(walk(presentationPane.element).find(value => value.ariaLabel =
   /Checksum No baseline evidence.*Verification result Verified/,
   "ordinary detail remains visible when ledger attestation is absent");
 const ordinaryDetailText = text(walk(presentationPane.element).find(value => value.ariaLabel === "Inventory item details"));
+const retainedDetailBody = presentationPane.element.querySelector(".nami-plan-review__detail-body");
+const retainedDetailFacts = [...retainedDetailBody.children];
+let detailTextWrites = 0;
+for (const node of retainedDetailFacts) {
+  let value = node.textContent;
+  Object.defineProperty(node, "textContent", {get() { return value; },
+    set(next) { value = next; detailTextWrites += 1; this.replaceChildren(); }});
+}
+presentationPane.render(presentationTask);
+for (const [index, node] of retainedDetailFacts.entries()) assertSameNode(retainedDetailBody.children[index], node,
+  "unchanged Inventory detail facts retain their nodes");
+assert.equal(detailTextWrites, 0, "unchanged Inventory detail facts retain their text nodes");
 assert.match(ordinaryDetailText, /Recording OK/);
 presentationReview.window = {...presentationReview.window,
   integrity:{...overlay, items:[{...overlayItem, record_disposition:"applied"}]}};

@@ -728,17 +728,30 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
         && latest.request_id === value.request_id && latest.revision > value.revision);
   }
 
-  function appendDetail(key, value, { filesystem = false, fullWidth = filesystem, block = false } = {}) {
-    const term = element("dt", "", key);
-    const description = element("dd");
-    if (fullWidth) term.className = description.className = "nami-detail-full";
-    if (block && detailBody.children.length > 0) {
-      const divider = element("dd", "nami-detail-divider");
-      divider.ariaHidden = "true";
-      detailBody.append(divider);
+  let detailIndex = 0;
+  const detailText = new WeakMap();
+  function detailNode(tag, className = "") {
+    let node = detailBody.children[detailIndex];
+    if (node?.tagName !== tag.toUpperCase()) {
+      while (detailBody.children.length > detailIndex) detailBody.children[detailBody.children.length - 1].remove();
+      node = element(tag);
+      detailBody.append(node);
     }
-    (filesystem ? renderFilesystemText : renderText)(description, value ?? "Unavailable");
-    detailBody.append(term, description);
+    detailIndex += 1;
+    node.className = className;
+    node.ariaHidden = className === "nami-detail-divider" ? "true" : null;
+    return node;
+  }
+  function updateDetailText(node, value, filesystem = false) {
+    const previous = detailText.get(node);
+    if (previous?.value === value && previous.filesystem === filesystem) return;
+    detailText.set(node, {value, filesystem});
+    (filesystem ? renderFilesystemText : renderText)(node, value);
+  }
+  function appendDetail(key, value, { filesystem = false, fullWidth = filesystem, block = false } = {}) {
+    if (block && detailIndex > 0) updateDetailText(detailNode("dd", "nami-detail-divider"), "");
+    updateDetailText(detailNode("dt", fullWidth ? "nami-detail-full" : ""), key);
+    updateDetailText(detailNode("dd", fullWidth ? "nami-detail-full" : ""), value ?? "Unavailable", filesystem);
   }
   function subjectDetails(prefix, subject, folder = false) {
     if (!folder) appendDetail(`${prefix} size`, subject === null ? null : `${bytes(subject.size)} (${subject.size} bytes)`, { block: true });
@@ -752,7 +765,13 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       + (row.rollup.acknowledged > 0 ? ` · ${row.rollup.acknowledged} acknowledged` : ""), { block: true });
   }
   function renderDetails() {
-    detailBody.replaceChildren();
+    detailIndex = 0;
+    try { paintDetails(); }
+    finally {
+      while (detailBody.children.length > detailIndex) detailBody.children[detailBody.children.length - 1].remove();
+    }
+  }
+  function paintDetails() {
     delete detailStatus.dataset.integrity;
     delete detailStatus.dataset.lifecycle;
     delete detailStatus.dataset.integrityState;

@@ -71,7 +71,7 @@ _START_RESPONSE_CAPACITY = 48
 _CLOSE_RECEIPT_CAPACITY = 48
 _DRAIN_WAIT_SECONDS = 25.0
 _PROGRESS_LINGER_SECONDS = 0.150
-_COPY_RESULT_LINGER_SECONDS = 0.025
+_RESULT_LINGER_SECONDS = 0.025
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
 _LOG = logging.getLogger(__name__)
@@ -184,18 +184,45 @@ def _is_progress_update(update: TaskDeliveryUpdate) -> bool:
     return type(update) is SessionEventView and update.body_type == "Progress"
 
 
-def _is_ordinary_copy_result(update: TaskDeliveryUpdate) -> bool:
-    if type(update) is not SessionEventView or update.body_type != "ItemOutcome":
+def _is_collectable_result(
+    update: TaskDeliveryUpdate, session_kind: str | None
+) -> bool:
+    if type(update) is not SessionEventView:
         return False
     body = update.body
+    if update.body_type == "ItemOutcome":
+        return (
+            session_kind == "sync-execution"
+            and body["phase"] == "execute"
+            and body["kind"] == "copy"
+            and body["result"] == "succeeded"
+            and body["reason"] is None
+            and body["recording"] == "ok"
+            and body["detail_omitted_count"] == 0
+            and not body["detail"]
+        )
+    if update.body_type != "IntegrityOutcome":
+        return False
+    phase, result = body["phase"], body["result"]
+    if session_kind == "sync-execution":
+        success = phase == "verify" and result == "verified"
+    elif session_kind == "verify":
+        success = phase == session_kind and result in {"baselined", "verified"}
+    else:
+        success = (
+            session_kind in {"baseline", "rebaseline"}
+            and phase == session_kind
+            and result == "baselined"
+        )
     return (
-        body["phase"] == "execute"
-        and body["kind"] == "copy"
-        and body["result"] == "succeeded"
+        success
+        and body["row_id"] is not None
+        and body["location_id"] is not None
         and body["reason"] is None
+        and body["detail"] is None
         and body["recording"] == "ok"
+        and body["record_disposition"] in {"applied", "noop"}
         and body["detail_omitted_count"] == 0
-        and not body["detail"]
     )
 
 
@@ -2775,7 +2802,7 @@ class TaskRegistry:
                 self._recover(task, session_id, replay_from)
             report_inconsistent = False
             with task.condition:
-                copy_deadline = None
+                result_deadline = None
                 while not claim.superseded and not task.closing:
                     if replay_from is not None or task.terminal_pending:
                         break
@@ -2784,16 +2811,18 @@ class TaskRegistry:
                         if not _is_progress_update(update)
                     )
                     if reliable and (
-                        task.session_kind != "sync-execution"
-                        or len(task.queue) >= _CAPACITY
-                        or not all(_is_ordinary_copy_result(update) for update in reliable)
+                        len(task.queue) >= _CAPACITY
+                        or not all(
+                            _is_collectable_result(update, task.session_kind)
+                            for update in reliable
+                        )
                     ):
                         break
                     now = self._clock()
                     if reliable:
-                        if copy_deadline is None:
-                            copy_deadline = now + _COPY_RESULT_LINGER_SECONDS
-                        wake_deadline = min(deadline, copy_deadline)
+                        if result_deadline is None:
+                            result_deadline = now + _RESULT_LINGER_SECONDS
+                        wake_deadline = min(deadline, result_deadline)
                     elif task.queue:
                         if task.progress_available_at is None:
                             task.progress_available_at = now

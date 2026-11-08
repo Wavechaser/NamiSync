@@ -20,9 +20,18 @@ globalThis.document = {
   querySelector(key) { if (!nodes.has(key)) nodes.set(key, new ElementFake("div")); return nodes.get(key); },
 };
 let executionPaint = null;
+let clock = 0;
+const paintTimers = new Map();
+globalThis.performance = {now: () => clock};
 globalThis.window = { chrome: { webview: {} }, addEventListener() {},
-  setTimeout(callback, delay) { assert.equal(delay, 500); return executionPaint = callback; },
-  clearTimeout() { executionPaint = null; },
+  setTimeout(callback, delay) {
+    assert.ok(delay >= 0 && delay <= 500);
+    const due = clock + delay;
+    const paint = () => { paintTimers.delete(paint); clock = Math.max(clock, due); callback(); };
+    paintTimers.set(paint, due);
+    return executionPaint = paint;
+  },
+  clearTimeout(paint) { paintTimers.delete(paint); if (executionPaint === paint) executionPaint = null; },
 };
 const url = (source) => `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const fixture = JSON.parse(await readFile(process.argv[3], "utf8"));
@@ -219,6 +228,7 @@ globalThis.inventoryRenders = renders;
 globalThis.inventoryConfirmations = [];
 for (const [key, value] of Object.entries(replacements)) source = source.replace(key, value);
 source += "\nexport { adoptTask, selectTask, acceptTaskUpdate, acceptTaskRelease, loadPlanReview, observeOriginalExecution, loadInventoryReview, changeInventoryView, loadInventoryWindow, readInventoryNavigationWindow, readInventoryDetail, readExecutionDetail, runInventoryAction, changeInventorySelection, startInventoryIntegrityAction, switchTaskPane, controlInventoryIntegrity, checkInventoryOutcome, closeRetainedTask, showSettings, refreshTasks, executeReviewedPlan, tasks, queueRowHighlight, interruptPlanHighlight, refreshInventoryOverlay, observeLinkedVerification, planFollowTarget };";
+source += "\nexport { acceptTaskRecovery, refreshExecutionWindow };";
 const app = await import(url(source));
 const taskId = fixture.views.default.summary.task_id;
 const sessionId = "3".repeat(32);
@@ -228,7 +238,20 @@ const task = app.adoptTask({ task_id: taskId, session_id: sessionId, session_sta
 taskSnapshot = { task_id: taskId, session_id: sessionId, session_state: "active",
   session_released: false, task_kind: "inventory", request_id: task.requestId,
   plan_request_id: null, session_kind: "inventory" };
-const tick = async () => { for (let i = 0; i < 8; i += 1) await Promise.resolve(); };
+const advanceClock = async (milliseconds) => {
+  const target = clock + milliseconds;
+  while (paintTimers.size > 0) {
+    const [next, due] = [...paintTimers].sort((first, second) => first[1] - second[1])[0];
+    if (due > target) break;
+    next();
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  }
+  clock = target;
+};
+const tick = async (paint = true) => {
+  for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  if (paint) await advanceClock(500);
+};
 app.selectTask(taskId); await tick();
 assert.equal(calls.length, 0, "active inventory must not open terminal review");
 task.sessionState = "completed";
@@ -1634,6 +1657,7 @@ assert.equal(followReview.follow.scrollOffset, null, "same target progress does 
 
 heldFollowAnchor = defer();
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1", "integrity", "1:2"));
+await tick();
 const beforeCachedGo = followWindows.length;
 assert.equal(followAnchors.at(-1).itemId, "1:1");
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null, "integrity", "1:2"));
@@ -1754,6 +1778,135 @@ recoveredAnchor.resolve({disposition:"current", view_revision:followReview.summa
 await tick(); await tick();
 assert.equal(followReview.follow.scrollOffset, 296, "the recovered target can still land");
 
+// Actual read admission uses the latest cursor and the loaded-window budget.
+{
+  const priorAnchor = globalThis.inventoryHarness.getInventoryItemAnchor;
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
+  await tick(); await tick();
+  followReview.follow.anchorKey = null;
+  followReview.follow.anchorIndex = null;
+  followTask.automaticReviewAt = clock;
+  followTask.automaticReadAt = clock;
+  const anchors = followAnchors.length;
+  const paints = renders.length;
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:90080"));
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:90081"));
+  await advanceClock(249);
+  assert.equal(renders.length, paints, "ordinary Inventory progress does not paint before 250ms");
+  await advanceClock(1);
+  assert.ok(renders.length > paints, "Inventory progress paints locally at 250ms");
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:90081"));
+  await advanceClock(249);
+  assert.equal(followAnchors.length, anchors, "different-window Follow waits through 499ms");
+  await advanceClock(1);
+  assert.equal(followAnchors.length, anchors + 1);
+  assert.equal(followAnchors.at(-1).itemId, "1:90081", "500ms admits only the latest cursor");
+  await tick(false);
+  const windows = followWindows.length;
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:90081"));
+  await advanceClock(249);
+  assert.equal(followWindows.length, windows, "cached ancestor refresh waits through 249ms");
+  await advanceClock(1);
+  assert.equal(followWindows.length, windows, "cached loaded ancestor paints without a full read at 250ms");
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:90081"));
+  await advanceClock(249);
+  assert.equal(followWindows.length, windows, "local paints do not admit full reads through 499ms");
+  await advanceClock(1);
+  assert.equal(followWindows.length, windows + 1, "continued local paint demand cannot postpone the 500ms read");
+  assert.equal(followAnchors.length, anchors + 1);
+  await tick(false);
+
+  const localFile = followReview.window.rows.find(row => !row.is_container
+    && row.warning === null && row.row_id !== null);
+  followTask.inventoryViewUnconfirmed = false;
+  const localWindows = followWindows.length;
+  const localAnchors = followAnchors.length;
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null,
+    followSnapshot(`${followReview.summary.location_id}:${localFile.row_id}`));
+  await advanceClock(249);
+  assert.equal(followWindows.length, localWindows);
+  await advanceClock(1);
+  assert.equal(followReview.follow.anchorIndex, localFile.visible_index,
+    "exact loaded Inventory cursor lands locally at 250ms");
+  assert.equal(followWindows.length, localWindows);
+  assert.equal(followAnchors.length, localAnchors);
+  await advanceClock(249);
+  assert.equal(followWindows.length, localWindows);
+  await advanceClock(1);
+  assert.equal(followWindows.length, localWindows + 1);
+  await tick(false);
+
+  // A failed Follow may release the independent overlay demand once, never
+  // manufacture another Follow attempt when no newer event exists.
+  let failures = 0;
+  globalThis.inventoryHarness.getInventoryItemAnchor = () => {
+    failures += 1;
+    return Promise.reject(new Error("unavailable"));
+  };
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:90082"));
+  await advanceClock(500); await tick(false);
+  await advanceClock(2000); await tick(false);
+  assert.equal(failures, 1, "background replay does not retry the failed Follow target");
+  assert.equal(followTask.inventoryOverlayDirty, false, "independent overlay demand settles");
+  globalThis.inventoryHarness.getInventoryItemAnchor = priorAnchor;
+
+  // The off-window highlighted detail belongs to the overlay receipt, not the
+  // window returned by Follow. It must catch the last update without another event.
+  const priorDetail = globalThis.inventoryHarness.getInventoryDetail;
+  const highlighted = {...real, node_id:"highlighted-off-window"};
+  followReview.detail = {state:"current", row:highlighted, response:{marker:"old"}};
+  globalThis.inventoryHarness.getInventoryDetail = (_task, revision) => Promise.resolve({
+    disposition:"current", view_revision:revision, marker:"latest"});
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:90083"));
+  await advanceClock(500); await tick(false);
+  await advanceClock(500); await tick(false);
+  assert.equal(followReview.detail.response.marker, "latest");
+  followReview.detail = null;
+  globalThis.inventoryHarness.getInventoryDetail = priorDetail;
+
+  // Bridge ordering delivers the recovered snapshot before clearing its fence.
+  followTask.drainUnavailable = true;
+  const beforeRecovery = followAnchors.length;
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:90084"));
+  await advanceClock(500);
+  assert.equal(followAnchors.length, beforeRecovery);
+  app.acceptTaskRecovery(followTask, followTask.sessionId);
+  await advanceClock(500); await tick(false);
+  assert.equal(followAnchors.length, beforeRecovery + 1);
+  assert.equal(followAnchors.at(-1).itemId, "1:90084");
+  await advanceClock(1000);
+  assert.equal(followAnchors.length, beforeRecovery + 1, "recovery re-arms once without polling");
+
+  // Auxiliary verification must not send retained Plan demand to an Inventory-only tick.
+  followTask.workPane = "plan";
+  const planReadsBefore = calls.filter(([name]) => name === "plan-window").length;
+  followTask.executionWindowDirty = true;
+  await app.refreshExecutionWindow(followTask);
+  assert.ok(calls.filter(([name]) => name === "plan-window").length > planReadsBefore,
+    "retained Plan dirty read starts while auxiliary verification is active");
+  followTask.workPane = "verify";
+
+  const loadedFile = followReview.window.rows.find(row => !row.is_container
+    && row.warning === null && row.row_id !== null);
+  assert.ok(loadedFile, "explicit loaded-row witness has an exact file");
+  followReview.follow.enabled = false;
+  followReview.follow.anchorKey = null;
+  followReview.follow.anchorIndex = null;
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null,
+    followSnapshot(`${followReview.summary.location_id}:${loadedFile.row_id}`));
+  heldFollowAnchor = defer();
+  const explicitLoadedAnchor = heldFollowAnchor;
+  const beforeExplicitLoaded = followAnchors.length;
+  globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+  assert.equal(followAnchors.length, beforeExplicitLoaded + 1,
+    "explicit Inventory Go retains authoritative lookup even for an exact loaded row");
+  app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null));
+  heldFollowAnchor = null;
+  explicitLoadedAnchor.resolve({disposition:"current", index:loadedFile.visible_index});
+  await tick();
+  followReview.follow.enabled = true;
+}
+
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:2"));
 app.acceptTaskUpdate(followTask, followTask.sessionId, null,
   {...followSnapshot(null, "integrity", "1:1"), session_state:"completed"});
@@ -1762,6 +1915,7 @@ await tick(); await tick();
 assert.equal(followReview.follow.anchorIndex, 40, "enabled Inventory Follow lands on the final settled row");
 assert.equal(followReview.follow.scrollOffset, 36);
 followReview.window = followWindow(followReview.summary.view_revision, 0);
+followTask.inventoryViewUnconfirmed = true;
 for (const boundary of ["gap", "raw gap", "terminal", "pane", "no target"]) {
   followReview.follow.enabled = false;
   app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));
@@ -1771,11 +1925,15 @@ for (const boundary of ["gap", "raw gap", "terminal", "pane", "no target"]) {
   heldFollowAnchor = defer();
   const retiredExplicit = heldFollowAnchor;
   globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+  assert.equal(followReview.followRead?.explicit, true, "the boundary witness reaches an authoritative anchor read");
   const windowsBeforeBoundary = followWindows.length;
   if (boundary === "pane") followTask.paneRevision += 1;
   else if (boundary === "no target") {
-    followTask.progressPresentation = {activeItem:{item_id:"unmapped", item_type:"operation"}};
-    globalThis.inventoryCallbacks.onNavigateCurrent(followReview, false);
+    app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot(null));
+    assert.equal(followReview.follow.hasTarget, false,
+      "same-phase active snapshot retires eligibility before the clock advances");
+    assert.equal(followReview.followRead, null,
+      "snapshot retirement cancels the original explicit anchor without another Go");
   }
   else if (boundary === "raw gap") app.acceptTaskUpdate(followTask, followTask.sessionId,
     {update_type:"event", event:{body_type:"Gap", body:{first_missed_seq:8}}});
@@ -1792,6 +1950,7 @@ for (const boundary of ["gap", "raw gap", "terminal", "pane", "no target"]) {
     `${boundary} prevents a delayed explicit anchor from dispatching its old window`);
   assert.equal(followReview.follow.scrollOffset, null, `${boundary} cannot publish the retired jump`);
 }
+followTask.inventoryViewUnconfirmed = false;
 followReview.follow.enabled = true;
 heldFollowAnchor = defer();
 app.acceptTaskUpdate(followTask, followTask.sessionId, null, followSnapshot("1:1"));

@@ -79,13 +79,32 @@ globalThis.document = {
 
 const windowListeners = new Map();
 const executionPaints = new Set();
+let clock = 0;
+const paintDue = new Map();
+const advanceClock = async (milliseconds) => {
+  const target = clock + milliseconds;
+  while (true) {
+    const next = [...paintDue].filter(([, due]) => due <= target).sort((a, b) => a[1] - b[1])[0];
+    if (!next) break;
+    next[0]();
+    await turns();
+  }
+  clock = target;
+  await turns();
+};
+globalThis.performance = {now: () => clock};
 globalThis.window = {
   setTimeout(callback, delay) {
-    assert.equal(delay, 500);
-    executionPaints.add(callback);
-    return callback;
+    assert.ok(delay >= 0 && delay <= 500);
+    const due = clock + delay;
+    const paint = () => {
+      executionPaints.delete(paint); paintDue.delete(paint);
+      clock = Math.max(clock, due); callback();
+    };
+    executionPaints.add(paint); paintDue.set(paint, due);
+    return paint;
   },
-  clearTimeout(callback) { executionPaints.delete(callback); },
+  clearTimeout(callback) { executionPaints.delete(callback); paintDue.delete(callback); },
   chrome: { webview: {} },
   addEventListener(name, callback) {
     const callbacks = windowListeners.get(name) ?? [];
@@ -659,6 +678,10 @@ async function turns(count = 12) {
 async function until(predicate) {
   for (let index = 0; index < 100; index += 1) {
     if (predicate()) return;
+    if (executionPaints.size > 0) {
+      const [paint] = [...paintDue].sort((first, second) => first[1] - second[1])[0];
+      paint();
+    }
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
   throw new Error("task-shell probe condition timed out");
@@ -2052,7 +2075,8 @@ liveReview.window = contextWindow;
 // A new direct operation target already in the current window needs only scroll.
 {
   const saved = {window: liveReview.window, follow: {...liveReview.follow},
-    presentation: liveTask.executionPresentation, pane: liveTask.workPane};
+    presentation: liveTask.executionPresentation, pane: liveTask.workPane, dirty:liveTask.executionWindowDirty};
+  liveTask.executionWindowDirty = false;
   const first = "d".repeat(32);
   const second = "e".repeat(32);
   const rows = [first, second].map((operation_id, index) => ({
@@ -2075,12 +2099,14 @@ liveReview.window = contextWindow;
       lastSettledIntegrityItemId: operationId};
     liveReview.follow.scrollOffset = null;
     globalThis.taskHarness.queuePlanFollow(liveReview);
+    flushExecutionPaint();
     assert.equal(liveReview.follow.anchorIndex, 1280 + index);
     assert.equal(liveReview.follow.scrollOffset, 1280, "leading context stays within loaded coverage");
     assertSameNode(liveReview.window, retainedWindow, "loaded Follow keeps the exact window");
   }
   liveReview.follow.scrollOffset = null;
   globalThis.taskHarness.queuePlanFollow(liveReview);
+  flushExecutionPaint();
   assert.equal(liveReview.follow.scrollOffset, null, "same-target ticks preserve manual position");
   assert.equal(planAnchors.length, anchorCount);
   assert.equal(planWindows.length, windowCount);
@@ -2108,6 +2134,7 @@ liveReview.window = contextWindow;
   liveReview.follow = saved.follow;
   liveTask.executionPresentation = saved.presentation;
   liveTask.workPane = saved.pane;
+  liveTask.executionWindowDirty = saved.dirty;
 }
 
 globalThis.planReviewHarness.callbacks.onFollowOverride(liveReview, 1280, 1289);
@@ -3564,8 +3591,8 @@ if (noopTask.executionWindowRefreshRunning) {
 }
 assert.equal(noopTask.review.follow.scrollOffset, 1019);
 assert.equal(planAnchors.length, enabledBurstAnchorBase + 1, "the NOOP burst has one automatic anchor lookup");
-assert.equal(planWindows.length, enabledBurstWindowBase + 2,
-  "Follow lands once and retained dirty demand refreshes once after ownership releases");
+assert.equal(planWindows.length, enabledBurstWindowBase + 1,
+  "Follow's authoritative window satisfies unchanged dirty demand without a duplicate refresh");
 assert.equal(noopTask.executionWindowDirty, false);
 assert.equal(noopTask.planReads.foregroundReaders, 0);
 assert.ok(reviewRenders.length <= enabledBurstPaintBase + 4, "the NOOP burst paints only bounded tick/read settlements");
@@ -3585,6 +3612,104 @@ await until(() => !noopTask.executionWindowRefreshRunning);
 assert.equal(noopTask.executionWindowDirty, false, "cached Follow cannot strand dirty demand");
 assert.equal(noopTask.review.follow.scrollOffset, null, "cached automatic Follow preserves within-window scroll");
 
+{
+  noopTask.automaticReviewAt = clock;
+  noopTask.automaticReadAt = clock;
+  const anchors = planAnchors.length;
+  const paints = reviewRenders.length;
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1500)}));
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1501)}));
+  await advanceClock(249);
+  assert.equal(reviewRenders.length, paints, "Plan progress waits through 249ms");
+  await advanceClock(1);
+  assert.ok(reviewRenders.length > paints, "Plan progress paints locally at 250ms");
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1501)}));
+  await advanceClock(249);
+  assert.equal(planAnchors.length, anchors, "Plan different-window demand waits through 499ms");
+  await advanceClock(1);
+  assert.equal(planAnchors.length, anchors + 1);
+  assert.equal(calls.at(-1).at(-1), noopOperation(1501));
+  planAnchors.at(-1).resolve({disposition:"current", index:1501});
+  await turns();
+  planWindows.at(-1).resolve(noopWindow(1497));
+  await turns();
+  const windows = planWindows.length;
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1500)}));
+  await advanceClock(249);
+  assert.equal(planWindows.length, windows, "Plan loaded refresh waits through 249ms");
+  await advanceClock(1);
+  assert.equal(planWindows.length, windows, "loaded Plan paints at 250ms without a full read");
+  assert.equal(noopTask.review.follow.anchorIndex, 1500, "exact loaded Plan cursor lands locally at 250ms");
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1500)}));
+  await advanceClock(249);
+  assert.equal(planWindows.length, windows, "loaded Plan has no full read through 499ms");
+  await advanceClock(1);
+  assert.equal(planWindows.length, windows + 1);
+  assert.equal(planAnchors.length, anchors + 1);
+  planWindows.at(-1).resolve(noopWindow(1497));
+  await turns();
+
+  const heldReaderRelease = noopTask.planReads.beginForeground();
+  const heldWindows = planWindows.length;
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1500)}));
+  await advanceClock(500);
+  assert.equal(planWindows.length, heldWindows, "foreground custody blocks the automatic full read");
+  assert.equal(noopTask.executionWindowDirty, true, "blocked read retains latest demand");
+  heldReaderRelease();
+  await advanceClock(499);
+  assert.equal(planWindows.length, heldWindows, "foreground release preserves the bounded opportunity clock");
+  await advanceClock(1);
+  assert.equal(planWindows.length, heldWindows + 1);
+  planWindows.at(-1).resolve(noopWindow(1497));
+  await turns();
+
+  // A delayed anchor moves the read deadline when its actual window dispatches.
+  const delayedAnchors = planAnchors.length;
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1800)}));
+  await advanceClock(500);
+  assert.equal(planAnchors.length, delayedAnchors + 1);
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(200)}));
+  await advanceClock(300);
+  planAnchors.at(-1).resolve({disposition:"current", index:1800});
+  await turns();
+  planWindows.at(-1).resolve(noopWindow(1796));
+  await turns();
+  await advanceClock(499);
+  assert.equal(planAnchors.length, delayedAnchors + 1,
+    "late automatic window dispatch retains its own 500ms budget");
+  await advanceClock(1);
+  assert.equal(planAnchors.length, delayedAnchors + 2);
+  assert.equal(calls.at(-1).at(-1), noopOperation(200));
+  planAnchors.at(-1).resolve({disposition:"current", index:200});
+  await turns();
+  planWindows.at(-1).resolve(noopWindow(196));
+  await turns();
+
+  const failuresBefore = planAnchors.length;
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1900)}));
+  await advanceClock(500);
+  assert.equal(planAnchors.length, failuresBefore + 1);
+  planAnchors.at(-1).reject(new Error("unavailable"));
+  await turns();
+  const replayWindows = planWindows.length;
+  await advanceClock(500);
+  assert.equal(planWindows.length, replayWindows + 1, "failed Plan Follow releases background demand once");
+  planWindows.at(-1).resolve(noopWindow(1497));
+  await turns();
+  await advanceClock(2000);
+  assert.equal(planAnchors.length, failuresBefore + 1, "Plan background replay does not manufacture Follow retries");
+  assert.equal(noopTask.executionWindowDirty, false);
+}
+
 const terminalNoopResult = executionResult({headline: "all-noop"});
 const terminalNoopAnchorBase = planAnchors.length;
 const terminalNoopWindowBase = planWindows.length;
@@ -3599,13 +3724,12 @@ assert.equal(executionPaints.size, 0, "terminal delivery retires the outstanding
 await until(() => planAnchors.length === terminalNoopAnchorBase + 1);
 assert.deepEqual(calls.at(-1), ["plan-operation-anchor", noopTaskId, noopSessionId,
   noopSummary.view_revision, noopOperation(2047)], "terminal delivery follows the final NOOP identity");
-planWindows[terminalNoopWindowBase].resolve(noopWindow(1019, terminalNoopResult));
 planAnchors.at(-1).resolve({disposition: "current", index: 2047});
-await until(() => planWindows.length === terminalNoopWindowBase + 2);
+await until(() => planWindows.length === terminalNoopWindowBase + 1);
 planWindows.at(-1).resolve(noopWindow(2043, terminalNoopResult));
 await until(() => noopTask.review.followRead == null);
 if (noopTask.executionWindowRefreshRunning) {
-  await until(() => planWindows.length === terminalNoopWindowBase + 3);
+  await until(() => planWindows.length === terminalNoopWindowBase + 2);
   planWindows.at(-1).resolve(noopWindow(2043, terminalNoopResult));
   await until(() => !noopTask.executionWindowRefreshRunning);
 }

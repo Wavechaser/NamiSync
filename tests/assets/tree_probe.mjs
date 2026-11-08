@@ -1361,6 +1361,37 @@ assert.equal(passiveChanges.at(-1), null, "exact view absence clears identity wi
 dispatchKey(passiveRoot, "Home");
 passiveTree.dispose();
 
+// Passive Follow keeps a loaded edge target visible without an incidental read.
+const followDocument = new TestDocument();
+const followRoot = followDocument.createElement("div");
+followRoot.clientHeight = 8 * ROW_H;
+const followRequests = [];
+const followTree = createTree(followRoot, {
+  requestIndex: index => followRequests.push(index),
+});
+followTree.commitWindow(followTree.beginWindowRequest(), fixtureWindow(0, 256));
+const followActive = followRoot.getAttribute("aria-activedescendant");
+followTree.commitPassiveWindow(followTree.beginWindowRequest(), fixtureWindow(0, 256));
+followTree.setPassiveScrollOffset(253);
+followRoot.dispatch("scroll");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRoot.scrollTop, 248 * ROW_H);
+assert.ok(255 * ROW_H < followRoot.scrollTop + followRoot.clientHeight,
+  "the last loaded target stays visible");
+assert.deepEqual(followRequests, [], "loaded-edge Follow does not bypass the read cadence");
+assert.equal(followRoot.getAttribute("aria-activedescendant"), followActive);
+followRoot.scrollTop = 260 * ROW_H;
+followRoot.dispatch("scroll");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRequests.length, 1, "user scrolling still requests missing rows");
+followTree.commitPassiveWindow(followTree.beginWindowRequest(), fixtureWindow(200, 4));
+followTree.setPassiveScrollOffset(200);
+followRoot.dispatch("scroll");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRoot.scrollTop, 200 * ROW_H);
+assert.equal(followRequests.length, 2, "a short window still requests viewport coverage");
+followTree.dispose();
+
 // A blocked manual scroll still reports Follow override, without retiring the
 // passive active identity when the callback renders or the gate later opens.
 const blockedDocument = new TestDocument();

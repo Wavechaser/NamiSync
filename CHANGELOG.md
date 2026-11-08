@@ -25,14 +25,30 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
-#### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-08)
+#### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 
+- Coalesce automatic Plan and Inventory work:
+  500 ms full-window reads and 250 ms local cursor/progress paints. Keep explicit navigation,
+  control/phase/gap and terminal feedback immediate. Restore automatic Inventory
+  loaded-row Follow under this scheduler, clamp passive landings to loaded
+  coverage, update Plan dynamic cells directly, and reuse current detail nodes.
+  Preserve the 256-row limit, read ownership and collection policy.
+- Extend the existing wakeable 25 ms COPY-result collection to successful
+  ordinary and linked integrity results, preserving ordered individual events,
+  immediate urgent bypass and response bounds. Keep filesystem work and durable
+  recording unchanged. The frontend-only native comparison exposes amplified
+  drain work and a cost from faster Plan full reads; retain that evidence.
+  Final matched 10k diagnostics lower Inventory renderer peaks 73–75%; Plan
+  changes from 158 to 136 seconds and 840 to 644 MiB, with renderer CPU still
+  12.2% higher. No stable speed or leak claim is made. Pass 2,289 interface
+  tests, all installed/API-floor cases and exact native browser delivery,
+  with independent review. Retain intermediate failures and the rebuilt recovery.
 - Reuse compatible Inventory rows and unchanged integrity cells during Baseline,
   Verify and Rebaseline, keeping only current-window controls. Preserve Follow
   scheduling, selection/focus and collection policy. A bounded 10k comparison
   reduces created elements by 81–91%; final sampled private-memory peaks are
   higher, so no footprint or throughput improvement is claimed. Defer
-  the loaded-target shortcut after its combined native probe exposed independent
+  the loaded-target shortcut in that delivery after its combined native probe exposed independent
   overlay read amplification; retain the failed variant and residual-cost trace.
   Pass 2,261 interface tests and both installed Inventory/default tree gates,
   with independent source, scope and evidence review.

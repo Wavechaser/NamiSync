@@ -8,7 +8,7 @@ function moduleUrl(source) {
 
 process.env.TZ = "UTC";
 const renderUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "render.js"), "utf8"));
-const planUrl = moduleUrl("export const renderPlanRow = () => {};");
+const planUrl = moduleUrl("export const renderPlanRow = () => {}; export const updatePlanRowExecution = () => {};");
 const iconsUrl = moduleUrl("export const createIcon = () => ({});");
 const taskStatusSource = (await readFile(process.argv[3], "utf8"))
   .replace("./render.js", renderUrl);
@@ -425,17 +425,21 @@ assert.deepEqual({ title: copiedTerminal.title, state: copiedTerminal.state, det
 }, "ordinary copied verification keeps its current visible terminal owner");
 
 // Exercise the production row renderer rather than only its projected values.
+let rowElementsCreated = 0;
+let rowTextWrites = 0;
 class RowElement {
   constructor(tagName, ownerDocument) {
     this.tagName = tagName; this.ownerDocument = ownerDocument;
     this.children = []; this.dataset = {}; this.attributes = {};
     this.style = { setProperty() {} };
   }
+  get textContent() { return this.text ?? ""; }
+  set textContent(value) { this.text = value; this.children = []; rowTextWrites += 1; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   setAttribute(name, value) { this.attributes[name] = value; }
 }
-const rowDocument = { createElement: (tag) => new RowElement(tag, rowDocument) };
+const rowDocument = { createElement: (tag) => { rowElementsCreated += 1; return new RowElement(tag, rowDocument); } };
 globalThis.HTMLElement = RowElement;
 globalThis.Element = RowElement;
 const rowAssets = dirname(process.argv[2]);
@@ -443,7 +447,7 @@ const fileRowUrl = moduleUrl((await readFile(join(rowAssets, "file_row.js"), "ut
   .replace("./render.js", renderUrl));
 const realPlanUrl = moduleUrl((await readFile(join(rowAssets, "plan.js"), "utf8"))
   .replace("./file_row.js", fileRowUrl).replace("./render.js", renderUrl));
-const { renderPlanRow } = await import(realPlanUrl);
+const { renderPlanRow, updatePlanRowExecution } = await import(realPlanUrl);
 const baseRenderedRow = {
   checked: true, mixed: false, selectionDisabled: true, depth: 0,
   folder: false, expanded: false, selectionLabel: "Select copy", nameText: "copy.bin",
@@ -483,5 +487,35 @@ for (const [itemType, phase] of [["operation", "execute"], ["operation", "verify
     assert.equal(bars.length, itemPercent === null ? 0 : 1);
     if (itemPercent !== null) assert.equal(bars[0].ariaValueNow, "40");
   }
+}
+const updating = rowDocument.createElement("div");
+const changingView = {...baseRenderedRow};
+renderPlanRow(updating, changingView);
+const originalCells = [...updating.children];
+const intentCell = updating.children.find(child => child.dataset.fileColumn === "primary");
+const checksumCell = updating.children.find(child => child.className.includes("nami-plan-row__checksum"));
+const notesCell = updating.children.find(child => child.className.includes("nami-file-row__notes"));
+for (const patch of [
+  {lifecycleKey:"executing", intentText:"Copying", progressPercent:40},
+  {progressPercent:80},
+  {lifecycleKey:"completed", intentText:"Completed", progressPercent:undefined,
+    checksumText:"abcdef01", notesText:"Recording delayed"},
+  {verification:true, verificationProgressPercent:30},
+  {verification:undefined, verificationProgressPercent:undefined, notesText:""},
+  {lifecycleKey:undefined, intentKey:"copy", intentText:"Copy"},
+]) {
+  Object.assign(changingView, patch);
+  updatePlanRowExecution(updating, changingView);
+  for (const [index, cell] of originalCells.entries()) assert.equal(updating.children[index] === cell, true,
+    "dynamic facts keep every existing cell and its static controls");
+  assert.equal(checksumCell.textContent, changingView.checksumText);
+  assert.equal(notesCell.textContent, changingView.notesText);
+  assert.equal(intentCell.dataset.lifecycle, changingView.lifecycleKey);
+  assert.equal(intentCell.dataset.intent, changingView.lifecycleKey === undefined ? changingView.intentKey : undefined);
+  const created = rowElementsCreated;
+  const writes = rowTextWrites;
+  updatePlanRowExecution(updating, {...changingView});
+  assert.equal(rowElementsCreated, created, "unchanged dynamic facts allocate no elements");
+  assert.equal(rowTextWrites, writes, "unchanged dynamic facts do not rewrite text nodes");
 }
 process.stdout.write("ok");

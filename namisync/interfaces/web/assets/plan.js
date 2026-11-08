@@ -38,6 +38,11 @@ const ROW_LIFECYCLE_KEYS = Object.freeze(new Set([
   "capacity",
   "failed",
 ]));
+const INTENT_FIELDS = Object.freeze([
+  "intentKey", "intentText", "lifecycleKey", "progressPercent",
+  "verification", "verificationProgressPercent",
+]);
+const renderedRows = new WeakMap();
 
 function validProgressPercent(rowView) {
   const executing = rowView.lifecycleKey === "executing";
@@ -95,16 +100,11 @@ function createCell(ownerDocument, className, column) {
   return cell;
 }
 
-export function renderPlanRow(element, rowView) {
-  if (!(element instanceof HTMLElement)) {
-    throw new TypeError("renderPlanRow target must be an HTMLElement");
-  }
-  if (!validRowView(rowView)) {
-    throw new TypeError("renderPlanRow view is invalid");
-  }
-
-  const ownerDocument = element.ownerDocument;
-  const intent = createCell(ownerDocument, "nami-plan-row__intent", "primary");
+function renderIntent(intent, rowView) {
+  const ownerDocument = intent.ownerDocument;
+  intent.replaceChildren();
+  delete intent.dataset.lifecycle;
+  delete intent.dataset.intent;
   if (rowView.lifecycleKey !== undefined) {
     intent.dataset.lifecycle = rowView.lifecycleKey;
   } else if (rowView.intentKey !== "") {
@@ -139,7 +139,19 @@ export function renderPlanRow(element, rowView) {
     }
     intent.append(verification);
   }
+}
 
+export function renderPlanRow(element, rowView) {
+  if (!(element instanceof HTMLElement)) {
+    throw new TypeError("renderPlanRow target must be an HTMLElement");
+  }
+  if (!validRowView(rowView)) {
+    throw new TypeError("renderPlanRow view is invalid");
+  }
+
+  const ownerDocument = element.ownerDocument;
+  const intent = createCell(ownerDocument, "nami-plan-row__intent", "primary");
+  renderIntent(intent, rowView);
   const checksum = createCell(ownerDocument, "nami-plan-row__checksum", "secondary");
   renderText(checksum, rowView.checksumText);
   const modified = createCell(ownerDocument, "nami-plan-row__modified", "secondary");
@@ -150,4 +162,17 @@ export function renderPlanRow(element, rowView) {
     className: "nami-plan-row",
     cells: [intent, checksum, modified],
   });
+  renderedRows.set(element, {intent, checksum,
+    notes: element.children[element.children.length - 1], view: {...rowView}});
+}
+
+export function updatePlanRowExecution(element, rowView) {
+  if (!(element instanceof HTMLElement) || !validRowView(rowView)) {
+    throw new TypeError("updatePlanRowExecution view is invalid");
+  }
+  const rendered = renderedRows.get(element);
+  if (INTENT_FIELDS.some(key => rendered.view[key] !== rowView[key])) renderIntent(rendered.intent, rowView);
+  if (rendered.view.checksumText !== rowView.checksumText) renderText(rendered.checksum, rowView.checksumText);
+  if (rendered.view.notesText !== rowView.notesText) renderText(rendered.notes, rowView.notesText);
+  rendered.view = {...rowView};
 }

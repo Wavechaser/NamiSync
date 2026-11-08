@@ -21,7 +21,7 @@ from _bridge_result_support import dispatch_result
 
 from _event_v5_fixtures import maximum_reliable_envelope
 from namisync.core.events import (
-    CORE_EVENT_SCHEMA_VERSION, Envelope, Gap, ItemOutcome, Progress, StateChanged,
+    CORE_EVENT_SCHEMA_VERSION, Envelope, Gap, ItemOutcome, PhaseChanged, Progress, StateChanged,
     Terminal, TerminalSummary,
 )
 from namisync.core.evidence import ContentEvidence, Outcome, Provenance, RecordingStatus
@@ -2438,6 +2438,96 @@ def _copy_result(sequence: int, **changes: object) -> SessionEventView:
     return _execution_event(SESSION, sequence, replace(body, **changes))
 
 
+def _integrity_result(sequence: int, **changes: object) -> SessionEventView:
+    body = IntegrityOutcome(
+        f"{sequence:032x}", str(sequence), "1", f"file-{sequence}",
+        IntegrityResult.VERIFIED, record_disposition=RecordDisposition.APPLIED,
+    )
+    return _execution_event(SESSION, sequence, replace(body, **changes))
+
+
+@pytest.mark.parametrize("session_kind,phase,result", [
+    pytest.param("baseline", "baseline", IntegrityResult.BASELINED, id="baseline"),
+    pytest.param("verify", "verify", IntegrityResult.BASELINED, id="verify-unattested"),
+    pytest.param("verify", "verify", IntegrityResult.VERIFIED, id="verify-attested"),
+    pytest.param("rebaseline", "rebaseline", IntegrityResult.BASELINED, id="rebaseline"),
+    pytest.param(EXECUTION_KIND, "verify", IntegrityResult.VERIFIED, id="linked-verify"),
+])
+def test_integrity_result_collection_has_one_fixed_25ms_deadline(
+    session_kind, phase, result,
+) -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = session_kind
+        waiting.clock.advance_to(1.0)
+        waiting.service.sink(_integrity_result(2, phase=phase, result=result))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        assert not waiting.done.is_set()
+
+        waiting.clock.advance_to(1.020)
+        waiting.service.sink(_integrity_result(
+            3, phase=phase, result=result, record_disposition=RecordDisposition.NOOP,
+        ))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 4)
+        assert not waiting.done.is_set()
+        waiting.service.sink(_execution_event(SESSION, 4, Progress(phase, 2, 3, 0, None, None)))
+
+        waiting.clock.advance_to(1.025)
+        _wake_task(waiting.registry, waiting.task_id)
+        assert [
+            (update.event.sequence, update.event.body_type)
+            for update in waiting.finish().updates
+        ] == [(2, "IntegrityOutcome"), (3, "IntegrityOutcome"), (4, "Progress")]
+
+
+@pytest.mark.parametrize("successor", [
+    pytest.param(_event(3, "StateChanged"), id="control"),
+    pytest.param(_execution_event(SESSION, 3, PhaseChanged("verify")), id="phase"),
+    pytest.param(_event(3, "Gap"), id="gap"),
+    pytest.param(_event(3, "Terminal"), id="terminal-event"),
+    pytest.param(_record(kind="verify", supports_pause=True), id="terminal-record"),
+    pytest.param(_integrity_result(3, result=IntegrityResult.ERROR), id="failure"),
+    pytest.param(_integrity_result(3, reason=IntegrityReason.RECORDING_ERROR), id="reason"),
+    pytest.param(_integrity_result(3, detail=""), id="detail"),
+    pytest.param(_integrity_result(3, detail_omitted_count=1), id="omitted-detail"),
+    pytest.param(_integrity_result(3, recording=RecordingStatus.DEGRADED), id="degraded"),
+    pytest.param(_integrity_result(3, record_disposition=None), id="no-disposition"),
+    pytest.param(_integrity_result(3, record_disposition=RecordDisposition.STALE), id="stale"),
+    pytest.param(_integrity_result(3, record_disposition=RecordDisposition.CONFLICT), id="conflict"),
+])
+def test_nonordinary_results_bypass_integrity_collection(successor) -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = "verify"
+        first = _integrity_result(2)
+        waiting.service.sink(first)
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        assert not waiting.done.is_set()
+
+        waiting.service.sink(successor)
+        updates = waiting.finish().updates
+        assert updates[0].event == first
+        assert (updates[1].event if type(successor) is SessionEventView
+                else updates[1].record) == successor
+        assert waiting.clock() == 0.0
+
+
+@pytest.mark.parametrize("session_kind,event", [
+    pytest.param(PLAN_KIND, _integrity_result(2), id="unowned"),
+    pytest.param("verify", _integrity_result(
+        2, phase="baseline", result=IntegrityResult.BASELINED), id="wrong-mode"),
+    pytest.param("baseline", _integrity_result(2, phase="baseline"), id="verified-baseline"),
+    pytest.param(EXECUTION_KIND, _integrity_result(
+        2, result=IntegrityResult.BASELINED), id="linked-baselined"),
+    pytest.param(EXECUTION_KIND, _integrity_result(
+        2, row_id=None, location_id=None), id="unrecorded-linked"),
+])
+def test_integrity_results_outside_owned_success_bypass_collection(session_kind, event) -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = session_kind
+        waiting.service.sink(event)
+        assert waiting.finish().updates[0].event == event
+        assert waiting.clock() == 0.0
+
+
 def test_copy_result_collection_has_one_fixed_25ms_deadline() -> None:
     with _progress_wait(progress_sequence=None) as waiting:
         waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
@@ -2477,32 +2567,43 @@ def test_nonordinary_results_bypass_copy_collection(successor) -> None:
         assert waiting.clock() == 0.0
 
 
-def test_full_reliable_queue_bypasses_copy_collection_without_loss() -> None:
+@pytest.fixture(params=[
+    pytest.param((EXECUTION_KIND, _copy_result), id="copy"),
+    pytest.param(("verify", _integrity_result), id="ordinary-verify"),
+])
+def collectable_result(request):
+    return request.param
+
+
+def test_full_reliable_queue_bypasses_result_collection_without_loss(collectable_result) -> None:
+    session_kind, make_result = collectable_result
     with _progress_wait(progress_sequence=None) as waiting:
-        waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
+        waiting.registry._tasks[waiting.task_id].session_kind = session_kind
         for sequence in range(2, 66):
-            waiting.service.sink(_copy_result(sequence))
+            waiting.service.sink(make_result(sequence))
         result = waiting.finish()
         assert [update.event.sequence for update in result.updates] == list(range(2, 66))
         assert waiting.clock() == 0.0
 
 
-def test_copy_collection_keeps_outer_drain_deadline() -> None:
+def test_result_collection_keeps_outer_drain_deadline(collectable_result) -> None:
+    session_kind, make_result = collectable_result
     with _progress_wait(drain_wait=1.0, progress_sequence=None) as waiting:
-        waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
+        waiting.registry._tasks[waiting.task_id].session_kind = session_kind
         waiting.clock.advance_to(0.990)
-        waiting.service.sink(_copy_result(2))
+        waiting.service.sink(make_result(2))
         waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
         waiting.clock.advance_to(1.0)
         _wake_task(waiting.registry, waiting.task_id)
         assert waiting.finish().updates[0].event.sequence == 2
 
 
-def test_copy_collection_supersession_and_shutdown_leave_reliable_queue_intact() -> None:
+def test_result_collection_supersession_and_shutdown_leave_reliable_queue_intact(collectable_result) -> None:
+    session_kind, make_result = collectable_result
     with _progress_wait(progress_sequence=None) as waiting:
         task = waiting.registry._tasks[waiting.task_id]
-        task.session_kind = EXECUTION_KIND
-        waiting.service.sink(_copy_result(2))
+        task.session_kind = session_kind
+        waiting.service.sink(make_result(2))
         waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
         with pytest.raises(DrainBusyError):
             waiting.registry.drain(waiting.task_id, SESSION, "6" * 32,
@@ -2512,8 +2613,8 @@ def test_copy_collection_supersession_and_shutdown_leave_reliable_queue_intact()
         assert waiting.clock() == 0.0
     with _progress_wait(progress_sequence=None) as waiting:
         task = waiting.registry._tasks[waiting.task_id]
-        task.session_kind = EXECUTION_KIND
-        waiting.service.sink(_copy_result(2))
+        task.session_kind = session_kind
+        waiting.service.sink(make_result(2))
         waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
         waiting.registry.begin_close()
         assert waiting.done.wait(1)
@@ -2523,7 +2624,7 @@ def test_copy_collection_supersession_and_shutdown_leave_reliable_queue_intact()
         assert [update.sequence for update in task.queue] == [2]
 
 
-def test_copy_results_outside_execution_and_replay_bypass_collection() -> None:
+def test_copy_results_outside_execution_bypass_collection() -> None:
     clock = _ManualClock()
     registry, service = _registry(clock=clock)
     start = _start(registry)
@@ -2533,16 +2634,21 @@ def test_copy_results_outside_execution_and_replay_bypass_collection() -> None:
                           replay_from=None).updates[0].event.sequence == 2
     assert clock() == 0.0
 
+
+def test_replay_bypasses_result_collection(collectable_result) -> None:
+    session_kind, make_result = collectable_result
+    clock = _ManualClock()
+
     class Service(_Service):
         def reobserve(self, session_id, sink, from_sequence):
-            sink(_copy_result(from_sequence))
+            sink(make_result(from_sequence))
             return self.reobserve_result
 
     service = Service()
     registry, _ = _registry(service, clock=clock)
     start = _start(registry)
     registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
-    registry._tasks[start.task_id].session_kind = EXECUTION_KIND
+    registry._tasks[start.task_id].session_kind = session_kind
     recovered = registry.drain(start.task_id, SESSION, "5" * 32, replay_from=2)
     assert recovered.updates[0].event.sequence == 2
     assert clock() == 0.0

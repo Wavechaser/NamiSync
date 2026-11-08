@@ -901,7 +901,8 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     )
 
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", plan) == [
-        "renderPlanRow"
+        "renderPlanRow",
+        "updatePlanRowExecution",
     ]
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", integrity) == [
         "createIntegrityCell"
@@ -912,6 +913,7 @@ def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
     ]
     assert '"./plan_review.js"' in production_shell
     assert '"./plan.js"' in production_shell
+    assert "updatePlanRowExecution(" in production_shell
     assert '"./integrity.js"' not in production_shell
     assert "renderPlanRow" in production_shell
     dormant_renderers = "\n".join((file_row, plan, integrity))
