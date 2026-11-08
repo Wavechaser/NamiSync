@@ -42,11 +42,15 @@ flat (−0.01 MiB/10 min).
 `task-execute`, driven by the renderer: 685–801 MiB at 10k (was 499–541) and
 2.32–2.71 GiB at 100k (was 1.37–1.53). Boundary collection cannot act during
 Execute. Two old-package 10k runs on runtime 157 (`oldpkg-runtime157/`) peaked
-at 894 and 1,131 MiB with renderer 453/705 MiB, overlapping the new range, so
-the 10k rise is not attributable between runtime and product. The earlier
-[allocation comparison](#execution-allocation-reduction--2026-11-07) also saw
-higher peaks after response-copy removal. 100k was not rerun on the old package;
-its attribution is open.
+at 894 and 1,131 MiB. The interleaved same-morning control
+(`build/close-probe-20261108/pkg/`, three 10k runs per package, alternating)
+separates them: new 1,203–1,258 MiB (renderer 778–828), old 951–1,082 MiB
+(renderer 519–635), with execute times equal (119–122 s vs 121–129 s). Every
+new run is above every old run, so most of the 10k rise comes from the product
+change since `b6a4fefe`, not runtime 157. The earlier
+[allocation comparison](#execution-allocation-reduction--2026-11-07) saw the
+same direction after response-copy removal; that commit is the leading suspect
+but is not isolated. 100k was not rerun on the old package.
 
 **Soak.** Whole-app post-close slopes over cycles 21–100 were +0.28, +0.27 and
 +0.17 MiB/cycle (shifts +17, +16, +9 MiB), against +0.14/−0.02/+0.30 before.
@@ -56,18 +60,27 @@ the remaining renderer slope is consistent across runs (+0.19–0.20 MiB/cycle,
 browser handles rose 3.8/cycle, as soak-01/02 did before; it is the same
 plateau-shaped pattern, not newly measured growth.
 
-**Slower exit after work.** Five of the eleven task runs (soak-03, all three
-10k runs, payload) still had the WebView2 browser and crashpad processes after
-the collector's 10-second grace; the owned Job then terminated them. In every
-task run except soak-01/02 the host itself took 3.8–4.6 s to leave, and closing
-took 10–14 s in total. Before, every run closed in 1.1–3.0 s. Startup runs, which
-never collect, still close in ~1 s. The old package on runtime 157 closed in
-1.1/1.5 s with no leftovers, so this comes from the product change, most likely
-the collection path, not the runtime update. Exit code and data were
-unaffected. The cause is not established, and neither is how long the
-browser would linger without Job termination. This is an open finding for its
-owner ([INTERFACES](INTERFACES.md#session-and-worker-boundary)); no fix is
-included.
+**Slower exit overnight, environmental.** Five of the eleven task runs
+(soak-03, all three 10k runs, payload) still had the WebView2 browser and
+crashpad processes after the collector's 10-second grace; the owned Job then
+terminated them. From soak-03's close (03:35 local) onward every task run took
+10–14 s to close: pywebview's close path disposes the controller and waits 3 s
+for the browser (`edgechromium.py` `clear_user_data`), the browser idled at zero
+CPU past that wait and outlived the host. Earlier runs, including soak-01/02 with
+200 collections, closed in 1.1–2.6 s. Runtime 157.0.4341.42 was installed six
+hours before the study and stayed constant. An Office Click-to-Run update ran
+03:09–03:38 local and left the machine reporting a required restart; that
+coincidence is the only environmental change found, not a demonstrated cause.
+
+`build/close-probe-20261108/` clears the product. A bare pywebview window with
+the app's WebView2 settings closed in ~0.6 s with the browser gone immediately
+across 26 trials, with or without one `HeapProfiler.collectGarbage` call and with
+or without the remote-debugging port. The source app with collection live or
+replaced by a no-op closed in 1.0–2.5 s after plan-only and executed 10k tasks
+(`app/results.jsonl`). The next morning, packaged 10k runs alternating old and
+new closed in 2.8/3.8/2.4 s (old) and 2.9/2.1/2.4 s (new), none with leftovers
+(`pkg/`). The earlier old-package-only control is superseded: it ran in the
+morning, while every slow close was overnight. No product change follows.
 
 ## Shared executor root spelling consolidation — 2026-11-07
 

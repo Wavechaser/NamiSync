@@ -695,10 +695,14 @@ Full resource schedule, 2026-11-07/08: a clean `733f0cb1` package (idle
 collection, response-copy removal) completed all 17 runs with exact mirrors and
 exit 0. Settled memory after close fell to 527–540 MiB at 10k and 689–793 MiB
 at 100k. Execution peaks rose to 1.1–1.2 GiB at 10k and 3.3–3.7 GiB at 100k;
-the WebView2 157 update confounds attribution. Five task runs left WebView2
-processes past the collector's close grace. An old-package control on the same
-runtime closed cleanly. Both findings are open and unscheduled; the SH-G-15
-non-blocking judgment above predates them and awaits the user.
+an interleaved 10k control on runtime 157 attributes most of the rise to the
+product (new 1,203–1,258 MiB vs old 951–1,082), with response-copy removal the
+leading but unisolated suspect. It remains open and unscheduled; the user had
+deprioritized it only if the runtime were responsible.
+Five overnight task runs left WebView2 processes past the collector's close
+grace. Interleaved old/new package controls and source-app collection on/off
+runs closed normally, so the slow close is environmental and not a product
+finding.
 
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
