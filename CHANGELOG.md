@@ -27,6 +27,15 @@ owning contracts.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-08)
 
+- Reuse compatible Inventory rows and unchanged integrity cells during Baseline,
+  Verify and Rebaseline, keeping only current-window controls. Preserve Follow
+  scheduling, selection/focus and collection policy. A bounded 10k comparison
+  reduces created elements by 81–91%; final sampled private-memory peaks are
+  higher, so no footprint or throughput improvement is claimed. Defer
+  the loaded-target shortcut after its combined native probe exposed independent
+  overlay read amplification; retain the failed variant and residual-cost trace.
+  Pass 2,261 interface tests and both installed Inventory/default tree gates,
+  with independent source, scope and evidence review.
 - Reduce Plan Follow churn by scrolling to an operation already in the loaded
   window and reusing compatible rows across overlapping execution windows.
   Preserve verification Follow targets, bounded window retention, current row

@@ -10,6 +10,109 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Inventory Follow allocation investigation — 2026-11-08
+
+The Inventory follow-up uses `e80cec1a` as its baseline. The delivered scope
+reuses compatible overlapping rows, without changing the 256-row window,
+automatic Follow cadence or collection policy. The user deferred the attempted
+loaded-target shortcut after its native diagnostic exposed read amplification.
+Functional evidence belongs in `build/inventory-follow-20261108/`; counted and
+native diagnostic evidence belongs in `build/inventory-costs-20261108/`.
+
+An unchanged same-offset window of 8/64/256 rows creates 112/896/3,584 elements
+and 56/448/1,792 listeners before reuse, versus zero after. A one-row shift with
+one changed integrity cell creates 16 elements and seven listeners after reuse
+at all three widths and all three integrity modes; the baseline rebuilds the
+complete window with the same counts above. The common renderer driver counts
+the complete panel paint, including temporary cell construction. These named
+fixtures are deterministic allocation diagnostics, not a fixed memory budget.
+
+The unsuccessful combined variant is important to the next design. Its Baseline
+phase completes, but takes 150.78 seconds and makes 3,788 window reads/3,843 drain
+calls, against 47.62 seconds and 542/1,045 in the baseline. Element construction
+falls from 1,850,962 to about 153,000, yet sampled renderer private memory peaks
+around 6,709 MiB. Verify is deliberately canceled and the owned host closes
+normally with an empty Job; this partial run is not acceptance evidence. The
+driver's bounded error-state CDP capture also fails after the connection closes; retained
+events and application logs establish cleanup and command counts.
+
+The shortcut removes the foreground anchor/window lifetime that used to suppress
+separate overlay admission. Nearly every drain reply then admits a new complete
+overlay window. Unconditionally retiring viewport demand for each local target
+also invalidates an in-flight overlay even when no viewport request exists.
+Rendering itself does not create a self-sustaining read loop: new snapshot demand
+or navigation invalidation drives it. The favorable DOM counts therefore cannot
+justify shipping the combined variant. Row reuse alone is measured separately.
+
+One fresh-process baseline and one reuse-only process each run Baseline, Verify
+and Rebaseline in that order over the same isolated 10k × 32 B corpus, with
+normal terminal collection and two-second settled pauses. The same counters,
+sampling driver and runtime apply to both. All three modes in both usable runs
+complete cleanly; independent database-copy audits verify exact 10k path/result
+sets per mode and final baseline attestations, without changing original database
+bytes. Corpus file hashes remain unchanged, and both hosts exit normally with empty
+Jobs. All 303 package files are recorded; the final variant differs in only
+`tree.js` and `inventory_review.js` after newline normalization. Raw newline-only
+differences are retained in the identity report rather than hidden.
+
+| Mode | Elements created, before → reuse | Listeners created, before → reuse | Renderer private peak, MiB, before → reuse | Window reads, before → reuse |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 1,850,962 → 171,834 | 925,351 → 75,782 | 1,759 → 1,811 | 542 → 512 |
+| Verify | 1,194,903 → 168,538 | 597,401 → 74,137 | 1,295 → 1,585 | 359 → 500 |
+| Rebaseline | 935,222 → 174,666 | 467,599 → 77,209 | 1,082 → 1,629 | 279 → 497 |
+
+Whole-run window/anchor/drain counts are 1,181/1,135/2,270 before and
+1,510/1,467/2,942 after. The phase command-timing filter misspells the anchor
+command; only whole-run anchor totals are supported. These single samples show
+reduced DOM construction, not footprint or throughput improvement. The final
+candidate's private peaks are higher in all three modes. An earlier row-reuse
+run before the own-property-call compatibility correction had mixed peaks;
+it remains separate historical evidence, not a substitute for the final table.
+Observed durations are 47.62/35.80/37.92 seconds before versus 38.35/36.98/37.38
+after. Faster painting can change drain/read frequency under unchanged scheduling;
+the exact private-memory difference is not attributed to one allocation path.
+Sampled heap and
+private-memory peaks are independent observations, not additive components.
+No 100k, soak or release-resource gate was rerun. Failed setup/socket attempts,
+the failed combined variant, raw receipts and audit corrections remain retained.
+
+Source tracing distinguishes navigation from result freshness. A new uncached
+Inventory target ordinarily resolves an authoritative anchor and landing window,
+and Follow can sample a newer target immediately after landing. The deferred
+shortcut would remove that transaction for an exact loaded row. Independently, ordinary integrity
+updates dirty the current overlay; `refreshInventoryOverlay` reads a complete
+bounded window and optional open detail, coalescing newer dirty revisions.
+Local navigation can remove its own lookup without eliminating overlay or
+viewport-coverage reads. Row reuse removes repeated DOM construction, not the
+serialization, transport, parsing and comparison of those window facts.
+
+Remaining costs also include newly entering rows, changed integrity cells,
+task/panel rendering, and detail reconstruction when detail is open. The number
+of newly visited rows and the number of paints are different scaling axes:
+slower verification may reduce allocation per second while still visiting the
+same rows over a longer run. A short private-memory slope is not an extrapolated
+retention rate because runtime collection and allocator high-water behavior
+affect the sampled footprint. Further cadence or rendering-limit changes need
+a separate behavior decision; this investigation does not apply either.
+
+Plan has a distinct remaining allocation path: `updateExecutionCells` builds a
+temporary complete row and transfers only its intent, checksum and notes cells
+into the retained row. Its earlier counted witness creates 26 elements for one
+entering row plus one changed execution row. That is a possible future local
+rendering optimization without changing Follow cadence; it was not changed here.
+Inventory's measured fixture creates fourteen elements and seven listeners per
+entering row, plus two elements for a changed presence cell. Even perfect overlap
+reuse still constructs rows as traversal advances. None of these counts attributes
+the user's specific 40 MiB per eight seconds to a particular owner.
+
+Before revisiting Inventory local Follow, give overlay refresh an explicit
+freshness/coalescing policy rather than relying on time spent in navigation IPC.
+The existing full-window replies carry both structure and current results; a
+future design should account for both consumers before eliminating either read.
+Changing that policy, reusing departed DOM as a fixed pool, or introducing wire
+deltas are separate proposals. Lowering the row limit or adding execution GC is
+not required by the findings and is not part of the delivered change.
+
 ## Plan Follow allocation reduction — 2026-11-08
 
 The follow-up to the execution-peak investigation below changes only Plan Follow

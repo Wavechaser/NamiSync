@@ -26,6 +26,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
   const activate = optionalCallback(callbacks, "activate");
   const activeChanged = optionalCallback(callbacks, "activeChanged");
   const decorateRow = optionalCallback(callbacks, "decorateRow");
+  const reuseRow = optionalCallback(callbacks, "reuseRow");
   const context = optionalCallback(callbacks, "context");
   const highlight = optionalCallback(callbacks, "highlight");
   const treeId = nextTreeId;
@@ -83,6 +84,9 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       const requestKind = admittedRequest?.kind ?? null;
       const requestedIndex = admittedRequest?.index ?? null;
       const entries = sourceRows.map((sourceRow) => {
+        const retained = renderedByIndex.get(sourceRow.visible_index);
+        if (retained?.row.node_id === sourceRow.node_id
+            && reuseRow(retained.element, sourceRow, retained.sourceRow) === true) return retained;
         const row = snapshotRow(sourceRow);
         let entry;
         const element = createRow(document, treeId, row, (event) => {
@@ -96,7 +100,7 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
           toggle(row.node_id, !row.expanded);
         });
         decorateRow(element, sourceRow);
-        entry = Object.freeze({element, row});
+        entry = Object.freeze({element, row, sourceRow});
         element.addEventListener("click", (event) => {
           if (callbacks.interactionAllowed?.() === false) return;
           acceptRenderedIntent(entry, callbacks.highlight === undefined);

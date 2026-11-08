@@ -25,6 +25,14 @@ function modifiedTime(value) {
   return formatLocalDateTime(Number(BigInt(value) / 1000000n)) ?? "Unavailable";
 }
 
+function sameRow(first, second) {
+  const keys = Object.keys(first);
+  return keys.length === Object.keys(second).length && keys.every((key) =>
+    Object.prototype.hasOwnProperty.call(second, key) && (first[key] === second[key]
+      || (typeof first[key] === "object" && typeof second[key] === "object"
+        && JSON.stringify(first[key]) === JSON.stringify(second[key]))));
+}
+
 function element(tag, className = "", text = "") {
   const value = document.createElement(tag);
   value.className = className;
@@ -288,12 +296,17 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
   let task = null;
   let tree = null;
   let committedWindow = null;
+  let committedReview = null;
+  let committedSessionId = null;
+  let committedPublication = null;
+  let reuseRows = false;
   let activeNodeId = null;
   let activeRefreshTarget = null;
   let rowOrdinaryItems = new Map();
   let rowOrdinaryMode = null;
   let rowOrdinarySessionId = null;
   let renderedProgress = null;
+  const renderedPresence = new WeakMap();
   const selectionControls = new Map();
   let selectionFocus = null;
   let searchTimer = null;
@@ -443,7 +456,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
   function renderPresence(state, row, ordinary = {
     item: row.is_container ? null : rowOrdinaryItems.get(row.row_id) ?? null,
     mode: rowOrdinaryMode, sessionId: rowOrdinarySessionId,
-  }) {
+  }, reuse = false) {
     const ordinaryItem = ordinary.item;
     const presentation = task?.progressPresentation;
     const active = presentation?.activeItem;
@@ -465,6 +478,14 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     const percent = live && Number.isFinite(presentation.itemPercent) ? presentation.itemPercent : undefined;
     const stateText = live ? liveLabel : ordinaryItem !== null ? integrityLabel(ordinaryItem.result)
       : row.warning !== null ? "Notice" : integrityLabel(stateKey);
+    const title = live ? stateText : ordinaryItem !== null
+      ? [owner, integrityLabel(ordinaryItem.result), ordinaryItem.reason, ordinaryItem.recording,
+        ordinaryItem.record_disposition, ordinaryItem.detail_omitted_count > 0
+          ? `${ordinaryItem.detail_omitted_count} details omitted` : null].filter(Boolean).join(" · ")
+      : row.is_container || row.row_id === null ? stateText
+        : `${label(row.presence)} · ${label(row.verification_state)}${row.reappeared ? " · Reappeared" : ""}`;
+    const key = JSON.stringify([live, percent, ordinaryItem?.result, stateKey, stateText, title]);
+    if (reuse && renderedPresence.get(state) === key) return;
     const content = createIntegrityCell(document, "", "primary",
       live ? "" : ordinaryItem?.result ?? stateKey, live && percent !== undefined ? "verifying" : undefined,
       stateText, percent);
@@ -474,12 +495,8 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     delete state.dataset.integrityState;
     Object.assign(state.dataset, content.dataset);
     if (!live && ordinaryItem !== null) state.dataset.integrityState = ordinaryItem.result;
-    state.title = live ? stateText : ordinaryItem !== null
-      ? [owner, integrityLabel(ordinaryItem.result), ordinaryItem.reason, ordinaryItem.recording,
-        ordinaryItem.record_disposition, ordinaryItem.detail_omitted_count > 0
-          ? `${ordinaryItem.detail_omitted_count} details omitted` : null].filter(Boolean).join(" · ")
-      : row.is_container || row.row_id === null ? stateText
-        : `${label(row.presence)} · ${label(row.verification_state)}${row.reappeared ? " · Reappeared" : ""}`;
+    state.title = title;
+    renderedPresence.set(state, key);
   }
 
   function decorateRow(rowElement, row) {
@@ -562,6 +579,11 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
         if (current !== null) callbacks.onFollowOverride?.(current, first, last);
       },
       decorateRow,
+      reuseRow: (rowElement, row, previous) => {
+        if (!reuseRows || !sameRow(previous, row)) return false;
+        renderPresence(rowElement.children[2], row, undefined, true);
+        return true;
+      },
       requestCancelled: (generation) => {
         if (current !== null) callbacks.onWindowCancelled?.(current, generation);
       },
@@ -649,21 +671,39 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
         }
         if (commitTreeWindow(controller, generation, window)) {
           owner.window = window;
-          committedWindow = window;
         }
       },
     }, ROW_HEIGHT, list, ROW_HEIGHT);
   }
 
   function commitTreeWindow(controller, generation, window, preferredNodeId = null, reveal = true, passive = false) {
+    reuseRows = committedReview === current && committedPublication === current.summary.request_id
+      && committedSessionId === task.sessionId && task.sessionId != null && task.sessionState === "active"
+      && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+      && committedWindow?.view_revision === window.view_revision
+      && window.view_revision === current.summary.view_revision
+      && committedWindow.highlight_revision === window.highlight_revision
+      && window.highlight_revision === current.summary.highlight_revision
+      && committedWindow.total === window.total;
     const retained = matchingIntegrity(window.integrity);
     const ordinary = isCurrentIntegrity(retained) ? retained : null;
+    const previousItems = rowOrdinaryItems;
+    const previousMode = rowOrdinaryMode;
+    const previousSessionId = rowOrdinarySessionId;
     rowOrdinaryItems = new Map((ordinary?.items ?? []).map((item) => [item.row_id, item]));
     rowOrdinaryMode = ordinary?.mode ?? null;
     rowOrdinarySessionId = ordinary?.session_id ?? null;
     const accepted = passive ? controller.commitPassiveWindow(generation, window)
       : controller.commitWindow(generation, window, preferredNodeId, reveal);
     if (accepted) {
+      committedWindow = window;
+      committedReview = current;
+      committedSessionId = task.sessionId;
+      committedPublication = current.summary.request_id;
+      const retainedIds = new Set(window.rows.map(row => row.node_id));
+      for (const nodeId of selectionControls.keys()) {
+        if (!retainedIds.has(nodeId)) selectionControls.delete(nodeId);
+      }
       const row = window.rows.find(value => value.node_id === activeNodeId);
       if (row !== undefined) activeRefreshTarget = refreshTarget(row);
       else if (activeRefreshTarget !== null && window.anchor_node_id === activeNodeId
@@ -672,6 +712,10 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
           viewRevision:current.summary.view_revision, publication:current.summary.request_id};
       }
       if (current !== null) current.activeRefreshTarget = activeRefreshTarget;
+    } else {
+      rowOrdinaryItems = previousItems;
+      rowOrdinaryMode = previousMode;
+      rowOrdinarySessionId = previousSessionId;
     }
     return accepted;
   }
@@ -794,6 +838,9 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
     tree?.dispose();
     tree = null;
     committedWindow = null;
+    committedReview = null;
+    committedSessionId = null;
+    committedPublication = null;
     activeNodeId = null;
     activeRefreshTarget = null;
     rowOrdinaryItems.clear();
@@ -1029,14 +1076,12 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
       const focusedCheckbox = [...selectionControls].find(([, control]) => control === document.activeElement)?.[0];
       const scrollTop = review.scrollTop ?? list.scrollTop;
       const keyboard = review.keyboardRevealWindow === review.window;
-      selectionControls.clear();
       list.scrollTop = scrollTop;
       const generation = tree.beginWindowRequest();
       commitTreeWindow(tree, generation, review.window,
         keyboard ? review.summary.highlight_focus_node_id : null, keyboard,
         review.passiveRevealWindow === review.window);
       review.passiveRevealWindow = null;
-      committedWindow = review.window;
       if (!keyboard) list.scrollTop = scrollTop;
       if (focusedCheckbox !== undefined && review.pending !== "selection") {
         selectionControls.get(focusedCheckbox)?.focus?.({preventScroll: true});
@@ -1052,7 +1097,7 @@ export function createInventoryReviewPanel(callbacks, detailsState = { expanded:
         const itemId = `${review.summary.location_id}:${row.row_id}`;
         if (itemId !== active?.item_id && itemId !== renderedProgress?.itemId) continue;
         const rowElement = selectionControls.get(row.node_id)?.parentElement?.parentElement;
-        if (rowElement !== undefined && rowElement !== null) renderPresence(rowElement.children[2], row);
+        if (rowElement !== undefined && rowElement !== null) renderPresence(rowElement.children[2], row, undefined, true);
       }
     }
     renderedProgress = {key:progressKey, itemId:active?.item_id};

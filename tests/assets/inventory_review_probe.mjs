@@ -1663,7 +1663,9 @@ const tailTask = {...presentationTask, inventoryReview:tailReview, taskKind:"inv
   snapshot:{session_id:"current-tail", session_state:"active", presentation:{value:99}},
   progressPresentation:{itemPercent:99, activeItem:{item_type:"integrity",
     item_id:`${tailReview.summary.location_id}:${settledTailRow.row_id}`}}};
-const tailPane = createInventoryReviewPanel({onWindow:async()=>settledTail});
+let nextTailWindow = Promise.resolve(settledTail);
+let tailWindowRequests = 0;
+const tailPane = createInventoryReviewPanel({onWindow:()=>{ tailWindowRequests += 1; return nextTailWindow; }});
 tailPane.render(tailTask);
 const tailViewport = tailPane.element.querySelector(".nami-inventory-review__list");
 tailViewport.scrollTop = 300 * 24;
@@ -1677,6 +1679,23 @@ assert.equal(settledPresence.querySelector(".nami-progress"), null);
 assert.equal(settledPresence.querySelector(".nami-file-state-label").textContent, "Verified");
 tailPane.render(tailTask);
 assert.equal(settledPresence.querySelector(".nami-file-state-label").textContent, "Verified");
+let retireTailWindow;
+nextTailWindow = new Promise(resolve => { retireTailWindow = resolve; });
+tailViewport.scrollTop = 0;
+tailViewport.dispatch("scroll");
+while (frames.length) frames.shift()();
+await tick();
+assert.equal(tailWindowRequests, 2, "the retired candidate reached the viewport read seam");
+tailReview.window = {...settledTail};
+tailPane.render(tailTask);
+retireTailWindow({...fixture.views.maximum.window, integrity:{...settledTail.integrity,
+  revision:settledTail.integrity.revision + 1, items:[]}});
+await tick();
+assert.equal(tailReview.window.offset, settledTail.offset, "retired viewport cannot replace the accepted window");
+tailTask.progressPresentation = {...tailTask.progressPresentation, itemPercent:98};
+tailPane.render(tailTask);
+assert.equal(settledPresence.querySelector(".nami-file-state-label").textContent, "Verified",
+  "a rejected viewport cannot replace the accepted row's ordinary result decorations");
 tailPane.dispose();
 
 // A passive selection receipt keeps the live outer viewport and focused checkbox.
@@ -1964,4 +1983,73 @@ recallReview.window = { ...recallReview.window, rows: recallReview.window.rows.m
 recallPane.render(recallTask);
 assert.equal(walk(recallPane.element).filter((item) => item.classList.contains("nami-file-row__availability")).length, 0);
 recallPane.dispose();
+
+// Compatible ordinary-integrity windows retain only their shared row DOM.
+for (const mode of ["baseline", "verify", "rebaseline"]) {
+  const sourceRows = fixture.views.maximum.window.rows;
+  const reusedReview = {...fixture.views.maximum, pending:null, message:null, detail:null,
+    queuedSearchQuery:null, scrollTop:0,
+    window:{...fixture.views.maximum.window, rows:sourceRows.slice(0, 8), integrity:null}};
+  const reusedTask = {taskId:`reuse-${mode}`, taskKind:"inventory", sessionKind:mode,
+    sessionId:"e".repeat(32), sessionState:"active", sessionReleased:false,
+    requestId:reusedReview.summary.request_id, inventoryReview:reusedReview,
+    snapshot:{session_id:"e".repeat(32), session_state:"active", phase:mode,
+      presentation:{value:20, determinate:true, indeterminate:false, items_done:1, items_total:8},
+      terminal_result:null}};
+  const selectedNodes = [];
+  const reusedPane = createInventoryReviewPanel({onDetail() {}, onWindow() {},
+    onSelect:(_review, nodeId) => selectedNodes.push(nodeId), onViewChange() {}});
+  const viewport = reusedPane.element.querySelector(".nami-inventory-review__list");
+  viewport.clientHeight = 4 * 24 + 24;
+  const rowsForReuse = () => walk(reusedPane.element).filter(value => value.getAttribute("role") === "treeitem");
+  const target = sourceRows.slice(1, 8).find(row => !row.is_container && row.warning === null);
+  assert.ok(target !== undefined);
+  reusedTask.progressPresentation = {activeItem:{item_type:"integrity",
+    item_id:`${reusedReview.summary.location_id}:${target.row_id}`}, itemPercent:20};
+  reusedPane.render(reusedTask);
+  const original = rowsForReuse();
+  const originalById = new Map(original.map(row => [row.dataset.nodeId, row]));
+  const activeRow = originalById.get(target.node_id);
+  const oldPresence = activeRow.children[2].children[0];
+  const oldClick = activeRow.listeners.get("click")[0];
+  reusedTask.progressPresentation = {activeItem:null, itemPercent:null};
+  reusedReview.window = {...reusedReview.window, offset:1,
+    rows:sourceRows.slice(1, 9).map(row => ({...row})),
+    integrity:{...overlay, location_id:reusedReview.summary.location_id,
+      session_id:reusedTask.sessionId, request_id:reusedTask.requestId, mode,
+      items:[{...overlayItem, row_id:target.row_id, result:mode === "verify" ? "verified" : "baselined"}]}};
+  reusedPane.render(reusedTask);
+  for (const row of rowsForReuse().slice(0, 7)) {
+    assertSameNode(row, originalById.get(row.dataset.nodeId), `${mode} retains overlapping row DOM`);
+  }
+  assertSameNode(activeRow.listeners.get("click")[0], oldClick, "overlap retains the original handler");
+  assert.notEqual(activeRow.children[2].children[0], oldPresence, "settlement replaces live progress cells");
+  assert.match(text(activeRow.children[2]), mode === "verify" ? /Verified/ : /Baselined/);
+  assert.equal(original[0].parentElement, null, "departed rows are detached");
+  const settledPresence = activeRow.children[2].children[0];
+  reusedReview.window = {...reusedReview.window, rows:reusedReview.window.rows.map(row => ({...row}))};
+  reusedPane.render(reusedTask);
+  assertSameNode(activeRow.children[2].children[0], settledPresence, "unchanged presence creates no new cell contents");
+  reusedReview.window = {...reusedReview.window, offset:0, rows:sourceRows.slice(0, 8)};
+  reusedPane.render(reusedTask);
+  assert.notEqual(rowsForReuse()[0], original[0], "returning departed rows are rebuilt without an off-window DOM cache");
+  const changedRow = {...target, display:"updated name", highlighted:true, selection:"none"};
+  reusedReview.window = {...reusedReview.window,
+    rows:reusedReview.window.rows.map(row => row.node_id === target.node_id ? changedRow : row)};
+  reusedPane.render(reusedTask);
+  const changedElement = rowsForReuse().find(row => row.dataset.nodeId === target.node_id);
+  assert.notEqual(changedElement, activeRow, "changed structure rebuilds the affected row");
+  assert.match(text(changedElement), /updated name/);
+  // A subsequent ordinary render updates the retained control's enabled state.
+  reusedTask.sessionState = "completed"; reusedTask.sessionReleased = true;
+  reusedPane.render(reusedTask);
+  const changedCheckbox = changedElement.children[0].children[0];
+  changedCheckbox.checked = true; changedCheckbox.dispatch("change");
+  assert.equal(selectedNodes.at(-1), target.node_id, "current rebuilt handlers dispatch the represented node");
+  const beforeNewSession = rowsForReuse()[0];
+  reusedTask.sessionId = "f".repeat(32); reusedTask.sessionState = "active";
+  reusedReview.window = {...reusedReview.window}; reusedPane.render(reusedTask);
+  assert.notEqual(rowsForReuse()[0], beforeNewSession, "a new session cannot reuse prior-session decorations");
+  reusedPane.dispose();
+}
 process.stdout.write("ok\n");

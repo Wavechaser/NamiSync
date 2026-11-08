@@ -1,56 +1,77 @@
-# Latest session — Plan Follow allocation, 2026-11-08
+# Latest session — Inventory row reuse, 2026-11-08
 
 ## Outcome and scope
 
-Base is `b5b6071b`. The user authorizes reducing the repeated Plan-window DOM
-construction responsible for higher execution peaks after verification Follow
-began tracking settled items. Keep that target behavior, and keep GC policy.
+Base is `e80cec1a`. The user requested Inventory allocation optimization and a
+trace of remaining Follow costs. Delivery is narrowed by explicit user approval
+to row reuse; the automatic loaded-target shortcut is deferred.
 
-Plan Follow now uses a matching operation already in its current session/view/
-highlight window without another Follow anchor/window read. Compatible rows in
-active committed overlapping windows retain DOM and listeners, with current row
-bindings and changed execution cells. Static changes rebuild affected rows.
-Only the current bounded window is retained, without an off-window row cache.
+`tree.js` permits its Inventory consumer to retain compatible rows at the same
+visible index. `inventory_review.js` requires the same review, publication,
+active ordinary integrity session, view/highlight revision and total, then
+compares complete row facts. Unchanged rows retain DOM/handlers; changed facts
+rebuild the row, and changed integrity presentation updates the presence cell.
+Only the current window's checkbox controls remain after a successful commit.
+Rejected viewport commits restore the accepted overlay. Generic tree behavior,
+Follow scheduling, row limit, focus/selection and GC policy are preserved.
 
-Review identified two navigation-custody gaps in the new local landing path.
-The common visible-page guard blocks hidden Settings work; local Plan jumps
-retire exact older viewport requests before publishing, preserving highlight
-and selection ownership. `navigation-review.md` records the mechanism review.
-The obsolete refresh-only marker was removed so actual Follow/viewport windows
-can use overlap reuse. No backend/protocol or collector changes are included.
+## Findings and disposition
+
+The combined candidate removed foreground Follow lookups. That exposed the
+independent overlay refresh on nearly every drain reply: Baseline window reads
+rose from 542 to 3,788, elapsed time from 47.62 to 150.78 seconds, and renderer
+private peak reached about 6,709 MiB despite much lower DOM construction. Verify
+was canceled and the owned host closed normally. The user chose row reuse only;
+`app.js` and its app probe were restored to base. The combined patch, source
+copies, failed/partial receipts and source trace remain in ignored evidence.
+
+Review also caught stale-view admission in the withdrawn shortcut and an API
+floor violation in the retained comparator. The latter is corrected to the
+existing own-property-call idiom. `mechanism-review.md` records independent
+recurrence review and the approved narrow correction; no broader fix was added.
 
 ## Verification and evidence
 
-Functional evidence is in `build/follow-allocation-20261108/`. Counted renderer
-replays create 98/770/3,074 elements before versus 26/26/26 after for a one-row
-shift and one changed execution row at widths 8/64/256. Identity, handler freshness,
-no off-window cache and static-change fallback witnesses accompany those counts.
-The initial 2,261-case interface pass predates the final navigation-custody
-correction. The final 2,261-case interface run and four installed task-shell/
-execution-review cases pass on the frozen correction. The final headed command
-explicitly clears default addopts. Source/test hashes are recorded in
-`identity.json`.
+Functional evidence: `build/inventory-follow-20261108/`. Final focused pane/app,
+generic tree and packaged API-floor checks pass (four cases). The final clean
+interface department passes all 2,261 cases. Both installed Inventory/default
+tree gates pass; raw receipts, screenshots and wheel identities are retained in
+`headed-receipts/`.
+Final independent approval is recorded in `independent-review.md`; documentation
+links and diff checks pass.
+The first department attempt put custody temporary files inside the source tree
+and ran under restricted filesystem permissions; its errors are retained. The
+exact failed-node retry exposed the API-floor issue above, now corrected.
 
-Native comparison evidence is in `build/follow-memory-20261108/`. Four isolated
-10k × 32 B source-app runs use baseline/candidate then candidate/baseline order,
-matching producer/runtime and normal GC. A fixed two-second terminal pause
-avoids mixing the previously observed immediate-close race into this comparison.
-All four runs pass exact mirrors, source preservation, durable operation/Verify
-audits and normal empty-Job exit. Sampled DOM peaks fall from 138–160k to 64–68k,
-embedder heap from 415–484 to 212–221 MiB, and renderer private peaks from
-976–1,080 to 776–779 MiB. PERFORMANCE records exact ranges, methods and limits.
-These are diagnostics, not release acceptance or a 100k/long-soak result.
+Measurement evidence: `build/inventory-costs-20261108/`. Same-window 8/64/256-row
+paints create 112/896/3,584 elements before versus zero after; a one-row shift and
+changed presence cell create 16 elements and seven listeners at all widths and
+all three modes. Native baseline and candidate runs use an isolated 10k x 32 B
+corpus, normal terminal GC, fixed pauses, frozen source/runtime/driver identity,
+exact per-mode path/outcome audits and empty-Job shutdown. Final `final-01`
+evidence matches the API-compatible source. Created elements fall 81–91%, but
+renderer private peaks rise in this sample (1,759→1,811 / 1,295→1,585 /
+1,082→1,629 MiB). Window reads rise 1,181→1,510. No footprint, throughput or
+read-reduction claim is made. PERFORMANCE owns final tables and limits; the
+earlier row-only run remains separate pre-correction evidence.
+
+An external table-loading instrumentation check has a pre-existing bridge
+anchor mismatch, independently reproduced from the base revision. The changed
+tree transformation parses successfully in an isolated contained Node witness
+(`check_table_consumer.json`). The unrelated profiler repair is deferred.
 
 ## Immediate operational context
 
-Existing measuring-session processes, profiles and fixtures are untouched.
-New native probe fixtures/profiles and ignored evidence belong to this task and
-remain registered under its evidence root. No task branch/worktree was created.
+No measuring-session process, profile or fixture was changed. Task-owned native
+fixtures/profiles remain registered under the measurement root; retain them with
+the evidence. No task branch or worktree was created.
 
-The prior 17-run rebuilt-package study and source bisection remain documented
-in PERFORMANCE and under `build/resource-study-20261108/` and
-`build/peak-bisect-20261108/`. Slow overnight exit was attributed to environment;
-two early-close stalls remain unexplained and are outside this change. Prior
-study fixtures remain retained and must not be removed with this task's files.
+Remaining costs include full window payloads/overlay reads, bounded comparisons,
+new entering rows, changed cells and open-detail rebuilding. Plan additionally
+builds a temporary complete row to update three execution cells. The user's
+40 MiB/eight-second observation is not attributed to a specific path by this
+study. Revisit Inventory refresh ownership/cadence before its local shortcut.
+No execution GC, heap cap, further post-Close GC or phase-transition GC is added.
 Verification pipelining, grouped recording and small-file batching remain M2.
-No further post-task-close GC is added.
+Prior resource studies, the Plan optimization and early-close observations stay
+in PERFORMANCE and their existing evidence roots; their fixtures are untouched.

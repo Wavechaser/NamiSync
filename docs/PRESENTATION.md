@@ -558,6 +558,18 @@ request-ownership rules. Local Plan landings retire older viewport demand before
 publishing, so a late scroll response cannot replace or retry past the jump.
 Explicit Go still retires competing Follow demand, without canceling highlight
 or selection work. Hidden Settings admits no Follow landing.
+During ordinary baseline, verify and rebaseline, compatible Inventory windows
+retain overlapping rows whose complete structural facts are unchanged. Changed
+row facts rebuild that row; changed integrity presentation refreshes its cell.
+Reuse is scoped to the same review, publication, active session, view/highlight
+revision and total. Generic tree users retain the default rebuild behavior.
+The current window owns its row and checkbox-control retention through the
+common successful commit path, including direct viewport commits. There is no
+off-window row cache. Follow cadence and the window limit are unchanged.
+Inventory retains its existing authoritative Follow lookup path. A loaded-target
+shortcut is deferred: removing its foreground read lifetime exposed independent
+overlay read amplification in native diagnostics. [PERFORMANCE](PERFORMANCE.md#inventory-follow-allocation-investigation--2026-11-08)
+records that investigation; no refresh scheduler or protocol change is implied.
 Manual scroll-away still disables Follow while a pending view/selection change,
 inventory action, loading or Close blocks row interaction. That notification does
 not authorize active-row changes or other blocked gestures.

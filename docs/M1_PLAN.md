@@ -21,6 +21,41 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Reduce Inventory Follow allocation — delivered 2026-11-08
+
+Apply row reuse to ordinary Inventory baseline, verify and rebaseline. Native
+diagnostics found the combined loaded-target shortcut removed the foreground
+read lifetime that incidentally coalesced independent overlay refreshes. The user
+approves shipping row reuse alone and deferring the automatic loaded-target
+shortcut and refresh-cadence changes. Preserve session/view/action/highlight ownership,
+authoritative ancestor lookup, fresh handlers and cells, passive keyboard/focus
+identity, manual override and one bounded retained window. Follow cadence,
+row limit, backend contracts and collection policy remain unchanged.
+
+Final owners are `tree.js` and `inventory_review.js`; direct consumers are
+their page/tree probes and installed Inventory and shell checks. Verify row
+allocation/identity, dynamic decoration and accepted/rejected viewport commits,
+then the interface department and affected installed
+checks. Compare bounded baseline/candidate allocation and native observations
+where necessary, with source/driver identity and ordinary cleanup. Trace residual
+Follow costs for discussion, without authorizing cadence or GC changes. Retain
+the failed combined variant and its corrected scope decision in evidence.
+Evidence lives in `build/inventory-follow-20261108/` and
+`build/inventory-costs-20261108/`. Independent review precedes one commit with
+PRESENTATION, PERFORMANCE, CHANGELOG and HANDOFF. Repository safety and recurrence
+stops apply; measuring-session resources remain untouched.
+
+The combined diagnostic and recurrence review remain retained. The final
+API-compatible row-reuse candidate passes focused probes, all 2,261 interface
+cases and both installed Inventory/default tree gates. Counted unchanged
+8/64/256-row paints create zero new elements; one shifted
+row plus a changed presence cell creates sixteen. Final native three-mode audits
+pass with normal empty-Job shutdown. Created elements fall 81–91%, but sampled
+private peaks are higher; no footprint or throughput claim is made. PERFORMANCE
+owns the exact table and limits. An unchanged bridge anchor already breaks the
+external table-loading profiler's full parse check at base; its changed tree
+consumer passes separately, and the unrelated repair is deferred.
+
 ### Reduce Plan Follow allocation — delivered 2026-11-08
 
 The user authorizes reducing the repeated Plan-window DOM construction exposed
