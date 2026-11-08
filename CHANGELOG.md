@@ -27,6 +27,13 @@ owning contracts.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 
+- Compare `7413a833` GUI and headless 10k executions in alternating batches.
+  Headless stays at 93–99 s. The same GUI build ranges 110–167 s across one
+  evening and adds 16–71 s within a batch. Timers spread the GUI cost across
+  the whole pipeline. A 0.5 ms GIL switch interval, 200 ms result collection
+  and turning off power throttling do not remove it; the worker stays on
+  performance cores. Renderer CPU is mostly native rendering, not JavaScript.
+  Record findings without a product change.
 - Coalesce automatic Plan and Inventory work:
   500 ms full-window reads and 250 ms local cursor/progress paints. Keep explicit navigation,
   control/phase/gap and terminal feedback immediate. Restore automatic Inventory

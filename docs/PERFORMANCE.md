@@ -10,6 +10,74 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Execution time: GUI versus headless — 2026-11-09
+
+Source runs of `7413a833` on the frozen 10k study fixture (10,000 × 32 B in
+100 folders, 10,100 operations, verify on). Each batch alternates arms in fresh
+processes. Drivers, receipts, thread CPU samples and timers are under
+`build/exec-time-20261109/` (`gui.py`, `svc.py`, `threadprobe.py`,
+`timers.py`; batches `out`–`out7`). GUI fixtures are registered per batch in
+`fixtures.jsonl`; headless targets are torn down after their mirror check.
+Every run completed with an exact mirror and normal close.
+
+| Batch | Headless service | GUI | GUI variant |
+| --- | --- | --- | --- |
+| 1 | 94.4 / 95.8 / 96.5 s | 126.7 / 135.2 / 167.0 s | — |
+| 2 | — | 117.6 / 127.9 / 134.2 s | 0.5 ms GIL switch interval: 111.7 / 113.3 / 127.5 s |
+| 3 (timers) | 97.6 / 98.8 s | 126.9 / 139.9 s | — |
+| 5 | — | 109.8 / 112.5 / 115.5 s | 200 ms result collection: 109.1 / 111.0 / 111.3 s |
+| 7 | 93.3 / 93.8 / 94.2 s | 110.1 / 117.0 / 117.4 s | Power throttling off: 113.6 / 114.5 / 115.0 s |
+
+**Variation.** Headless execution stays at 93–99 s. The same GUI build ranges
+from 110 to 167 s across batches on one evening. Within a batch, the GUI adds
+16–23 s in later batches and 31–71 s in the first. A single pair cannot resolve
+a 14% speed change. Earlier source bisection of this harness found `b6a4fefe`'s
+source at 117–125 s against 113–152 s for later commits, with no
+commit-dependent difference ([`733f0cb1` schedule](#full-resource-schedule-on-733f0cb1--2026-110708)).
+`b6a4fefe`'s fastest packaged 10k run (85 s) is below today's headless floor,
+so no GUI change can reach it on this host state. It reflects a different
+environment, not a faster product.
+
+**Where the GUI adds time.** In-process thread CPU sampling shows that the
+session worker does the same file work in both modes but uses more CPU with
+the GUI (49–51 s headless versus 51–68 s GUI). Inclusive function timers
+(batch 3, two runs each) attribute the extra ~34 s across the whole
+pipeline. Python-heavy guards slow most: `RootHold.require_ordinary` (271k
+calls) 3.3 → 7.0 s, path resolution 11.5 → 16.5 s and `_prepare_copy`
+22.7 → 30.7 s. The verification open of the just-copied file slows least:
+33.7 → 40.7 s. A uniform slowdown of Python work points to contention: other
+host Python threads hold the GIL, and other threads share physical cores. The
+following candidates were tested and ruled out:
+
+- **GIL handoff latency.** Lowering the switch interval from 5 ms to 0.5 ms
+  moved the mean ~9 s, within the overlapping ranges.
+- **Bridge thread volume.** pywebview starts a thread per bridge call, and each
+  command response triggers a second `ack:` call: 7.6k–9.7k threads use
+  11.5–16.5 s CPU per run. A 200 ms clean-result collection window (runtime
+  patch) cut drains 3.2k → 0.59k, bridge threads 7k → 1.7k and host CPU
+  77 → 66 s, but execution time only 1–5 s.
+- **Efficiency cores.** The i7-13700K's logical processors 16–23 are efficiency
+  cores. Sampled worker calls ran on them 0.0–0.6% of the time, and opting the
+  host process out of execution-speed throttling did not change the time.
+
+The headless floor is the pipeline itself: about 43 s of copy and 51 s of
+verification. The just-copied file's first open alone takes ~34 s (see the
+[`b6a4fefe` cost attribution](#multiple-open-tasks-and-cost-attribution-on-b6a4fefe--2026-11-07)). The remaining GUI cost is not owned by one
+host path. Removing it entirely would need execution outside the GUI host's
+interpreter, a separate architectural decision. Larger execution gains are in
+the pipeline's existing M2 candidates: verification overlap, grouped
+recording and copy guards.
+
+**Renderer CPU.** A V8 CPU profile of one 114 s GUI execution (`out6`) shows
+the renderer main thread idle for 85.5 s. Of 28.5 s busy, JavaScript is about
+3.5 s. The other 25 s is native work that the profiler does not split:
+style, layout, paint and compiling each bridge response script.
+`table_controller.js` `height()` takes 1.2 s. `setFollowScrollTop` calls it on
+each Follow paint, which forces a synchronous layout. Column resizer
+measurement takes 0.5 s and Plan row rendering 0.5 s. Renderer CPU runs in a
+separate process and did not track execution time in these runs. Lowering it
+means fewer paints or cheaper frames, not faster JavaScript.
+
 ## Coalesced table refresh measurements — 2026-11-08–09
 
 This follow-up compares Git `39255ca30672a0d978a9e8ad423b389cbbd27244`

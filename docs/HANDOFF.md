@@ -29,6 +29,18 @@ existing popup checks and closed their menu. The measurement now runs after
 existing interactions; all original assertions remain. Initial receipts and
 failures are retained in `gallery-initial/`, `headed.xml` and focused logs.
 
+## Execution-time findings (same day)
+
+A separate measurement-only review of `7413a833` found no correctness defect
+(413 focused drain/frontend cases pass). Alternating 10k batches show headless
+at 93–99 s and the same GUI build at 110–167 s, so single-pair speed claims
+are inside the noise. GUI cost is spread across the pipeline. A shorter GIL
+switch interval, 200 ms result collection and turning off power throttling do
+not remove it. PERFORMANCE "Execution time: GUI versus headless" has the
+tables and limits. Evidence and registered GUI fixtures are under
+`build/exec-time-20261109/`.
+No product change was made.
+
 ## Operational context
 
 Work took place in the existing `milestone1` worktree.
