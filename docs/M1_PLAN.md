@@ -691,6 +691,15 @@ single-task sum. PERFORMANCE ("Multiple open tasks and cost attribution")
 lists renderer, verification and copy-guard optimization candidates. None is
 scheduled.
 
+Full resource schedule, 2026-11-07/08: a clean `733f0cb1` package (idle
+collection, response-copy removal) completed all 17 runs with exact mirrors and
+exit 0. Settled memory after close fell to 527–540 MiB at 10k and 689–793 MiB
+at 100k. Execution peaks rose to 1.1–1.2 GiB at 10k and 3.3–3.7 GiB at 100k;
+the WebView2 157 update confounds attribution. Five task runs left WebView2
+processes past the collector's close grace. An old-package control on the same
+runtime closed cleanly. Both findings are open and unscheduled; the SH-G-15
+non-blocking judgment above predates them and awaits the user.
+
 | Step | Finite outcome, owners and verification | Dependency / status |
 | --- | --- | --- |
 | R0 | Inspect current package/version/launchers, INTERFACES/BRIDGE/DESKTOP_UI release criteria, TESTS commands, DEFENSE/PERFORMANCE evidence policy and relevant archived packaging dispositions. Record audience, format, missing work and serialized closeout. Documentation-only commit; local links and diff checks plus adversarial scope review. | Complete initial inspection; at that baseline, wheel metadata and installed-wheel witnesses existed but release CI, a dependency lock and frozen-app specification were absent. SH-G-15 has no budgets/artifacts; current-source bridge timing acceptance is also open. |

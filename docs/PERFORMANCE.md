@@ -10,6 +10,65 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Full resource schedule on `733f0cb1` — 2026-11-07/08
+
+**Artifact.** `build/resource-study-20261108/package/NamiSync-windows-x64-dev.zip`,
+SHA-256 `c14d1691ed8fde68d073c76c58ba2a29c9925c8817f537a5cb91dcc676a7c082`,
+built by `build_package.ps1` (same locked recipe as the `b6a4fefe` study) from
+clean `733f0cb1`: idle renderer collection, bounded admission, response-copy
+removal, executor spelling reuse and later GUI fixes. Same host, collector,
+corpus and frozen 17-run schedule as the [`b6a4fefe` study](#full-resource-schedule-on-b6a4fefe--2026-110607).
+Runtime changed underneath: Edge 157.0.4341.42 here versus 156.0.4314.58 there.
+All 17 runs completed (`full.log` ends `exit 0`); every deferred mirror matched
+and every app exited 0. `validation.json` verdict is FAIL, informational as
+before; its causes are below.
+
+| Profile (runs) | Peak, whole app | Settled after close | `b6a4fefe` peak / settled |
+| --- | ---: | ---: | ---: |
+| Startup (3 plain, 3 DevTools) | 341–354 MiB | 335–350 MiB | 346–374 / 342–372 |
+| 10,000 × 32 B (3) | 1,101–1,224 MiB | 527–540 MiB | 950–976 / 826–842 |
+| 100,000 × 32 B (3) | 3,298–3,674 MiB | 689–793 MiB | 2,365–2,557 / 1,999–2,126 |
+| Payload (1) | 428 MiB | 404 MiB | 444 / 423 |
+| Soak, 100 cycles (3) | 605–620 MiB | 510–536 MiB per cycle | 732–781 / 643–753 |
+| 10k task open, idle 60 min (1) | 1,086 MiB | 522 MiB | 962 / 804 |
+
+**Settled memory.** Boundary collection does what it was built for. After close,
+100k tasks keep 1.2–1.4 GiB less than before and now fall under the 1 GiB
+yardstick; 10k tasks keep ~300 MiB less. The open-task idle held 560 MiB
+instead of 837 MiB, so terminal release alone collects. The 60-minute slope was
+flat (−0.01 MiB/10 min).
+
+**Execution peak rose.** Peaks moved from `task-executed-open` to
+`task-execute`, driven by the renderer: 685–801 MiB at 10k (was 499–541) and
+2.32–2.71 GiB at 100k (was 1.37–1.53). Boundary collection cannot act during
+Execute. Two old-package 10k runs on runtime 157 (`oldpkg-runtime157/`) peaked
+at 894 and 1,131 MiB with renderer 453/705 MiB, overlapping the new range, so
+the 10k rise is not attributable between runtime and product. The earlier
+[allocation comparison](#execution-allocation-reduction--2026-11-07) also saw
+higher peaks after response-copy removal. 100k was not rerun on the old package;
+its attribution is open.
+
+**Soak.** Whole-app post-close slopes over cycles 21–100 were +0.28, +0.27 and
++0.17 MiB/cycle (shifts +17, +16, +9 MiB), against +0.14/−0.02/+0.30 before.
+Two runs exceed the 0.2 yardstick. Collection removed most of the sawtooth, and
+the remaining renderer slope is consistent across runs (+0.19–0.20 MiB/cycle,
+~12 MiB per 100 syncs). Host +0.03–0.06 MiB/cycle, GUI objects flat. soak-02
+browser handles rose 3.8/cycle, as soak-01/02 did before; it is the same
+plateau-shaped pattern, not newly measured growth.
+
+**Slower exit after work.** Five of the eleven task runs (soak-03, all three
+10k runs, payload) still had the WebView2 browser and crashpad processes after
+the collector's 10-second grace; the owned Job then terminated them. In every
+task run except soak-01/02 the host itself took 3.8–4.6 s to leave, and closing
+took 10–14 s in total. Before, every run closed in 1.1–3.0 s. Startup runs, which
+never collect, still close in ~1 s. The old package on runtime 157 closed in
+1.1/1.5 s with no leftovers, so this comes from the product change, most likely
+the collection path, not the runtime update. Exit code and data were
+unaffected. The cause is not established, and neither is how long the
+browser would linger without Job termination. This is an open finding for its
+owner ([INTERFACES](INTERFACES.md#session-and-worker-boundary)); no fix is
+included.
+
 ## Shared executor root spelling consolidation — 2026-11-07
 
 The follow-up to the investigation below reuses exact admitted root and reviewed

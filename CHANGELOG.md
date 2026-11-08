@@ -27,6 +27,12 @@ owning contracts.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-08)
 
+- Measure the rebuilt `733f0cb1` package over the full 17-run schedule. Settled
+  memory after close falls ~300 MiB at 10k and 1.2–1.4 GiB at 100k; all mirrors
+  match. Execution peaks rise (100k 3.3–3.7 GiB), with runtime 157 confounding
+  attribution. Five task runs now leave WebView2 processes past the close grace;
+  an old-package control on the same runtime closes cleanly. Record both as open
+  findings without a product change.
 - Bound new session admission behind idle renderer collection to one five-second
   wait budget. Return an explicit retryable refusal without starting a session
   or releasing the collection reservation. Preserve late completion/retry and
