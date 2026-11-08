@@ -47,10 +47,40 @@ at 894 and 1,131 MiB. The interleaved same-morning control
 separates them: new 1,203–1,258 MiB (renderer 778–828), old 951–1,082 MiB
 (renderer 519–635), with execute times equal (119–122 s vs 121–129 s). Every
 new run is above every old run, so most of the 10k rise comes from the product
-change since `b6a4fefe`, not runtime 157. The earlier
-[allocation comparison](#execution-allocation-reduction--2026-11-07) saw the
-same direction after response-copy removal; that commit is the leading suspect
-but is not isolated. 100k was not rerun on the old package.
+change since `b6a4fefe`, not runtime 157. 100k was not rerun on the old package.
+
+**Execution peak isolated to `323b5377`.** `build/peak-bisect-20261108/`
+(`peak_probe.py`) runs the source app from detached worktrees of each candidate
+commit through the same collector and 10k workload, interleaving arms, on
+runtime 157. Peaks, whole app:
+
+| Tree | Peak (runs) |
+| --- | ---: |
+| `b6a4fefe` (old package source) | 741–959 MiB (3) |
+| `cbf3f090` response-copy removal | 855–923 MiB (3) |
+| `2ca0b291` idle collection, live / no-op | 773–897 / 822–859 MiB (10 / 3) |
+| `323b5377` linked-verification follow | 1,369–1,420 MiB (7) |
+| `650cddbc`, `733f0cb1` (HEAD), collection live | 1,323–1,454 MiB (7) |
+
+Response-copy removal and collection are cleared; the step is `323b5377`, and
+later commits add nothing. HEAD with collection replaced by a no-op peaked at
+1,188–1,231 MiB (3), still far above `2ca0b291`. Renderer heap samples during Execute (`runs4/`) show
+what grew: max DOM nodes 37–43k → 117–142k, JS event listeners 12.6–14.3k →
+45–53k (`323b5377` with and without the variant below), Blink heap ~143 → 354–430 MiB, V8 used 208–225 → 347–382 MiB. Each Plan
+follow step anchors a new 256-row window at the target's index − 4, and
+`plan_review.js` `renderRows` reuses rows only for an identical offset and node list, so every
+step to a new item rebuilds all rows (~4.4k nodes, ~1.5k listeners) until the
+next collection. Before `323b5377` this happened during the copy half only; the
+table went quiet once verification began because fast verification left no
+active target. `323b5377` deliberately follows `last_settled_integrity_item_id`,
+so the rebuild churn now runs through verification too (anchor reads 88–107 →
+213–243 per run, window reads 230–264 → 307–356). Restricting the new chained
+re-follow to explicit requests (`nochain.diff`) did not lower the peak
+(1,299–1,410 MiB), so the target change, not the chaining, drives it. The 100k
+rise is probably the same mechanism over a longer verification, but was not
+measured. Two of 19 runs carrying `323b5377` (none of 19 earlier) timed out
+waiting for the task card to leave after a Close clicked 30–35 ms after
+completion; unexplained and not investigated.
 
 **Soak.** Whole-app post-close slopes over cycles 21–100 were +0.28, +0.27 and
 +0.17 MiB/cycle (shifts +17, +16, +9 MiB), against +0.14/−0.02/+0.30 before.

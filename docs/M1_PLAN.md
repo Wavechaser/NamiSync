@@ -696,9 +696,12 @@ collection, response-copy removal) completed all 17 runs with exact mirrors and
 exit 0. Settled memory after close fell to 527–540 MiB at 10k and 689–793 MiB
 at 100k. Execution peaks rose to 1.1–1.2 GiB at 10k and 3.3–3.7 GiB at 100k;
 an interleaved 10k control on runtime 157 attributes most of the rise to the
-product (new 1,203–1,258 MiB vs old 951–1,082), with response-copy removal the
-leading but unisolated suspect. It remains open and unscheduled; the user had
-deprioritized it only if the runtime were responsible.
+product (new 1,203–1,258 MiB vs old 951–1,082). Source bisection isolates it to
+`323b5377`: the Plan follow now tracks settled verification items, and each
+follow step rebuilds the full 256-row window, so DOM churn continues through
+verification (10k peak ~870 → ~1,400 MiB). Response-copy removal and idle
+collection are cleared. A remedy is open and unscheduled pending the user's
+decision.
 Five overnight task runs left WebView2 processes past the collector's close
 grace. Interleaved old/new package controls and source-app collection on/off
 runs closed normally, so the slow close is environmental and not a product

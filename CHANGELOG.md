@@ -30,7 +30,9 @@ owning contracts.
 - Measure the rebuilt `733f0cb1` package over the full 17-run schedule. Settled
   memory after close falls ~300 MiB at 10k and 1.2–1.4 GiB at 100k; all mirrors
   match. Execution peaks rise (100k 3.3–3.7 GiB); an interleaved 10k control on
-  runtime 157 attributes most of the rise to the product. Overnight WebView2 close lingering is traced to the environment:
+  runtime 157 attributes most of the rise to the product, and source bisection
+  isolates it to `323b5377`'s verification follow rebuilding full Plan windows.
+  Overnight WebView2 close lingering is traced to the environment:
   interleaved old/new packages and source collection on/off close normally.
   Record findings without a product change.
 - Bound new session admission behind idle renderer collection to one five-second
