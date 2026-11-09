@@ -1111,7 +1111,7 @@ remain below the separately frozen ceiling with no Gap, ordered delivery,
 
 The authoritative committed artifacts are `tests/interfaces/web/sh_g_8_transport_calibration.json`, `sh_g_8_transport_ceiling.json`, and `sh_g_8_transport_holdout.json`. Calibration was produced from tested commit `56c50b43dc19090ad33af031891503bfec80599b`. The ordinary current-source one-child guard authenticates the frozen contract and compares both live custody shapes with its ceiling; it is Tier-1 drift evidence, not a recalibration. Terminal result graphs, whole-Job deltas, and whole-runtime resource acceptance are outside this closed custody claim.
 
-The v4 installed-wheel timing and custody runs are retained historical diagnostic evidence. They do not establish current-source Tier-2 timing acceptance or alter the frozen v1 calibration. In particular, `sh_g_8_acceptance=incomplete-without-custody` remains incomplete evidence, not a pass. The selected `python -m tools performance bridge-event installed --json build/bridge-event.json` case remains diagnostic: it measures archived-HEAD product bytes with a labeled working-tree driver and reports incomplete native attempts with raw child context. Its v5 page decodes fixture byte strings to bounded numeric samples, checks item-free terminal facts, and uses the ordered ItemOutcome stream as the independent item witness. A rejected report stops sample admission and publishes the first browser failure before Close; synthetic workers honor cancellation so host cleanup can settle. A timed-out historical launch alone does not establish its cause. Reproduce frozen custody only with the committed calibration runner and its validated artifacts. Any changed bridge transport must run its affected ordinary checks; new acceptance requires predeclared profile, authority, artifact, and validator rather than a favorable observation.
+The v4 installed-wheel timing and custody runs are retained historical diagnostic evidence. They do not establish current-source Tier-2 timing acceptance (see the R3 collection below) or alter the frozen v1 calibration. In particular, `sh_g_8_acceptance=incomplete-without-custody` remains incomplete evidence, not a pass. The selected `python -m tools performance bridge-event installed --json build/bridge-event.json` case remains diagnostic: it measures archived-HEAD product bytes with a labeled working-tree driver and reports incomplete native attempts with raw child context. Its v5 page decodes fixture byte strings to bounded numeric samples, checks item-free terminal facts, and uses the ordered ItemOutcome stream as the independent item witness. A rejected report stops sample admission and publishes the first browser failure before Close; synthetic workers honor cancellation so host cleanup can settle. A timed-out historical launch alone does not establish its cause. Reproduce frozen custody only with the committed calibration runner and its validated artifacts. Any changed bridge transport must run its affected ordinary checks; new acceptance requires predeclared profile, authority, artifact, and validator rather than a favorable observation.
 
 Useful failure checks remain mandatory: a valid event must not be stranded by a singular response overflow; an explicit Gap must not be hidden by terminal truth; a malformed batch must not partially apply; an uncertain replay must not repeat an effect; origin refusal and hostile-name rendering must make no handler or DOM authority; and a bounded queue must preserve reliable tail/terminal reconciliation under overflow.
 
@@ -1123,14 +1123,17 @@ Historical decision, gate, and delivery narrative is retained in `obsolete/M1_BR
 reference profile, sample aggregation and event fixture. Reliable/terminal
 delivery retains 100 ms p95 / 250 ms maximum with no Gap; replaceable progress
 retains 1 s p95 / 2 s maximum with coalesced monotonicity. Current-source timing
-acceptance is open.
+acceptance passed the predeclared five-child
+[R3 collection](PERFORMANCE.md#r3-acceptance-result--2026-11-09) at `cbb07d5f`,
+validated by `tools.performance.br_g_42`; changed bridge transport, driver,
+runtime or profile requires renewal.
 The current v5 custody fixture and frozen v1 acceptance are distinct: per task,
 150 reliable outcomes own items_done, while byte coordinates 1..1,500 drive
 cadence with valid item/attempt identities and matching outcomes. Ordinary final
 results retain the 1,500-byte attempted-work high-water; maximum-no-Gap remains
 outcome-only. The active-version field overlay cannot alter the frozen v1 corpus.
 The installed event diagnostic consumes this v5 shape independently of the
-frozen custody corpus; a complete diagnostic run does not close current timing
+frozen custody corpus; a single diagnostic run does not renew timing
 acceptance.
 
 A new or changed transport representation retains the protected contract,

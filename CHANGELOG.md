@@ -25,11 +25,13 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
-#### Measure current-source BR-G-42 timing (2026-11-09)
+#### Measure and accept current-source BR-G-42 timing (2026-11-09)
 
 - Run the bridge-event, Plan, execution-UI and History release diagnostics on
-  `ddf1afe9`. All observations stay within the historical budgets; acceptance
-  remains open.
+  `ddf1afe9`. All observations stay within the historical budgets.
+- Close R3: map Plan/UI numbers as advisory under DEFENSE §7, predeclare
+  five-child History release and bridge-event collections with a separate
+  validator, and pass them plus the Inventory cold renewal on clean `cbb07d5f`.
 - Realign the optional execution-UI driver with current task identity, status
   lines and typed control replies; 9 of 13 cases had been failing.
 - Ratify CPython 3.13.17 as the reference runtime. Count harness threads from

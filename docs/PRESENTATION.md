@@ -753,8 +753,8 @@ origin/code disclosure and exact lifecycle relationships.
 
 The inventory projection criterion retains the reference profile and sampling
 in [PERFORMANCE](PERFORMANCE.md#reference-profile-and-collection). The
-[2026-10-30 renewal](PERFORMANCE.md#inventory-projection-renewal--2026-10-30)
-passes on its recorded profile and gating sources. Changed dependencies require
+[2026-11-09 R3 renewal](PERFORMANCE.md#r3-acceptance-result--2026-11-09)
+passes on its recorded profile and gating sources at `cbb07d5f`. Changed dependencies require
 renewed evidence; the runtime population target alone does not close this gate.
 
 | Behavior | Retained criterion |

@@ -3091,8 +3091,8 @@ p95 7–13 ms and max 38–40 ms (620 each), progress p95 43–45 ms and max
 diagnostic case: BRIDGE keeps current-source timing acceptance open until a
 predeclared collection closes it.
 
-Plan warm changed-view windows took 350–740 ms p95; they have no recorded
-budget. Incremental peak private bytes during construction overlap (308.2 MiB)
+Plan warm changed-view windows took 350–740 ms p95, within the historical
+advisory 1.5 s p95 / 3 s maximum in the M1-7 compact contract. Incremental peak private bytes during construction overlap (308.2 MiB)
 exceeded the 267.8 MiB observation at
 `3c3bbbc`, leaving 11.8 MiB headroom. Cold base leaves 0.14 s. Both are single
 samples, so neither establishes a pass nor a regression.
@@ -3252,6 +3252,29 @@ stay in ignored `build/r3-acceptance-20261109/` (Inventory child logs in its
 existing `build/m1-9-20261001/` root); the validation JSON, with
 each report's SHA-256, and the Inventory compact raw/validation JSON are
 committed under `tests/interfaces/web/`.
+
+### R3 acceptance result — 2026-11-09
+
+Every collection passed on clean `cbb07d5f` (CPython 3.13.17, SQLite 3.50.4,
+captured reference profile on AC power, total CPU 3.6–5.1% beforehand, R2 work
+held). No child failed or was retried.
+
+| Obligation | Children | Result | Limit |
+| --- | ---: | ---: | ---: |
+| Inventory cold base / information-heavy | 5 / 5 | max 1.623 s (1.583–1.623) / 2.297 s (2.250–2.297) | 3 s / 6 s |
+| History 50-run summary | 5 (10 readings) | max 1.736 s | 3 s |
+| History item / event 256-row pages | 5 (200 each) | p95 21.2 / 20.8 ms; max 23.5 / 22.1 ms | 500 ms / 1 s |
+| Bridge event reliable/terminal | 5 (3,100 events) | worst p95 10 ms; max 40 ms; no Gap | 100 / 250 ms |
+| Bridge event progress | 5 (7,367 events) | worst p95 45 ms; max 51 ms; monotonic | 1 s / 2 s |
+
+Committed: [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261109_raw.json)
+and [validation](../tests/interfaces/web/r3_inventory_cold_20261109_validation.json);
+[History/bridge-event validation](../tests/interfaces/web/r3_br_g_42_validation_20261109.json)
+with each raw report's SHA-256. Raw reports and logs:
+`build/r3-acceptance-20261109/collection/` and
+`build/m1-9-20261001/measurement-inventory-cold-20261109T130416Z-bc2ffcb0/`.
+This closes R3's timing obligations for the recorded profile and revision only;
+changed gating sources, runtime or profile require renewal under DEFENSE §7.
 
 ## Selected Plan and execution UI observations
 
