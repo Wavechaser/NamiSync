@@ -29,11 +29,14 @@ owning contracts.
 
 - Run the bridge-event, Plan, execution-UI and History release diagnostics on
   `ddf1afe9`. All observations stay within the historical budgets; acceptance
-  remains open. The bridge-event memory limb is invalid under ordinary desktop
-  load because its thread snapshot walks every system thread, and its runtime
-  reference still names CPython 3.13.14.
+  remains open.
 - Realign the optional execution-UI driver with current task identity, status
   lines and typed control replies; 9 of 13 cases had been failing.
+- Ratify CPython 3.13.17 as the reference runtime. Count harness threads from
+  process records instead of walking every system thread, so the bridge-event
+  memory limb no longer depends on desktop load; three runs now pass.
+- Attribute the tight Plan cold-base and retained-memory margins to the
+  widened projection node and retained folder path strings.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 

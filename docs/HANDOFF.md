@@ -2,47 +2,59 @@
 
 ## Delivered change
 
-Base `ddf1afe9`, branch `milestone1`. No product change. `8d599511` realigns
-the optional `tools performance execution-ui` driver: start settlement now uses
-`plan_request_id` (changed by `41afd262`), control successors match the leading
-status message (changed by `2dcdc05f`), and the parent accepts the page's exact
-typed control reply. Tests feed the real shapes and fail on the old driver.
+Base `ddf1afe9`, branch `milestone1`. No product change.
+
+- `8d599511` realigns the optional `tools performance execution-ui` driver with
+  current task identity (`plan_request_id`), status lines that append control
+  guidance, and the page's typed control reply.
+- `387a9749` ratifies CPython 3.13.17 as the BR-G-42 reference runtime (user
+  decision, DEFENSE §7, budgets unchanged).
+- `ec194871` makes the bridge-event harness count threads from one
+  `SystemProcessInformation` snapshot instead of a Toolhelp walk of every
+  system thread. Counts are identical, and cost drops from 44–88 ms to
+  about 7.6 ms.
 
 ## Verification
 
-- `tests/interfaces/web/test_m1_8_execution_ui_scale.py`: 46 pass; 3 fail with
-  the driver change removed.
-- Ordinary suite: 6,489 pass, 4 skipped. Two pre-existing failures are
-  unrelated: `tests/test_table_loading_performance.py` reports
-  "table-loading instrumentation anchor drifted" with and without this change.
-  The optional table-loading driver's anchor no longer matches current
-  `bridge.js`; it was not investigated or fixed.
+- Driver and harness tests pass: 46 execution-UI tests and 42 bridge-event
+  tests. The execution-UI tests fail with the old driver.
+- The ordinary suite earlier passed 6,489 with 2 pre-existing failures in
+  `tests/test_table_loading_performance.py`. That optional driver's
+  instrumentation anchor no longer matches `bridge.js`; it is not fixed.
+- Bridge-event `installed` passes three times on clean `ec194871`, with a
+  longest memory-sample gap of 0.021–0.022 s. It remains a diagnostic case.
 
 ## Measurements
 
 [PERFORMANCE](PERFORMANCE.md#current-source-br-g-42-diagnostics--2026-11-09)
-owns the table and limits. In summary, bridge-event latencies, Plan, 13
-execution-UI cases and History release are all within the historical budgets.
-Bridge-event stays `incomplete`: its memory-sampler limb (0.1 s blind interval)
-fails because a once-a-second thread snapshot walks all system threads (about
-43 ms at 7,700 threads, 88 ms at 15,000). The harness reference still names
-CPython 3.13.14. Plan retained memory has 11.8 MiB headroom on a single sample.
+owns the results. Every family is within its historical budget. The tight
+items are stable:
+- Plan cold base: 1,819–1,833 ms against 2,000 ms.
+- Retained construction memory: 323.3–324.3 MB against 335.5 MB.
 
-## Next decisions
+The causes are attributed; no product change has been made or approved.
 
-- R3 acceptance needs: a bridge-event harness whose memory limb is independent
-  of system thread count (or a bounding quiescence profile), a runtime-profile
-  decision for 3.13.17 and predeclared five-child cold collections.
-- The table-loading driver anchor drift is a separate optional-tool repair.
-- Cleanup of F:, H:\test_dir and `build\` was inventoried earlier this session
-  and awaits the user's decision; this session adds
-  `build/bridge-timing-20261109/` (wheel, `site/` install, reports, raw logs).
+## Open decisions
+
+- **Retained memory:** derive or share folder `path` strings instead of
+  retaining node-tree strings (about 18 MiB), and possibly move rarely set node
+  fields into an optional record (about 19 MiB; broader contract change).
+- **Cold base:** fill frozen node slots through member descriptors during
+  materialization (about 100 ms). The node-tree build (about 660 ms) and draft
+  append (about 500 ms) remain the largest phases.
+- **Acceptance:** R3 still needs predeclared collections.
+- **Table-loading driver:** the anchor repair is a separate optional-tool fix.
 
 ## Operational context
 
-No task-owned native process remains. Evidence, including failed attempts
-(`*.attempt1`, `*.attempt2`), is retained under `build/bridge-timing-20261109/`.
-The timing runs created no new roots on F: or H:. Six
-`%TEMP%\NamiSync-cadence-*` directories (2026-11-08 23:34 – 2026-11-09 00:33,
-about 12,800 files) predate this session's runs and belong to another session;
-they are cleanup candidates.
+Cleanup (`build/cleanup-20261109/delete-list.txt` and `delete-log.txt`) removed
+1,947 items:
+- all `F:\NamiSync-resource-*` corpora;
+- everything in `H:\test_dir` except `source` and `target`;
+- `build\` package environments, evidence-free profiles, WebView2 browser data,
+  measurement-run databases and evidence-free fixture trees.
+
+Logs, receipts and results were kept. 19 old pytest venv/profile folders under
+`ab10-20260926`, `m1-7*` and `m1-9-20261001` failed with access denied, a
+probable sandbox ACL issue. Six `%TEMP%\NamiSync-cadence-*` folders from
+another session remain. No task-owned native process remains.

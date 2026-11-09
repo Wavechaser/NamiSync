@@ -3080,10 +3080,40 @@ buffer, instead of a Toolhelp thread walk. Python visits one record per process
 processes, and the snapshot takes about 7.6 ms against 44–55 ms for the walk
 at 7,700 threads. The 0.1 s blind-interval criterion is unchanged.
 
+After that change and the 3.13.17 ratification, three consecutive runs on clean
+`ec194871` returned `passed=True` with `measurement_valid`, matching runtime
+and machine profiles and a clean archive scope. Reliable/terminal events were
+p95 7–13 ms and max 38–40 ms (620 each), progress p95 43–45 ms and max
+49–52 ms (1,490–1,496 each), and the longest memory-sample gap was
+0.021–0.022 s, with about 7,700 system threads. These remain the selected
+diagnostic case: BRIDGE keeps current-source timing acceptance open until a
+predeclared collection closes it.
+
 Plan warm changed-view windows took 350–740 ms p95; they have no recorded
 budget. Retained construction memory (308.2 MiB) grew from 267.8 MiB at
 `3c3bbbc`, leaving 11.8 MiB headroom. Cold base leaves 0.14 s. Both are single
 samples, so neither establishes a pass nor a regression.
+
+Repeats on `ec194871` show both are stable, not noise. Five fresh cold-base
+children took 1,819–1,833 ms, and three memory children retained
+323.3–324.3 MB. Diagnostic attribution (`projection_profile.py`,
+`projection_phases.py` and their outputs in the evidence folder):
+
+- **Memory.** tracemalloc traces about 254 MiB for the base and
+  information-heavy states. The 360,000 `PlanProjectionNode` objects are 107 MiB
+  at 312 B each; at `3c3bbbc` a node had 25 fields, now 35, so the 10 added
+  fields cost about 27.5 MiB. The newer `path` field keeps node-tree folder
+  path strings alive after construction (17.9 MiB). Together these cover the
+  growth.
+- **Cold base time.** Over three wall-clock runs: node-tree build 658–672 ms,
+  draft append 499–563 ms, materialization 420–425 ms, selection 112–114 ms,
+  pre-order 50–52 ms and other work about 100 ms. Recall folding is only about
+  25 ms. In a 120,000-node microbenchmark, frozen-dataclass construction cost
+  208 ms with 25 fields and 291–304 ms with 35. Filling the same frozen slots
+  through their member descriptors took 188–199 ms. The node widening
+  therefore explains most of the 70–80 ms growth since `3c3bbbc`.
+
+No product change follows from this diagnosis.
 
 The first execution-UI run failed 9 of 13 cases on three driver defects, all
 corrected in `8d599511`: stale task identity since `41afd262`, exact status
@@ -3094,10 +3124,9 @@ gates and stayed `audit=OK`: 3,919 window transactions, 262 ms maximum
 commit, at most 256 pending events and 109,568 pending bytes.
 
 Evidence, including failed attempts, the wheel (SHA-256 `CDC9E4B7…68`) and
-its installation, is in `build/bridge-timing-20261109/`. Acceptance under R3
-still needs a harness whose memory limb does not depend on system thread count
-(or a quiescence profile that bounds it), a runtime-profile decision and
-predeclared five-child cold collections.
+its installation, is in `build/bridge-timing-20261109/`; the `site/` installation
+was later removed as a regenerable environment. Acceptance under R3 still needs
+predeclared collections, including five-child cold collections.
 
 ## Selected Plan and execution UI observations
 
