@@ -12,3 +12,4 @@
 /namisync/interfaces/web/assets/icons/* -text
 /namisync/interfaces/web/assets/icons.js text eol=lf
 /namisync/interfaces/web/assets/components.css text eol=lf
+/tools/packaging/notices/*.txt -text

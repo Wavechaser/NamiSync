@@ -95,12 +95,12 @@ These remain open and do not promise universal whole-runtime memory containment.
 
 Integrated lifecycle verification is complete. M1 release preparation targets
 a portable Windows x64 `v0.1.0` build for a small tester group, delivered
-unsigned; distribution contents and final
-release acceptance remain open. No downloadable release is claimed yet.
-The [prepared tester guide](tools/packaging/START-HERE.txt) covers extraction,
+unsigned; final release acceptance remains open. No downloadable release is claimed yet.
+The portable builder includes the [tester guide](tools/packaging/START-HERE.txt), covering extraction,
 prerequisites, application data and feedback; the
 [source/build guide](tools/packaging/BUILDING.txt) explains matching-source
-rebuilds. These are preparation materials, not final release instructions.
+rebuilds, alongside the GPL and distribution-wide third-party notices.
+These do not certify a release candidate or authorize external handoff.
 Rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.

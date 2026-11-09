@@ -591,7 +591,7 @@ explicit, reviewable and regression-backed.
 - Reconcile the accumulated handoff into current resumption context and account
   for task-owned fixture cleanup while retaining evidence.
 
-#### Build the portable M1 debug package (2026-11-04 – 2026-11-05)
+#### Build the portable M1 debug package (2026-11-04 – 2026-11-09)
 
 - Activate M1-Release for a small tester group receiving a portable Windows x64
   app; retain existing per-user data placement and GUI/console entry points.
@@ -611,11 +611,14 @@ explicit, reviewable and regression-backed.
   `v0.1.0` for distribution without a beta suffix.
 - Verify the refreshed Actions in hosted run `42056121788`: 6,371 tests,
   twelve imports and portable upload pass without the Node 20 warning.
-- Prepare unsigned tester and corresponding-source/build guides. Census all
-  477 retained bundle files and both executable analyses; identify notices for
-  implicit freezer dependencies and unresolved ambient native DLL origins.
-  Keep notice integration, native-input correction and candidate acceptance
-  open; do not replace the user's measured package.
+- Complete R2 distribution contents: ship tester/source guides and export the
+  About records with exact Python, compiled-library, freezer and embedded-package
+  license supplements. Retain source directions and Microsoft binary conditions;
+  external agreement and candidate delivery remain R5 work.
+- Trace 43 ambient DLLs to PyInstaller's PATH fallback. Restrict freezer inputs,
+  use Windows 11's system UCRT/API sets, retain Python's VC runtime and export
+  native hashes/origin tables locally and through CI. Verify the actual ZIP and
+  isolated standard-user About/startup/close; preserve previous measured builds.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
   release publication remains open.

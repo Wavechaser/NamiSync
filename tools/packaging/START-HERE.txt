@@ -1,7 +1,7 @@
 NamiSync v0.1.0 "Gertrud" — tester guide
 
-Preparation copy: final distribution contents and release verification are still
-pending. This file does not turn a development ZIP into an accepted release.
+Development package: candidate acceptance remains a separate release checkpoint.
+This guide does not turn a development ZIP into an accepted release.
 
 Start the app
 -------------
@@ -75,6 +75,11 @@ For a suspected wrong copy/delete or inconsistent result, stop using that test
 pair and preserve the affected files and evidence before attempting recovery.
 
 The console entry point is namisync.exe; run .\namisync.exe --help for commands.
-NamiSync is GPL-3.0-or-later; see LICENSE. Third-party notices and matching source
-must accompany the final distribution. About contains the existing app notices;
-the distribution-wide notice review remains pending in this preparation copy.
+NamiSync is GPL-3.0-or-later; see LICENSE. THIRD-PARTY-NOTICES.txt covers the
+bundled runtime and app components; About also contains the app notices.
+BUILDING.txt explains matching source, upstream sources and build directions.
+Microsoft binary components have additional conditions reproduced in the CPython
+Windows installation license section of THIRD-PARTY-NOTICES.txt. Before external
+delivery, the maintainer must arrange the distributor/end-user agreement those
+terms require; including this notice alone does not authorize redistribution.
+These conditions apply to Microsoft code, not to NamiSync or Python itself.

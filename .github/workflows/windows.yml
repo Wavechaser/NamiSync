@@ -76,4 +76,6 @@ jobs:
             build/portable/source-identity.json
             build/portable/bundle-identity.json
             build/portable/build-environment.txt
+            build/portable/native-origins.json
+            build/portable/freezer-tables/*.toc
             build/portable/wheel/*.whl

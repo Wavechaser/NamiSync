@@ -5,6 +5,7 @@ not exist; failed attempts remain available for diagnosis.
 """
 
 import argparse
+import ast
 import hashlib
 import io
 import json
@@ -19,9 +20,13 @@ from datetime import datetime, timezone
 from importlib.metadata import distributions
 from pathlib import Path
 
+if __package__:
+    from .notices import write_notices
+else:
+    from notices import write_notices
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE_PATHS = ("namisync", "tools/packaging", "pyproject.toml", "README.md", "LICENSE")
+SOURCE_PATHS = ("namisync", "tools/packaging", "pyproject.toml", "README.md", "LICENSE", ".gitattributes")
 
 
 def source_snapshot(root: Path) -> tuple[str, int, bytes]:
@@ -62,8 +67,48 @@ def write_archive(path: Path, base: Path, names: list[str], epoch: int) -> None:
             archive.writestr(entry, (base / name).read_bytes())
 
 
-def run(*args: str, cwd: Path) -> None:
-    subprocess.run(args, cwd=cwd, check=True)
+def run(*args: str, cwd: Path, env: dict[str, str] | None = None) -> None:
+    subprocess.run(args, cwd=cwd, check=True, env=env)
+
+
+def freezer_environment() -> dict[str, str]:
+    """Do not let unrelated applications on PATH supply bundled DLLs."""
+    windows = Path(os.environ["SystemRoot"])
+    environment = os.environ.copy()
+    environment["PATH"] = os.pathsep.join(str(path) for path in (
+        Path(sys.prefix) / "Scripts", Path(sys.base_prefix),
+        Path(sys.base_prefix) / "DLLs", windows / "System32", windows,
+    ))
+    return environment
+
+
+def record_native_origins(work: Path, bundle: Path, output: Path) -> None:
+    """Bind collected native bytes to the locked environment/Python installation."""
+    roots = (Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve())
+    rows = []
+    entries = ast.literal_eval((work / "COLLECT-00.toc").read_text(encoding="utf-8"))[0]
+    for name, source, kind in entries:
+        if kind not in {"BINARY", "EXTENSION"}:
+            continue
+        path = Path(source).resolve()
+        if not any(path.is_relative_to(root) for root in roots):
+            raise RuntimeError(f"Native input outside build environment/Python: {path}")
+        lowered = Path(name).name.lower()
+        if lowered == "ucrtbase.dll" or lowered.startswith(("api-ms-win-core-", "api-ms-win-crt-")):
+            raise RuntimeError(f"Windows-provided runtime must not be bundled: {name}")
+        destination = bundle / "_internal" / name
+        sha256 = digest(path)
+        if digest(destination) != sha256:
+            raise RuntimeError(f"Collected native bytes differ from input: {name}")
+        rows.append({"path": name, "source": str(path), "kind": kind, "sha256": sha256})
+    (output / "native-origins.json").write_text(json.dumps({
+        "native_files": rows,
+        "scope": "COLLECT BINARY/EXTENSION inputs; raw freezer tables also retain embedded/bootloader inputs",
+    }, indent=2), encoding="utf-8")
+    tables = output / "freezer-tables"
+    tables.mkdir()
+    for path in sorted(work.glob("*.toc")):
+        shutil.copyfile(path, tables / path.name)
 
 
 def digest(path: Path) -> str:
@@ -121,23 +166,15 @@ def main() -> None:
     run(sys.executable, "-m", "pip", "check", cwd=output)
     run(sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean",
         "--distpath", str(output / "dist"), "--workpath", str(output / "work"),
-        str(source / "tools/packaging/namisync.spec"), cwd=output)
+        str(source / "tools/packaging/namisync.spec"), cwd=output, env=freezer_environment())
     bundle = output / "dist/NamiSync"
+    record_native_origins(output / "work/namisync", bundle, output)
     check_executable(bundle / "namisync.exe", 3)
     check_executable(bundle / "namisync-gui.exe", 2)
     shutil.copyfile(source / "LICENSE", bundle / "LICENSE")
-    (bundle / "START-HERE.txt").write_text(
-        "NamiSync development package (not a release candidate)\n\n"
-        "Extract the whole folder, then run namisync-gui.exe.\n"
-        "Requires Windows 11 x64, Microsoft Edge WebView2 Runtime and .NET Framework 4.8.\n"
-        "Python installation is not required. No administrator launch is needed.\n"
-        "Settings/history use %LOCALAPPDATA%\\NamiSync.\n"
-        "For an isolated debug profile: namisync-gui.exe --data-dir C:\\absolute\\new-profile\n"
-        "Keep test source/target folders separate from valuable data. Review the plan before Execute.\n"
-        "Close the app before replacing its folder. Deleting this folder does not delete application data.\n"
-        "namisync.exe is the command-line entry point; run --help for usage.\n",
-        encoding="utf-8",
-    )
+    for name in ("START-HERE.txt", "BUILDING.txt"):
+        shutil.copyfile(source / "tools/packaging" / name, bundle / name)
+    write_notices(source, bundle)
     run(str(bundle / "namisync.exe"), "--help", cwd=output)
     frozen = subprocess.check_output([sys.executable, "-m", "pip", "freeze", "--all"], cwd=output).decode()
     (output / "build-environment.txt").write_text(frozen, encoding="utf-8")

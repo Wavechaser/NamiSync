@@ -19,6 +19,11 @@ for shim, name, console in (
         hiddenimports=["webview.platforms.winforms", "webview.platforms.edgechromium"],
         excludes=["PyQt5", "PyQt6", "PySide2", "PySide6", "webview.platforms.cef"],
     )
+    # Windows 11 supplies UCRT and resolves these API sets through its loader.
+    # Never redistribute an ambient PATH copy (or a serviced System32 copy).
+    analysis.binaries = [entry for entry in analysis.binaries
+        if Path(entry[0]).name.lower() != "ucrtbase.dll"
+        and not Path(entry[0]).name.lower().startswith(("api-ms-win-core-", "api-ms-win-crt-"))]
     archive = PYZ(analysis.pure)
     executables.append(EXE(
         archive, analysis.scripts, [], exclude_binaries=True,

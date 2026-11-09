@@ -1,62 +1,64 @@
-# Latest session — table driver repair and projection tuning, 2026-11-09
+# Latest session — M1-R2 distribution closure, 2026-11-09
 
-## Delivered changes
+## Delivered outcome
 
-Branch `milestone1`. `c4fb6340` fixes the optional table-loading driver and
-its two pre-existing test failures: observe `native.response` after direct
-settlement without restoring a clone. Installed verification also exposed a
-pre-input Inventory setup race. The driver now waits for authoritative highlight
-adoption before the timed ArrowUp; target, geometry and landing checks remain.
+Branch `milestone1`, starting at `bde18995`. R2 completes the portable
+distribution inputs and guidance; it does not freeze or distribute the R4/R5
+candidate. R3's existing disposition remains unchanged.
 
-The subsequent Plan change computes basenames and sort keys once, shares equal
-immutable display/key strings and reuses keys for member rows. It changes no
-public fields, frozen constructor, exact paths, raw Unicode sorting or selection.
-No global cache or interning is introduced.
-
-## Measurements and decisions
-
-The existing component producer ran three alternating fresh-child pairs per
-metric against baseline/sharing 303-file snapshots on CPython 3.13.17:
-
-- Construction-overlap incremental peak private bytes: baseline 309.01–309.61
-  MiB; sharing 292.62–295.76 MiB. Every pair improved, by 13.84–16.39 MiB.
-- Cold base: 2,190–2,263 versus 2,128–2,226 ms. Heavy: 3,124–3,329 versus
-  3,097–3,384 ms. Mixed paired changes and overlapping ranges; no stable speed
-  claim. Both base arms exceed the historical 2,000 ms reference budget under
-  this observation context. This is not renewed R3 acceptance.
-- A separate ignored direct-slot constructor trial saved 130–383 ms in three
-  base pairs, with substantial drift in both arms. It remains unshipped: a
-  second explicit 35-field initialization mapping adds maintenance beyond the
-  small string-sharing change. Keep it as a future lever.
-- Full 35-field fingerprints match baseline/sharing/trial over all 120k base
-  and 240k heavy nodes. Sampled process-memory savings are not decomposed from
-  shallow string bytes or allocator effects.
-
-[PERFORMANCE](PERFORMANCE.md#plan-string-sharing-diagnostics--2026-11-09)
-contains the method, ranges and limitations. Sparse records and combined
-builders remain excluded. Historical budgets are unchanged.
+- Build ships START-HERE, BUILDING, GPL and THIRD-PARTY-NOTICES: twenty existing
+  About records plus 31 pinned supplements. Preserve attribution notes, exact
+  upstream texts, source directions and byte-preserving Git attributes.
+- Cover Python's compiled/native dependencies, PyInstaller's bootloader and its
+  separate zlib, setuptools' vendored/configuration code and MPL source access.
+  Independent review additionally followed 19 Python Windows projects, 290
+  direct references, 790 resolved source/header paths and 45 bootloader files.
+- Trace 43 stray DLLs (29 core API sets, 13 CRT API sets, ucrtbase) to the
+  freezer's ambient PATH lookup into Codex's libheif directory. Constrain its
+  PATH, omit Windows 11's system UCRT/API sets, retain Python's VC runtime and
+  verify collected native origins/hashes. CI now retains origins and raw TOCs.
+- Existing dependency versions, app behavior and measured artifacts remain
+  unchanged. The external Microsoft binary-terms agreement is explicitly an R5
+  handoff prerequisite; notice inclusion is not agreement or redistribution
+  clearance.
 
 ## Verification and evidence
 
-- Driver: 45 focused tests; final tools department 427 passed, three existing
-  symlink-privilege skips. Fixture checks passed. Final installed Plan/Inventory
-  each completed 16 gestures, 41/42 requests; all assets restored by hash.
-  All 303 installed package files verified. `build/table-driver-fix-20261109/`
-  retains receipts, identities, failed attempts and exact setup-race trace.
-- Projection: 105 focused projection/review tests passed; baseline negative control
-  fails the three intended sharing assertions while both nonsharing cases pass.
-  Final workflow/interface verification passed 3,257 tests, with 3,281
-  deselected. Logs, JUnit and source identity receipts are under
-  `build/projection-tuning-20261109/`.
-- Independent reviewers inspected source, metrics, fixture provenance and
-  driver asset restoration. Documentation links and diff checks accompany the
-  final commit. No budget, safety or timing assertion was weakened.
+`build/m1-r2-20261109/attempt-04/` is the final diagnostic portable build from
+isolated `checkout-05`, with canonical source bytes checked against the integration
+inputs. The source archive has 350 files. Its census reconciles all 436 bundle/ZIP
+files, 133 native origins, 773 distinct module/embedded/bootstrap input triples
+and 51 notice records. No ambient/UCRT remnants or unknown owner remains.
+The 43 removed PE paths are exactly the historical stray population; retained
+non-executable native bytes match the earlier build.
+
+- Tools department: 449 passed, three existing symlink-privilege skips. Final
+  notice-focused verification: 16 passed. No assertion or gate weakened.
+- Actual console help and PE architecture/subsystems pass. Fresh extraction
+  outside the checkout, system-only PATH and medium integrity: UI reaches Ready,
+  Settings/About displays 0.1.0 and twenty app notices, startup logs agree, normal
+  close exits 0 with no Job members remaining before cleanup.
+- Independent review checks the actual ZIP, source/notice hashes, compiled
+  dependencies, licensing text provenance and final diff. TOOLS owns the summary;
+  raw build/census/smoke receipts and source-match evidence live in the task folder.
+  Downloaded originals and notice-focused receipts live in
+  `build/r2-notices-20261109/`.
+- Changed-source whitespace checks pass excluding the verbatim upstream notice
+  texts. The full staged check reports inherited CRLF/trailing-space/blank-EOF
+  bytes in those texts; preserve them to retain the reviewed upstream hashes.
+  `upstream-whitespace.log` records that intentional exception.
+
+Earlier attempts remain as evidence: sandbox environment/temp setup failures;
+superseded notice builds; smoke probes that looked for detached About before
+opening Settings; and a diagnostic snapshot with checkout rather than canonical
+Git line endings. Each was corrected and reverified. No product startup failure
+was found. R4 must still assess its exact release candidate and applicable gates.
 
 ## Operational context
 
-No measuring-session process, profile or corpus was touched. Driver native
-hosts/children exited under existing Job cleanup; pywebview's directory-cleanup
-sharing warnings remain in evidence, without claiming natural empty browser
-jobs. Ignored snapshots and diagnostic evidence are retained. The previous
-17.9 MiB path attribution was corrected in `5081cc17`: that bucket contains
-existing node IDs, not newly retained folder paths.
+No measuring-session process, profile, corpus or package was changed. Owned
+native probes exited, with bounded Job cleanup. Ignored diagnostic checkouts,
+their local Git identities, locked environment, Temp extractions and raw evidence
+are retained for provenance; none is a branch or commit to merge. No release,
+tag, upload or external delivery occurred. The next release work is R4, then
+R5's concrete candidate review and agreed tester handoff.

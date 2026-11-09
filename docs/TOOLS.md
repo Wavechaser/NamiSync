@@ -70,8 +70,8 @@ interactive Windows 11 acceptance. It has read-only repository permissions and
 does not publish releases. After the first release, extend the same validated
 build path to a manually approved draft-release job; final native evidence and
 artifact identity must still be accounted before publication. Exact dependency
-versions and download hashes are pinned here; the final distribution-wide
-license/source bundle remains release closure work. CI fetches full history for
+versions and download hashes are pinned here; distribution notices and source
+directions are included in each build. CI fetches full history for
 ordinary tests because custody validators consult historical Git objects. Its
 Actions are pinned by commit, with exact Python/Node versions. The current
 checkout v7.0.1, setup-python/setup-node v7.1.0 and upload-artifact v7.0.2
@@ -89,10 +89,12 @@ prerequisites, checksum/unsigned-warning handling, first use, profile retention,
 upgrade and feedback instructions. [`BUILDING.txt`](../tools/packaging/BUILDING.txt)
 prepares matching-source and clean-commit build directions, including the
 distinction between a repository commit and an extracted source ZIP without Git
-history. These are reviewed preparation inputs, not yet consumed by `build.py`;
-its generated development guide remains unchanged. Integrate them with the
-complete notice corpus after native inputs are settled. No accepted release or
-download location is implied.
+history. `build.py` ships both guides, the GPL, and `THIRD-PARTY-NOTICES.txt`.
+The notice exporter reads the existing twenty About records and the pinned
+supplements under `tools/packaging/notices/`; its README describes text provenance
+and maintenance. Build-time export is offline and verifies the supplement hashes.
+The source archive includes these inputs and their byte-preserving Git attributes.
+No accepted release or download location is implied.
 
 The 2026-11-05 census verifies all 477 files of retained local `build-d` against
 both its freezer collection table and bundle manifest at `b3095886`, plus the
@@ -105,22 +107,48 @@ origin tables were not uploaded, so local origins cannot be attributed to it.
 
 | Population | Existing coverage and remaining preparation |
 | --- | --- |
-| NamiSync, direct/transitive runtime packages, embedded web assets, WebView2 SDK and .NET compatibility assemblies | Existing GPL and twenty About records retain versions, sources and full texts. Export/reconcile them into a distribution-wide notice bundle; do not infer that a wheel's METADATA covers embedded components. |
-| CPython 3.13.17 and its stdlib/native extensions | Add the Windows installation's license and incorporated-software notices; account for OpenSSL 3.5.9, SQLite 3.50.4, Expat 2.8.5, zlib 1.3.1, mpdecimal 4.0.0, bzip2, libffi and XZ using the selected build's sources. Preserve Microsoft binary-distribution conditions separately from NamiSync's GPL. |
-| Freezer bootstrap and implicit Python packages | Actual analyses include PyInstaller hooks, setuptools 83.0.0 and packaging 26.2. Setuptools also brings vendored backports.tarfile, jaraco packages, more-itertools, packaging, tomli and wheel. Review their actual included versions and notice texts, not just top-level runtime requirements. PyInstaller's bootloader exception and file-specific licenses remain relevant. |
-| Native files outside the Python installation/locked environment | Local collection includes 42 API-set DLLs and `ucrtbase.dll` from an ambient Codex runtime's libheif directory. PyInstaller's Windows dependency resolver falls back to PATH. Their recorded hashes identify bytes but do not establish distribution provenance. Resolve the input policy and rerun the resulting artifact checks before candidate distribution. |
-| Corresponding source and build evidence | Pair source/executable archives and checksums with their identities; preserve source/build directions and upstream attributions. Retain native origin tables for future local and hosted candidates. Whole-ZIP equality remains unclaimed. |
+| NamiSync, direct/transitive runtime packages, embedded web assets, WebView2 SDK and .NET compatibility assemblies | Ship the GPL and export all twenty existing About records with versions, sources and full texts. Wheel METADATA alone does not cover embedded components. |
+| CPython 3.13.17 and its stdlib/native extensions | Ship the Windows installation's license and incorporated-software notices, with exact native dependency supplements. Preserve Microsoft binary-distribution conditions separately from NamiSync's GPL. |
+| Freezer bootstrap and implicit Python packages | Include PyInstaller's bootloader exception and file-specific terms, setuptools 83.0.0 and its included vendored packages and copied configuration/validation code, plus packaging 26.2. BUILDING identifies the exact MPL-covered source in the pinned setuptools wheel. |
+| Native files outside the Python installation/locked environment | Freezer PATH contains only the selected environment, Python and Windows directories. Exclude Windows-provided UCRT/API-set DLLs for the Windows 11 target. Refuse collected BINARY/EXTENSION origins outside the environment/Python roots or bytes differing from those origins. Python's VC runtime DLLs remain bundled. |
+| Corresponding source and build evidence | Pair source/executable archives and checksums with their identities and source/build directions. `native-origins.json` binds collected native inputs to hashes; `freezer-tables/` retains both analyses, bootloader and collection tables locally and in CI. Whole-ZIP equality remains unclaimed. |
 
-The native-origin finding is about build inputs, not evidence that the measured
-package lost data or violated a sync guarantee. Do not silently replace that
-package. A correction that changes loaded native runtime bytes requires
-dependency-scoped reassessment of installed/resource evidence before R4.
-M1_PLAN owns the remaining R2 gate and release decisions.
+The historical ambient population was 29 core API sets, 13 CRT API sets and
+`ucrtbase.dll` (2,352,200 bytes). The locked freezer's resolver searches PATH and
+its inclusion policy retains that family for older Windows. Windows 11 resolves
+API sets through its loader and always uses the system UCRT. Removing those
+copies does not justify renewing resource evidence: R4 still assesses its exact
+candidate and dependency changes. Existing measured packages remain untouched.
+M1_PLAN owns the R2 gate and release decisions.
 Upstream references: [CPython 3.13.17 incorporated-software notices](https://github.com/python/cpython/blob/v3.13.17/Doc/license.rst),
 [its Windows external dependency inputs](https://github.com/python/cpython/blob/v3.13.17/PCbuild/get_externals.bat),
 [PyInstaller licensing](https://pyinstaller.org/en/stable/license.html) and
-[Microsoft redistribution guidance](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170).
-Final text selection must follow the actual distributed versions and provenance.
+[Microsoft redistribution guidance](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170),
+[system UCRT deployment](https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment?view=msvc-170)
+and [Windows API sets](https://learn.microsoft.com/en-us/windows/win32/apiindex/windows-apisets).
+Text selection follows the actual distributed versions and provenance; the full
+Python notices may also describe optional Python components absent from this bundle.
+
+R2 validation (2026-11-09) uses the final isolated clean diagnostic snapshot and
+`build/m1-r2-20261109/attempt-04/`, not a frozen release candidate. Its census
+reconciles all 436 ZIP/bundle files, 133 native origin records and 773 distinct
+module/embedded/bootstrap input triples against the collection tables, source
+archive and notice records. The 51 records comprise twenty existing About texts
+and 31 supplements. Independent source review additionally followed the selected
+Python Windows projects (19 projects, 290 direct references, 790 resolved source/
+include paths) and 45 bootloader C/header files. This found the distinct bootloader
+zlib, HACL/KaRaMeL and wrapper notices that aggregate package licenses omit.
+The pinned source/header evidence lives beside the census and in
+`build/r2-notices-20261109/`. These are finite coverage observations, not a claim
+about arbitrary future dependency builds.
+
+The tools department passed 449 tests with three existing Windows privilege
+skips; the final notice-focused cases passed 16 tests. A fresh extraction outside
+the checkout runs with system-only PATH, reaches Ready under medium integrity,
+shows About 0.1.0 and twenty app notices, and closes with exit 0 and no remaining
+Job members. Full candidate/resource gates remain R4. Before external delivery,
+R5 records the agreement required by the reproduced Microsoft binary conditions;
+including those texts alone does not satisfy that agreement.
 
 ## Icon maintenance
 
