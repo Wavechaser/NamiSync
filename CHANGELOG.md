@@ -25,6 +25,16 @@ provenance and comparison limits in [PERFORMANCE.md](docs/PERFORMANCE.md).
 Observed speed is diagnostic; component acceptance and safety remain with their
 owning contracts.
 
+#### Measure current-source BR-G-42 timing (2026-11-09)
+
+- Run the bridge-event, Plan, execution-UI and History release diagnostics on
+  `ddf1afe9`. All observations stay within the historical budgets; acceptance
+  remains open. The bridge-event memory limb is invalid under ordinary desktop
+  load because its thread snapshot walks every system thread, and its runtime
+  reference still names CPython 3.13.14.
+- Realign the optional execution-UI driver with current task identity, status
+  lines and typed control replies; 9 of 13 cases had been failing.
+
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 
 - Keep compatible overlapping Plan and Inventory rows attached during window

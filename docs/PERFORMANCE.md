@@ -3039,6 +3039,56 @@ carry the source and profile bindings and raw sample membership. The P2
 the earlier 6.8/7.3 ms window and 58.8/65.1 ms start p95/max observations.
 Do not combine maxima and p95 across endpoints into one score.
 
+### Current-source BR-G-42 diagnostics — 2026-11-09
+
+These diagnostic runs, on clean `ddf1afe9`, check today's checkout against the
+historical budgets above. They are not acceptance: one child per case, no
+predeclared collection and a changed runtime. The machine matches the reference
+hardware, OS and AC-power profile with CPython 3.13.17 and SQLite 3.50.4. For
+the event runs, Telegram and stray `node_repl` processes were closed; the
+desktop otherwise ran ordinary applications (about 390 processes / 7,700 threads).
+
+| Family / case | Statistic | Observation | Historical limit |
+| --- | --- | ---: | ---: |
+| Bridge event, reliable/terminal (runs 5–6, 620 each) | p95 / max ms | 13–18 / 38–41 | 100 / 250 |
+| Bridge event, progress (1,472–1,486 each) | p95 / max ms | 43–46 / 52–61 | 1,000 / 2,000 |
+| Plan cold base, 120,000 rows | single cold ms | 1,856.0 | 2,000 max |
+| Plan cold information-heavy, 240,000 rows | single cold ms | 2,571.4 | 4,000 max |
+| Plan unchanged windows (7 cases) | p95 ms, 6 warm | 1.3–2.4 | 250 / 500 |
+| Plan retained construction overlap | bytes | 323,158,016 | 335,544,320 |
+| Execution UI cold click feedback (8 cases) | single cold ms | 3.0–19.3 | 50 max |
+| Execution UI warm receipts (5 cases) | p95 ms, 6 warm | 2.0–51.3 | 100 / 250 |
+| History release, 50-run summary / 256-row pages | s; p95 / max ms | 1.74; 20.1–20.4 / 21.3–21.5 | 3; 500 / 1,000 |
+
+Every bridge-event run kept order and monotonic progress with no Gap, but the
+report remains `incomplete`. Its job-memory limb requires memory samples no more
+than 0.1 s apart. Once a second the same sampling loop takes a resource snapshot
+whose thread count walks every system thread. That walk took about 88 ms with
+15,175 system threads (runs 1–4, 45–56 late samples each) and about 43 ms with
+7,700 (runs 5–6, maxima 0.119/0.117 s). Its validity therefore depends on
+unrelated desktop load. `runtime_profile_match` is also false because the
+harness reference still names CPython 3.13.14; the 2026-10-30 Inventory renewal
+already recorded 3.13.17 under DEFENSE §7.
+
+Plan warm changed-view windows took 350–740 ms p95; they have no recorded
+budget. Retained construction memory (308.2 MiB) grew from 267.8 MiB at
+`3c3bbbc`, leaving 11.8 MiB headroom. Cold base leaves 0.14 s. Both are single
+samples, so neither establishes a pass nor a regression.
+
+The first execution-UI run failed 9 of 13 cases on three driver defects, all
+corrected in `8d599511`: stale task identity since `41afd262`, exact status
+matching since `2dcdc05f`, and a parent check that compared the page's typed
+control reply with the contract's bare verdict. Unchanged cases were retained;
+cases touching corrected code were rerun. The History release case applied its
+gates and stayed `audit=OK`: 3,919 window transactions, 262 ms maximum
+commit, at most 256 pending events and 109,568 pending bytes.
+
+Evidence, including failed attempts, the wheel (SHA-256 `CDC9E4B7…68`) and
+its installation, is in `build/bridge-timing-20261109/`. Acceptance under R3
+still needs a harness whose memory limb does not depend on system thread count
+(or a quiescence profile that bounds it), a runtime-profile decision and
+predeclared five-child cold collections.
+
 ## Selected Plan and execution UI observations
 
 Run an optional case through `python -m tools performance --list`, then

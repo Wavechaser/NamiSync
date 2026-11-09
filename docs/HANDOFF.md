@@ -1,63 +1,48 @@
-# Latest session — DOM work and bridge costs, 2026-11-09
+# Latest session — current-source BR-G-42 timing, 2026-11-09
 
 ## Delivered change
 
-Base `fb448fac`, branch `milestone1`. Four product files change: `app.js`,
-`plan_review.js`, `tree.js` and `table_controller.js`. Compatible overlapping
-rows remain attached; Plan retains spacers and preserves scroll during structural
-publication. Passive Follow caches height and rechecks a pending landing in the
-existing geometry frame, respecting newer navigation. Read-only ticks skip an
-unchanged prepaint; accepted reads and new progress still paint promptly.
-Duplicate synchronous execution-pane paints are removed. Keep the existing
-250/500 ms cadence, 25 ms collection, ACK custody and GC policy.
+Base `ddf1afe9`, branch `milestone1`. No product change. `8d599511` realigns
+the optional `tools performance execution-ui` driver: start settlement now uses
+`plan_request_id` (changed by `41afd262`), control successors match the leading
+status message (changed by `2dcdc05f`), and the parent accepts the page's exact
+typed control reply. Tests feed the real shapes and fail on the old driver.
 
 ## Verification
 
-- 2,289 interface cases pass; all six affected installed journeys pass, including
-  both sizes for execution review and task shell. The frontend/API-floor checks
-  and focused negative controls pass. Final product bytes match native wheel
-  staging and the complete 303-file measurement freeze.
-- Two initial-candidate findings were corrected: stale positive/zero geometry
-  before resize observation, and temporary list shrinkage resetting Plan scroll.
-  The latter explains all four initial execution/task-shell native failures.
-  Original native assertions remain unchanged. An independent actual-window
-  resize witness now matches baseline coverage without an extra read.
-- Sandbox setup/attachment and one diagnostic selector failure are retained,
-  along with initial product failures, under `build/dom-costs-20261109/builder/`
-  and `review/`. Source/functional and measurement reviews are independent.
+- `tests/interfaces/web/test_m1_8_execution_ui_scale.py`: 46 pass; 3 fail with
+  the driver change removed.
+- Ordinary suite: 6,489 pass, 4 skipped. Two pre-existing failures are
+  unrelated: `tests/test_table_loading_performance.py` reports
+  "table-loading instrumentation anchor drifted" with and without this change.
+  The optional table-loading driver's anchor no longer matches current
+  `bridge.js`; it was not investigated or fixed.
 
-## Measurements and next discussion
+## Measurements
 
-[PERFORMANCE](PERFORMANCE.md#dom-mutation-and-bridge-follow-up--2026-11-09)
-owns the methods, tables, attribution limits and source/evidence pointers.
-All twelve diagnostic runs passed exact source/data audits and closed normally
-with empty Jobs. The user reported activity before 11:47 Asia/Shanghai, so four
-pre-idle Plan runs are excluded. Two fresh opposite-order quiet Plan pairs
-reverse the apparent gain; no stable CPU/speed improvement or regression is
-established. Inventory time/combined renderer CPU is effectively unchanged;
-sampled renderer peaks fall about 6–9% in its one pair. Fewer DOM mutations are
-verified separately from aggregate resource claims.
+[PERFORMANCE](PERFORMANCE.md#current-source-br-g-42-diagnostics--2026-11-09)
+owns the table and limits. In summary, bridge-event latencies, Plan, 13
+execution-UI cases and History release are all within the historical budgets.
+Bridge-event stays `incomplete`: its memory-sampler limb (0.1 s blind interval)
+fails because a once-a-second thread snapshot walks all system threads (about
+43 ms at 7,700 threads, 88 ms at 15,000). The harness reference still names
+CPython 3.13.14. Plan retained memory has 11.8 MiB headroom on a single sample.
 
-The separate post-DOM 25/200 ms collection pair reduces bridge threads
-7,052 → 1,758 and execution host CPU 80.34 → 69.81 seconds, but elapsed time only
-113.45 → 112.18 seconds. Renderer and worker CPU barely change. Ordinary ACK
-call-thread CPU is 1.45 seconds at 25 ms and 0.25 seconds at 200 ms; drain and
-window payload work dominate the remaining measured bridge-body CPU. These
-whole-lifetime thread figures exclude caller-side creation and are not predicted
-removable savings: custody cleanup must still execute.
+## Next decisions
 
-Collection remains a CPU/resource tradeoff with extra clean-result latency.
-If ACK reduction is pursued, the narrow candidate is a validated drain receipt
-piggybacked on the next pull, cleaned before successor admission, with standalone
-cleanup for terminal/no-successor/error/uncertain delivery. It needs explicit
-custody/ingress review and tests, not deletion of ACK calls. Neither change is
-implemented or approved. Slower local painting and frontend pulling are deferred.
-Verification pipelining and durable/small-file batching remain outside this work.
+- R3 acceptance needs: a bridge-event harness whose memory limb is independent
+  of system thread count (or a bounding quiescence profile), a runtime-profile
+  decision for 3.13.17 and predeclared five-child cold collections.
+- The table-loading driver anchor drift is a separate optional-tool repair.
+- Cleanup of F:, H:\test_dir and `build\` was inventoried earlier this session
+  and awaits the user's decision; this session adds
+  `build/bridge-timing-20261109/` (wheel, `site/` install, reports, raw logs).
 
 ## Operational context
 
-No task-owned native process remains. Only owned profiles, targets and evidence
-were used; measuring-session resources were not touched. Ignored evidence and
-fixtures under `build/dom-costs-20261109/` are deliberately retained. No new
-branch/worktree was created, and the older cadence recovery reference is untouched.
-No further product/test edits are pending for this checkpoint.
+No task-owned native process remains. Evidence, including failed attempts
+(`*.attempt1`, `*.attempt2`), is retained under `build/bridge-timing-20261109/`.
+The timing runs created no new roots on F: or H:. Six
+`%TEMP%\NamiSync-cadence-*` directories (2026-11-08 23:34 – 2026-11-09 00:33,
+about 12,800 files) predate this session's runs and belong to another session;
+they are cleanup candidates.
