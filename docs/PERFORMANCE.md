@@ -10,6 +10,46 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## R4 candidate resource schedule on `1f632b13` — 2026-11-10
+
+**Artifact.** `build/m1-r4-20261109/package/NamiSync-windows-x64-dev.zip`,
+SHA-256 `58429fa854c3161cd5e43bffeaedda05fc6373541430ece369009af40547478f`,
+built by that folder's `build_package.ps1` (same hash-locked recipe and offline
+downloads as R2) from clean `1f632b13`. The collector, corpus, host and frozen
+17-run schedule are those of the [`733f0cb1` study](#full-resource-schedule-on-733f0cb1--2026-110708).
+The runs took about 4.4 hours (00:32–04:55 local) with the machine otherwise
+quiet. All 17 runs completed (`soak.log` ends `exit 0`). All 306 mirror checks
+matched, and every app exited 0 with no remaining processes, unlike the
+overnight slow closes on `733f0cb1`. `soak-validation.json` reports
+FAIL; as before, that verdict is informational and the user judges SH-G-15.
+
+| Profile (runs) | Peak, whole app | Settled after close | `733f0cb1` peak / settled |
+| --- | ---: | ---: | ---: |
+| Startup (3 plain, 3 DevTools) | 338–343 MiB | 334–338 MiB (plain) | 341–354 / 335–350 |
+| 10,000 × 32 B (3) | 964–1,111 MiB | 501–558 MiB | 1,101–1,224 / 527–540 |
+| 100,000 × 32 B (3) | 2,316–2,404 MiB | 719–726 MiB | 3,298–3,674 / 689–793 |
+| Payload (1) | 440 MiB | 418 MiB | 428 / 404 |
+| Soak, 100 cycles (3) | 607–618 MiB | 458–552 MiB per cycle | 605–620 / 510–536 |
+| 10k task open, idle 60 min (1) | 995 MiB | 536 MiB | 1,086 / 522 |
+
+Startup idle CPU was 0.13–0.40%; DevTools added 2.8 MiB settled. Against the
+historical yardsticks, startup, closed memory, payload, the 10k profiles and
+the open-task idle (+0.015 MiB/10 min) are inside. The validator's FAILs are two:
+
+- **100k execution peak**: 2.32–2.40 GiB exceeds the 2 GiB yardstick but is about 1 GiB
+  below `733f0cb1`, consistent with the Plan Follow and DOM reconciliation
+  work since then. 10k peaks also fell (964–1,111 versus 1,101–1,224 MiB).
+- **Soak slope**: whole-app post-close slopes over cycles 21–100 are +0.35,
+  +0.28 and +0.31 MiB/cycle (yardstick 0.2); soak-01's first/last shift is
+  26.6 MiB against 20. By role the renderer contributes +0.20–0.22 MiB/cycle,
+  matching `733f0cb1`'s +0.19–0.20; host +0.03–0.07, GPU +0.03–0.08, others
+  flat. Handle slopes are +0.9, −1.1 and −2.5 per cycle; GUI objects move
+  by at most one. The renderer trend is unchanged; the whole-app difference
+  comes from GPU/host variance, not a new growth source.
+
+Raw samples, events, fixtures and per-run results live under `soak/`; the
+validator report is `soak-validation.json`.
+
 ## DOM mutation and bridge follow-up — 2026-11-09
 
 The follow-up to `fb448fac` isolates DOM reconciliation, viewport measurement

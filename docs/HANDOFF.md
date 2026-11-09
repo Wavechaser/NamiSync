@@ -1,64 +1,55 @@
-# Latest session — M1-R2 distribution closure, 2026-11-09
+# Latest session — M1-R4 candidate run, 2026-11-09/10
 
-## Delivered outcome
+## Outcome
 
-Branch `milestone1`, starting at `bde18995`. R2 completes the portable
-distribution inputs and guidance; it does not freeze or distribute the R4/R5
-candidate. R3's existing disposition remains unchanged.
+Branch `milestone1` at `1f632b13`. R4 ran in full on a clean candidate and
+remains **open**. One intermittent headed-test failure blocks BR-G-44, and the
+SH-G-15 judgment belongs to the user. No product source changed this session.
+M1_PLAN ("R4 candidate run") records the decision state;
+PERFORMANCE records the resource numbers.
 
-- Build ships START-HERE, BUILDING, GPL and THIRD-PARTY-NOTICES: twenty existing
-  About records plus 31 pinned supplements. Preserve attribution notes, exact
-  upstream texts, source directions and byte-preserving Git attributes.
-- Cover Python's compiled/native dependencies, PyInstaller's bootloader and its
-  separate zlib, setuptools' vendored/configuration code and MPL source access.
-  Independent review additionally followed 19 Python Windows projects, 290
-  direct references, 790 resolved source/header paths and 45 bootloader files.
-- Trace 43 stray DLLs (29 core API sets, 13 CRT API sets, ucrtbase) to the
-  freezer's ambient PATH lookup into Codex's libheif directory. Constrain its
-  PATH, omit Windows 11's system UCRT/API sets, retain Python's VC runtime and
-  verify collected native origins/hashes. CI now retains origins and raw TOCs.
-- Existing dependency versions, app behavior and measured artifacts remain
-  unchanged. The external Microsoft binary-terms agreement is explicitly an R5
-  handoff prerequisite; notice inclusion is not agreement or redistribution
-  clearance.
+- **Candidate:** `build/m1-r4-20261109/package/` was built from clean `1f632b13`
+  with the locked R2 recipe (`build_package.ps1`, `build.log` exit 0). Portable
+  ZIP SHA-256 `58429fa854c3161cd5e43bffeaedda05fc6373541430ece369009af40547478f`;
+  `SHA256SUMS.txt` and the identity/origin JSONs sit beside it.
+- **Release command:** `release/`, from `run_release.ps1`. 1 failed, 6,555
+  passed, 4 privilege-capability skips (symlink/reparse, WinError 1314).
+  lint-imports and diff check pass; the tree was clean before and after. All
+  546 BR-G and 81 SH-G cases pass. Per-case results are in `release/cases.txt`.
+- **Blocking failure:** `test_task_shell_headed[larger]`, `focusPreserved`
+  False. A focused live Pause button drops focus to `body` during automatic
+  Follow. Isolated reruns at HEAD fail in every attempt
+  (`release/rerun-task-shell-*.log`). Worktree reruns (`bisect/summary.txt`)
+  place the onset at `ea0daac2`; `b3095886` passed 8 of 8, and the commits
+  between them are docs only. The suspected route is the deferred execution
+  paint (renderTasks/queuePlanFollow) re-rendering an ancestor; this is not yet
+  pinned. Bisect worktrees are removed; logs remain.
+- **DESKTOP_UI mapping:** `ui_map.ps1` maps every criterion to passing cases;
+  the only gap is this failure.
+- **Portable witness:** `witness.py` drives Ready, About (0.1.0, 20 notices),
+  reviewed copy, exact mirror, Integrity inventory, Baseline, Verify and
+  close. It runs from Temp at medium integrity on a system-only PATH.
+  `witness-07/receipt.json` passed. Attempts 01–06 failed on driver races and
+  are retained.
+- **SH-G-15:** `soak/`, `soak.log`, `soak-validation.json`. All 17 runs
+  completed with exact mirrors and exit 0. The validator's FAILs are the 100k
+  peak (2.32–2.40 GiB, about 1 GiB below `733f0cb1`) and the soak whole-app
+  slope (+0.28–0.35 MiB/cycle). The renderer share, +0.20–0.22, is unchanged
+  from the prior study.
 
-## Verification and evidence
+## Next
 
-`build/m1-r2-20261109/attempt-04/` is the final diagnostic portable build from
-isolated `checkout-05`, with canonical source bytes checked against the integration
-inputs. The source archive has 350 files. Its census reconciles all 436 bundle/ZIP
-files, 133 native origins, 773 distinct module/embedded/bootstrap input triples
-and 51 notice records. No ambient/UCRT remnants or unknown owner remains.
-The 43 removed PE paths are exactly the historical stray population; retained
-non-executable native bytes match the earlier build.
-
-- Tools department: 449 passed, three existing symlink-privilege skips. Final
-  notice-focused verification: 16 passed. No assertion or gate weakened.
-- Actual console help and PE architecture/subsystems pass. Fresh extraction
-  outside the checkout, system-only PATH and medium integrity: UI reaches Ready,
-  Settings/About displays 0.1.0 and twenty app notices, startup logs agree, normal
-  close exits 0 with no Job members remaining before cleanup.
-- Independent review checks the actual ZIP, source/notice hashes, compiled
-  dependencies, licensing text provenance and final diff. TOOLS owns the summary;
-  raw build/census/smoke receipts and source-match evidence live in the task folder.
-  Downloaded originals and notice-focused receipts live in
-  `build/r2-notices-20261109/`.
-- Changed-source whitespace checks pass excluding the verbatim upstream notice
-  texts. The full staged check reports inherited CRLF/trailing-space/blank-EOF
-  bytes in those texts; preserve them to retain the reviewed upstream hashes.
-  `upstream-whitespace.log` records that intentional exception.
-
-Earlier attempts remain as evidence: sandbox environment/temp setup failures;
-superseded notice builds; smoke probes that looked for detached About before
-opening Settings; and a diagnostic snapshot with checkout rather than canonical
-Git line endings. Each was corrected and reverified. No product startup failure
-was found. R4 must still assess its exact release candidate and applicable gates.
+1. The user decides on a fix for the focus regression. Any product fix
+   invalidates the candidate's release, witness and SH-G-15 evidence. A new
+   clean candidate then needs a rebuild, the release command, a `witness.py`
+   rerun and the 17-run schedule (about 4.5 h).
+2. The user judges SH-G-15 on the measured behavior.
+3. R4 closes with one reviewed commit once BR-G-44 passes; R5 follows.
 
 ## Operational context
 
-No measuring-session process, profile, corpus or package was changed. Owned
-native probes exited, with bounded Job cleanup. Ignored diagnostic checkouts,
-their local Git identities, locked environment, Temp extractions and raw evidence
-are retained for provenance; none is a branch or commit to merge. No release,
-tag, upload or external delivery occurred. The next release work is R4, then
-R5's concrete candidate review and agreed tester handoff.
+Evidence is under the git-ignored `build/m1-r4-20261109/`. The
+resource and witness fixtures are registered collector-owned roots under `F:\` and
+`H:\test_dir\`. They remain on disk, and `resources cleanup --out <dir>`
+removes them on request. The corpus and `H:\test_dir\source`/`target` were
+not touched. No push, tag, release or upload.

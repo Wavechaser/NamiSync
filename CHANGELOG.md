@@ -591,7 +591,7 @@ explicit, reviewable and regression-backed.
 - Reconcile the accumulated handoff into current resumption context and account
   for task-owned fixture cleanup while retaining evidence.
 
-#### Build the portable M1 debug package (2026-11-04 – 2026-11-09)
+#### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
 - Activate M1-Release for a small tester group receiving a portable Windows x64
   app; retain existing per-user data placement and GUI/console entry points.
@@ -619,6 +619,11 @@ explicit, reviewable and regression-backed.
   use Windows 11's system UCRT/API sets, retain Python's VC runtime and export
   native hashes/origin tables locally and through CI. Verify the actual ZIP and
   isolated standard-user About/startup/close; preserve previous measured builds.
+- Run R4 on clean candidate `1f632b13`. The portable reviewed copy/inventory/
+  verify witness passes, every DESKTOP_UI criterion maps to passing cases, and
+  the 17-run SH-G-15 schedule completes for the user's judgment. The release
+  command finds one intermittent task-shell focus regression, first seen at
+  `ea0daac2`, which blocks BR-G-44; R4 stays open.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
   release publication remains open.
