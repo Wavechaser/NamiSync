@@ -1898,3 +1898,24 @@ def test_bridge_event_benchmark_rejects_incomplete_or_untrusted_evidence(
             job_memory=corrupted_memory,
         )
         assert result["passed"] is False
+
+
+def test_bridge_event_thread_counts_read_process_records_for_named_processes() -> None:
+    import threading
+
+    benchmark = _benchmark_module()
+    release = threading.Event()
+    workers = [threading.Thread(target=release.wait) for _ in range(3)]
+    for worker in workers:
+        worker.start()
+    try:
+        own = os.getpid()
+        absent = 4_000_000_000
+        counts = benchmark._thread_counts((own, absent))
+        assert counts is not None
+        assert counts[absent] == 0
+        assert counts[own] >= threading.active_count()
+    finally:
+        release.set()
+        for worker in workers:
+            worker.join()

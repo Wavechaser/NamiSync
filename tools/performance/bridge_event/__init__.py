@@ -11,6 +11,7 @@ import platform
 import re
 import shutil
 import statistics
+import struct
 import subprocess
 import sys
 import tempfile
@@ -112,7 +113,12 @@ _PRODUCER_MAX_LATENESS_SECONDS = 0.1
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _PROCESS_VM_READ = 0x0010
 _PROCESS_COMMAND_LINE_INFORMATION = 60
-_TH32CS_SNAPTHREAD = 0x00000004
+_SYSTEM_PROCESS_INFORMATION = 5
+_STATUS_INFO_LENGTH_MISMATCH = ctypes.c_long(0xC0000004).value
+# x64 SYSTEM_PROCESS_INFORMATION: NextEntryOffset and NumberOfThreads lead;
+# UniqueProcessId follows the ImageName UNICODE_STRING and BasePriority.
+_PROCESS_ID_OFFSET = 0x50
+_process_information_buffer = ctypes.create_string_buffer(1 << 20)
 _RESOURCE_SAMPLE_SECONDS = 1.0
 _RESOURCE_MAX_BLIND_INTERVAL_SECONDS = 1.25
 _REFERENCE_OS_BUILD = "26200"
@@ -176,18 +182,6 @@ class _UnicodeString(ctypes.Structure):
         ("Length", wintypes.USHORT),
         ("MaximumLength", wintypes.USHORT),
         ("Buffer", ctypes.c_void_p),
-    )
-
-
-class _ThreadEntry32(ctypes.Structure):
-    _fields_ = (
-        ("dwSize", wintypes.DWORD),
-        ("cntUsage", wintypes.DWORD),
-        ("th32ThreadID", wintypes.DWORD),
-        ("th32OwnerProcessID", wintypes.DWORD),
-        ("tpBasePri", wintypes.LONG),
-        ("tpDeltaPri", wintypes.LONG),
-        ("dwFlags", wintypes.DWORD),
     )
 
 
@@ -595,21 +589,6 @@ def _private_memory_apis():
         ctypes.POINTER(wintypes.DWORD),
     )
     kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
-    kernel32.CreateToolhelp32Snapshot.argtypes = (
-        wintypes.DWORD,
-        wintypes.DWORD,
-    )
-    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
-    kernel32.Thread32First.argtypes = (
-        wintypes.HANDLE,
-        ctypes.POINTER(_ThreadEntry32),
-    )
-    kernel32.Thread32First.restype = wintypes.BOOL
-    kernel32.Thread32Next.argtypes = (
-        wintypes.HANDLE,
-        ctypes.POINTER(_ThreadEntry32),
-    )
-    kernel32.Thread32Next.restype = wintypes.BOOL
     psapi.GetProcessMemoryInfo.argtypes = (
         wintypes.HANDLE,
         ctypes.POINTER(_ProcessMemoryCountersEx),
@@ -624,6 +603,13 @@ def _private_memory_apis():
         ctypes.POINTER(wintypes.ULONG),
     )
     ntdll.NtQueryInformationProcess.restype = wintypes.LONG
+    ntdll.NtQuerySystemInformation.argtypes = (
+        wintypes.ULONG,
+        ctypes.c_void_p,
+        wintypes.ULONG,
+        ctypes.POINTER(wintypes.ULONG),
+    )
+    ntdll.NtQuerySystemInformation.restype = wintypes.LONG
     return kernel32, psapi, ntdll
 
 
@@ -798,24 +784,42 @@ def _process_resource_snapshot(
 
 
 def _thread_counts(process_ids: tuple[int, ...]) -> dict[int, int] | None:
-    kernel32, _psapi, _ntdll = _private_memory_apis()
-    snapshot = kernel32.CreateToolhelp32Snapshot(_TH32CS_SNAPTHREAD, 0)
-    if snapshot == ctypes.c_void_p(-1).value:
+    # One kernel snapshot of process records; Python reads each process's
+    # NumberOfThreads instead of iterating every thread on the system.
+    if ctypes.sizeof(ctypes.c_void_p) != 8:
+        return None
+    _kernel32, _psapi, ntdll = _private_memory_apis()
+    global _process_information_buffer
+    buffer = _process_information_buffer
+    for _ in range(4):
+        size = len(buffer)
+        returned = wintypes.ULONG()
+        status = ntdll.NtQuerySystemInformation(
+            _SYSTEM_PROCESS_INFORMATION, buffer, size, ctypes.byref(returned),
+        )
+        if status == _STATUS_INFO_LENGTH_MISMATCH:
+            buffer = ctypes.create_string_buffer(max(size * 2, int(returned.value) + 65_536))
+            _process_information_buffer = buffer
+            continue
+        if status != 0:
+            return None
+        break
+    else:
         return None
     wanted = set(process_ids)
     counts = {process_id: 0 for process_id in process_ids}
-    try:
-        entry = _ThreadEntry32()
-        entry.dwSize = ctypes.sizeof(entry)
-        present = bool(kernel32.Thread32First(snapshot, ctypes.byref(entry)))
-        while present:
-            owner = int(entry.th32OwnerProcessID)
-            if owner in wanted:
-                counts[owner] += 1
-            entry.dwSize = ctypes.sizeof(entry)
-            present = bool(kernel32.Thread32Next(snapshot, ctypes.byref(entry)))
-    finally:
-        kernel32.CloseHandle(snapshot)
+    view = memoryview(buffer)
+    offset = 0
+    while True:
+        next_offset, thread_count = struct.unpack_from("<II", view, offset)
+        (process_id,) = struct.unpack_from("<Q", view, offset + _PROCESS_ID_OFFSET)
+        if process_id in wanted:
+            counts[process_id] = thread_count
+        if next_offset == 0:
+            break
+        offset += next_offset
+        if offset + _PROCESS_ID_OFFSET + 8 > size:
+            return None
     return counts
 
 

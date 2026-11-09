@@ -3073,6 +3073,13 @@ unrelated desktop load. `runtime_profile_match` is also false because the
 harness reference still names CPython 3.13.14; the 2026-10-30 Inventory renewal
 already recorded 3.13.17 under DEFENSE §7.
 
+The harness now reads each named process's `NumberOfThreads` from one
+`NtQuerySystemInformation(SystemProcessInformation)` snapshot, reusing its
+buffer, instead of a Toolhelp thread walk. Python visits one record per process
+(about 390) rather than every thread. Counts match the walk exactly for 42
+processes, and the snapshot takes about 7.6 ms against 44–55 ms for the walk
+at 7,700 threads. The 0.1 s blind-interval criterion is unchanged.
+
 Plan warm changed-view windows took 350–740 ms p95; they have no recorded
 budget. Retained construction memory (308.2 MiB) grew from 267.8 MiB at
 `3c3bbbc`, leaving 11.8 MiB headroom. Cold base leaves 0.14 s. Both are single
