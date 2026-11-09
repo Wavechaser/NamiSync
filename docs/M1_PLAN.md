@@ -862,12 +862,15 @@ The 2026-11-09 follow-up at `6673fc43` corrects the Plan memory attribution:
 the 17.9 MiB bucket is existing node IDs, not new folder paths. The slot-growth
 accounting remains valid but does not decompose the construction-overlap
 private-byte peak. Path sharing is not a useful reference-fixture remedy.
-The user subsequently authorized the separate optional table-loading hook
-repair first, followed by modest projection tuning within the existing public
-contract. Equal display/sort-key string sharing and private materialization are
-the bounded candidates; sparse-record redesign and combined tree/projection
-builders remain excluded. PERFORMANCE owns diagnostics; R3 collections and
-budgets remain unchanged.
+The user subsequently authorized the separate optional table-loading repair
+first (`c4fb6340`, including settled Inventory diagnostic keyboard setup), then
+modest projection tuning within the existing public contract. Equal
+display/sort-key string sharing reduces diagnostic construction-overlap peak
+private bytes in all three matched pairs. Private slot materialization was
+trialed but remains unshipped: the additional field mapping is unnecessary for
+that modest benefit, and timing estimates drifted. Sparse-record redesign and
+combined tree/projection builders remain excluded. PERFORMANCE owns the
+measurements; R3 collections and budgets remain unchanged.
 
 Preserve reviewed plans, atomic publication, durable truth, idempotency, import
 boundaries, root admission, exact command identity and per-user state placement.

@@ -785,7 +785,12 @@ criterion above and separate release, custody and settlement gates remain.
 Projection construction uses private slotted row drafts, streams warning rows,
 and releases completed tree/index intermediates before materialization. Move
 peers are assigned before final nodes are built; consumed drafts are released
-before publication. Source nodes remain stable across display sorts. Real sorts produce
+before publication. Operation-tree rows compute their basename and filename
+sort key once. Equal display/key strings share that immutable object. Member
+rows reuse the parent's filename key while retaining their own action labels.
+Raw casefold values and original path spelling are unchanged, with no intern
+table or retained cache. Source nodes remain stable across display sorts.
+Real sorts produce
 compact source-position permutations and inverse ranks, preserving exact sibling
 comparison and subtree contiguity without cloning projection nodes or identity
 maps. PlanReviewState validates structure on acquisition and

@@ -47,6 +47,10 @@ owning contracts.
   and byte-for-byte restoration. Make Inventory's diagnostic keyboard setup
   await authoritative highlight adoption before sending its timed movement;
   preserve the target, timing interval and landing assertions.
+- Compute Plan basenames and filename sort keys once, sharing equal strings
+  and member keys without changing node fields, raw Unicode sorting or paths.
+  Three matched diagnostic pairs reduce construction-overlap peak private
+  bytes by about 14–16 MiB; cold timings overlap, so no stable speed gain is claimed.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 

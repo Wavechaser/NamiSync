@@ -194,6 +194,11 @@ def test_plan_projection_preserves_groups_selection_and_move_old_path_ancestry()
     assert group.operation_count == 2
     assert group.selectable_operation_count == 2
     assert group.selected_operation_count == 1
+    assert group.filename_key is group.display
+    members = [node for node in projection.nodes if node.parent_index == group.position]
+    assert len(members) == 2
+    assert {node.display for node in members} == {"copy", "update"}
+    assert all(node.filename_key is group.filename_key for node in members)
     moved_node = projection.node_for_id(
         projection.operation_node_id_by_id[str(moved.op_id)]
     )
@@ -620,6 +625,20 @@ def test_filename_sort_uses_raw_basename_casefold_before_path_normalization() ->
         "j.txt",
         "ı.txt",
     ]
+
+
+@pytest.mark.parametrize("name", ("lowercase.txt", "MixedCase.txt", "ı.txt", "Straße.txt"))
+def test_filename_key_shares_display_only_when_casefold_is_unchanged(name: str) -> None:
+    copied = operation(
+        OperationKind.COPY, source_path=name, target_path=name,
+        source=file_stat(identity_index=8),
+    )
+    projection = build_plan_projection(REQUEST_ID, _artifact(copied))
+    node = projection.node_for_id(projection.operation_node_id_by_id[str(copied.op_id)])
+    assert node.display == name
+    assert node.filename_key == name.casefold()
+    if name == name.casefold():
+        assert node.filename_key is node.display
 
 
 def test_canonical_sort_reuses_source_nodes_and_returns_inverse_ranks() -> None:

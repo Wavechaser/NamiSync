@@ -866,12 +866,16 @@ def _append_operation_tree(
         )
         draft_index = len(drafts)
         draft_by_tree_position[node.position] = draft_index
+        display = _basename(node.rel_path)
+        filename_key = display.casefold() if node.rel_path else None
+        if filename_key == display:
+            filename_key = display
         drafts.append(
             _operation_draft(
                 node.node_id,
-                _basename(node.rel_path),
+                display,
                 node.rel_path_key,
-                _basename(node.rel_path).casefold() if node.rel_path else None,
+                filename_key,
                 node.depth + (1 if parent_override is not None else 0),
                 parent,
                 node.is_container or len(member_ids) > 1,
@@ -933,7 +937,7 @@ def _append_operation_tree(
                         _member_node_id(tree.scope_identity, operation_id),
                         operation.kind.value.replace("_", " "),
                         node.rel_path_key,
-                        _basename(node.rel_path).casefold() if node.rel_path else None,
+                        filename_key,
                         node.depth + 1 + (1 if parent_override is not None else 0),
                         draft_index,
                         False,

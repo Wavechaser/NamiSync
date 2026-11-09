@@ -3181,6 +3181,54 @@ its installation, is in `build/bridge-timing-20261109/`; the `site/` installatio
 was later removed as a regenerable environment. Acceptance under R3 still needs
 predeclared collections, including five-child cold collections.
 
+### Plan string-sharing diagnostics — 2026-11-09
+
+After the table-driver repair at `c4fb6340`, a narrow Plan candidate computes
+each operation-tree basename and casefold key once, shares equal display/key
+strings and reuses that key for member rows. Public frozen-node construction,
+all 35 fields, exact paths and raw Unicode sorting remain unchanged. A census
+found 119,996 equal-but-distinct keys / 6,139,876 shallow bytes per fixture;
+this is an allocation opportunity, not a process-memory prediction.
+
+The existing component producer and correctness validator ran in fresh bounded
+children against two 303-file package snapshots differing only in
+`workflows/plan_projection.py`. Three pairs per metric alternated arm order on
+CPython 3.13.17. No concurrent task benchmark ran. Background load and power
+state were not independently verified; these are diagnostics, not R3 acceptance
+or a new five-child cold collection. All 18 receipts satisfied the existing
+fixture checks and matched their snapshot origins and identities.
+
+| Metric | Baseline range | Sharing range | Interpretation |
+| --- | ---: | ---: | --- |
+| Cold base, 120k nodes | 2,190–2,263 ms | 2,128–2,226 ms | Overlap and mixed paired changes; no stable speed claim |
+| Cold information-heavy, 240k nodes | 3,124–3,329 ms | 3,097–3,384 ms | Overlap and mixed paired changes |
+| Incremental peak private bytes, construction overlap | 309.01–309.61 MiB | 292.62–295.76 MiB | Lower in all three pairs by 13.84–16.39 MiB |
+
+The current cold-base observations exceed the historical 2,000 ms reference
+budget in both arms and are slower than the earlier same-day diagnostics. This
+comparison neither renews acceptance nor attributes that host-time difference
+to the patch. The sampled process-memory reduction is not decomposed into
+string bytes versus allocator or temporary-object effects.
+
+A separate ignored trial bound all 35 slot setters once during materialization
+and initialized the same frozen node objects directly. Three fresh base pairs
+were sharing → trial: 2,471 → 2,089; 2,149 → 2,020; 1,882 → 1,609 ms.
+Each pair favors the trial, but both arms drift strongly, so 130–383 ms is an
+observed paired range rather than a stable expected saving. The trial remains
+unshipped: a second explicit field-initialization mapping is a maintenance cost
+not needed for the modest memory improvement. Sparse optional metadata likewise
+remains a separate design, with dense-workload overhead still unresolved.
+
+All 35 field values across the complete base and heavy projections have matching
+fingerprints for baseline, sharing and the ignored trial. Functional tests own
+sorting, selection and consumer behavior; fingerprints do not replace them.
+`build/projection-tuning-20261109/` retains manifests, scripts, raw receipts,
+comparisons, field fingerprints and test results. Failed evidence is retained.
+The final workflow/interface neighborhood passed 3,257 tests, with 3,281
+deselected. Current sharing assertions fail on the frozen baseline as intended;
+the two nonsharing casefold controls still pass. Independent review confirmed
+the source population, raw receipts, field fingerprints and final test results.
+
 ## Selected Plan and execution UI observations
 
 Run an optional case through `python -m tools performance --list`, then
