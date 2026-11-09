@@ -858,6 +858,15 @@ finding.
 | R4 | Freeze a clean candidate after debugging/cleanup integration. Record commit, source/dependency/tool/runtime identities and artifact hashes; provide repeatable Windows build/CI configuration, with interactive native evidence separately identified. Run the complete TESTS release command with default exclusions cleared and no department filter, imports, applicable settlement and every BR-G/SH-G obligation. Map every active DESKTOP_UI acceptance item to evidence or an explicitly approved deferral. Add portable-artifact startup, packaged resource, standard-integrity, real reviewed-copy/inventory/verify and close witnesses; wheel evidence alone cannot certify the executable. | After R1–R3 and concurrent work settle. All `test_br_g` cases must collect/pass without skip/xfail; account for other capability skips. Changed source, producer, checker, driver or runtime invalidates affected evidence. One reviewed candidate closeout commit; no broad gate yet. |
 | R5 | Review exact candidate adversarially; reconcile notices/source, hashes, known issues, instructions and gate evidence. Prepare the immutable ZIP, source bundle, checksums and release notes for the selected testers. Update CHANGELOG, README, this register and HANDOFF with actual outcomes. | After R4. Present concrete files and remaining distribution/signing decisions before external delivery. Release completes only when named gates and agreed handoff are satisfied; uploading/tagging must not substitute for acceptance. |
 
+The 2026-11-09 follow-up at `6673fc43` corrects the Plan memory attribution:
+the 17.9 MiB bucket is existing node IDs, not new folder paths. The slot-growth
+accounting remains valid but does not decompose the construction-overlap
+private-byte peak. Path sharing is not a useful reference-fixture remedy.
+Private frozen-node materialization and a separate optional table-loading hook
+repair are recommendations, not accepted implementation scope. PERFORMANCE
+owns the census and driver diagnostics; R3 collections and budgets remain
+unchanged.
+
 Preserve reviewed plans, atomic publication, durable truth, idempotency, import
 boundaries, root admission, exact command identity and per-user state placement.
 No packaging convenience may add elevation, relax origin/resource admission,

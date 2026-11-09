@@ -35,8 +35,12 @@ owning contracts.
 - Ratify CPython 3.13.17 as the reference runtime. Count harness threads from
   process records instead of walking every system thread, so the bridge-event
   memory limb no longer depends on desktop load; three runs now pass.
-- Attribute the tight Plan cold-base and retained-memory margins to the
-  widened projection node and retained folder path strings.
+- Identify widened frozen-node construction as a plausible cold-time cost
+  and account for 27.5 MiB of additional node slots. Correct the initial path attribution: the
+  17.9 MiB bucket contains existing node IDs, while the two fixtures retain
+  only about 20.7 KiB of path strings exclusive to the inspected path fields.
+  Investigate the stale table-loading driver hook without changing product
+  contracts, performance budgets or claiming new acceptance.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 

@@ -2427,7 +2427,7 @@ keyboard window read remains inside gesture-to-coverage time.
 Browser `performance.now()` measures the viewport-intent callback (or direct
 window call when no callback owns it) to native submission, direct call readiness
 wait, native round trip, actual pywebview JSON decode, bridge response-entry through
-envelope/token validation and clone/schema settlement,
+envelope/token validation and schema settlement,
 accepted DOM adoption and frame coverage. Python `perf_counter_ns()` measures
 native dispatcher entry to prepared-handler entry, registry total and inner
 view window construction, bridge capture/projection, and actual pywebview
@@ -3090,30 +3090,71 @@ diagnostic case: BRIDGE keeps current-source timing acceptance open until a
 predeclared collection closes it.
 
 Plan warm changed-view windows took 350–740 ms p95; they have no recorded
-budget. Retained construction memory (308.2 MiB) grew from 267.8 MiB at
+budget. Incremental peak private bytes during construction overlap (308.2 MiB)
+exceeded the 267.8 MiB observation at
 `3c3bbbc`, leaving 11.8 MiB headroom. Cold base leaves 0.14 s. Both are single
 samples, so neither establishes a pass nor a regression.
 
-Repeats on `ec194871` show both are stable, not noise. Five fresh cold-base
-children took 1,819–1,833 ms, and three memory children retained
+Repeats on `ec194871` cluster closely. Five fresh cold-base
+children took 1,819–1,833 ms, and three memory children recorded peaks of
 323.3–324.3 MB. Diagnostic attribution (`projection_profile.py`,
 `projection_phases.py` and their outputs in the evidence folder):
 
 - **Memory.** tracemalloc traces about 254 MiB for the base and
   information-heavy states. The 360,000 `PlanProjectionNode` objects are 107 MiB
   at 312 B each; at `3c3bbbc` a node had 25 fields, now 35, so the 10 added
-  fields cost about 27.5 MiB. The newer `path` field keeps node-tree folder
-  path strings alive after construction (17.9 MiB). Together these cover the
-  growth.
+  fields cost about 27.5 MiB. The initial attribution of another 17.9 MiB to
+  retained folder paths was incorrect: `node_tree.py:283` allocates node IDs,
+  already present at `3c3bbbc`. This absolute allocation bucket is not evidence
+  of growth caused by `path`. This retained-object accounting does not
+  decompose the historical incremental private-byte peak under construction
+  overlap; how much of that peak difference it explains is unmeasured.
 - **Cold base time.** Over three wall-clock runs: node-tree build 658–672 ms,
   draft append 499–563 ms, materialization 420–425 ms, selection 112–114 ms,
   pre-order 50–52 ms and other work about 100 ms. Recall folding is only about
   25 ms. In a 120,000-node microbenchmark, frozen-dataclass construction cost
   208 ms with 25 fields and 291–304 ms with 35. Filling the same frozen slots
   through their member descriptors took 188–199 ms. The node widening
-  therefore explains most of the 70–80 ms growth since `3c3bbbc`.
+  is therefore a plausible contributor to the repeat range being about
+  67–81 ms above the historical 1,752.5309 ms maximum at `3c3bbbc`,
+  but this isolated comparison does not establish end-to-end attribution.
 
 No product change follows from this diagnosis.
+
+Follow-up inspection at `6673fc43` counted object identities in both exact
+fixtures (`build/projection-investigation-20261109/occupancy.json` and its
+helper). Each fixture has only 60 path strings, totaling 10,586 bytes, not
+also referenced by another node field or the inspected operation/scan facts.
+That is about 20.7 KiB combined, an upper bound within this census rather than
+a measured process-memory saving. Most folder paths already share their
+display strings; operation and warning paths share retained artifact facts.
+There are no nonidentical path/key strings with equal values in these fixtures.
+Path deduplication therefore cannot recover the proposed 17.9 MiB. Deriving
+paths from case-folded keys would also violate exact detail spelling.
+
+The narrower cold-time candidate is private materialization of the same frozen
+node type using slot descriptors. The earlier constructor microbenchmark is
+promising, but does not establish an end-to-end saving. Preserve all fields,
+defaults, selection replacement and public construction behavior; compare full
+projection values and measure fresh cold children before delivery. Optional
+records may reduce per-node slots, but add allocations where populated and
+change the exported dataclass representation. They need a separate design and
+fixture occupancy accounting. Tree/draft traversal costs remain candidates for
+profiling, not authority to remove validation, identity or ordering work.
+
+The separate table-loading driver investigation at the same revision reproduced
+two failures and 40 passes in `tests/test_table_loading_performance.py`. Both
+failures are one stale direct-settlement hook after `cbf3f090` removed a clone:
+the driver expects `settleAttemptResponse(attempt, response)` instead of the
+current `native.response`. The other 14 anchors match. An in-memory correction
+of both the anchor and observer argument parses all four instrumented modules
+and passes the existing bounded Plan bridge probe with 125 observed window
+requests and zero pending requests. No tracked driver fix or installed timing
+renewal was made. Evidence and the finite repair proposal are in
+`build/table-driver-investigation-20261109/summary.md`. The existing Plan DOM
+span measures structural rendering starting at checkbox-array initialization,
+not earlier diff/scroll reads or all rendering work; its released Plan fixture
+still takes that structural branch.
 
 The first execution-UI run failed 9 of 13 cases on three driver defects, all
 corrected in `8d599511`: stale task identity since `41afd262`, exact status
