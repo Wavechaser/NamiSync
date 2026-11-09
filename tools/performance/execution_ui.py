@@ -65,7 +65,8 @@ def _rootless_probe_script(metric_id: str) -> str:
         '''    const current = await bridge.listTasks();
     const task = current.tasks.find((value) => value.task_id === prepared.row.task_id);
     if (task?.task_kind !== "sync-plan"
-        || task.request_id !== prepared.row.request_id
+        || task.plan_request_id !== prepared.row.request_id
+        || task.request_id !== receipt.value.request_id
         || task.session_id !== receipt.value.session_id) {
       throw new Error("execution receipt did not become the current task run");
     }
@@ -367,6 +368,12 @@ CASES = (
     "ui_control_cancel_receipt",
 )
 
+_CONTROL_RECEIPT_METRICS = frozenset({
+    "ui_control_pause_receipt",
+    "ui_control_resume_receipt",
+    "ui_control_cancel_receipt",
+})
+
 _FEEDBACK_MARKERS = {
     "ui_update_plan_view_click_feedback": "pending_frame",
     "ui_mutate_plan_selection_click_feedback": "pending_frame",
@@ -378,8 +385,40 @@ _FEEDBACK_MARKERS = {
 }
 
 
+_CONTROL_RECEIPT_STATES = {
+    "pause": ("running", "pausing"),
+    "resume": ("paused", "pending"),
+    "cancel": ("running", "canceling"),
+}
+
+
+def _control_receipt_matches(expected: object, correctness: object) -> bool:
+    # The page reports the exact typed control reply; the contract names only its verdict.
+    if type(expected) is not dict or type(correctness) is not dict:
+        return False
+    action = expected.get("action")
+    states = _CONTROL_RECEIPT_STATES.get(action) if type(action) is str else None
+    return bool(
+        states is not None
+        and expected == {"accepted": True, "action": action}
+        and set(correctness) == {
+            "accepted", "action", "task_id", "expected_session_id",
+            "session_id", "code", "before", "after",
+        }
+        and correctness["accepted"] is True
+        and correctness["action"] == action
+        and correctness["code"] == "accepted"
+        and (correctness["before"], correctness["after"]) == states
+        and type(correctness["task_id"]) is str and bool(correctness["task_id"])
+        and type(correctness["session_id"]) is str and bool(correctness["session_id"])
+        and correctness["session_id"] == correctness["expected_session_id"]
+    )
+
+
 def _correctness_matches(metric: dict[str, object], correctness: object) -> bool:
     expected = metric["correctness"]
+    if str(metric["id"]) in _CONTROL_RECEIPT_METRICS:
+        return _control_receipt_matches(expected, correctness)
     marker = _FEEDBACK_MARKERS.get(str(metric["id"]))
     if marker is None:
         return correctness == expected

@@ -221,22 +221,28 @@ const uFeedback = (() => {
     };
   }
 
+  // The status line leads with the state message; control guidance may follow it.
+  function statusLeads(status, message) {
+    return status === message || status.startsWith(`${message} `);
+  }
+
   function controlSuccessor(review, row, action, frame) {
     if (frame.pending !== "" || !frame.connected || currentReview(row, review) === null) return false;
     const toggle = review.querySelector('[data-control="pause-resume"]');
     const cancel = review.querySelector('[data-action="cancel"]');
+    const status = frame.status;
     if (action === "pause") {
-      return (frame.status === "Pausing execution…" && toggle?.dataset.action === "pause" && toggle.disabled === true)
-        || (frame.status === "Execution paused. Resume available."
+      return (statusLeads(status, "Pausing execution…") && toggle?.dataset.action === "pause" && toggle.disabled === true)
+        || (statusLeads(status, "Execution paused. Resume available.")
           && toggle?.dataset.action === "resume" && toggle.disabled === false);
     }
     if (action === "resume") {
-      return (frame.status === "Execution waiting." && toggle?.dataset.action === "pause" && toggle.disabled === true)
-        || (frame.status === "Execution running."
+      return (statusLeads(status, "Execution waiting.") && toggle?.dataset.action === "pause" && toggle.disabled === true)
+        || (statusLeads(status, "Execution running.")
           && toggle?.dataset.action === "pause" && toggle.disabled === false);
     }
-    return (frame.status === "Canceling execution…" && cancel?.disabled === true)
-      || (frame.status === "Execution canceled." && cancel?.disabled === true);
+    return (statusLeads(status, "Canceling execution…") && cancel?.disabled === true)
+      || (statusLeads(status, "Execution canceled.") && cancel?.disabled === true);
   }
 
   function controlCorrectness(value, row, action) {

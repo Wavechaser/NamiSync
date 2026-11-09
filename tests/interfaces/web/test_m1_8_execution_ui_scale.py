@@ -90,7 +90,10 @@ def test_ui_parent_checks_adapted_feedback(
             adapter.run_case(metric_id, output=tmp_path / "report.json", installed_root=installed_root)
 
 
-@pytest.mark.parametrize("corruption", (None, "refused", "wrong_action"))
+@pytest.mark.parametrize(
+    "corruption",
+    (None, "refused", "wrong_action", "other_session", "wrong_transition", "bare_contract", "extra"),
+)
 def test_ui_child_checks_control_action_and_restores_adapters(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str | None,
 ) -> None:
@@ -100,6 +103,12 @@ def test_ui_child_checks_control_action_and_restores_adapters(
     original_script = adapter.legacy._headed_probe_script
     original_settle = adapter.legacy._HeadedFixtureController._settle_initial_view
     calls: list[tuple[str, int]] = []
+    # The page's uFeedback.controlCorrectness shape, as recorded by the U-v2 receipts.
+    page_correctness = {
+        "accepted": True, "action": "pause", "task_id": f"task-{'a' * 32}",
+        "expected_session_id": "b" * 32, "session_id": "b" * 32,
+        "code": "accepted", "before": "running", "after": "pausing",
+    }
 
     def page(metric_contract: dict, root: Path, count: int) -> tuple[list, dict, dict]:
         assert root == tmp_path.resolve()
@@ -110,13 +119,22 @@ def test_ui_child_checks_control_action_and_restores_adapters(
         )
         calls.append((metric_contract["id"], count))
         samples = [
-            {"correctness": deepcopy(metric["correctness"]), "elapsed_ns": 1}
+            {"correctness": deepcopy(page_correctness), "elapsed_ns": 1}
             for _ in range(6)
         ]
+        first = samples[0]["correctness"]
         if corruption == "refused":
-            samples[0]["correctness"]["accepted"] = False
+            first["accepted"] = False
         elif corruption == "wrong_action":
-            samples[0]["correctness"]["action"] = "resume"
+            first["action"] = "resume"
+        elif corruption == "other_session":
+            first["session_id"] = "e" * 32
+        elif corruption == "wrong_transition":
+            first["after"] = "paused"
+        elif corruption == "bare_contract":
+            samples[0]["correctness"] = deepcopy(metric["correctness"])
+        elif corruption == "extra":
+            first["extra"] = True
         return samples, {}, {"published_plan_count": count}
 
     monkeypatch.setattr(adapter.legacy, "_run_headed_page", page)
@@ -126,7 +144,7 @@ def test_ui_child_checks_control_action_and_restores_adapters(
             metric_id, "a" * 32, contract_path=adapter.CONTRACT_PATH,
             benchmark_root=tmp_path, installed_root=tmp_path,
         )
-        assert receipt["samples"][0]["correctness"] == metric["correctness"]
+        assert receipt["samples"][0]["correctness"] == page_correctness
         assert receipt["headed_fixture"]["published_plan_count"] == calls[0][1]
     else:
         with pytest.raises(RuntimeError, match="did not complete the named action"):
@@ -342,7 +360,10 @@ async function run(kind, order, fault = null) {
     else if (kind === 'selection') selection.checked = true;
     else if (start) status = 'Execution running.';
     else if (action === 'pause') {
-      status = fault === 'advanced-progress' ? 'Execution paused. Resume available.' : 'Pausing execution…';
+      // Product status lines append control guidance after the state message.
+      status = fault === 'advanced-progress'
+        ? 'Execution paused. Resume available. Execution is paused. Resume when ready.'
+        : 'Pausing execution… Pausing at the next safe checkpoint.';
       controls.toggle.disabled = true;
       if (fault === 'advanced-progress') {controls.toggle.dataset.action = 'resume'; controls.toggle.disabled = false;}
     } else if (action === 'resume') {
@@ -350,7 +371,8 @@ async function run(kind, order, fault = null) {
       controls.toggle.dataset.action = 'pause';
       controls.toggle.disabled = fault !== 'advanced-progress';
     } else {
-      status = fault === 'advanced-progress' ? 'Execution canceled.' : 'Canceling execution…';
+      status = fault === 'advanced-progress' ? 'Execution canceled.'
+        : 'Canceling execution… Canceling at the next safe checkpoint.';
       controls.cancel.disabled = true;
     }
   };
@@ -573,8 +595,9 @@ const TASK = `task-${'a'.repeat(32)}`;
 const PLAN = 'b'.repeat(32);
 const RUN = 'c'.repeat(32);
 const SESSION = 'd'.repeat(32);
+// A started Plan task names its execution run; the reviewed Plan moves to plan_request_id.
 const summary = {task_id: TASK, task_kind: 'sync-plan',
-  request_id: PLAN, session_id: SESSION};
+  request_id: RUN, plan_request_id: PLAN, session_id: SESSION};
 const bridge = {listTasks: async () => ({tasks: [summary]})};
 const until = async (predicate) => {
   if (!predicate()) throw Error('execution admission did not settle');
@@ -587,9 +610,12 @@ const prepared = {row: {task_id: TASK, request_id: PLAN},
 const receipt = {value: {task_id: TASK, request_id: RUN, session_id: SESSION}};
 (async () => {
   assert.equal((await settle(prepared, {promise: Promise.resolve(receipt)})).value.request_id, RUN);
-  summary.request_id = 'e'.repeat(32);
+  summary.plan_request_id = 'e'.repeat(32);
   await assert.rejects(settle(prepared, {promise: Promise.resolve(receipt)}), /current task run/);
+  summary.plan_request_id = PLAN;
   summary.request_id = PLAN;
+  await assert.rejects(settle(prepared, {promise: Promise.resolve(receipt)}), /current task run/);
+  summary.request_id = RUN;
   summary.session_id = 'e'.repeat(32);
   await assert.rejects(settle(prepared, {promise: Promise.resolve(receipt)}), /current task run/);
 })().catch((error) => {console.error(error); process.exitCode = 1;});

@@ -3097,6 +3097,12 @@ For the seven adapted command-feedback cases, the current receipt accepts
 either a pending frame or an already accepted successor frame, with all other
 action/fixture fields still exact. The child and parent validate that current
 receipt; the frozen historical busy/pending-frame JSON remains unchanged.
+Control successor frames match the leading status message, because the status
+line may append control guidance. Start settlement binds the task summary's
+`plan_request_id` to the reviewed Plan and its `request_id` and session to the
+typed start receipt. The parent accepts a warm control receipt only as the
+page's exact typed reply: accepted, named action, `accepted` code, that action's
+before/after states and the expected session.
 
 For a fresh installed observation, build and install a wheel into a separate
 tool-owned directory and pass that installation as `--installed-root`. The
