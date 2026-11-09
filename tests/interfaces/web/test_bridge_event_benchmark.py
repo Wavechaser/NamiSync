@@ -1528,7 +1528,7 @@ def _passing_evidence(benchmark):
         "producer_task_2": producers[2],
         "producer_task_3": producers[3],
         "runtime": {
-            "python": "3.13.14 (test)",
+            "python": "3.13.17 (test)",
             "sqlite": "3.50.4",
             "packages": {
                 "bottle": "0.13.4",

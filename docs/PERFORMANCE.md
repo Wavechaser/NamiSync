@@ -2275,8 +2275,11 @@ remain necessary to attribute the report to this mechanism.
 
 The retained BR-G-42 profile is Windows 11 Pro build 26200, i7-13700K
 (16 cores/24 logical processors), 63.7 GiB RAM, WD_BLACK SN850X 4 TB NVMe
-for repository, fixtures and SQLite, CPython 3.13.14, SQLite 3.50.4, AC
-power and no unrelated sustained workload. Warm p95 uses at least 30
+for repository, fixtures and SQLite, CPython 3.13.17, SQLite 3.50.4, AC
+power and no unrelated sustained workload. The user ratified CPython 3.13.17
+on 2026-11-09 under DEFENSE §7, after the late-October security update, with
+budgets unchanged; evidence recorded on 3.13.14 keeps its original identity.
+Warm p95 uses at least 30
 samples; cold maxima use at least five fresh-process or cold-projection
 samples. Record raw samples, source/runtime/profile, fixture seed, statistic,
 child count, p95 and maximum. These identify reference evidence, not exact-
