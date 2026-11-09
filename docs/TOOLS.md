@@ -654,7 +654,8 @@ fresh installed children each. Use a new C5 disposable installed environment
 with its explicit ownership marker and a `c5-host-profile.json` beside output.
 `python -m tools.performance.table_loading --check` validates the fixtures without
 heading or timing; `--probe CASE --installed-root PATH --output PATH` runs one
-representative child before baseline collection. Coordinate headed runs and
+representative child before baseline collection. Supply an absolute output
+path because the child runs from its own raw-evidence directory. Coordinate headed runs and
 freeze writers first. The driver instruments four installed assets with exact
 anchors and retains original/instrumented/restored bytes under ignored `build/`;
 parent-owned restoration also covers child failure/deadline. Source product

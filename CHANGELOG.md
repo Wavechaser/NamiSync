@@ -41,6 +41,12 @@ owning contracts.
   only about 20.7 KiB of path strings exclusive to the inspected path fields.
   Investigate the stale table-loading driver hook without changing product
   contracts, performance budgets or claiming new acceptance.
+- Repair that optional driver's direct-settlement hook without restoring the
+  removed response clone. Cover all four asset drift points and exercise the
+  actual instrumented bridge's response accounting; preserve fail-before-write
+  and byte-for-byte restoration. Make Inventory's diagnostic keyboard setup
+  await authoritative highlight adoption before sending its timed movement;
+  preserve the target, timing interval and landing assertions.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 

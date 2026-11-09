@@ -1,62 +1,49 @@
-# Latest session — Plan margin investigation, 2026-11-09
+# Latest session — table driver repair and projection tuning, 2026-11-09
 
-## Outcome
+## Delivered driver repair
 
-Inspected `6673fc43` on `milestone1`. Documentation-only correction and
-investigation; no product, driver or test implementation, no native app launch.
+Base `5081cc17`, branch `milestone1`. Product code is unchanged in this
+checkpoint. The optional table-loading driver now observes `native.response`
+after direct settlement, without restoring the removed clone. Drift refusal
+covers all four assets; a bounded runtime test verifies actual bridge accounting.
 
-- The earlier 17.9 MiB folder-path attribution was wrong. Its allocation site
-  creates existing node IDs. The ten additional node slots cost 27.47 MiB
-  across 360,000 nodes; this retained-object calculation does not decompose
-  the historical construction-overlap private-byte peak difference.
-- A census of both reference fixtures found only 60 strings / 10,586 bytes
-  per fixture exclusive to `path` among the inspected artifact/node fields.
-  Most paths already share objects. This is not process-memory savings;
-  further aliases can only reduce that bound. Do not implement path removal
-  or derivation on the basis of the previous 17.9 MiB claim.
-- Both table-loading failures have one stale instrumentation anchor after
-  `cbf3f090`: direct settlement now uses `native.response`. The proposed
-  correction must change both the anchor and observer argument, keep the
-  settlement-before-ACK boundary, and must not restore the removed clone.
+Installed verification exposed a separate setup race. Inventory's local active
+row preceded authoritative highlight adoption; the driver sent ArrowUp with
+an old revision and correctly received a conflict. The pre-input wait now
+requires authoritative focus and completed Inventory highlight adoption.
+Targets, geometry, input timing and landing assertions are unchanged.
 
-## Verification and evidence
+## Verification
 
-- Projection census covers 120,000 base and 240,000 heavy nodes. Source and
-  historical allocation-site inspection corroborate the correction.
-  `build/projection-investigation-20261109/` contains the helper, complete
-  occupancy JSON and `findings.md` with ownership and verification seams.
-- Table-loading focused reproduction with an owned temporary directory:
-  two failures, 40 passes (`focused-tests-owned-temp-02.txt`). All 15 anchors
-  inspected, only one absent. In-memory correction parses four modules and
-  passes the existing bounded Plan bridge probe: 125 observed window requests,
-  zero pending, complete response timing fields. No installed timing renewal.
-  `build/table-driver-investigation-20261109/summary.md` indexes successful
-  evidence and retained sandbox/helper failures.
-- [PERFORMANCE](PERFORMANCE.md#current-source-br-g-42-diagnostics--2026-11-09)
-  owns the corrected results. Historical budgets and R3 acceptance remain
-  unchanged; earlier current-source diagnostics are still diagnostics.
+- Focused tests: 45 passed. Final tools department: 427 passed, three existing
+  Windows symlink-privilege skips, 6,104 deselected. Fixture checks passed.
+- The existing instrumented bridge probe accounts for 125 window requests,
+  zero pending, and complete response phases. Final installed Plan and Inventory
+  probes both pass all 16 gestures with restored assets. Raw receipts are
+  `install-02/plan-probe-03.json` and `install-02/inventory-probe-03.json`
+  under `build/table-driver-fix-20261109/`.
+- Failed sandbox/temp attempts, relative-output launch failure and both
+  Inventory keyboard failures plus the command/frame trace are retained.
+  Asset restoration is checked independently by hash; no measuring-session
+  resources were used. This is diagnostic-driver correctness, not renewed
+  timing acceptance. Pywebview may report its user-data-directory cleanup
+  sharing warning; do not equate host exit with naturally empty browser jobs.
 
-## Recommended next scope
+## Remaining authorized work
 
-1. Repair the optional table-loading hook independently. Verify focused/tools
-   tests, fixture checks and one owned installed probe per table; retain
-   fail-before-write and byte-for-byte restoration controls.
-2. Trial a private materialization-only constructor for the same frozen node
-   class, with full-field parity, immutable/public-constructor behavior,
-   selection replacement and sorting tests. Existing descriptor microbenchmarks
-   suggest about 100 ms at 120k nodes; a full candidate has not been measured.
-3. Defer sparse metadata representation. Seven fields replaced by one optional
-   record could save about 16.48 MiB on these sparse fixtures, but fully
-   populated workloads could cost about 40 extra bytes/node. Public constructor,
-   dataclass replacement and direct consumers require a separate design.
+The user authorized modest memory/cold-projection tuning after this repair,
+without changing public node contracts or budgets. A read-only census found
+119,996 equal-but-distinct display/sort-key strings per reference fixture:
+6,139,876 shallow bytes each. Test sharing these immutable strings before
+considering more elaborate construction changes. The existing frozen-node
+materialization microbenchmark remains only a candidate, not an end-to-end
+speed result. Sparse-record redesign and combined tree/projection builders
+remain excluded.
 
-Tree/draft loop simplifications remain profiling candidates. No combined
-builder rewrite, validation removal, performance-budget change or acceptance
-promotion is authorized by this investigation.
-
-## Operational context
-
-No task-owned native process remains. Ignored evidence is retained; unrelated
-cleanup and measuring-session resources were untouched. Earlier cleanup logs
-remain under `build/cleanup-20261109/`; old inaccessible pytest folders and
-other sessions' temporary folders were not part of this task.
+Evidence: `build/projection-tuning-20261109/` owns this session's census and
+subsequent trials; `build/projection-investigation-20261109/` retains the
+prior field/path census. PERFORMANCE owns measurements and their limits.
+The previous 17.9 MiB path attribution was corrected in `5081cc17`: that bucket
+contains existing node IDs. The fixed-slot increase does not decompose process
+peak growth, and path sharing has negligible reference-fixture opportunity.
+R3 acceptance and historical budgets remain unchanged.

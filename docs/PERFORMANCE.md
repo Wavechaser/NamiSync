@@ -2395,7 +2395,8 @@ covers index 20,032 through `ceil((20032 * 24 + measured viewport height) / 24) 
 It activates the first retained row outside timing, synchronously restores the
 setup scroll position after activation's normal reveal, focuses with preventScroll,
 and waits for its
-real highlight/active identity and viewport coverage, then dispatches ArrowUp
+authoritative highlight/active identity and viewport coverage, including the
+completion of Inventory's pending highlight adoption, then dispatches ArrowUp
 to target the validated setup offset minus one. Setup geometry and target
 and setup request identity are retained in the raw sample. The offset must stay
 unchanged through activation, with the original viewport and selected row checked
@@ -2461,9 +2462,10 @@ Commands, run only after inputs freeze and headed coordination:
 .\.venv\Scripts\python.exe -m tools.performance.table_loading --check
 # Use the fresh installed interpreter for the probe and baseline; its output
 # directory already contains c5-host-profile.json.
-python -m tools.performance.table_loading --probe plan-base --installed-root SITE_PACKAGES --output build/gui-inventory-refinement-20261005/c5-representative-plan.json
-python -m tools performance table-loading plan-base --installed-root SITE_PACKAGES --json build/gui-inventory-refinement-20261005/c5-baseline-plan.json
-python -m tools performance table-loading inventory-base --installed-root SITE_PACKAGES --json build/gui-inventory-refinement-20261005/c5-baseline-inventory.json
+$evidenceRoot = (Resolve-Path build/gui-inventory-refinement-20261005).Path
+python -m tools.performance.table_loading --probe plan-base --installed-root SITE_PACKAGES --output "$evidenceRoot/c5-representative-plan.json"
+python -m tools performance table-loading plan-base --installed-root SITE_PACKAGES --json "$evidenceRoot/c5-baseline-plan.json"
+python -m tools performance table-loading inventory-base --installed-root SITE_PACKAGES --json "$evidenceRoot/c5-baseline-inventory.json"
 ```
 
 Reports and raw child/asset evidence use fresh paths under ignored `build/`.
@@ -3155,6 +3157,16 @@ renewal was made. Evidence and the finite repair proposal are in
 span measures structural rendering starting at checkbox-array initialization,
 not earlier diff/scroll reads or all rendering work; its released Plan fixture
 still takes that structural branch.
+
+The subsequent authorized repair updates the direct-settlement anchor and
+observer argument together. Its installed Inventory witness exposed a separate
+pre-input setup race: the driver dispatched ArrowUp after local active-row
+feedback but before the click's authoritative highlight was adopted. The move
+used the old revision and correctly received a conflict. The driver now waits
+for that intended settled setup before starting the keyboard interval; target,
+geometry, input and landing assertions are unchanged. No product behavior or
+performance budget changes. `build/table-driver-fix-20261109/` retains the
+failed attempts, command/frame trace, final verification and asset identities.
 
 The first execution-UI run failed 9 of 13 cases on three driver defects, all
 corrected in `8d599511`: stale task identity since `41afd262`, exact status

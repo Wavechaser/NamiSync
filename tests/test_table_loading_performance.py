@@ -34,7 +34,7 @@ def test_table_loading_restores_after_child_failure(tmp_path):
     assert json.loads((evidence / "manifest.json").read_bytes())["restored"] is True
 
 
-@pytest.mark.parametrize("name", ("app.js", "tree.js"))
+@pytest.mark.parametrize("name", ("app.js", "bridge.js", "tree.js", "plan_review.js"))
 def test_table_loading_anchor_drift_refuses_before_any_write(tmp_path, name):
     root, assets = _installed(tmp_path)
     (assets / name).write_text("changed source")
@@ -64,6 +64,31 @@ def test_table_loading_instrumented_modules_parse(tmp_path):
         result = run_node_probe((node, "--check", target), timeout=10)
         assert result.returncode == 0, result.stderr
     result = run_node_probe((node, "--check", loading.PROBE), timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
+def test_table_loading_observes_current_bridge_window_settlement(tmp_path):
+    from _frontend_test_support import _node_executable, run_node_probe
+
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the measurement method controls"
+    bridge = tmp_path / "bridge.mjs"
+    bridge.write_text(loading.transform_asset("bridge.js", (ASSETS / "bridge.js").read_text(encoding="utf-8")), encoding="utf-8")
+    source = (Path(__file__).parent / "assets/plan_window_bridge_probe.mjs").read_text(encoding="utf-8")
+    source = "globalThis.__tableLoadingApp = {snapshot() { return {}; }};\n" + source
+    source += """
+const trace = globalThis.__tableLoading;
+const windowRequests = requests.filter(row => row.command === 'get_plan_window');
+if (trace.pending !== 0 || trace.requests.length !== windowRequests.length) {
+  throw new Error('window settlement accounting differs');
+}
+if (trace.requests.some(row => !Number.isFinite(row.validation_ns) || !Number.isFinite(row.round_trip_ns))) {
+  throw new Error('window response phase observation missing');
+}
+"""
+    probe = tmp_path / "instrumented_plan_bridge.mjs"
+    probe.write_text(source, encoding="utf-8")
+    result = run_node_probe((node, probe, bridge), timeout=10)
     assert result.returncode == 0, result.stderr
 
 

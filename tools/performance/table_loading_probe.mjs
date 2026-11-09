@@ -273,8 +273,9 @@ globalThis.__tableLoading = (() => {
           root.scrollTop = keyboardSetup.first * 24;
           first.focus({preventScroll: true});
           await until(() => trace.pending === 0 && coverage()?.covered
-            && (component === "plan" ? owner().summary.highlight_focus_node_id === first.dataset.nodeId
-              : root.querySelector("[role=tree]").getAttribute("aria-activedescendant") === first.id), "keyboard setup focus");
+            && owner().summary.highlight_focus_node_id === first.dataset.nodeId
+            && (component === "plan" || (!owner().highlightPending
+              && root.querySelector("[role=tree]").getAttribute("aria-activedescendant") === first.id)), "keyboard setup focus");
           await frame();
           const selectedSetup = coverage();
           if (selectedSetup.offset !== keyboardSetup.offset || selectedSetup.first !== keyboardSetup.first
