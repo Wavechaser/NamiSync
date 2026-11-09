@@ -36,7 +36,12 @@ A separate measurement-only review of `7413a833` found no correctness defect
 at 93–99 s and the same GUI build at 110–167 s, so single-pair speed claims
 are inside the noise. GUI cost is spread across the pipeline. A shorter GIL
 switch interval, 200 ms result collection and turning off power throttling do
-not remove it. PERFORMANCE "Execution time: GUI versus headless" has the
+not remove it. Minimizing the window during execution recovers about half of
+the GUI excess (batch 10: headless 105–107 s, visible 128–129 s, minimized
+115–118 s) by removing ~43 s of renderer and GPU CPU. The remaining ~10 s is
+in-process bridge and drain work: the hidden page still makes 92% of the event
+pulls. A single minimized smoke run (177 s, worker partly on efficiency cores)
+did not recur. PERFORMANCE "Execution time: GUI versus headless" has the
 tables and limits. Evidence and registered GUI fixtures are under
 `build/exec-time-20261109/`.
 No product change was made.

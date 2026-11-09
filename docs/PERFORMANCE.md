@@ -16,7 +16,7 @@ Source runs of `7413a833` on the frozen 10k study fixture (10,000 × 32 B in
 100 folders, 10,100 operations, verify on). Each batch alternates arms in fresh
 processes. Drivers, receipts, thread CPU samples and timers are under
 `build/exec-time-20261109/` (`gui.py`, `svc.py`, `threadprobe.py`,
-`timers.py`; batches `out`–`out7`). GUI fixtures are registered per batch in
+`timers.py`, `phase_cpu.py`; batches `out`–`out10`). GUI fixtures are registered per batch in
 `fixtures.jsonl`; headless targets are torn down after their mirror check.
 Every run completed with an exact mirror and normal close.
 
@@ -27,9 +27,12 @@ Every run completed with an exact mirror and normal close.
 | 3 (timers) | 97.6 / 98.8 s | 126.9 / 139.9 s | — |
 | 5 | — | 109.8 / 112.5 / 115.5 s | 200 ms result collection: 109.1 / 111.0 / 111.3 s |
 | 7 | 93.3 / 93.8 / 94.2 s | 110.1 / 117.0 / 117.4 s | Power throttling off: 113.6 / 114.5 / 115.0 s |
+| 9 | — | 128.3 / 129.6 / 129.7 s | Minimized: 116.7 / 118.1 / 120.2 s; minimized, throttling off: 116.1 / 116.6 / 119.7 s |
+| 10 | 105.2 / 106.9 s | 128.4 / 129.4 s | Minimized: 115.1 / 117.7 s |
 
-**Variation.** Headless execution stays at 93–99 s. The same GUI build ranges
-from 110 to 167 s across batches on one evening. Within a batch, the GUI adds
+**Variation.** Headless execution stays at 93–99 s through batch 7 and rises
+to 105–107 s in batch 10 alongside the GUI arms, so the host state itself
+drifts. The same GUI build ranges from 110 to 167 s across batches on one day. Within a batch, the GUI adds
 16–23 s in later batches and 31–71 s in the first. A single pair cannot resolve
 a 14% speed change. Earlier source bisection of this harness found `b6a4fefe`'s
 source at 117–125 s against 113–152 s for later commits, with no
@@ -63,8 +66,10 @@ following candidates were tested and ruled out:
 The headless floor is the pipeline itself: about 43 s of copy and 51 s of
 verification. The just-copied file's first open alone takes ~34 s (see the
 [`b6a4fefe` cost attribution](#multiple-open-tasks-and-cost-attribution-on-b6a4fefe--2026-11-07)). The remaining GUI cost is not owned by one
-host path. Removing it entirely would need execution outside the GUI host's
-interpreter, a separate architectural decision. Larger execution gains are in
+host path. The minimized-window runs below split it about evenly between
+rendering contention and in-process work. Removing the in-process half
+entirely would need execution outside the GUI host's interpreter, a separate
+architectural decision. Larger execution gains are in
 the pipeline's existing M2 candidates: verification overlap, grouped
 recording and copy guards.
 
@@ -74,9 +79,37 @@ the renderer main thread idle for 85.5 s. Of 28.5 s busy, JavaScript is about
 style, layout, paint and compiling each bridge response script.
 `table_controller.js` `height()` takes 1.2 s. `setFollowScrollTop` calls it on
 each Follow paint, which forces a synchronous layout. Column resizer
-measurement takes 0.5 s and Plan row rendering 0.5 s. Renderer CPU runs in a
-separate process and did not track execution time in these runs. Lowering it
-means fewer paints or cheaper frames, not faster JavaScript.
+measurement takes 0.5 s and Plan row rendering 0.5 s. Lowering renderer CPU
+means fewer paints or cheaper frames, not faster JavaScript. Rendering does
+slow execution even though it runs in other processes; the minimized-window
+runs below show this.
+
+**Minimized window (batches 8–10).** The driver minimizes the app window right
+after Execute, which makes the page `hidden`, and restores it at completion.
+Restoring adds about 1 s to the minimized times shown. Execution-phase CPU by
+process (`phase_cpu.py`):
+
+| Arm | Execution | Host process | Renderer | GPU process | Worker thread |
+| --- | --- | --- | --- | --- | --- |
+| Headless (batch 10) | 105–107 s | — | — | — | 55.6–56.5 s |
+| GUI visible | 128–130 s | 85.6–88.1 s | 35.7–39.8 s | 12.8–16.8 s | 60.6–62.6 s |
+| GUI minimized | 115–120 s | 75.6–80.0 s | 8.5–10.1 s | < 0.5 s | 55.6–58.5 s |
+
+Minimizing removes about 28 s of renderer and 15 s of GPU-process CPU, and the
+worker's CPU drops to the headless level. Execution recovers 11–13 s, about
+half of the GUI's 23 s excess in batch 10. The rest (~10 s) remains with
+rendering nearly idle. The hidden page still issues 92% of the `next_events`
+pulls (3.3k versus 3.6k), against half the Plan window reads (116 versus 252). Host
+Python work outside the worker (≈20 s CPU) still competes for the GIL. So
+roughly half the GUI cost is cross-process rendering contention, which
+rendering cuts can reduce. The other half is in-process bridge and drain work,
+which a smaller bridge volume or execution outside the GUI interpreter would
+address. Turning off power throttling while minimized changes nothing.
+
+The first minimized run (batch 8, single smoke run) took 177.4 s with 13.2% of
+sampled worker calls on efficiency cores, against ≤1.3% in every other run.
+Windows can deprioritize a minimized process, but this did not recur in five
+later minimized runs. It is recorded as an unexplained outlier.
 
 ## Coalesced table refresh measurements — 2026-11-08–09
 

@@ -33,7 +33,9 @@ owning contracts.
   the whole pipeline. A 0.5 ms GIL switch interval, 200 ms result collection
   and turning off power throttling do not remove it; the worker stays on
   performance cores. Renderer CPU is mostly native rendering, not JavaScript.
-  Record findings without a product change.
+  Minimizing the window during execution recovers about half of the GUI
+  excess; the rest is in-process bridge and drain work. Record findings
+  without a product change.
 - Coalesce automatic Plan and Inventory work:
   500 ms full-window reads and 250 ms local cursor/progress paints. Keep explicit navigation,
   control/phase/gap and terminal feedback immediate. Restore automatic Inventory
