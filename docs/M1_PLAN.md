@@ -21,6 +21,37 @@ row. A completed batch does not activate another pending outcome.
 
 ## Remaining checkpoints
 
+### Reduce redundant DOM work — delivered 2026-11-09
+
+From `fb448fac`, keep compatible overlapping Inventory/Plan rows attached,
+retain Plan spacers, cache passive Follow geometry and skip unchanged read-tick
+prepaints and duplicate synchronous pane-switch paints. Structural Plan
+publication preserves scroll before existing focus/reveal policy. The existing
+reconciliation frame corrects a pending passive landing for resize; newer
+navigation, publication and retirement discard it. Preserve bounded current
+rows, focus, selection, menus, 250 ms local painting, 500 ms routine reads and
+immediate explicit/urgent feedback. PRESENTATION owns the final behavior.
+
+All 2,289 interface cases and six affected installed journeys pass. Independent
+native resize and focused negative controls verify the two introduced geometry
+and temporary-scroll-collapse corrections; native assertions remain unchanged.
+Source, test and measurement identities and failed receipts are retained under
+`build/dom-costs-20261109/`. Twelve native diagnostic runs pass exact data audits
+and normal empty-Job close. Four pre-idle Plan runs are excluded after the user
+reported external activity. Quiet opposite-order Plan pairs show no stable
+CPU/speed benefit or regression; Inventory elapsed/CPU is effectively unchanged
+with modest sampled peak reductions. PERFORMANCE owns the figures and limits.
+
+The 200 ms collection and reduced-ACK investigations are complete for discussion,
+not implementation. A separate final-source pair reproduces roughly 75% fewer
+bridge threads and 13% less execution host CPU for only 1.27 seconds elapsed
+saving. ACK call-body CPU is modest, excludes caller-side creation and is not
+wholly removable because cleanup must remain. A possible drain-only receipt
+piggyback needs a reviewed custody/ingress design; no protocol change is approved.
+Keep 25 ms collection and current ACK custody. Slower local painting and frontend
+pulls remain deferred. No GC, heap cap, row-limit, durable batching or verification
+concurrency change; measuring-session resources remain untouched.
+
 ### Coalesce automatic table refresh and reduce rendering allocation — delivered 2026-11-09
 
 Rebuilt from `39255ca3` after the user approved 250 ms local cursor/progress

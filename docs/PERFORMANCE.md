@@ -10,6 +10,149 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## DOM mutation and bridge follow-up — 2026-11-09
+
+The follow-up to `fb448fac` isolates DOM reconciliation, viewport measurement
+and redundant paints while preserving 250 ms local paints, 500 ms routine
+window reads and 25 ms clean-result collection. Focused probes observe retained
+row attachment, geometry updates and prompt progress during delayed reads.
+Native comparisons use frozen base/candidate package trees and a shared driver,
+fresh owned profiles/targets, the existing read-only 10k × 32 B corpus and normal
+GC. Targets are inside this task's workspace evidence root, so absolute times
+are not interchangeable with the earlier study's `H:\test_dir` targets.
+The initial Plan bracket (baseline/candidate/candidate/baseline) is retained
+but excluded from performance conclusions: the user reported external machine
+activity during the preceding roughly fifteen minutes, ending around 11:47
+Asia/Shanghai. Two fresh opposite-order Plan pairs run after that idle report,
+with the Inventory pair between them. Inventory covers baseline, verify and
+rebaseline. CPU, memory and elapsed
+values are diagnostics, not new acceptance budgets or leak guarantees. Exact
+mirror/source checks and normal empty-Job shutdown qualify complete runs.
+Source/driver identities, raw receipts and review live under
+`build/dom-costs-20261109/`.
+
+The final interface department passes 2,289 cases (4,237 deselected), and all
+six affected installed journeys pass, including both window sizes for execution
+review and task shell. The focused probes distinguish the old source through
+retained-row detachment, synchronous Follow measurement and unchanged read-tick
+paint assertions. Two initial-candidate issues were corrected before freezing:
+cached geometry during resize, and temporary scroll collapse during structural
+Plan publication. Existing native assertions remain unchanged. An independent
+actual-window resize witness confirms the final reconciliation frame restores
+loaded coverage without an extra read. Failed attempts, exact native source
+identities and negative controls remain under `builder/` and `review/`.
+
+Quiet Plan baseline → candidate observations, after the idle report:
+
+| Pair and execution order | Seconds | Renderer CPU seconds | Renderer peak MiB | Window reads |
+| --- | --- | --- | --- | --- |
+| 03: candidate, baseline | 128.16 → 137.56 | 40.48 → 46.63 | 689 → 732 | 247 → 265 |
+| 04: baseline, candidate | 117.83 → 112.24 | 33.44 → 31.88 | 683 → 664 | 227 → 217 |
+
+The unfavorable first quiet pair did not repeat in reversed order. Both arms
+drifted substantially downward, so these observations establish neither a
+stable resource/speed benefit nor a regression. Host and GPU CPU and created
+element totals also changed direction between pairs. The deterministic
+reduction in row detachments and redundant calls is separate evidence; it does
+not account for the entire native-rendering bucket. Main receipts include the
+four excluded pre-idle Plan runs, four quiet Plan runs and two Inventory runs.
+
+Quiet Inventory baseline → candidate observations (one pair):
+
+| Phase | Seconds | Renderer CPU seconds | Renderer peak MiB | Window reads |
+| --- | --- | --- | --- | --- |
+| Baseline | 26.35 → 25.96 | 10.25 → 8.27 | 307 → 286 | 55 → 52 |
+| Verify | 25.49 → 25.42 | 8.50 → 7.42 | 343 → 312 | 52 → 53 |
+| Rebaseline | 25.51 → 25.52 | 6.17 → 8.92 | 332 → 315 | 57 → 54 |
+
+Elapsed time and combined renderer CPU (24.92 → 24.61 seconds) are effectively
+unchanged in this diagnostic pair. Sampled renderer peaks are about 6–9% lower;
+the CPU direction varies by phase. These are observations, not a broad CPU,
+throughput or leak claim. Each phase has an exact durable population audit.
+
+**Post-DOM collection and ACK attribution.** A separate quiet 25/200 ms pair
+uses the same frozen final package and its own matched instrumentation. Only
+the diagnostic wrapper changes the collection constant in process memory;
+shipped collection remains 25 ms. Both runs pass exact audits and normal
+empty-Job shutdown. Execution-phase observations:
+
+| Metric | 25 ms | 200 ms |
+| --- | ---: | ---: |
+| Elapsed seconds | 113.447 | 112.176 |
+| Host CPU seconds | 80.344 | 69.813 |
+| Renderer CPU seconds | 31.953 | 32.000 |
+| Drain commands | 3,207 | 562 |
+| Plan window commands | 218 | 215 |
+
+Whole-application call-thread attribution includes startup, planning and close;
+it must not be summed into the execution-only values above:
+
+| Bucket | 25 ms calls / CPU seconds | 200 ms calls / CPU seconds |
+| --- | ---: | ---: |
+| Ordinary ACK | 3,523 / 1.453 | 876 / 0.250 |
+| Event drain | 3,214 / 5.438 | 569 / 3.469 |
+| Window | 220 / 4.641 | 217 / 4.500 |
+| All bridge call threads, including other commands and completion ACKs | 7,052 / 12.266 | 1,758 / 8.969 |
+
+Thread count falls 75.1% and execution-phase host CPU 13.1%, but elapsed time
+falls only 1.271 seconds. Worker whole-lifetime CPU is nearly unchanged
+(58.906 → 58.234 seconds). Fewer calls still carry the same reliable results;
+file/durable work and window/rendering traffic remain. This supports resource
+savings without a proportional critical-path gain, not an exact decomposition
+of waits or a stable speed/latency guarantee from one ordered pair.
+
+The diagnostic classifies the installed pywebview call closure before measuring
+its original thread body through native return. It includes handler and
+serialization CPU, excludes caller-side thread creation and final teardown,
+retains no payload, and avoids the earlier live/ended double count. Eleven
+classifier cases and the installed closure/request-prefix checks pass; all
+classified command counts match independent handler counters, with zero
+unclassified calls. Native phase CPU has one-second sampling boundaries;
+thread-time accounting has finite resolution. Full provenance, raw samples,
+audits and checker identities are in
+`build/dom-costs-20261109/measurement/collection/ack-summary.json` and
+`build/dom-costs-20261109/measurement/collection/final-summary.md`.
+These instrumented runs are separate from the
+DOM comparison. Slower local painting and frontend pulls remain deferred.
+
+**Collection and ACK investigation.** Reanalysis of the three adjacent
+25/200 ms pairs with reversed ordering in `build/exec-time-20261109/out5` finds
+mean bridge-thread
+counts 6,988 versus 1,715 (−75.4%), but sampled bridge-thread CPU only 11.6
+versus 8.2 seconds (−29.3%). Host CPU falls 77.37 to 66.5 seconds; execution
+averages 112.60 versus 110.47 seconds with overlapping ranges, including one
+adjacent pair slower with collection. Worker CPU stays about 49–52 seconds;
+Plan reads and renderer/GPU CPU barely change. Collection removes fixed call,
+thread, envelope and snapshot overhead while retaining reliable item data,
+serialization/validation, filesystem/durable work and independent rendering.
+Saved CPU overlapping IO waits is a plausible explanation for the small elapsed
+gain, not a measured GIL/wait decomposition. That earlier instrumentation combines
+ACK and command calls, so it cannot establish ACK-only CPU or a speed forecast.
+The old `report.py` also double-counts a live/ended worker at one `gui-02`
+boundary; its negative residual is unusable. Process totals and ended bridge
+target deltas do not depend on that residual. The investigation records exact
+sample-window differences and receipts.
+
+A possible later design is drain-only predecessor-receipt piggybacking, with
+cleanup before successor admission/long-poll waiting and standalone cleanup
+when no successor is issued or delivery is uncertain. Ordinary, mutation and
+async-completion cleanup would remain unchanged. This is not approved product
+behavior: BRIDGE still requires current ACK custody. General timed ACK batching
+would add bounded retention, flush and retry responsibilities. Approximate
+drain-ACK call opportunities fall from 3.2k of 7k calls at 25 ms to 0.58k of
+1.7k at 200 ms; these use slightly different count windows and are not CPU
+forecasts. Collection and ACK savings overlap, rather than adding independently.
+Piggybacking would still perform custody release in the successor thread;
+measured ACK-thread CPU would not all disappear. Its potential savings are the
+separate call/thread/return overhead, not the required cleanup itself.
+The new pair separates call-thread CPU, but a future collection change still
+needs clean/urgent delivery and concurrent-task checks. A future ACK change
+needs exact custody/admission, saturation, failed delivery, terminal/no-successor
+cleanup and worker-exit evidence. Current asynchronous ACK cleanup does not
+gate successful response adoption; fewer calls cannot be equated with the same
+fraction of delivery time saved. Detailed source owners and proposed checks are in
+`build/dom-costs-20261109/bridge/investigation.md`.
+
 ## Execution time: GUI versus headless — 2026-11-09
 
 Source runs of `7413a833` on the frozen 10k study fixture (10,000 × 32 B in

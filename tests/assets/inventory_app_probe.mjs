@@ -1830,11 +1830,14 @@ assert.equal(followReview.follow.scrollOffset, 296, "the recovered target can st
     "exact loaded Inventory cursor lands locally at 250ms");
   assert.equal(followWindows.length, localWindows);
   assert.equal(followAnchors.length, localAnchors);
+  const localPaints = renders.length;
   await advanceClock(249);
   assert.equal(followWindows.length, localWindows);
   await advanceClock(1);
   assert.equal(followWindows.length, localWindows + 1);
   await tick(false);
+  assert.equal(renders.length, localPaints + 1,
+    "an Inventory read-only tick paints its receipt without an unchanged dispatch paint");
 
   // A failed Follow may release the independent overlay demand once, never
   // manufacture another Follow attempt when no newer event exists.

@@ -351,6 +351,20 @@ Reused handlers read
 the current row binding, focus is restored under the existing rules, and rows
 outside the new window are not retained in a cache.
 
+Window publication reconciles children in place: compatible overlapping rows
+stay attached, departed rows are removed and entering or reordered rows are
+inserted only where needed. Structural Plan publication restores the prior
+scroll offset before existing focus/reveal handling, preventing temporary
+content shrinkage from resetting the viewport. Plan spacers are retained with the panel. Existing
+focus within a retained Plan row does not need another focus call. Passive
+Follow uses the last measured positive viewport height, refreshed by ordinary
+geometry reads and the existing resize observer; unknown or zero height is
+remeasured so hidden-pane reentry can clamp to loaded coverage immediately.
+The existing reconciliation frame rechecks a pending passive landing against
+fresh geometry before deciding whether to read uncovered rows. Manual/keyboard
+navigation, other scroll ownership, window replacement and retirement discard
+that pending landing. This does not change user navigation or the window limit.
+
 At a read opportunity, the scheduler admits automatic Follow before requesting
 a dirty table-window refresh. A Follow read that takes foreground ownership defers the refresh until
 the reader becomes idle, preserving its dirty demand. A cached target or a
@@ -364,6 +378,11 @@ Background-only replay does not create new Follow demand. Slow or independently
 invalidated reads retain one latest pending refresh through the scheduler.
 Completion routes that retained demand through its cadence deadline, which may
 already have elapsed; a current failure without independent demand does not poll.
+An automatic read-only tick with no new local paint demand skips its pre-read
+paint unless Follow changes visible state. The accepted read response still
+paints immediately, and pending reads do not delay local progress. Immediate
+pane switches avoid a duplicate synchronous paint where the same path already
+performs the immediate automatic review paint.
 
 Full Plan reloads obey the same foreground ownership rule: a reload admitted
 before or during a user interaction cannot replace the review owning that

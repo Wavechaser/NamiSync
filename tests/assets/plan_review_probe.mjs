@@ -76,7 +76,8 @@ class ElementFake {
 
   insertBefore(value, reference) {
     value.remove();
-    const index = this.children.indexOf(reference);
+    const index = reference === null ? this.children.length : this.children.indexOf(reference);
+    assert.ok(index >= 0);
     this.children.splice(index, 0, value);
     value.parentElement = this;
   }
@@ -112,7 +113,15 @@ class ElementFake {
 
   remove() {
     if (this.parentElement === null) return;
+    this.detachCount = (this.detachCount ?? 0) + 1;
     this.parentElement.children = this.parentElement.children.filter((item) => item !== this);
+    const viewport = this.parentElement.scrollClampViewport;
+    if (viewport) {
+      const extent = ROW_HEIGHT + this.parentElement.children.reduce((height, child) => height
+        + (child.dataset.nodeId !== undefined ? ROW_HEIGHT
+          : parseFloat(child.style.getPropertyValue("block-size")) || 0), 0);
+      viewport.scrollTop = Math.min(viewport.scrollTop, Math.max(0, extent - viewport.clientHeight));
+    }
     this.parentElement = null;
   }
 
@@ -1816,6 +1825,9 @@ function overlapAllocations(windowSize) {
   panel.render(task);
   const departing = findByDataset(panel.element, "nodeId", rows[0].node_id);
   const retained = findByDataset(panel.element, "nodeId", rows[1].node_id);
+  const retainedParent = retained.parentElement;
+  const retainedDetachCount = retained.detachCount ?? 0;
+  retained.focus({preventScroll:true});
   const listenerCount = [...retained.listeners.values()].reduce((sum, items) => sum + items.length, 0);
   const nextRows = Array.from({length: windowSize}, (_, index) => makeRow(index + 1));
   nextRows[0].execution = {operation: executionRow.execution.operation, automatic_verification: null, evidence: null};
@@ -1824,6 +1836,12 @@ function overlapAllocations(windowSize) {
   panel.render(task);
   const allocations = document.elementsCreated - before;
   assertSameNode(findByDataset(panel.element, "nodeId", rows[1].node_id), retained);
+  assertSameNode(retained.parentElement, retainedParent);
+  assert.equal(retained.detachCount ?? 0, retainedDetachCount,
+    "overlapping rows stay attached throughout the publication");
+  assertSameNode(document.activeElement, retained, "window advancement preserves retained row focus");
+  assert.deepEqual(retainedParent.children.filter(node => node.dataset.nodeId !== undefined)
+    .map(node => node.dataset.nodeId), nextRows.map(row => row.node_id));
   assert.equal(findByDataset(panel.element, "nodeId", rows[0].node_id), null);
   assert.equal([...retained.listeners.values()].reduce((sum, items) => sum + items.length, 0), listenerCount);
   assert.equal(findByClass(retained, "nami-plan-row__intent").dataset.lifecycle, "completed");
@@ -1845,6 +1863,31 @@ function overlapAllocations(windowSize) {
 const overlapCounts = [8, 64, 256].map(overlapAllocations);
 assert.deepEqual(overlapCounts, [overlapCounts[0], overlapCounts[0], overlapCounts[0]],
   "one entering row and one changed execution row allocate independently of retained window width");
+for (const retainedIndex of [null, 0]) {
+  const rows = Array.from({length:32}, (_, index) => ({...liveRow, node_id:`clamp-${index}`,
+    operation_id:(index + 1).toString(16).padStart(32, "0"), visible_index:index}));
+  const review = {...liveReview, window:{...liveReview.window, rows, total:32, offset:0}};
+  const task = {...liveTask, review, progressPresentation:null, executionPresentation:null};
+  const panel = createPlanReviewPanel(callbacks);
+  panel.render(task);
+  const viewport = findByClass(panel.element, "nami-plan-review__list");
+  const body = findByClass(panel.element, "nami-plan-review__rows");
+  viewport.clientHeight = 9 * ROW_HEIGHT;
+  viewport.scrollTop = 16 * ROW_HEIGHT;
+  body.scrollClampViewport = viewport;
+  review.window = {...review.window, rows:rows.map((row, index) => index === retainedIndex ? row
+    : {...row, display:`replacement-${index}`})};
+  panel.render(task);
+  assert.equal(viewport.scrollTop, 16 * ROW_HEIGHT,
+    "full and sparse-overlap publications restore scroll after transient extent collapse");
+  review.summary = {...review.summary, highlight_focus_node_id:rows[31].node_id};
+  review.window = {...review.window, rows:review.window.rows.map(row => ({...row, display:row.display + "-next"}))};
+  review.keyboardRevealWindow = review.window;
+  findByDataset(panel.element, "nodeId", rows[16].node_id).focus({preventScroll:true});
+  panel.render(task);
+  assert.ok(viewport.scrollTop > 16 * ROW_HEIGHT, "keyboard reveal follows scroll restoration");
+  panel.dispose();
+}
 livePanel.render(liveTask);
 const liveElement = findByDataset(livePanel.element, "nodeId", liveRow.node_id);
 let liveIntent = findByClass(liveElement, "nami-plan-row__intent");

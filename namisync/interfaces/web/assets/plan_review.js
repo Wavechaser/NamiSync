@@ -570,6 +570,10 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
   let searchTimer = null;
   let lastSearchSubmit = -Infinity;
   let renderedRows = null;
+  const topSpacer = document.createElement("div");
+  topSpacer.className = "nami-plan-review__spacer";
+  const bottomSpacer = document.createElement("div");
+  bottomSpacer.className = "nami-plan-review__spacer";
   let controlTaskId = null;
   let controlSessionId = null;
   let cancelDeadline = null;
@@ -1063,22 +1067,20 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
       review.keyboardRevealWindow = null;
       return;
     }
+    const preservedTop = list.scrollTop;
     const checkboxes = [];
     const rowElements = [];
     const bindings = [];
     const reusable = compatibleProjection
       ? new Map(previous.rows.map((row, index) => [row.node_id, index])) : null;
-    const fragment = document.createDocumentFragment();
-    const top = document.createElement("div");
-    top.className = "nami-plan-review__spacer";
-    top.style.setProperty("block-size", `${review.window.offset * ROW_HEIGHT}px`);
-    fragment.append(top);
+    const children = [topSpacer];
+    topSpacer.style.setProperty("block-size", `${review.window.offset * ROW_HEIGHT}px`);
     if (review.window.total === 0) {
       const empty = document.createElement("p");
       empty.className = "nami-shell__guidance nami-plan-review__empty";
       renderText(empty, review.summary.filter_counts?.all === 0
         ? "Plan is empty" : "No items match these filters.");
-      fragment.append(empty);
+      children.push(empty);
     }
     for (const row of review.window.rows) {
       const oldIndex = reusable?.get(row.node_id);
@@ -1102,7 +1104,7 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         checkboxes.push(checkbox);
         rowElements.push(element);
         bindings.push(binding);
-        fragment.append(element);
+        children.push(element);
         continue;
       }
       const binding = {row};
@@ -1215,18 +1217,24 @@ export function createPlanReviewPanel(callbacks, detailsState = { expanded: fals
         checkboxes[checkboxes.length - 1] = null;
       }
       rowElements.push(element);
-      fragment.append(element);
+      children.push(element);
     }
-    const bottom = document.createElement("div");
-    bottom.className = "nami-plan-review__spacer";
     const remaining = Math.max(0, review.window.total - review.window.offset - review.window.rows.length);
-    bottom.style.setProperty("block-size", `${remaining * ROW_HEIGHT}px`);
-    fragment.append(bottom);
-    body.replaceChildren(fragment);
+    bottomSpacer.style.setProperty("block-size", `${remaining * ROW_HEIGHT}px`);
+    children.push(bottomSpacer);
+    const retainedChildren = new Set(children);
+    for (const child of Array.from(body.children)) {
+      if (!retainedChildren.has(child)) child.remove();
+    }
+    for (const [index, child] of children.entries()) {
+      const next = body.children[index] ?? null;
+      if (next !== child) body.insertBefore(child, next);
+    }
+    table.setScrollTop(preservedTop, false);
     if (focusedRow) {
       const focused = rowElements.find((row) => row.dataset.nodeId === restoreFocusNodeId);
       if (focused !== undefined) {
-        focused.focus?.({ preventScroll: true });
+        if (!focused.contains(document.activeElement)) focused.focus?.({ preventScroll: true });
         if (review.keyboardRevealWindow === review.window) {
           revealRow(Number(focused.ariaRowIndex) - 2);
           table.resetTravel();

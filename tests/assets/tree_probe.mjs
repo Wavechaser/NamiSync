@@ -55,7 +55,7 @@ class TestElement {
     this.parentElement = null;
     this.scrollTop = 0;
     this.clientHeight = 0;
-    this.clampScrollOnReplace = false;
+    this.clampScrollOnMutation = false;
   }
 
   addEventListener(name, listener) {
@@ -92,6 +92,23 @@ class TestElement {
     this.children.push(...children);
   }
 
+  insertBefore(child, reference) {
+    child.remove();
+    const index = reference === null ? this.children.length : this.children.indexOf(reference);
+    assert.ok(index >= 0);
+    this.children.splice(index, 0, child);
+    child.parentElement = this;
+    if (this.clampScrollOnMutation) this.scrollTop = 0;
+  }
+
+  remove() {
+    if (this.parentElement === null) return;
+    this.detachCount = (this.detachCount ?? 0) + 1;
+    this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+    if (this.parentElement.clampScrollOnMutation) this.parentElement.scrollTop = 0;
+    this.parentElement = null;
+  }
+
   replaceChildren(...children) {
     for (const child of this.children) {
       if (child.parentElement === this) {
@@ -102,7 +119,7 @@ class TestElement {
       child.parentElement = this;
     }
     this.children = [...children];
-    if (this.clampScrollOnReplace) {
+    if (this.clampScrollOnMutation) {
       this.scrollTop = 0;
     }
   }
@@ -1116,7 +1133,7 @@ assert.equal(shortRoot.getAttribute("aria-activedescendant"), null);
 const narrowDocument = new TestDocument();
 const narrowRoot = narrowDocument.createElement("div");
 narrowRoot.clientHeight = 4 * ROW_H;
-narrowRoot.clampScrollOnReplace = true;
+narrowRoot.clampScrollOnMutation = true;
 const narrowRequests = [];
 const narrowTree = createTree(narrowRoot, {
   requestIndex: (index, generation) => {
@@ -1372,7 +1389,14 @@ const followTree = createTree(followRoot, {
 followTree.commitWindow(followTree.beginWindowRequest(), fixtureWindow(0, 256));
 const followActive = followRoot.getAttribute("aria-activedescendant");
 followTree.commitPassiveWindow(followTree.beginWindowRequest(), fixtureWindow(0, 256));
+let followHeight = followRoot.clientHeight;
+let followHeightReads = 0;
+Object.defineProperty(followRoot, "clientHeight", {
+  get() { followHeightReads += 1; return followHeight; },
+  set(value) { followHeight = value; },
+});
 followTree.setPassiveScrollOffset(253);
+assert.equal(followHeightReads, 0, "Follow reuses measured geometry instead of forcing layout");
 followRoot.dispatch("scroll");
 followDocument.defaultView.flushAnimationFrame();
 assert.equal(followRoot.scrollTop, 248 * ROW_H);
@@ -1380,6 +1404,37 @@ assert.ok(255 * ROW_H < followRoot.scrollTop + followRoot.clientHeight,
   "the last loaded target stays visible");
 assert.deepEqual(followRequests, [], "loaded-edge Follow does not bypass the read cadence");
 assert.equal(followRoot.getAttribute("aria-activedescendant"), followActive);
+followRoot.clientHeight = 16 * ROW_H;
+followDocument.defaultView.triggerResize(followRoot);
+const resizedHeightReads = followHeightReads;
+followTree.setPassiveScrollOffset(253);
+assert.equal(followRoot.scrollTop, 240 * ROW_H, "resized viewport constrains Follow to loaded coverage");
+assert.equal(followHeightReads, resizedHeightReads, "resized Follow uses observer geometry");
+followRoot.clientHeight = 20 * ROW_H;
+const beforeResizedFollowReads = followHeightReads;
+followTree.setPassiveScrollOffset(253);
+assert.equal(followHeightReads, beforeResizedFollowReads,
+  "Follow does not synchronously remeasure a positive cached viewport");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRoot.scrollTop, 236 * ROW_H,
+  "the existing frame reclamps Follow after resize before observer delivery");
+assert.deepEqual(followRequests, [], "resizing before the Follow frame cannot request unloaded tail rows");
+followRoot.clientHeight = 24 * ROW_H;
+followTree.setPassiveScrollOffset(253);
+followRoot.dispatch("wheel");
+followRoot.scrollTop = 100 * ROW_H;
+followRoot.dispatch("scroll");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRoot.scrollTop, 100 * ROW_H, "manual scrolling retires the pending Follow correction");
+followRoot.clientHeight = 0;
+followDocument.defaultView.triggerResize(followRoot);
+followRoot.clientHeight = 8 * ROW_H;
+followTree.setPassiveScrollOffset(253);
+assert.equal(followRoot.scrollTop, 248 * ROW_H,
+  "first visible Follow measures a hidden viewport before its observer fires");
+followDocument.defaultView.triggerResize(followRoot);
+followTree.setPassiveScrollOffset(253);
+assert.equal(followRoot.scrollTop, 248 * ROW_H, "hidden-to-visible observation restores Follow geometry");
 followRoot.scrollTop = 260 * ROW_H;
 followRoot.dispatch("scroll");
 followDocument.defaultView.flushAnimationFrame();
@@ -1391,6 +1446,40 @@ followDocument.defaultView.flushAnimationFrame();
 assert.equal(followRoot.scrollTop, 200 * ROW_H);
 assert.equal(followRequests.length, 2, "a short window still requests viewport coverage");
 followTree.dispose();
+
+// A queued passive correction never takes ownership back from newer input,
+// publication, or controller retirement.
+const {createTableController} = await import(tableControllerUrl);
+for (const retirement of ["wheel", "keyboard", "programmatic", "request", "publication", "hidden", "reset", "dispose"]) {
+  const owner = new TestDocument();
+  const viewport = owner.createElement("div");
+  viewport.clientHeight = 8 * ROW_H;
+  const requests = [];
+  const controller = createTableController(viewport, ROW_H, 0,
+    {requestIndex: index => requests.push(index)});
+  controller.setWindow(fixtureWindow(0, 256));
+  owner.defaultView.flushAnimationFrame();
+  controller.setFollowScrollTop(253 * ROW_H);
+  viewport.clientHeight = 20 * ROW_H;
+  if (retirement === "wheel") viewport.dispatch("wheel");
+  if (retirement === "keyboard") viewport.dispatch("keydown", {key:"ArrowDown"});
+  if (retirement === "programmatic") controller.setScrollTop(100 * ROW_H);
+  if (retirement === "request") controller.beginWindowRequest();
+  if (retirement === "publication") controller.setWindow(fixtureWindow(0, 256));
+  if (retirement === "hidden") {
+    viewport.clientHeight = 0;
+    owner.defaultView.flushAnimationFrame();
+    viewport.clientHeight = 20 * ROW_H;
+    controller.schedule();
+  }
+  if (retirement === "reset") { controller.reset(); controller.setWindow(fixtureWindow(0, 256)); }
+  if (retirement === "dispose") controller.dispose();
+  viewport.scrollTop = 100 * ROW_H;
+  owner.defaultView.flushAnimationFrame();
+  assert.equal(viewport.scrollTop, 100 * ROW_H, `${retirement} retires the pending passive correction`);
+  assert.deepEqual(requests, [], `${retirement} cannot resurrect a Follow coverage request`);
+  controller.dispose();
+}
 
 // A blocked manual scroll still reports Follow override, without retiring the
 // passive active identity when the callback renders or the gate later opens.

@@ -27,6 +27,15 @@ owning contracts.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 
+- Keep compatible overlapping Plan and Inventory rows attached during window
+  updates, retain Plan spacers and avoid redundant focus calls. Cache passive
+  Follow viewport measurements and skip unchanged pre-read paints while keeping
+  immediate feedback and the existing 250/500 ms cadence. Investigate longer
+  clean-result collection and drain ACK piggybacking without changing bridge
+  timing or custody. Quiet DOM comparisons show no stable CPU/speed gain;
+  test-only 200 ms collection cuts bridge threads about 75% and host CPU 13%
+  for only 1.27 seconds elapsed saving. PERFORMANCE records the evidence and
+  remaining decisions.
 - Compare `7413a833` GUI and headless 10k executions in alternating batches.
   Headless stays at 93–99 s. The same GUI build ranges 110–167 s across one
   evening and adds 16–71 s within a batch. Timers spread the GUI cost across

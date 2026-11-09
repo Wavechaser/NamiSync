@@ -34,8 +34,18 @@ class ElementFake {
     }
   }
   replaceChildren(...values) {
-    for (const child of this.children) child.parentElement = null;
+    for (const child of this.children) {
+      child.detachCount = (child.detachCount ?? 0) + 1;
+      child.parentElement = null;
+    }
     this.children = []; this.append(...values);
+  }
+  insertBefore(value, reference) {
+    value.remove();
+    const index = reference === null ? this.children.length : this.children.indexOf(reference);
+    assert.ok(index >= 0);
+    this.children.splice(index, 0, value);
+    value.parentElement = this;
   }
   closest(selector) {
     for (let value = this; value !== null; value = value.parentElement) {
@@ -50,7 +60,10 @@ class ElementFake {
       ?? this.children.map((value) => value.querySelector(selector)).find(Boolean) ?? null;
   }
   remove() {
-    if (this.parentElement !== null) this.parentElement.children = this.parentElement.children.filter((value) => value !== this);
+    if (this.parentElement !== null) {
+      this.detachCount = (this.detachCount ?? 0) + 1;
+      this.parentElement.children = this.parentElement.children.filter((value) => value !== this);
+    }
     this.parentElement = null;
   }
   addEventListener(key, value, options) {
@@ -2021,6 +2034,7 @@ for (const mode of ["baseline", "verify", "rebaseline"]) {
   reusedPane.render(reusedTask);
   const original = rowsForReuse();
   const originalById = new Map(original.map(row => [row.dataset.nodeId, row]));
+  const originalDetachCounts = new Map(original.map(row => [row.dataset.nodeId, row.detachCount ?? 0]));
   const activeRow = originalById.get(target.node_id);
   const oldPresence = activeRow.children[2].children[0];
   const oldClick = activeRow.listeners.get("click")[0];
@@ -2033,7 +2047,11 @@ for (const mode of ["baseline", "verify", "rebaseline"]) {
   reusedPane.render(reusedTask);
   for (const row of rowsForReuse().slice(0, 7)) {
     assertSameNode(row, originalById.get(row.dataset.nodeId), `${mode} retains overlapping row DOM`);
+    assert.equal(row.detachCount ?? 0, originalDetachCounts.get(row.dataset.nodeId),
+      `${mode} leaves overlapping rows attached`);
   }
+  assert.deepEqual(rowsForReuse().map(row => row.dataset.nodeId),
+    reusedReview.window.rows.map(row => row.node_id), "window order remains exact");
   assertSameNode(activeRow.listeners.get("click")[0], oldClick, "overlap retains the original handler");
   assert.notEqual(activeRow.children[2].children[0], oldPresence, "settlement replaces live progress cells");
   assert.match(text(activeRow.children[2]), mode === "verify" ? /Verified/ : /Baselined/);

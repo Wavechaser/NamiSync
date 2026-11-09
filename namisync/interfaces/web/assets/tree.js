@@ -125,11 +125,14 @@ export function createTree(root, callbacks = {}, rowHeight = ROW_H, viewport = r
       );
       topSpacer.style.blockSize = `${leadingRows * rowHeight}px`;
       bottomSpacer.style.blockSize = `${trailingRows * rowHeight}px`;
-      root.replaceChildren(
-        topSpacer,
-        ...entries.map((entry) => entry.element),
-        bottomSpacer,
-      );
+      const retainedElements = new Set(entries.map((entry) => entry.element));
+      for (const entry of renderedByIndex.values()) {
+        if (!retainedElements.has(entry.element)) entry.element.remove();
+      }
+      for (const [index, entry] of entries.entries()) {
+        const next = root.children[index + 1];
+        if (next !== entry.element) root.insertBefore(entry.element, next);
+      }
       renderedByIndex = nextByIndex;
       restoreScroll();
 

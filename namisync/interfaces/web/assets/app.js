@@ -476,11 +476,11 @@ function switchTaskPane(task, paneName) {
     if (task.review !== null) interruptPlanNavigation(task.review);
     task.workPane = "verify";
     if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
-    renderTasks();
     if (executionPaneVisible(task)) {
       paintAutomaticReview(task);
       return;
     }
+    renderTasks();
     void loadInventoryReview(task);
     paintAutomaticReview(task);
     return;
@@ -492,9 +492,11 @@ function switchTaskPane(task, paneName) {
   }
   task.workPane = "plan";
   if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
-  renderTasks();
   if (task.sessionKind === "sync-execution") paintAutomaticReview(task);
-  else if (task.executionWindowDirty) void refreshExecutionWindow(task);
+  else {
+    renderTasks();
+    if (task.executionWindowDirty) void refreshExecutionWindow(task);
+  }
 }
 
 function showSettings() {
@@ -740,12 +742,18 @@ function scheduleAutomaticReview(task, follow = false) {
       scheduleAutomaticReview(task);
       return;
     }
-    paintAutomaticReview(task, task.automaticFollowPending, performance.now() >= task.automaticReadAt + 500);
+    paintAutomaticReview(task, task.automaticFollowPending, performance.now() >= task.automaticReadAt + 500,
+      task.automaticPaintPending);
   }, Math.max(0, due - now));
 }
 
-function paintAutomaticReview(task, follow = true, read = true) {
+function paintAutomaticReview(task, follow = true, read = true, paint = true) {
   cancelAutomaticReview(task);
+  const review = task.sessionKind === "sync-execution" ? task.review : task.inventoryReview;
+  const previousOffset = review?.follow?.scrollOffset;
+  const previousTarget = review?.follow?.hasTarget;
+  const previousEligible = review?.follow?.eligible;
+  const previousMessage = review?.message;
   const land = read || automaticFollowIsLocal(task);
   if (land) task.automaticFollowPending = false;
   task.automaticPaintPending = false;
@@ -759,12 +767,15 @@ function paintAutomaticReview(task, follow = true, read = true) {
         if (!task.review.follow.hasTarget) cancelReviewFollow(task.review);
         else if (follow && land && task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
       }
-      renderTasks();
-      if (read && task.executionWindowDirty) void refreshExecutionWindow(task);
     } else {
       if (follow && land) followInventory(task);
-      renderTasks();
-      if (read && task.inventoryOverlayDirty) void refreshInventoryOverlay(task, task.sessionId, false);
+    }
+    if (paint || previousOffset !== review?.follow?.scrollOffset
+        || previousTarget !== review?.follow?.hasTarget || previousEligible !== review?.follow?.eligible
+        || previousMessage !== review?.message) renderTasks();
+    if (read && task.sessionKind === "sync-execution" && task.executionWindowDirty) void refreshExecutionWindow(task);
+    else if (read && task.sessionKind !== "sync-execution" && task.inventoryOverlayDirty) {
+      void refreshInventoryOverlay(task, task.sessionId, false);
     }
   } finally {
     task.automaticReviewRunning = false;

@@ -10,11 +10,13 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
   let observedTop = viewport.scrollTop;
   let direction = 0;
   let expectedScroll = null;
+  let pendingFollowTop = null;
   let manualScroll = false;
   let framePending = false;
   let disposed = false;
 
-  const height = () => Math.max(0, viewport.clientHeight - topInset);
+  let measuredHeight = null;
+  const height = () => measuredHeight = Math.max(0, viewport.clientHeight - topInset);
   function bounds(full = false) {
     const top = Math.max(0, viewport.scrollTop);
     return full
@@ -41,12 +43,14 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
     offset = 0;
     end = 0;
     settled = null;
+    pendingFollowTop = null;
     resetTravel();
   }
   function beginRequest(index, kind) {
     generation += 1;
     cancelPending();
     settled = null;
+    pendingFollowTop = null;
     pending = Object.freeze({generation, index, kind, direction,
       scrollTop: kind === "scroll" ? viewport.scrollTop : null,
       clientHeight: kind === "scroll" ? height() : null});
@@ -77,6 +81,7 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
       && (pending?.kind !== "scroll" || height() <= 0 || overlaps(window));
   }
   function adoptWindow(window) {
+    pendingFollowTop = null;
     total = window.total;
     offset = Math.min(window.offset, total);
     end = offset + window.rows.length;
@@ -121,17 +126,22 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
   }
   function cancelNavigation() { if (pending?.kind === "keyboard") invalidate(); }
   function setScrollTop(value, reconcile = true) {
+    pendingFollowTop = null;
     const previous = viewport.scrollTop;
     viewport.scrollTop = value;
     if (reconcile) resetTravel();
     if (viewport.scrollTop !== previous) expectedScroll = {reconcile, scrollTop: viewport.scrollTop};
   }
-  function setFollowScrollTop(value) {
-    const visibleHeight = height();
+  function boundedFollowTop(value, visibleHeight) {
     if (visibleHeight > 0 && (end - offset) * rowHeight >= visibleHeight) {
-      value = Math.max(offset * rowHeight, Math.min(value, end * rowHeight - visibleHeight));
+      return Math.max(offset * rowHeight, Math.min(value, end * rowHeight - visibleHeight));
     }
-    setScrollTop(value);
+    return value;
+  }
+  function setFollowScrollTop(value) {
+    setScrollTop(boundedFollowTop(value, measuredHeight > 0 ? measuredHeight : height()));
+    pendingFollowTop = value;
+    schedule();
   }
   function revealRow(index) {
     if (height() <= 0) return;
@@ -139,9 +149,12 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
     if (top < viewport.scrollTop) setScrollTop(top);
     else if (top + rowHeight > viewport.scrollTop + height()) setScrollTop(Math.max(0, top + rowHeight - height()));
   }
-  function markManualScroll() { manualScroll = true; cancelNavigation(); }
+  function markManualScroll() { pendingFollowTop = null; manualScroll = true; cancelNavigation(); }
   function onKeyDown(event) {
-    if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) manualScroll = true;
+    if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) {
+      pendingFollowTop = null;
+      manualScroll = true;
+    }
   }
   function onScroll() {
     if (expectedScroll !== null && viewport.scrollTop === expectedScroll.scrollTop) {
@@ -151,6 +164,7 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
       manualScroll = false;
       if (!reconcile) return;
     } else {
+      pendingFollowTop = null;
       expectedScroll = null;
       const travel = Math.sign(viewport.scrollTop - observedTop);
       if (travel !== 0) direction = travel;
@@ -170,12 +184,16 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
     });
   }
   function reconcileViewport() {
-    if (height() <= 0 || total <= 0) {
+    const visibleHeight = height();
+    if (visibleHeight <= 0 || total <= 0) {
+      pendingFollowTop = null;
       resetTravel();
       settled = null;
       if (pending?.kind === "scroll") invalidate();
       return;
     }
+    // Layout can change between Follow's cached measurement and this frame.
+    if (pendingFollowTop !== null) setScrollTop(boundedFollowTop(pendingFollowTop, visibleHeight));
     if (settled?.scrollTop === viewport.scrollTop && settled.clientHeight === height()) return;
     settled = null;
     if (pending?.kind === "external") { callbacks.viewportChanged?.(); return; }
@@ -201,11 +219,15 @@ export function createTableController(viewport, rowHeight, topInset, callbacks) 
   viewport.addEventListener("wheel", markManualScroll, {passive: true});
   viewport.addEventListener("touchstart", markManualScroll, {passive: true});
   viewport.addEventListener("keydown", onKeyDown);
-  const resizeObserver = new document.defaultView.ResizeObserver(schedule);
+  const resizeObserver = new document.defaultView.ResizeObserver(() => {
+    height();
+    schedule();
+  });
   resizeObserver.observe(viewport);
   function dispose() {
     if (disposed) return;
     disposed = true;
+    pendingFollowTop = null;
     invalidate();
     resizeObserver.disconnect();
     viewport.removeEventListener("scroll", onScroll);

@@ -3654,6 +3654,19 @@ assert.equal(noopTask.review.follow.scrollOffset, null, "cached automatic Follow
   planWindows.at(-1).resolve(noopWindow(1497));
   await turns();
 
+  // A read tick with no newer local facts paints only its eventual receipt.
+  noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
+    {phase:"execute", last_settled_operation_id:noopOperation(1500)}));
+  await advanceClock(250);
+  const paintedLocal = reviewRenders.length;
+  const beforeReadOnlyTick = planWindows.length;
+  await advanceClock(250);
+  assert.equal(planWindows.length, beforeReadOnlyTick + 1);
+  assert.equal(reviewRenders.length, paintedLocal, "read dispatch does not repaint unchanged local facts");
+  planWindows.at(-1).resolve(noopWindow(1497));
+  await turns();
+  assert.equal(reviewRenders.length, paintedLocal + 1, "read receipt paints its new rows once");
+
   const heldReaderRelease = noopTask.planReads.beginForeground();
   const heldWindows = planWindows.length;
   noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
@@ -3675,9 +3688,11 @@ assert.equal(noopTask.review.follow.scrollOffset, null, "cached automatic Follow
     {phase:"execute", last_settled_operation_id:noopOperation(1800)}));
   await advanceClock(500);
   assert.equal(planAnchors.length, delayedAnchors + 1);
+  const paintsWhileReading = reviewRenders.length;
   noopDrain.acceptUpdate(executionDirtyUpdate, pageSnapshot(noopTaskId, noopSessionId,
     {phase:"execute", last_settled_operation_id:noopOperation(200)}));
   await advanceClock(300);
+  assert.ok(reviewRenders.length > paintsWhileReading, "a slow anchor read cannot delay local progress painting");
   planAnchors.at(-1).resolve({disposition:"current", index:1800});
   await turns();
   planWindows.at(-1).resolve(noopWindow(1796));
