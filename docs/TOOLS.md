@@ -672,6 +672,12 @@ target. Plan/UI latency and empirical representation memory are advisory.
 Correctness, counted scale behavior, custody, lifecycle/resource containment,
 history release limits, SH-G-15 and executor settlement retain their named gates.
 
+The R3 History release and bridge-event acceptance collection has its own
+collector and separate checker, `python -m tools.performance.br_g_42 collect DIR`
+and `validate DIR`. Collection refuses a dirty tree and launches five fresh
+children per case without retry. [PERFORMANCE](PERFORMANCE.md#r3-acceptance-collection--predeclared-2026-11-09)
+owns the statistics and limits.
+
 The M1-9 inventory cold projection gate has two dedicated commands, independent
 of that optional case registry:
 
