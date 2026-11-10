@@ -856,16 +856,34 @@ origin and exact notice evidence remains in `build/m1-r2-20261109/` and
 or distribute the R4/R5 candidate or renew resource acceptance. Existing measured
 artifacts remain intact.
 
-**R4 candidate run, 2026-11-09/10 (open).** Clean `1f632b13` was built with the
-locked R2 recipe into `build/m1-r4-20261109/package/`. Portable ZIP SHA-256
-`58429fa8…478f`, wheel `18a04000…0b`, source ZIP `e8823ddc…6351`; identities,
-native origins and the full hashes are in that folder. Results:
+**R4 candidate run, 2026-11-09/10.** The final candidate is clean `3ece185f`, built
+with the locked R2 recipe into `build/m1-r4-20261109/package-2/`. Portable ZIP
+SHA-256 `5b9163ce…7319`, wheel `207db5df…e87b`, source ZIP `bb5bfc73…dfb4`;
+identities, native origins and the full hashes are in that folder. The first
+candidate, `1f632b13` (`package/`, ZIP `58429fa8…478f`), differs only in one
+test driver. All 309 wheel members and all 350 source-archive members are
+byte-identical. Each executable's 610 embedded entries match; only the PE
+build timestamp (two places) and checksum differ. The other changed ZIP members are
+install metadata (`RECORD`, `direct_url.json`, naming the output folder and
+wheel archive hash) (`package-compare.txt`, `exe-compare.txt`,
+`exe-bytes.txt`). Results:
 
-- **Release command** (TESTS, exclusions cleared, Python 3.13.17, Node 24.22.1):
-  1 failed, 6,555 passed, 4 skipped. Imports and diff check pass. All 546 BR-G and
-  81 SH-G cases pass. The four skips are symlink/reparse creation refused for
-  lack of privilege (WinError 1314), a capability skip on this host.
-  The failure blocks BR-G-44, so R4 cannot close on this candidate.
+- **Release command** (TESTS, exclusions cleared, Python 3.13.17, Node 24.22.1)
+  on `3ece185f`, quiet desktop (`release-3/`): **6,556 passed, 0 failed, 4
+  skipped.** Imports and diff check pass, and the tree stayed clean. All 546 BR-G and
+  81 SH-G cases pass with no skip or xfail. The four skips are symlink/reparse
+  creation refused for lack of privilege (WinError 1314), a capability skip on
+  this host. BR-G-44 passes. Earlier runs are retained: `release/` (on
+  `1f632b13`: 1 failure, below) and `release-2/` (on `3ece185f`: 3 failures,
+  next item).
+- **Headed gallery flakes under desktop activity:** `release-2/` failed one
+  component-gallery run, which counts as three cases including BR-G-46. Reruns
+  that morning failed 1 of 6 and 1 of 8 in three different forms: About Escape
+  event counts, an icon image load error, and a window already gone at harness close.
+  On the quiet desktop, 11 instrumented runs and `release-3/` all pass,
+  with no failure messages captured (`gallery-diag/`). The user attributes the
+  earlier failures to concurrent desktop use. No product or test change follows;
+  headed release evidence needs an idle desktop.
 - **Failure (test race, not product):** `test_task_shell_headed[larger]` saw
   `focusPreserved: False`, intermittently in either window size. Instrumented reruns
   (`focus-diag/`) show Pause never received focus. The driver called `focus()`
@@ -875,18 +893,20 @@ native origins and the full hashes are in that folder. Results:
   through automatic Follow and the deferred paint, with no blur, attribute
   change or removal. Reruns first fail at `ea0daac2`, which repaints immediately on control-state change and
   plausibly shows the controls inside that closing window. The driver now
-  waits for the dialog to close and asserts focus landed. 10 of 10 cases pass.
-  Product bytes are unchanged, so the witness and SH-G-15 evidence stand.
+  waits for the dialog to close and asserts focus landed (`3ece185f`). 10 of 10
+  cases pass.
 - **DESKTOP_UI acceptance mapping:** every criterion maps to passing release
   cases (bridge/native gates, transport, drain, layout-control, single-instance,
-  setup, execution-review, inventory and task-shell journeys). The only gap was
-  the test race above.
+  setup, execution-review, inventory and task-shell journeys), all passing in
+  `release-3/`.
 - **Portable witness:** fresh extraction outside the checkout, system-only PATH,
   medium integrity. Ready, About `0.1.0 "Gertrud"` with 20 notices, reviewed
   copy with exact mirror, Integrity inventory, Baseline and Verify complete,
-  then a normal close exits 0 with an empty Job (`witness-07/receipt.json`).
+  then a normal close exits 0 with an empty Job. It passes on both candidates:
+  `witness-07` on `package/` and `witness-08` on the final `package-2/` ZIP.
   Attempts 01–06 failed on driver races and are retained.
-- **SH-G-15 schedule:** all 17 runs complete with exact mirrors and clean exits.
+- **SH-G-15 schedule** (collected on `1f632b13`; carried to `3ece185f`, whose
+  app content is identical as above): all 17 runs complete with exact mirrors and clean exits.
   The 100k peak (2.3–2.4 GiB) and soak whole-app slopes (+0.28–0.35 MiB/cycle,
   renderer +0.20–0.22 as before) exceed historical yardsticks; everything else
   is inside them ([PERFORMANCE](PERFORMANCE.md#r4-candidate-resource-schedule-on-1f632b13--2026-11-10)).
@@ -898,7 +918,7 @@ native origins and the full hashes are in that folder. Results:
 | R1 | Build the portable packaging path: tools owns build script/specification/locked build inputs; interfaces owns existing entry points, resources and version metadata; tests owns artifact verification. Include package assets, native host assemblies, distribution metadata, GUI/console subsystem classification and corresponding source identity. Verify from a clean staged source on Windows x64, then extract to a path outside the checkout and exercise both actual executables under standard integrity without relying on development Python. Keep required clean-wheel checks. One coherent packaging commit with matching TOOLS/INTERFACES/TESTS documentation. | Repeatable build path, hash-locked installation, native startup/close and hosted CI pass at `b3095886`. Exact source/tool/environment identities and scoped build comparison are recorded. Final release-candidate proof remains with R4. TOOLS owns structure and build commands. |
 | R2 | Complete the distribution contents and user journey: exact bundled dependency/asset census, notices/license texts and corresponding-source/build directions, selected release version, extraction/start/prerequisite guidance, supported limitations, feedback instructions and upgrade/data-retention guidance. Owners: INTERFACES, README, FEATURES and existing notice corpus; packaging consumes them. Verify against actual ZIP contents, About/startup identity and clean-machine or isolated supported-host launch. One coherent distribution-documentation/asset commit. | Complete 2026-11-09: ship the unsigned v0.1.0 guides, GPL and 51 notice records, including compiled Python/freezer and embedded-package terms. Trace and exclude the 43 ambient UCRT/API-set DLLs; retain controlled native origins and freezer tables locally/in CI. Actual ZIP/source census, console help and isolated medium-integrity About/startup/close pass; packaging/tool verification and independent review pass. TOOLS owns finite evidence and native policy. External Microsoft-terms agreement remains a named R5 handoff prerequisite; no release candidate is accepted here. |
 | R3 | Close quantitative release obligations under existing owners. INTERFACES/DEFENSE own SH-G-15 acceptance; PERFORMANCE owns exact profiles, workload corpus, process identities, repetitions/durations, quiescence, statistics, raw records and validator provenance. Predeclare separate cold peak/settled, retained-growth and trend budgets before acceptance measurements. Map current BR-G-42 timing and retained history/projection obligations to current validators/evidence by dependency. Commit each coherent acceptance mechanism with its subject docs and tests. | Design follows artifact/runtime selection; measurements follow settled inputs. No invented passing budget, diagnostic-to-acceptance promotion, retired BR-G-45 revival or universal leak-freedom claim. Missing policy choices or invalidated authority require adjudication under DEFENSE. 2026-11-09 current-source BR-G-42 diagnostics at `ddf1afe9` stay within the historical budgets ([PERFORMANCE](PERFORMANCE.md#current-source-br-g-42-diagnostics--2026-11-09)); the user ratified CPython 3.13.17 as the reference runtime with budgets unchanged. **Complete 2026-11-09** at `cbb07d5f`: Plan/UI numbers are advisory under DEFENSE §7 and need no collection; the [predeclared five-child collections](PERFORMANCE.md#r3-acceptance-result--2026-11-09) pass for Inventory cold projection, History release and bridge-event timing. SH-G-15 is judged on the rebuilt candidate in R4. |
-| R4 | Freeze a clean candidate after debugging/cleanup integration. Record commit, source/dependency/tool/runtime identities and artifact hashes; provide repeatable Windows build/CI configuration, with interactive native evidence separately identified. Run the complete TESTS release command with default exclusions cleared and no department filter, imports, applicable settlement and every BR-G/SH-G obligation. Map every active DESKTOP_UI acceptance item to evidence or an explicitly approved deferral. Add portable-artifact startup, packaged resource, standard-integrity, real reviewed-copy/inventory/verify and close witnesses; wheel evidence alone cannot certify the executable. | After R1–R3 and concurrent work settle. All `test_br_g` cases must collect/pass without skip/xfail; account for other capability skips. Changed source, producer, checker, driver or runtime invalidates affected evidence. One reviewed candidate closeout commit; no broad gate yet. **Open 2026-11-10:** the `1f632b13` candidate passes the witness, UI mapping and imports, and completes SH-G-15 collection for the user's judgment. BR-G-44 was blocked by an intermittent task-shell driver race (see above), now corrected in the test; the release command reruns on the corrected commit. |
+| R4 | Freeze a clean candidate after debugging/cleanup integration. Record commit, source/dependency/tool/runtime identities and artifact hashes; provide repeatable Windows build/CI configuration, with interactive native evidence separately identified. Run the complete TESTS release command with default exclusions cleared and no department filter, imports, applicable settlement and every BR-G/SH-G obligation. Map every active DESKTOP_UI acceptance item to evidence or an explicitly approved deferral. Add portable-artifact startup, packaged resource, standard-integrity, real reviewed-copy/inventory/verify and close witnesses; wheel evidence alone cannot certify the executable. | After R1–R3 and concurrent work settle. All `test_br_g` cases must collect/pass without skip/xfail; account for other capability skips. Changed source, producer, checker, driver or runtime invalidates affected evidence. One reviewed candidate closeout commit; no broad gate yet. **2026-11-10:** final candidate `3ece185f` passes the complete release command (BR-G-44), UI mapping, imports and the portable witness. Its app content matches the `1f632b13` SH-G-15 collection. The task-shell driver race was corrected in the test. R4 closeout awaits the user's SH-G-15 judgment. |
 | R5 | Review exact candidate adversarially; reconcile notices/source, hashes, known issues, instructions and gate evidence. Prepare the immutable ZIP, source bundle, checksums and release notes for the selected testers. Update CHANGELOG, README, this register and HANDOFF with actual outcomes. | After R4. Present concrete files and remaining distribution/signing decisions before external delivery. Record distributor/tester agreement to the Microsoft binary conditions identified in BUILDING and the shipped notices before handoff; retaining text alone is not agreement or redistribution clearance. Release completes only when named gates and agreed handoff are satisfied; uploading/tagging must not substitute for acceptance. |
 
 The 2026-11-09 follow-up at `6673fc43` corrects the Plan memory attribution:

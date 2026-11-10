@@ -15,7 +15,10 @@ preserving fixture/action, counted-work and independent release/custody gates.
 **Artifact.** `build/m1-r4-20261109/package/NamiSync-windows-x64-dev.zip`,
 SHA-256 `58429fa854c3161cd5e43bffeaedda05fc6373541430ece369009af40547478f`,
 built by that folder's `build_package.ps1` (same hash-locked recipe and offline
-downloads as R2) from clean `1f632b13`. The collector, corpus, host and frozen
+downloads as R2) from clean `1f632b13`. The final R4 candidate `3ece185f`
+changes only a test driver; its package has identical wheel members and
+executable payloads ([M1_PLAN](M1_PLAN.md#m1-release--authorized-2026-11-04), "R4 candidate run"), so these results
+apply to it unchanged. The collector, corpus, host and frozen
 17-run schedule are those of the [`733f0cb1` study](#full-resource-schedule-on-733f0cb1--2026-110708).
 The runs took about 4.4 hours (00:32–04:55 local) with the machine otherwise
 quiet. All 17 runs completed (`soak.log` ends `exit 0`). All 306 mirror checks

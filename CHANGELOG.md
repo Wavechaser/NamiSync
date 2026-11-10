@@ -625,6 +625,11 @@ explicit, reviewable and regression-backed.
   command's one intermittent failure is a task-shell driver race: it focused
   Pause while the closing confirmation still kept the page inert. The driver
   now waits for the close and asserts focus landed; product focus is unaffected.
+- Freeze final candidate `3ece185f`: the complete release command passes on an
+  idle desktop (6,556 passed, 4 privilege skips), satisfying BR-G-44, and the
+  witness passes on its ZIP. Its app content matches the soaked package apart from
+  PE timestamps and install metadata. Component-gallery flakes seen under
+  concurrent desktop use did not recur on an idle desktop.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
   release publication remains open.
