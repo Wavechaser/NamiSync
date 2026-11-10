@@ -288,11 +288,11 @@ production premise must land atomically with its owning model, constants,
 fixture, validator, and acceptance evidence rather than precede them as launch
 policy.
 
-The desktop host must remain at standard integrity. Before headed beta release,
-an elevated launch must be refused before command exposure unless a revision of
-this model explicitly supports it; until that gate exists, elevated launch is
-an unsupported configuration. Live application databases and browser state are
-supported only on local, non-cloud-synchronized storage.
+The desktop host requires a standard medium-integrity Windows process token.
+It refuses launch before singleton activation and command exposure unless
+Windows confirms both medium integrity and a non-elevated token. Live
+application databases and browser state are supported only on local,
+non-cloud-synchronized storage.
 
 The authorized user establishes a root anchor through an interface path-
 admission flow — currently an explicit CLI path or native picker — and reviews

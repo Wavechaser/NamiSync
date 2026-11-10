@@ -973,7 +973,7 @@ The host passes the packaged reviewed full-color ICO to pywebview for the
 title bar/taskbar. Portable executables embed the same artifact. No shortcut,
 registry installation or elevated launch is required to establish this identity.
 
-NamiSync has one GUI implementation and two correctly classified Windows entry-point families. `namisync` and `python -m namisync` are console entry points; without a subcommand they show usage and direct the user to `namisync-gui`. `namisync-gui` is a GUI entry point and does not retain a console window. `interfaces/launcher.py` owns `main(argv=None)` and `gui_main(argv=None)`; CLI work must not import pywebview. The GUI launcher completes path and logging setup before importing the web host.
+NamiSync has one GUI implementation and two correctly classified Windows entry-point families. `namisync` and `python -m namisync` are console entry points; without a subcommand they show usage and direct the user to `namisync-gui`. `namisync-gui` is a GUI entry point and does not retain a console window. `interfaces/launcher.py` owns `main(argv=None)` and `gui_main(argv=None)`; CLI work must not import pywebview. The GUI launcher resolves the local application paths before importing the web host.
 
 GUI arguments are closed: no arguments or one absolute local `--data-dir PATH` (including equals spelling). Unknown/positional/repeated/missing arguments and relative or non-local paths fail before directory creation, mutex acquisition, logging, or pywebview import. A dependency-free Win32 `MessageBoxW` reporter with caption `NamiSync - Startup Error` shows actionable startup failures when no console exists. Logging records failures once available; a second-instance activation is the settled non-error case.
 
@@ -984,6 +984,15 @@ the first byte above that bound receive `Invalid command request.` without
 reflecting input. GUI admission precedes `Path`/`GuiArguments` construction for
 both data-dir spellings and reports the same usage refusal through its native
 startup reporter, before app paths or the desktop host are imported.
+
+All desktop entry points reach the same host admission. Before singleton
+activation, directory leases, logging or browser and bridge construction, the
+host queries the primary Windows process token and admits only standard medium
+integrity with no token elevation. A refused or unavailable token check uses
+the native startup reporter, returns exit status 1 and directs the user to
+reopen NamiSync normally. The console launcher follows its own command path.
+[DEFENSE.md](DEFENSE.md#21-supported-environment-and-trusted-computing-base)
+owns the authority boundary.
 
 The supported desktop stack is CPython 3.13 on Windows 11 x64, `pywebview==6.2.1`, `pythonnet==3.1.0` on Windows, and Bottle 0.13.4 or later. NamiSync supports the tested pythonnet netfx route and refuses a conflicting `PYTHONNET_RUNTIME`. A change affecting pywebview, pythonnet, clr_loader, or return transport reruns the relevant native reality and hostile-text checks.
 

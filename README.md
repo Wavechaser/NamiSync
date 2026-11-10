@@ -236,8 +236,8 @@ never hides the other result axes in rendered output.
 - No cross-process desktop task visibility, background integrity, concurrent
   file execution, general database migration, backup, or history retention controls.
 - No automatic execution or bypass of reviewed-plan confirmation.
-- The desktop host requires standard integrity. Enforcing elevated-launch refusal
-  before command exposure remains an open headed beta requirement. [Defense model](docs/DEFENSE.md#21-supported-environment-and-trusted-computing-base)
+- The desktop host requires standard Windows permissions and refuses elevated
+  launches before exposing commands. [Defense model](docs/DEFENSE.md#21-supported-environment-and-trusted-computing-base)
 
 ## Documentation
 

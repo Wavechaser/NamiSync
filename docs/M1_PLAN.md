@@ -982,9 +982,9 @@ verification pipeline, new feature or unrelated dependency upgrade is authorized
 
 | Step / commit boundary | Population, preserved guarantees and verification | Status |
 | --- | --- | --- |
-| RR1 — standard-integrity GUI admission | `interfaces/web/host.py` and its narrow native token helper if needed; existing host/logging/headed tests and their direct synthetic helpers; DEFENSE/INTERFACES. All GUI paths converge before singleton activation, path leases, logging, service or command exposure. Query actual process integrity and elevation, admit ordinary medium/non-elevated only and fail closed when facts cannot be read. Preserve CLI behavior and normal-user launch. Verify focused refusal/order/native query tests, interfaces department and genuine medium/elevated owned-process witnesses; independent review before the atomic guard commit. | Reviewed draft and focused checks pass; genuine High-token witness awaits user interaction. |
-| RR2 — exact serviced build inputs | `tools/packaging`, its tests/notice corpus, Windows CI, `pyproject.toml`, exact About attribution and direct consumers, active TOOLS/source-build guidance and INTERFACES stack. Select official CPython 3.15.2 x64 full managed ZIP, setuptools 84.1.0, necessary 3.15-compatible pythonnet 3.2.1 / CFFI 2.1.0 wheel and native-serviced xxhash 4.1.0. Reconcile applicable advisories and complete collected notices; preserve no-ambient-DLL policy, source identity and GPL/third-party terms. Use private environments, verify real build/console/native-host seam and ordinary compatibility; independent review before the atomic runtime/build commit. | Bounded source/input/notice review and focused checks pass; preserved unmerged pending RR1/RR3 gates and complete acceptance. |
-| RR3 — reference-profile renewal | Existing `br_g_42`, bridge-event and inventory producer/checker/test consumers plus current profile docs and new, separately named receipts. Preserve historical receipt bytes and all numerical budgets. Predeclare the selected runtime/hardware/collection inputs, then run the existing five-child Inventory cold and History/bridge-event collections. Renew all other runtime-dependent gates required by the declared owners; no advisory Plan/UI metric becomes acceptance. Review producer/checker changes and their controls before freezing and collecting. | Draft qualification edits are paused at the v1 validator authority boundary; the v2 proposal below awaits a user decision. No acceptance collection started. |
+| RR1 — standard-integrity GUI admission | `interfaces/web/host.py` and its narrow native token helper if needed; existing host/logging/headed tests and their direct synthetic helpers; DEFENSE/INTERFACES. All GUI paths converge before singleton activation, path leases, logging, service or command exposure. Query actual process integrity and elevation, admit ordinary medium/non-elevated only and fail closed when facts cannot be read. Preserve CLI behavior and normal-user launch. Verify focused refusal/order/native query tests, interfaces department and genuine medium/elevated owned-process witnesses; independent review before the atomic guard commit. | Guard verified: 148 focused, 2,302 interfaces, 12 imports and genuine low/medium/High-token witnesses pass; independent review closes RR1. |
+| RR2 — exact serviced build inputs | `tools/packaging`, its tests/notice corpus, Windows CI, `pyproject.toml`, exact About attribution and direct consumers, active TOOLS/source-build guidance and INTERFACES stack. Select official CPython 3.15.2 x64 full managed ZIP, setuptools 84.1.0, necessary 3.15-compatible pythonnet 3.2.1 / CFFI 2.1.0 wheel and native-serviced xxhash 4.1.0. Reconcile applicable advisories and complete collected notices; preserve no-ambient-DLL policy, source identity and GPL/third-party terms. Use private environments, verify real build/console/native-host seam and ordinary compatibility; independent review before the atomic runtime/build commit. | Bounded source/input/notice review and focused checks pass; preserved unmerged pending RR3 gates and complete acceptance. |
+| RR3 — reference-profile renewal | Existing `br_g_42`, bridge-event and inventory producer/checker/test consumers plus current profile docs and new, separately named receipts. Preserve historical receipt bytes and all numerical budgets. Predeclare the selected runtime/hardware/collection inputs, then run the existing five-child Inventory cold and History/bridge-event collections. Renew all other runtime-dependent gates required by the declared owners; no advisory Plan/UI metric becomes acceptance. Review producer/checker changes and their controls before freezing and collecting. | User approved v2 authority; implementation and controls are active. No acceptance collection started. |
 | RR4 — renewed candidate and R5 closure | Freeze clean integrated source, build one exact artifact, census files/notices/origins; run complete TESTS release command, imports, every BR-G/SH-G witness, portable reviewed-copy/inventory/integrity/close and 17-run SH-G-15 schedule on unchanged declared workloads/budgets. Reconcile any resource exceedance explicitly rather than importing the old artifact's acceptance. Independent exact-candidate R5 review, immutable handoff set and final delivery decision follow. | After RR1–RR3. No old pass is silently attributed to changed source/runtime. |
 
 Evidence uses `build/m1-release-repair-20261110/` under its README conventions.
@@ -1010,7 +1010,9 @@ backend across fourteen sizes and boundary cases; no persisted algorithm or
 domain operation changes. Its dependency constraint and exact notices are part
 of the authorized native servicing outcome.
 
-**Pending verification-authority decision.** The original SH-G-8 ceiling pins
+**Approved verification-authority extension — 2026-11-10.** The user approved
+the versioned authority described below, preserving all v1 evidence, provenance,
+controls and the ceiling. The original SH-G-8 ceiling pins
 the working bytes of `test_bridge_transport_custody.py` to `c6da8e17`, whose
 live qualifier requires Python 3.13. Editing that qualifier for 3.15 invalidates
 the pin. The draft is unaccepted; no original ceiling, receipt or Git authority
@@ -1019,7 +1021,7 @@ was changed. A PSF 3.15.2 / SQLite 3.53.4 / xxhash 4.1.0 diagnostic measured
 1,966,080-byte ceiling, then correctly failed the authority check. These numbers
 are not gate acceptance.
 
-The proposed narrow extension versions the active verifier authority: add
+The approved narrow extension versions the active verifier authority: add
 `sh_g_8_transport_authority_v2.json`, pin its active verifier/shared-helper
 identities and authenticate the original v1 validator, ceiling, calibration and
 accepted holdout through their immutable Git identities. Preserve the original
@@ -1033,7 +1035,7 @@ new calibration, budget change or broadened empirical claim is proposed.
 Independent review, an isolated authority freeze, the authority controls and
 the real selected-runtime drift check precede integration and the existing
 R3/R4 renewal. DEFENSE §7's append/version-only rule and AGENTS' verification
-boundary require the user's decision before this extension is implemented.
+boundary remain binding; this approval does not change the numerical claim.
 
 The serviced Astral 3.13.18 alternative passed all 66 unchanged custody checks
 with xxhash 4.1.0, but its SQLite 3.53.1 predates the FTS5 fixes. Database
@@ -1052,11 +1054,13 @@ test processes are bounded and task-owned; do not alter other sessions or global
 Python. Existing safety, recurrence and unsupported-boundary stops remain in
 force. An exposed applicable advisory without an in-scope remedy, changed effect
 model, or blocked unchanged gate requires adjudication, not weakened assertions.
-The unanswered v2 authority decision and canceled elevation interaction stop
-dependent work. Recovery `ed18ad3e` on `codex/wip-20261110-release-repair`
-preserves the unmerged draft from `89bbd0e7`; rebuild reviewed outcomes after
-the decisions rather than merging or cherry-picking that WIP. Only the bounded
-wheel-test fix and current decision/resumption documents are on `milestone1`.
+The user approved v2 and reports that the first UAC prompt was not seen. A
+retry through built-in Windows PowerShell completed: the actual High/elevated
+token was refused before singleton/data/browser exposure. The user also
+authorized the native tests and quiet, plugged-in, unlocked resource schedule. Recovery `ed18ad3e` on
+`codex/wip-20261110-release-repair` preserves the unmerged draft from
+`89bbd0e7`; rebuild reviewed outcomes rather than merging or cherry-picking
+that WIP. Preserve the old recovery until every saved change is accounted for.
 
 The 2026-11-09 follow-up at `6673fc43` corrects the Plan memory attribution:
 the 17.9 MiB bucket is existing node IDs, not new folder paths. The slot-growth

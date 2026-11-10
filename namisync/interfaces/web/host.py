@@ -29,6 +29,12 @@ _ERROR_ALREADY_EXISTS = 183
 _SW_RESTORE = 9
 _PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 _MAX_LONG_PATH_CHARS = 32_768
+# The Windows SDK inlines GetCurrentProcessToken with this query-only handle.
+_CURRENT_PROCESS_TOKEN = -4
+_TOKEN_ELEVATION = 20
+_TOKEN_INTEGRITY_LEVEL = 25
+_WIN_MEDIUM_LABEL_SID = 67
+_SECURITY_MAX_SID_SIZE = 68
 _EXIT_SUCCESS = 0
 _EXIT_STARTUP = 1
 _ID_RETRY = 4
@@ -41,6 +47,55 @@ _CLOSE_INCOMPLETE_MESSAGE = (
     "NamiSync could not finish closing safely.\n\n"
     "Choose Retry to try the orderly close again. Cancel keeps NamiSync open."
 )
+
+
+class _TokenMandatoryLabel(ctypes.Structure):
+    _fields_ = [("sid", wintypes.LPVOID), ("attributes", wintypes.DWORD)]
+
+
+def _has_standard_process_token() -> bool:
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    get_token_information = advapi32.GetTokenInformation
+    get_token_information.argtypes = (
+        wintypes.HANDLE,
+        ctypes.c_int,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD),
+    )
+    get_token_information.restype = wintypes.BOOL
+    is_well_known_sid = advapi32.IsWellKnownSid
+    is_well_known_sid.argtypes = (wintypes.LPVOID, ctypes.c_int)
+    is_well_known_sid.restype = wintypes.BOOL
+
+    returned_size = wintypes.DWORD()
+    elevated = wintypes.DWORD()
+    if not get_token_information(
+        _CURRENT_PROCESS_TOKEN,
+        _TOKEN_ELEVATION,
+        ctypes.byref(elevated),
+        ctypes.sizeof(elevated),
+        ctypes.byref(returned_size),
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+    if elevated.value:
+        return False
+
+    buffer = ctypes.create_string_buffer(
+        ctypes.sizeof(_TokenMandatoryLabel) + _SECURITY_MAX_SID_SIZE
+    )
+    if not get_token_information(
+        _CURRENT_PROCESS_TOKEN,
+        _TOKEN_INTEGRITY_LEVEL,
+        buffer,
+        len(buffer),
+        ctypes.byref(returned_size),
+    ):
+        raise ctypes.WinError(ctypes.get_last_error())
+    label = _TokenMandatoryLabel.from_buffer(buffer)
+    if not label.sid:
+        raise OSError("Windows did not supply a process integrity label")
+    return bool(is_well_known_sid(label.sid, _WIN_MEDIUM_LABEL_SID))
 
 
 class _NativeFolderPicker:
@@ -711,6 +766,21 @@ def run_desktop(
     ] = _schedule_startup_deadline,
 ) -> int:
     """Run the secured headed composition and retain every native owner."""
+
+    try:
+        standard_token = _has_standard_process_token()
+    except (AttributeError, OSError):
+        startup_error(
+            "NamiSync could not verify its Windows process permissions. "
+            "Close this dialog and reopen NamiSync normally."
+        )
+        return _EXIT_STARTUP
+    if not standard_token:
+        startup_error(
+            "NamiSync desktop requires standard Windows permissions. "
+            "Close this dialog and reopen NamiSync normally, without Run as administrator."
+        )
+        return _EXIT_STARTUP
 
     lease: DesktopInstanceLease | None = None
     path_lease: AppPathLease | None = None

@@ -593,6 +593,9 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
+- Refuse elevated or unverified desktop process tokens before singleton
+  activation, application path leases, logging and browser setup. Verify real low, standard
+  medium and elevated High-token behavior, preserving console operation.
 - Check wheel identity and license metadata as headers, allowing the release
   nickname in its README description while requiring exact package name/version
   and preserving the full GPL/license-byte checks.

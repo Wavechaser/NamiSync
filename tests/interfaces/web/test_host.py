@@ -623,6 +623,7 @@ def _patch_primary(
     lease_error: Exception | None = None,
 ) -> tuple[AppPaths, list[object], _Webview, _Document, list[str]]:
     paths = AppPaths.from_root(tmp_path / "app")
+    monkeypatch.setattr(host, "_has_standard_process_token", lambda: True)
     order: list[object] = []
     reports: list[str] = []
     webview = _Webview(order)
@@ -1589,12 +1590,101 @@ def test_br_g_19_desktop_host_preserves_the_interface_boundary() -> None:
     assert forbidden_calls == []
 
 
+@pytest.mark.parametrize(
+    ("elevated", "rid", "failed_query", "error_text"),
+    [
+        (0, 0x2000, None, None),
+        (1, 0x2000, None, "requires standard Windows permissions"),
+        (0, 0x2100, None, "requires standard Windows permissions"),
+        (0, 0x3000, None, "requires standard Windows permissions"),
+        (0, 0x4000, None, "requires standard Windows permissions"),
+        (0, 0x1000, None, "requires standard Windows permissions"),
+        (0, 0x2000, 20, "could not verify its Windows process permissions"),
+        (0, 0x2000, 25, "could not verify its Windows process permissions"),
+    ],
+    ids=[
+        "standard", "elevated", "medium-plus", "high", "system", "low",
+        "no-elevation-fact", "no-integrity-fact",
+    ],
+)
+def test_desktop_token_admission_precedes_singleton_and_app_effects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    elevated: int,
+    rid: int,
+    failed_query: int | None,
+    error_text: str | None,
+) -> None:
+    import ctypes
+    from ctypes import wintypes
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+
+    def get_token_information(token, kind, output, capacity, return_size):
+        assert token == -4  # GetCurrentProcessToken()
+        if kind == failed_query:
+            ctypes.set_last_error(5)
+            return 0
+        if kind == 20:  # TokenElevation
+            size = ctypes.sizeof(wintypes.DWORD)
+            assert capacity == size
+            ctypes.cast(output, ctypes.POINTER(wintypes.DWORD)).contents.value = elevated
+        else:
+            assert kind == 25  # TokenIntegrityLevel
+            # SID revision 1, one subauthority, SECURITY_MANDATORY_LABEL_AUTHORITY.
+            sid = b"\x01\x01\x00\x00\x00\x00\x00\x10" + rid.to_bytes(4, "little")
+            offset = ctypes.sizeof(host._TokenMandatoryLabel)
+            size = offset + len(sid)
+            assert capacity >= size
+            address = ctypes.addressof(output) + offset
+            ctypes.memmove(address, sid, len(sid))
+            host._TokenMandatoryLabel.from_buffer(output).sid = address
+        ctypes.cast(return_size, ctypes.POINTER(wintypes.DWORD)).contents.value = size
+        return 1
+
+    paths = AppPaths.from_root(tmp_path / "not-created")
+    reports: list[str] = []
+    identities: list[DesktopInstanceIdentity] = []
+
+    def load_library(name, *, use_last_error):
+        assert name == "advapi32" and use_last_error
+        return SimpleNamespace(
+            GetTokenInformation=get_token_information,
+            IsWellKnownSid=advapi32.IsWellKnownSid,
+        )
+
+    def acquire(identity, *, native):
+        identities.append(identity)
+        return DesktopInstanceAdmission(None, True, None)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("token probe touched primary desktop state")
+
+    monkeypatch.setattr(ctypes, "WinDLL", load_library)
+    monkeypatch.setattr(host, "acquire_desktop_instance", acquire)
+    monkeypatch.setattr(AppPaths, "acquire_lease", forbidden)
+    monkeypatch.setattr(host, "_configure_logging", forbidden)
+    monkeypatch.setattr(host, "_load_webview", forbidden)
+    identity = _identity()
+
+    result = run_desktop(paths, identity, startup_error=reports.append)
+
+    assert not paths.root.exists()
+    if error_text is None:
+        assert result == 0 and identities == [identity] and reports == []
+    else:
+        assert result == 1 and identities == []
+        assert len(reports) == 1 and error_text in reports[0]
+        assert "reopen NamiSync normally" in reports[0]
+
+
 def test_losing_instance_exits_before_logging_or_webview_import(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     paths = AppPaths.from_root(tmp_path / "not-created")
     reports: list[str] = []
+    monkeypatch.setattr(host, "_has_standard_process_token", lambda: True)
     monkeypatch.setattr(
         host,
         "acquire_desktop_instance",

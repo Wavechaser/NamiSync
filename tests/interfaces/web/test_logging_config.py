@@ -212,6 +212,7 @@ appearance = Appearance()
 
 
 lease = host.DesktopInstanceLease(object(), LeaseNative())
+host._has_standard_process_token = lambda: True
 host.acquire_desktop_instance = lambda _identity, native=None: (
     host.DesktopInstanceAdmission(lease, False, None)
 )
