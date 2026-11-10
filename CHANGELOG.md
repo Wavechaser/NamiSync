@@ -622,8 +622,9 @@ explicit, reviewable and regression-backed.
 - Run R4 on clean candidate `1f632b13`. The portable reviewed copy/inventory/
   verify witness passes, every DESKTOP_UI criterion maps to passing cases, and
   the 17-run SH-G-15 schedule completes for the user's judgment. The release
-  command finds one intermittent task-shell focus regression, first seen at
-  `ea0daac2`, which blocks BR-G-44; R4 stays open.
+  command's one intermittent failure is a task-shell driver race: it focused
+  Pause while the closing confirmation still kept the page inert. The driver
+  now waits for the close and asserts focus landed; product focus is unaffected.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
   release publication remains open.

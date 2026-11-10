@@ -16,14 +16,13 @@ PERFORMANCE records the resource numbers.
   passed, 4 privilege-capability skips (symlink/reparse, WinError 1314).
   lint-imports and diff check pass; the tree was clean before and after. All
   546 BR-G and 81 SH-G cases pass. Per-case results are in `release/cases.txt`.
-- **Blocking failure:** `test_task_shell_headed[larger]`, `focusPreserved`
-  False. A focused live Pause button drops focus to `body` during automatic
-  Follow. Isolated reruns at HEAD fail in every attempt
-  (`release/rerun-task-shell-*.log`). Worktree reruns (`bisect/summary.txt`)
-  place the onset at `ea0daac2`; `b3095886` passed 8 of 8, and the commits
-  between them are docs only. The suspected route is the deferred execution
-  paint (renderTasks/queuePlanFollow) re-rendering an ancestor; this is not yet
-  pinned. Bisect worktrees are removed; logs remain.
+- **Failure, now corrected as a test race:** `test_task_shell_headed`,
+  `focusPreserved` False. Instrumented traces (`focus-diag/`, diff in
+  `diagnostic.diff`) show the driver focused Pause while the closing execution
+  confirmation still held the page `inert`. Pause never took focus. With a
+  wait for the dialog to close, every trace keeps focus through Follow.
+  The driver now waits and asserts focus landed (`fixed-summary.txt`: 10 of 10
+  cases). Bisect logs (`bisect/summary.txt`, onset `ea0daac2`) remain.
 - **DESKTOP_UI mapping:** `ui_map.ps1` maps every criterion to passing cases;
   the only gap is this failure.
 - **Portable witness:** `witness.py` drives Ready, About (0.1.0, 20 notices),
@@ -39,10 +38,8 @@ PERFORMANCE records the resource numbers.
 
 ## Next
 
-1. The user decides on a fix for the focus regression. Any product fix
-   invalidates the candidate's release, witness and SH-G-15 evidence. A new
-   clean candidate then needs a rebuild, the release command, a `witness.py`
-   rerun and the 17-run schedule (about 4.5 h).
+1. Rerun the release command on the corrected commit. Product bytes are
+   unchanged, so the witness and SH-G-15 evidence stand.
 2. The user judges SH-G-15 on the measured behavior.
 3. R4 closes with one reviewed commit once BR-G-44 passes; R5 follows.
 

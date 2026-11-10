@@ -1185,7 +1185,10 @@ window.addEventListener("error", (event) => {
   await until(() => liveViewport.scrollTop > 24, 'held-progress off-window position');
   const offWindowOffset = liveViewport.scrollTop;
   const focusBeforeFollow = live.querySelector('[data-action="pause"]');
+  // Confirmation keeps the page inert until its close frames finish.
+  await until(() => !document.querySelector("#execution-confirmation")?.open, "live confirmation closed");
   focusBeforeFollow.focus();
+  if (document.activeElement !== focusBeforeFollow) throw new Error("live Pause did not take focus");
   const selectionBeforeFollow = await control('follow_snapshot');
   const followAnchor = await control('follow_anchor');
   const followContextTop = Math.max(0, followAnchor.index - 4) * 24;
