@@ -983,9 +983,9 @@ verification pipeline, new feature or unrelated dependency upgrade is authorized
 | Step / commit boundary | Population, preserved guarantees and verification | Status |
 | --- | --- | --- |
 | RR1 — standard-integrity GUI admission | `interfaces/web/host.py` and its narrow native token helper if needed; existing host/logging/headed tests and their direct synthetic helpers; DEFENSE/INTERFACES. All GUI paths converge before singleton activation, path leases, logging, service or command exposure. Query actual process integrity and elevation, admit ordinary medium/non-elevated only and fail closed when facts cannot be read. Preserve CLI behavior and normal-user launch. Verify focused refusal/order/native query tests, interfaces department and genuine medium/elevated owned-process witnesses; independent review before the atomic guard commit. | Guard verified: 148 focused, 2,302 interfaces, 12 imports and genuine low/medium/High-token witnesses pass; independent review closes RR1. |
-| RR2 — exact serviced build inputs | `tools/packaging`, its tests/notice corpus, Windows CI, `pyproject.toml`, exact About attribution and direct consumers, active TOOLS/source-build guidance and INTERFACES stack. Select official CPython 3.15.2 x64 full managed ZIP, setuptools 84.1.0, necessary 3.15-compatible pythonnet 3.2.1 / CFFI 2.1.0 wheel and native-serviced xxhash 4.1.0. Reconcile applicable advisories and complete collected notices; preserve no-ambient-DLL policy, source identity and GPL/third-party terms. Use private environments, verify real build/console/native-host seam and ordinary compatibility; independent review before the atomic runtime/build commit. | Bounded source/input/notice review and focused checks pass; preserved unmerged pending RR3 gates and complete acceptance. |
-| RR3 — reference-profile renewal | Existing `br_g_42`, bridge-event and inventory producer/checker/test consumers plus current profile docs and new, separately named receipts. Preserve historical receipt bytes and all numerical budgets. Predeclare the selected runtime/hardware/collection inputs, then run the existing five-child Inventory cold and History/bridge-event collections. Renew all other runtime-dependent gates required by the declared owners; no advisory Plan/UI metric becomes acceptance. Review producer/checker changes and their controls before freezing and collecting. | User approved v2 authority; implementation and controls are active. No acceptance collection started. |
-| RR4 — renewed candidate and R5 closure | Freeze clean integrated source, build one exact artifact, census files/notices/origins; run complete TESTS release command, imports, every BR-G/SH-G witness, portable reviewed-copy/inventory/integrity/close and 17-run SH-G-15 schedule on unchanged declared workloads/budgets. Reconcile any resource exceedance explicitly rather than importing the old artifact's acceptance. Independent exact-candidate R5 review, immutable handoff set and final delivery decision follow. | After RR1–RR3. No old pass is silently attributed to changed source/runtime. |
+| RR2 — exact serviced build inputs | `tools/packaging`, its tests/notice corpus, Windows CI, `pyproject.toml`, exact About attribution and direct consumers, active TOOLS/source-build guidance and INTERFACES stack. Select official CPython 3.15.2 x64 full managed ZIP, setuptools 84.1.0, necessary 3.15-compatible pythonnet 3.2.1 / CFFI 2.1.0 wheel and native-serviced xxhash 4.1.0. Reconcile applicable advisories and complete collected notices; preserve no-ambient-DLL policy, source identity and GPL/third-party terms. Use private environments, verify real build/console/native-host seam and ordinary compatibility; independent review before the atomic runtime/build commit. | Integrated as `eb98c95f` and compatibility descendant `cfeac2d9`; exact inputs/notices, complete release and final artifact review pass. |
+| RR3 — reference-profile renewal | Existing `br_g_42`, bridge-event and inventory producer/checker/test consumers plus current profile docs and new, separately named receipts. Preserve historical receipt bytes and all numerical budgets. Predeclare the selected runtime/hardware/collection inputs, then run the existing five-child Inventory cold and History/bridge-event collections. Renew all other runtime-dependent gates required by the declared owners; no advisory Plan/UI metric becomes acceptance. Review producer/checker changes and their controls before freezing and collecting. | Complete on `cfeac2d9`: v2 controls/live ceiling, five-child Inventory base/heavy and History/installed bridge collections pass unchanged limits; independently reviewed versioned receipts retained. |
+| RR4 — renewed candidate and R5 closure | Freeze clean integrated source, build one exact artifact, census files/notices/origins; run complete TESTS release command, imports, every BR-G/SH-G witness, portable reviewed-copy/inventory/integrity/close and 17-run SH-G-15 schedule on unchanged declared workloads/budgets. Reconcile any resource exceedance explicitly rather than importing the old artifact's acceptance. Independent exact-candidate R5 review, immutable handoff set and final delivery decision follow. | Active on `cfeac2d9`: complete release 6,575 passes/four unchanged capability skips, 12 imports, 30 × 3 settlement, final package census and Medium journey pass. Packaged High-token witness awaits UAC consent; 17-run resource schedule remains required. No old resource exception transfers. |
 
 Evidence uses `build/m1-release-repair-20261110/` under its README conventions.
 The isolated authority introduction `eb98c95f` passed 159 custody and related
@@ -996,24 +996,26 @@ witnesses assume Python's old internal delegation. Restore the existing UTC
 grammar in `core/event_v5.py`, update those five headed test files and current
 DESKTOP_UI guidance, and retain one no-follow snapshot across either OS entry
 point. CORE, the executor witness and CHANGELOG complete this finite delta.
-All 22 failing cases pass within 281 focused and 112 headed checks. Independent
-review and a complete release rerun on a descendant of the immutable v2
-introduction precede integration; History collection must use that descendant
-because History admission consumes the shared timestamp validator. Preserve the
-failed release receipt and all v2 pins; no contract or budget is relaxed.
+All 22 failing cases passed within 281 focused and 112 headed checks. Independent
+review and the complete release rerun passed on descendant `cfeac2d9` before
+integration. History collection also passed on that descendant because History
+admission consumes the shared timestamp validator. The failed release receipt
+and all v2 pins remain preserved; no contract or budget was relaxed.
 Input comparison rejected official 3.14.10 because its SQLite 3.50.4 retains
 the WAL-reset bug; NamiSync uses WAL. Official 3.15.2 supplies SQLite 3.53.4
 and retains the existing PSF distribution/CI provider. Its necessary supported
-pythonnet update passed the real netfx/WinForms/EdgeChromium import and managed
-conversion probe; complete native gates remain required. A serviced Astral
+pythonnet update passed the real netfx/WinForms/EdgeChromium import, managed
+conversion probe and complete release suite. A serviced Astral
 3.13.18 alternative also passed that probe but retains FTS5-affected SQLite
-3.53.1 and changes distribution provenance. Expat/XZ advisory applicability
-still requires final freezer/population review. Exact input hashes and native
+3.53.1 and changes distribution provenance. `runtime/input-comparison.md`
+in the repair evidence records the Expat/XZ caller-applicability disposition;
+the final artifact review independently records the bundled population and
+native origins. Exact input hashes and native
 versions remain with packaging locks and the runtime evidence, not this register.
 RR2's runtime selection and RR3's producer/checker qualification edits form one
 atomic source boundary: the current-runtime tests cannot remain pinned to 3.13
-when their release input changes. Review and verify those edits together;
-RR3's clean-source acceptance collections follow that commit. Frozen historical
+when their release input changes. Those edits were reviewed and verified together;
+RR3's clean-source acceptance collections subsequently passed. Frozen historical
 receipts keep their original runtime checks and bytes; no ceiling is recalibrated.
 The selected hashing input is now the unmodified xxhash 4.1.0 wheel with native
 xxHash 0.8.4. Upstream native servicing covers its latest release; the former
@@ -1028,8 +1030,8 @@ the versioned authority described below, preserving all v1 evidence, provenance,
 controls and the ceiling. The original SH-G-8 ceiling pins
 the working bytes of `test_bridge_transport_custody.py` to `c6da8e17`, whose
 live qualifier requires Python 3.13. Editing that qualifier for 3.15 invalidates
-the pin. The draft is unaccepted; no original ceiling, receipt or Git authority
-was changed. A PSF 3.15.2 / SQLite 3.53.4 / xxhash 4.1.0 diagnostic measured
+the pin. The prior unversioned draft was not accepted; no original ceiling,
+receipt or Git authority was changed. Its PSF 3.15.2 / SQLite 3.53.4 / xxhash 4.1.0 diagnostic measured
 1,433,387 ordinary and 1,642,935 maximum-no-Gap bytes below the unchanged
 1,966,080-byte ceiling, then correctly failed the authority check. These numbers
 are not gate acceptance.

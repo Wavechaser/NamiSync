@@ -593,6 +593,14 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
+- Renew the complete release, settlement and R3 timing gates on `cfeac2d9`:
+  6,575 tests pass with four unchanged capability skips, all 12 import contracts
+  hold, and Inventory/History/bridge collections pass unchanged limits. Preserve
+  separately versioned receipts and the failed predecessor run.
+- Build and independently audit the serviced portable package: 341 files,
+  38 native inputs and 52 notices. Verify the actual Medium-token app's About,
+  reviewed copy, integrity actions and clean exit; retain packaged elevated
+  refusal and resource acceptance as separate pending gates.
 - Preserve strict event timestamp clock ranges under Python 3.15, align the
   installed desktop witnesses with Python.NET 3.2.1, and keep the executor's
   single no-follow snapshot check independent of Python's stat delegation.

@@ -3348,6 +3348,33 @@ receipts and source closure. The current guard leaves that empirical claim
 scoped to the historical profile. SH-G-15 runs separately on the rebuilt
 release package.
 
+### R3 release repair result — 2026-11-10
+
+The renewed collection passes on clean `cfeac2d9`, using the selected runtime
+above, the same reference machine, AC power and the user-confirmed quiet
+desktop. All twenty timed children completed without retries. Independent
+review reconciles source/runtime/profile identities, raw hashes and metrics.
+
+| Obligation | Children | Result | Unchanged limit |
+| --- | ---: | ---: | ---: |
+| Inventory cold base / information-heavy | 5 / 5 | max 1.479 / 2.114 s | 3 / 6 s |
+| History 50-run summary | 5 (10 readings) | max 1.681 s | 3 s |
+| History item / event pages | 5 (200 each) | p95 18.93 / 19.30 ms; max 33.82 / 29.81 ms | 500 ms / 1 s |
+| Bridge reliable/terminal | 5 (3,100 events) | worst p95 6 ms; max 51 ms; no Gap | 100 / 250 ms |
+| Bridge progress | 5 (7,490 events) | worst p95 42 ms; max 47 ms; monotonic | 1 / 2 s |
+
+History's worst normal commit was 54.03 ms; maximum pending state was 256
+events / 109,568 bytes, with recording and audit assertions satisfied.
+Committed receipts: [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261110_raw.json),
+[Inventory verdict](../tests/interfaces/web/r3_inventory_cold_20261110_validation.json)
+and [History/bridge verdict](../tests/interfaces/web/r3_br_g_42_validation_20261110.json).
+Full reports, profile and logs remain in
+`build/m1-release-repair-20261110/acceptance/20261110-03/r3/`; the Inventory
+raw path is recorded in its `identity.json`. Independent review is in
+`build/m1-release-repair-20261110/renewal/r3-review.md`.
+These results renew the named timing gates only, not SH-G-15 or a universal
+speed claim. Historical receipts and their scope remain unchanged.
+
 ## Selected Plan and execution UI observations
 
 Run an optional case through `python -m tools performance --list`, then
