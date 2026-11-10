@@ -10,6 +10,69 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Release repair resource attempt on `cfeac2d9` — 2026-11-10
+
+Resources03 used the independently reviewed serviced portable ZIP, SHA-256
+`a840c9b0fedc31a442e677cb81c7281d5901ed9eafa1e1d25f31c991d9ceff5a`,
+the selected CPython 3.15.2 stack, the same reference host and the unchanged
+SH-G-15 v1 schedule and budgets. Collection started at 07:29:56 UTC and
+stopped at the payload profile; the runner finished at 11:12:46 UTC.
+**The verdict is FAIL and incomplete, not a renewed acceptance.** Fifteen
+runs are valid, the payload run is invalid and `idle-open-01` never started.
+The accepted older candidate's disposition below does not transfer.
+
+| Observation | Runs 1 / 2 / 3 | Unchanged limit |
+| --- | --- | --- |
+| 100k whole-app peak | 2,309.039 / 2,348.285 / 2,346.273 MiB | 2,048 MiB |
+| Soak memory slope, cycles 21–100 | 0.366 / 0.448 / 0.347 MiB/cycle | 0.2 MiB/cycle |
+| Soak first/last median memory shift | 24.129 / 28.631 / 20.109 MiB | 20 MiB |
+| Soak handle slope | 2.699 / −1.780 / 2.575 handles/cycle | 1 handle/cycle |
+| Soak GUI-object growth | 0.5 / −1.5 / −0.5 | 10 |
+
+There are eleven exceeded run/predicate pairs across six valid runs, versus
+seven pairs in the previously accepted candidate. The other nine valid runs
+have no numerical exceedances, including three startup controls without
+numerical predicates. Plain startup, 10k and closed-memory checks pass;
+the new handle-slope observations do not by themselves establish a leak.
+Recomputing the same cycle-window estimator by role locates the two rising
+handle trends in the host: 2.645 / −1.766 / 2.631 handles/cycle. Browser,
+renderer and GPU handle slopes are near zero. The samples cannot identify
+handle types or owners. The final 120-second idle ends only five handles
+below each cycle-100 median, still 560 / 846 / 174 above that app's initial
+idle count. This warrants ownership/lifetime investigation, not a leak claim.
+Renderer memory slopes remain about 0.20–0.22
+MiB/cycle across both attempts; higher GPU contributions in runs 1/2 and host
+memory in run 2 contribute to the current whole-app memory observations.
+Role medians are not additive, and this decomposition is not causal proof.
+
+The payload's second copy (64 × 4 MiB) reached execution and verification
+completion, but the driver timed out after its Close gesture. Its screenshot
+shows the retained completed task without a Close-pending/refusal message.
+The driver records CDP input delivery, not proof that the intended control
+received the trusted click; the failure's cause is not established. No
+product or collector correction is included in this attempt. The final idle
+window and the following hour-long open-task case are missing.
+Two separately retained payload-only diagnostic pilots add bounded passive
+input/completion tracing while preserving the original gestures and timeout.
+Both complete with exact mirrors and normal empty-Job exits. They do not
+reproduce the timeout, establish its cause or replace the missing acceptance
+coverage; instrumentation can perturb an input race.
+
+All sixteen launched apps exited 0 with empty owned Jobs. All 300 soak and
+six scale mirror checks passed, as did the first payload mirror. Because the
+second payload audit is registered only after task Close, a separate read-only
+post-failure SHA-256 audit verified all 64 source/target files. Supplemental
+post-stop checks also confirm all 65 supplied-corpus sizes/timestamps and all
+341 extracted bundle paths/hashes remain unchanged. They do not repair the
+incomplete collector receipt or supply missing observation windows.
+
+Raw evidence: `build/m1-release-repair-20261110/acceptance/20261110-03/resources/`,
+including `validation.json`, `schedule/runs/payload-01/failure.png` and
+`payload-failure-mirror.json`. Independent reconciliation and comparison:
+`build/m1-release-repair-20261110/renewal/resources-review.md`.
+Any renewed resource disposition must distinguish the complete observations,
+missing coverage and unchanged yardsticks; no prior exception is inherited.
+
 ## R4 candidate resource schedule on `1f632b13` — 2026-11-10
 
 **Artifact.** `build/m1-r4-20261109/package/NamiSync-windows-x64-dev.zip`,

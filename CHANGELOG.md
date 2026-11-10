@@ -593,6 +593,11 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
+- Preserve Resources03 as FAIL/incomplete: fifteen valid runs, a payload
+  task-Close observation timeout and an unrun open-idle case. Record the
+  unchanged-budget memory/handle exceedances, exact post-failure mirrors and
+  normal app shutdowns; keep renewed R5 acceptance pending rather than
+  transferring the old candidate's resource disposition.
 - Renew the complete release, settlement and R3 timing gates on `cfeac2d9`:
   6,575 tests pass with four unchanged capability skips, all 12 import contracts
   hold, and Inventory/History/bridge collections pass unchanged limits. Preserve

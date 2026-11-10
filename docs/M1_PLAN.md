@@ -985,9 +985,38 @@ verification pipeline, new feature or unrelated dependency upgrade is authorized
 | RR1 — standard-integrity GUI admission | `interfaces/web/host.py` and its narrow native token helper if needed; existing host/logging/headed tests and their direct synthetic helpers; DEFENSE/INTERFACES. All GUI paths converge before singleton activation, path leases, logging, service or command exposure. Query actual process integrity and elevation, admit ordinary medium/non-elevated only and fail closed when facts cannot be read. Preserve CLI behavior and normal-user launch. Verify focused refusal/order/native query tests, interfaces department and genuine medium/elevated owned-process witnesses; independent review before the atomic guard commit. | Guard verified: 148 focused, 2,302 interfaces, 12 imports and genuine low/medium/High-token witnesses pass; independent review closes RR1. |
 | RR2 — exact serviced build inputs | `tools/packaging`, its tests/notice corpus, Windows CI, `pyproject.toml`, exact About attribution and direct consumers, active TOOLS/source-build guidance and INTERFACES stack. Select official CPython 3.15.2 x64 full managed ZIP, setuptools 84.1.0, necessary 3.15-compatible pythonnet 3.2.1 / CFFI 2.1.0 wheel and native-serviced xxhash 4.1.0. Reconcile applicable advisories and complete collected notices; preserve no-ambient-DLL policy, source identity and GPL/third-party terms. Use private environments, verify real build/console/native-host seam and ordinary compatibility; independent review before the atomic runtime/build commit. | Integrated as `eb98c95f` and compatibility descendant `cfeac2d9`; exact inputs/notices, complete release and final artifact review pass. |
 | RR3 — reference-profile renewal | Existing `br_g_42`, bridge-event and inventory producer/checker/test consumers plus current profile docs and new, separately named receipts. Preserve historical receipt bytes and all numerical budgets. Predeclare the selected runtime/hardware/collection inputs, then run the existing five-child Inventory cold and History/bridge-event collections. Renew all other runtime-dependent gates required by the declared owners; no advisory Plan/UI metric becomes acceptance. Review producer/checker changes and their controls before freezing and collecting. | Complete on `cfeac2d9`: v2 controls/live ceiling, five-child Inventory base/heavy and History/installed bridge collections pass unchanged limits; independently reviewed versioned receipts retained. |
-| RR4 — renewed candidate and R5 closure | Freeze clean integrated source, build one exact artifact, census files/notices/origins; run complete TESTS release command, imports, every BR-G/SH-G witness, portable reviewed-copy/inventory/integrity/close and 17-run SH-G-15 schedule on unchanged declared workloads/budgets. Reconcile any resource exceedance explicitly rather than importing the old artifact's acceptance. Independent exact-candidate R5 review, immutable handoff set and final delivery decision follow. | Active on `cfeac2d9`: complete release 6,575 passes/four unchanged capability skips, 12 imports, 30 × 3 settlement, final package census and Medium journey pass. Packaged High-token witness awaits UAC consent; 17-run resource schedule remains required. No old resource exception transfers. |
+| RR4 — renewed candidate and R5 closure | Freeze clean integrated source, build one exact artifact, census files/notices/origins; run complete TESTS release command, imports, every BR-G/SH-G witness, portable reviewed-copy/inventory/integrity/close and 17-run SH-G-15 schedule on unchanged declared workloads/budgets. Reconcile any resource exceedance explicitly rather than importing the old artifact's acceptance. Independent exact-candidate R5 review, immutable handoff set and final delivery decision follow. | Active on `cfeac2d9`: complete release 6,575 passes/four unchanged capability skips, 12 imports, 30 × 3 settlement, final package census and Medium journey pass. Held: Resources03 is FAIL/incomplete (15 valid runs, payload Close-observation timeout, open-idle unrun), with eleven numerical exceedances across six valid runs. Two diagnostic payload pilots pass but do not explain or replace the failure. Packaged High awaits UAC consent. No old resource exception transfers. |
 
 Evidence uses `build/m1-release-repair-20261110/` under its README conventions.
+Resources03's [partial resource result](PERFORMANCE.md#release-repair-resource-attempt-on-cfeac2d9--2026-11-10)
+does not close RR4. All launched apps shut down normally and file audits pass;
+the failed Close observation does not establish a product lifecycle defect.
+Bounded trusted-input pilots did not reproduce it. The new handle trend is
+observed in the host, but existing samples do not identify ownership or prove
+a leak. `renewal/resources-review.md` and `portable/payload-pilot-{01,02}/`
+retain the finite investigation. No product or collector correction has been
+made, and the unchanged failed verdict remains intact.
+
+**Proposed follow-up, pending user decision:** trace the Close observation and
+characterize host handle ownership/lifetime under repeated tasks first.
+Begin read-only at `host.py`/`pywebview_runtime.py`, `rail.js`/`app.js` Close
+dispatch, and `tools/performance/resources.py` with its `_cdp.py` helper.
+The passing pilots do not authorize a product fix: require a reproducer and
+ownership evidence before any correction, plus real headed Close checks.
+Limit corrections to demonstrated defects in the web host/runtime integration,
+task-rail input seam or existing native/resource helpers, with focused owning
+and direct-consumer tests, independent review and renewed affected gates.
+Preserve exact task identity, trusted user input, Close effects/recovery and
+the selected dependency provenance. Renew complete resource coverage under
+the original budgets; any numerical disposition remains the user's decision.
+Current owners are INTERFACES/BRIDGE/DESKTOP_UI for behavior, TESTS for native
+witnesses, PERFORMANCE for measurement, and M1_PLAN/HANDOFF for decisions.
+No domain/filesystem/ledger effect, new GC or heap policy, threshold change,
+automatic mutation replay, broad dependency upgrade or unrelated UI change is
+proposed. A new ownership, safety or verification-authority boundary still
+requires a separate stop. AGENTS requires adjudication for a blocked gate
+without an authorized remedy; this proposal is not implementation authority.
+
 The isolated authority introduction `eb98c95f` passed 159 custody and related
 controls, including the live unchanged ceiling. Its complete release run then
 found three bounded runtime-migration causes: Python 3.15 normalizes `24:00:00`,

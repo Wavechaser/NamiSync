@@ -1,4 +1,4 @@
-# Latest session — release gates renewed, 2026-11-10
+# Latest session — release renewal blocked after measurement, 2026-11-10
 
 The user authorized bounded release repair, versioned SH-G-8 authority and the
 quiet, plugged-in, unlocked resource schedule. [M1_PLAN](M1_PLAN.md#approved-release-repair--2026-11-10)
@@ -40,15 +40,32 @@ cannot substitute for the final image. Retry with a fresh attempt when the
 user can consent, using reviewed `portable/request-high.ps1` and its hash-pinned
 wrapper. No elevated Git or unrelated process control is needed.
 
-The independently authorized 17-run SH-G-15 schedule started at 07:29:56 UTC
-under `acceptance/20261110-03/resources/`, on the exact Medium-admitted ZIP.
-It is in progress; do not launch a duplicate. High remains pending for final
-R5, and no UAC child is running. The active runner used Resources03,
-Package03, the full candidate commit and `-QuietUnlocked`.
-Check its identity, schedule and command receipts before resuming. Serialize native work and preserve
-all raw verdicts. New resource exceedances require their own disposition;
-the old R4 exception does not transfer. Final exact-artifact R5 review and
-immutable delivery preparation still follow.
+Resources03 stopped with FAIL/incomplete. Fifteen runs are valid; payload
+timed out waiting for the second completed task to close, and `idle-open-01`
+never ran. All sixteen apps exited 0 with empty Jobs. All completed mirrors
+and a separate 64-file payload SHA-256 check pass. Supplemental post-stop
+checks confirm all 65 corpus sizes/modification times and extracted bundle bytes. No collector
+result was rewritten. The original schedule is not acceptance.
+
+Six valid runs account for eleven exceedances across four predicates: 100k peaks 2,309–2,348
+MiB; all three soak memory slopes/shifts; two whole-Job handle slopes. The
+new handle slopes align with the host role. Final 120-second idle still
+retains 560 / 846 / 174 host handles above initial idle, without handle-type
+or lifetime evidence establishing a leak. Renderer memory slopes remain
+similar to the older collection. PERFORMANCE and `renewal/resources-review.md`
+own exact values, comparison limits and the unchanged budgets.
+
+Two bounded payload-only diagnostic pilots completed normally with both
+mirrors exact. They add passive input/completion tracing to the original
+gesture and timeout, without product/driver correction or automatic retries.
+They did not reproduce the Close timeout and cannot replace resource-gate
+coverage. Preserve `portable/payload-pilot-{01,02}/` and the original failure.
+No measurement, pilot or UAC process remains running.
+
+R5 remains held for the proposed bounded Close/host-handle follow-up decision,
+complete resource coverage/disposition and actual packaged High witness.
+The old artifact's resource exception does not transfer. No additional GC,
+heap cap, weaker threshold or lifecycle/effect change has been made.
 
 ## Evidence and resumption
 
@@ -62,7 +79,8 @@ Historical v1 custody bytes and v2 pins remain unchanged.
 The acceptance worktree stays clean at `cfeac2d95a6db83107854d17d9e6c4e9a774b77e`
 under `acceptance-checkout`, branch `codex/release-repair-authority-v2`, with
 its private selected `.venv`. Main `milestone1` fast-forwarded to that exact
-descendant; `integration.json` records the checked transition. Root `.venv`
+descendant, followed by documentation commit `c662cd2e`; `integration.json`
+records the checked transition. Root `.venv`
 and global Python are untouched. Retain recovery `ed18ad3e` on
 `codex/wip-20261110-release-repair` until final accounting; it was rebuilt,
 never merged or cherry-picked. No task worktree or old evidence was removed.
