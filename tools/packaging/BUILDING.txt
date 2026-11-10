@@ -73,9 +73,9 @@ under NamiSync's GPL. Windows 11 supplies UCRT/API-set system libraries.
 The CPython Windows installation license reproduced in THIRD-PARTY-NOTICES.txt
 requires further distributors to require their distributors and external end
 users to agree to terms protecting the Microsoft Distributable Code at least
-as much as Microsoft's own requirements. Arrange that agreement before external
-handoff (the R5 delivery prerequisite); merely including notices is not a grant
-of redistribution rights. Consult the reproduced conditions for their exact
+as much as Microsoft's own requirements. The bundle's MICROSOFT-TERMS.txt states
+those terms for every recipient; keep it with any build you pass on and require
+your recipients to agree to it. Consult the reproduced conditions for their exact
 terms. They apply only to Microsoft Distributable Code, not to NamiSync or
 Python itself, and do not change NamiSync's GPL license.
 

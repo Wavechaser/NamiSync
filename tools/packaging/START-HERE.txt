@@ -78,8 +78,6 @@ The console entry point is namisync.exe; run .\namisync.exe --help for commands.
 NamiSync is GPL-3.0-or-later; see LICENSE. THIRD-PARTY-NOTICES.txt covers the
 bundled runtime and app components; About also contains the app notices.
 BUILDING.txt explains matching source, upstream sources and build directions.
-Microsoft binary components have additional conditions reproduced in the CPython
-Windows installation license section of THIRD-PARTY-NOTICES.txt. Before external
-delivery, the maintainer must arrange the distributor/end-user agreement those
-terms require; including this notice alone does not authorize redistribution.
-These conditions apply to Microsoft code, not to NamiSync or Python itself.
+The bundled Microsoft runtime code is provided under MICROSOFT-TERMS.txt. Read it
+before running the app: using or passing on this build means agreeing to those
+terms. They apply to Microsoft code, not to NamiSync or Python itself.

@@ -90,7 +90,10 @@ prerequisites, checksum/unsigned-warning handling, first use, profile retention,
 upgrade and feedback instructions. [`BUILDING.txt`](../tools/packaging/BUILDING.txt)
 prepares matching-source and clean-commit build directions, including the
 distinction between a repository commit and an extracted source ZIP without Git
-history. `build.py` ships both guides, the GPL, and `THIRD-PARTY-NOTICES.txt`.
+history. [`MICROSOFT-TERMS.txt`](../tools/packaging/MICROSOFT-TERMS.txt) states
+the recipient terms that the CPython Windows build's Microsoft Distributable Code
+conditions require every distributor and end user to accept. `build.py` ships
+the three guides, the GPL, and `THIRD-PARTY-NOTICES.txt` at the bundle root.
 The notice exporter reads the About records and the pinned
 supplements under `tools/packaging/notices/`; its README describes text provenance
 and maintenance. Build-time export is offline and verifies the supplement hashes.
@@ -147,9 +150,10 @@ The tools department passed 449 tests with three existing Windows privilege
 skips; the final notice-focused cases passed 16 tests. A fresh extraction outside
 the checkout runs with system-only PATH, reaches Ready under medium integrity,
 shows About 0.1.0 and twenty app notices, and closes with exit 0 and no remaining
-Job members. Full candidate/resource gates remain R4. Before external delivery,
-R5 records the agreement required by the reproduced Microsoft binary conditions;
-including those texts alone does not satisfy that agreement.
+Job members. Full candidate/resource gates remain R4. Including the reproduced
+Microsoft binary conditions alone does not satisfy their recipient-agreement
+requirement; the bundled `MICROSOFT-TERMS.txt` states those terms for every
+recipient, and the maintainer asks testers to accept it at handoff.
 
 ## Icon maintenance
 

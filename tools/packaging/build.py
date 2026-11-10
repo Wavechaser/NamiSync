@@ -172,7 +172,7 @@ def main() -> None:
     check_executable(bundle / "namisync.exe", 3)
     check_executable(bundle / "namisync-gui.exe", 2)
     shutil.copyfile(source / "LICENSE", bundle / "LICENSE")
-    for name in ("START-HERE.txt", "BUILDING.txt"):
+    for name in ("START-HERE.txt", "BUILDING.txt", "MICROSOFT-TERMS.txt"):
         shutil.copyfile(source / "tools/packaging" / name, bundle / name)
     write_notices(source, bundle)
     run(str(bundle / "namisync.exe"), "--help", cwd=output)
