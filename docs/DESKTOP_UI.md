@@ -129,7 +129,7 @@ project/package metadata, logging and protocol-independent version checks.
 `NICKNAME` is `Gertrud`, a display label for About, release notes and changelog
 headings. Filenames, databases, mutexes, CLI behavior, protocols and compatibility
 logic are independent of the nickname. The host stack pins pywebview 6.2.1 and
-pythonnet 3.1.0.
+pythonnet 3.2.1.
 Bottle has a floor of 0.13.4, the reality-tested server version. NamiSync uses
 pythonnet's default Windows .NET Framework (`netfx`) runtime and refuses a
 conflicting runtime override. The existing read-only .NET Framework check is
@@ -1116,7 +1116,7 @@ until that exact worker exits; a browser timeout or completed domain handler
 does not release native-return custody. It also discards the pinned runtime's
 unused synchronous callback-registry entries without changing the return
 channel. [INTERFACES.md](INTERFACES.md) owns those compatibility mechanisms and
-their remaining containment boundary. The exact pythonnet 3.1.0 pin is equally
+their remaining containment boundary. The exact pythonnet 3.2.1 pin is equally
 part of that boundary because native delegate subscription, WinForms thread
 affinity, and `CoreWebView2` access pass through it. Required ordinary Node
 probes are unmarked and non-skippable; probes marked `supplemental_node` may

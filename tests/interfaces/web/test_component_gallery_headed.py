@@ -3493,7 +3493,7 @@ def _run_gallery_mode(
     assert result["runtime"]["versions"] == {
         "namisync": VERSION,
         "pywebview": "6.2.1",
-        "pythonnet": "3.1.0",
+        "pythonnet": "3.2.1",
     }
     assert Path(result["runtime"]["executable"]).resolve().is_relative_to(
         installed.root.resolve()

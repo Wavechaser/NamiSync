@@ -1139,7 +1139,7 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     assert runtime["versions"] == {
         "namisync": VERSION,
         "pywebview": "6.2.1",
-        "pythonnet": "3.1.0",
+        "pythonnet": "3.2.1",
     }
 
 
@@ -1209,7 +1209,7 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
     assert runtime["versions"] == {
         "namisync": VERSION,
         "pywebview": "6.2.1",
-        "pythonnet": "3.1.0",
+        "pythonnet": "3.2.1",
     }
 
 
@@ -1576,7 +1576,7 @@ def _run_transport_scenario(
     assert result["runtime"]["versions"] == {
         "namisync": VERSION,
         "pywebview": "6.2.1",
-        "pythonnet": "3.1.0",
+        "pythonnet": "3.2.1",
     }
     return _TransportEvidence(
         root=root,
@@ -1676,7 +1676,7 @@ def _run_off_origin_scenario(
     assert result["runtime"]["versions"] == {
         "namisync": VERSION,
         "pywebview": "6.2.1",
-        "pythonnet": "3.1.0",
+        "pythonnet": "3.2.1",
     }
     return _OffOriginEvidence(root=root, result=result)
 

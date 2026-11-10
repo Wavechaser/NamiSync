@@ -463,11 +463,12 @@ canonical-byte encoding and its byte ceiling.
 Supported event producers and persisted event decoding use the exact ASCII
 grammar
 `YYYY-MM-DDTHH:MM:SS[.ffffff]+00:00`: four-digit years 0001–9999, a real
-Gregorian calendar date and time, and either no fraction or exactly six digits.
-Other offsets, `Z`, alternative ISO spellings, rollover dates, and trailing
-characters refuse. Python constructs the datetime after checking grammar. The
-browser retains the same check for external session-record values; a live event
-timestamp is trusted producer data rather than independently recertified.
+Gregorian calendar date, hours 00–23, minutes and seconds 00–59, and either no
+fraction or exactly six digits. Other offsets, `Z`, alternative ISO spellings,
+rollover dates, and trailing characters refuse. Python checks the clock ranges
+before constructing the datetime so `24:00:00` cannot roll to the next day.
+The browser retains the same check for external session-record values; a live
+event timestamp is trusted producer data rather than independently recertified.
 
 The Python live event view reuses the canonical projected body and changes only
 the surrounding sequence key from persisted `seq` to browser `sequence`; it

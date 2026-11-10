@@ -988,6 +988,19 @@ verification pipeline, new feature or unrelated dependency upgrade is authorized
 | RR4 — renewed candidate and R5 closure | Freeze clean integrated source, build one exact artifact, census files/notices/origins; run complete TESTS release command, imports, every BR-G/SH-G witness, portable reviewed-copy/inventory/integrity/close and 17-run SH-G-15 schedule on unchanged declared workloads/budgets. Reconcile any resource exceedance explicitly rather than importing the old artifact's acceptance. Independent exact-candidate R5 review, immutable handoff set and final delivery decision follow. | After RR1–RR3. No old pass is silently attributed to changed source/runtime. |
 
 Evidence uses `build/m1-release-repair-20261110/` under its README conventions.
+The isolated authority introduction `eb98c95f` passed 159 custody and related
+controls, including the live unchanged ceiling. Its complete release run then
+found three bounded runtime-migration causes: Python 3.15 normalizes `24:00:00`,
+eight installed-test expectations still name Python.NET 3.1.0, and two leaf-stat
+witnesses assume Python's old internal delegation. Restore the existing UTC
+grammar in `core/event_v5.py`, update those five headed test files and current
+DESKTOP_UI guidance, and retain one no-follow snapshot across either OS entry
+point. CORE, the executor witness and CHANGELOG complete this finite delta.
+All 22 failing cases pass within 281 focused and 112 headed checks. Independent
+review and a complete release rerun on a descendant of the immutable v2
+introduction precede integration; History collection must use that descendant
+because History admission consumes the shared timestamp validator. Preserve the
+failed release receipt and all v2 pins; no contract or budget is relaxed.
 Input comparison rejected official 3.14.10 because its SQLite 3.50.4 retains
 the WAL-reset bug; NamiSync uses WAL. Official 3.15.2 supplies SQLite 3.53.4
 and retains the existing PSF distribution/CI provider. Its necessary supported

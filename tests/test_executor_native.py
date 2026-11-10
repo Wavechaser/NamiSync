@@ -2952,25 +2952,25 @@ def test_executor_leaf_stat_uses_one_checked_snapshot_for_all_metadata(
         path.mkdir()
     info = path.lstat()
     native_path = to_extended_length_path(str(path))
-    observations: list[tuple[str, bool]] = []
+    followed_links: list[bool] = []
     original_stat, original_lstat = os.stat, os.lstat
     fs = NativeFileSystem()
 
     def observe_stat(current, *args, **kwargs):
         if str(current) == native_path:
-            observations.append(("stat", kwargs.get("follow_symlinks", True)))
+            followed_links.append(kwargs.get("follow_symlinks", True))
         return original_stat(current, *args, **kwargs)
 
     def observe_lstat(current, *args, **kwargs):
         if str(current) == native_path:
-            observations.append(("lstat", False))
+            followed_links.append(False)
         return original_lstat(current, *args, **kwargs)
 
     monkeypatch.setattr(os, "stat", observe_stat)
     monkeypatch.setattr(os, "lstat", observe_lstat)
     actual = fs.stat_path(path)
 
-    assert observations == [("stat", False)]
+    assert followed_links == [False]
     assert actual is not None and actual.kind is kind
     assert actual.size == (info.st_size if kind is EntryKind.FILE else 0)
     assert actual.mtime_ns == info.st_mtime_ns and actual.nlink == info.st_nlink

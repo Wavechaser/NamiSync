@@ -625,7 +625,7 @@ def _run_task_shell_scenario(
     assert initial["runtime"]["versions"] == {
         "namisync": importlib.metadata.version("namisync"),
         "pywebview": "6.2.1",
-        "pythonnet": "3.1.0",
+        "pythonnet": "3.2.1",
     }
     assert screenshot.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     return initial

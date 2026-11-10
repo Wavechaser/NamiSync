@@ -593,6 +593,9 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
+- Preserve strict event timestamp clock ranges under Python 3.15, align the
+  installed desktop witnesses with Python.NET 3.2.1, and keep the executor's
+  single no-follow snapshot check independent of Python's stat delegation.
 - Select serviced CPython 3.15.2, setuptools 84.1.0, pythonnet 3.2.1 and
   xxhash 4.1.0 inputs; renew exact notices and remove the no-longer-shipped
   .NET compatibility-assembly attribution. Preserve native-origin enforcement.
