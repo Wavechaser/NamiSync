@@ -89,10 +89,9 @@ the mounted pane, tree focus, expanded Task details and anchored scroll position
 while replacing its rows. Prior item evidence is retired before the new
 publication is adopted.
 
-The Stage 6 target is a `pywebview` host forced to Edge Chromium/WebView2 with
-packaged web assets. The earlier PySide6 proof-of-concept is historical input,
-not the implementation target or test contract. `ui_mockup/mockup.html` is the
-starting frontend artifact to revise into the packaged UI.
+The desktop uses a `pywebview` host forced to Edge Chromium/WebView2 with
+packaged web assets. The earlier PySide6 proof-of-concept and the HTML mockup
+are historical design artifacts. [Archived mockup](obsolete/ui_mockup/mockup.md)
 
 ## Scope and delivery boundary
 
@@ -100,8 +99,8 @@ Stage 6 delivers:
 
 - a `namisync-gui` GUI-subsystem entry point with no retained console window;
 - one single-instance desktop shell, Setup, process-live task rail, work area,
-  plan/execution review, and inventory/integrity views; the history dialog is a
-  later M1 surface outside the accepted second-half reslice;
+  plan/execution review, and inventory/integrity views. The desktop History
+  dialog remains deferred.
 - desktop actions for reviewed sync, inventory, baseline, verify, rebaseline,
   per-task Setup overrides, and pause/resume/cancel where the registered
   activity supports them, plus explicit Save defaults for new tasks;
@@ -125,12 +124,12 @@ host. The host acquires the fixed per-logon instance mutex before creating any
 directory or logger; only the primary configures file logging and imports
 pywebview. Explicit CLI work never imports or initializes pywebview.
 
-NamiSync remains version `0.1.0` until M1 is complete. The runtime `VERSION`
-alone supplies project/package metadata, logging, protocol-independent version
-checks, and later frozen-file metadata. `NICKNAME` is `Gertrud` and is only a
-human-facing label for About, release notes, and changelog headings; it never
-enters filenames, databases, mutexes, CLI behavior, protocols, or compatibility
-logic. The host stack pins pywebview 6.2.1 and pythonnet 3.1.0;
+The portable candidate is version `0.1.0`. The runtime `VERSION` supplies
+project/package metadata, logging and protocol-independent version checks.
+`NICKNAME` is `Gertrud`, a display label for About, release notes and changelog
+headings. Filenames, databases, mutexes, CLI behavior, protocols and compatibility
+logic are independent of the nickname. The host stack pins pywebview 6.2.1 and
+pythonnet 3.1.0.
 Bottle has a floor of 0.13.4, the reality-tested server version. NamiSync uses
 pythonnet's default Windows .NET Framework (`netfx`) runtime and refuses a
 conflicting runtime override. The existing read-only .NET Framework check is
@@ -236,10 +235,9 @@ and absent from the wheel.
 Post-realignment readiness hardening additionally packages `readiness.js` as
 the neutral host-challenge receiver; it adds no second application-data bridge.
 There is no npm, framework, bundler, transpiler, source map, inline script, or
-inline event handler. The first running shell and installed-wheel
-proof precede PyInstaller work. The frozen specification, dependency lock, CI,
-third-party notices, and exact-source release material close in the final beta
-packaging slice.
+inline event handler. The portable Windows x64 build uses the frozen
+specification and dependency lock. It includes third-party notices and build
+directions for the corresponding source archive. [Portable packaging](TOOLS.md#portable-build-preparation)
 
 GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
 establishes the completed design-token foundation. NamiSync presents as a

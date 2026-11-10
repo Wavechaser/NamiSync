@@ -374,11 +374,11 @@ read_task_execution_evidence(task_id, operation_ids)
 ```
 
 `read_execution_evidence` is a read-only forwarding surface. The runtime owns
-the reusable ledger reader and the workflow owns all five-state attribution;
-the service and later bridge consumers do not reclassify database facts. Its
-subjects are workflow-retained facts, including complete-run target-ownership
-uniqueness, rather than browser assertions. P1 owns the pending retained-task
-derivation; this read facade only accepts the already-trusted internal fact.
+the reusable ledger reader and the workflow owns all five-state attribution.
+The retained-task read resolves requested operation IDs against the workflow's
+retained review and derives the evidence subjects from that review, including
+complete-run target-ownership uniqueness. The service and bridge carry the
+result without reclassifying database facts.
 
 The plan/session lifecycle deliberately has two live service surfaces. The
 session-oriented family is `start_plan`, `reobserve`, `unsubscribe`,
@@ -420,15 +420,13 @@ and framing. Task reads rehydrate the UI, exact release removes session custody,
 and close destroys task presentation/receipts. Interfaces follow and recheck
 bridge authority around outside work.
 
-The accepted but unrealized contract adds shared plan/inventory sibling sorting
-to those server projections. New views and reset use canonical path-key order;
-explicit filename/size/mtime choices reorder presentation before windowing, not
-domain selection, recursive scope, or execution authority/order. Raw workflow-
-owned sort facts and complete production command/validator support must be
-active whenever sorting activates, even if mtime/reset GUI layout remains
-latent. Revisions, indexes, anchors, and late-response guards move coherently
-under the exact
-[Bridge sorting contract](PRESENTATION.md#search-filters-sorting-and-follow).
+Plan and Inventory sort siblings by filename, size or modification time in
+their server projections. Sort keys derive from workflow-owned facts. New views
+and reset use canonical path-key order. Sorting reorders presentation before
+windowing and preserves domain selection, recursive scope, execution authority
+and execution order.
+Revisions, indexes, anchors and late-response guards follow the shared sorting
+contract. [Sorting contract](PRESENTATION.md#search-filters-sorting-and-follow)
 
 External values are validated before presentation construction. Numeric
 encoding follows bridge/defense domains and identity remains non-arithmetic.
@@ -1084,7 +1082,7 @@ Only `assets/bridge.js` may reference `window.pywebview`; the host exposes only 
 | SH-G-9 | Deferred with the history page. When activated, a live cursor ahead of durability must render the committed prefix, terminate on an empty terminal page without retry looping, and obtain later repair only through a fresh read. |
 | SH-G-10 | Production always constructs the fixed `DesktopInstanceIdentity` for `Local\\NamiSync.Desktop` and title `NamiSync`; AppPaths/data-dir cannot alter it. Production launches collide on that mutex, injected distinct test identities coexist, window and activator titles come from the same identity, and no argv/environment/bridge/page input overrides its namespace. |
 | SH-G-11–14 | `PRESENTATION.md` and the visual owner retain the exact token, material/fallback, motion, fixed-local-icon, and installed-wheel evidence criteria. |
-| SH-G-15 | Scoped release acceptance. Before measuring, declare the installed build, runtime/hardware profile, observed process scope, finite cold-start/repeated/long workloads, repetitions/durations, warm-up/quiescence, fresh-process count, statistics, separate resource predicates, budgets, and validator. Measure stable host and relevant runtime/renderer-child identities; preserve raw observations and dispersion without materially contaminating the product. Require absolute cold-start peak and settled use plus retained-growth and trend checks. An incomplete workload or missing observation cannot pass. Scoped Tier-2 acceptance applies only to named profiles/workloads; relevant source, dependency, or runtime changes rerun affected profiles against unchanged budgets unless explicitly revised. Tier-3 rules govern calibration-derived ceilings or invalidated authority. **Accepted 2026-11-10 by the user's judgment** of the 17-run SH-G-15 v1 schedule (startup, 10k/100k scale, payload, three 100-cycle soaks, 60-minute open idle). The schedule ran on the R4 package, whose app content matches candidate `3ece185f`. The user accepted the validator's two yardstick exceedances as measured: the 100k execution peak, and the soak whole-app growth slope. [PERFORMANCE](PERFORMANCE.md#r4-candidate-resource-schedule-on-1f632b13--2026-11-10) holds results and artifacts. This does not revive BR-G-45 or weaken runtime-enforced request/population bounds. |
+| SH-G-15 | Scoped release acceptance. Before measuring, declare the installed build, runtime/hardware profile, observed process scope, finite cold-start/repeated/long workloads, repetitions/durations, warm-up/quiescence, fresh-process count, statistics, separate resource predicates, budgets, and validator. Measure stable host and relevant runtime/renderer-child identities; preserve raw observations and dispersion without materially contaminating the product. Require absolute cold-start peak and settled use plus retained-growth and trend checks. An incomplete workload or missing observation cannot pass. Scoped Tier-2 acceptance applies only to named profiles/workloads; relevant source, dependency, or runtime changes rerun affected profiles against unchanged budgets unless explicitly revised. Tier-3 rules govern calibration-derived ceilings or invalidated authority. **Accepted 2026-11-10 by the user's judgment** of the measured 17-run SH-G-15 v1 schedule (startup, 10k/100k scale, payload, three 100-cycle soaks, 60-minute open idle). The schedule ran on the R4 package, whose app content matches candidate `3ece185f`. The historical validator reported `FAIL` on three predicates covering two topics. The 100k execution peak exceeded its yardstick, as did the soak whole-app growth slope and one retained shift of 26.629 MiB. The user accepted the schedule as measured. This does not revive BR-G-45 or weaken runtime-enforced request/population bounds. [Results and artifacts](PERFORMANCE.md#r4-candidate-resource-schedule-on-1f632b13--2026-11-10) |
 
 ## Common Adapter Contract
 

@@ -25,7 +25,7 @@ quiet. All 17 runs completed (`soak.log` ends `exit 0`). All 306 mirror checks
 matched, and every app exited 0 with no remaining processes, unlike the
 overnight slow closes on `733f0cb1`. `soak-validation.json` reports
 FAIL; as before, that verdict is informational. On 2026-11-10 the user accepted
-these results for SH-G-15, including both exceedances below.
+these results for SH-G-15, including the peak and soak-growth observations below.
 
 | Profile (runs) | Peak, whole app | Settled after close | `733f0cb1` peak / settled |
 | --- | ---: | ---: | ---: |
@@ -38,14 +38,15 @@ these results for SH-G-15, including both exceedances below.
 
 Startup idle CPU was 0.13–0.40%; DevTools added 2.8 MiB settled. Against the
 historical yardsticks, startup, closed memory, payload, the 10k profiles and
-the open-task idle (+0.015 MiB/10 min) are inside. The validator's FAILs are two:
+the open-task idle (+0.015 MiB/10 min) are inside. The validator reports three
+failing predicates across two measured topics (seven failed run/predicate pairs):
 
-- **100k execution peak**: 2.32–2.40 GiB exceeds the 2 GiB yardstick but is about 1 GiB
+- **100k execution peak**: 2,316–2,404 MiB exceeds the 2,048 MiB yardstick but is about 1 GiB
   below `733f0cb1`, consistent with the Plan Follow and DOM reconciliation
   work since then. 10k peaks also fell (964–1,111 versus 1,101–1,224 MiB).
-- **Soak slope**: whole-app post-close slopes over cycles 21–100 are +0.35,
+- **Soak growth**: whole-app post-close slopes over cycles 21–100 are +0.35,
   +0.28 and +0.31 MiB/cycle (yardstick 0.2); soak-01's first/last shift is
-  26.6 MiB against 20. By role the renderer contributes +0.20–0.22 MiB/cycle,
+  26.629 MiB against 20, a separate failed predicate. By role the renderer contributes +0.20–0.22 MiB/cycle,
   matching `733f0cb1`'s +0.19–0.20; host +0.03–0.07, GPU +0.03–0.08, others
   flat. Handle slopes are +0.9, −1.1 and −2.5 per cycle; GUI objects move
   by at most one. The renderer trend is unchanged; the whole-app difference

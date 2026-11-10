@@ -1,10 +1,10 @@
 <meta charset="utf-8">
-<title>NamiSync — UI overhaul mockup</title>
+<title>NamiSync — historical UI mockup</title>
 <style>
 /* ============================================================
-   Stack change: NamiSync is moving from PySide6/Fusion+QSS to a
-   WebView2 shell, which is what makes this pass possible — real
-   CSS, real shadows, real flyouts instead of what QSS could fake.
+   Historical design prototype from the transition from
+   PySide6/Fusion+QSS to a WebView2 shell. The current desktop
+   behavior is documented in docs/DESKTOP_UI.md.
    This mockup follows the Fluent 2 (Windows 11) design language:
    Segoe UI Variable type, 4px control / 8px card corner radius,
    subtle low-opacity borders, and a Mica-style window background.
@@ -582,6 +582,7 @@ button, input, select, textarea { font-family: inherit; font-size: inherit; colo
 
 <div class="mockup-stage">
   <div class="note">
+    <b>Historical UI mockup.</b> The tasks and controls below simulate an early design.
     Click a task card to switch tasks. Click <b>Sync / Integrity</b> to toggle views (each
     task retains its own). Click <b>Edit</b> on a scanned task to reopen its setup form,
     click the mode/deletion/verify toggles, click filter chips, right-click an inventory row,

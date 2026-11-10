@@ -80,30 +80,25 @@ Baseline/Verify/Rebaseline with live controls and separate results. Execution
 tasks retain Plan review alongside a Verify pane for repeatable ordinary
 verification of copied files or the current checkbox selection. These actions
 scan current state and may supersede execution-relative evidence; original
-execution and automatic verification results remain unchanged. Final lifecycle
-acceptance, packaging and beta closure remain open, so the window is
-not yet the complete desktop product.
+execution and automatic verification results remain unchanged. Desktop History
+is deferred. Retained runs are available through the CLI.
 Plan and Inventory mark observed recall-required items with a cloud indicator
-and a **Not fully local** filter. Scan-wide recall file counts and logical sizes
+and a **Remote files** filter. Scan-wide recall file counts and logical sizes
 are available through the bridge for later status-panel integration; they are
 not download-volume predictions or a complete cloud inventory.
-The [M1 delivery register](docs/M1_PLAN.md) records execution-review acceptance,
-affected performance verification, and any remaining recovery work.
-Desktop release also requires scoped cold-start resource budgets and repeated/
-long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
-These remain open and do not promise universal whole-runtime memory containment.
 
-Integrated lifecycle verification is complete. M1 release preparation targets
-a portable Windows x64 `v0.1.0` build for a small tester group, delivered
-unsigned; final release acceptance remains open. No downloadable release is claimed yet.
-The portable builder includes the [tester guide](tools/packaging/START-HERE.txt), covering extraction,
-prerequisites, application data and feedback; the
-[source/build guide](tools/packaging/BUILDING.txt) explains matching-source
-rebuilds, alongside the GPL and distribution-wide third-party notices.
-These do not certify a release candidate or authorize external handoff.
-Rebaseline
-behavior lives in the [feature catalog](docs/FEATURES.md); the
-[M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
+R4 verification is complete for the unsigned Windows x64 portable candidate
+`v0.1.0` “Gertrud” (`3ece185f`). The complete release suite and the packaged
+reviewed copy, inventory, verification and close checks passed. Resource
+acceptance covers the measured cold-start, repeated and long-workload schedule.
+Release closure and tester handoff remain open in R5. [M1 delivery register](docs/M1_PLAN.md)
+
+The candidate includes a tester guide covering extraction, prerequisites,
+application data and feedback. The source and build guide explains how to
+rebuild from matching source. The GPL and third-party notices accompany both
+guides.
+[Tester guide](tools/packaging/START-HERE.txt) · [Source and build guide](tools/packaging/BUILDING.txt)
+
 External requests and applicable populations are bounded at their owners;
 the [defense model](docs/DEFENSE.md) states the active limits and support scope.
 
@@ -186,7 +181,8 @@ Run the tests and check the import boundaries:
 Focused, departmental, cross-department neighborhood, ordinary, and complete/
 headed verification commands are defined in [Tests](docs/TESTS.md).
 
-M1's desktop host additionally requires Microsoft Edge WebView2 Runtime.
+The supported M1 desktop environment includes Microsoft Edge WebView2 Runtime
+and .NET Framework 4.8 or a compatible later .NET Framework 4.x runtime.
 Declaring pywebview does not make explicit CLI commands initialize a GUI; the
 Stage 6 host contract performs a read-only runtime preflight before window
 creation, then refuses pywebview's silent older-engine fallback with an install
@@ -238,10 +234,10 @@ never hides the other result axes in rendered output.
 
 - No durable plan/session queue or restart-resume.
 - No cross-process desktop task visibility, background integrity, concurrent
-  file execution, general database migration, backup, or history retention.
+  file execution, general database migration, backup, or history retention controls.
 - No automatic execution or bypass of reviewed-plan confirmation.
-- No supported elevated desktop host; standard-integrity startup is the
-  defense baseline, and enforced elevated-launch refusal remains beta work.
+- The desktop host requires standard integrity. Enforcing elevated-launch refusal
+  before command exposure remains an open headed beta requirement. [Defense model](docs/DEFENSE.md#21-supported-environment-and-trusted-computing-base)
 
 ## Documentation
 
@@ -351,8 +347,9 @@ same-task Refresh, conditional missing-row visibility, shared row highlighting
 and filter-scoped file selection
 and standalone integrity controls/results. Plan/Verify navigation keeps original
 execution review separate from ordinary current-state verification, including
-repeatable verification of successful copy targets. Final lifecycle acceptance
-and beta packaging remain open.
+repeatable verification of successful copy targets. Integrated lifecycle
+verification and R4 candidate verification are complete. R5 owns release
+closeout and tester handoff.
 
 ### M1 Features
 

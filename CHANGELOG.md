@@ -593,6 +593,14 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
+- Review R5's exact accepted candidate, source, notices, native origins and R4
+  gate evidence; stage unchanged tester archives, matching provenance, checksums
+  and draft release notes. Hold closure for elevated-GUI refusal, an explicit
+  security-servicing disposition and the required external agreement.
+- Reconcile shipped behavior and release status in current docs; archive the
+  old UI mockup under `docs/obsolete/ui_mockup/` at the user's request. Correct
+  the SH-G case count and resource units/predicate accounting without changing
+  the accepted R4 result or raw validator verdict.
 - Activate M1-Release for a small tester group receiving a portable Windows x64
   app; retain existing per-user data placement and GUI/console entry points.
 - Record packaging, distribution contents, quantitative acceptance, clean

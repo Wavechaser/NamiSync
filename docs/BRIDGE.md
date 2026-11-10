@@ -1091,7 +1091,7 @@ Concurrent handlers synchronize effect admission, drains and retirement without 
 
 ## Remaining future outcomes
 
-Future inventory, integrity, execution-detail and history surfaces must retain the implemented task/review guarantees: idempotent actions, stale-intent refusal, explicit close, truthful terminal delivery, bounded ingress and populations, and a finite containment/refusal/evidence design. Each future mechanism must record its own bounded delivery register and name its runtime enforcer and evidence. Do not revive complete-owner-graph charging, byte reservations, phase-ahead leases or precharged response capacity by citing this document.
+Desktop History remains unrealized. It and any extensions to the implemented inventory, integrity and execution-detail surfaces must retain idempotent actions, stale-intent refusal, explicit close, truthful terminal delivery, bounded ingress and populations, and a finite containment/refusal/evidence design. Each future mechanism must record its own bounded delivery register and name its runtime enforcer and evidence. Do not revive complete-owner-graph charging, byte reservations, phase-ahead leases or precharged response capacity by citing this document.
 
 Location admission and typed/picker/recent Setup are implemented through the
 common workflow-owned no-follow path. A slot, candidate or remembered identity

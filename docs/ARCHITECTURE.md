@@ -847,8 +847,9 @@ See `WORKFLOWS.md`.
 
 ### 4.10 Interfaces
 
-**Tier:** Interface/Periphery · **Status:** CLI active; desktop foundation and
-shared presentation active; remaining product surfaces unrealized
+**Tier:** Interface/Periphery · **Status:** CLI and desktop Setup, Plan,
+execution review, Inventory, integrity and Settings active. Desktop History
+remains unrealized.
 
 The service facade exposes primitive typed views over workflows and dispatcher
 state. CLI and desktop adapters are siblings and own no sync, selection,
