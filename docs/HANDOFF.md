@@ -1,20 +1,20 @@
-# Latest session — row attachment fix and targeted idle continuation, 2026-11-10
+# Latest session — row fix and remaining idle measurements complete, 2026-11-11
 
 The user authorized the small row-attachment fix and then the remaining idle
 measurements. Resource measurements remain non-blocking under accepted SH-G-15.
 M1_PLAN owns the decision. Resources03 remains raw FAIL/incomplete; no receipt
 was rewritten and no full soak is requested.
 
-## Close finding and next step
+## Delivered correction and verification
 
-Shipped `rail.js` unconditionally appends retained rows during render. A bounded
+The prior `rail.js` unconditionally appended retained rows during render. A bounded
 native probe on exact candidate `cfeac2d9` reproduces a lost Close click:
 render between trusted mouse-down/up detaches and reattaches the same row,
 blurs the button and suppresses click. Both no-render controls invoke the
 exact callback once. The original payload timeout lacks this trace, so its
 cause remains unconfirmed.
 
-The five-line production correction leaves correctly positioned rows attached.
+Commit `1d936876` delivers the five-line correction, leaving ordered rows attached.
 Its ordinary regression fails against the old code and passes after correction,
 covering refresh/prepend and removal/reorder. A separate package extraction
 with only the corrected rail asset overlaid passes trusted down/render/up,
@@ -30,14 +30,27 @@ Low-token/repository-temp attempt is retained as invalid environment evidence;
 its permission and custody-temp failures all clear in attempt02. Independent
 review approves the product/test/docs delta and targeted measurement runner.
 
-Next: after reviewed fix commit, create a fresh detached `idle-followup-checkout`
-and use `run-idle-followup.ps1` for a fresh Package attempt and Resources attempt
-04. The unchanged collector runs only `idle-open-01` (60 minutes) then
-`payload-01`, keeping the earlier 15 observations intact. Preserve the new
-partial schedule's raw validator FAIL for its 15 deliberately absent runs;
-report the two requested run results and metrics separately. The runner and
-`compare-idle-followup-package.py` are ignored evidence tooling. Do not mutate
-the frozen `acceptance-checkout`, old package env or old artifact extractions.
+Package04 was built from clean detached `idle-followup-checkout` at `1d936876`.
+ZIP SHA-256 `fca5c839cb9e4fb7a47e343656b08a9587961e2cdf2ccf8a920652875970311f`.
+Independent comparison confirms exact native inputs/notices and byte-identical
+embedded executable code; rail and attributable README/install/build metadata
+are the only bundle differences. Preserve the first strict comparator receipt
+alongside the corrected attribution and `package/artifact-comparison-review.md`.
+
+Resources04 finished at 00:13 Shanghai time on 2026-11-11. Only the original
+`idle-open-01` and `payload-01` profiles ran; both are valid and every applicable
+predicate passes. The complete hour idle window had median 554.715 MiB and
+reported slope +0.001 MiB/10 minutes; final closed memory was 551.262 MiB.
+Payload peak was 442.828 MiB, final idle 404.104 MiB. All three task closes and
+mirror checks pass; both apps exit 0 with empty owned Jobs. No run remains active.
+Independent review is `acceptance/20261110-04/resources/review.md`; PERFORMANCE
+owns the metrics and estimator. Preserve the raw partial-schedule FAIL for 15
+deliberately absent profiles; do not relabel it a full 17-run pass or repeat the
+soak. The Close/idle follow-up is complete. Final R5 reconciliation remains.
+
+The runner and comparator remain ignored evidence tooling. No old checkout,
+package environment, extraction, receipt or measuring-session process was
+mutated. Retain both frozen checkouts and all task evidence for final accounting.
 
 Evidence root `build/m1-release-repair-20261110/portable/`:
 - `rail-click-probe.py`, `rail-click-probe.js` and

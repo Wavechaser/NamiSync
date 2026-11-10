@@ -591,12 +591,16 @@ explicit, reviewable and regression-backed.
 - Reconcile the accumulated handoff into current resumption context and account
   for task-owned fixture cleanup while retaining evidence.
 
-#### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
+#### Build the portable M1 debug package (2026-11-04 – 2026-11-11)
 
 - Keep correctly ordered task-rail rows attached across repaints, preserving
   clicks between trusted press/release. Verify attachment/order regression and
   native focus/click behavior without changing Close effects or claiming the
   original untraced timeout's cause is proven.
+- Rebuild `1d936876` and complete only the missing open-idle and payload
+  observations. All three task closes and mirrors pass; both apps exit cleanly.
+  The 60-minute open-task memory trend is +0.001 MiB per 10 minutes. Preserve
+  the separate partial receipt and prior evidence without repeating the soak.
 - Preserve Resources03's raw FAIL/incomplete receipt, exact post-failure
   mirrors and normal app shutdowns. Record the user's confirmation that
   resource measurements remain non-blocking under accepted SH-G-15; pursue

@@ -10,6 +10,46 @@ retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
 representation-memory collection to optional developer observations while
 preserving fixture/action, counted-work and independent release/custody gates.
 
+## Row attachment fix: remaining idle observations — 2026-11-10–11
+
+After the user authorized the small rail fix and remaining idle measurements,
+clean `1d936876` was rebuilt in a fresh environment. Portable ZIP SHA-256:
+`fca5c839cb9e4fb7a47e343656b08a9587961e2cdf2ccf8a920652875970311f`.
+Independent comparison finds unchanged native inputs/notices and byte-identical
+embedded executable archives; bundle differences are the rail asset and
+attributable README/install/build metadata. The earlier package is untouched.
+
+The unchanged collector ran only `idle-open-01` then `payload-01`, from
+2026-11-10 23:05 to 2026-11-11 00:13 Shanghai time. The complete 3,600-second
+open-task idle window follows a reviewed 10k × 32 B copy. Both requested runs
+are valid and pass every applicable historical predicate. No soak was repeated.
+The existing estimator omits the first ten idle minutes; its final 3,000 seconds
+contain 3,000 complete samples with a maximum sample gap of 1.016 seconds.
+
+| Observation | Open 10k task | Payload (1 × 4 GiB, 64 × 4 MiB) |
+| --- | ---: | ---: |
+| Whole-app sampled peak | 1,129.746 MiB | 442.828 MiB |
+| Open-idle median private memory | 554.715 MiB | — |
+| Open-idle memory slope | +0.001 MiB / 10 min | — |
+| Maximum settled memory after task close | 551.262 MiB | 405.535 MiB |
+| Final idle median private memory | 551.262 MiB | 404.104 MiB |
+
+All three task closes succeeded. Both apps exited 0 with empty owned Jobs;
+all three deferred source/target hash comparisons passed. The collector also
+verified the supplied corpus metadata and extracted bundle were unchanged.
+The original timeout's exact input ordering remains unproven; these results
+verify the corrected package's requested paths, not universal leak freedom.
+
+Evidence: `build/m1-release-repair-20261110/acceptance/20261110-04/`, with
+`package/independent-comparison-02.json`, `package/artifact-comparison-review.md`,
+and `resources/{identity.json,validation.json,schedule/}`. The raw schedule
+validator correctly reports FAIL because the other 15 profiles were deliberately
+not repeated. Its two present run rows are valid with no failed predicates.
+Do not relabel this partial collection a complete 17-run pass or rewrite the
+earlier Resources03 receipt. M1_PLAN retains the user's non-blocking SH-G-15
+resource disposition.
+Independent metric/provenance review is `resources/review.md`.
+
 ## Release repair resource attempt on `cfeac2d9` — 2026-11-10
 
 Resources03 used the independently reviewed serviced portable ZIP, SHA-256
