@@ -964,10 +964,49 @@ tester set. The notes distinguish frozen build-time prose from current status,
 give the source-ZIP rebuild route without assuming public Git reachability,
 and state the hold. No accepted archive was repacked or rebuilt.
 
-The coherent proposal is a bounded release-repair checkpoint for GUI admission
-and security-serviced build inputs, followed by affected R3/R4 renewal and R5
-closure. The user decision is pending. Independent documentation reconciliation
-and this review can be committed; dependent product/build changes remain stopped.
+On 2026-11-10 the user **authorized the bounded release repair and renewed gates**:
+GUI admission, security-serviced exact build inputs and affected R3/R4 renewal
+under unchanged budgets, followed by R5 closure. External delivery and the
+Microsoft-terms agreement remain a final separate step. The reviewed R5 findings
+and mockup archive are committed in `4cd41dda`.
+
+### Approved release repair — 2026-11-10
+
+Preserve the accepted `3ece185f` artifact and all historical receipts. The finite
+repair population is the desktop host/token admission and direct test helpers;
+packaging locks, Python/CI profile, notice corpus and source/build guidance; and
+the runtime-dependent R3 producers/checkers/fixtures with their acceptance
+collections. Domain operations, bridge custody, file effects, databases, product
+version and predeclared budgets are unchanged. No execution GC, batching,
+verification pipeline, new feature or unrelated dependency upgrade is authorized.
+
+| Step / commit boundary | Population, preserved guarantees and verification | Status |
+| --- | --- | --- |
+| RR1 — standard-integrity GUI admission | `interfaces/web/host.py` and its narrow native token helper if needed; existing host/logging/headed tests and their direct synthetic helpers; DEFENSE/INTERFACES. All GUI paths converge before singleton activation, path leases, logging, service or command exposure. Query actual process integrity and elevation, admit ordinary medium/non-elevated only and fail closed when facts cannot be read. Preserve CLI behavior and normal-user launch. Verify focused refusal/order/native query tests, interfaces department and genuine medium/elevated owned-process witnesses; independent review before the atomic guard commit. | Active. |
+| RR2 — exact serviced build inputs | `tools/packaging`, its tests/notice corpus, Windows CI, `pyproject.toml`, exact About attribution and direct consumers, active TOOLS/source-build guidance and INTERFACES stack. Select official CPython 3.15.2 x64 full managed ZIP, setuptools 84.1.0 and necessary 3.15-compatible pythonnet 3.2.1 / xxhash 3.8.2 / CFFI 2.1.0 wheel. Reconcile applicable advisories and complete collected notices; preserve no-ambient-DLL policy, source identity and GPL/third-party terms. Use private environments, verify real build/console/native-host seam and ordinary compatibility; independent review before the atomic runtime/build commit. | Inputs selected for implementation, not release acceptance. |
+| RR3 — reference-profile renewal | Existing `br_g_42`, bridge-event and inventory producer/checker/test consumers plus current profile docs and new, separately named receipts. Preserve historical receipt bytes and all numerical budgets. Predeclare the selected runtime/hardware/collection inputs, then run the existing five-child Inventory cold and History/bridge-event collections. Renew all other runtime-dependent gates required by the declared owners; no advisory Plan/UI metric becomes acceptance. Review producer/checker changes and their controls before freezing and collecting. | Read-only dependency/sequence design while RR1/RR2 settle; dependent implementation waits for selected inputs. |
+| RR4 — renewed candidate and R5 closure | Freeze clean integrated source, build one exact artifact, census files/notices/origins; run complete TESTS release command, imports, every BR-G/SH-G witness, portable reviewed-copy/inventory/integrity/close and 17-run SH-G-15 schedule on unchanged declared workloads/budgets. Reconcile any resource exceedance explicitly rather than importing the old artifact's acceptance. Independent exact-candidate R5 review, immutable handoff set and final delivery decision follow. | After RR1–RR3. No old pass is silently attributed to changed source/runtime. |
+
+Evidence uses `build/m1-release-repair-20261110/` under its README conventions.
+Input comparison rejected official 3.14.10 because its SQLite 3.50.4 retains
+the WAL-reset bug; NamiSync uses WAL. Official 3.15.2 supplies SQLite 3.53.4
+and retains the existing PSF distribution/CI provider. Its necessary supported
+pythonnet update passed the real netfx/WinForms/EdgeChromium import and managed
+conversion probe; complete native gates remain required. A serviced Astral
+3.13.18 alternative also passed that probe but retains FTS5-affected SQLite
+3.53.1 and changes distribution provenance. Expat/XZ advisory applicability
+still requires final freezer/population review. Exact input hashes and native
+versions remain with packaging locks and the runtime evidence, not this register.
+The guard department exposed a pre-existing wheel test matching the nickname
+against the README description. Correct its package-identity check to exact
+METADATA Name/Version headers in a separate test-only commit; preserve GPL and
+complete source/artifact checks. The invalid source-tree-temp and concurrent
+README-edit receipts remain retained and do not count as product failures.
+Serialize shared source/tests/validators and measurement work. Product/native
+test processes are bounded and task-owned; do not alter other sessions or global
+Python. Existing safety, recurrence and unsupported-boundary stops remain in
+force. An exposed applicable advisory without an in-scope remedy, changed effect
+model, or blocked unchanged gate requires adjudication, not weakened assertions.
 
 The 2026-11-09 follow-up at `6673fc43` corrects the Plan memory attribution:
 the 17.9 MiB bucket is existing node IDs, not new folder paths. The slot-growth

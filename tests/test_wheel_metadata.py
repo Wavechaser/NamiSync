@@ -7,6 +7,7 @@ import subprocess
 import tomllib
 import warnings
 import zipfile
+from email.parser import Parser
 from pathlib import Path
 
 import pytest
@@ -67,13 +68,16 @@ def test_built_wheel_declares_and_contains_gpl_license(
             for name in names
             if name.endswith(".dist-info/licenses/LICENSE")
         ]
-        metadata = wheel.read(metadata_name).decode("utf-8")
+        metadata = Parser().parsestr(
+            wheel.read(metadata_name).decode("utf-8"), headersonly=True
+        )
 
         assert license_names == ["namisync-0.1.0.dist-info/licenses/LICENSE"]
         assert wheel.read(license_names[0]) == (PROJECT_ROOT / "LICENSE").read_bytes()
-        assert "License-Expression: GPL-3.0-or-later" in metadata
-        assert "License-File: LICENSE" in metadata
-        assert "Gertrud" not in metadata
+        assert metadata["License-Expression"] == "GPL-3.0-or-later"
+        assert metadata.get_all("License-File") == ["LICENSE"]
+        assert metadata["Name"] == "namisync"
+        assert metadata["Version"] == "0.1.0"
 
 
 def test_built_wheel_publishes_canonical_identity_record(

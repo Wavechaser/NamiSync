@@ -593,6 +593,9 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
+- Check wheel identity and license metadata as headers, allowing the release
+  nickname in its README description while requiring exact package name/version
+  and preserving the full GPL/license-byte checks.
 - Review R5's exact accepted candidate, source, notices, native origins and R4
   gate evidence; stage unchanged tester archives, matching provenance, checksums
   and draft release notes. Hold closure for elevated-GUI refusal, an explicit

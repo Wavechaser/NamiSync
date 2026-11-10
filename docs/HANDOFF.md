@@ -1,76 +1,59 @@
-# Latest session — R5 review and prepared handoff, 2026-11-10
+# Latest session — authorized release repair, 2026-11-10
 
-## Outcome
+## Active outcome
 
-Starting branch `milestone1`, clean `0d6d969e`. R4 remains accepted for
-`3ece185f`. R5's byte/evidence review and internal delivery preparation pass,
-but **release closure and external handoff are on hold**. The user's decision
-on the bounded release-repair proposal is pending; do not infer authorization
-from the R4 acceptance or from elapsed time.
+The user authorized the bounded release repair and renewed gates proposed by R5.
+[M1_PLAN](M1_PLAN.md#approved-release-repair--2026-11-10) owns RR1–RR4:
+standard-integrity GUI admission, exact serviced build inputs, runtime-dependent
+R3 renewal and complete R4 verification under unchanged budgets. External
+delivery and the Microsoft agreement remain separate final decisions. Do not
+request repair authorization again.
 
-The [R5 decision record](M1_PLAN.md#r5-review-and-outstanding-release-decisions--2026-11-10)
-owns the findings, finite scope and proposed verification. DEFENSE still requires
-standard-integrity GUI enforcement before beta and a security-supported selected
-runtime/dependency set. Executable source, build tools, locks and acceptance
-policy are unchanged. The accepted archives retain their original README;
-the updated repository README will be an input to a future build.
+Starting point is `milestone1` at `4cd41dda`, which records the R5 review and
+archives the mockup under `docs/obsolete/ui_mockup/`. Preserve the accepted R4
+artifact `3ece185f` and historical receipts. No old pass or resource exception
+certifies a changed candidate.
 
-## Completed review and preparation
+## Work in progress
 
-- Exact accepted ZIP SHA-256:
-  `5b9163ce26b2a20734058069c03b966225be5bef6c7aac4b90477a54408f7319`.
-  Verified 436 portable members, 350 candidate Git source members, 309 wheel
-  members/RECORD, 133 native origins and all 51 notice records. PE classification,
-  CRCs and the original/final candidate comparison pass.
-- R4 release evidence has 6,556 passes/four privilege skips. All 546 BR-G and
-  69 SH-G-named cases pass. The previous 81 was a loose-substring count including
-  unrelated cases. DESKTOP_UI's twelve behavior criteria map to 50 exact test
-  functions/64 cases; unchanged settlement dependencies retain prior evidence.
-- Resource raw FAIL remains explicit: 100k peak 2,316–2,404 MiB, soak trend and
-  one 26.629 MiB retained shift exceed yardsticks. The user's acceptance is a
-  separate judgment. Correcting units/predicate accounting changes no result.
-- BR-G-43 docs now describe shipped sorting/evidence/direct-target writes,
-  Remote files and row advisories, accepted R4 status and deferred desktop
-  History. The user requested moving the old mockup into obsolete; the two
-  files now live under `docs/obsolete/ui_mockup/`, with updated references.
-- `build/m1-r5-20261110/delivery/` contains the unchanged renamed executable
-  and matching source ZIPs, wheel, required identity/environment files, guides,
-  licenses, draft release notes and SHA256SUMS. Eleven files are checksummed;
-  the checksum file is the twelfth. Raw native/TOC copies stay in
-  `maintainer-evidence/`, outside the prospective tester set. No repack/rebuild.
-
-## Required decisions
-
-1. The candidate has no elevated-GUI refusal, despite DEFENSE's explicit
-   pre-beta requirement. Normal-user startup evidence does not close that gate.
-   Implementing it or revising the model requires explicit scope authorization.
-2. CPython 3.13 remains source-security supported, but the frozen 3.13.17 Windows
-   binary misses published 3.13.18 fixes. Normal asset serving reaches Windows
-   MIME lookup, with a narrow plausible fixed-path/drive/ACL precondition.
-   Setuptools 83.0.0 has a published legacy-installer advisory; the inspected
-   supported flows did not invoke its malicious-wheel trigger. No supported hard-wall escape
-   was demonstrated. Exact input refresh or a reasoned security-support
-   disposition is required; a newer Python number alone is not sufficient.
-3. Microsoft distributor/tester agreement and concrete external delivery
-   approval remain outstanding. No upload, tag, push or handoff is authorized.
-
-Proposed checkpoint: enforce standard GUI admission, resolve the named runtime/
-build/native servicing findings, select exact supported inputs, preserve R3
-budgets and renew dependency-affected R3/R4 gates, then return to R5. No such
-implementation has started. The old accepted artifact remains evidence.
+- RR1 adds a primary process-token check before singleton activation, path
+  leases, logging, services or browser exposure. Only medium/non-elevated is
+  admitted; unreadable facts cause actionable refusal. Focused host/logging
+  checks pass (148). Native low/medium source witnesses retain host hashes.
+  The interfaces department passes all 2,302 cases after correcting its temp
+  placement and the pre-existing wheel-header assertion. Source and test-fix
+  independent reviews pass. Genuine elevated evidence is pending Windows
+  consent and must finish before the guard commit.
+- RR2 selected official PSF Python 3.15.2; runtime locks are not yet changed.
+  Official Python 3.14.10 retains SQLite 3.50.4's published WAL-reset bug;
+  NamiSync uses WAL. Official 3.15.2 includes SQLite 3.53.4 but requires compatible
+  pythonnet 3.2.1 and xxhash 3.8.2 upgrades, plus setuptools 84.1.0. Both this
+  candidate and Astral 3.13.18 passed the initial native compatibility probe;
+  official PSF preserves distribution/CI provenance and includes newer SQLite.
+  Final applicability, notice and complete native reviews remain. No
+  supported-path corruption was observed in this investigation.
+- The read-only renewal design maps exact runtime consumers and acceptance.
+  Preserve historical SH-G-8 qualification separately from the live drift
+  guard and unchanged 1,966,080-byte ceiling. Full acceptance needs a disposable
+  checkout with its own selected-runtime `.venv`: two tooling tests explicitly
+  launch that path. Keep the user's current venv.
 
 ## Evidence and operational context
 
-`build/m1-r5-20261110/` retains independent artifact review, exact desktop gate
-mapping, OSV exact/vendored queries, dated host snapshot, official Python
-installation index, full security-support review and the delivery manifest.
-The query populations are 17 PyPI pins plus WebView2 SDK and eight vendored
-versions; only setuptools matched. Empty queries do not prove safety/support.
-The security review includes primary-source links and bounded applicability.
+`build/m1-release-repair-20261110/README.md` defines evidence conventions.
+`guard/` retains focused/native receipts and the elevated-source helper;
+`runtime/` retains downloads and private environments; `renewal-design.md` maps
+five-child R3 collections, the complete release suite, settlement audit, native
+artifact witnesses and unchanged 17-run resource schedule. Preserve failed
+attempts. Serialize shared writers and acceptance measurements. Default shell
+is Low integrity; ordinary unsandboxed execution is Medium, not elevated.
+Genuine elevated evidence needs a measured High token and Windows consent.
 
-Only read-only receipt/source/advisory checks and documentation validation ran;
-no product tests were rerun without changed dependencies. The current host
-snapshot is not retroactively attributed to R4. No measuring-session process,
-profile, corpus or old artifact was touched. Failed review-helper assumptions
-were corrected and receipts retained. Original R4 evidence remains under
-`build/m1-r4-20261109/` and the prior handoff is preserved in Git history.
+Earlier R5 evidence remains in `build/m1-r5-20261110/`, including security review,
+desktop-gate mapping and the prepared old-candidate delivery set. Its ZIP hash is
+`5b9163ce26b2a20734058069c03b966225be5bef6c7aac4b90477a54408f7319`.
+Original R4 evidence remains in `build/m1-r4-20261109/`: 6,556 passes/four privilege
+skips, 546 BR-G and 69 SH-G cases. Its resource validator remains FAIL for 100k
+peak, soak slope and one retained shift, separately accepted by the user for that
+artifact only. No upload, tag, push or external handoff occurred. No measuring
+session process, profile, corpus or old artifact is task-owned.

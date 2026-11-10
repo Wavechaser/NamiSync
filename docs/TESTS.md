@@ -15,6 +15,8 @@ canonical source bytes across checkout newline policies, exact build dependency
 versions and stable archive order/timestamps. Actual isolated builds and hosted
 CI provide composition evidence; these unit cases do not certify a portable
 release or the serviced Windows runner image.
+Wheel identity and license declarations are checked in METADATA headers;
+the README description may contain the product's display nickname.
 Packaging checks also preserve exact notice bytes through source archives,
 export existing About attribution, and reject unexpected native origins or
 collected bytes that differ from their inputs. An actual ZIP census and isolated
