@@ -492,8 +492,8 @@ contract, not a total-memory reduction or a new measured acceptance ceiling.
 The shared full result remains a subject-scaled terminal artifact, separately
 observed through live dispatcher result roots. The former BR-G-45 aggregate
 terminal-artifact model is retired and supplies no active bound. SH-G-15 scoped resource
-and leak/growth acceptance remains open; this change claims neither a replacement
-aggregate bound nor whole-runtime containment.
+and leak/growth acceptance is owned by INTERFACES; this change claims neither a
+replacement aggregate bound nor whole-runtime containment.
 Contained store-write and custody-release failures retain only separate sticky
 Boolean failure markers. The dispatcher does not retain the exception, its
 arguments, attributes, cause, context, or traceback: any of those can keep an

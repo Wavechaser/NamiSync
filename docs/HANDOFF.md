@@ -2,8 +2,9 @@
 
 ## Outcome
 
-Branch `milestone1`. R4's gates pass on final candidate `3ece185f`; closeout
-awaits the user's SH-G-15 judgment. M1_PLAN ("R4 candidate run") holds the
+Branch `milestone1`. **R4 is complete** at final candidate `3ece185f`. Its gates
+pass, and the user accepted the SH-G-15 results on 2026-11-10 (INTERFACES SH-G-15,
+FEATURES). M1_PLAN ("R4 candidate run") holds the
 decision record and PERFORMANCE holds the resource numbers. All evidence is under
 the git-ignored `build/m1-r4-20261109/`.
 
@@ -31,13 +32,15 @@ the git-ignored `build/m1-r4-20261109/`.
 - **SH-G-15:** `soak/`, collected on `1f632b13` and applicable to `3ece185f`.
   All 17 runs are clean. The 100k peak (2.32–2.40 GiB) and the soak whole-app
   slope (+0.28–0.35 MiB/cycle, renderer +0.20–0.22 as before) exceed the
-  historical yardsticks.
+  historical yardsticks. The user accepted both as measured.
 
 ## Next
 
-1. The user judges SH-G-15 on the measured behavior.
-2. R4 closes with one reviewed closeout commit; R5 then reviews the exact
-   `package-2/` candidate for tester handoff.
+R5 reviews the exact `package-2/` candidate adversarially. It reconciles
+notices/source, hashes, known issues, instructions and BR-G-43's remaining
+docs/README status. It also prepares the ZIP, source bundle, checksums and
+release notes. It records the Microsoft binary-terms agreement before any
+tester handoff.
 
 ## Operational context
 

@@ -630,6 +630,8 @@ explicit, reviewable and regression-backed.
   witness passes on its ZIP. Its app content matches the soaked package apart from
   PE timestamps and install metadata. Component-gallery flakes seen under
   concurrent desktop use did not recur on an idle desktop.
+- Close R4: the user accepts the SH-G-15 schedule as measured, including the
+  100k execution peak and soak growth slope above historical yardsticks.
 - Add Windows GitHub CI for ordinary tests/import contracts and development
   package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
   release publication remains open.

@@ -24,7 +24,8 @@ The runs took about 4.4 hours (00:32–04:55 local) with the machine otherwise
 quiet. All 17 runs completed (`soak.log` ends `exit 0`). All 306 mirror checks
 matched, and every app exited 0 with no remaining processes, unlike the
 overnight slow closes on `733f0cb1`. `soak-validation.json` reports
-FAIL; as before, that verdict is informational and the user judges SH-G-15.
+FAIL; as before, that verdict is informational. On 2026-11-10 the user accepted
+these results for SH-G-15, including both exceedances below.
 
 | Profile (runs) | Peak, whole app | Settled after close | `733f0cb1` peak / settled |
 | --- | ---: | ---: | ---: |
