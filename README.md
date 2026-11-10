@@ -87,24 +87,19 @@ and a **Remote files** filter. Scan-wide recall file counts and logical sizes
 are available through the bridge for later status-panel integration; they are
 not download-volume predictions or a complete cloud inventory.
 
-R4 verification is complete for the unsigned Windows x64 portable candidate
-`v0.1.0` “Gertrud” (`3ece185f`). The complete release suite and the packaged
-reviewed copy, inventory, verification and close checks passed. Resource
-acceptance covers the measured cold-start, repeated and long-workload schedule.
-Release closure and tester handoff remain open in R5. [M1 delivery register](docs/M1_PLAN.md)
+M1 is complete. The unsigned Windows x64 portable tester build `v0.1.0`
+“Gertrud” (`b0a3fe13`) passes the complete release suite and the packaged
+reviewed copy, inventory, verification and close checks; its resource use was
+accepted as measured. Its tester set (app and source ZIPs, wheel, build
+identities, guides, Microsoft recipient terms, notices, release notes and
+checksums) is assembled in the git-ignored `dist/v0.1.0/` folder of the
+maintainer's checkout. [M1 delivery register](docs/M1_PLAN.md)
 
-The serviced replacement `cfeac2d9` passes the complete release suite, R3 timing,
-settlement and portable Medium/High-token checks. The user confirmed that
-resource measurements remain non-blocking under the accepted SH-G-15
-disposition. The follow-up source keeps correctly ordered task-rail rows attached across
-repaints to preserve clicks; the original timeout's cause remains unconfirmed. R5's final
-review and delivery decision remain open.
-
-The candidate includes a tester guide covering extraction, prerequisites,
-application data and feedback. The source and build guide explains how to
-rebuild from matching source. The GPL and third-party notices accompany both
-guides.
-[Tester guide](tools/packaging/START-HERE.txt) · [Source and build guide](tools/packaging/BUILDING.txt)
+The tester guide covers extraction, prerequisites, application data and
+feedback. The source and build guide explains how to rebuild from matching
+source. The bundled Microsoft runtime code ships under its recipient terms; the
+GPL and third-party notices accompany the guides.
+[Tester guide](tools/packaging/START-HERE.txt) · [Source and build guide](tools/packaging/BUILDING.txt) · [Microsoft terms](tools/packaging/MICROSOFT-TERMS.txt)
 
 External requests and applicable populations are bounded at their owners;
 the [defense model](docs/DEFENSE.md) states the active limits and support scope.
@@ -355,8 +350,7 @@ and filter-scoped file selection
 and standalone integrity controls/results. Plan/Verify navigation keeps original
 execution review separate from ordinary current-state verification, including
 repeatable verification of successful copy targets. Integrated lifecycle
-verification and R4 candidate verification are complete. R5 owns release
-closeout and tester handoff.
+verification is complete, and the `v0.1.0` portable tester release closes M1.
 
 ### M1 Features
 

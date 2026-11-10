@@ -593,6 +593,14 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-11)
 
+- Close R5 and M1. Reconcile Package04 against `1d936876`. Ship
+  `MICROSOFT-TERMS.txt` beside START-HERE so every recipient receives the
+  Microsoft Distributable Code terms. Freeze final candidate `b0a3fe13`: Package05
+  reconciles with only that file, the two edited guides, executable stamps and
+  install metadata changed. The complete release command passes (6,575 passed,
+  4 privilege skips, all 35 headed cases, 12 imports), as does the packaged
+  Medium witness. Stage the tester set with short M1 release notes in
+  `dist/v0.1.0/`.
 - Keep correctly ordered task-rail rows attached across repaints, preserving
   clicks between trusted press/release. Verify attachment/order regression and
   native focus/click behavior without changing Close effects or claiming the

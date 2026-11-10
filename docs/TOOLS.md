@@ -98,7 +98,11 @@ The notice exporter reads the About records and the pinned
 supplements under `tools/packaging/notices/`; its README describes text provenance
 and maintenance. Build-time export is offline and verifies the supplement hashes.
 The source archive includes these inputs and their byte-preserving Git attributes.
-No accepted release or download location is implied.
+No accepted release or download location is implied. A delivered tester set is
+copied byte-for-byte from its reviewed evidence directory into the git-ignored
+`dist/v<version>/` at the repository root. That folder holds only the files
+handed to testers, with their `SHA256SUMS.txt`; build environments, receipts
+and draft sets stay under `build/`.
 
 The 2026-11-05 census verifies all 477 files of retained local `build-d` against
 both its freezer collection table and bundle manifest at `b3095886`, plus the
