@@ -71,7 +71,7 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
         entries.delete(taskId);
       }
     }
-    for (const task of tasks) {
+    for (const [index, task] of tasks.entries()) {
       let entry = entries.get(task.taskId);
       if (entry === undefined) {
         const row = document.createElement("div");
@@ -183,7 +183,8 @@ export function createTaskRail({ onCreate, onSelect, onClose, onRetryUpdates, on
       entry.close.ariaLabel = checkClose ? `Check Close outcome for ${task.label}` : closeReason ?? `${closeUnavailable ? "Retry close outcome for"
         : task.closeFailed ? "Retry close for" : "Close"} ${task.label}`;
       entry.close.title = entry.close.ariaLabel;
-      list.append(entry.row);
+      const next = list.children[index] ?? null;
+      if (next !== entry.row) list.insertBefore(entry.row, next);
     }
   }
 

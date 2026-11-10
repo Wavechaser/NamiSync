@@ -593,10 +593,10 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
-- Reproduce task-rail click loss when an unchanged repaint detaches a row
-  between trusted press/release. Preserve the bounded native probe and
-  independent review; recommend stable row reconciliation without claiming
-  the original untraced timeout's cause is proven. No product fix is included.
+- Keep correctly ordered task-rail rows attached across repaints, preserving
+  clicks between trusted press/release. Verify attachment/order regression and
+  native focus/click behavior without changing Close effects or claiming the
+  original untraced timeout's cause is proven.
 - Preserve Resources03's raw FAIL/incomplete receipt, exact post-failure
   mirrors and normal app shutdowns. Record the user's confirmation that
   resource measurements remain non-blocking under accepted SH-G-15; pursue

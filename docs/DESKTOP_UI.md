@@ -1871,8 +1871,10 @@ authority.
 M1-4 activates task page creation, selection/navigation, rail interactions, and
 explicit closure. The rail is newest-first, keeps stable process-local labels
 and card elements across re-observation of published blank,
-active-session, and terminal/released tasks within the current document. Page
-bodies now show editable or frozen Setup; review, execution and inventory
+active-session, and terminal/released tasks within the current document.
+Refreshes keep rows attached when task order stays the same, so a press on a
+retained task control can complete. Page bodies now show editable or frozen
+Setup; review, execution and inventory
 content await their owning checkpoints. Task identity, activity/terminal state,
 and pending/failed close remain truthful and observable; this slice does not
 prebuild those later content projections. Stale create, close, list, and drain

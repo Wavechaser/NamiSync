@@ -31,6 +31,14 @@ class ElementFake {
     }
   }
 
+  insertBefore(value, next) {
+    value.remove();
+    const index = next === null ? this.children.length : this.children.indexOf(next);
+    assert.ok(index >= 0, "insertion reference is a child");
+    value.parentNode = this;
+    this.children.splice(index, 0, value);
+  }
+
   replaceChildren(...values) {
     for (const child of this.children) child.parentNode = null;
     this.children = [];
@@ -443,6 +451,28 @@ const railSource = (await readFile(process.argv[3], "utf8"))
   .replace("./render.js", renderUrl)
   .replace("./task_status.js", taskStatusUrl);
 const {createTaskRail} = await import(moduleUrl(railSource));
+{
+  const rail = createTaskRail(Object.fromEntries(
+    ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])));
+  const list = walk(rail.element).find(element => element.classList.values.has("nami-task-rail__items"));
+  const older = {taskId: TASK_A, label: "Task 1"};
+  const newer = {taskId: TASK_B, label: "Task 2"};
+  const newest = {taskId: TASK_C, label: "Task 3"};
+  rail.render([newer, older], newer.taskId, null);
+  const [newerRow, olderRow] = list.children;
+  let detachments = 0;
+  for (const row of [newerRow, olderRow]) {
+    row.remove = () => { detachments += 1; ElementFake.prototype.remove.call(row); };
+  }
+  rail.render([{...newer}, {...older}], newer.taskId, null);
+  rail.render([newest, newer, older], newest.taskId, null);
+  const [newestRow] = list.children;
+  assertSameNodes(list.children, [newestRow, newerRow, olderRow], "prepend preserves newest-first row identities");
+  assert.equal(detachments, 0, "refresh and prepend leave existing rail rows attached");
+  rail.render([older, newer], older.taskId, null);
+  assertSameNodes(list.children, [olderRow, newerRow], "removal and reorder preserve retained row identities");
+  assert.equal(newestRow.parentNode, null, "removed task row is detached");
+}
 const headlineRail = createTaskRail(Object.fromEntries(
   ["onCreate", "onSelect", "onClose", "onRetryUpdates", "onSettings"].map(name => [name, () => {}])));
 const headlineTask = {taskId:"headline", label:"Headline", taskKind:"sync-plan", workPane:"plan",

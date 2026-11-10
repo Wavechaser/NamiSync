@@ -96,8 +96,8 @@ Release closure and tester handoff remain open in R5. [M1 delivery register](doc
 The serviced replacement `cfeac2d9` passes the complete release suite, R3 timing,
 settlement and portable Medium/High-token checks. The user confirmed that
 resource measurements remain non-blocking under the accepted SH-G-15
-disposition. Targeted diagnosis reproduced task-rail click loss; its correction
-is pending, and the original timeout's cause remains unconfirmed. R5's final
+disposition. The follow-up source keeps correctly ordered task-rail rows attached across
+repaints to preserve clicks; the original timeout's cause remains unconfirmed. R5's final
 review and delivery decision remain open.
 
 The candidate includes a tester guide covering extraction, prerequisites,

@@ -91,10 +91,14 @@ This demonstrates a product input defect, without filesystem effects or a
 soak. It does not prove that this ordering caused the original untraced timeout.
 
 Evidence: `build/m1-release-repair-20261110/portable/rail-click-probe-20261110-02/`.
-The proposed correction is ordered row reconciliation that leaves correctly
-positioned rows attached. Verify it with the same trusted down/render/up seam
-and task ordering/identity tests; no Close replay or backend lifecycle change
-is needed. No product correction is included in this investigation.
+The follow-up correction leaves correctly positioned rows attached. The
+ordinary regression fails on the old renderer and passes after correction;
+the native trusted down/render/up diagnostic now retains focus and invokes
+the exact fixture callback once. Both controls also pass, with no row moves.
+The native diagnostic uses a separate old-package extraction with only the
+corrected rail asset overlaid; it is not new-package acceptance. Evidence is
+under `portable/rail-fix-20261110/` and `portable/rail-fix-native-20261110-02/`.
+No Close replay or backend lifecycle change is included.
 
 ## R4 candidate resource schedule on `1f632b13` — 2026-11-10
 

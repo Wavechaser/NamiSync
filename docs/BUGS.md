@@ -1247,15 +1247,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
-- MODERATE - OPEN (2026-11-10). Input-target detachment. A task-rail repaint
+- MODERATE - FIXED (2026-11-10). Input-target detachment. A task-rail repaint
   between pointer press and release can discard the user's Close click,
   leaving the task retained without a pending/refusal message. Cause:
-  `rail.js` appends every existing row even when its order is unchanged,
+  `rail.js` appended every existing row even when its order was unchanged,
   detaching the pressed button and suppressing the browser's click. A bounded
   native probe on packaged `cfeac2d9` reproduces this with the same enabled
   button and coordinates; both controls invoke the fixture Close callback once. The
   original resource-run timeout lacks the trace needed to prove this ordering.
-  Preserve already ordered row attachments; implementation remains pending.
+  Fixed by leaving correctly ordered rows attached and moving only misplaced
+  rows. Regression covers refresh/prepend and removal/reorder; the native
+  press/render/release probe now retains focus and invokes the callback once.
 
 - MODERATE - FIXED (2026-10-14). Incomplete accepted activity adoption. After
   execution, Inventory Refresh can be refused despite a released session and

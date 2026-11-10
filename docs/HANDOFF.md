@@ -1,9 +1,9 @@
-# Latest session — Close-input diagnosis and packaged High pass, 2026-11-10
+# Latest session — row attachment fix and targeted idle continuation, 2026-11-10
 
-The user requested a quick Close-timeout investigation, confirmed resource
-measurements are non-blocking under accepted SH-G-15, and was present for UAC.
-No further soak ran. M1_PLAN owns the decision. Resources03 remains raw
-FAIL/incomplete, including missing open-idle coverage; no receipt was rewritten.
+The user authorized the small row-attachment fix and then the remaining idle
+measurements. Resource measurements remain non-blocking under accepted SH-G-15.
+M1_PLAN owns the decision. Resources03 remains raw FAIL/incomplete; no receipt
+was rewritten and no full soak is requested.
 
 ## Close finding and next step
 
@@ -12,13 +12,32 @@ native probe on exact candidate `cfeac2d9` reproduces a lost Close click:
 render between trusted mouse-down/up detaches and reattaches the same row,
 blurs the button and suppresses click. Both no-render controls invoke the
 exact callback once. The original payload timeout lacks this trace, so its
-cause remains unconfirmed. No product code changed.
+cause remains unconfirmed.
 
-Recommended correction: ordered row reconciliation that leaves correctly
-positioned rows attached. Verify trusted down/render/up, callback identity/count
-and ordering/insertion/removal. Preserve Close effects/recovery; no automatic
-mutation replay. This session delivered investigation, not implementation or
-R5 closure. Resource handle ownership remains deferred diagnostic work.
+The five-line production correction leaves correctly positioned rows attached.
+Its ordinary regression fails against the old code and passes after correction,
+covering refresh/prepend and removal/reorder. A separate package extraction
+with only the corrected rail asset overlaid passes trusted down/render/up,
+exact callback count/identity and retained focus, with no row moves. This is a
+native renderer diagnostic, not rebuilt-package acceptance. Close effects and
+recovery are unchanged; no automatic mutation replay. Verification evidence:
+`portable/rail-fix-20261110/` and `portable/rail-fix-native-20261110-02/`.
+Resource handle ownership remains deferred diagnostic work.
+
+Verification: the interfaces department passes 2,313 tests with the selected
+Python 3.15.2 under Medium integrity and external temporary storage. The first
+Low-token/repository-temp attempt is retained as invalid environment evidence;
+its permission and custody-temp failures all clear in attempt02. Independent
+review approves the product/test/docs delta and targeted measurement runner.
+
+Next: after reviewed fix commit, create a fresh detached `idle-followup-checkout`
+and use `run-idle-followup.ps1` for a fresh Package attempt and Resources attempt
+04. The unchanged collector runs only `idle-open-01` (60 minutes) then
+`payload-01`, keeping the earlier 15 observations intact. Preserve the new
+partial schedule's raw validator FAIL for its 15 deliberately absent runs;
+report the two requested run results and metrics separately. The runner and
+`compare-idle-followup-package.py` are ignored evidence tooling. Do not mutate
+the frozen `acceptance-checkout`, old package env or old artifact extractions.
 
 Evidence root `build/m1-release-repair-20261110/portable/`:
 - `rail-click-probe.py`, `rail-click-probe.js` and
