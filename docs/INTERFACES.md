@@ -1093,6 +1093,13 @@ Only `assets/bridge.js` may reference `window.pywebview`; the host exposes only 
 | SH-G-11–14 | `PRESENTATION.md` and the visual owner retain the exact token, material/fallback, motion, fixed-local-icon, and installed-wheel evidence criteria. |
 | SH-G-15 | Scoped release acceptance. Before measuring, declare the installed build, runtime/hardware profile, observed process scope, finite cold-start/repeated/long workloads, repetitions/durations, warm-up/quiescence, fresh-process count, statistics, separate resource predicates, budgets, and validator. Measure stable host and relevant runtime/renderer-child identities; preserve raw observations and dispersion without materially contaminating the product. Require absolute cold-start peak and settled use plus retained-growth and trend checks. An incomplete workload or missing observation cannot pass. Scoped Tier-2 acceptance applies only to named profiles/workloads; relevant source, dependency, or runtime changes rerun affected profiles against unchanged budgets unless explicitly revised. Tier-3 rules govern calibration-derived ceilings or invalidated authority. **Accepted 2026-11-10 by the user's judgment** of the measured 17-run SH-G-15 v1 schedule (startup, 10k/100k scale, payload, three 100-cycle soaks, 60-minute open idle). The schedule ran on the R4 package, whose app content matches candidate `3ece185f`. The historical validator reported `FAIL` on three predicates covering two topics. The 100k execution peak exceeded its yardstick, as did the soak whole-app growth slope and one retained shift of 26.629 MiB. The user accepted the schedule as measured. This does not revive BR-G-45 or weaken runtime-enforced request/population bounds. [Results and artifacts](PERFORMANCE.md#r4-candidate-resource-schedule-on-1f632b13--2026-11-10) |
 
+The user's 2026-11-10 clarification keeps the serviced `cfeac2d9` resource
+measurements non-blocking under this SH-G-15 disposition, including the familiar
+approximately 2.4 GB peak. Resources03's raw incomplete receipt and missing
+open-idle observation remain recorded in PERFORMANCE; neither is relabeled a
+passing measurement. The requested follow-up targets the Close timeout without
+another long soak. M1_PLAN owns that investigation and release status.
+
 ## Common Adapter Contract
 
 - Bound each complete externally supplied request at ingress. `BRIDGE.md`

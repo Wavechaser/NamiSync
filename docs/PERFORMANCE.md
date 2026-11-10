@@ -17,11 +17,15 @@ Resources03 used the independently reviewed serviced portable ZIP, SHA-256
 the selected CPython 3.15.2 stack, the same reference host and the unchanged
 SH-G-15 v1 schedule and budgets. Collection started at 07:29:56 UTC and
 stopped at the payload profile; the runner finished at 11:12:46 UTC.
-**The verdict is FAIL and incomplete, not a renewed acceptance.** Fifteen
+**The raw verdict is FAIL and incomplete.** Fifteen
 runs are valid, the payload run is invalid and `idle-open-01` never started.
-The accepted older candidate's disposition below does not transfer.
+On 2026-11-10 the user confirmed that resource measurements are non-blocking
+under the accepted SH-G-15 disposition, including the approximately 2.4 GB
+peak observed in the 100k collections. The raw validator yardsticks below are
+not renewed release blockers. The user requested targeted Close investigation
+without another long soak; missing coverage remains explicitly unmeasured.
 
-| Observation | Runs 1 / 2 / 3 | Unchanged limit |
+| Observation | Runs 1 / 2 / 3 | Historical validator yardstick |
 | --- | --- | --- |
 | 100k whole-app peak | 2,309.039 / 2,348.285 / 2,346.273 MiB | 2,048 MiB |
 | Soak memory slope, cycles 21–100 | 0.366 / 0.448 / 0.347 MiB/cycle | 0.2 MiB/cycle |
@@ -39,7 +43,8 @@ handle trends in the host: 2.645 / −1.766 / 2.631 handles/cycle. Browser,
 renderer and GPU handle slopes are near zero. The samples cannot identify
 handle types or owners. The final 120-second idle ends only five handles
 below each cycle-100 median, still 560 / 846 / 174 above that app's initial
-idle count. This warrants ownership/lifetime investigation, not a leak claim.
+idle count. Ownership/lifetime investigation is a deferred diagnostic, not a
+leak claim or a blocker for the requested Close investigation.
 Renderer memory slopes remain about 0.20–0.22
 MiB/cycle across both attempts; higher GPU contributions in runs 1/2 and host
 memory in run 2 contribute to the current whole-app memory observations.
@@ -70,8 +75,26 @@ Raw evidence: `build/m1-release-repair-20261110/acceptance/20261110-03/resources
 including `validation.json`, `schedule/runs/payload-01/failure.png` and
 `payload-failure-mirror.json`. Independent reconciliation and comparison:
 `build/m1-release-repair-20261110/renewal/resources-review.md`.
-Any renewed resource disposition must distinguish the complete observations,
-missing coverage and unchanged yardsticks; no prior exception is inherited.
+The user's non-blocking disposition does not turn missing observations into
+measurements or establish universal leak freedom. Preserve the original raw
+verdict and distinguish the Close investigation from resource optimization.
+
+### Bounded Close-input diagnosis — 2026-11-10
+
+The exact `cfeac2d9` packaged WebView2 reproduces a lost click in the shipped
+`rail.js`. A fixture rail uses inert callbacks and trusted native mouse input.
+Two controls without a repaint each invoke the fixture Close callback once. One unchanged
+`rail.render` between mouse-down and mouse-up removes and re-adds the existing
+row; the same enabled button remains at the same coordinates, but focus is
+lost and the browser emits no click. Close's callback is never invoked.
+This demonstrates a product input defect, without filesystem effects or a
+soak. It does not prove that this ordering caused the original untraced timeout.
+
+Evidence: `build/m1-release-repair-20261110/portable/rail-click-probe-20261110-02/`.
+The proposed correction is ordered row reconciliation that leaves correctly
+positioned rows attached. Verify it with the same trusted down/render/up seam
+and task ordering/identity tests; no Close replay or backend lifecycle change
+is needed. No product correction is included in this investigation.
 
 ## R4 candidate resource schedule on `1f632b13` — 2026-11-10
 

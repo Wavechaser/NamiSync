@@ -1,90 +1,57 @@
-# Latest session — release renewal blocked after measurement, 2026-11-10
+# Latest session — Close-input diagnosis and packaged High pass, 2026-11-10
 
-The user authorized bounded release repair, versioned SH-G-8 authority and the
-quiet, plugged-in, unlocked resource schedule. [M1_PLAN](M1_PLAN.md#approved-release-repair--2026-11-10)
-owns RR1–RR4. Preserve original artifacts and budgets. External delivery and
-the Microsoft agreement remain separate final decisions.
+The user requested a quick Close-timeout investigation, confirmed resource
+measurements are non-blocking under accepted SH-G-15, and was present for UAC.
+No further soak ran. M1_PLAN owns the decision. Resources03 remains raw
+FAIL/incomplete, including missing open-idle coverage; no receipt was rewritten.
 
-## Integrated work and verified gates
+## Close finding and next step
 
-- `08514423` closes the source GUI token guard, including actual Low/Medium/High
-  observations. `eb98c95f` selects official PSF CPython 3.15.2, SQLite 3.53.4,
-  setuptools 84.1.0, pythonnet 3.2.1 and xxhash 4.1.0/native 0.8.4, with exact
-  notices and versioned custody authority. Preserve that exact introduction
-  in ancestry; do not rebase or cherry-pick it.
-- `cfeac2d9` restores strict UTC clock grammar despite Python's new `24:00`
-  normalization, updates installed runtime witnesses and preserves the
-  executor's single no-follow snapshot check across Python implementations.
-  Independent review and complete release pass: 6,575 tests, four unchanged
-  WinError 1314 fixture skips and 12 imports. All 546 BR-G / 69 SH-G obligations
-  pass across 614 cases; the runner's 545 BR prefix count excludes the shared
-  SH-G-8/BR-G-42 case. Settlement passes 30 × 3.
-- R3 passes on the same clean revision: five children each for Inventory
-  base/heavy and History/installed bridge. PERFORMANCE records exact metrics
-  and three versioned receipts. Independent review: `renewal/r3-review.md`.
-- Package03 and independent artifact review pass: 341 portable files, 352
-  source files, 309 wheel entries, 38 native inputs and 52 notices. ZIP SHA-256:
-  `a840c9b0fedc31a442e677cb81c7281d5901ed9eafa1e1d25f31c991d9ceff5a`.
-  The actual Medium journey passes rendered About, reviewed copy, exact mirror,
-  Inventory/Baseline/Verify and exit 0 with an empty owned Job. Independent
-  review confirms the harmless profile-cleanup warning also occurred in the
-  prior accepted witness; it does not leave a live owned process.
+Shipped `rail.js` unconditionally appends retained rows during render. A bounded
+native probe on exact candidate `cfeac2d9` reproduces a lost Close click:
+render between trusted mouse-down/up detaches and reattaches the same row,
+blurs the button and suppresses click. Both no-render controls invoke the
+exact callback once. The original payload timeout lacks this trace, so its
+cause remains unconfirmed. No product code changed.
 
-## Immediate remaining work
+Recommended correction: ordered row reconciliation that leaves correctly
+positioned rows attached. Verify trusted down/render/up, callback identity/count
+and ordering/insertion/removal. Preserve Close effects/recovery; no automatic
+mutation replay. This session delivered investigation, not implementation or
+R5 closure. Resource handle ownership remains deferred diagnostic work.
 
-The actual packaged High-token witness is pending. UAC attempt01 canceled
-after approximately two minutes without launching the elevated child. Preserve
-`portable/high-uac-20261110-01.json`; a prompt-visibility question is pending.
-Do not repeatedly prompt while the user may be away. Source High evidence
-cannot substitute for the final image. Retry with a fresh attempt when the
-user can consent, using reviewed `portable/request-high.ps1` and its hash-pinned
-wrapper. No elevated Git or unrelated process control is needed.
+Evidence root `build/m1-release-repair-20261110/portable/`:
+- `rail-click-probe.py`, `rail-click-probe.js` and
+  `rail-click-probe-20261110-02/probe-result.json`, SHA-256
+  `dfd305426ea07080a3d0973e11564a39ba903f61c9b92511c3ccab0a1e00e142`.
+  Attempt01 refused the Low-token harness before GUI launch. Attempt02 used
+  Medium integrity. Its host exited 0; two WebView2 children exceeded the grace
+  period and were contained by the owned Job. Subsequent checks found all owned
+  PIDs gone. Do not call this an empty-Job graceful-close witness.
+- `rail-click-review.md` holds independent diagnostic review.
+- Earlier `payload-pilot-{01,02}/` passed without reproducing the original
+  timeout; preserve those and the original failed payload receipt unchanged.
 
-Resources03 stopped with FAIL/incomplete. Fifteen runs are valid; payload
-timed out waiting for the second completed task to close, and `idle-open-01`
-never ran. All sixteen apps exited 0 with empty Jobs. All completed mirrors
-and a separate 64-file payload SHA-256 check pass. Supplemental post-stop
-checks confirm all 65 corpus sizes/modification times and extracted bundle bytes. No collector
-result was rewritten. The original schedule is not acceptance.
+## Packaged High and retained release evidence
 
-Six valid runs account for eleven exceedances across four predicates: 100k peaks 2,309–2,348
-MiB; all three soak memory slopes/shifts; two whole-Job handle slopes. The
-new handle slopes align with the host role. Final 120-second idle still
-retains 560 / 846 / 174 host handles above initial idle, without handle-type
-or lifetime evidence establishing a leak. Renderer memory slopes remain
-similar to the older collection. PERFORMANCE and `renewal/resources-review.md`
-own exact values, comparison limits and the unchanged budgets.
+`high-20261110-02/receipt.json` and `high-uac-20261110-02.json` pass actual UAC
+and elevated refusal. The exact GUI ran with elevation 1 / High SID 12288,
+showed the expected refusal, created no app data, exited 1 and left an empty
+owned Job. `high-review-02.md` independently verifies the result. Canceled
+attempt01 remains; unchanged bytes need no further UAC request.
 
-Two bounded payload-only diagnostic pilots completed normally with both
-mirrors exact. They add passive input/completion tracing to the original
-gesture and timeout, without product/driver correction or automatic retries.
-They did not reproduce the Close timeout and cannot replace resource-gate
-coverage. Preserve `portable/payload-pilot-{01,02}/` and the original failure.
-No measurement, pilot or UAC process remains running.
+Candidate `cfeac2d95a6db83107854d17d9e6c4e9a774b77e` retains complete release
+6,575 passes/four unchanged capability skips, 12 imports, 30 × 3 settlement,
+R3 timing, package census and Medium journey passes. Portable ZIP SHA-256:
+`a840c9b0fedc31a442e677cb81c7281d5901ed9eafa1e1d25f31c991d9ceff5a`.
+Evidence lives under `acceptance/20261110-03/`; R3 receipts are committed.
 
-R5 remains held for the proposed bounded Close/host-handle follow-up decision,
-complete resource coverage/disposition and actual packaged High witness.
-The old artifact's resource exception does not transfer. No additional GC,
-heap cap, weaker threshold or lifecycle/effect change has been made.
-
-## Evidence and resumption
-
-Evidence root: `build/m1-release-repair-20261110/`. `acceptance/20261110-03/`
-holds release, R3, settlement and package receipts. `portable/` holds reviewed
-drivers, static identity, artifact audit/review and live witnesses. Failed
-release02 remains; all 22 former failures pass on the successor.
-`renewal/runtime-compat-01/review.md` accounts for the delta and coverage.
-Historical v1 custody bytes and v2 pins remain unchanged.
-
-The acceptance worktree stays clean at `cfeac2d95a6db83107854d17d9e6c4e9a774b77e`
-under `acceptance-checkout`, branch `codex/release-repair-authority-v2`, with
-its private selected `.venv`. Main `milestone1` fast-forwarded to that exact
-descendant, followed by documentation commit `c662cd2e`; `integration.json`
-records the checked transition. Root `.venv`
-and global Python are untouched. Retain recovery `ed18ad3e` on
-`codex/wip-20261110-release-repair` until final accounting; it was rebuilt,
-never merged or cherry-picked. No task worktree or old evidence was removed.
-
-Keep accepted old R4 `3ece185f`, `build/m1-r4-20261109/` and old R5 delivery
-under `build/m1-r5-20261110/` immutable. No upload, tag, push, external delivery
-or measuring-session process/profile/corpus mutation has occurred.
+Frozen `acceptance-checkout` remains on `codex/release-repair-authority-v2`
+at `cfeac2d9` with its private selected runtime. Preserve authority introduction
+`eb98c95f` in ancestry; no rebase/cherry-pick. Root `.venv` and global Python
+are untouched. Keep recovery `ed18ad3e` on
+`codex/wip-20261110-release-repair` for final accounting; it was rebuilt, never
+merged. Retain old R4 `3ece185f`, `build/m1-r4-20261109/` and old R5 delivery
+under `build/m1-r5-20261110/`. No cleanup, upload, tag, push or external delivery
+occurred. Final R5 review, immutable tester handoff and external
+delivery/Microsoft agreement decision remain open.

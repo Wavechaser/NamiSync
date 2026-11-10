@@ -94,10 +94,11 @@ acceptance covers the measured cold-start, repeated and long-workload schedule.
 Release closure and tester handoff remain open in R5. [M1 delivery register](docs/M1_PLAN.md)
 
 The serviced replacement `cfeac2d9` passes the complete release suite, R3 timing,
-settlement and portable Medium-user checks. Its renewed resource collection
-is incomplete after a payload task-Close timeout and reports memory/handle
-budget exceedances. Packaged elevated-refusal verification also awaits UAC
-consent. R5 remains on hold; the older resource acceptance does not transfer.
+settlement and portable Medium/High-token checks. The user confirmed that
+resource measurements remain non-blocking under the accepted SH-G-15
+disposition. Targeted diagnosis reproduced task-rail click loss; its correction
+is pending, and the original timeout's cause remains unconfirmed. R5's final
+review and delivery decision remain open.
 
 The candidate includes a tester guide covering extraction, prerequisites,
 application data and feedback. The source and build guide explains how to

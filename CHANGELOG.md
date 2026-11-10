@@ -593,19 +593,22 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
-- Preserve Resources03 as FAIL/incomplete: fifteen valid runs, a payload
-  task-Close observation timeout and an unrun open-idle case. Record the
-  unchanged-budget memory/handle exceedances, exact post-failure mirrors and
-  normal app shutdowns; keep renewed R5 acceptance pending rather than
-  transferring the old candidate's resource disposition.
+- Reproduce task-rail click loss when an unchanged repaint detaches a row
+  between trusted press/release. Preserve the bounded native probe and
+  independent review; recommend stable row reconciliation without claiming
+  the original untraced timeout's cause is proven. No product fix is included.
+- Preserve Resources03's raw FAIL/incomplete receipt, exact post-failure
+  mirrors and normal app shutdowns. Record the user's confirmation that
+  resource measurements remain non-blocking under accepted SH-G-15; pursue
+  the payload Close timeout with targeted investigation, without another soak.
 - Renew the complete release, settlement and R3 timing gates on `cfeac2d9`:
   6,575 tests pass with four unchanged capability skips, all 12 import contracts
   hold, and Inventory/History/bridge collections pass unchanged limits. Preserve
   separately versioned receipts and the failed predecessor run.
 - Build and independently audit the serviced portable package: 341 files,
   38 native inputs and 52 notices. Verify the actual Medium-token app's About,
-  reviewed copy, integrity actions and clean exit; retain packaged elevated
-  refusal and resource acceptance as separate pending gates.
+  reviewed copy, integrity actions and clean exit. Verify actual packaged
+  High-token refusal before app data creation, with exit 1 and an empty Job.
 - Preserve strict event timestamp clock ranges under Python 3.15, align the
   installed desktop witnesses with Python.NET 3.2.1, and keep the executor's
   single no-follow snapshot check independent of Python's stat delegation.
