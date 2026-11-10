@@ -31,10 +31,10 @@ locked upstream distributions with pip download --require-hashes using the
 included requirements and bootstrap files. Wheels are ZIP archives: Python
 modules inside them are source, not just compiled executables.
 
-In particular, setuptools 83.0.0's wheel contains the exact MPL-2.0-covered
+In particular, setuptools 84.1.0's wheel contains the exact MPL-2.0-covered
 source under setuptools/config/_validate_pyproject/ and schema source under
 setuptools/config/. Obtain that wheel at:
-  https://pypi.org/project/setuptools/83.0.0/#files
+  https://pypi.org/project/setuptools/84.1.0/#files
 Extract those directories together with their NOTICE files. The wheel's SHA-256
 is pinned in tools/packaging/bootstrap.txt. These unmodified files include copied
 validate-pyproject source and generated fastjsonschema code; their notices retain
@@ -42,30 +42,32 @@ the MPL-2.0 and BSD terms. The same wheel contains all the selected setuptools
 vendored Python sources and licenses under setuptools/_vendor/.
 
 Native-source starting points for the exact bundled versions:
-  CPython 3.13.17: https://github.com/python/cpython/tree/v3.13.17
+  CPython 3.15.2: https://github.com/python/cpython/tree/v3.15.2
   Python external inputs: that tag's PCbuild/get_externals.bat
   OpenSSL 3.5.9: https://github.com/openssl/openssl/tree/openssl-3.5.9
   Python native dependencies: https://github.com/python/cpython-source-deps
     branches bzip2-1.0.8, libffi-3.4.4, mpdecimal-4.0.0,
-    sqlite-3.50.4.0, xz-5.2.5 and zlib-1.3.1
-  Expat: CPython tag's Modules/expat (2.8.5)
+    sqlite-3.53.4.0, xz-5.8.1.1, zlib-ng-2.2.4 and zstd-1.5.7
+  Expat: CPython tag's Modules/expat (2.9.0)
   HACL* hash implementations: CPython tag's Modules/_hacl, compiled into
-    python313.dll; retained MIT and Apache notices identify the vendored
+    python315.dll; retained MIT and Apache notices identify the vendored
     implementation and KaRaMeL support headers.
+  BLAKE2 wrapper: CPython tag's Modules/blake2module.c (public-domain/CC0 code).
   CPython wrapper/runtime credits: Modules/_decimal/_decimal.c,
     Modules/_winapi.c and Python/getopt.c at the same CPython tag.
-  BLAKE2: CPython tag's Modules/_blake2/impl (public-domain/CC0 code).
   pysqlite: CPython tag's Modules/_sqlite; retain its zlib-style notices when
     redistributing that source. The bundled SQLite engine is identified above.
   PyInstaller 6.22.3: https://github.com/pyinstaller/pyinstaller/tree/v6.22.3
     bootloader/zlib contains its statically linked zlib 1.3.2 inflate subset,
-    separate from the CPython runtime's zlib 1.3.1.
+    separate from the CPython runtime's zlib-ng 2.2.4.
 For cffi, xxhash, pythonnet and clr_loader native sources, obtain each pinned
 version's source distribution/repository from the corresponding PyPI project
 and the source references in the notices. The build consumes the locked Windows
 wheels; the lock does not claim to reproduce their upstream compiler toolchains.
+The xxhash 4.1.0 wheel contains xxHash 0.8.4 with x86 runtime dispatch. Its
+source distribution contains the engine and dispatch files under deps/xxhash/.
 The PyInstaller bootloader exception and runtime-hook terms are reproduced in
-the notices. XZ contributes its public-domain liblzma, not its GPL/LGPL tools.
+the notices. XZ contributes its 0BSD-licensed liblzma.
 Microsoft binaries retain their distribution conditions; they are not relicensed
 under NamiSync's GPL. Windows 11 supplies UCRT/API-set system libraries.
 The CPython Windows installation license reproduced in THIRD-PARTY-NOTICES.txt
@@ -79,7 +81,12 @@ Python itself, and do not change NamiSync's GPL license.
 
 Build from the recorded repository commit
 ----------------------------------------
-Use Windows x64, Git and CPython 3.13.17 x64. A compiler and Node are not required
+Use Windows x64, Git and CPython 3.15.2 x64. The release build uses the official
+PSF Windows managed-runtime archive:
+  https://www.python.org/ftp/python/3.15.2/python-3.15.2-amd64.zip
+  SHA-256 d6da9c33a32cf111e1d52b91392c83ea6a808545b646e0557f66cb6d9ee76785
+Verify its SHA-256 and extract it to a new directory before creating a virtual
+environment. A compiler and Node are not required
 by the portable build command. Node 24.22.1 is used for project verification.
 The commands below assume python resolves to that CPython installation and
 source-identity.json is in the starting directory:

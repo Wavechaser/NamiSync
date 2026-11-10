@@ -184,6 +184,7 @@ def test_current_source_transport_custody_stays_within_frozen_ceiling(
         source_authority=frozen._artifact_source_authority(artifact),
         dependency_authority=frozen._artifact_dependency_authority(artifact),
         expected_pycache_prefix=frozen._artifact_pycache_prefix(artifact),
+        expected_python=parent.LIVE_PYTHON,
     )
 
     contract, _calibration = frozen._load_transport_custody_ceiling_contract(

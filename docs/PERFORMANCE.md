@@ -2318,12 +2318,14 @@ remain necessary to attribute the report to this mechanism.
 
 ## Reference profile and collection
 
-The retained BR-G-42 profile is Windows 11 Pro build 26200, i7-13700K
-(16 cores/24 logical processors), 63.7 GiB RAM, WD_BLACK SN850X 4 TB NVMe
-for repository, fixtures and SQLite, CPython 3.13.17, SQLite 3.50.4, AC
-power and no unrelated sustained workload. The user ratified CPython 3.13.17
-on 2026-11-09 under DEFENSE §7, after the late-October security update, with
-budgets unchanged; evidence recorded on 3.13.14 keeps its original identity.
+The BR-G-42 reference machine is Windows 11 Pro build 26200, i7-13700K
+(16 cores/24 logical processors), 63.7 GiB RAM and WD_BLACK SN850X 4 TB NVMe
+for repository, fixtures and SQLite, on AC power with no unrelated sustained
+workload. The [release repair renewal](#r3-release-repair-renewal--predeclared-2026-11-10)
+selects CPython 3.15.2 x64 and SQLite 3.53.4 on the same machine under DEFENSE §7.
+The [2026-11-09 acceptance](#r3-acceptance-result--2026-11-09) keeps its ratified
+CPython 3.13.17 and SQLite 3.50.4 identity. Earlier CPython 3.13.14 evidence
+likewise retains its measured profile.
 Warm p95 uses at least 30
 samples; cold maxima use at least five fresh-process or cold-projection
 samples. Record raw samples, source/runtime/profile, fixture seed, statistic,
@@ -3320,6 +3322,31 @@ with each raw report's SHA-256. Raw reports and logs:
 `build/m1-9-20261001/measurement-inventory-cold-20261109T130416Z-bc2ffcb0/`.
 This closes R3's timing obligations for the recorded profile and revision only;
 changed gating sources, runtime or profile require renewal under DEFENSE §7.
+
+### R3 release repair renewal — predeclared 2026-11-10
+
+The [approved repair](M1_PLAN.md#approved-release-repair--2026-11-10) selects
+official Windows x64 CPython 3.15.2 with SQLite 3.53.4. The installed bridge
+child uses pywebview 6.2.1, pythonnet 3.2.1 and the selected package dependency
+set. Record the actual interpreter, SQLite, WebView2, CLR and package versions
+alongside the reference machine facts, AC power and quiet desktop. Collect
+after the input changes settle on one clean commit. Build and install each
+archived wheel against the selected dependencies in a fresh environment.
+
+The prior R3 collection procedure and limits above carry forward. Inventory
+uses five cold children for each of the two cases and its separate validator.
+History and installed bridge events use five fresh children apiece with the
+existing BR-G-42 checker. Keep failed attempts and do not retry individual
+children. Record results with distinct filenames and preserve the 2026-11-09
+receipts, budgets, fixture and statistics. The live SH-G-8 custody drift guard
+runs on CPython 3.15.2 and xxhash 4.1.0 against the same frozen ceiling.
+The [v2 authority](../tests/interfaces/web/sh_g_8_transport_authority_v2.json)
+authenticates the working verifier against its Git introduction and the
+original v1 verifier and artifacts against their historical Git identities.
+Calibration and holdout retain their CPython 3.13 qualifier, original raw
+receipts and source closure. The current guard leaves that empirical claim
+scoped to the historical profile. SH-G-15 runs separately on the rebuilt
+release package.
 
 ## Selected Plan and execution UI observations
 

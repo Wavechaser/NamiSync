@@ -1109,7 +1109,18 @@ The [recorded calibration and holdout](PERFORMANCE.md#bridge-transport-custody)
 remain below the separately frozen ceiling with no Gap, ordered delivery,
 128/64/64 queue shape, cleanup and terminal predicates.
 
-The authoritative committed artifacts are `tests/interfaces/web/sh_g_8_transport_calibration.json`, `sh_g_8_transport_ceiling.json`, and `sh_g_8_transport_holdout.json`. Calibration was produced from tested commit `56c50b43dc19090ad33af031891503bfec80599b`. The ordinary current-source one-child guard authenticates the frozen contract and compares both live custody shapes with its ceiling; it is Tier-1 drift evidence, not a recalibration. Terminal result graphs, whole-Job deltas, and whole-runtime resource acceptance are outside this closed custody claim.
+The authoritative v1 artifacts are `tests/interfaces/web/sh_g_8_transport_calibration.json`,
+`sh_g_8_transport_ceiling.json` and `sh_g_8_transport_holdout.json`. Calibration
+was produced from tested commit `56c50b43dc19090ad33af031891503bfec80599b`.
+The [v2 verifier authority](../tests/interfaces/web/sh_g_8_transport_authority_v2.json)
+pins the active verifier and helper to its own Git introduction and authenticates
+the original v1 verifier and artifacts at their historical commits. The v1
+holdout still requires the original source closure and ancestry, three fresh
+children, the historical runtime and exact receipts. The ordinary current-source
+one-child guard checks both custody shapes against the same 1,966,080-byte
+ceiling on the selected runtime. It provides Tier-1 drift evidence. Terminal
+result graphs, whole-Job deltas and whole-runtime resource acceptance are outside
+the frozen v1 claim.
 
 The v4 installed-wheel timing and custody runs are retained historical diagnostic evidence. They do not establish current-source Tier-2 timing acceptance (see the R3 collection below) or alter the frozen v1 calibration. In particular, `sh_g_8_acceptance=incomplete-without-custody` remains incomplete evidence, not a pass. The selected `python -m tools performance bridge-event installed --json build/bridge-event.json` case remains diagnostic: it measures archived-HEAD product bytes with a labeled working-tree driver and reports incomplete native attempts with raw child context. Its v5 page decodes fixture byte strings to bounded numeric samples, checks item-free terminal facts, and uses the ordered ItemOutcome stream as the independent item witness. A rejected report stops sample admission and publishes the first browser failure before Close; synthetic workers honor cancellation so host cleanup can settle. A timed-out historical launch alone does not establish its cause. Reproduce frozen custody only with the committed calibration runner and its validated artifacts. Any changed bridge transport must run its affected ordinary checks; new acceptance requires predeclared profile, authority, artifact, and validator rather than a favorable observation.
 

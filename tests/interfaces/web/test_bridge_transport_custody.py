@@ -24,6 +24,8 @@ CALIBRATION = Path(__file__).with_name("sh_g_8_transport_calibration.json")
 CEILING_CONTRACT = Path(__file__).with_name(
     "sh_g_8_transport_ceiling.json"
 )
+HOLDOUT = Path(__file__).with_name("sh_g_8_transport_holdout.json")
+VERIFIER_AUTHORITY = Path(__file__).with_name("sh_g_8_transport_authority_v2.json")
 TESTED_COMMIT = "0" * 40
 VARIANT = "calibration-a"
 
@@ -151,6 +153,7 @@ def _validate_archived_run_artifact(
         source_authority=source_authority,
         dependency_authority=dependency_authority,
         expected_pycache_prefix=expected_pycache_prefix,
+        expected_python=parent.FROZEN_PYTHON,
     )
 
 
@@ -220,24 +223,7 @@ def _load_transport_custody_ceiling_contract(parent, child):
         is None
     ):
         raise ValueError("transport-custody acceptance authority drifted")
-    working_blob = subprocess.run(
-        [
-            "git",
-            "hash-object",
-            f"--path={authority_path}",
-            authority_path,
-        ],
-        cwd=ROOT.parent,
-        text=True,
-        capture_output=True,
-        timeout=10,
-        check=False,
-    )
-    if (
-        working_blob.returncode != 0
-        or working_blob.stdout.strip() != authority["git_blob_oid"]
-    ):
-        raise ValueError("transport-custody acceptance authority drifted")
+    _require_verifier_authority(authority)
 
     frozen = contract["calibration"]
     calibration_hashes = calibration["hashes"]
@@ -347,6 +333,89 @@ def _git_blob_oid(commit: str, path: str) -> str:
     ):
         raise ValueError("transport-custody frozen Git blob is unavailable")
     return object_id
+
+
+def _working_blob_oid(path: str, *, normalize_line_endings: bool = False) -> str:
+    mode = f"--path={path}" if normalize_line_endings else "--no-filters"
+    completed = subprocess.run(
+        ["git", "hash-object", mode, path],
+        cwd=ROOT.parent,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise ValueError("transport-custody working Git blob is unavailable")
+    return completed.stdout.strip()
+
+
+def _require_verifier_authority(v1_verifier: dict[str, str]) -> None:
+    repository = ROOT.parent
+    authority_path = VERIFIER_AUTHORITY.relative_to(repository).as_posix()
+    history = subprocess.run(
+        [
+            "git", "log", "--full-history", "--no-renames", "--diff-filter=A",
+            "--format=%H", "HEAD", "--", authority_path,
+        ],
+        cwd=repository,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    introductions = history.stdout.splitlines()
+    if (
+        history.returncode != 0
+        or len(introductions) != 1
+        or re.fullmatch(r"[0-9a-f]{40}", introductions[0]) is None
+    ):
+        raise ValueError("transport-custody v2 authority introduction is unavailable")
+    introduction = introductions[0]
+    if _working_blob_oid(authority_path) != _git_blob_oid(introduction, authority_path):
+        raise ValueError("transport-custody v2 authority record drifted")
+
+    record = json.loads(VERIFIER_AUTHORITY.read_bytes())
+    verifier_path = Path(__file__).resolve().relative_to(repository).as_posix()
+    helper_path = PARENT.relative_to(repository).as_posix()
+    artifact_paths = {
+        path.relative_to(repository).as_posix()
+        for path in (CALIBRATION, CEILING_CONTRACT, HOLDOUT)
+    }
+    if (
+        type(record) is not dict
+        or set(record) != {"schema_version", "active_verifiers", "v1_verifier", "v1_artifacts"}
+        or record["schema_version"] != 2
+        or type(record["active_verifiers"]) is not dict
+        or set(record["active_verifiers"]) != {verifier_path, helper_path}
+        or type(record["v1_artifacts"]) is not dict
+        or set(record["v1_artifacts"]) != artifact_paths
+        or any(
+            type(commit) is not str or re.fullmatch(r"[0-9a-f]{40}", commit) is None
+            for commit in record["v1_artifacts"].values()
+        )
+    ):
+        raise ValueError("transport-custody v2 authority schema drifted")
+
+    for path, blob in record["active_verifiers"].items():
+        if blob != _git_blob_oid(introduction, path) or blob != _working_blob_oid(path):
+            raise ValueError(f"transport-custody v2 verifier drifted: {path}")
+
+    artifacts = record["v1_artifacts"]
+    ceiling_commit = artifacts[CEILING_CONTRACT.relative_to(repository).as_posix()]
+    if (
+        record["v1_verifier"] != v1_verifier
+        or _git_blob_oid(ceiling_commit, verifier_path) != v1_verifier["git_blob_oid"]
+    ):
+        raise ValueError("transport-custody v1 verifier authority drifted")
+    # The two raw receipts use CRLF checkout bytes and retain their SHA-256 checks.
+    crlf_receipts = {
+        receipt.relative_to(repository).as_posix() for receipt in (CALIBRATION, HOLDOUT)
+    }
+    for path, commit in artifacts.items():
+        working_blob = _working_blob_oid(path, normalize_line_endings=path in crlf_receipts)
+        if working_blob != _git_blob_oid(commit, path):
+            raise ValueError(f"transport-custody v1 artifact authority drifted: {path}")
 
 
 def _require_holdout_commit_authority(
@@ -961,6 +1030,7 @@ def test_transport_custody_fixture_uses_real_paths_and_exact_maximum_shape(
         source_authority=_artifact_source_authority(custody_run),
         dependency_authority=_artifact_dependency_authority(custody_run),
         expected_pycache_prefix=_artifact_pycache_prefix(custody_run),
+        expected_python=parent.LIVE_PYTHON,
     )
 
     ordinary_queues = custody_run["ordinary"]["observed_checkpoint_peak"]
@@ -1021,7 +1091,7 @@ def test_transport_custody_fixture_uses_real_paths_and_exact_maximum_shape(
     )
     runtime = custody_run["runtime"]
     assert runtime["implementation"] == "CPython"
-    assert runtime["version_info"][:2] == [3, 13]
+    assert runtime["version_info"][:3] == [3, 15, 2]
     assert runtime["version_info"][3:] == ["final", 0]
     assert runtime["pointer_bits"] == 64
     assert runtime["py_debug"] == 0
@@ -1118,9 +1188,25 @@ def test_runtime_qualifier_normalizes_only_fresh_pycache_identity(
     )
 
 
+def test_archived_run_validation_refuses_current_live_runtime(custody_run) -> None:
+    parent = _parent_module()
+    child = _child_module()
+    with pytest.raises(ValueError, match="outside the frozen qualifier"):
+        _validate_archived_run_artifact(
+            parent,
+            child,
+            custody_run,
+            variant=VARIANT,
+            source_authority=_artifact_source_authority(custody_run),
+            dependency_authority=_artifact_dependency_authority(custody_run),
+            expected_pycache_prefix=_artifact_pycache_prefix(custody_run),
+        )
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
+        ("version_info", [3, 13, 17, "final", 0]),
         ("with_pymalloc_config", 0),
         ("python_malloc", "default"),
         ("no_site", 0),
@@ -1151,6 +1237,7 @@ def test_windows_pymalloc_qualifier_rejects_ambiguous_profiles(
             source_authority=_artifact_source_authority(custody_run),
             dependency_authority=_artifact_dependency_authority(custody_run),
             expected_pycache_prefix=_artifact_pycache_prefix(custody_run),
+            expected_python=parent.LIVE_PYTHON,
         )
 
 
@@ -1198,6 +1285,7 @@ def test_transport_custody_artifact_schema_rejects_corruption(
             source_authority=_artifact_source_authority(custody_run),
             dependency_authority=_artifact_dependency_authority(custody_run),
             expected_pycache_prefix=_artifact_pycache_prefix(custody_run),
+            expected_python=parent.LIVE_PYTHON,
         )
 
 
@@ -1224,6 +1312,7 @@ def test_transport_custody_artifact_rejects_rehashed_implausible_measurement(
             source_authority=_artifact_source_authority(custody_run),
             dependency_authority=_artifact_dependency_authority(custody_run),
             expected_pycache_prefix=_artifact_pycache_prefix(custody_run),
+            expected_python=parent.LIVE_PYTHON,
         )
 
 
@@ -1248,6 +1337,7 @@ def test_child_receipt_rejects_plausible_rehashed_artifact_edit(
         source_authority=_artifact_source_authority(original),
         dependency_authority=_artifact_dependency_authority(original),
         expected_pycache_prefix=_artifact_pycache_prefix(original),
+        expected_python=parent.LIVE_PYTHON,
     )
     with pytest.raises(ValueError, match="receipt does not match"):
         parent._validate_child_receipt(receipt, artifact)
@@ -1347,6 +1437,10 @@ def test_dataset_uses_three_distinct_runs_without_acceptance_or_limit(
 
     monkeypatch.setattr(parent, "_run_child", run_child)
     monkeypatch.setattr(parent, "_require_authoritative_parent", lambda: None)
+    with pytest.raises(RuntimeError, match="require CPython 3.13"):
+        parent.build_dataset("calibration", tmp_path)
+    # Exercise dataset assembly with synthetic receipts from the live fixture.
+    monkeypatch.setattr(parent, "FROZEN_PYTHON", sys.version_info[:2])
     source_authority = _artifact_source_authority(custody_run)
     monkeypatch.setattr(
         parent, "_source_authority", lambda: source_authority
@@ -1409,13 +1503,115 @@ def test_transport_custody_ceiling_is_mechanically_frozen() -> None:
     assert hashlib.sha256(CALIBRATION.read_bytes()).hexdigest() == (
         contract["calibration"]["artifact_sha256"]
     )
-    assert hashlib.sha256(PARENT.read_bytes()).hexdigest() == (
+    original_helper = subprocess.run(
+        ["git", "cat-file", "blob", f"{_CALIBRATION_COMMIT}:{PARENT.relative_to(ROOT.parent).as_posix()}"],
+        cwd=ROOT.parent,
+        capture_output=True,
+        timeout=10,
+        check=True,
+    ).stdout
+    assert hashlib.sha256(original_helper).hexdigest() == (
         calibration["runs"][0]["hashes"]["source_files"][
             "tests/bridge_transport_custody.py"
         ]
     )
     assert "passed" not in json.dumps(contract)
     assert "result" not in json.dumps(contract)
+
+
+@pytest.mark.parametrize(("path", "problem"), [
+    (VERIFIER_AUTHORITY, "v2 authority record drifted"),
+    (Path(__file__), "v2 verifier drifted"),
+    (PARENT, "v2 verifier drifted"),
+    (CALIBRATION, "v1 artifact authority drifted"),
+    (CEILING_CONTRACT, "v1 artifact authority drifted"),
+    (HOLDOUT, "v1 artifact authority drifted"),
+])
+def test_transport_custody_authority_refuses_working_blob_drift(
+    monkeypatch: pytest.MonkeyPatch,
+    path: Path,
+    problem: str,
+) -> None:
+    v1_verifier = json.loads(CEILING_CONTRACT.read_bytes())["acceptance"]["authority"]
+    tampered_path = path.resolve().relative_to(ROOT.parent).as_posix()
+    working_blob_oid = _working_blob_oid
+
+    def working_blob(relative: str, *, normalize_line_endings: bool = False) -> str:
+        if relative == tampered_path:
+            return "0" * 40
+        return working_blob_oid(relative, normalize_line_endings=normalize_line_endings)
+
+    monkeypatch.setitem(globals(), "_working_blob_oid", working_blob)
+    with pytest.raises(ValueError, match=problem):
+        _require_verifier_authority(v1_verifier)
+
+
+def test_transport_custody_authority_detects_raw_line_ending_changes(tmp_path: Path) -> None:
+    authority = tmp_path / "authority.json"
+    authority.write_bytes(b"{}\n")
+    original_blob = _working_blob_oid(str(authority))
+    authority.write_bytes(b"{}\r\n")
+    assert _working_blob_oid(str(authority)) != original_blob
+
+
+def test_transport_custody_authority_refuses_competing_introductions(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    def git(*arguments: str) -> str:
+        return subprocess.run(
+            [
+                "git",
+                "-c", "user.name=Custody Test",
+                "-c", "user.email=custody@example.invalid",
+                "-c", "commit.gpgsign=false",
+                "-c", f"core.hooksPath={tmp_path / 'no-hooks'}",
+                *arguments,
+            ],
+            cwd=tmp_path,
+            text=True,
+            capture_output=True,
+            timeout=10,
+            check=True,
+        ).stdout
+
+    git("init", "-q", "--template=", "--initial-branch=first")
+    git("commit", "-qm", "base", "--allow-empty")
+    git("branch", "other")
+    authority = tmp_path / VERIFIER_AUTHORITY.name
+    authority.write_bytes(b"{}\n")
+    git("add", authority.name)
+    git("commit", "-qm", "first introduction")
+    git("switch", "-q", "other")
+    authority.write_bytes(b"{ }\n")
+    git("add", authority.name)
+    git("commit", "-qm", "other introduction")
+    git("switch", "-q", "first")
+    git("merge", "-q", "--no-edit", "-s", "ours", "other")
+    simplified = git("log", "--diff-filter=A", "--format=%H", "HEAD", "--", authority.name)
+    assert len(simplified.splitlines()) == 1
+
+    monkeypatch.setitem(globals(), "ROOT", tmp_path / "tests")
+    monkeypatch.setitem(globals(), "VERIFIER_AUTHORITY", authority)
+    with pytest.raises(ValueError, match="v2 authority introduction is unavailable"):
+        _require_verifier_authority({})
+
+
+def test_transport_custody_authority_refuses_original_verifier_drift(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    v1_verifier = json.loads(CEILING_CONTRACT.read_bytes())["acceptance"]["authority"]
+    original_ceiling = "455df3a6fdc1307af140bf91b1dea95774fb36fe"
+    git_blob_oid = _git_blob_oid
+
+    def git_blob(commit: str, path: str) -> str:
+        if commit == original_ceiling and path == v1_verifier["path"]:
+            return "0" * 40
+        return git_blob_oid(commit, path)
+
+    monkeypatch.setitem(globals(), "_git_blob_oid", git_blob)
+    with pytest.raises(ValueError, match="v1 verifier authority drifted"):
+        _require_verifier_authority(v1_verifier)
 
 
 def test_transport_custody_holdout_refuses_calibration() -> None:
@@ -1842,6 +2038,7 @@ def test_archived_run_validation_is_checkout_path_independent(
             source_authority=source_authority,
             dependency_authority=dependency_authority,
             expected_pycache_prefix=pycache_prefix,
+            expected_python=parent.FROZEN_PYTHON,
         )
     _validate_archived_run_artifact(
         parent,

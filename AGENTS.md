@@ -95,8 +95,10 @@ Use the relevant routes below, not a mandatory full-document reading sequence:
   `nami_sync`. Use lowercase snake_case modules and clear domain type names.
   Persist root-relative paths independent of drive letters; filesystem APIs
   may use `pathlib.Path` with long-path-safe handling.
-- Use native PowerShell and preferably Python 3.13 from the project venv. Do not
-  introduce CMD, Bash, Git Bash or WSL unless requested or technically necessary.
+- Use native PowerShell and prefer the project venv created with the selected
+  release interpreter in [TOOLS.md](docs/TOOLS.md#portable-build-preparation).
+  Do not introduce CMD, Bash, Git Bash or WSL unless requested or technically
+  necessary.
 - Follow [TESTS.md](docs/TESTS.md) for test scope and execution.
   `tests/_departments.py` owns exact primary module assignment; do not duplicate
   its catalogs in prose. Departments do not prove blast radius: add direct

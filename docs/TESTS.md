@@ -65,7 +65,9 @@ automatically.
 
 ### 4. Ordinary repository
 
-The configured default runs every ordinary test and excludes tests marked
+Create the project `.venv` with the exact Windows x64 release interpreter in
+[TOOLS](TOOLS.md#portable-build-preparation) for both ordinary and release
+checks. The configured default runs every ordinary test and excludes tests marked
 `headed`.
 
 ```powershell
@@ -376,6 +378,12 @@ collected test without a department filter.
 .\.venv\Scripts\python.exe -m pytest -q -o "addopts="
 .\.venv\Scripts\lint-imports.exe
 ```
+
+Use a checkout with complete Git history for the SH-G-8 authority and drift
+checks. The ordinary suite authenticates the original v1 holdout and the active
+v2 verifier blobs. Run the live custody child with the selected release Python
+and a temporary directory outside the source tree. A new verifier authority
+must be committed in its isolated candidate before these checks can pass.
 
 ## Accepted-target verification
 

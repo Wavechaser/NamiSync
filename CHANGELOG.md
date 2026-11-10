@@ -593,6 +593,12 @@ explicit, reviewable and regression-backed.
 
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-10)
 
+- Select serviced CPython 3.15.2, setuptools 84.1.0, pythonnet 3.2.1 and
+  xxhash 4.1.0 inputs; renew exact notices and remove the no-longer-shipped
+  .NET compatibility-assembly attribution. Preserve native-origin enforcement.
+- Version the active custody verifier authority while retaining the original
+  calibration, holdout, provenance and 1,966,080-byte ceiling. Separate the live
+  runtime from historical qualification and reject byte or introduction drift.
 - Refuse elevated or unverified desktop process tokens before singleton
   activation, application path leases, logging and browser setup. Verify real low, standard
   medium and elevated High-token behavior, preserving console operation.

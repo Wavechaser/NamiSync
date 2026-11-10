@@ -16,6 +16,8 @@ from types import ModuleType
 REPOSITORY_ROOT = Path(__file__).parents[1]
 CHILD = Path(__file__).parent / "interfaces" / "web" / "_bridge_transport_custody.py"
 RETAINED = CHILD.with_name("_bridge_retained_memory.py")
+FROZEN_PYTHON = (3, 13)
+LIVE_PYTHON = (3, 15, 2)
 MEASUREMENT_KEYS = {
     "adapter_queue_bytes",
     "adapter_queue_objects",
@@ -238,6 +240,7 @@ def _read_run_artifact(
         source_authority=source_authority,
         dependency_authority=dependency_authority,
         expected_pycache_prefix=expected_pycache_prefix,
+        expected_python=FROZEN_PYTHON,
     )
     return value
 
@@ -250,6 +253,7 @@ def _validate_run_artifact(
     source_authority: dict[str, object],
     dependency_authority: dict[str, object],
     expected_pycache_prefix: Path,
+    expected_python: tuple[int, ...],
 ) -> None:
     if set(source_authority) != {
         "tested_commit",
@@ -401,7 +405,7 @@ def _validate_run_artifact(
         or runtime["python"] != contract.sys.version
         or type(version_info) is not list
         or len(version_info) != 5
-        or version_info[:2] != [3, 13]
+        or version_info[:len(expected_python)] != list(expected_python)
         or version_info[3:] != ["final", 0]
         or runtime["pointer_bits"] != 64
         or runtime["py_debug"] != 0
@@ -851,6 +855,8 @@ def build_dataset(kind: str, temporary_root: Path) -> dict[str, object]:
     _require_authoritative_parent()
     if kind not in {"calibration", "holdout"}:
         raise ValueError("dataset kind must be calibration or holdout")
+    if sys.version_info[:2] != FROZEN_PYTHON:
+        raise RuntimeError("custody calibration and holdout require CPython 3.13")
     variant = "calibration-a" if kind == "calibration" else "holdout-b"
     source_authority = _source_authority()
     dependency_authority = _dependency_authority()

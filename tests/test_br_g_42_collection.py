@@ -30,7 +30,7 @@ def collection(tmp_path):
             path.write_text(json.dumps({
                 "status": "complete", "family": family, "case": case,
                 "environment": {"driver_source": {"dirty": False, "revision": REVISION},
-                                "python": "3.13.17 (test)"},
+                                "python": "3.15.2 (test)"},
                 "observation": _observation(family),
             }), encoding="utf-8")
             runs.append({"family": family, "case": case, "child": child,
@@ -71,7 +71,7 @@ def test_br_g_42_validation_passes_complete_collection(collection):
     ("history/release-05.json",
      lambda r: r["environment"]["driver_source"].update(dirty=True), "history/release"),
     ("bridge-event/installed-02.json",
-     lambda r: r["environment"].update(python="3.13.14 (old)"), "bridge-event/installed"),
+     lambda r: r["environment"].update(python="3.13.17 (old)"), "bridge-event/installed"),
     ("bridge-event/installed-05.json",
      lambda r: r["observation"].update(measurement_valid=False), "bridge-event/installed"),
     ("bridge-event/installed-03.json",

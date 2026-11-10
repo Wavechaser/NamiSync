@@ -131,9 +131,9 @@ def main() -> None:
     parser.add_argument("output", type=Path)
     args = parser.parse_args()
     if sys.platform != "win32" or platform.machine().lower() not in ("amd64", "x86_64"):
-        parser.error("Build on Windows x64 with CPython 3.13")
-    if platform.python_implementation() != "CPython" or sys.version_info[:3] != (3, 13, 17) or sys.prefix == sys.base_prefix:
-        parser.error("Use a disposable CPython 3.13.17 virtual environment")
+        parser.error("Build on Windows x64 with CPython 3.15.2")
+    if platform.python_implementation() != "CPython" or sys.version_info[:3] != (3, 15, 2) or sys.prefix == sys.base_prefix:
+        parser.error("Use a disposable CPython 3.15.2 virtual environment")
     revision, epoch, committed = source_snapshot(ROOT)
     dependencies = check_environment(ROOT / "tools/packaging")
     os.environ["SOURCE_DATE_EPOCH"] = str(epoch)

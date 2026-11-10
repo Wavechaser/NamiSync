@@ -13,5 +13,5 @@ components not collected by this app; retaining the complete upstream file does
 not imply those components are shipped.
 SQLite's file is the complete leading comment of the pinned sqlite3.h; its
 full header is retained in preparation evidence, not a second source copy here.
-XZ supplies liblzma only: its public-domain library, not the GPL/LGPL tools or
-build utilities mentioned in its complete upstream COPYING file.
+XZ supplies the 0BSD-licensed liblzma. Its notice is the upstream COPYING.0BSD
+file for that library.

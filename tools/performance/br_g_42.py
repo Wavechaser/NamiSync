@@ -20,7 +20,7 @@ from pathlib import Path
 
 _REPOSITORY = Path(__file__).resolve().parents[2]
 CHILDREN = 5
-RUNTIME_PREFIX = "3.13.17 "
+RUNTIME_PREFIX = "3.15.2 "
 UNITS = (("history", "release"), ("bridge-event", "installed"))
 # HISTORY.md: 50-run summary at most 3 s; 256-row pages 500 ms p95 / 1 s maximum.
 HISTORY_LIMITS = {"summary_s": 3.0, "page_p95_ms": 500.0, "page_max_ms": 1000.0}

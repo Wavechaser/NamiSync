@@ -1528,13 +1528,13 @@ def _passing_evidence(benchmark):
         "producer_task_2": producers[2],
         "producer_task_3": producers[3],
         "runtime": {
-            "python": "3.13.17 (test)",
-            "sqlite": "3.50.4",
+            "python": "3.15.2 (test)",
+            "sqlite": "3.53.4",
             "packages": {
                 "bottle": "0.13.4",
                 "namisync": "0.1.0",
                 "pywebview": "6.2.1",
-                "pythonnet": "3.1.0",
+                "pythonnet": "3.2.1",
             },
         },
         "clr_runtime": "Runtime: .NET Framework",

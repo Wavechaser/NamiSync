@@ -994,7 +994,7 @@ reopen NamiSync normally. The console launcher follows its own command path.
 [DEFENSE.md](DEFENSE.md#21-supported-environment-and-trusted-computing-base)
 owns the authority boundary.
 
-The supported desktop stack is CPython 3.13 on Windows 11 x64, `pywebview==6.2.1`, `pythonnet==3.1.0` on Windows, and Bottle 0.13.4 or later. NamiSync supports the tested pythonnet netfx route and refuses a conflicting `PYTHONNET_RUNTIME`. A change affecting pywebview, pythonnet, clr_loader, or return transport reruns the relevant native reality and hostile-text checks.
+The portable desktop stack uses CPython 3.15.2 on Windows 11 x64, `pywebview==6.2.1`, `pythonnet==3.2.1`, and Bottle 0.13.4. NamiSync supports the tested pythonnet netfx route and refuses a conflicting `PYTHONNET_RUNTIME`. A change affecting pywebview, pythonnet, clr_loader, or return transport reruns the relevant native reality and hostile-text checks.
 
 The window's native return adapter consumes a one-shot marker from the bridge's
 existing document generation after command processing. It contains obsolete

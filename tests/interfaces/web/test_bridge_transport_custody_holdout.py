@@ -89,6 +89,7 @@ def test_custody_evidence_byte_authority_is_explicitly_pinned() -> None:
         "tests/interfaces/web/sh_g_8_transport_calibration.json",
         "tests/interfaces/web/sh_g_8_transport_ceiling.json",
         "tests/interfaces/web/sh_g_8_transport_holdout.json",
+        "tests/interfaces/web/sh_g_8_transport_authority_v2.json",
     ]
     completed = subprocess.run(
         ["git", "check-attr", "eol", "--", *paths],

@@ -175,6 +175,9 @@ def test_distribution_notices_export_app_and_runtime_corpora(tmp_path: Path) -> 
     assert "Mozilla Public License, version 2.0" in output
     assert "PyInstaller bootloader zlib — 1.3.2" in output
     assert "(C) 1995-2026 Jean-loup Gailly and Mark Adler" in output
+    assert "zlib-ng — 2.2.4" in output
+    assert "Zstandard — 1.5.7" in output
+    assert "xxHash native source notices — 0.8.4" in output
     assert "HACL* hash implementations in CPython" in output
     assert "INRIA, CMU and Microsoft Corporation" in output
     assert "HACL* KaRaMeL support headers in CPython" in output

@@ -1,0 +1,16 @@
+{
+  "schema_version": 2,
+  "active_verifiers": {
+    "tests/bridge_transport_custody.py": "2fa0dc0b3e663c110c746c0a1b2f0fc13d6ead18",
+    "tests/interfaces/web/test_bridge_transport_custody.py": "d5bc38d3ae9b1c00bc6b346b94eb08f9bd2b12a1"
+  },
+  "v1_verifier": {
+    "path": "tests/interfaces/web/test_bridge_transport_custody.py",
+    "git_blob_oid": "c6da8e17de96e2c73a677c091b8bfb13e261cbd2"
+  },
+  "v1_artifacts": {
+    "tests/interfaces/web/sh_g_8_transport_calibration.json": "10cd8f2165f232537779d993796e551f851f3260",
+    "tests/interfaces/web/sh_g_8_transport_ceiling.json": "455df3a6fdc1307af140bf91b1dea95774fb36fe",
+    "tests/interfaces/web/sh_g_8_transport_holdout.json": "6a213a10e883a2fcc014249744daa0d4eb64af3d"
+  }
+}

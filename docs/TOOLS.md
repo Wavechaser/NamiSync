@@ -29,7 +29,8 @@ directory per attempt; never overwrite an earlier candidate or failed receipt.
 assets. Build-time artwork tools are not runtime dependencies.
 
 Build a development package from a clean commit in a disposable CPython
-3.13.17 x64 environment:
+3.15.2 x64 environment. [BUILDING.txt](../tools/packaging/BUILDING.txt)
+records the release runtime's official Windows archive and digest.
 
 ```powershell
 python -m venv build/package-env
@@ -90,7 +91,7 @@ upgrade and feedback instructions. [`BUILDING.txt`](../tools/packaging/BUILDING.
 prepares matching-source and clean-commit build directions, including the
 distinction between a repository commit and an extracted source ZIP without Git
 history. `build.py` ships both guides, the GPL, and `THIRD-PARTY-NOTICES.txt`.
-The notice exporter reads the existing twenty About records and the pinned
+The notice exporter reads the About records and the pinned
 supplements under `tools/packaging/notices/`; its README describes text provenance
 and maintenance. Build-time export is offline and verifies the supplement hashes.
 The source archive includes these inputs and their byte-preserving Git attributes.
@@ -107,9 +108,9 @@ origin tables were not uploaded, so local origins cannot be attributed to it.
 
 | Population | Existing coverage and remaining preparation |
 | --- | --- |
-| NamiSync, direct/transitive runtime packages, embedded web assets, WebView2 SDK and .NET compatibility assemblies | Ship the GPL and export all twenty existing About records with versions, sources and full texts. Wheel METADATA alone does not cover embedded components. |
-| CPython 3.13.17 and its stdlib/native extensions | Ship the Windows installation's license and incorporated-software notices, with exact native dependency supplements. Preserve Microsoft binary-distribution conditions separately from NamiSync's GPL. |
-| Freezer bootstrap and implicit Python packages | Include PyInstaller's bootloader exception and file-specific terms, setuptools 83.0.0 and its included vendored packages and copied configuration/validation code, plus packaging 26.2. BUILDING identifies the exact MPL-covered source in the pinned setuptools wheel. |
+| NamiSync, direct/transitive runtime packages, embedded web assets and WebView2 SDK | Ship the GPL and export the About records with versions, sources and full texts. Wheel METADATA alone does not cover embedded components. Pythonnet 3.2.1 resolves the compatibility assemblies from the host .NET Framework. |
+| CPython 3.15.2 and its stdlib/native extensions | Ship the Windows installation's license and incorporated-software notices, with exact native dependency supplements including Zstandard and zlib-ng. Preserve Microsoft binary-distribution conditions separately from NamiSync's GPL. |
+| Freezer bootstrap and implicit Python packages | Include PyInstaller's bootloader exception and file-specific terms, setuptools 84.1.0 and its included vendored packages and copied configuration/validation code, plus packaging 26.2. BUILDING identifies the exact MPL-covered source in the pinned setuptools wheel. |
 | Native files outside the Python installation/locked environment | Freezer PATH contains only the selected environment, Python and Windows directories. Exclude Windows-provided UCRT/API-set DLLs for the Windows 11 target. Refuse collected BINARY/EXTENSION origins outside the environment/Python roots or bytes differing from those origins. Python's VC runtime DLLs remain bundled. |
 | Corresponding source and build evidence | Pair source/executable archives and checksums with their identities and source/build directions. `native-origins.json` binds collected native inputs to hashes; `freezer-tables/` retains both analyses, bootloader and collection tables locally and in CI. Whole-ZIP equality remains unclaimed. |
 
@@ -120,8 +121,8 @@ API sets through its loader and always uses the system UCRT. Removing those
 copies does not justify renewing resource evidence: R4 still assesses its exact
 candidate and dependency changes. Existing measured packages remain untouched.
 M1_PLAN owns the R2 gate and release decisions.
-Upstream references: [CPython 3.13.17 incorporated-software notices](https://github.com/python/cpython/blob/v3.13.17/Doc/license.rst),
-[its Windows external dependency inputs](https://github.com/python/cpython/blob/v3.13.17/PCbuild/get_externals.bat),
+Upstream references: [CPython 3.15.2 incorporated-software notices](https://github.com/python/cpython/blob/v3.15.2/Doc/license.rst),
+[its Windows external dependency inputs](https://github.com/python/cpython/blob/v3.15.2/PCbuild/get_externals.bat),
 [PyInstaller licensing](https://pyinstaller.org/en/stable/license.html) and
 [Microsoft redistribution guidance](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170),
 [system UCRT deployment](https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment?view=msvc-170)

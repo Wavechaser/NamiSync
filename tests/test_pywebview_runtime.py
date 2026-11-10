@@ -68,7 +68,7 @@ def test_native_host_dependencies_are_declared_directly() -> None:
         "pywebview==6.2.1"
     ]
     assert [item for item in dependencies if item.startswith("pythonnet")] == [
-        "pythonnet==3.1.0; sys_platform == 'win32'"
+        "pythonnet==3.2.1; sys_platform == 'win32'"
     ]
     assert [item for item in dependencies if item.startswith("bottle")] == [
         "bottle>=0.13.4"

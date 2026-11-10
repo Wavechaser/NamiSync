@@ -1,18 +1,18 @@
 [
   {
     "name": "CPython Windows installation license",
-    "version": "3.13.17",
+    "version": "3.15.2",
     "file": "01-cpython-windows-installation-license.txt",
-    "source": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-amd64.zip ; installed LICENSE.txt",
-    "archive_sha256": "b26ca4b4ee51e157836049934d2b8eabd55939be296f3130254251b6df96ec2f",
-    "sha256": "62bec384df47b0328307db41455ff6ea2559e5546b394ac69148561b21703120"
+    "source": "https://www.python.org/ftp/python/3.15.2/python-3.15.2-amd64.zip ; installed LICENSE.txt",
+    "archive_sha256": "d6da9c33a32cf111e1d52b91392c83ea6a808545b646e0557f66cb6d9ee76785",
+    "sha256": "935cf13e19f8c31b497d20b05d73623431a226b230c3599bc30fa3348979bc68"
   },
   {
     "name": "CPython incorporated software notices",
-    "version": "3.13.17",
+    "version": "3.15.2",
     "file": "02-cpython-incorporated-software-notices.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Doc/license.rst",
-    "sha256": "952ac05720d7f1dcb63589b35eb0931b1442eb250230a4ad31198eddf0ad6abc"
+    "source": "https://raw.githubusercontent.com/python/cpython/v3.15.2/Doc/license.rst",
+    "sha256": "0d4c04850f7320219853c3c9d20cf9d2c6916524030e147f220f2b96b5ae8aeb"
   },
   {
     "name": "OpenSSL",
@@ -23,9 +23,9 @@
   },
   {
     "name": "Expat",
-    "version": "2.8.5",
+    "version": "2.9.0",
     "file": "04-expat.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/expat/COPYING",
+    "source": "https://raw.githubusercontent.com/python/cpython/v3.15.2/Modules/expat/COPYING",
     "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87"
   },
   {
@@ -36,25 +36,26 @@
     "sha256": "2713324211652ce4a60e6e21e54f9dc3004299e591b0933a352f1a89c5fb53c2"
   },
   {
-    "name": "zlib",
-    "version": "1.3.1",
-    "file": "06-zlib.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython-source-deps/zlib-1.3.1/LICENSE",
-    "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+    "name": "zlib-ng",
+    "version": "2.2.4",
+    "file": "06-zlib-ng.txt",
+    "source": "https://raw.githubusercontent.com/python/cpython-source-deps/zlib-ng-2.2.4/LICENSE.md",
+    "sha256": "6c9f0d975b41afaa34d22f55bb8986ce69e5cb7ad327cb2b28820cd425edf5ee"
   },
   {
     "name": "XZ",
-    "version": "5.2.5",
+    "version": "5.8.1 (CPython input xz-5.8.1.1)",
     "file": "07-xz.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython-source-deps/xz-5.2.5/COPYING",
-    "sha256": "bcb02973ef6e87ea73d331b3a80df7748407f17efdb784b61b47e0e610d3bb5c"
+    "source": "https://raw.githubusercontent.com/python/cpython-source-deps/xz-5.8.1.1/COPYING.0BSD",
+    "sha256": "54a423f7b2c890a1e4d6541f88f4e5702c0414988ba3f6247f4578d3b8bca5b7",
+    "note": "The CPython runtime includes liblzma under the BSD Zero Clause License."
   },
   {
     "name": "SQLite",
-    "version": "3.50.4",
+    "version": "3.53.4",
     "note": "This notice reproduces the complete leading comment of sqlite3.h; the hash identifies that excerpt, not the complete header.",
     "file": "08-sqlite.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython-source-deps/sqlite-3.50.4.0/sqlite3.h",
+    "source": "https://raw.githubusercontent.com/python/cpython-source-deps/sqlite-3.53.4.0/sqlite3.h",
     "sha256": "85806d613cfda5901f848b3b5b4b04396c8c64e89c97c0af3706c42b0c44bb47"
   },
   {
@@ -91,107 +92,107 @@
   },
   {
     "name": "setuptools",
-    "version": "83.0.0",
+    "version": "84.1.0",
     "file": "13-setuptools.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools-83.0.0.dist-info/licenses/LICENSE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools-84.1.0.dist-info/licenses/LICENSE",
     "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "setuptools schema notice",
-    "version": "83.0.0",
+    "version": "84.1.0",
     "file": "14-setuptools-schema-notice.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/config/NOTICE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/config/NOTICE",
     "sha256": "2dddf08818297a3b89d43d95ff659d8da85741108c9136dfa3a4d856c0623bd8",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "setuptools generated validation notices",
-    "version": "83.0.0",
+    "version": "84.1.0",
     "file": "15-setuptools-generated-validation-notices.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/config/_validate_pyproject/NOTICE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/config/_validate_pyproject/NOTICE",
     "sha256": "09c9bcea95ca086f8bc5bed174e40bc835b297d40fb5f86bbbb570fe0a5581a7",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "backports.tarfile",
     "version": "1.2.0",
     "file": "16-backports-tarfile.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/backports.tarfile-1.2.0.dist-info/LICENSE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/backports.tarfile-1.2.0.dist-info/LICENSE",
     "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "jaraco.context",
     "version": "6.1.0",
     "file": "17-jaraco-context.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/jaraco_context-6.1.0.dist-info/licenses/LICENSE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/jaraco_context-6.1.0.dist-info/licenses/LICENSE",
     "sha256": "9755a18519666e5f0f4cae3daad3d7012bcae48a600b31237d75e9fe134e6683",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "jaraco.functools",
     "version": "4.4.0",
     "file": "18-jaraco-functools.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/jaraco_functools-4.4.0.dist-info/licenses/LICENSE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/jaraco_functools-4.4.0.dist-info/licenses/LICENSE",
     "sha256": "5a57cb4db85e2a2dd88c290628908add57e3451449e0a9a71fdfb38776fd759d",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "jaraco.text",
     "version": "4.0.0",
     "file": "19-jaraco-text.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/jaraco.text-4.0.0.dist-info/LICENSE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/jaraco.text-4.0.0.dist-info/LICENSE",
     "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "more-itertools",
     "version": "10.8.0",
     "file": "20-more-itertools.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/more_itertools-10.8.0.dist-info/licenses/LICENSE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/more_itertools-10.8.0.dist-info/licenses/LICENSE",
     "sha256": "09f1c8c9e941af3e584d59641ea9b87d83c0cb0fd007eb5ef391a7e2643c1a46",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "tomli",
     "version": "2.4.0",
     "file": "21-tomli.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/tomli-2.4.0.dist-info/licenses/LICENSE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/tomli-2.4.0.dist-info/licenses/LICENSE",
     "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "wheel",
     "version": "0.46.3",
     "file": "22-wheel.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/wheel-0.46.3.dist-info/licenses/LICENSE.txt",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/wheel-0.46.3.dist-info/licenses/LICENSE.txt",
     "sha256": "30c23618679108f3e8ea1d2a658c7ca417bdfc891c98ef1a89fa4ff0c9828654",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "setuptools vendored packaging LICENSE",
     "version": "26.0",
     "file": "23-setuptools-vendored-packaging-license.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE",
     "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "setuptools vendored packaging LICENSE.APACHE",
     "version": "26.0",
     "file": "24-setuptools-vendored-packaging-license-apache.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE.APACHE",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE.APACHE",
     "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "setuptools vendored packaging LICENSE.BSD",
     "version": "26.0",
     "file": "25-setuptools-vendored-packaging-license-bsd.txt",
-    "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE.BSD",
+    "source": "https://pypi.org/project/setuptools/84.1.0/ ; setuptools-84.1.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE.BSD",
     "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5",
-    "archive_sha256": "29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3"
+    "archive_sha256": "5231689c6ac8156cd155cfb98c3fd6fb252c3e7e9bd3d78b64d3c55f132624c9"
   },
   {
     "name": "PyInstaller bootloader zlib",
@@ -199,46 +200,63 @@
     "file": "26-pyinstaller-bootloader-zlib.txt",
     "source": "https://raw.githubusercontent.com/pyinstaller/pyinstaller/v6.22.3/bootloader/zlib/LICENSE",
     "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2",
-    "note": "PyInstaller bootloader/zlib contains the inflate subset statically linked into the Windows bootloader. This is separate from CPython zlib 1.3.1."
+    "note": "PyInstaller bootloader/zlib contains the inflate subset statically linked into the Windows bootloader. This is separate from CPython zlib-ng 2.2.4."
   },
   {
     "name": "HACL* hash implementations in CPython",
-    "version": "CPython 3.13.17 vendored source",
+    "version": "CPython 3.15.2 vendored source",
     "file": "27-cpython-hacl.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/_hacl/Hacl_Hash_SHA2.c",
+    "source": "https://raw.githubusercontent.com/python/cpython/v3.15.2/Modules/_hacl/Hacl_Hash_SHA2.c",
     "sha256": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c",
-    "note": "Complete license header, identical in the MD5, SHA1, SHA2 and SHA3 C sources compiled by PCbuild/pythoncore.vcxproj. The hash identifies this header excerpt."
+    "note": "Complete license header, identical in the selected MD5, SHA1, SHA2, SHA3, HMAC and BLAKE2 C sources compiled by PCbuild/pythoncore.vcxproj. The hash identifies this header excerpt."
   },
   {
     "name": "HACL* KaRaMeL support headers in CPython",
-    "version": "CPython 3.13.17 vendored source",
+    "version": "CPython 3.15.2 vendored source",
     "file": "28-cpython-krml.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/_hacl/include/krml/FStar_UInt_8_16_32_64.h",
-    "sha256": "54079ca9757dbaa2a54053fbd9be60f77c5e06695fa997191fc141cd20d41d59",
-    "note": "Representative complete Apache-2.0 header excerpt for compiler-reachable krml/FStar_UInt_8_16_32_64.h, internal/target.h, lowstar_endianness.h, FStar_UInt128_Verified.h and fstar_uint128_struct_endianness.h, which retain the same INRIA/Microsoft copyright and terms. Full Apache-2.0 text is reproduced in the OpenSSL and PyInstaller entries."
+    "source": "https://raw.githubusercontent.com/python/cpython/v3.15.2/Modules/_hacl/include/krml/FStar_UInt_8_16_32_64.h",
+    "sha256": "41e75e8d17f54de252b7d8e1d1ebcd0687612baaa6fdc346298c9a99d2f01d02",
+    "note": "Representative complete Apache-2.0 and MIT notice from a compiler-reachable KaRaMeL support header. The OpenSSL and HACL* entries reproduce the full terms."
   },
   {
     "name": "CPython decimal wrapper",
-    "version": "CPython 3.13.17",
+    "version": "CPython 3.15.2",
     "file": "29-cpython-decimal-wrapper.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/_decimal/_decimal.c",
+    "source": "https://raw.githubusercontent.com/python/cpython/v3.15.2/Modules/_decimal/_decimal.c",
     "sha256": "09351578782897b5b7ac0aff3b493cafa1040d9d4ab048ace3a6a5f00e570741",
     "note": "Complete leading source copyright/license comments; the hash identifies this excerpt."
   },
   {
     "name": "CPython Windows API support",
-    "version": "CPython 3.13.17",
+    "version": "CPython 3.15.2",
     "file": "30-cpython-windows-api-support.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/_winapi.c",
+    "source": "https://raw.githubusercontent.com/python/cpython/v3.15.2/Modules/_winapi.c",
     "sha256": "dea16d3edc0bee8725bb7286a43269805fd0171fd64bfb3f246c994e1a731094",
     "note": "Complete leading source copyright/license comments; the hash identifies this excerpt."
   },
   {
     "name": "CPython getopt",
-    "version": "CPython 3.13.17",
+    "version": "CPython 3.15.2",
     "file": "31-cpython-getopt.txt",
-    "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Python/getopt.c",
+    "source": "https://raw.githubusercontent.com/python/cpython/v3.15.2/Python/getopt.c",
     "sha256": "fa1d65c8bf1aafc14b926becddbd665ab2834c5ca1ab2f55801ca9bc63750d33",
     "note": "Complete leading source copyright/license comments; the hash identifies this excerpt."
+  },
+  {
+    "name": "Zstandard",
+    "version": "1.5.7",
+    "file": "32-zstandard.txt",
+    "source": "https://raw.githubusercontent.com/python/cpython-source-deps/zstd-1.5.7/LICENSE",
+    "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+    "note": "The CPython _zstd extension uses Zstandard under its BSD license."
+  },
+  {
+    "name": "xxHash native source notices",
+    "version": "0.8.4",
+    "file": "33-xxhash-native-source-notices.txt",
+    "source": "https://pypi.org/project/xxhash/4.1.0/ ; xxhash-4.1.0.tar.gz!/xxhash-4.1.0/deps/xxhash/",
+    "archive_sha256": "c9b288e4c1f5dae54417bc8a05e6f6daf505783d916b4783f4dd2f2e7d5db486",
+    "sha256": "6964029ee40bfea873b3ad42acc86596b6847d62cbd6ad220d3cba964cd1ae4c",
+    "note": "Complete leading notice comments from xxhash.c, xxhash.h, xxh_x86dispatch.c and xxh_x86dispatch.h in that order. The hash identifies the excerpts."
   }
 ]

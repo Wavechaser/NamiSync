@@ -267,7 +267,7 @@ def test_about_notices_keep_reviewed_text_and_modal_lifecycle(built_wheel: Built
         "pythonnet": "e1dc3a6ff017a6800dc27a7220500f512b95fbcd996d38ebbbff85c693245369",
         "Python.NET contributors": "65a13631f078bed51e9a4033dea257e57a7f23097f3003b1ce1ba1c8a9136c93",
         "bottle": "af150257b1f7cce92b6207854f2e8f90ea9ae52d7cac758d13a47bd12e2a2443",
-        "xxhash": "b3c620adc9a8812cc0c3c7fc09567fa9a9930d3546de955dfb955b168cf989ac",
+        "xxhash": "b76e99529f3e47372029e11914a8f4b95d6313463ed5a1a5c9afe96c3e015114",
         "typing_extensions": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
         "clr_loader": "dd6bdca10cdc3b24c6b0b6cef5fd611b7feb6917f127833283ddcdb310d3b453",
         "cffi": "5ba24ddc57067f9249add644c3afc41a5d6dc37e23433ef759d95df370b0af63",
@@ -282,7 +282,6 @@ def test_about_notices_keep_reviewed_text_and_modal_lifecycle(built_wheel: Built
         "domJSON": "9876c56a0a754e788f8bd7bc683e52ccf79b7a8eae05799407fffa798fc8f272",
         "Native Promise Only": "87c815bfd1dc02ac37eb5593290e245b5dc1de6be1e0dbd00b18dcd2ed3523f6",
         "Symbol-ES6": "24efa6399810650b5b060a735e2b6cb5d8657aaa507fe92a4bed1be8a1107167",
-        "Microsoft.NET.Build.Extensions": "2ddc7ffd9b8ed968550a34d258cfafe7443073f73f5ee5ef01013782029287ab",
     }
     records = content["acknowledgements"]["notices"]
     assert {record["name"]: hashlib.sha256(record["text"].encode("utf-8")).hexdigest() for record in records} == expected

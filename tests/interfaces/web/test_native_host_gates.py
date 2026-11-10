@@ -170,7 +170,7 @@ def test_native_host_gate_page_keeps_the_probe_in_inert_page_data() -> None:
     assert "window.open(POPUP_TARGET)" in script
     assert "document.getElementById(\"status\").textContent" in script
     assert runtime["versions"]["pywebview"] == "6.2.1"
-    assert runtime["versions"]["pythonnet"] == "3.1.0"
+    assert runtime["versions"]["pythonnet"] == "3.2.1"
     assert transport["uses_window_evaluate_js"] is True
     assert transport["uses_return_callback_table"] is True
     packaged_probe = native_gate_child._PACKAGED_POPUP_SCRIPT
@@ -287,9 +287,9 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert evidence["schema_version"] == 1
     assert evidence["exit_code"] == 0
     assert evidence["startup_errors"] == []
-    assert runtime["python_info"][:2] == [3, 13]
+    assert runtime["python_info"] == [3, 15, 2]
     assert versions["pywebview"] == "6.2.1"
-    assert versions["pythonnet"] == "3.1.0"
+    assert versions["pythonnet"] == "3.2.1"
     assert Path(runtime["executable"]).resolve().is_relative_to(
         native_live_gate_evidence.installed_root
     )

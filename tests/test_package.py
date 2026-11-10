@@ -50,7 +50,7 @@ def test_declared_xxhash_dependency_is_importable() -> None:
     project = tomllib.loads(
         (Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
     )
-    assert "xxhash>=3.8.1,<4" in project["project"]["dependencies"]
+    assert "xxhash>=4.1.0,<5" in project["project"]["dependencies"]
     assert len(xxhash.xxh3_128().digest()) == 16
 
 
