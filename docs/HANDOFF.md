@@ -1,60 +1,57 @@
-# Latest session — post-M1 cleanup, 2026-11-11
+# Latest session — UI compaction and BUGS access review, 2026-11-11
 
-M1 building and validation are concluded. The user explicitly authorized clearing
-all six local codex branches without preserving superseded recoveries, and the
-61 registered external resource-test roots. M1_PLAN owns the disposition; earlier
-instructions to retain these recovery references are superseded by that decision.
+The user requested further DESKTOP_UI compaction and asked whether BUGS growth
+will impede access, surveys and cross-module sibling analysis. UI servicing is
+complete; BUGS was surveyed read-only. No permanent bug IDs/catalog tooling,
+record migration, product/test/authority changes or build cleanup were activated.
 
-## Changes
+## Delivery
 
-- All six local codex branches removed. No archive or replacement refs created.
-  Git may retain deleted-tip objects through ordinary reflogs; no object purge
-  or garbage collection was requested or run.
-- The acceptance worktree is detached at cfeac2d9; its files/environment remain.
-  The R5 checkout (b0a3fe13) and idle-followup checkout (1d936876) also remain.
-- External cleanup removed all 61 registry-matched roots (934,265 files,
-  22,944,192,000 logical bytes / 21.37 GiB). The
-  pre-deletion census checked boundaries, registries and every descendant for
-  reparse state. Receipts: build/mop-up-survey-20261111/external-cleanup-*.
-- Independent post-check finds zero resource-test roots or local codex branches;
-  retained directories' file counts and total sizes match the survey baseline.
-  Verification: build/mop-up-survey-20261111/cleanup-verification.json.
-- Keep F:\NamiSyncExecutorBenchSource, H:\test_dir\source and H:\test_dir\target.
-  Both H: directories, including their trash, are the user's human-testing trees.
-- Build Tiers A + B (user-selected, with SQLite) removed 151,464 files and 73
-  dangling in-build junctions: 10.36 GiB, build now 242 entries / 6.67 GiB.
-  Plan, holds and verification: build/mop-up-survey-20261111/build-report.md,
-  cleanup.md and tierab-result.json. Worktrees, their venv runtime, R5 delivery,
-  proof ZIPs and receipt-cited entries verified intact.
-- Round 5 (user-approved deletions only) removed 47,590 files / 1.37 GiB:
-  PyInstaller work intermediates, app trees matching a ZIP elsewhere in build,
-  and byte copies of Git-reachable blobs. Build is now 196 entries / 131,126
-  files / 5.38 GiB; holds re-verified (`round5-result.json`). In-place archiving
-  of closed roots was not approved; build-report.md breaks down their content.
-- Round 6 removed leftover test files from closed roots: non-receipt files in
-  256 pytest basetemps that escaped Tier B, plus synthetic copy payloads
-  (31,604 files / 603 MiB). Build is 99,527 files / 4.80 GiB (`round6-result.json`).
-- 1,081 Tier A/B, 340 round-5 and 455 round-6 rows (old Codex-sandbox-owned
-  files) were denied. From an elevated PowerShell in the repo, rerun
-  `.venv\Scripts\python.exe -I build\mop-up-survey-20261111\execute_tiers_ab.py obsolete-only uncited venv pyi-work frozen2 git-copy pytest-left synth-data`,
-  then `--verify` with the same rules.
-- Documentation tidying remains pending. Earlier census numbers in report.md
-  describe the pre-cleanup state.
+- DESKTOP_UI: 2,481 lines / 22,913 words to 1,075 / 9,046. Consolidate shared
+  appearance values and visible behavior; delegate repeated source signatures,
+  projection/transport mechanics and test choreography to existing owners.
+- Keep all five existing specification tables, fifteen palette primitives,
+  thirty-three explicit color literals and the exact thirteen-bullet acceptance
+  section. Source-block dispositions cover all 215 blocks / 56 headings.
+- BUGS has 319 records across ten owner groups, median 82 words, p90 109 and
+  maximum 150. Statuses: 315 FIXED, two SUPERSEDED, one DEFERRED, one CLOSED,
+  BOUNDED; these are recorded states, not a new product audit. BUGS bytes unchanged.
+- Retrieval findings: 314 category spellings; only two exact repeated-category
+  groups cross owners. Module/date/category collides for two records, so it is
+  unsuitable as permanent identity. Qualified dates/compound statuses initially
+  escaped naive parsing; complete severity-header accounting catches omissions.
+- Recommend stable entry IDs and an on-demand lossless record catalog for filters
+  and entry-sized cross-owner analysis. Similarity/category matches are candidate
+  retrieval, not common-cause/recurrence proof. Physical module splitting and
+  taxonomy changes can wait. No fixed-record deletion or age archival proposed.
 
-## Evidence and next work
+## Evidence and verification
 
-Survey/cleanup tooling and receipts live in build/mop-up-survey-20261111/.
-The original inventory and branch audit retain provenance, not Git recovery
-archives. Tier A removed whole uncited/obsolete-only entries, including their
-old failure records, by user decision. Keep receipts in cited roots, prior cleanup
-reconstruction assets, all remaining worktrees and the final tester set. Remaining build is evidence receipts plus holds; Tier C (removing the three
-secondary worktrees through Git) is not authorized yet. No product/test
-changes or product test runs in this session.
+build/mop-up-survey-20261111/ui-round2-review.md and bugs-access-review.md own
+this session's detailed review. ui-round2-verification.json checks UI fragments,
+complete source accounting, unchanged BUGS hash and all 319 record headers.
+bugs-survey-records.jsonl is a derived snapshot export for analysis, not a second
+hand-maintained log or permanent tool. bugs-access-analysis.json records groups.
 
-Final tester candidate remains b0a3fe133745b2212b8c7d1254c317879e980f90 (Package05),
-ZIP SHA-256 652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc.
-Prior release gate: 6,575 passes, four skips, 35 headed cases, 12 import contracts;
-packaged Medium witness passed. Tester set: dist/v0.1.0 and R5 delivery/;
-release evidence: build/m1-r5-20261111 and earlier repair/R4 roots. Nothing
-published or sent here. Keep M1 headings pending delivery; separate README
-revision remains pending. The terms file was not legally reviewed.
+The integrated documentation receipt validates all current local Markdown links,
+24 retained measurement methods/results, all 68 changelog tasks/date order and
+README phase alignment. Diff checks apply; no product tests for editorial changes.
+Earlier first-pass receipts remain historical. Do not run its UI composer alone
+to overwrite the final document; the follow-up UI composition is a second stage.
+No commit, push, publication or tester delivery occurred here.
+
+## Retained operational context
+
+Further build cleanup is paused at its last 4.80 GiB / 99,527-file census;
+do not retry denied rows or remove worktrees. Evidence-storage/retention design
+is undecided. Keep F:\NamiSyncExecutorBenchSource, the user's H:\test_dir\source
+and target play directories including trash, all three detached worktrees and
+their runtime, reconstruction assets, release evidence and tester material.
+Six codex branches and 61 external resource roots were already cleared; worktree
+removal (Tier C) was not authorized.
+
+Final candidate b0a3fe13 / Package05, ZIP SHA-256
+652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc.
+Keep dist/v0.1.0 and R5 delivery. M1 headings remain pending external delivery;
+the separate README rewrite remains outside this checkpoint. Microsoft terms
+remain maintainer wording without legal review.

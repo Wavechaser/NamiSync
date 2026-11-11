@@ -1,264 +1,53 @@
 # Desktop UI
 
-The secured host, theme/accessibility foundation, generic tree renderer and
-file-row gallery are implemented. Process-live tasks expose frozen Setup and
-typed/picker/recent plan and standalone inventory starts. Production Plan
-review, execution admission and live pause/resume/cancel controls are active;
-retained execution-result review is active in that Plan pane. Inventory has a
-separate bounded read pane with search, facets, sibling sorting and current
-evidence details, Refresh, missing-item visibility, complete file selection and
-ordinary integrity controls and deferred ordinary copied-file verification.
-History remains pending. Settings exposes explicit Setup defaults and theme preferences. Current v5 item
-progress and detailed result rows are reduced by the bridge for bounded display.
+This is the visual and interaction contract for M1's Windows desktop: process-live
+Setup/tasks, Plan/execution review, Inventory/integrity, ordinary copied-file Verify
+and Settings. Desktop History and durable task/restart recovery remain deferred.
+UI presentation never decides sync policy, computes plans, writes SQLite, mutates
+files or creates a second domain lifecycle.
 
-This document owns visual/user interaction behavior. BRIDGE owns exact transport,
-PRESENTATION owns projection/window/search/sort behavior, INTERFACES owns the host,
-and M1_PLAN owns remaining delivery. Historical build and calibration recaps are
-archived with the original plans; current bridge evidence has one BRIDGE owner.
+[Visual system](#visual-system) · [Setup](#setup-and-location-flow) ·
+[Review](#review-viewport-focus-and-navigation) · [Execution](#live-execution-controls) ·
+[Inventory](#inventory-review-and-stored-evidence) · [Acceptance](#acceptance-criteria)
 
-## Purpose
+## Scope and owners
 
-Card labels and file rows do not allow browser text selection. Expanded Task
-and Item details remain selectable and copyable, including paths and hashes;
-editable fields retain normal text selection. Buttons inside details remain
-controls rather than selectable text. This follows Microsoft's
-[text selection guidance](https://learn.microsoft.com/en-us/windows/apps/develop/input/guidelines-for-textselection).
+| Owner | Authority |
+| --- | --- |
+| This document | Appearance, layout, labels, gestures, accessibility and visible feedback. |
+| [PRESENTATION](PRESENTATION.md) | Projection identity, complete hierarchy/membership, windows, search/filter/sort, selection, Follow resolution and scale. |
+| [BRIDGE](BRIDGE.md) | Exact transport, bounded envelopes, revisions/opaque IDs, command/recovery custody, progress and response validation. |
+| [INTERFACES](INTERFACES.md) | Host, task/session observation, native admission, per-user paths/logging, prerequisites and ordered shutdown. |
+| [TOOLS](TOOLS.md) / [TESTS](TESTS.md) | Asset maintenance, development launch, installed/native evidence and verification routes. |
+| [M1_PLAN](M1_PLAN.md) | Completed delivery, accepted residuals, exclusions and unresolved observations. |
 
-Plan and Inventory highlights paint inside the row without changing column
-geometry. Their selected view segment retains its accent and normal button
-interaction on either page; clicking it keeps the current page. The other
-destination remains disabled during copying and becomes available when linked
-verification begins or the original execution is released.
-Unselected disabled destinations keep their disabled appearance. Selection remains visually distinct, as in Microsoft's
-[Fluent tabs specification](https://github.com/microsoft/fluentui/blob/master/packages/react-components/react-tabs/library/docs/Spec.md).
+M1 keeps the standard native frame and separate GUI/console entry points over
+workflow composition. There is no unattended execution, durable Plan/session
+storage, cross-process task visibility, settings CLI or hidden workflow API.
+Forced exit promises neither settlement nor restart-resume. Later work starts
+with fresh observation and review. [ARCHITECTURE](ARCHITECTURE.md) owns imports;
+the desktop never reaches around workflow composition to reinterpret domain state.
 
-Plan Again is absent during execution or while execution admission has an
-unsettled outcome; existing Check outcome recovery remains available. Execution
-Pause/Resume and Cancel use icon-only buttons with accessible names and tooltips
-in the headline's top action row. Cancel retains its five-second, two-click
-confirmation. This follows Microsoft's [Fluent button guidance](https://fluent2.microsoft.design/components/web/react/core/button/usage/).
+## Visual system
 
-Automatic post-copy verification opens Verify once when its phase is observed.
-Until the original run is released, Verify uses the existing bounded execution
-review and operation identities, including live verification progress and the
-original run's Pause/Resume and Cancel controls. It does not open or mutate an
-Inventory publication. Users may return to Plan, whose execution-phase progress
-stays settled while verification continues. The switch does not repeat after a
-manual return. Release replaces Verify with the ordinary target Inventory pane;
-the original Plan and its operation results remain available.
-Between verification files, Go to current retains the last observed verification
-subject without reading each file separately. A new gap, phase change, terminal
-record or session replacement retires that target. Plan does not present a lossy
-partial execution sample as final counters; the terminal execute-phase result
-supplies those counters when available.
-Verify's headline, activity feedback and terminal counters describe the
-verification phase, including paused, canceled, failed and incomplete outcomes;
-recovery feedback and original-run control custody remain authoritative.
-Successful verification still shows independent recording/audit warnings and
-omitted issue details with attention styling; mismatch retains error styling.
+Use Fluent 2 Windows 11 presentation, Segoe UI Variable body text and Cascadia
+Mono/Consolas paths/hashes. Mica is the whole-window base: page, rail and resting
+task cards remain transparent; content cards use their primary blend. High
+contrast, unavailable material or failed transparency uses an opaque neutral
+fallback. M1 adds neither Acrylic nor a custom caption.
 
-Plan and Inventory show a 16px Microsoft Fluent plain cloud with a 6px
-gap after names with positive scan-time recall evidence, independently of
-operation reasons and unsupported state. The native artwork sits in a 16px-wide,
-12px-high clipped slot shifted up 1px for optical alignment. Its accessible label and tooltip read: “Not fully available
-locally. Access may retrieve content through your provider.” Both filter menus
-include “Remote files”; directories can match on their own evidence. The
-filter count describes matching rows, not scan-wide file bytes. No icon is a
-claim that unmarked files are fully local. The per-item advisory carries the
-retrieval explanation without an additional cloud paragraph in Task details. Aggregate
-recall file/byte counters remain available through the bridge for later status
-panel work; there is no new counter or confirmation modal in this delivery.
+Microsoft's [Fluent](https://github.com/microsoft/fluentui/) and
+[WinUI](https://github.com/microsoft/microsoft-ui-xaml/) examples guide behavior,
+states and accessibility; the packaged web surface remains plain same-origin ES
+modules without importing those frameworks. Source files own their signatures and
+view shapes; the rules below describe what the resulting controls must do.
 
-NamiSync's Windows desktop is a local, headed adapter for reviewing and
-controlling safe one-way mirroring, location inventory and integrity work, and
-retained history. It makes the workflow's existing facts comprehensible; it
-does not decide sync policy, calculate plans, write SQLite, mutate files, or
-own a second session lifecycle. Live execution refresh does not interrupt a
-foreground view, highlight, selection, or scroll interaction; changed ownership
-replays the refresh at the accepted window, while navigation, Settings,
-and stale or failed receipts remain inert toward visible result/detail facts.
-A replacement document retires the window's authority and requires reopening.
+### Palette and semantic channels
 
-Inventory navigation reuses the task's confirmed view for its exact session.
-Session replacement, terminal release, uncertain delivery or a pending view
-change requires a current bounded read; returning to a still-running read
-keeps one latest reread behind it. Background task-list observations preserve
-foreground view edits and their latest queued search. Reading a view does not
-change the task's scan or integrity activity status. An explicit reread keeps
-the mounted pane, tree focus, expanded Task details and anchored scroll position
-while replacing its rows. Prior item evidence is retired before the new
-publication is adopted.
-
-The desktop uses a `pywebview` host forced to Edge Chromium/WebView2 with
-packaged web assets. The earlier PySide6 proof-of-concept and the HTML mockup
-are historical design artifacts. [Archived mockup](obsolete/ui_mockup/mockup.md)
-
-## Scope and delivery boundary
-
-Stage 6 delivers:
-
-- a `namisync-gui` GUI-subsystem entry point with no retained console window;
-- one single-instance desktop shell, Setup, process-live task rail, work area,
-  plan/execution review, and inventory/integrity views. The desktop History
-  dialog remains deferred.
-- desktop actions for reviewed sync, inventory, baseline, verify, rebaseline,
-  per-task Setup overrides, and pause/resume/cancel where the registered
-  activity supports them, plus explicit Save defaults for new tasks;
-  and
-- the WebView2 bridge, static-asset packaging, security controls, and frontend
-  tests needed to make those views safe to use with hostile filesystem names.
-
-It does not add durable plan or session storage, cross-process task visibility,
-general migration, history retention, unattended execution, a settings CLI,
-or a new workflow API. Session and saved-plan state are process-local in M1:
-closing the desktop loses unexecuted plans and restart-resume is not promised.
-
-## Packaging and local host state
-
-The console and desktop entry points deliberately remain separate Windows
-subsystems over one implementation. `namisync` and `python -m namisync` always
-route through `interfaces/launcher.py` to the CLI; with no subcommand they print
-usage, point to `namisync-gui`, and exit with the existing usage status.
-`namisync-gui` resolves its one path authority, then lazily imports the web
-host. The host acquires the fixed per-logon instance mutex before creating any
-directory or logger; only the primary configures file logging and imports
-pywebview. Explicit CLI work never imports or initializes pywebview.
-
-The portable candidate is version `0.1.0`. The runtime `VERSION` supplies
-project/package metadata, logging and protocol-independent version checks.
-`NICKNAME` is `Gertrud`, a display label for About, release notes and changelog
-headings. Filenames, databases, mutexes, CLI behavior, protocols and compatibility
-logic are independent of the nickname. The host stack pins pywebview 6.2.1 and
-pythonnet 3.2.1.
-Bottle has a floor of 0.13.4, the reality-tested server version. NamiSync uses
-pythonnet's default Windows .NET Framework (`netfx`) runtime and refuses a
-conflicting runtime override. The existing read-only .NET Framework check is
-therefore also the pythonnet prerequisite check.
-
-One host-owned path set places production data under
-`%LOCALAPPDATA%\NamiSync`: databases/settings/UI state at the root, rotating
-UTF-8 logs under `logs`, and persistent WebView2 user data under `webview2`.
-The GUI-only `--data-dir PATH` option accepts an absolute local root for tests
-and isolated runs; it must relocate every artifact together.
-The `namisync` and `pywebview` loggers share the file handler, which is installed
-before pywebview import. Pywebview starts with `private_mode=True` and the
-explicit `webview2` storage path; browser state never becomes plan, task, or
-filesystem authority.
-
-For editable-source UI iteration, `tools/gui.ps1` supplies a distinct
-development mutex/title and roots all state beneath
-`%LOCALAPPDATA%\NamiSync-Development`. Bare invocation opens the real shell;
-`gallery` opens the dark component gallery by default. This developer-only
-composition does not change the production launcher's arguments, environment
-contract, packaged assets, or desktop behavior. `TOOLS.md` owns its exact
-commands, relaunch loop, diagnostic lifecycle, and process-safety rules.
-The production document reserves no scrollbar gutter. The shell keeps 24px
-outer padding except at inline end, where it subtracts the shared 10px scrollbar
-size to give 14px. Every work panel retains its stable gutter, including Plan
-and Inventory with hidden outer overflow, so normal-theme page content ends
-24px from the window edge. Setup and Settings use that same gutter when scrolling.
-Forced colors keep the same shell padding and browser-owned scrollbar width;
-their combined spacing may differ from 24px but remains consistent across pages.
-The gallery is a natural-height specimen document with page scrolling; it owns
-a stable document gutter and symmetric 24px padding. Its temporary production
-shell check removes those overrides and restores them afterward. It does not
-inherit the task shell's viewport-height limit. Installed gallery checks reject
-overlap between its top-level specimen sections.
-
-Scrolling remains browser-owned. The bundled WebView2 SDK supports
-[`ScrollBarStyle = FluentOverlay`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2environmentoptions.scrollbarstyle),
-but pinned pywebview 6.2.1 creates its environment through
-`CoreWebView2CreationProperties` and `EnsureCoreWebView2Async(None)` without an
-environment-options hook. Changing the scrollbar after initialization is not
-the supported API path. No vendor patch or environment override is installed;
-Microsoft classifies the Fluent scrollbar browser flag as
-[development-only](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/webview-features-flags).
-Native integration is deferred to M2: the feasible Windows-backend change also
-requires coordinated startup, early navigation/HTML-loading and rendering tests,
-which is not justified solely for the M1 scrollbar. Current CSS
-approximates Fluent with a small fixed gutter: the softened rounded thumb is
-always thin at rest and wider on direct hover/drag, with no extra pressed
-highlight or pane show/hide logic. The track uses a subtle neutral fill. Wheel, keyboard,
-track clicks and dragging remain native; forced colors use browser defaults.
-The fixed gutter avoids hover layout shifts but cannot paint over content like
-native Fluent. CSS also does not reproduce native fade, input-method awareness
-or system-preference parity. Microsoft's [scroll viewer guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/scroll-controls)
-describes the thin-to-wide behavior; Chromium's [scrollbar styling guidance](https://developer.chrome.com/docs/css-ui/scrollbar-styling)
-explains the classic gutter introduced by custom scrollbar dimensions.
-
-Plan and Inventory use one outer scroll area for both axes. Their opaque sticky
-24 px header shares column tracks with the unscrolled body; the outer viewport
-alone reserves a stable vertical gutter, including when rows fit. Horizontal
-overflow moves header and rows together and reduces the usable row height by
-its scrollbar. Viewport and reveal calculations reserve the header height, so
-keyboard targets remain below it. Setup and generic table specimens retain a
-vertical body below a fixed header, with matching header/body gutters and an
-outer horizontal scroll area. Both arrangements use the
-[CSS stable-gutter contract](https://www.w3.org/TR/css-overflow-3/#scrollbar-gutter-property),
-without measuring scrollbar widths or repeatedly correcting column positions in JavaScript. File-column
-resize gestures retain their existing initial width snapshot.
-
-Before window creation, the primary host constructs the service and consumes
-the shared database-pair facade. Fresh state initializes ledger then history;
-ready state continues; refused state runs the bounded finalizer and shows the
-coordinated reset action through the stable native startup dialog. It then
-resolves `index.html` from package resources, creates one pending native
-document and a dispatcher snapshotted from the production command mapping
-defined exclusively by `BRIDGE.md`, and starts only Edge Chromium with
-the packaged page served on a random loopback origin. The initialized callback
-binds that exact origin once. Renderer/origin failure aborts before native
-window creation. An initial guard failure or pre-open loaded refusal rejects
-authority, attempts public destruction once, and, if that call throws or
-returns without closing, posts one owner-bound `WM_CLOSE`. Neither request
-guarantees that a broken native window closes. Service, logging, and mutex
-finalization follows only after the WebView loop returns; authority remains
-rejected meanwhile, and cleanup never replaces the original failure diagnosis.
-
-Native test and gallery compositions may supply an existing absolute physical
-local index file directly to `run_desktop`. The production launcher never
-exposes that construction-only seam through arguments, environment, page data,
-or bridge traffic, and the test page is never package data.
-
-The editable gallery launcher reuses the existing test-owned gallery child and
-scenario without changing them. That child remains in the real host loop after
-publishing `ready`; the clean-wheel pytest parent is what closes the acceptance
-window, while a direct editable launch waits for the operator. Its manually
-generated milestones are convenience diagnostics rather than headed evidence.
-
-Frontend assets are setuptools package data and use plain same-origin ES
-modules. At Slice 2 closure the wheel contained exactly `index.html`, `app.css`,
-`app.js`, `bridge.js`, and `render.js`; `render.js` owns the strict
-`textContent` sink. GUI Break 1 adds exactly `tokens.css`, `components.css`,
-`icons.js`, `appearance.js`, pinned local SVGs, and their `SOURCE.json` and `LICENSE.txt`
-records under `assets/icons/`. The component-gallery scenario remains test-only
-and absent from the wheel.
-Post-realignment readiness hardening additionally packages `readiness.js` as
-the neutral host-challenge receiver; it adds no second application-data bridge.
-There is no npm, framework, bundler, transpiler, source map, inline script, or
-inline event handler. The portable Windows x64 build uses the frozen
-specification and dependency lock. It includes third-party notices and build
-directions for the corresponding source archive. [Portable packaging](TOOLS.md#portable-build-preparation)
-
-GUI Break 1, scheduled after Slice 3 and before production surfaces begin,
-establishes the completed design-token foundation. NamiSync presents as a
-Fluent 2 Windows 11 app using Segoe UI Variable for body text and
-Cascadia Mono/Consolas for paths and hashes. It retains the standard native
-frame. Mica is the whole-window base: the page, controller, task rail, and
-resting task cards are transparent, while background/content cards use a low-
-opacity primary blend over that base. High contrast,
-unavailable material, or a transparency failure falls back to an opaque
-system-appropriate neutral surface. M1 adds neither Acrylic nor a custom
-caption.
-
-When building, reviewing, or tuning UI elements, refer to Microsoft's official
-[Fluent UI](https://github.com/microsoft/fluentui/) and
-[WinUI](https://github.com/microsoft/microsoft-ui-xaml/) examples. NamiSync's
-web surface remains framework-free, but the official React and XAML
-implementations remain instructive for behavior, states, accessibility, and
-visual details; adapt their lessons rather than importing their frameworks.
-
-`tokens.css` is the only source file allowed to contain these exact 15 authored
-red/green/blue/yellow/purple palette primitives:
+Only `tokens.css` contains these fifteen authored palette primitives. Renderers
+consume semantic/component roles, not raw colors or direct palette references.
+No renderer invents a new hardcoded/derived hue; a changed visual role requires
+an explicit design decision and matching token/contract/evidence update.
 
 ```css
 --palette-red-main: #EE6666;
@@ -278,81 +67,31 @@ red/green/blue/yellow/purple palette primitives:
 --palette-purple-light: #BB88EE;
 ```
 
-The former yellow and purple main values retain their exact hex values as the
-new `yellow-light` and `purple-light` primitives. Operation-family consumers
-remain bound to `main`. The semantic-label contract below explicitly uses
-light/dark family tones as supporting badge surfaces, and Dark relocating text
-uses purple-light as a documented readability exception.
+Palette identity is main-first in both ordinary themes; light/dark tones support
+surfaces, interaction and contrast rather than silently replacing main with theme.
+Dark relocating text explicitly uses purple-light; Light uses purple-main. The
+blue/green/yellow/red main text on pale Light zebra rows, inactive Delete's red-main
+text, and the recorded Light red/yellow filled pairs retain their authored visual
+exceptions. Their words/non-color cues carry meaning; they are not blanket
+accessible-color claims. Forced colors use Windows system colors.
 
-Palette use is main-first. When an authored family communicates identity or
-state, its `main` swatch is the default color in both ordinary themes. The
-family's `light` and `dark` tones normally contextualize that main—as a
-supporting surface, inverse, interaction tone, or contrast fallback—and do not
-replace it merely because the page theme changed. A role that intentionally
-makes a light/dark tone primary without its main must be named as an explicit
-exception in this visual contract and receive a same-change token and evidence
-update. Contrast remains a required default and Windows forced colors remain
-authoritative. If product design explicitly keeps a main foreground below the
-normal-text contrast target, that exception must retain visible non-color text,
-be measured rather than claimed accessible, and be recorded here. Light-theme
-main text in the blue, green, yellow, and red families can fall below the
-normal-text target on pale zebra rows. Dark relocating text therefore uses
-purple-light while Light retains purple-main. These are explicit text-form
-exceptions, not accessible-color claims. The generic inactive Delete chip
-is the same kind of explicit red-main foreground exception on its neutral
-resting fill. Plan and Inventory use a neutral Filter trigger with an accent
-fill only when canonical category settings are active. Filled
-semantic forms deliberately pair main-colored text with a supporting family
-surface; the Light red/yellow pairs are authored visual exceptions below the
-normal-text target for this review pass. Their words carry meaning independently
-of color, forced colors replace them with Windows system colors, and the gallery
-evidence records the exact installed pairs and measured ratios.
+Hue names a class; form communicates attention. One rendered signal belongs to
+one channel. Context, text, shape and accessible state distinguish channels using
+the same hue. Ordinary states use text; attention/action may use a filled badge
+or another explicit structural cue, never color alone.
 
-### Semantic color channels
-
-Status (2026-09-10): the 15-token palette, channel-scoped aliases and
-components, static projected fixtures, and gallery evidence implement this
-contract. The task rail headline uses the main status headline's semantic color,
-including attention, paused and terminal states. Its supporting text and progress
-retain their own roles. Forced-color rail headlines inherit the card's system
-foreground, preserving contrast on selected and hovered cards. Headline wording
-matches the ordinary status card and names the current operation, including
-Execution completed, Inventory scan completed, Verification completed and
-Execution completed with issues. Task errors, release recovery, unknown Close
-outcomes, inventory errors, and manual or linked verification after sync may
-present different headlines when they describe different facts or retained
-activities. These exceptions preserve the current activity and execution identities.
-
-Intentions and information are never conveyed through color or form alone.
-Hue answers **what class** a signal belongs to; form answers **how much the
-user should care**. Ordinary states use colored text. A state needing immediate
-attention or action uses a more prominent form such as a filled badge, a
-flashing element where motion is appropriate, or another explicit structural
-cue. Urgency is never inferred from hue alone.
-
-One rendered signal belongs to exactly one semantic channel at a time. A
-component must not make one color simultaneously mean plan intent, task
-lifecycle, and integrity. When separate channels need the same color family,
-their channel-specific label, accessible state, surrounding context, and form
-keep the meanings distinct.
-
-In these tables, **text** means colored text without a semantic background.
-**Fill** means a borderless badge with an 18 logical px height and optically
-raised label alignment. Light uses the family's `light` swatch as the
-surface and Dark uses its `dark` swatch. Dark labels use the exact `main`
-swatch; Light red and yellow labels use their exact `dark` swatches so the
-filled attention forms remain contrast-safe. Neutral fill uses the corresponding selected-neutral surface and
-secondary neutral text. Standalone badges may remain pill-shaped; compact
-file-list badges share the checkbox's 4 px radius, use 4 px inner padding on
-both sides, and bleed that same 4 px into the leading cell padding so filled
-and unfilled text align. Text, icon/shape, and accessible state continue to name
-the meaning. Forced colors replace authored foregrounds and fills with Windows
-system colors.
+**Text** has no semantic background. **Fill** is a borderless 18-logical-pixel
+badge with optically raised text: Light uses family-light surface, Dark uses
+family-dark; Dark labels use main, Light red/yellow labels use dark. Neutral fill
+uses selected-neutral surface/secondary text. Standalone pills are permitted;
+compact file-list badges use 4 px corners/padding and bleed 4 px into the leading
+cell inset so filled and plain labels align. Windows colors override these pairs
+in forced colors. Existing main-first visual exceptions remain explicit.
 
 #### Channel 1 — intent
 
-Intent says what the reviewed plan wants to do. Its classes follow
-reversibility because reversibility best predicts user regret.
+Plan intent follows reversibility. Exception presentation overrides the displayed
+family, not the reviewed operation or its result.
 
 | Class | Members | Hue | Form |
 | --- | --- | --- | --- |
@@ -364,12 +103,7 @@ reversibility because reversibility best predicts user regret.
 | Nothing | `noop` | neutral | text |
 | Exception | `error`, `unsupported`, `blocked` | yellow | fill |
 
-An exception presentation overrides an operation-family presentation for the
-rendered status; it does not rewrite the reviewed operation or domain result.
-
 #### Channel 2 — lifecycle
-
-Lifecycle describes task cards, run status and projected execution rows.
 
 | State or projected result condition | Hue | Form |
 | --- | --- | --- |
@@ -386,26 +120,19 @@ Lifecycle describes task cards, run status and projected execution rows.
 | capacity exhaustion or capacity refusal | yellow | fill |
 | errored / `FAILED` | red | fill |
 
-Yellow means that nothing is known broken, but the result needs user attention
-and was not part of the original plan. `PAUSING` and `CANCELING` retain the
-pre-stopping accent because the system is still complying with the request and
-working toward a safe boundary. Once settled, `PAUSED` becomes yellow. Plain
-`CANCELED` remains a low-urgency neutral result, but its filled form prevents it
-from resembling a task that never started. `CANCELED_AFTER_PUBLISH`,
-`CANCELED_AFTER_MUTATION`, and `REFUSED` use yellow fill because a filesystem
-change may need review or a precondition needs repair.
+Yellow attracts review without hiding a known failure. Pausing/canceling stays
+accent while the system approaches a safe boundary. Paused freezes the last bar
+in yellow; plain canceled freezes it in neutral gray, with fill distinguishing a
+stopped task from one never started. After-publication/mutation cancellation and
+refusal require attention. Additional stopped-count/percentage presentation is
+latent, not an implied payload or renderer field.
 
-The progress interpretation is explicit: a paused task freezes at its last
-value with a yellow fill; resume returns it to system accent. A plain canceled
-task freezes at its last value with a neutral-gray fill. The product may later
-add a stopped count or percentage such as “stopped after 412 of 1,908” or “42%
-completed” to paused/canceled presentation. That decision remains latent: this
-contract defines no payload, projection, or renderer field for it.
+Rail headlines share the status card's semantic role and current activity wording;
+supporting text/progress keep their own roles. Distinct task, release/recovery,
+Inventory or auxiliary activity facts may require different headlines. Forced-color
+rail text inherits the selected/hovered card's system foreground.
 
 #### Channel 3 — integrity
-
-Integrity owns the single collapsed inventory presence/integrity column.
-Healthy inventory remains calm text while items requiring action use fill.
 
 | `IntegrityResult` or inventory condition | Meaning | Hue | Form |
 | --- | --- | --- | --- |
@@ -420,448 +147,215 @@ Healthy inventory remains calm text while items requiring action use fill.
 | `MISMATCHED` | hash is confirmed different | red | fill |
 | `ERROR` | read failed | red | fill |
 
-`REAPPEARED` is an inventory presentation condition, not an
-`IntegrityResult`. It overrides ordinary `UNVERIFIED` or `MODIFIED` display and
-forces yellow fill without changing the retained integrity truth. It does not
-erase a stronger confirmed mismatch or error.
+Reappeared is an Inventory presentation condition, not an IntegrityResult; it
+overrides ordinary unverified/modified but never stronger mismatch/error truth.
+Stored evidence, live progress and latest ordinary results remain separate.
 
-A future hardcoded or derived color value is possible only after an explicit
-product-author design decision and a same-change contract/token/evidence update; it is
-not silently synthesized by a renderer. `tokens.css` contains no `color-mix()`
-derivations. Floating Go and autoscroll use ordinary button fills over individual
-opaque neutral wrappers, preserving native accent changes and ordinary interaction
-states without letting rows show through. The installed gallery observes both
-panes' glyphs, square targets and primary emphasis, plus opaque wrappers, ordinary
-button interaction colors and absent backdrop filters in light, dark and forced
-colors. `tokens.css` also owns channel-scoped
-intent, lifecycle, and integrity aliases; neutral roles use a
-pinned Microsoft Fluent light/dark subset. Native appearance retains the
-observed Windows `Accent`, `AccentLight1`–`AccentLight3`, and
-`AccentDark1`–`AccentDark3` ramp values, while the page receives only semantic
-accent-fill and accent-text-fill roles. These
-externally owned design inputs are tested separately from the 15
-NamiSync-authored primitives. The neutral and scale values are transcribed from
-pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
-`32b42a5bf79c1836047dfc7fae07b1320731bce4`; exact source hashes are retained
-in test fixtures. Accessible stroke roles own visible boundaries only for
-components whose visual contract still uses a stroke; keyboard focus remains a
-separate visible ring even on borderless controls.
-`components.css`
-consumes only those aliases for channel-scoped semantic labels, progress
-indicators, and related controls; Slice 4-7 renderers consume
-component/semantic contracts and contain
-neither raw color literals nor direct palette references. The component gallery
-settles light/dark mappings with visual and numeric contrast evidence rather
-than inferring theme roles from swatch names. Forced colors use Windows system
-colors, and text plus icon/shape/state cues keep every status understandable
-without color. The gallery resolves production HTML/CSS from a clean installed
-wheel and records exact installed `tokens.css`/`components.css` bytes; its own
-page remains tests-only. That clean-wheel statement applies to the pytest
-acceptance composition, not the editable `tools/gui.ps1` preview. Computed text
-pairs must reach 4.5:1 for normal text and 3:1 for large text except for the
-explicit main-first text cases recorded above. Every ordinary-theme filled
-badge pair reaches the 4.5:1 normal-text floor. State indicators,
-checkbox/toggle boundaries, and the textbox underline meet the 3:1 non-text
-floor. Ordinary button and textbox elevation strokes are deliberately subtle
-construction lines; the dual keyboard-focus stroke remains the accessible
-control boundary.
+Native appearance supplies observed Accent, AccentLight1–3 and AccentDark1–3;
+the page receives semantic accent-fill/text-fill roles. Neutral/scales use the
+pinned Fluent token subset, independently tested from the authored palette.
+Its source is `@fluentui/tokens@1.0.0-alpha.24`, commit
+`32b42a5bf79c1836047dfc7fae07b1320731bce4`; fixtures retain exact source hashes.
+Contrast targets are 4.5:1 normal text, 3:1 large text/non-text indicators, subject
+to the explicit visual exceptions above. Subtle elevation strokes are construction
+lines; keyboard focus supplies an independently visible boundary.
 
-The tuned component contract has two command-button tiers. Ordinary buttons
-use WinUI's translucent control fills rather than opaque RGB approximations.
-In CSS RGBA order, Dark rest/hover/press/disabled use `#ffffff0f`,
-`#ffffff15`, `#ffffff08` and `#ffffff0b`; Light uses `#ffffffb3`,
-`#f9f9f980`, `#f9f9f94d` and `#f9f9f94d`. Textboxes and combobox triggers
-share these control-fill roles. Focused textboxes use the native input-active
-role: `#1e1e1eb3` in Dark and opaque white in Light. Alpha applies to the fill,
-not the whole element, so text and glyphs retain their own contrast.
-Light ordinary-button borders retain black 0F on the top/sides and 29 below;
-Dark uses white 18 on the top/sides and 12 below, flattening to black 0F or
-white 12 when pressed or disabled (hex alpha).
-Accent buttons use white 14 over black 66 in Light and white 14 over black 23
-in Dark for normal/hover elevation; pressed and disabled accent borders are
-transparent.
-Ordinary button borders flatten to the neutral stroke when pressed or disabled;
-checkbox and toggle strokes use an authored 1.2px width to bias Chromium's
-fractional-DPI snapping;
-this is a local visual adjustment, not native WinUI thickness or a guarantee
-of identical physical pixels across displays. Native 1 logical px and the
-original elevation roles were referenced from Microsoft's
-[Button resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Button_themeresources.xaml)
-and [common colors](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml).
+### Control fills, borders and focus
 
-The GUI-D7 disabled-button label investigation found no element-wide alpha,
-filter or transform in the button path. Light and Dark use dedicated opaque
-disabled foregrounds (`#bdbdbd` and `#5c5c5c`), consistent with Fluent's
-separate disabled-label brush rather than fading the whole control. The clean
-installed gallery did not reproduce the intermittent blur, so production CSS
-is unchanged. WebView2 defines rasterization scale as the combination of
-monitor DPI and text scaling and tracks monitor changes; Microsoft also records
-[high-DPI blurry-text](https://github.com/MicrosoftEdge/WebView2Feedback/issues/571)
-and [transparent-host rendering](https://github.com/MicrosoftEdge/WebView2Feedback/issues/4945)
-reports. Those make a renderer/compositor condition plausible, not proven.
-Reopen with the WebView2 runtime version, monitor DPI and text scale,
-active/inactive and monitor-move state, HDR/material state, and a same-frame
-capture of enabled and disabled labels; whole-surface blur should be diagnosed
-through the host's
-[rasterization-scale contract](https://github.com/MicrosoftEdge/WebView2Feedback/blob/main/specs/RasterizationScale.md)
-before changing color tokens.
+Alpha applies to fills, never whole controls. Textboxes/combobox triggers share
+ordinary fills; focus, popups and disabled roles stay independent.
 
-Textboxes paint one translucent fill clipped to the padding box. Their top and
-side edges use the authored 1.2px control stroke; the ordinary lower border is
-transparent and a single straight 2px border-box layer supplies the neutral or
-accent strip. The rounded outer clip tapers the strip ends instead of bending a
-2px physical border up both sides. Focus changes the strip to accent. A
-capture-phase pointer marker suppresses the shared dual ring only for a clicked
-textbox and clears on blur; keyboard traversal retains that ring. Disabled
-textboxes remove the strip and flatten every edge to black 0F in Light or white
-12 in Dark; their fill follows the disabled control role.
-Forced colors remain system-owned. The mapping follows the same
-[common resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/Common_themeresources_any.xaml),
-[textbox resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/TextBox_themeresources.xaml)
-and [combobox resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/ComboBox/ComboBox_themeresources.xaml).
-Popup material and shadow composition remain separate from trigger fills.
-The combobox trigger paints its fill once, with independent top/side/bottom
-strokes; it no longer stacks a fill gradient over a second fill and a full-area
-border gradient. This preserves the intended alpha over its actual parent.
-Its authored 1.2px perimeter matches buttons and textboxes while retaining
-native black 0F/29 elevation edges in Light and white 18/12 in Dark;
-pressed edges flatten to black 0F or white 12 respectively. The separately tuned
-ordinary-button stroke tones above remain a local choice.
-A Windows-accent
-primary modifier marks consequential actions such as Execute and Verify.
-Light selects Windows `AccentDark1` as its base; Dark selects `AccentLight2`.
-Hover and press retain that base at 90% and 80% opacity respectively, so Mica
-or the owning control surface remains the real compositing base. Primary
-button labels use exact black or white chosen once from the opaque base by the
-native WCAG relative-luminance calculation. Every accent-filled label retains
-that foreground through interaction, so text never reverses. The selected
-Sync/Integrity half, checked boxes, and toggles use the same state ladder;
-progress and selection markers consume only the base fill. Forced colors use
-the system `Highlight`/`HighlightText` pair.
-The gallery's generic operation-chip specimens are likewise borderless:
-inactive chips use an inverse grayscale surface and text pairing, while an
-active operation chip uses that operation family's
-exact main swatch at rest with contrast-selected grayscale text. Delete is the
-deliberate exception only at rest: its inactive label is exact red-main in both
-ordinary themes, while its active red-main surface uses the same contrast-safe
-neutral label policy as other selected chips.
-Active operation-chip hover/press cues retain the same main RGB at 90%/80%
-strength, matching other colored clickable controls; they do not lift or scale.
-Inactive Delete retains red-main text but otherwise uses the same distinct
-grayscale hover and pressed backgrounds as every other inactive chip.
-Plain pressed chips likewise
-retain their active label color rather than carrying a latent state inversion.
-Channel-scoped labels use colored text or the borderless 18 logical px filled
-form required by the tables above; their words and non-color cues remain
-visible in either form. Progress uses a neutral gray track with system accent
-for active/resumed work, frozen yellow for paused work, and frozen neutral gray
-for plain canceled work, without hover/pressed inset strokes. Forced colors
-use a `Canvas` track and `Highlight` fill so completed and unfilled portions
-remain distinct. The two-half
-Sync/Integrity component's state contract uses
-`radiogroup`/`radio` semantics: exactly one half carries
-`aria-checked="true"`, and that selected half uses the live Windows accent
-roles. The owning later renderer still supplies interaction behavior. These
-ordinary-theme border removals do not remove keyboard focus indication or
-override forced-color authority.
+| Role | Light | Dark |
+| --- | --- | --- |
+| Ordinary rest/hover/press/disabled fill, CSS RGBA | `#ffffffb3`, `#f9f9f980`, `#f9f9f94d`, `#f9f9f94d` | `#ffffff0f`, `#ffffff15`, `#ffffff08`, `#ffffff0b` |
+| Input-active fill | opaque white | `#1e1e1eb3` |
+| Ordinary perimeter/bottom, hex alpha | black 0F / 29 | white 18 / 12 |
+| Pressed/disabled flattened stroke | black 0F | white 12 |
+| Accent rest/hover elevation | white 14 over black 66 | white 14 over black 23 |
+| Disabled label | `#bdbdbd` | `#5c5c5c` |
+| Unchecked checkbox stroke, WinUI ARGB | `#72000000` | `#8BFFFFFF` |
+| Disabled unchecked checkbox stroke | `#00000037` | `#FFFFFF28` |
+| Consequential accent base | AccentDark1 | AccentLight2 |
 
-Ordinary keyboard focus uses Fluent's opposing dual stroke: a 1 px inner
-`colorStrokeFocus1` separator and a 2 px outer `colorStrokeFocus2` ring. This
-keeps the page-contrast ring distinct from inverse control fills. Mouse
-activation does not request that ring. Forced colors continue to use the
-system focus outline and its explicit offset.
+Buttons/checkboxes/toggles use authored 1.2 px strokes; this biases Chromium
+fractional-DPI snapping, not native thickness or identical physical pixels.
+Accent pressed/disabled borders are transparent. Accent hover/press use the same
+base RGB at 90%/80% opacity; one native luminance calculation chooses exact black
+or white label text from the opaque base and that text never inverts on interaction.
+The selected Sync/Integrity half, checked boxes and switches share this ladder;
+progress/selection markers use the base only. Forced colors use Highlight/HighlightText.
 
-Unchecked checkboxes use a 1.2px neutral Fluent
-`ControlStrongStrokeColorDefault` boundary (`#72000000` Light / `#8BFFFFFF`
-Dark in WinUI ARGB notation, authored as CSS RGBA hex). Their selected fill and
-boundary become semantic accent states while retaining the 16 px outer
-geometry. Selected checkboxes use the pinned local Fluent
-`checkmark_16_regular.svg` mask rather than a font glyph, centered as a roughly
-12 px check with a small authored dilation; mixed state uses the pinned
-`subtract_16_regular.svg` mask. Disabled unchecked boxes use the dedicated
-theme stroke (`#00000037` Light, `#FFFFFF28` Dark, and `GrayText` in forced
-colors), following the native
-[CheckBox resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/CheckBox_themeresources.xaml).
-Textboxes use a separate subtle 2 px control
-boundary and a stronger neutral bottom stroke at rest; focus changes only that
-underline to the semantic accent fill. Mouse focus therefore does not gain a
-keyboard ring, while `:focus-visible` composes the accented underline with the
-shared dual focus stroke.
+Textboxes paint one padding-clipped fill and a straight 2 px lower strip within
+rounded clipping, not a bent perimeter. Focus accents the strip. Pointer focus
+suppresses only that textbox's extra dual ring until blur; keyboard focus retains
+it. Disabled textboxes remove the strip and flatten all edges. Comboboxes likewise
+paint one fill with independent elevation edges, never stacked fill gradients.
+Ordinary keyboard focus uses a 1 px inner separator and 2 px outer Fluent ring;
+mouse activation does not request it. Forced colors keep a system-visible outline.
 
-Switches retain a 40x20 logical pixel footprint and use the same strong neutral
-off-state stroke, including while disabled. The checked boundary is transparent.
-Following [WinUI's switch template](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/ToggleSwitch_themeresources.xaml),
-the centered thumb is 12x12 at rest/disabled, 14x14 on hover and 17x14 while
-pressed, elongating inward. Off-state switches and checkboxes use the native
-translucent alternate-control fill roles; checked states retain the accent
-base and its native hover/press opacity ladder. Disabled off/on fills and thumb colors follow native disabled
-resource roles; keeping the off-state stroke unchanged is the requested local
-exception. Keyboard focus and forced-color system strokes remain independent.
+Checkbox outer geometry is 16 px, with a centered roughly 12 px pinned Fluent
+checkmark mask and small dilation; mixed uses the subtract mask. Switches are
+40×20 px: thumb 12×12 at rest/disabled, 14×14 hover, 17×14 pressed, elongating
+inward. Off states retain native translucent alternate fill and strong stroke,
+including disabled; checked borders are transparent. Disabled fills/thumbs follow
+native roles, with the unchanged off-stroke as the explicit local exception.
 
-The clear-button modifier is transparent at rest and when disabled, uses the
-task-card hover/press fills when enabled and keeps keyboard focus feedback.
-Its Clear/dismiss specimen is included in the component gallery's full state
-matrix and the same modifier styles the two path Clear buttons.
+Clear/dismiss controls are transparent at rest/disabled, use task-card hover/press
+fills and retain keyboard feedback. Operation chips are borderless: inactive
+inverse grayscale; active family-main with contrast-selected neutral label, same
+90%/80% hover/press, no lift/scale. Inactive Delete alone keeps red-main text while
+using ordinary grayscale interaction backgrounds. Progress has a neutral track,
+accent active/resumed, yellow paused, neutral-gray plain canceled; forced colors
+use Canvas/Highlight. Sync/Integrity uses radiogroup/radio with exactly one
+aria-checked selection. Border removal never removes keyboard/forced-color cues.
 
-Elevated surfaces use a dedicated flyout boundary rather than the accessible
-control-stroke role: black 6% in Light and black 20% in Dark, with opaque
-Light/Dark stroke fallbacks. Dialogs and menus keep their ordinary black
-elevation shadows on ordinary SDR displays. In Dark, dialogs other than a
-keyboard-focused one, menus and combobox popups drop those CSS shadows while
-the window's display composes in Windows Advanced Color: through
-`(dynamic-range: high)` for HDR, and through the native `data-advanced-color`
-flag for SDR WCG, which CSS media queries report as plain sRGB. The subtle
-flyout boundary remains. This mitigates, and does not fix, the Windows
-composition defect in [BUGS.md](BUGS.md#desktop-material-composition).
+Disabled-label blur was not reproduced in the clean installed gallery. Do not
+change tokens on that hypothesis. Reopen with runtime, DPI/text scaling,
+active/monitor-move and HDR/material state, plus same-frame enabled/disabled
+captures; whole-surface blur needs host rasterization investigation.
 
-That defect's evidence method: GDI/BitBlt screenshots show DWM's legacy 8-bit
-composition, which is exact and cannot see the halo. The GUI-D8–D10 diagnostics
-capture the scRGB desktop through Desktop Duplication FP16 (ffmpeg `ddagrab`),
-fit flat straight-alpha patches against sRGB-space, linear and linearized-
-premultiplied blends, and repeat the layout from a raw Win32 window writing exact
-premultiplied pixels. That raw window and a black-backdrop gray/alpha grid
-reproduce the error without WebView2 or Mica. `--force-color-profile=scrgb-linear`
-makes DWM's blend physically linear and removes the ring, but lightens every
-translucent token and renders HDR grayish, so it is not adopted. Light theme,
-cards and fills are unchanged; their small WCG deviation is accepted. The
-gallery's historical normal/opaque flyout labels do not isolate popup alpha
-(both fills are opaque); its shadowless control remains useful.
+### Surfaces, appearance and motion
 
-The file-list surfaces share presentation components. `file_row.js` owns the
-shared row skeleton; `plan.js` exports only `renderPlanRow(element, rowView)`.
-`integrity.js` exports `createIntegrityCell`, reused by Inventory without
-replacing tree-owned row elements. The component gallery owns its standalone
-`renderIntegrityRow(element, rowView)` adapter and its validation, using that
-same product cell renderer and row skeleton.
-Inputs are page-local presentation
-views, not bridge envelopes or compatibility contracts. Callers supply native
-checkbox state, mixed state and accessible labels; depth, folder and expanded
-state; display-ready basename and size text; list-specific status text; and
-notes. `renderPlanRow` accepts an empty `intentKey` for a plain row, exact operation
-and presentation keys `copy`, `mkdir`, `move`, `rename`, `recase`, `update`, `move_update`, `trash`,
-`delete`, and `noop`, or exact exception keys `error`, `unsupported`, and
-`blocked`. A projected execution row may instead supply an admitted lifecycle
-key. Actual no-op completion (`skipped` result with `noop` reason) displays green
-**No change**; other skipped results, including a deselected no-op, display
-neutral **Skipped** through the row-only `skipped` key. Operation notes also use
-No change for that no-op outcome and retain other supplied results and reasons.
-An `executing` row additionally requires a finite,
-already-projected `progressPercent` from 0 through 100 and renders a 4 logical
-px mini progress bar across the cell's content width, preserving the standard
-8 px inset on both sides; supplied text such as “Copying” becomes its
-accessible label. `completed` remains visible semantic text.
-`renderIntegrityRow` accepts only `verified`,
-`baselined`,
-`unverified`, `modified`, `reappeared`, `unsupported`, `canceled`, `missing`,
-`mismatched`, and `error`, or exact projected lifecycle key `verifying` or
-`completed`; `verifying` follows the same explicit percentage/bar contract and
-uses text such as “Verifying” as its accessible label. Each non-progress state
-wraps the supplied label in the
-channel-scoped semantic-label component. The already-projected key selects its
-fixed component role; there is no form field and JavaScript does not derive a
-domain result, hue, urgency, transport-counter ratio, or row identity. The
-renderers also do not aggregate sizes,
-truncate hashes, split paths, reconstruct hierarchy, or dispatch anything. All
-text still passes through `render.js`. Production Plan consumes its row renderer;
-Inventory consumes the integrity state-cell helper while retaining its own
-tree identities, disclosure listeners and navigation. The complete integrity
-row renderer remains a gallery specimen.
+| Surface | Contract |
+| --- | --- |
+| Content card | Static 1.2 px outline; Light `#EBEBEB` fallback, black 6% blended stroke, white 70% fill; Dark `#1C1C1C`, black 10%, white 5%. Secondary/tertiary blends remain contextual roles; no hover/press. |
+| Flyout boundary | Black 6% Light / 20% Dark with opaque stroke fallback, separate from accessible control strokes. Ordinary SDR dialogs/menus retain black elevation shadows. |
+| Advanced Color | Dark menus/comboboxes and non-keyboard-focused dialogs suppress CSS shadows when HDR dynamic-range or native SDR-WCG evidence says Advanced Color. Boundary remains; Light/cards/fills are unchanged. |
+| Motion | Shared tokens/Fluent easing for controls, disclosures, progress and dialogs. Reduced motion stops/reduces non-essential transitions. Virtualized creation/recycling never animates. |
 
-Both lists use the same compact six-column grid, 24 px rows, 12 px row text,
-and 16 px native checkboxes. The sync plan order is Selection, Filename, Size,
-Operation / status, Checksum, Notes. The integrity order is Selection,
-Filename, Size, Presence, Checksum, Notes: integrity classification is carried
-inside the projected presence/status label because a checksum comparison is
-irrelevant when the expected file is absent. Selection has no visible header text and retains
-the accessible name `Selection`. The gallery exposes five focusable vertical
-separators after Selection, File/path, Size, Operation/Presence, and Checksum;
-Notes has no outside-edge separator. On the first pointer or Left/Right
-interaction, the test-only controller reads all six rendered header widths in
-one pass, freezes Selection, Size, Operation/Presence, Checksum, and Notes as
-pixel tracks, and changes File/path to the sole `minmax(12rem, 1fr)` track in
-one style write. That transition preserves the current visual result before
-applying the requested delta. Each separator controls the preceding column. A
-fixed-column delta is transferred inversely to Notes; the File/path separator
-changes Notes and lets the residual flexible track absorb the result. Notes
-never falls below 14 rem, the resized track never falls below its authored
-minimum, intervening fixed tracks retain their widths, and the table's right
-edge remains anchored. Pointer drag and Left/Right keyboard input use the same
-calculation. The gallery retains those widths only in its current DOM and adds
-no persistence, bridge state, or production column-layout contract. Folder rows expose a borderless disclosure
-button and mixed checkboxes; projected child rows carry only their basename,
-indent under the folder, and never repeat the full visual path. Plan and
-integrity cells use the channel-specific semantic text, 18 logical px filled
-form, or active 4 logical px padded-content progress form defined above, while
-JavaScript consumes only the exact already-projected key and percentage. Zebra backgrounds belong only to
-direct rendered rows, including folders; cells and columns are transparent and
-the row group has no filler height, so striping ends at the final row. The
-untouched grid has a 48 rem content floor. After manual resizing, ordinary
-window-width changes affect File/path alone; it grows and contracts down to
-12 rem while every stored pixel track remains unchanged. The effective table
-minimum is the greater of 48 rem and the sum of the stored fixed tracks, the
-12 rem File/path minimum, and stored Notes. Once that minimum is reached the
-preserved grid overflows horizontally, so a customized 58 rem layout remains
-58 rem wide in a 48 rem viewport and resumes flexing only when more space
-returns. The right edge aligns with the visible container when the tracks fit
-and with the scrollable table edge when they do not. Forced colors replace
-colored state text with the system neutral foreground.
+Advanced Color shadow suppression mitigates the external DWM composition defect;
+it is not a Windows fix or a promise that translucent fills are exact. Raw Win32
+controls reproduce it without WebView2/Mica; legacy screenshots cannot see the
+FP16 halo. scRGB output was rejected because it changes translucent colors/HDR.
+[BUGS](BUGS.md#desktop-material-composition) owns the residual/reopening record.
 
-The component gallery owns the complete static row fixtures; production consumers
-reuse the presentation components described above. Its static
-sync array covers one plain row, every operation once, all three exception
-states, and a
-partially selected expanded `photos` folder with two indented basename-only
-children, plus explicit Copying progress and Completed text rows. A second static
-array covers every integrity state, Verifying progress and Completed text rows,
-and another partially selected folder with two children. Test-owned
-listeners exercise computed collapse/restore and direct-child checkbox
-reconciliation—including mixed to fully selected and back—without inventing
-product hierarchy or recursive selection policy. Each gallery header also owns
-a test-only master checkbox whose checked/mixed state is derived from every
-selectable specimen row and whose change selects or deselects them all; this
-settles the interaction without claiming Slice 5's server-owned selection
-policy. The same driver proves stationary first-freeze geometry, inverse Notes
-reserve, pointer and keyboard parity, fixed intervening tracks, 12/14 rem
-clamps, File/path-only viewport response, the computed effective minimum, and
-preserved-width horizontal overflow. The specimens
-fill the shell's wide `work` area; a transient constrained measurement proves
-horizontal overflow without leaving
-the visible gallery narrow. The clean-wheel gallery passes projected row views
-directly to the two installed renderers and proves the resulting DOM. Fixture
-markers and gallery code are absent from the wheel. No temporary command, fake
-`SyncPlan`, workflow, dispatcher, or session participates. Slice 5 therefore
-begins at validated Python projection → existing bridge → the local renderers,
-without a temporary data channel to preserve or remove.
+System/Light/Dark is a production DOM combobox: disabled until its initial cosmetic
+read, serial revision-bound choices, canonical accepted display only—never
+optimistic CSS. Failure/Refresh reads current state; it does not claim the old
+write settled. Generation fences suppress late replies; no sticky original-response
+fence. Cosmetic failure stays local/sanitized and does not block operational readiness.
+High contrast temporarily overrides the saved choice without overwriting it.
 
-The gallery keeps the rail, Plan review controls, status card, and row fixtures
-visually and semantically parallel with production; its gallery-only callbacks
-perform no domain-backend writes and its plan data remains presentation-owned.
-Its task rail retains three representative production-rendered specimens:
-running execution, a ready plan, and execution completed with issues, plus
-Settings. Their headlines and semantic states come from the ordinary renderer;
-the gallery does not add a task-state matrix or simulate backend actions.
-Persistent production Plan panels show preflight, commitment and other refusal
-guidance, expandable prior-location contents with a destination-reveal preview,
-and interactive Pause/Resume plus two-click Cancel. Their callbacks only update
-gallery presentation values. Installed checks retain the refusal disclosures,
-move navigation and selection observations, control labels/tones/glyphs, and
-Cancel's five-second expiry alongside the existing gallery matrix.
-The same gallery
-gives every lifecycle case its own task-card/status specimen
-and separately exercises active, resumed, paused, and canceled progress.
-Lifecycle cases do not become file rows. All fixtures pass exact display-ready
-presentation values directly to production components/renderers; they do not
-derive planner, dispatcher, or verifier meaning.
+The portaled fixed listbox matches trigger width, centers the selected option
+when possible and clamps to an 8 px viewport inset. Resting options are transparent;
+hover/selection share a neutral overlay, selection adds a 3 px accent pill, press
+weakens the overlay. Trigger elevation flattens while pressed/open; keyboard ring
+remains. Popup is opaque theme surface with flyout stroke/radius and elevation 16,
+not Acrylic. Forced colors use Canvas/CanvasText/ButtonBorder/Highlight/HighlightText.
 
-The icon foundation includes the selected Regular glyph vocabulary and explicit
-Filled Play and Stop aliases used for Resume and armed execution cancellation,
-vendored locally from `@fluentui/svg-icons@1.1.334` with exact package/file URLs,
-per-file SHA-256 hashes, and license. A frozen
-`icons.js` registry maps visual glyph names to fixed component classes; the
-classes use fixed local CSS masks painted with `currentColor`. `tokens.css`
-owns exact 16/20/24 px `sm`/`md`/`lg` icon sizes and `components.css` owns
-alignment and states.
-Each size selects native artwork rather than scaling a single universal asset.
-The authored catalog and generated receipt record the current coverage. Where the pinned
-upstream package has no native size, the fixed mapping scales 20 px artwork:
-Arrow Sync Checkmark at 16, Database Arrow Up at 24, Folder Holder at 16/24,
-and Timeline at 16. These are explicit exceptions, not runtime asset discovery.
-20 px is the default control glyph; 16 px supports compact text/controls, and
-24 px is reserved for deliberately larger controls. Glyph size does not define
-the button's hit target.
-There is no remote load, icon font, runtime registration, inline/generated SVG,
-or data-derived class/asset path. Icons remain decorative beside visible text;
-icon-only controls require their own accessible name.
+The same initial cosmetic snapshot drives native material, opaque background and
+the first page appearance envelope before creation; section initialization cannot
+delay operational readiness. This is not a compositor flash-free-paint guarantee.
+Live appearance reads/apply coalesce on the native UI thread; subscription precedes
+initial read and changed native generations cannot overwrite newer state.
+Unknown/unreadable display flags retain prior state. Appearance-envelope revisions
+are not persisted cosmetic or bridge-protocol versions. Injected contrast/CDP
+evidence is not a real OS-theme-transition witness.
 
-#### App icon
+Unconfirmed native reapply publishes degraded and restores an opaque page base.
+Startup refuses only if native enhancement may have changed the surface and opaque
+rollback cannot be confirmed. Appearance observation survives incomplete/exceptional
+Close and closes once after complete service shutdown, before destruction.
+Dialogs keep compatible exit state before close; no minimum visible exit duration.
 
-The NamiSync app icon pairs the two-sheet copy glyph with water: an outlined
-source sheet behind, and a front sheet painted as layered paper waves. Under a
-band of sky sits a teal wave, and a deep front swell rises over it on the
-right. Three fixed 256 x 256 SVG masters live in `namisync/interfaces/branding/`:
+### Scrolling and gutters
 
-- `namisync_icon_color.svg` uses gradients, and each wave casts a soft shadow
-  onto the layer behind it.
-- `namisync_icon_two_tone.svg` uses blue-main and a dark blue.
-- `namisync_icon_mono.svg` paints a single `currentColor` ink.
+Window size is 1280×800 logical px with 1024×640 minimum through pywebview's public
+API; its backend performs DPI conversion. No JavaScript/native-minimum correction.
+A 48 rem container query preserves stacked reflow under WebView zoom.
 
-The two flat renders omit the teal wave, so its band becomes negative space.
-A short bar on the front sheet's left edge closes that band, keeping the sheet
-whole. The color master has no such bar. All three share the remaining geometry.
+Shell padding is 24 px except inline end: subtract the shared 10 px scrollbar to
+14 px. No document gutter; each work panel keeps its stable gutter even with hidden
+outer overflow, making normal-theme content end 24 px from the edge. Forced colors
+keep shell padding and browser scrollbar width consistently across pages. The
+natural-height gallery alone has document scrolling/stable gutter and symmetric
+24 px padding; its production-shell specimen temporarily removes/restores that override.
 
-The masters are artwork, not UI glyphs. They ship as `namisync.interfaces`
-package data, outside the web assets, so the `tokens.css` palette ownership and
-Fluent vocabulary rules do not apply to them. The full-color master is ratified
-for the executable, title bar and taskbar; monochrome variants are intended for
-in-interface use alongside monochrome text. `namisync.ico` is a reviewed,
-tracked raster artifact derived from the full-color master, with 16, 20, 24,
-32, 40, 48, 64, 128 and 256 pixel frames. Builds consume it unchanged. Tests
-check parsing and frame sizes, never regeneration equality or exact bytes:
-renderer versions can legitimately change antialiasing. Regeneration requires
-explicit artwork review, not a routine build or test step.
+Plan/Inventory use one two-axis viewport, opaque sticky 24 px header and shared
+column tracks; the viewport alone reserves a stable vertical gutter even if rows
+fit. Horizontal scrollbar reduces usable row height. Reveal reserves the header,
+and file-column resize keeps its initial width snapshot. Setup/generic tables
+instead use vertically scrolling bodies below fixed headers, matched gutters and
+outer horizontal scrolling. No width-measuring/correcting JavaScript.
+
+Scrolling stays browser-owned. M1 CSS approximates Fluent with fixed gutter,
+thin resting thumb widened on hover/drag, subtle track and no extra pressed/fade/
+pane show-hide logic; forced colors use browser defaults. Wheel, keyboard, track
+click and drag stay native. Native Fluent overlay/fade/input/system preference
+parity requires coordinated host startup changes and remains M2 work, not a flag
+or vendor patch. TOOLS owns current development/installed compositions.
+
+### File-row components and geometry
+
+The shared skeleton and integrity cell render page-local projected views;
+function signatures, argument schemas and supported keys are source-owned in
+`file_row.js`, `plan.js` and `integrity.js`, not another wire contract. The gallery
+uses those same components with test-only fixtures; production keeps real hierarchy,
+selection and activation owners. No fake Plan/session/temporary command ships.
+
+Projected state chooses a fixed semantic role; the browser never derives domain
+result, urgency, hue or counter ratio. Actual completed NOOP says green **No change**;
+other skipped outcomes, including deselected NOOP, say neutral **Skipped**. A
+projected executing/verifying cell uses its finite 0–100 percentage for a 4 px
+bar across the cell with 8 px side insets; supplied text labels accessibility.
+Unknown progress remains text/indeterminate. Terminal text never disappears.
+
+| Shared geometry | Contract |
+| --- | --- |
+| Production Plan/Inventory | 24 CSS px rows; generic tree renderer independently remains 28 px. Two fixed virtual spacers; no zebra fill on spacers. |
+| Typography/checkboxes | 12 px/16 px caption text; 16 px boxes, semibold folders/state labels, monospace checksums. |
+| Headers/columns | Same tracks for header/body; Name absorbs passive growth. Freeze fitted non-Name widths at first visible loaded layout; hidden/disconnected waits, reuse retains widths. |
+| Resize | Constrained pointer/keyboard parity; Notes yields width until its minimum. A positive fixed-column resize cannot exceed remaining Notes reserve. |
+| Minima | Action 6 rem; Inventory Filename/Modified/Notes 12/7/14 rem. Existing generic/gallery File/Notes 12/14 rem constraints remain. |
+| Neutral facts | Size, Modified, Notes and rail paths use `#616161` Light / `#adadad` Dark; forced colors use system text. |
+
+Physical row/column geometry, fixed tracks, constrained resize, width-preserving
+horizontal overflow and focus/reflow are installed-gallery acceptance, not a new
+browser-owned ordering or selection model. Do not infer domain policy from static
+gallery checkbox reconciliation or its sample action counts.
+
+Gallery row specimens use Selection, Filename, Size, Operation/Presence, Checksum,
+Notes; Selection has no visible caption but retains its accessible name. Five
+focusable separators control preceding tracks, not Notes' outer edge. First resize
+freezes fixed tracks; File/path alone flexes with a 12 rem minimum, Notes at least
+14 rem. Pointer/Left/Right share the same inverse-Notes calculation, preserving
+intervening tracks and right edge. Effective minimum is max(48 rem, fixed tracks +
+12 rem File + stored Notes); overflow preserves customized widths. Widths are
+DOM-local, not persisted/bridge state. Only direct rows own zebra fill, ending at
+the last row; cells/group backgrounds stay transparent with no filler height.
+Folders have borderless disclosure/mixed checkbox, children indented basenames.
+
+### App icon and glyph vocabulary
+
+The app icon combines rear source-sheet outline and front paper/water layers:
+sky, teal wave and deep right-rising swell. The three 256×256 SVG masters under
+`interfaces/branding/` are full-color gradients/shadows, blue-main/dark-blue
+two-tone and currentColor mono. Flat variants omit teal and add the left closing
+bar; the color master has no bar. Remaining geometry is shared.
+
+Masters are packaged artwork outside web glyph/palette rules. Full color is
+ratified for executable/title bar/taskbar; mono variants serve in-interface text.
+Tracked `namisync.ico` has 16/20/24/32/40/48/64/128/256 px frames. Builds consume
+it unchanged; tests check parsing/sizes, not regeneration or byte equality.
+Regeneration requires explicit artwork review.
 
 #### Maintaining the icon vocabulary
 
-See [TOOLS.md](TOOLS.md#icon-maintenance) for the command syntax and options.
-
-Edit `tools/icons.json` to add or remove glyphs and declare missing-size
-fallbacks. Then run `.\.venv\Scripts\python.exe tools/icons.py sync`.
-The command authenticates the pinned npm archive and updates
-the native SVGs, SOURCE receipt, fixed JavaScript registry and CSS mappings.
-Do not edit those generated regions or per-file receipts manually. Native
-16/20/24 px artwork is selected automatically; missing sizes require an explicit
-fallback, and a fallback becomes an error when native artwork is available.
-
-Run `.\.venv\Scripts\python.exe tools/icons.py check` to verify generated files
-without writing. Both commands accept `--archive path/to/svg-icons.tgz` for
-offline use; otherwise they download the pinned official archive. The authentic
-archive check proves upstream correspondence; receipt consistency tests alone
-do not. Independent tests cover safety, fallbacks, drift, packaging and rendering
-without a second hand-maintained glyph or hash list.
-
-For an upstream update, review the catalog's version, archive integrity, commit
-and license hash together. The npm archive omits the license file: retain or
-deliberately update the reviewed local `LICENSE.txt`; the tool validates its
-hash and refuses a mismatch. Review the generated diff and run the icon/tool
-tests and installed gallery gate. The catalog and maintenance tool are not
-packaged or loaded by the app. Registration never authorizes placement.
+[TOOLS](TOOLS.md#icon-maintenance) owns catalog edits, authenticated archive sync,
+generated registries/receipts, native 16/20/24 artwork/fallbacks, license updates
+and checks. Do not hand-edit generated regions, maintain another glyph/hash
+catalog, or package maintenance tooling. Registration never authorizes placement.
 
 #### Icon placement and meaning
 
-The governing rule is that icons help users differentiate. Their availability
-in the registry is not a reason to display them. Placement, presentation and
-density are stronger constraints than the example actions or glyph mappings
-below. Shared text-and-icon surfaces, including lists and menus,
-remain text-first. Only frequent actions (such as New, Open and Save) or actions
-requiring immediate attention (such as deletion) receive supplementary glyphs.
-Do not decorate every row or assign an icon merely to fill a column. Align text
-consistently when some entries have icons and others do not.
-
-Familiar, unambiguous controls may use only an icon: New, Save, Search, Settings,
-and a contextually clear Close/Clear are examples, not an exhaustive eligibility
-list. Other actions may qualify when their meaning is clear in context. The
-button owns an explicit accessible action name and a tooltip available on hover
-and keyboard focus;
-the glyph remains decorative. An ambiguous action retains visible text. In
-particular, dismissing a panel, clearing an input, and canceling running work
-must remain distinguishable through context and naming even when their glyphs
-are related. Registration does not convert current text buttons automatically.
-
-Operation and status badges already carry their semantic cues; do not add a
-second status icon beside a badge for the same information. A standalone warning
-or error may use an attention icon where no badge already expresses it. Glyph
-shape is not operation authority: creation variants, folder variants, play/sync,
-and database variants require an explicit surface meaning before placement.
-Use one consistent glyph for each action within a context; do not use similar
-variants as interchangeable decoration or to distinguish unrelated actions.
-
-The initial action vocabulary below is a guideline, not a fixed mapping or
-whitelist. A surface may use a different glyph or another well-understood
-icon-only action when that improves recognition in context. Such exceptions
-must preserve the stronger rules: selective emphasis, restrained density,
-clear action meaning and accessibility, and no redundant badge/icon cues.
-The examples do not change current controls or make every occurrence eligible
-for an icon.
+Icons differentiate rather than decorate. Text-and-icon lists/menus stay text-first;
+frequent or attention-demanding actions may receive supplementary glyphs, with
+consistent text alignment. Familiar clear actions may be icon-only when their
+button has an explicit accessible action name and hover/keyboard tooltip; ambiguous
+actions keep text. Close, Clear and Cancel must remain contextually distinguishable.
+The glyph itself is decorative. A badge already carrying status gets no duplicate
+status icon. Use one consistent glyph per contextual action, never similar variants
+as decoration. Preserve fixed local artwork rather than substitute font glyphs.
 
 | Action | Glyph | Meaning boundary |
 | --- | --- | --- |
@@ -873,747 +367,247 @@ for an icon.
 | Search | `search` | Find/filter in the named scope. |
 | Delete | `delete` | An actual removal action; retain consequence wording where needed. |
 
-Task cancellation is a lifecycle action, not removal or mere dismissal. Keep
-its meaning distinct from `delete` and from closing a panel. The remaining
-registered glyphs are available vocabulary; assign their surface semantics when
-the corresponding interaction is designed, rather than inventing 47 actions.
+## Host and security boundary
 
-Native appearance observes Windows light/dark/high-contrast state and live
-`UISettings` `Accent`, `AccentLight1`–`AccentLight3`, and
-`AccentDark1`–`AccentDark3` values.
-The raw ramp stays native-side. The revisioned `namisync.appearance.v3`
-envelope publishes only `accentFill`, its 90% hover and 80% pressed values, one
-contrast-selected foreground, `accentTextFill` (`AccentDark2` in Light and
-`AccentLight3` in Dark), and the Boolean `advancedColor` of the window's
-current display to packaged `appearance.js` through UI-thread
-`document_channel.py`; only its exact schema and fixed CSSOM/dataset sinks are
-valid. `advancedColor` is read through DisplayConfig (24H2 active Advanced
-Color, else the original enabled bit) and refreshed on display-setting changes,
-monitor changes while moving and window activation. That refresh republishes
-only a changed value and never reapplies material; a read failure keeps the
-prior value.
-This internal document-envelope revision changes neither the persisted cosmetic
-value version nor the bridge request protocol.
-Observation subscribes before its mandatory initial read. Later native events
-advance one coalesced generation whose current state is read and applied on the
-window UI thread; a newer generation is deferred to another UI turn so stale
-callback-thread snapshots cannot become newest or starve the message pump.
-The installed materials composition gate applies an injected native
-high-contrast snapshot and CDP `forced-colors` emulation in the same production
-window, then compares resolved surfaces with dynamic system-color probes while
-retaining the native Mica-off checks. It does not claim to exercise a real OS
-contrast-theme transition.
-The product header now includes the labelled System/Light/Dark selector carried
-by the ratified cosmetic channel. It stays disabled until its initial section
-read succeeds; exhausted initial transport failure leaves only that control
-disabled and does not alter operational readiness. Within one displayed generation
-it serializes replacements,
-reconciles only server-accepted state, and never mutates theme CSS
-optimistically. A delayed replacement keeps its original request and shows
-qualified feedback. Failure or explicit Refresh reads the current canonical
-section and permits a new revision-bound choice. Refresh does not claim the old
-replacement settled; generations prevent its late reply from restoring an older
-display. No original-response observation or sticky outcome fence is retained.
-Document replacement follows the host's close/reopen contract. Save failure remains a sanitized log event
-in the active cosmetic contract;
-it does not block bridge readiness or replace the shell's operational status.
-The stored override drives both the native window material and the page
-tokens. Active high contrast temporarily wins without overwriting the
-stored choice; system accent and reduced-motion state remain unchanged.
-Component gallery `light` and `reduced` modes seed `light`, while `dark` and
-`forced` seed `dark`, before window creation. The installed witness forces a
-real accepted selector change, proves the choice is not rendered
-optimistically, restores the seeded choice, and checks native/page agreement.
-The selector is a production-owned DOM combobox rather than the browser's
-native picker. Its fixed-position listbox is portaled under `body`, matches the
-trigger width, aligns the selected option center with the trigger center when
-space permits, and clamps to an 8 px viewport inset. Ordinary options are
-transparent at rest. Hover and selection use one shared neutral overlay;
-selection additionally keeps a 3 px accent pill, and press temporarily weakens
-that overlay. Task cards consume the same two selection roles.
-The closed trigger uses a subtle tokenized vertical
-elevation boundary at rest/hover and a flat subtle boundary while pressed/open;
-mouse activation does not request a focus ring, while `:focus-visible` retains
-the shared dual keyboard ring. The M1 popup uses an opaque theme surface because
-no Acrylic owner exists yet, plus the flyout stroke, overlay radius, and
-elevation 16. Forced colors remove shadow and use Canvas, CanvasText, ButtonBorder,
-Highlight, and HighlightText through system-owned tokens. Microsoft's official
-[XAML styling guide](https://github.com/microsoft/microsoft-ui-xaml/blob/main/docs/design-notes/xaml-styling-guide.md)
-is the reference for the closed control-elevation boundary.
-The host loads the cosmetic authority before choosing the opaque fallback
-background or creating the window. That same initial effective snapshot feeds
-title-bar/material policy, the appearance controller, and the first page
-appearance envelope; page-side section initialization remains post-`OPEN` and
-cannot delay readiness. The precreate opaque background and first authoritative
-appearance envelope use the same override, and settled native/page presentation
-must agree; this is not a compositor-level claim of flash-free first paint.
-The native window is constructed at 1280 x 800 logical pixels with an explicit
-1024 x 640 logical-pixel minimum through pywebview's public `create_window`
-arguments. Pywebview's WinForms backend performs the DPI conversion; NamiSync
-does not mutate `window.native.MinimumSize` or correct geometry from JavaScript.
-The former viewport media query is removed. A 48 rem inline-size container
-query retains the stacked reflow because WebView2 zoom can still make the CSS
-viewport narrower than the logical host dimensions.
-Opaque fallback requires sufficient structured backdrop/glass/form/controller
-landing evidence. A live reapply that confirms neither native path publishes
-`degraded`, which returns the page itself to its theme-correct opaque base;
-initial configuration, observation, or publication failure degrades over the
-opaque window baseline. Startup refuses only when native enhancement may have
-changed that surface and an opaque rollback cannot be confirmed. Appearance remains
-subscribed through incomplete or exceptional close attempts and closes once
-only after complete service close, before destruction. Shared dialogs likewise
-retain their ordinary lifecycle:
-`data-closing` runs the compatible exit state before the owner calls `close()`.
+INTERFACES owns singleton/token/prerequisite admission, per-user paths/logging,
+database startup, native origin/navigation controls, appearance landing and ordered
+shutdown. Production uses Edge Chromium/WebView2 and packaged local assets with
+no silent fallback. M1 does not invoke the Evergreen bootstrapper; missing runtime
+gets read-only installation guidance. Unsigned packages publish hashes/source
+identity and honest unknown-code-policy guidance. Browser state grants no authority.
 
-Motion tokens and Fluent easing curves live in `tokens.css`; controls,
-expand/collapse, progress, and dialog transitions consume those shared values.
-`prefers-reduced-motion` reduces or stops non-essential motion. Virtualized row
-creation and recycling never animate, so scroll performance and row geometry
-remain stable. GUI Breaks tune choreography without creating another motion
-contract.
+GUI-only data-dir relocates every artifact together. The development launcher
+uses its distinct mutex/title and NamiSync-Development root; test compositions'
+local-index seam is not a production argument/environment/page/bridge override.
+Clean installed-wheel evidence is separate from editable preview. The old PySide
+proof/mockup is [historical](obsolete/ui_mockup/mockup.md).
 
-M1 does not bundle or automatically invoke the Evergreen WebView2 Bootstrapper.
-The supported target remains Windows 11; missing WebView2 is refused read-only
-with an official installation direction. M1 beta binaries may be unsigned and
-must publish hashes, exact source identity, and an honest warning that Windows
-or enterprise policy may block unknown unsigned code.
+BRIDGE owns dispatch/envelope/identity/recovery, neutral readiness and response
+custody. The initial five-second readiness deadline does not turn a nonce into
+authorization. A genuine replacement permanently retires page command/appearance
+authority and directs close/reopen plus fresh review; admitted work still settles.
+Same-document history/canceled navigation are distinct. Private parsed response
+adoption follows BRIDGE, not an obsolete deep-copy recipe.
 
-## Adapter boundary
-
-The desktop imports only `NamiSyncService` and its primitive workflow views.
-It must not import `core`, `modules`, `db`, CLI internals, or construct a
-dispatcher, runtime, workflow request, repository, or recorder.
-
-The service currently provides this pre-reslice command surface:
-
-```python
-start_plan(source, target, *, deletion_policy=None, command_id=None,
-           observation_sink=None) -> PlanSession
-start_execution(request_id, *, verify_after_execute=False) -> ExecutionSession
-start_inventory(...), start_baseline(...), start_verify(...), start_rebaseline(...)
-read_semantic_settings() -> SemanticSettingsView
-commit_semantic_settings(patch) -> SemanticSettingsView
-```
-
-`SessionObserver.observe(session_id, sink)` supplies primitive current-state
-and event/record views. Plan start's optional sink is currently attached
-transactionally before the session can run. The accepted target requires that
-same attach-before-schedulability path for every desktop-created execution,
-inventory, integrity, and manual-verification session. `BRIDGE.md`
-exclusively defines the recovery cursor and command-receipt identity exposed
-across the wire. The desktop owns the bounded presentation queue fed by that
-sink; it does not expose raw dispatcher streams to JavaScript. It must
-unsubscribe the exact terminal session on release or task close and close every
-remaining observation before service shutdown.
-
-The desktop submits complete Setup and freezes the native canonical result;
-defaults only prepopulate the page and Setup never writes global settings.
-Session starts create or attach to a process-live task, and bounded readback
-reconstructs the rail/pane after navigation. Exact Setup, task authority, and
-concurrent start/close/release behavior remain bridge authority.
-
-An initial loaded-time security, unsafe-surface, or document-readiness refusal
-closes dispatcher admission and wakes the task registry before appearance
-teardown or any window close request. Public destruction is attempted once;
-after a throw or a return without closure, the host posts one `WM_CLOSE` to its retained
-native window handle so the startup-refused path can release the GUI loop. A
-failure of both close paths never reopens authority or replaces the original
-startup diagnosis.
-
-Native load alone does not open a document. The packaged module installs its
-neutral readiness receiver before the appearance receiver and shell DOM, then
-sends `shell_ready` through the existing sole `dispatch` function. After safe
-base-surface settlement, the host posts a current-generation nonce; the page
-echoes it through `readiness_echo` and records `Ready` only after a truthful
-acknowledgement. The ordinary Ready label is hidden; other host status messages
-remain visible. Repeated raw API notifications do not restart shell startup.
-Ordinary commands
-remain unavailable until native security/load, shell acknowledgement, safe
-surface settlement, and the neutral post/echo roundtrip converge. The nonce is
-liveness evidence only, never authorization, and is neither logged nor
-persisted. A fixed five-second product deadline applies to the initial document.
-During initial startup, missing acknowledgement, unsafe surface, or
-failed neutral publication enters the direct fail-closed startup-refusal path.
-Appearance publication continues independently and may degrade. Reload is not
-a supported user action. A genuine replacement document permanently loses
-command and appearance authority, including during initial startup. Host-owned
-guidance tells the user to close and reopen NamiSync, review the folders and make
-a fresh plan. Admitted work retains its existing owners and settles normally;
-reload does not automatically cancel work, release a task, or close the service.
-The normal X action still performs bounded, retryable shutdown. Stale timers,
-acknowledgements and queued posts cannot reopen authority. Canceled navigation,
-blocked popups and same-document fragment history leave the current shell usable.
-
-`NamiSyncService.close()` is bounded but not instantaneous: its derived
-allowance is twelve seconds, reached only when the audit writer is genuinely
-wedged, and a healthy close returns in milliseconds. The host must therefore
-never call it from pywebview's `closing` callback, which pywebview runs
-synchronously on the WinForms UI thread — a window that stops pumping messages
-is marked unresponsive by Windows within a few seconds. The close handler
-returns `False` to veto the immediate close, shows a determinate closing
-affordance, runs the ordered teardown off the UI thread, and closes the window
-programmatically when the `ShutdownView` returns. An incomplete shutdown stays
-visible rather than being swallowed by window destruction. The implemented
-controller rejects new bridge admission, closes the task registry to wake
-drains and capacity-blocked sinks, waits for admitted native call workers to
-finish their return path and exit, unsubscribes task observations, then calls the
-service. A complete result permits one recursive-safe
-programmatic destroy only after window-owned appearance observation closes
-exactly once. An incomplete result or exception keeps the window open with
-appearance observation still active,
-sets fixed retry guidance in the packaged status element, and presents an owned
-native Retry/Cancel dialog. Only its Retry choice starts another worker; another
-title-bar close can reopen the dialog but neither retries nor force-closes.
-Each loaded document binds its current status element before a close worker may
-render, so a late worker never queries a destroyed or replaced document;
-presentation failure is sanitized and cannot change shutdown truth.
-`classify_result()` supplies the single headline and independent filesystem,
-integrity, recording, audit, disposition, and cancellation axes. The frontend
-renders those facts; it never reimplements headline precedence or parses
-diagnostic text.
-
-Current location commands bind one explicit root or retained location id before
-admission. `LocationResolutionError` already carries the five visible states
-(`resolved`, `offline`, `ambiguous`, `root_missing`, `root_unavailable`), exact
-candidate mounts, and corrective detail. The shared workflow-owned location
-candidate service and bounded remembered-location readback are implemented;
-typed, picker and remembered Setup inputs use that admission route. The UI must
-request a user-selected current mount for ambiguity rather than inferring one
-from a mapping or prior task. Its process-local slot is purpose-bound, expires,
-and is freshly re-admitted at every real start; it is not lasting root
-authority.
-
-Semantic settings and UI state are deliberately separate. Existing service/CLI
-callers may read and partially commit semantic settings. Desktop
-Setup reads them only as initial values and freezes per-task overrides without
-writing the file. Settings alone exposes explicit partial Save defaults, including
-automatic execution verification; existing drafts and Plan again retain their captured choices.
-The ratified `ui_state.py` replacement owns a strict,
-section-versioned cosmetic document; schema v1 contains only the appearance
-override. Recents are not a future cosmetic section: they derive from ledger
-runs and current workflow probing. Geometry, columns, treegrid
-expansion/grouping state, and filter chips remain deferred typed sections.
-H2 sorting is process-live view state, not a persistence section; durable sort
-preferences are excluded from M1. UI
-state must not become another semantic-settings, task, or session store.
-
-## Bridge and renderer security
-
-The host exposes one function-table `dispatch` entry, and only packaged
-`bridge.js` references `window.pywebview`. `BRIDGE.md` exclusively defines
-the complete envelope bound, immutable command mapping, opaque identities,
-exact errors, deadlines and retry classes, revision rules, drain recovery,
-sequence/`Gap`/terminal semantics, and terminal-session release versus explicit
-task close. This document requires those mechanisms to produce actionable,
-path-sanitized UI feedback; it does not duplicate their wire contract.
-
-NamiSync-owned code never constructs JavaScript or calls `evaluate_js`,
-`run_js`, or `Window.state` as an application-data channel. Pinned pywebview
-6.2.1 internally constructs JavaScript to return exposed-function results, so
-its serializer/escaper and the real-browser hostile-name round trip remain part
-of the security boundary. The host retains each admitted call's handler position
-until that exact worker exits; a browser timeout or completed domain handler
-does not release native-return custody. It also discards the pinned runtime's
-unused synchronous callback-registry entries without changing the return
-channel. [INTERFACES.md](INTERFACES.md) owns those compatibility mechanisms and
-their remaining containment boundary. The exact pythonnet 3.2.1 pin is equally
-part of that boundary because native delegate subscription, WinForms thread
-affinity, and `CoreWebView2` access pass through it. Required ordinary Node
-probes are unmarked and non-skippable; probes marked `supplemental_node` may
-skip. Both resolve Node.js from `NAMISYNC_TEST_NODE` before `PATH`. Required
-bridge probes cover original start-plan outcome observation without mutation
-replay and single-attempt interactive wrappers. The required drain-manager Progress validator/replay gate
-proves atomic rejection before cursor or reliable-sibling delivery. Installed
-real-WebView2 witnesses cover native custody and renderer behavior;
-[TESTS.md](TESTS.md) owns the ordinary gate requirements.
-
-The host must force `gui="edgechromium"` and fail with an install action if the
-Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
-acceptable. Before `create_window` it calls the shared host preparation, which
-sets
-`OPEN_EXTERNAL_LINKS_IN_BROWSER=False`, `ALLOW_FILE_URLS=False`,
-`ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None` and performs only
-read-only WebView2 runtime registry access through one side-effect-free
-compatibility module. It mirrors pinned pywebview 6.2.1's .NET prerequisite,
-accepted Edge channels, and HKCU/HKLM architecture routing, with executable
-upstream parity coverage. The `86.0.622.0` token is retained because that
-backend passes it to its compatibility helper; NamiSync mirrors the helper's
-actual comparison and makes no security-patch freshness claim. A configured
-`WEBVIEW2_RUNTIME_PATH` bypasses only Edge-channel discovery, not the shared
-.NET/netfx prerequisite read. One typed probe snapshot supplies
-both availability and refusal reason: an absent prerequisite names .NET or
-WebView2, while an unreadable or malformed registry state reports detection
-failure and recommends repair instead of falsely claiming a component is
-missing. Host preparation never repeats the .NET registry read merely to choose
-its message. The start wrapper repeats
-preparation, passes `debug=False`, and uses one zero-argument `initialized`
-callback that verifies the selected renderer before invoking the host callback.
-Every shipped JavaScript primitive must also run at that admitted floor:
-own-property checks use the compatible prototype call, ARIA roles use explicit
-attributes, and opaque bridge identities use `crypto.getRandomValues` rather
-than newer convenience APIs. Static installed-wheel guards and the real
-WebView2 accessibility witness cover that implementation side of compatibility.
-Once the static asset server has selected its random loopback port, the host
-callback derives the exact origin from the complete `window.real_url` with
-`urlsplit` and registers an
-idempotent synchronous `before_load` callback. On the WinForms UI thread
-`before_load` reaches
-`CoreWebView2` and attaches the tested `NavigationStarting`,
-`FrameNavigationStarting`, `NewWindowRequested`, and `SourceChanged` handlers
-exactly once before application calls are exposed; setup and dispatch workers
-never access the UI-affine native object. Top-level navigation outside the
-exact packaged asset origin is canceled, every frame navigation is canceled,
-and every popup is handled. Attachment failure is sticky and observable:
-dispatch remains closed and the host tears down the dead window with an
-actionable message after load rather than relying on an exception that
-pywebview logs and swallows.
-
-`dispatch` independently rechecks a lock-protected snapshot of the native
-committed `CoreWebView2.Source` on every call. It does not authorize from
-pywebview's managed `Source` or `get_current_url()`: both can report a rejected
-navigation target after WebView2 canceled it and retained the packaged
-document. A canceled request leaves the snapshot unchanged, while a genuinely
-committed off-origin source replaces it and causes dispatch to fail closed.
-Origin authorization is an entry-time admission check; the bridge neither
-holds the document lock across a handler nor rolls back completed work if
-document replacement makes its response undeliverable. That state is
-uncertain delivery, not uncertain commit; `BRIDGE.md` owns the corresponding
-retry and recovery rules. The packaged static-asset server is not an API or
-event channel.
-
-Each native response carries a private transport token around the unchanged
-bridge envelope. JavaScript validates the wrapper, clones the response, and
-then acknowledges that token; provider mutation during acknowledgment cannot
-change the delivered clone. A late response that loses a timeout race still
-performs the same clone-and-receipt cleanup. Genuine replacement retires host
-response custody and permanently revokes page admission. Older workers retain
-their execution ownership until exit, without delivering results to a successor
-page or reopening it.
-
-The frontend places the restrictive CSP meta element first in `<head>` so no
-earlier resource escapes it; `frame-src 'none'` independently blocks frames
-during initial parsing before the native hooks exist. DOM APIs such as
-`textContent` render all filesystem-derived data. The frontend must never use
-`innerHTML`, build executable script from returned data, or interpolate a
-filename into an attribute, URL, command, style, or bridge request.
-Hostile-name fixtures are required end-to-end.
-
-Filesystem-derived row labels use the narrower `renderFilesystemText` sink.
-It maps `DEFENSE.md`'s exact layout-control set and literal marker delimiters to
-injective uppercase `⟦U+XXXX⟧` markers, then delegates to the sole
-`textContent` writer. The label is a bidi isolate. This final presentation
-projection neither mutates nor caps filename display in Python/wire/search;
-callbacks separately receive raw opaque node ids. Marker spelling has no
-decoding or search meaning.
-Trusted shell copy continues through the generic inert-text sink. Ordinary
-markup-like text, Arabic, Hebrew, combining sequences, emoji/variation
-selectors, ZWNJ/ZWJ, and long labels remain exact.
+Keep first-head CSP, inert text/layout-control markers and bidi isolation. No
+innerHTML or executable/attribute/URL/style/command interpolation of filesystem
+text. Ordinary Unicode stays exact; raw callback IDs remain separate from display.
+Only bridge.js references window.pywebview. Static assets are not an API channel.
+Native shutdown runs off the UI thread with visible Closing; the service allowance
+may reach twelve seconds. Incomplete shutdown retains the window, owned Retry/
+Cancel and original diagnosis; no silent force-close or authority reopening.
 
 ## Interaction contract
 
+### Shared review behavior
+
+Card labels/file rows are not browser-text-selectable; expanded Task/Item details
+and editable fields retain selection/copy. Detail buttons remain controls.
+Selection/highlight paint never changes tracks. Current view segment keeps accent
+and ordinary button behavior; clicking it stays put. Other destination is disabled
+during copying and enabled for linked Verify/original release; disabled appearance
+is preserved. Plan Again is absent during execution or unsettled admission, with
+original-outcome recovery still available.
+
+Automatic post-copy Verify opens once when observed, then respects manual return
+to Plan. Before original release it uses bounded execution review/operation identity
+and that run's controls, without creating/mutating an Inventory publication. Release
+opens ordinary target Inventory; original Plan/results remain. Between files Go
+retains the last observed subject; Gap/phase/terminal/session replacement retires it.
+Verify headline/counters describe that phase, including partial/failure/cancel,
+while recording/audit issues remain visible. Partial execution telemetry never
+becomes a fabricated final counter.
+
+Observed recall evidence gets the 16 px Fluent plain cloud, 6 px name gap, clipped
+16×12 slot shifted up 1 px. Label/tooltip: “Not fully available locally. Access may
+retrieve content through your provider.” Remote files filters include directories
+on their own evidence; matching rows are not total download bytes. Unmarked files
+are not certified local. Aggregate recall facts remain available for later status
+work, without another cloud paragraph/modal or remote-completion claim.
+
+Background/drain updates preserve foreground drafts, highlight, selection, scroll
+and current feedback. Same-session confirmed Inventory views can be reused; pending
+change, replacement, release or uncertain delivery requires current bounded read,
+with only the latest reread behind an in-flight one. Explicit reread keeps mounted
+pane/tree focus/expanded Task details/anchored scroll and retires prior item evidence
+before new publication. A view read never changes scan/integrity activity status.
+
 ### Setup and location flow
 
-Setup labels its modes Sync and Integrity before folder admission; the latter
-retains the existing standalone inventory behavior. The selected mode
-sets the picker purpose; changing it invalidates prior folder authority. Inventory
-uses one root and shows that exact frozen root after admission. Sync Setup exposes
-trash/additive deletion, trash-on-update, filters, creation-time and ACL
-preservation, source-casing propagation, and linked verification. Mirror has no
-control. ADS is visibly unavailable and frozen off; the page never implies a
-disabled checked option will be honored. Wire encoding is
-owned by [BRIDGE.md](BRIDGE.md).
+Only the selected Sync/Inventory type's Create action is visible. Segmented radio
+supports arrow keys; changing mode/purpose invalidates prior folder authority.
+Inventory uses one Root and shows the admitted frozen root. Setup reads defaults,
+captures per-task overrides, and never saves global settings.
 
-Setup and Recent pairs occupy separate cards. Setup starts at the work area's
-top without a repeated task-title heading; the region's accessible name retains
-the selected task identity. The task type uses the gallery's
-segmented radio control, with arrow-key selection. Each path row places its
-Source/Target label in a compact fixed-width track on the left, an editable path and recent-folder caret in one
-standard textbox, with its compact caret button inset on all sides and an accessible
-folder-open Browse button outside on the right. The
-recent dropdown supports keyboard navigation, selection and Escape dismissal.
-Pointer opening leaves its items neutral; keyboard navigation highlights the
-focused item, and pointer movement hands highlighting back to hover. The path
-dropdown and More options use centered 16px Fluent down/up chevrons from the
-pinned local directional set.
-Plan options have no enclosing outline or divider: Verify execution and Additive
-sync switches sit together on the left, in that order, with 16px between them. Additive on maps to
-`additive`; off maps to `trash`. More options
-sits on the right of the same row and reveals preservation/update/casing switches
-and exclude filters below. Each advanced caption follows its toggle directly;
-Add filter sits beside the filter textbox; [PLANNER.md](PLANNER.md#exclude-filter-syntax-and-effect)
-documents pattern syntax and effect. Disclosure changes presentation only,
-never option values. Only the selected task type's Create action is visible.
-Expanded options have extra spacing below the always-visible switches and 8px
-between their rows. Buttons, textboxes and combobox triggers use translucent
-disabled fills; other disabled surfaces retain their own component roles.
-Forced-color and transparent-action overrides remain independent.
-Empty and resolved paths omit routine hints; refusal and recovery messages remain
-visible in the shared Setup feedback area left of Add pair/Create. Source,
-Target or Root labels identify folder feedback, and the path fields retain
-their accessible descriptions there. Action/recovery feedback and frozen-Setup
-guidance use the same area. Errors do not insert text beneath the path rows;
-buttons stay top-aligned when feedback wraps. Mount-choice controls remain with
-their fields, and per-pair results remain in the batch table.
-Each path has compact inset Clear and recent-folder buttons; Clear
-empties only that local field and invalidates its candidate without a Python
-request, including when the textbox was focused. Browse is square. Idle and
-disabled path-action buttons are transparent, with
-task-card hover/press fills when enabled.
-Textboxes retain their normal accented active underline without an extra outer
-ring; forced colors retain a visible outline. Dropdown-option buttons have no
-native resting border, while keyboard-focused options retain the common focus
-indicator. More options, recent-pair Refresh and New task are also transparent
-at rest and use task-card hover/press fills. The square Refresh uses Arrow Clockwise;
-New task uses the larger Add Square Multiple glyph. Add pair precedes single
-Create at the right. Single Create remains visible but disabled while the origin
-has queued or unresolved batch work. Create batch appears below its table,
-aligned right. Routine introductory guidance and
-the visible Task type caption are omitted; the switch retains its accessible name.
+Setup/Recent pairs are separate cards. Setup begins at work-area top with no
+repeated visible task/type heading; accessible region identity stays. Each path
+row has fixed Source/Target/Root label track, editable path with inset Clear/recent
+caret and separate square Browse. Clear edits locally/invalidate candidate without
+Python, even if textbox focused. Recent dropdown supports arrows/Enter/Escape;
+pointer-open starts neutral, keyboard highlights, pointer movement restores hover.
+Disclosure uses pinned 16 px up/down chevrons.
 
-A path row remains editable before its task starts. Editing an
-accepted path immediately drops the page's slot reference and marks it
-unresolved; the UI never silently reuses cached authority. Validation runs on
-Enter, blur, completed paste, picker/remembered selection, or start—not each
-keystroke. Refusal keeps the row editable and gives action-guiding typed
-feedback. A selected file remains visible with `not-directory`; it is never
-silently converted to its parent. Native code owns parsing, volume support, and
-no-follow admission.
+Verify execution then Additive sync occupy the left option row with 16 px gap;
+Additive maps on→additive, off→trash. More options sits right, changing only
+disclosure, not values. Expanded preservation/update/casing/filter controls have
+extra top space and 8 px row gaps; caption follows toggle, Add filter beside text.
+Creation-time/ACL/source-casing and linked verification remain captured options.
+No Mirror control; ADS is visibly unavailable/frozen off. [PLANNER](PLANNER.md#exclude-filter-syntax-and-effect)
+owns exact exclude syntax/effect. No disabled checked option implies honored work.
 
-Create plan and Create inventory remain available during an ordinary folder
-check. Activating either starts one guarded attempt, displays Checking folders,
-and awaits the current row's admission before proceeding; it does not submit a
-duplicate check or use an older accepted choice while a recheck is running.
-Without a running check, unresolved rows are admitted normally. Editing the
-form abandons that attempt, and refusal starts no task. Picker and mount-choice
-waits retain their separate guards. Add pair remains a snapshot action and may
-capture a row during an ordinary check; Create batch admits that private
-snapshot later, without retaining the editable row's in-flight promise. Batch
-start is independent of checks running on the editable Source/Target rows.
-A saved pair retains its accepted choice if present (including one captured
-during a recheck); batch reuses that choice, otherwise admits the saved
-candidate. This does not change the workflow's fresh native admission or the
-requirement to review the resulting dry-run Plan before execution.
+Empty/resolved paths omit routine hints. Folder/action/recovery feedback shares
+the area left of Add pair/Create, named by Source/Target/Root, with accessible
+descriptions; it never inserts error text under rows or shifts top-aligned actions.
+Mount controls stay with fields and row-specific outcomes stay in batch tables.
+Clear/Browse/recent/More options/recent Refresh/New task are transparent at rest,
+task-card fills on interaction and retain keyboard/forced-color feedback.
 
-When a picked folder has multiple current mounted copies, Setup presents the
-current mount choices. Choosing one continues that exact selection through a
-short-lived opaque reference and fresh native identity checks. It cannot start
-work until resolved, silently choose the first mount, or reuse a stale choice.
+Before start, editing immediately drops accepted slot authority. Validate on Enter,
+blur, completed paste, picker/recent choice or start, not each keystroke. Refusal
+stays editable/action-guiding. A selected file remains visible as not-directory,
+never silently converted to parent. Native/workflow code owns parsing/admission.
 
-Setup shows recent sources, targets, and active pairs derived from ledger runs.
-The recent-pair table reuses file-table surfaces with taller rows, two stacked
-source/target paths in its first column and two aligned endpoint statuses in its
-second. Corners, caption typography, header fill and alternating row surfaces
-match the gallery plan table, with 3.5rem (56px by default) two-line rows,
-1.75rem (28px) headers and 12px folder-column header/content insets. Both recent
-and batch tables reserve five row slots, scrolling additional rows beneath a
-fixed header. Empty slots are inert and excluded from accessibility. Both path
-lines carry Source:/Target: labels in one shared-width track, so their truncated
-path values start at the same horizontal position. The existing recent-activity query returns
-at most five pairs; the shared table also supports larger batch populations.
-Hover, press and keyboard
-focus paint the whole enabled row, never individual cells. Long
-paths truncate at the tail and retain the full text in a tooltip. Online uses a
-green solid circle; Offline uses red; accompanying text stays neutral. Status
-dots have a 1px downward optical adjustment beside their captions. A missing
-root or absent volume makes that endpoint Offline. Other resolver refusals show
-Unavailable, and incomplete/failed probes show Checking/Could not check. Only
-pairs with both endpoints Online can be selected; all rows remain visible.
-Refresh rechecks these
-ephemeral observations. It does not start a task or retain folder authority.
-Unresolved remembered locations remain visible with stable identity context,
-never a stale drive hint. Multi-pair creation is a browser coordinator over
-ordinary serial plan starts: Add pair captures a private options snapshot for
-that row, each row has a stable command id and independent outcome, and completed rows are never
-rolled back. Same-document navigation keeps the coordinator; document
-replacement may stop only rows not yet submitted, while admitted tasks are
-rediscovered from task enumeration.
+Create remains available during an ordinary check: one guarded attempt shows
+Checking folders and awaits the current check, without duplication or stale choice.
+Editing abandons it; refusal starts nothing. Picker/mount waits keep their guards.
+Ambiguity requires an explicit current mount, expiring purpose-bound reference and
+fresh checks—not first-match or cached authorization.
 
-One active batch gesture owns its selected rows, each with its own captured
-options. Before admitting a queued pair, its snapshot is independently
-canonicalized; a preparation refusal affects only that row. Removing the row
-during preparation prevents its admission and submission. Delayed requests
-retain their canonical options and original promise without preparing them again.
-Additional batch
-rows and new form starts wait for it to finish; each form also rejects overlapping
-gestures on that same task. This is not a global queue for independent form
-attempts already underway. Delayed or unavailable creation/start offers the
-exact command's read-only Check and remains distinct from refusal; Check never
-substitutes edited input or creates a replacement intent. Late completion is
-adopted by the original issuing operation.
+#### Recent pairs and batches
 
-Core folder rows and the primary action appear first; More options reveals
-the remaining task-local choices. Start admits unresolved nonempty rows automatically.
-Stable form elements retain focus and drafts through rail, drain and navigation
-updates; response revisions cannot restore an edited row's old choice. The
-page retains one coordinator of at most 48 pairs. Each row belongs to its
-originating task, and only an editable Sync Setup displays or starts those rows;
-Inventory Setup hides the retained queue and remains startable while rows are
-queued. Returning to Sync restores the same rows. Rows show
-source and target paths, Verify and deletion settings, and creation status in a
-conditional table under the composition actions. Queued entries display their
-own captured settings, including independent filter lists and preservation
-choices; later form edits cannot alter them. Preparation replaces only that
-row's snapshot with canonical settings. Ordinary statuses are Ready, Created and Failed; in-flight and uncertain
-requests retain truthful intermediate labels. Results remain visible until
-Clear results removes settled receipts, without closing created tasks or
-discarding unresolved requests. The table hides only when no entries remain.
-The right-aligned Create batch footer sits 8px below the table. Create batch and
-Clear results both remain visible whenever the table exists. They are disabled
-when no eligible creation/Check or settled result is available, respectively;
-creation also retains the existing editing, closure and in-flight guards.
-Remove discards a queued row locally, including during preparation, or a row
-still waiting for folder admission before task creation. The runner rechecks
-membership before submission; late folder replies cannot revive a removed row.
-Create/Start requests already submitted cannot be removed. Closing the origin
-discards its queued rows and can detach pending folder admission, but its close
-control remains unavailable during preparation or while Create/Start outcomes
-need reconciliation. An adopted task also cannot close or submit a fresh
-form while its batch start needs reconciliation; guidance names the origin.
-The close control explains that reason. Original-outcome observation Check remains
-available on the origin, and navigation never transfers the rows to a new task.
-After a start, per-task readback shows the backend-frozen locations and options.
-Plan again reads fresh availability for the reviewed identities, requests an
-explicit current mount when ambiguous, and starts a separate plan with the
-same frozen options and default selection. It copies no execution authority.
-Terminal status alone never fabricates an empty or ready review.
+Recent/batch tables share caption/header/zebra surfaces, 56 px two-line rows,
+28 px headers, 12 px folder-column insets and five reserved slots; excess scrolls
+below a fixed header. Empty slots are inert/inaccessible. Source:/Target: share
+label width, paths tail-elide with full tooltip. Full-row hover/press/focus, never
+cell-only. Online has a green dot, Offline red, neutral text and 1 px lowered dots.
+Missing root/volume is Offline; other refusals Unavailable; incomplete probes show
+Checking/Could not check. All rows remain visible; only both-Online pairs select.
+The current recent query returns at most five. Refresh is ephemeral probing, not
+task start/authority; unresolved identities never display a stale drive hint.
 
-The conditional table keeps batch composition near its actions; created tasks
-remain the task rail's responsibility. The earlier popover, page-level tray and
-dedicated Batch page alternatives remain unimplemented.
+Add pair captures private paths/options even during ordinary check; batch later
+admits that snapshot independently, reusing a captured accepted choice if present.
+The coordinator holds at most 48 stable-ID pairs with per-row options/results.
+Queued rows show paths, Verify/deletion/filter/preservation values; later form
+edits cannot change them. Canonical preparation replaces only that row's snapshot.
+Rows belong to their origin Sync task; Inventory hides, rather than loses, its queue.
 
-Slice 4 establishes only the presentation core and honest shell frame. It adds
-no presentation command or placeholder plan, inventory, history, or control
-surface. The page exposes labelled
-task navigation and a work region with truthful empty states under the standard
-native title frame. `rail.js` and `panels.js` own that accessible frame; they
-do not create fake task or session data. After the initial authoritative task
-list, the app creates one real blank task only if none exist, no task mutation
-has overtaken that read, and no creation attempt remains. This runs once per document;
-closing the last task later leaves the work area's empty state. The empty rail
-offers an ordinary **New Task** button, with the add-square-multiple icon and
-label centered together in a standard task-card footprint. It shares the top
-Create control's pending and original-outcome recovery state; neither control
-replays an uncertain creation. The top icon-only Create remains available.
+One batch gesture serially prepares/admits its selected rows, not a global queue
+for independent forms. Preparation refusal affects one row; removal before
+submission prevents it and late admission replies cannot revive it. Submitted
+Create/Start cannot be removed. Delay keeps original payload/promise and read-only
+Check, never replacement/replay. Created tasks are not rolled back.
 
-Plan and the `tree.js` adapter share `table_controller.js` for viewport geometry,
-window generations, coverage, settlement and reveal. Their row and focus policies
-remain separate; Inventory is not a mode of the Plan panel.
-The shared `tree.js` consumes only windows already decided by Python's pure
-`visible_sequence.py`. It renders at most 256 returned rows plus fixed virtual
-spacers, uses exact 28-CSS-pixel rows and the filesystem-text helper, exposes
-the complete layout-safe label to accessibility even when the visual label elides, and ignores a
-stale response generation. The root is the single Tab stop, row focus uses
-`aria-activedescendant`, and server-derived level, sibling-set, parent, and
-first-child metadata support Up/Down/Home/End/Left/Right/Enter navigation even
-across a window boundary. `aria-expanded` and the disclosure appear only when
-the active filtered projection retains an immediate child: expanded and
-collapsed projected parents emit `true` and `false`, while leaves and
-structural containers with no retained child emit no expansion state. It never
-lets an active descendant remain outside the tree viewport: keyboard movement
-and a completed off-window target use the invocation's fixed row height to reveal
-the entire row in its designated viewport (the root by default). User scroll bursts and
-layout-only viewport resizes enter the same coalesced animation-frame
-reconciliation. Crossing a virtual spacer requests the missing leading or
-trailing global index with the controller-owned generation;
-new positions share the in-flight scroll generation. A still-owned response
-that overlaps the current viewport is accepted even after further scrolling,
-preserves `scrollTop`, and chooses a visible active row using the current
-viewport. Reconciliation then requests any remaining uncovered range. Keyboard
-and external requests retain exact generations. Failed or blocked Inventory reads
-settle their exact pending generation without retrying at rest; later changed
-scrolling can retry without reloading the page. Scrolling
-within a covered window sends no request and moves only presentation focus to a
-fully visible rendered row when one is available; otherwise it clears the
-active descendant until a covering commit. Neither outcome invokes domain
-activation. An external projection request takes priority over scroll state
-from the old DOM, and stale page responses are refused before their payload is
-read. Clicking a disclosure
-focuses that row and requests exactly one expand/collapse change without
-activating it; clicking the label activates as usual. It never filters a viewport, reconstructs ancestry,
-searches a path, owns selection, or talks to the bridge. Slices 5 and 6 remain the first owners
-of real plan/inventory rows and their command wiring. The exact Python
-structural/search/filter/window/anchor contract and installed shell/tree
-contract live in `PRESENTATION.md`; the installed shell/tree witness is SH-G-7 in
-`INTERFACES.md`.
+Add pair precedes single Create, which remains visible but disabled for queued/
+unresolved batch work. Conditional table sits near actions; right-aligned Create
+batch is 8 px below it. Create batch/Clear results stay visible while table exists,
+disabled without eligible work/settled results or during guards. Clear removes only
+settled receipts, never tasks/unknown outcomes; hide table only when empty.
 
-Plan and Inventory views use server-owned sibling sorting.
-New views start in canonical path-key order; users can choose filename, size,
-or mtime with explicit direction, and reset restores path-key order. The server
-sorts complete sibling sets before windowing, with deterministic ties and
-unavailable values last. Size/time use raw numeric facts, including only a
-folder's own available mtime, never a time inferred from descendants. Sorting
-preserves hierarchy, node ids, selection, collapse, and execution authority
-and order. It advances coherent view revisions, indexes, and anchors; the
-browser cannot sort only a page or reuse old numeric indexes. Ordinary
-sort/reset starts at offset zero. Automatic following
-is available only in canonical path-key order with no search or filters. It
-starts enabled for a new eligible execution or ordinary integrity session and
-follows its active operation/item or nearest visible collapsed ancestor. Plan
-uses execution activity and retains the latest settled operation between files
-and at terminal. Live linked Verify and ordinary Inventory baseline, verify and
-rebaseline follow the active item or the last settled integrity result, including
-when fast verification publishes no active-item progress. Enabled ordinary
-Inventory Follow can land on the last settled row as the run ends. Linked Verify
-navigation ends at the terminal record and Inventory opens on release. User
-scrolling the target out of view, or changing sort/search/filter, disables it;
-only explicit action resumes it, even after returning to an eligible view.
-Programmatic scroll does not disable follow. Pause/phase changes preserve the
-choice; task navigation cannot silently re-enable it. Follow never changes
-selection or keyboard focus, and stale replies cannot undo manual navigation.
-Repeated progress for the same target in the loaded window does not reposition
-the viewport; explicit Go still jumps to it.
-Go, Follow and move-destination jumps share a four-row leading context: fetch
-and scroll from `max(0, target index - 4)`, retaining the actual target identity
-and index. Apply the scroll after the new rows/spacers exist; the viewport may
-clamp near its end. Refreshes preserve the existing viewport wherever possible.
+Navigation retains coordination. Genuine replacement stops only unsubmitted rows;
+admitted tasks are rediscovered. Closing origin discards queued rows/detaches pending
+folder admission, but preparation and unreconciled start outcomes block Close/new
+form starts. Adopted tasks name their origin blocker; Check remains on the origin.
+Popovers, global trays and a dedicated Batch page remain unimplemented alternatives.
 
-Float **Go to current operation** (Plan), **Go to current item** (Inventory), and
-**Turn on autoscroll** over the rows at
-the viewport's lower-right with 32px logical insets (`--space-7`), reusing existing floating-control conventions. Go
-uses navigation-location-target and autoscroll uses location-arrow. Both are icon-only square
-buttons with accessible action names and tooltips. Go keeps its ordinary neutral
-button styling and autoscroll keeps its primary accent emphasis. Each button sits
-on its own opaque neutral wrapper at rest, hover and press, without blur or
-acrylic; button interaction fills follow the ordinary shared styles. Go
-uses the item at click time even if the next file starts before the jump
-completes. Between files the controls retain the last known target. A gap,
-pane change or retired verification session discards a pending jump. Go
-performs a one-time jump in the current view, without enabling follow or changing
-sort/filters. If the target and ancestors are excluded, report that fact. Enable
-appears only when follow is eligible and off. With no active target, controls
-cannot jump to a fabricated row. Both actions support keyboard use; underlying
-rows/actions must be scrollable clear of the overlay. A distance readout is not
-required. Inventory following leaves highlights, checkbox selection, details and
-Refresh selected untouched. Its active identity stays retained off-window; ARIA
-detaches while the row has no element and restores when it renders again. Focus
-alone does not reveal that row or override Follow. Explicit navigation resumes
-from the retained position; only actual disappearance from the view clears it.
-Collapsing its parent counts as disappearance and clears Refresh selected's
-target. Manual scroll-away disables Follow even while pending work blocks row
-interaction; completion does not resume it automatically.
-PRESENTATION owns resolution and passive publication; M1_PLAN owns finite acceptance.
+### Review viewport, focus and navigation
 
-The Plan review renders its current bounded window in the compact file-row grid
-with exact 24-CSS-pixel rows and matching leading/trailing spacer offsets; the
-generic `tree.js` renderer keeps its separate 28-pixel contract. A Plan card
-shows the switcher at left, frozen source/target paths in two middle rows and
-Verify on/off and Trash/Additive in two lines aligned with the paths at right.
-These fixed-width semantic fields reserve their icon and label slots: Verify on
-uses accent `arrow-sync-checkmark`, Verify off uses muted `arrow-sync`, Trash
-uses muted `delete`, and Additive uses accent `document-add`. Text remains visible;
-the decorative icons use the pinned Microsoft Fluent assets, not substitute glyphs.
-Plan paths and semantic labels use 12px caption text. The semantic field is
-7rem wide, shifting its icon edge right to align optically with Plan again.
-A Status card shows selected/byte/planning-issue facts and execution controls;
-one table card owns search, the shared Filter menu and the grid, without a footer.
-While no reviewed plan is available, execution and replan actions are not
-actionable; a loading or unavailable panel cannot retain a previous task's
-enabled controls. Reusing the Plan panel also restores viewport resize
-observation so newly exposed rows reconcile without requiring a scroll gesture.
-Restoring the same focused Plan row after replacement preserves the viewport;
-moving keyboard focus to another row still reveals that target. Each scroll
-read settles its renderer-owned request even when its response is discarded.
-An unchanged failed viewport waits for viewport geometry or navigation to change;
-returning from Settings or restoring a hidden viewport can retry the same offset.
-Status and table cards use a 16 px top inset. The status
-progress bar is 8 px thick; the rail's progress remains 4 px. The Plan view switcher has
-a 6 px outer radius. At default (1280×800) and larger window sizes the natural-height
-Plan and Status cards leave the remaining work-panel height to the table card;
-the table's two-axis viewport scrolls. Search is a narrower right-aligned
-box with inset submit and Clear icons styled like Setup path-box controls.
-Clear restores input focus and immediately clears the query. Plan and Inventory
-share one ordinary-sized button with regular Filter and chevron icons and the
-caption `Filters · matching/total`. With no accepted count it reads `Filters`.
-Its inline counter shows matching/total items from the accepted summary, using
-the same population as All rather than counting active categories. Search affects
-the numerator; folding and scrolling do not. It stays neutral at All and uses
-the accent fill when categories are active. The popup reuses the existing menu surface and follows
-Microsoft's [checkbox menu guidance](https://fluent2.microsoft.design/components/web/react/core/menu/usage)
-for multiple filter criteria. Every canonical category has a checkmark and its
-authoritative count, including zero; All clears category settings. Inventory's
-All shows its default-visible item count, excluding acknowledged items; the
-button denominator includes acknowledged items so explicitly filtering for them
-retains the same total. The original toolbar/Search layout is unchanged.
-Stable items keep the popup open and focused through pending/settled updates;
-pending guards refuse another gesture without introducing a query queue.
-The popup has a bounded scrollable height within its owning work panel and
-viewport and opens above when more room is available there. Resize or scrolling
-outside the menu dismisses its old geometry; scrolling inside remains usable. Up/Down/Home/End navigate, Enter/Space toggle, and Escape closes
-and returns trigger focus, including while pending. The pending trigger remains
-focusable with aria-disabled and refuses opening. Outside pointer interaction,
-focus leaving, window blur/hidden document, context replacement and retirement
-close the popup and remove its document/window listeners. Panel reuse restores
-normal interaction. The Sync/Integrity outer corner radius
-includes its inset so it is concentric with the inner buttons. Status-card actions
-align right alongside the large status title, with an arrow-reset Plan again
-button before Execute. It stays icon-only when used to Check the original
-Plan-again outcome; its accessible name and tooltip follow that current action
-without replacing the icon.
-Below the short state headline, supporting facts and explanatory status occupy
-two logical lines to the left of Details. Status remains visible for ordinary
-guidance as well as actionable warnings, errors and in-flight feedback. Both
-use caption size and secondary foreground; long advice wraps without hiding
-important text in a tooltip. This follows Fluent's
-[concise content guidance](https://fluent2.microsoft.design/content-design) and
-[message guidance](https://fluent2.microsoft.design/components/web/react/core/messagebar/usage)
-to keep titles specific and messages readable without truncation.
-The progress track deliberately uses the ordinary button-rest translucent fill
-instead of Microsoft's stronger ProgressBar stroke resource. It composites over
-the card, without opacity on the whole control. Forced colors retain Canvas.
-Creating a Plan or Inventory switches immediately from Setup to its review shell.
-The shell shows Checking folders during admission, then Planning or Scanning
-after submission, with indeterminate progress and an empty table until the
-complete review is available. Filters and row actions stay unavailable during
-loading. Submitted folder text provides context until canonical reviewed paths
-arrive; it is not admitted evidence. Admission refusal returns to Setup. A delayed
-start retains Check outcome for the original delivery, and an unknown outcome
-stops animation while preserving its admission fence. Plan again keeps the old
-review until the newly created task is adopted, then selects the new task unless
-the user navigated elsewhere while launch was pending. Pair batches keep their coordinator.
-Ready, unexecuted plans remain idle; execution retains its progress authority.
-The production Plan grid orders Select, Name, Action, Checksum (empty), Size,
-Modified and Notes; Checksum and Modified share their default width. The
-gallery shares that column order. Dependency counts and `Risk: none` are omitted
-from Notes; actual risks and diagnostics remain. Size, Modified and Notes use
-the same tertiary text color (#616161 Light, #adadad Dark, CanvasText in forced
-colors); task-rail paths share it. The synthetic Plan root is omitted from the table. The Select
-header is the sole tri-state bulk control for all selectable operations
-matching the active search/filter query, not merely the
-loaded or expanded rows. Folder checkboxes target matching descendants;
-changing views alone never changes selection. Its outer two-axis viewport owns
-the stable gutter and thin-to-wide scrollbar styling; its sticky header remains
-visible above the rows. At the first visible loaded layout, production freezes the fitted
-non-Name widths; subsequent table growth goes entirely to Name. Hidden or
-disconnected rendering defers that snapshot, and panel reuse retains it.
-Production columns use the gallery's constrained pointer/keyboard resizing,
-with Notes yielding width. When Notes is already at its minimum, a positive
-fixed-column resize stays clamped until a deliberate reduction creates Notes
-space. Action's 6rem minimum is shared by its
-default track and pointer/keyboard constraints. Name, Size and Modified headers cycle
-ascending, descending, canonical path order with catalog chevrons; a different
-header starts ascending. Sort buttons fill the padded header cell, with the
-active chevron aligned right. Status and row
-byte labels use binary units with two fixed decimals from 1 KiB upward and exact
-integer bytes below it, while sort keys remain raw backend facts.
-Filter labels and counters occupy separate spans with a dedicated gap, never
-expanded word spacing. Menu counters align to the right edge. The Plan-again
-icon button is square. Plan and task-tab Source/Target labels use equal-width
-3.5em slots with a 2px gap so path starts align without excess spacing.
-Task-tab details, paths and progress end 18px inside
-the tab's right edge; title and close-button positioning remain unchanged.
+PRESENTATION owns full hierarchy/window/selection/sort/anchor policy; the page
+never infers it from displayed paths, adjacency or retained rows. Render only
+server-returned windows (at most 256 rows plus spacers), with exact row-height
+geometry, full layout-safe accessible labels and stale-owner refusal before payload
+adoption. Dispose controllers before removing roots so listeners/queued work retire.
 
-Plan action/filter labels use sentence case and friendly names:
-`noop` is **No change**, `mkdir` is **Create folder**,
-`rename` is **Rename**, `move_update` is **Move + update**, `trash`
-is **Move to trash**, and `delete` is **Delete**. Destructive confirmation and
-the irreversible risk detail remain unchanged. Plan projection classifies recase
-and pure same-parent moves as Rename; their row labels and Rename filter agree.
-Cross-parent moves remain Move, while Move + update stays distinct even in place.
-Item details and execution diagnostics retain the actual operation kind, including
-Recase. The single Filter menu retains
-all thirteen canonical Plan categories independently and their counters; the
-former grouped shortcuts are replaced by those explicit checkbox choices.
-The Notes policy is explicit and fail-visible:
+Tree root is one Tab stop using aria-activedescendant. Server position/parent/
+child metadata supports arrow/Home/End/Enter navigation across windows. Expansion
+state/disclosure exists only for a retained immediate child. Disclosures focus and
+request one expand/collapse without activation; labels activate. Covered scroll
+moves presentation focus to a visible row or clears ARIA until coverage, never
+domain activation. Keyboard/external targets reveal the whole row below the header.
+
+Scroll/resizes coalesce; compatible overlapping replies may adopt while preserving
+scrollTop, then reconcile remaining coverage. Keyboard/external requests retain
+exact intent. Failed/blocked reads settle without idle retry loops; later scrolling,
+hidden return or changed viewport can retry. An unchanged narrower page waits for
+new geometry instead of alternating edges. Settings/hidden render defers geometry;
+return can retry the same offset. No implicit minimum page width.
+
+#### Sorting, search and filters
+
+Headers Name/Size/Modified cycle ascending, descending, canonical; switching header
+starts ascending. Buttons fill padded header cells with active chevron right.
+Raw numeric size/mtime keys and complete siblings are server-owned; ties/unavailable
+handling, revisions and index/anchor rebuilding stay in PRESENTATION. Sorting never
+changes hierarchy, IDs, selection, collapse, execution scope/order or durable settings.
+Ordinary sort/reset starts at zero. No status/progress/global-flat sorting in M1.
+
+Search is narrower/right-aligned with inset submit/Clear; Clear restores focus and
+clears immediately. A fixed 150 ms trailing debounce remains editable during read:
+keep newest query behind the current request, including across retained task navigation.
+Search/filter do not mutate selection; stale success/failure cannot replace current view.
+
+Both panes use one ordinary Filters button with regular Filter/chevron and caption
+Filters · matching/total, or Filters until accepted counts. Counter uses All's
+population: search changes numerator, scrolling/folding do not. Inventory All
+excludes acknowledged rows but denominator includes them. All clears categories;
+all thirteen Plan categories stay independent with counts including zero.
+Trigger stays neutral at All and accent for active categories.
+
+Checkbox-menu items/counts stay stable/focused during updates; pending refuses
+gestures without adding a query queue. Scrollable popup clamps to work panel and
+viewport, opens above if room is better; label/count have a dedicated gap and
+right-aligned count. Up/Down/Home/End navigate, Enter/Space toggle, Escape returns
+trigger focus even pending. Pending trigger is focusable aria-disabled but cannot
+open. Outside interaction/focus loss/blur/hidden, outer scroll/resize or owner
+replacement closes and removes listeners; internal scrolling works, reuse restores.
+
+#### Sorting and automatic Follow
+
+Follow is eligible only in canonical order without search/filter, initially on for
+new eligible execution/ordinary integrity. It follows active or last-settled
+nominal subject/visible collapsed ancestor; linked Verify ends navigation at terminal
+and opens Inventory on release. It never changes selection or keyboard focus.
+Manual scroll-away or changed sort/search/filter disables it, even while pending;
+only explicit Enable resumes. Programmatic scroll, pause and task navigation do
+not silently change the choice. Repeated loaded-target progress does not reposition;
+explicit Go does.
+
+Go/Follow/move jumps use four leading rows, max(0, target index − 4), applied after
+rows/spacers mount and clamped at the end. Use target identity captured at click,
+not the next item. Retain last target between files; Gap, pane/phase/session change
+or terminal retirement invalidates stale intent. Excluded target/ancestors gets
+guidance, never fabricated row. Go changes neither filters/sort nor Follow choice.
+
+Float Go to current operation/item and Turn on autoscroll at lower-right 32 px
+insets: square icon-only targets, accessible names/tooltips, navigation-location-target
+and location-arrow. Go is ordinary neutral; Enable primary accent. Each has an
+opaque neutral wrapper in every interaction state, without blur/Acrylic. Rows remain
+scrollable clear. Enable appears only eligible/off; no active target means no jump.
+
+Inventory Follow leaves highlights, checkboxes, Details and Refresh selected alone.
+Off-window active identity stays retained while ARIA detaches; render restores it.
+Focus alone does not reveal/override Follow. Explicit navigation resumes there;
+real disappearance, including collapsing its parent, clears active/action target.
+
+### Plan columns, scope and operation labels
+
+Plan columns are Select, Name, Action, Checksum (empty), Size, Modified, Notes;
+Checksum/Modified default widths match. Synthetic root is omitted. The header
+tri-state selects the complete matching selectable population, not just loaded/
+expanded rows; folders use server-defined descendants. Dependency/safety closure
+remains workflow-owned. View changes alone never change execution selection.
+
+Plan ready is neutral for every built unexecuted Plan, not execution eligibility.
+Execute still needs nonempty executable selection and preflight. Strictly empty and
+filtered-empty views differ. Notes omit dependency counts/Risk:none but show actual
+risks. Size/time/notes use shared tertiary foreground. Binary labels have two fixed
+decimals from 1 KiB upward, exact integer bytes below; Modified uses local display
+without changing raw sort facts. Plan remains hash-free; any execution-owned evidence
+comes only from atomic ledger classification, separately labeled from current state.
+
+Friendly labels are No change, Create folder, Rename, Move + update, Move to trash
+and Delete. Recase/pure same-parent move display/filter as Rename; cross-parent
+Move and Move + update remain distinct. Details/diagnostics retain actual kind.
 
 | Input | Display policy |
 | --- | --- |
@@ -1626,948 +620,409 @@ The Notes policy is explicit and fail-visible:
 | Non-neutral risk, free-form notices, partial/overflow totals | Show unchanged. |
 | Any unrecognized or future reason/notice | Show verbatim as inert text; hiding never follows a broad pattern. |
 
-Known reason-code labels are translated only at rendering; backend facts,
-selection and execution authority remain unchanged.
+Known reason translation is display-only; unknown reasons remain inert and visible.
+Operation/ordinary-integrity overlays replace only one complete current generation;
+stale or missing facts never become fabricated planned paths/results.
 
-Prior groups start collapsed and show one clickable badge containing both the
-count (`N items moved to`) and compact destination in the filename area, with
-separate expand/collapse disclosure. Its 4 px corners and inner padding match
-the compact action badges; the badge starts slightly before the filename slot
-so its text aligns with ordinary filenames. Hover and press reduce only the
-purple fill opacity to 90% and 80%, retaining the text color and a visible
-keyboard focus ring. Forced colors use Highlight/HighlightText for interaction.
-Inventory uses the same collapsed/expanded chevrons as Plan, without rotating
-both the disclosure container and its chevron.
-The target parent is the destination even for a directory move.
-The destination label is a basename with an ellipsis prefix when ancestors are
-omitted, bounded to 255 UTF-16 units; its tooltip and accessible name use the
-same compact label. Full filesystem destinations are available in the highlighted
-group's item details. Use purple background/text:
-light purple badge fill with dark purple text in Light, dark purple fill with light
-purple text in Dark, and system colors in forced colors. Activation reveals the
-canonical destination, expanding its ancestors and clearing only obstructing
-search/filters. Root destinations jump to the first canonical moved item.
-The pill and its contents stay outside execution selection and totals.
-Canonical move rows append purple **moved from another folder** text after the
-filename. Move + update uses **previous location available in details**, including
-same-folder updates. Rename rows show **renamed from [previous name]** and have no
-prior-location groups. The browser renders projection-supplied classification
-and bounded prior basenames; it never hides rows or derives filter membership.
-Long Rename annotations ellipsize and retain their prior basename in a tooltip.
-Inline prior-location and Rename annotations have a 4 px gap after the filename.
-They use at most half the Filename cell so long origins leave the filename readable.
-If the destination's follow-up window no longer matches, retain the last coherent
-review and offer **Refresh review** with an explanation. A coherent conflict
-response aligns the viewport with the loaded offset before asking the user to
-click the destination again; obsolete task/navigation responses remain silent.
+#### Move and prior-location context
 
-Window display and notice labels are bounded to 300 UTF-16 units. A separate
-read for the highlighted node supplies complete original-case relative paths,
-its source/target origin, previous path, move destination and full notice without
-filesystem access. Item details join paths to the reviewed source or target root
-according to their supplied origin; previous paths and move destinations use the
-target root. Execution operation, automatic verification and the five supplied
-backup/mutation destination/prior/published/trash path fields also use that target
-root. The global trash location is already absolute. Joining is display-only,
-without filesystem probes or parsing diagnostic prose. Node, view, session, action, navigation and
-Close guards reject obsolete replies. Returning to a retained Plan reads its
-highlighted node again; retired paths never reappear from a cached detail.
-Reads never fan out across visible rows.
-Planned-detail loading or failure stays visible alongside execution-detail status.
+Prior groups start collapsed. One count/destination badge in Name is distinct from
+disclosure; 4 px corners/padding align with action badges, slight leading bleed aligns
+text. Light uses light-purple/dark text, Dark dark-purple/light text; hover/press
+reduce only fill to 90%/80%, with focus ring and forced-color Highlight pair.
+Disclosure shares Inventory's chevrons without double rotation.
 
-Row highlighting is distinct from execution selection. Pointer and keyboard
-gestures replace, toggle, extend, or add ranges in the complete server-owned
-ordered view; the visible 256-row window merely paints returned highlight flags.
-Checkboxes preserve a highlight and apply only to direct row contributions when
-the checked row belongs to a multi-highlight set. A singleton highlighted folder
-or a folder outside that set retains recursive scope; folder checkbox states
-continue to aggregate descendants. Plan dependency and safety closure remains
-workflow-owned. Search/filter changes clear highlighting, while
-scrolling, sorting and disclosure changes do not. The bridge carries compact
-gesture endpoints and expected revisions rather than row or operation arrays.
-The status tier says neutral **Plan ready** for every built, unexecuted plan.
-This is not an execution-readiness claim: Execute still requires preflight and
-a nonempty executable selection. Strictly empty plans have an explicit empty
-message, distinct from a filtered-empty view.
-Task tabs share the status digest, replacing the visible Task N title with the
-current lifecycle state. They show a shorter detail (selected operation count and required
-binary bytes), source/target paths or `-`, and an aggregate progress track.
-The title is semibold. Detail and path text uses compact caption line spacing;
-those rows and progress extend below the upper-right close button, ending at
-an 18px right inset to align optically with its icon. Progress has matching space above and below. Live task
-selection markers are 2rem, Settings is 1rem; the production-rail gallery shares them.
-Internal task identity is unchanged. Ready-plan progress remains inert; planning
-uses the indeterminate state described above. Execution progress
-comes only from the accepted progress reducer, never from selected rows.
-Production commands, validators, state, raw row facts, and window/anchor
-behavior remain active. Status/progress sorting, global
-flat sorting, and durable preferences are excluded from M1. Exact rules and
-acceptance live in [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow);
-the existing shell/tree witness does not close this new work. The active M1
-delivery plan owns sequencing.
+Destination is the target parent, even for directory move. Compact basename with
+ellipsis prefix is bounded to 255 UTF-16 units and shared by tooltip/accessibility;
+full destination is in Details. Activation reveals canonical destination, expands
+ancestors and clears only obstructing filters/search; target-root destination uses
+first canonical moved item. Badge/prior contents never enter execution totals/selection.
 
-Execute opens a Fluent smoke confirmation dialog whenever the workflow reports
-selected destructive operations. The dialog states the replacement/removal
-consequence and selected count, with Cancel and Confirm and execute actions.
-Its paragraphs use a 16 px separation and the action row uses a 24 px separation.
-There is no persistent consent checkbox. Non-destructive selections submit
-immediately. Request/revision binding and admission recovery are owned by
-[BRIDGE](BRIDGE.md); the dialog grants no separate lasting authority.
+Canonical Move appends moved from another folder; Move + update says previous
+location available in details, including same-folder updates. Rename shows renamed
+from [previous name], has no prior group, elides annotation with prior-name tooltip.
+Annotation gap is 4 px and at most half Name width so filename remains readable.
+Projection supplies classification/labels; browser does not derive membership.
+Changed destination window keeps coherent review and offers Refresh review; a
+coherent conflict aligns loaded viewport before asking another click. Old owners stay silent.
 
-The native HTML dialog uses `showModal()` and existing `.nami-dialog` material
-and motion. The app and theme-popup roots remain inert through the exit
-transition: pointer, wheel, keyboard and focus cannot interact with the page
-behind the smoke. Backdrop gestures are consumed; the page scroll lock retains
-and restores the prior inline overflow value and priority, while the dialog can
-scroll within a short viewport. Initial focus is Cancel; Tab
-stays within the dialog, Escape cancels, and closing restores the invoking
-control's focus when it remains available. Confirm is single-shot and begins
-admission immediately. Cancel before submission leaves the review editable;
-delayed submission instead offers read-only Check and disables selection and
-Close until admission truth is recovered. Shared reduced-motion and
-forced-color rules apply.
+#### Highlighting, Details and confirmation
 
-Closing has no minimum observable duration. The installed task-shell correctness
-scenario arms a finite tests-only animation before trusted confirmation so the
-native driver can test background input during closing, then completes that
-animation after recording the witness. This barrier does not alter product code
-or measure latency. Transient closing attributes must not be treated as durable
-readiness; the production zero-motion path may finish after a single frame.
+Highlight is independent of execution selection. Pointer/keyboard replace/toggle/
+extend/add ranges in full server order. A checkbox in a multi-highlight set applies
+direct row contributions; singleton/outside-set folder stays recursive, with
+descendant checkbox aggregation. Search/filter clears highlight; sort/scroll/
+disclosure does not. Gestures send endpoints/revisions, not browser-owned row arrays.
 
-Plan-again availability follows the same app-owned eligibility rule as dispatch,
-including loaded Setup readiness, pending attempts and batch/close blockers.
-The control remains disabled while those prerequisites are unresolved; an
-unsubmitted gesture never displays a completed-request message.
-Plan-review layout rules honor HTML hidden state, including the loading toolbar,
-status actions and inactive execution controls. An unbound review exposes no
-actionable controls.
-If a Plan load fails, the task card directs the user to select it to retry.
-Selecting that eligible task retries Plan loading as well as Setup; repeated
-selection shares an in-flight load and an already current review remains cached.
-Successful recovery clears the error and restores the exact reviewed task.
+Display labels/notices are bounded to 300 UTF-16 units; the highlighted node gets
+one complete detail read, never fan-out. Original-case paths/digests remain copyable.
+Join supplied origin to reviewed root only for display; prior/move and execution
+backup/mutation/prior/published/trash fields use target root, global trash already
+absolute. No filesystem probe or diagnostic-text parsing. View/session/action/Close
+fences retire old details before replies; returning to Plan reads highlight anew.
+Planned-detail loading/failure stays visible alongside execution-detail status.
 
-The component gallery includes a Preview destructive confirmation button. It
-opens this same production dialog with a sample count of 13; Cancel and Confirm
-only dismiss the preview and report that no files changed. It stays closed at
-rest, so the gallery remains available for inspecting other components. The
-installed light/dark/forced-color/reduced-motion gallery witness exercises both
-dismissals, background inertness, native wheel blocking and focus restoration alongside the existing
-material matrix.
+Destructive workflow count opens the shared smoke dialog, explains replacement/
+removal and selected count, with Cancel and Confirm and execute. Paragraph gap is
+16 px, action gap 24 px; no persistent consent. Non-destructive selection submits
+immediately. showModal, existing material/motion, app/popup inertness and scroll lock
+remain through exit; restore prior overflow/value/priority. Dialog can scroll short
+viewports. Cancel initially focused; Tab contained, Escape cancels; restore invoker
+only if available. Backdrop pointer/wheel/key gestures do not reach background.
 
-A scroll page settles the viewport snapshot that requested it. If that snapshot
-is unchanged and the page is narrower than the viewport, the renderer waits for
-a later viewport change rather than automatically alternating missing edges.
-A changed viewport is reconciled after the response, including a response now
-outside the viewport;
-the owning view is not subject to an implicit minimum page width.
+Confirm is single-shot/start admission immediately; Cancel before submission keeps
+review editable. Delayed admission offers Check and fences selection/Close. A
+tests-only exit-animation barrier proves background blocking, not product latency;
+zero-motion may close in one frame. Preview uses the same dialog with no effects,
+not a second production command. Plan Again eligibility follows dispatch blockers;
+an unsubmitted click never displays a completed-request message.
 
-The Slice 4 frame has two labelled structural regions beneath the header: task
-navigation stating that no tasks are available and a work region stating that
-no task is selected. Landmarks are not gratuitous tab stops; the first real
-tree is the operable widget. The completed clean-installed-wheel SH-G-7 run uses
-native keyboard events, platform accessibility inspection, native 200% WebView
-zoom, and forced-colors emulation against production assets. It verifies focus order and visibility,
-usable stacked reflow without horizontal overflow, system-color focus,
-exact layout-control markers with no surviving active controls, unchanged
-ordinary hostile/Unicode and long labels, raw callback ids through `tree.js`,
-exact 28-pixel rows, no more than
-256 rows plus two spacers, and stale-generation refusal. Python is the sole
-validation/window authority and emits the exact renderer view. One canonical
-temporary JSON manifest is produced through the real workflow tree,
-visible-sequence, window, and wire-view functions; the direct Node probe and
-installed WebView2 child consume those same bytes, and Python, child, and page
-SHA-256 values match. Its cases cover the `head`, `next`, `tail`, `empty`,
-`maximum`, and `layout_control` views, expansion tri-state across the pointer
-and projected-empty views, and ordinary-Unicode and long-label values carried
-by `next`.
-The real workflow fixture uses representative admitted layout controls; the
-exhaustive fixed-set sink probe is renderer-local because C0 characters are not
-valid Windows filename input. JavaScript does not duplicate structural
-validation. Before removing a tree root, its owner disposes the controller;
-that idempotently disconnects resize observation, removes controller-owned root
-listeners, invalidates pending work, and makes an already queued frame inert.
-The manifest remains test-only and absent from the wheel. This
-evidence adds no bridge
-command or synthetic domain state. Slice 5 remains the first real plan surface.
+### Shell layout and Settings
 
-The window bounds the shell to its viewport. Task items scroll independently
-between the rail header and the full-width Settings button at the bottom;
-work content has its own scrolling area. The compact New task icon is centered
-beside the Tasks heading. Live task text has a 20 px leading inset, while the
-Settings control keeps its own 16 px inset. Task text has additional left
-padding.
+Viewport bounds shell; tasks scroll independently between Tasks/New task and the
+full-width bottom Settings button; work area scrolls separately. Landmarks are
+labeled, not gratuitous tab stops. Empty navigation/work explain no task selected.
+After first authoritative enumeration create one blank task only if no mutation or
+creation overtook it, once per document. Last Close then leaves empty work with
+ordinary New Task button sharing the top Create's pending/recovery state.
 
-Settings is an ordinary scrollable work-area page with three cards: Setup defaults,
-Appearance and About. Setup defaults exposes the existing supported task options,
-including automatic execution verification, with unavailable ADS preservation
-disabled. Exclude filters use individual Add/Remove actions and preserve each
-pattern's exact spelling. Only explicit Save defaults writes the changed fields;
-unchanged fields are omitted from the patch. Reading the page retains unsaved
-fields while refreshing untouched defaults. The footer keeps advisories on the
-left and Save defaults on the right of the same row. The button reserves the row
-height when the ordinary unsaved advisory is absent. Reads and saves are serialized
-and disable editing until they settle. A delayed save stays pending; an unconfirmed
-save offers Read current defaults before another explicit save and never replays
-the earlier write. A successful current-state read does not claim that the earlier
-save succeeded. Existing task drafts and captured plan choices remain unchanged.
-Appearance contains only the existing Theme selector. About shows `0.1.0 "Gertrud"`
-with separate License and Open source acknowledgements buttons. Their default
-appearance has no underline. Their neutral hover/pressed surfaces follow the
-[WinUI HyperlinkButton resources](https://github.com/microsoft/microsoft-ui-xaml/blob/main/controls/dev/CommonStyles/HyperlinkButton_themeresources.xaml)
-with `accentTextFill` retaining the same text color through hover and press,
-plus normal keyboard focus. Forced colors retain the system link color.
-Each opens a read-only native modal with the shared dialog material and motion.
-License presents the existing GPL text; acknowledgements present locally packaged
-notices for the current Windows dependencies and derived/bundled assets, with
-version and source attribution. The NamiSync license uses the repository's
-LF-pinned LICENSE bytes and matching SHA-256; its static embedded record is
-maintained explicitly. Packaged JavaScript is compared with checkout bytes
-without newline normalization. Text is selectable and internally scrollable;
-Close stays outside the scrolling region. Close and Escape dismiss, restore the
-available invoking button and preserve background inertness and page scroll lock
-through exit. Source URLs are inert text, and opening notices performs no remote
-load or navigation. The body uses the existing shared scrollbar treatment.
-The installed gallery exercises both contents, native Tab/wheel/Escape/Enter,
-selection, fixed Close, background blocking and focus restoration in its four modes.
-Opening Settings preserves task identities, drafts, activity and closure state.
-Background task updates do not navigate away from Settings. Clicking a task
-returns to it; an unraced successful New task action opens its new task.
+Rail is a transparent Mica seam, without border/shadow. Resting unselected cards
+transparent; hover/current share neutral overlay, press weakens it. Live current
+cards keep 3 px × 2 rem (32 px default) accent marker; Settings marker is 1 rem.
+Task text leading inset 20 px, Settings 16 px. Sibling select/dismiss buttons never
+nest; dismiss transparent at rest, task-card interaction fills, contextual Close/
+Retry accessible name. Forced-color enabled current cards use Highlight/HighlightText
+and opposing marker; disabled GrayText; focus stays visible. Current selection is
+explicit aria-current/selected, not inferred from running state.
 
-The rail itself is a Mica seam: it has no card background, border, or shadow.
-A resting unselected task card is fully transparent. Hover and selected/current
-rest use the same neutral selection overlay; press temporarily weakens it. The
-live rail's selected navigation button exposes `aria-current="page"`; the
-gallery's `aria-current="true"` and `aria-selected="true"` variants retain the
-same component treatment. Live selected/current cards retain a 3 px wide, 2 rem tall
-(32 CSS px at the default root size) sampled-accent marker,
-so hover never erases selection. Task cards have no painted border or elevation
-in ordinary themes. Each live card spans the rail column with a dismiss icon
-inset at the right; selection and dismissal remain sibling buttons, never nested
-interactive controls. Dismiss is transparent at rest and uses the task-card
-hover/press fills, with contextual accessible Close/Retry naming and the existing
-pending-close availability rules. In forced colors,
-every enabled selected/current card pairs the `Highlight` surface with
-`HighlightText` and an opposing marker; disabled cards retain `GrayText`, and
-keyboard focus retains a system-visible outline. Selection is conveyed
-with `aria-selected`/`aria-current` and is not
-inferred from a task's running status.
+Cards show current status digest rather than visible Task N, compact operation/
+binary-byte detail, source/target paths or -, and progress; internal ID is unchanged.
+Labels reserve 3.5 em tracks with 2 px gaps, detail/path/progress end 18 px inside
+the right edge below close, with equal progress spacing. Subject-only activity never
+invents a source→target pair. Ready Plan progress is inert, planning indeterminate,
+execution uses authoritative progress, never selected rows. Stable card elements
+stay attached during same-order repaint so trusted press/release survives.
+Rail keeps its 18 rem cap, compact 14 px headlines and one-line path/detail text;
+headlines may wrap at native minimum instead of forcing horizontal overflow.
 
-Background/content cards are a separate static component role with 1.2px outlines.
-They do not react to hover or press. Light uses a solid `#EBEBEB` stroke fallback beneath a
-black 6% blended stroke and a white 70% primary fill; Dark uses a solid
-`#1C1C1C` fallback beneath a black 10% blended stroke and a white 5% primary
-fill. The token foundation also retains the supplied secondary and tertiary
-blends for state/context use. Forced colors replace these material blends with
-opaque system surfaces and boundaries.
+Settings has Setup defaults, Appearance and About cards. Explicit Save defaults
+patches only changed supported options; excludes Add/Remove preserve exact pattern
+spelling and ADS stays unavailable. Reads preserve unsaved edits while refreshing
+untouched values; reads/saves serialize and disable editing. Footer advisory left,
+Save right with reserved row height. Delayed save stays pending; unconfirmed save
+offers Read current defaults before another explicit write, never replay or claimed
+settlement. Existing drafts/frozen Plan-again choices remain unchanged.
 
-The accepted rail presents process-live adapter tasks, not dispatcher history.
-A task may outlive its serial sessions but is not durable across application
-restart. Task enumeration/detail observes the rail and selected pane during
-same-document navigation. Cards show truthful activity, scope, phase, progress,
-and terminal headline; subject-only work never fabricates a source-to-target
-label. Exact task/result revisions and named-generation rules are bridge
-authority.
+Theme uses the appearance contract above. About shows version/nickname, License and
+Open source acknowledgements, no resting underline; shared neutral hover/press with
+unchanged accent text and keyboard focus/system link colors. Each opens read-only
+native modal with shared material/motion, selectable scrolling text and fixed Close.
+GPL bytes remain LF-pinned and exact; notices cover current packaged dependencies
+and derived assets. URLs are inert; no remote load/navigation. Close/Escape restore
+available invoker and background inertness through exit. Task navigation/drafts/
+activity survive Settings; background updates never navigate away. An unraced
+successful New task opens its task; clicking a task returns to it.
 
-M1-4 activates task page creation, selection/navigation, rail interactions, and
-explicit closure. The rail is newest-first, keeps stable process-local labels
-and card elements across re-observation of published blank,
-active-session, and terminal/released tasks within the current document.
-Refreshes keep rows attached when task order stays the same, so a press on a
-retained task control can complete. Page bodies now show editable or frozen
-Setup; review, execution and inventory
-content await their owning checkpoints. Task identity, activity/terminal state,
-and pending/failed close remain truthful and observable; this slice does not
-prebuild those later content projections. Stale create, close, list, and drain
-responses cannot replace current-generation state or steal a later selection.
+### Live execution controls
 
-An accepted pause renders **Pausing…** until custody actually reaches
-**Paused**; repeat pause/resume is disabled during the drain and cancellation
-remains available. Terminal presentation releases only that exact session while
-review artifacts remain.
+Pause/Resume, Cancel, Refresh and Baseline dropdown use square 32 px targets.
+Pause is icon-only neutral Regular Pause; authoritative Paused becomes accented
+Filled Play Resume. Accessible action/tooltip follows state; waiting/pausing disables
+repeat but keeps Cancel. Pausing remains Pausing until actual Paused settlement.
 
-A planning session that exceeds a review limit produces no Plan. Its task card
-and panel show the limit named by the terminal result, and the panel directs the
-user to create a task with a smaller folder pair. Re-selecting that task retains
-the explanation. A saved Plan blocked by preflight still opens for review.
+Cancel is neutral Regular Stop. First click arms accented Filled Stop for a
+monotonic five-second deadline; second submits. Arming does nothing to execution,
+renders do not extend it. Expiry, leave/retire, unavailable control or submission
+disarms; expiry timer changes only that button.
 
-Pause/Resume, Cancel, Inventory Refresh and the Baseline dropdown use square
-32px targets with centered glyphs.
+Control attempts belong to exact task/session through refresh, with no duplicate
+request. Authoritative control/terminal/session state supersedes old replies;
+byte ticks do not erase refusal. Lost updates disable controls and offer one Retry
+updates even before review or during Close. Last truth stays visible—lost updates
+do not prove stopped work. Retry observes same session, never restarts it; controls
+wait for validated recovery. Terminal/release retries and original Close Check
+remain distinct, with unresolved Close's fence first.
 
-Execution uses one stable icon-only Pause/Resume button with an accessible
-action name, tooltip, Regular Pause and Filled Play artwork. Running Pause is
-neutral; authoritative Paused switches it to accented Resume. Waiting and pausing keep the button unavailable
-while existing lifecycle feedback remains truthful. Cancel is an icon-only
-neutral button with Regular Stop artwork, an accessible name and tooltip.
-Its first click arms an accent fill with Filled Stop for
-five seconds; a second click within that monotonic deadline submits cancellation.
-Arming does not submit a command. Ordinary renders never extend the deadline;
-expiry, task/session replacement, unavailable controls, leaving the panel and
-submission disarm it. The expiry timer changes only the Cancel button.
+### Close and uncertain outcomes
 
-Execution-control attempts belong to the task and session across review refreshes.
-A replacement review retains pending and relevant accepted/refused/uncertain
-feedback, without allowing a duplicate request. New authoritative control state,
-terminal or replacement session wins over obsolete replies; ordinary byte-progress
-ticks do not erase a refusal. If task updates stop, disable Pause/Resume/Cancel
-and expose one task-card **Retry updates** action, including before review loads
-or while task Close is pending. Keep last-known execution truth: lost updates
-are not proof that work stopped. Retry restores observation of the same session;
-it does not restart work. Controls remain unavailable until recovery delivery
-is validated. Terminal display/release failures reuse their distinct retries.
-An unresolved Close keeps its original-result Check and fence ahead of observation recovery;
-a pending Close can finish after recovered terminal delivery.
+Busy Close says Closing, requests cooperative cancellation and retains the task
+until settlement/release. Incomplete Close stays actionable, never domain retry or
+force-close. Close/publication fault retires rail/panel/tree generations before
+clearing cached values. Task Close never purges trash. Terminal retry/Verify remaining
+and explicit session cleanup remain M2; ordinary owned-temp/read/operation retries
+and pause/transport/shutdown recovery keep their separate policies.
 
-Closing a live task renders
-**Closing…**, immediately requests best-effort cooperative cancellation, and
-stays visible until cancellation settlement and resource release permit close.
-An incomplete close remains actionable through close/shutdown recovery; this
-does not retry the domain operation. There is no force-close
-path. Close and publication-fault observations invalidate rail, panel, and
-affected tree request generations before clearing cached data, so detached old
-responses are inert before payload read.
+Mutation delay is availability feedback, not timeout cancellation. After five seconds
+qualify original-result waiting. Failed observation says Outcome unavailable and
+offers read-only Check; fixed unreadable final result says unknown/invalid_result
+with close/reopen/fresh-review guidance. Acknowledge native bytes for cleanup without
+lifting its intent fence; an impossible recovery does not get a fake Retry button.
+Healthy pending stays pending; if delivery already failed, request explicit Check.
+Late original promise is sole adopter and cannot repeat confirmation or navigation.
 
-Mutation response delay is availability feedback, not an operation deadline.
-After five seconds, qualify the wait for the original result; finite failed
-observation qualifies communication as **Outcome unavailable** and offers a
-read-only Check, with normal application close/reopen and current-state review
-as a fallback if communication remains unavailable. A matching unreadable final
-response is noncheckable fixed-unknown, with an `invalid_result` diagnostic and
-close/reopen guidance. Native cannot repair its retained bytes; acknowledge them
-for cleanup while preserving the intent fence. A healthy pending response remains pending when the
-bounded round ends. If direct delivery already failed, explicitly ask the user
-to Check rather than claiming to await an automatic response. Still-live delivery
-can update its owner through the original promise, which remains the sole adopter.
-For the eleven protected commands in
-BRIDGE, keep the original intent and relevant task/session/revision fences until
-its outcome is resolved. A captured final response that cannot establish the effect
-keeps the intent fence with close/reopen and fresh-review guidance, without a
-Retry button that cannot recover anything. An unresolved Close blocks new starts
-and replacement tasks. Folder choices remain local: editing, clearing, mount or
-recent-choice replacement invalidates older admission replies; Start/batch uses
-only the latest resolved choice. One live native picker remains separately owned.
-View, highlight and theme use authoritative current-state Refresh, with revisions
-and generations preventing stale adoption. Current state does not prove an old
-effect settled. These five commands do not keep original-outcome fences, and
-their uncertainty alone does not block unrelated Close or controls.
-Check cannot submit another mutation. Late adoption repeats no confirmation
-and does not change current navigation.
-Successful pending Close and live session observation retain their separate
-settlement paths. D4 highlight/focus remains independent of execution selection.
-After a captured noncheckable review response, a user may still Cancel the same
-active execution if the unknown action was not Cancel. Its separate control
-attempt retains its own outcome and observation Check while the original review
-warning remains. This exception does not reopen in-flight protected review work,
-or repeat an unknown Cancel. After a fixed review/control error, explicit Close
-is available when the retained review identifies the exact native task/session
-pair; native cancellation and settlement own that cleanup. It does not resolve
-the earlier unknown outcome. Unknown starts, execution admission, release and
-Close remain fenced. Disabled Close gives the same action-guiding reason
-enforced by its handler.
-An uncertain execution admission also keeps its retained execution handle's
-guidance visible in Plan review, including after the review is reconstructed.
+BRIDGE's protected effect commands retain task/session/revision and original-intent
+fences; uncertain Close blocks starts/replacement. Current-state view/highlight/theme
+Refresh has its own generations, not a sticky original-outcome fence; current state
+does not prove an old effect settled. Folder edits/clear/mount/recent changes retire
+older local admission replies; only one native picker stays owned. Check never mutates.
 
-Task closure never purges trash. User-invoked session cleanup and terminal
-execution/verification retry actions, including **Verify remaining**, are
-deferred to M2. Existing automatic owned-temp recovery, bounded operation/read
-retries, pause/resume, transport replay, and shutdown recovery remain unchanged.
-A forced process exit cannot wait for settlement and provides no durable live
-task or resume promise; later work starts from fresh observation and review.
+A fixed unknown review does not prevent separately canceling the exact live execution
+unless Cancel itself was unknown; retain both warnings/attempts and do not repeat
+unknown Cancel. Explicit Close after a fixed review/control error still needs the
+exact native task/session and cannot resolve the old outcome. Unknown start,
+execution admission, release and Close remain fenced; disabled Close explains why.
+Retained execution-admission guidance survives review reconstruction.
 
-Normally completed linked execution/verification retains read-only file lists,
-item status, and each phase's aggregate status. Retained executions with successful
-copied targets may start ordinary Verify copied after release. Non-stopping
-degradation retains that same review experience with visible issue axes, without
-item retries. Canceled or otherwise abnormally terminated sessions retain their
-terminal truth for review and close, without resume, retry, or session cleanup.
-Paused live sessions retain their existing controls.
+### Retained execution and issue presentation
 
-M1 execution review is active in the existing Plan pane. The execution header
-and every row come from one coherent bounded Plan window; live update bursts
-coalesce into one selected-window read at a time, while a hidden task keeps only
-a dirty marker until it is selected. The browser never builds a complete result
-map. Every read is pinned to the task, session, reviewed request, view action and
-execution revision; Settings navigation, task navigation, document retirement, Close and
-replacement generations make older replies inert. Terminal release explicitly reopens the retained Plan
-truth. The task rail may use the exact terminal session result immediately so a
-known failure or degradation cannot remain labelled as green completion while
-retained capacity counts are still being captured.
+Normal completion retains file lists, item and phase status for read-only review;
+successful copied scope may be ordinarily verified after release. Non-stopping
+degradation keeps review with independent issue axes, without resume/item retry.
+Canceled/abnormal retained truth does not imply restart/domain retry. One coherent
+bounded Plan window supplies execution header/rows; bursts coalesce selected-window
+reads, hidden tasks retain summary rather than full browser results.
 
-Rows present the operation result, automatic linked verification, recording
-state and current stored evidence as independent axes. In linked Verify, a
-successful copy or update awaiting its verification result shows **Pending**
-until progress or a result is available for that row. Linked Verify uses the
-Plan's existing filters and keeps their Filters button visible and disabled
-in the shared toolbar so Search stays in its usual position. Structural operation
-containers may carry projected rollups without pretending to be a detail
-subject. Missing means unknown, and a successful zero-byte operation is still
-reported as ran. One explicit row action may load full operation detail; the
-pane retains only that one response and retires it when its operation identity
-or execution revision changes. Hostile detail remains inert text. Producer and
-presentation omission counts, recording issues, terminal filesystem/integrity/
-audit axes, phases, errors and observed Gap history remain visible after
-settlement. Capacity guidance uses yellow in the aggregate run header and task
-rail only when the retained counts, terminal axes and active-result identity
-prove that classification. Independently, an operation row that itself failed
-for the exact disk-capacity reason uses the yellow capacity lifecycle. The row
-still says Failed, keeps the capacity reason, and preserves independent
-verification, recording and stored-evidence facts. It does not inherit or
-reinterpret the aggregate result. Unknown, stale, generic or mixed aggregate
-failure evidence remains red and never masks an independent operation,
-integrity, recording or audit failure; each row continues to show its own facts.
-Plan/execution and Inventory status cards share `statusTitle`, `facts` and
-`status`: a short state headline, supporting facts, and an explanation or advisory.
-Plan/execution facts show selected a of b, required space and planning-issue count
-before execution; phase, item progress, percent, throughput and ETA during it;
-key terminal outcomes afterward. Execution and terminal information replace
-stale plan facts. Unknown totals/rates/ETA remain unavailable rather than being
-invented; presentation estimates do not become durable execution facts.
+Execution row lifecycle, automatic verification, stored evidence, recording and
+audit remain independent. A copy awaiting its verification is Pending, not verified;
+settled verification cannot restart the copy lifecycle. Aggregate capacity yellow
+needs exact retained result proof; an individual capacity-failed row independently
+says Failed in yellow. Mixed/unknown/generic failure stays red, with no hidden
+integrity/recording/audit failure. Location-only trash text claims neither existence,
+total nor purge; richer typed I/O reasons remain later work.
 
-The status title and primary action share one row at the native minimum width;
-active controls may occupy the next row. Facts and status occupy two logical
-lines on the left of the Details disclosure. Long advice wraps rather than
-being truncated, including at the native minimum width. Progress follows them. The shared
-card is used by Plan, live and
-terminal execution; the same presentation remains available to a future Verify
-view without implementing that view here. Details starts collapsed on a new app
-launch. One work-panel-owned disclosure flag is shared across Plan and Inventory,
-task navigation, Settings and new tasks until the user changes it. It is not
-persisted; sharing visibility never shares item facts or bypasses their retirement.
-Its optional
-right column spans Setup, status and table, capped at 20rem and 40% of the
-available width. Hiding it returns that width to all three central cards.
-Two stacked cards scroll independently: global plan/execution diagnostics,
-the supplied detailed status and action messages, nonzero canonical plan-action
-counts, issues, omissions and trash location above the highlighted item's facts.
-The item card receives two parts of the available card height to the global
-card's one, preserving independent scrolling.
-Action recovery and Gap guidance also remain visible in the central status card
-while Details is hidden. This
-uses the supplemental, simultaneous-interaction pattern in Microsoft's
-[inline drawer guidance](https://fluent2.microsoft.design/components/web/react/core/drawer/usage).
-The task rail keeps its 18rem cap and narrows in smaller windows while retaining
-tab, path-label and close-control alignment. Rail detail stays on one line with
-ellipsis for overflow; selecting the task exposes ordinary status and Details.
-Execution refusal uses concise retry guidance in the rail. Recovery guidance
-points to its actual rail control when a short instruction is known; otherwise
-the original message remains, with its full text in the detail tooltip.
-Headline text may wrap at its normal font size. Installed gallery observations
-at 14px show all four sampled headlines on one line in a 288px rail; at the
-238.429px native-minimum rail, “Execution completed with issues” wraps to two
-lines. Detail stays on one line at both widths. The
-item pane always exists while expanded and prompts for a highlight when none is
-active. The server-owned highlight focus, including the last focus in a range,
-chooses the item; a row click does not force a deliberately collapsed pane open.
-Checkbox selection remains independent. Planned facts include supplied size,
-Modified time, positive dependency count and applicable selection/folder totals;
-they never infer a missing planned path. Action and reason lead the item facts;
-available operation outcomes and recording replace the leading planned claim.
-Distinct automatic verification and stored-evidence facts remain below. Paths
-and complete digests occupy full-width label/value rows; other metadata stays
-columned at a 1:1.5 label/value ratio. Thin neutral dividers follow Microsoft's
-[Fluent divider guidance](https://fluent2.microsoft.design/components/web/react/core/divider/usage)
-and separate the title,
-action/reason/recording block, paths and remaining metadata. Inventory files group
-presence, path, checksum/observation/result/combined recording, attested facts,
-observed facts and observation/verification dates in that order. Conditional
-missing, acknowledged, reappeared, unsupported and invalidation facts remain
-visible when applicable. Folders put path before complete scope and observed
-metadata, omit observed size and file-verification facts, and show the scope
-advisory only alongside eligible Acknowledge all/Restore all actions. Source and target paths share the same
-formatting and joining infrastructure. Only reviewed source observations supply
-an operation source path, preserving its spelling independently of target casing
-or normalization; target-only, unsupported-without-source-evidence, structural
-and prior-location subjects do not infer one. Ordinary detail omits the operation ID
-and has no sticky shaded title or per-row Details/Close buttons. The whole area
-collapses while retaining the table view, selection, highlight and scroll, and
-focus returns to the disclosure when hidden content held it. No separate card
-or reserved blank diagnostic row sits below the table. Headline failures,
-independent degraded outcomes and issue/Gap indication remain visible when
-folded. Trash is location-only, with no existence/count/purge claim.
-Terminal detail includes a concise outcome, local completion time when known,
-and nonnegative elapsed wall time from the matching session's end and start;
-null or invalid timing is omitted, and overlapping error categories are never
-summed into an invented total.
-UI dates use local `yyyy-MM-DD HH:mm` for Plan, Verify and Inventory Modified
-values, Inventory Modified hover text, terminal completion and detail dates.
-Missing dates retain their existing blank, omitted or Unavailable presentation.
-Machine values and operation diagnostics retain the original values. Sorting
-and elapsed time use those values at full precision.
-The default/minimum windows remain 1280×800/1024×640; Details preserves the
-bounded table viewport and its virtual scrolling at both sizes. The global and
-item cards wrap long text and retain separately reachable scrolling and focus.
+#### Status card and Details layout
 
-[M1_PLAN](M1_PLAN.md#m1-8-execution-review-closure) owns M1-8 delivery status and its finite
-acceptance. The superseded `76f9281` allocation and its rejected layout evidence
-are historical in [the recovery archive](obsolete/M1_8_U_RECOVERY.md).
+Status title and primary action share one row even at native minimum; active
+controls may wrap to the next. Facts/status occupy two logical caption/secondary
+lines left of Details and wrap long advice rather than tooltip/truncate it. Progress
+follows. Status/table top inset is 16 px, status bar 8 px, rail bar 4 px, Plan
+switch radius 6 px. Natural-height cards leave remaining default/larger viewport
+space to the scrolling table. Sync/Integrity outer radius includes its inset.
 
-On `review-publication-protocol-failed`, the pane keeps prior settled review
-truth, clears the faulting live row decoration, disables mutating actions, and
-shows: **NamiSync could not publish this review safely. Close the task and try
-again.** Event drain and exact release continue for custody, but queued events
-cannot repopulate the discarded generation. The issue remains visible after
-release until task close. Fault precedence, phase mapping, disposal, and
-allowed operations follow this document and [INTERFACES.md](INTERFACES.md).
+Before execution show selection/required space/planning issues; during work show
+phase/items/percent/rate/ETA; terminal facts replace stale Plan claims. Unknowns
+stay unavailable. Details starts collapsed per app launch, with one nonpersisted
+visibility choice across Plan/Inventory/tasks/Settings; visibility never shares facts.
+Optional right column spans Setup/status/table, capped 20 rem/40%, restoring width
+when hidden. Global/item cards scroll independently with 1:2 height allocation and
+minimum-height chain. Recovery/Gap guidance stays central when Details is hidden.
 
-The browser retains only one accepted byte-fitting tree window for the selected
-pane. It never keeps a hidden complete plan/inventory list and never receives
-`OperationResult.items` or transient operation hashes. Retention exhaustion
-guides the user to close a task or wait for retry state to expire. A tree
-population refusal instead guides them to narrow roots or resolve scan/preflight
-problems; an initial refusal has no partial tree and a replacement refusal keeps
-the prior complete tree. Exact budgets, hard-wall precedence, omission
-witnesses, paging, generation pins, and close/release reservations remain
-bridge/defense authority.
+Global Details contains current diagnostics/action messages, nonzero action counts,
+issues/omissions and location-only trash. Highlighted item Details uses action/reason
+first, then actual operation/recording, separate automatic/current evidence, full
+paths/digests and applicable metadata. Planned and execution detail loading/failure
+remain independent. Neutral fact labels use tertiary text; local display/time
+formatting never alters exact stored facts. Hiding Details restores focus if inside.
 
-Plan and inventory windows carry the complete server-owned generic row frame.
-The browser passes identity, hierarchy, accessibility position, expansion, and
-revision authority through without inferring them from paths, adjacency, or the
-currently retained rows. A raced read is rejected rather than splicing
-generations.
+The expanded item pane always exists, prompting for a highlight when absent;
+click does not reopen a deliberately collapsed pane. Paths/digests use full-width
+rows, other metadata 1:1.5 label/value columns with thin neutral group dividers.
+Inventory file groups are presence, path, checksum/observation/result/recording,
+attested facts, observed facts, dates; applicable missing/acknowledged/reappeared/
+unsupported/invalidation facts remain. Folders put path before scope/object facts,
+omit observed size/file-verification facts, and show folder advisory only with
+eligible visibility actions. Only reviewed source observations supply operation
+source paths; never infer them for target-only/structural/prior/unsupported subjects.
+No ordinary operation ID, sticky shaded title, per-row Details/Close or reserved
+empty diagnostics strip. Fold keeps view/selection/highlight/scroll and essential
+issue/Gap/degradation guidance. Terminal time is matching-session local completion
+plus nonnegative full-precision elapsed; invalid/null timing is omitted, overlapping
+errors never summed. UI dates use local `yyyy-MM-DD HH:mm` consistently for rows,
+hover, completion and detail, without changing machine/diagnostic values.
 
-Sync is a serial task interaction: Setup creates one immutable reviewed
-plan, the user chooses a dependency-closed selection, and Execute attaches to
-the same task only after commitment and fresh preflight of that set. A terminal
-with `filesystem="refused"` and `disposition="unrun"` displays the generic
-“Execution did not start” state and retains the committed selection for review.
-After retained review capture, separate guidance identifies preflight refusal,
-invalid execution commitment, or another refusal. Closed preflight codes select
-fixed actionable explanations, such as insufficient target space; raw exception
-and path details are not displayed. The guidance survives release and navigation.
-A reviewed-negative admission receives preflight guidance immediately without
-committing selection; [BRIDGE](BRIDGE.md) owns the bounded refusal disclosure.
-Recovery is explicit **Plan again**. Only failure to admit an execution restores
-editable selection; a preflight rejection after admission does not. Plan again freshly resolves
-the immutable reviewed volume pair, then creates a new task with the old frozen
-Setup and default selection; changed Setup also creates a new task. Neither path
-copies authorization. There is no background replan, execute-anyway,
-auto-commit, or unattended path. Automatic linked verification stays in the
-execution session; manual
-exact post-copy verification is a later session that never rewrites execution.
-The task adapter and browser identity consumers now preserve that separation:
-Plan headers, details and follow use original execution identity, while task
-status uses the current session kind. Reconstructing a task or refreshing its
-Inventory preserves the original Plan request. Loading original Plan review
-does not replace current auxiliary recovery feedback. After original execution
-release, the same task's **Plan / Verify** switch opens its target ledger without
-starting a scan or hash. Returning to Plan retains its selection, details,
-follow setting and viewport. Pane changes retire pending navigation reads;
-late replies cannot replace the other pane's state or feedback.
+On review-publication-protocol-failed, retain prior settled truth, clear faulting
+live decoration, disable mutation and say: **NamiSync could not publish this review
+safely. Close the task and try again.** Drain/exact release continue for custody;
+queued events cannot revive that generation, and the issue lasts until task Close.
+Retention exhaustion directs Close/wait for retry-state expiry; population refusal
+directs narrower roots or scan/preflight repair. Initial refusal has no partial
+tree; replacement refusal keeps the prior complete one. Never browser-cache a
+full result or transient operation hashes; BRIDGE/DEFENSE own exact hard walls.
 
-**Verify copied** starts ordinary Verify on server-derived successful
-copy targets from the retained execution. It scans those paths and checks current
-evidence, without changing Inventory checkbox selection. The action can repeat
-with a new command after release, including successful work in a partial or
-linked execution. Empty copied scope starts nothing. Each uncertain command
-retains Check original outcome; Check never submits another operation.
-When the original execution summary confirms that no copied file succeeded, the
-button stays visible but disabled, with guidance to select files and use Verify
-selected. An unavailable summary does not imply an empty population; server
-admission remains decisive without a new readiness check.
+### Execution admission and Plan again
 
-**Verify selected** is an ordinary action independent of copied-file
-eligibility. It uses the complete nonempty server-owned checkbox selection and
-never runs automatically. Baseline and Rebaseline also use the ordinary selected
-files scope on linked Verify pages. Infrastructure supports linked baseline and
-rebaseline, but the product exposes no separate linked/copied-scope baseline action.
-Both Verify scopes share current-session controls and one latest ordinary result;
-neither controls or rewrites the original execution. Missing evidence may be
-baselined, never verified. A clean ordinary inventory Verify result that creates baselines shows
-**Baseline created** in the task digest and explains that files without prior
-checksums received new baselines while any existing baselines matched. The raw
-verification-incomplete classification remains unchanged; recording/audit
-degradation and adverse outcomes retain their attention state. Missing/unsupported targets and
-scan warnings remain visible without an all-copied-files-verified claim.
+Creating Plan/Inventory immediately shows review shell: Checking folders then
+Planning/Scanning, indeterminate bar, blank table until complete publication.
+Filters/actions stay unavailable. Submitted path is context, not admission evidence;
+refusal returns Setup. Delayed start retains Check; fixed unknown stops animation
+while retaining fence. Ready unexecuted Plan stays idle, not fabricated readiness.
 
-Refresh needs no exact-verification-forfeiture warning: the one-shot exact action
-is retired. Its normal current-task/publication/revision checks remain, and
-Rebaseline still requires consent. Later scans may truthfully supersede the
-execution's displayed evidence without implying changed file contents or
-altering original execution and linked verification outcomes.
+Execute needs commitment, dependency-closed selection and fresh preflight. Unrun/
+refused displays Execution did not start, retains committed review and fixed
+actionable guidance rather than raw paths/exceptions. Reviewed-negative refusal
+gets guidance without commitment. Only failed admission restores editable selection;
+preflight rejection after admission does not. Pre-execution/queued capacity refusal
+keeps task without execution/retry/automatic Close; planner population refusal may
+have no Plan, review-preflight refusal may keep a complete negative Plan.
 
-Pre-execution capacity refusal, including queued wakeup refusal, keeps the task
-visible without execution, automatic retry, or automatic close. Scan/planner
-population refusals may have no plan; review-preflight space refusal may retain
-an immutable plan with a negative verdict. They must not share a fabricated
-partial review. After resolving the cause, explicit Plan again performs fresh
-scans and review. Recognized operation/copy, cleanup and destructive-prerequisite
-disk-capacity failure during execution now settles the current operation and
-admits no later operation. Recorder-only item-write failure remains recording
-degradation. Execution review shows the yellow capacity message. This color does not
-erase any known failure or independent recording/integrity issue. Other I/O
-failures use the existing typed generic reason and available diagnostic detail;
-a richer I/O taxonomy is deferred to M2.
+Plan Again freshly resolves reviewed identities/current ambiguity, creates a new
+task with frozen options/default selection and no copied authorization. Changed Setup
+also creates another task; no background replan/execute-anyway/autocommit. Keep old
+review until new task adopted; select new only if user did not navigate elsewhere.
+Original Plan identity/details/Follow/viewport remain while auxiliary activity owns
+current status. Pane changes retire navigation reads; old replies cannot cross panes.
 
-M1 execution review also supplies an informational trash-location string. It is
-shown as a location only, without a total, existence claim, scan of everything
-in `.synctrash`, or promise that externally removable files still exist. No
-purge action is implied.
+### Ordinary copied-file and selected Verify
 
-The Plan pane distinguishes immutable **Review snapshot** context from the
-current edited selection and the latest fresh-execution notices. Search,
-filters, collapse, and viewport never change selection. Notices are visible
-typed context. Their exact supplied notice/path facts are available in Details;
-they remain inert for selection and execution.
-Operation groups expose every operation once, with a distinct non-folder
-semantic; group/folder checkboxes operate on server-defined membership
-independent of the current window. Move peers, item/node anchors, dependencies,
-rollups, risk, and selection authority all come from the server projection.
-The browser never reconstructs them from display paths.
+After original release, Plan/Verify opens existing target ledger without scan/hash.
+Verify copied starts ordinary scan/Verify on server-derived successful-copy scope,
+can repeat with a new command after partial or linked work, and never changes
+checkboxes or original results. Empty scope starts nothing. Confirmed zero successes
+keeps button visible/disabled with selected-Verify guidance; unavailable summary is
+not an empty scope or a new readiness authority.
 
-Plan rows remain hash-free. Execution evidence is shown only when the bounded
-atomic ledger view classifies it as execution-owned; current-state evidence is
-labelled separately. Execution and ordinary-integrity overlays remain independent
-fields. A replacement attempt decorates from one complete new generation, never
-a mixture or old fallback, while settled membership remains stable until
-terminal publication. View behavior, grouping, evidence classes, overlays,
-and anchor behavior are defined here and in [PRESENTATION.md](PRESENTATION.md); future exact DTOs remain open.
+Verify selected uses complete nonempty server selection, never automatic. Ordinary
+Baseline/Rebaseline also use selected files; no separate linked/copied-scope baseline
+button ships despite infrastructure support. Both Verify scopes share current
+session controls/latest ordinary result, not original execution controls/results.
+Refresh does not warn about forfeiting the retired one-shot exact action. Missing
+evidence may become Baseline created, never Verified; raw verification-incomplete
+classification, recording/audit issues, missing/unsupported rows and scan warnings
+remain. Later scan evidence may supersede display without rewriting originals.
 
-Inventory remains distinct from plan review. Released terminal inventory tasks
-open their own read pane, including when selected again. The renderer labels
-execution-associated ledger publications with absent scan provenance as
-“Current ledger · No inventory scan”, without invented scan counts or incomplete
-scan wording. Execution tasks reach those publications through Verify. It supports backend
-literal search, counted server facets, collapse, bounded windows and explicit
-sibling filename/own-size/own-mtime sorting through the Filename, Size and Modified
-headers: ascending, descending, then canonical path order. The Default facet view hides acknowledged direct matches;
-their complete count and Acknowledged facet remain available, and necessary
-folder ancestors remain visible. Neither browsing nor hidden rows changes
-complete folder rollups. The browser retains at most 256 rows and reuses the
-generic tree controller's keyboard, scroll and stale-generation behavior with
-an explicit 24 px row height; other tree consumers retain the 28 px default.
-Its columns are Selection, Filename, Presence, Checksum, Size, Modified and Notes.
-The Selection header has an accessible name and no visible text. Header and row
-checkboxes display server-owned none/partial/all state for matching files. Header
-and folder gestures respect the current search/filters, including collapsed and
-unloaded matches. Accessible labels disclose that scope, while selected and
-hidden-by-filter counts expose the complete retained selection used by starts.
-Warnings and folders with no matching files are inert. Ctrl/Shift clicks and
-Shift+arrows use Plan's server-owned highlight/range mechanics; clicking a
-highlighted checkbox applies only to matching highlighted files in a multi-row
-set, without expanding highlighted folders. Singleton and outside-set folders
-remain recursive. Search/filter
-changes clear highlights; sort/collapse, checkbox changes and refreshed publications
-preserve surviving highlight identities. Removed rows are pruned; a filtered or
-collapsed focus does not display stale item details. A selection reply replaces authoritative summary/window
-state while preserving the live outer scroll position and checkbox focus.
-Passive result refresh cannot reveal a different active row or overwrite a newer
-foreground window. Stale or uncertain gestures reload instead of replaying.
-Full and selected Refresh preserve a visible item or folder at the same viewport
-position, including a partially visible row. The replacement window loads there
-directly; an absent or filtered-out anchor falls back to the old position clamped
-to the new extent. Restoration does not focus or activate its anchor, and enabled
-autoscroll can still follow current integrity work.
-Checksum shows eight characters of recorded baseline evidence, with the full
-stored digest in its tooltip; no evidence shows an em dash. Missing, modified or
-reappeared rows retain their stored checksum. A scan does not verify current bytes.
-Presence shows live integrity progress, then retained ordinary per-file results,
-then current ledger state. A settled result from the current integrity session
-supersedes its last progress sample. Progress updates preserve rows, checkboxes,
-focus and the viewport; only the current session's matching item supplies a bar.
-Known percentages use the existing inline bar; unknown progress remains text,
-following Microsoft's [progress guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/progress-controls).
-Missing and unsupported presence retain their ledger labels; for present files,
-Mismatch overrides Reappeared, then the stored verification state supplies
-Verified, Modified or Unverified. Reappeared alone implies no fresh verification.
-Ordinary present folders show green Present; rowless folders retain blank Presence
-cells. Missing,
-reappeared, unsupported and error evidence remains visible. Scan notices retain
-the neutral Notice label. Acknowledgement,
-bounded warning details and partial/overflow size qualifiers appear in Notes;
-complete evidence remains in Details and tooltips. Filename alone absorbs
-passive width growth. Manual resizing transfers width from Notes down to its
-14rem minimum; Filename and Modified retain their 12rem and 7rem minima.
-Both lists reuse 24 px rows, 12 px/16 px caption text, shared zebra surfaces,
-16 px checkboxes, semibold folder names and state labels, monospace checksums,
-and the shared tertiary foreground for Size, Modified and Notes. In forced
-colors, active Inventory text cells inherit HighlightText while filled Presence
-backgrounds and checkbox eligibility remain. Tree spacers do not receive
-zebra fill. Folder Size shows
-complete file bytes while its tooltip and Details distinguish own object facts.
+### Inventory review and stored evidence
 
-The frozen Setup, status and table align with Plan review. The standalone task's
-switcher selects Integrity and disables Sync. Status actions run left to right:
-ordinary icon-only Refresh inventory (Arrow Clockwise), Baseline split button,
-and accented Verify. Baseline runs directly; its dropdown exposes Rebaseline,
-matching the full split button's width and leading edge.
-The dropdown follows the shared menu's keyboard, dismissal and currentness rules,
-and returns focus to its trigger on Escape, action activation or confirmation.
-Outside interaction, scrolling and window blur dismiss it without moving focus.
-Setup's path region shares Plan's two-line minimum height while
-retaining one real Root line. The status card keeps the current activity outcome,
-complete inventory rollup summary and one persistent status paragraph.
-That paragraph marks previous publication, incomplete or scoped coverage and
-includes loading, action-result, event-gap or recovery guidance without repeating
-the rollup counts. Complete selection and hidden-selection counts, scan scope
-and counts live in Task details. The stored-checksum disclaimer and retained-window
-result paragraph are omitted. The visible-row count remains a view fact,
-not a second inventory total. Its shared 8 px progress track remains visible;
-unknown activity totals use the shared indeterminate animation, and terminal
-state stops animation without inventing a completion percentage. Supplied known
-progress retains the task snapshot's value. Details shares the app-session disclosure
-state described above and opens a full-height optional right
-column using Plan's two independently scrolling cards: task facts above and item
-details below, with a selection placeholder. Hiding Details restores focus when
-it was inside that column. The shared 20rem/40% cap, 1:2 global/item allocation and minimum-size chain
-preserve table scrolling. Acknowledgement and restore controls remain with the
-selected item's details.
+Inventory is a separate bounded projection, not a Plan mode. Frozen Setup/status/
+table align visually; standalone switch selects Integrity and disables Sync. Current
+ledger evidence, latest ordinary overlay and actual scan publication have distinct
+identities. No view/selection/Refresh silently hashes or creates baseline evidence.
 
-Inventory detail body text uses Plan's caption typography with unchanged titles.
-Both detail panes use tertiary neutral foreground for fact labels. Execution
-NOOP outcomes say No change, while genuine skipped operations remain Skipped;
-the target path is shown once rather than repeated as Execution path.
-Inventory task details omit the status card's activity and duplicate file total.
-The leading file status combines presence and the table's current integrity
-presentation; newer same-owner window results supersede older exact-detail
-results there. Superseded activity results remain labelled Previous in the body.
-Only supplied applicable abnormal dates and reasons appear. File evidence keeps
-actual Last verified dates and the complete baseline digest and
-attested metadata; algorithm, observed kind and the current-ledger heading are
-omitted. Folder details show path, observed object facts and complete scope totals,
-with nonzero missing/acknowledged counts, without verification fields. Short
-**Acknowledge** and **Restore** buttons (Acknowledge all and Restore all for
-folders) follow the facts with a small folder-scope
-advisory; their visibility and complete server-owned action scope remain unchanged.
-Eligible acknowledged missing rows also expose Restore missing in their context
-menu, under the same current-publication and released-session guards.
+Presence shows current integrity progress, then current-session/displayed-scan
+ordinary results, then ledger state; a newer successful scan adopts current ledger
+facts. Mismatch wins over Reappeared, then Verified/Modified/Unverified; Reappeared
+alone proves no verification. Missing/unsupported/error stay explicit, ordinary
+present folders green Present, rowless folders blank, scan notices neutral Notice.
+Known progress uses inline bar, unknown text; settle exact current result even if
+zero outcomes, repairing gaps rather than leaving rows pending.
 
-Inventory terminal labels identify baseline, verification and rebaseline when
-those ordinary sessions are observed; the detailed status calls this the current
-activity. Task-details scan scope/counts continue to describe the actual published
-scan. Baseline, Verify and Rebaseline use the complete server-owned selection.
-An empty selection starts nothing. Rebaseline opens a blocking confirmation
-showing the selected scope and count; Cancel changes nothing, and acceptance
-cannot survive a request or view-revision change. Start recovery observes the
-original command without submitting another operation. Icon-only Pause, Resume and Cancel
-retain accessible action names and tooltips and
-address only the exact current ordinary session, with task status derived from
-that activity's snapshot rather than relabeling every Inventory activity a scan.
+Warnings are outside action/selection and folder rollup populations. Folder Size
+is complete file bytes with own object facts in tooltip/Details; overflow is
+unavailable, never clamped. Acknowledged rows remain in authoritative totals even
+when hidden. Complete evidence/digests and partial/omission qualifications stay in
+Details/tooltips; compact Notes carries acknowledgement, warning and size qualifiers.
+Forced-color text inherits HighlightText without erasing Presence/checkbox cues.
 
-Refresh selected lives only in the current file or folder's context menu, and
-remains usable while Details is hidden. Accepted keyboard highlights read current
-details for the focused row, including off-window navigation. Refresh rereads
-that surviving focused item's evidence under the new view; old responses cannot
-replace it. Neither detail loading nor refresh takes DOM focus from another
-control. Notices offer no Refresh
-action. Retained active-row identity continues to anchor viewport restoration.
-Acknowledge missing and Restore visibility
-continue to act on the item displayed in the details card.
+#### Inventory controls and Details
 
-Activate a row with click or Enter to load its detail selection. Domain subjects load fresh exact
-ledger evidence with observed and attested facts, full digest,
-evidence observation time, verification freshness and invalidation. Synthetic
-folders show complete rollups and their path; notices show their informational warning only.
-Window labels are bounded basenames, and flat notices show a code plus bounded
-path tail. The existing detail read supplies complete folder/notice paths and
-diagnostics from the published snapshot, labelled **Path at scan time**; domain
-subjects keep their separate fresh ledger evidence. Full-path server search is
-preserved independently of those compact labels.
-Ledger, synthetic-folder and non-null notice paths use the published summary's
-root for full filesystem display. Missing roots retain relative text, and a null
-notice path remains unavailable. Global detailed scan scope also uses that root;
-the central status scope, item titles and table text retain their existing form.
-These joins use supplied detail facts without filesystem probes.
-Task navigation, view changes and Close retire details before late replies can
-restore them. A failed read normally offers Reload inventory view, which reads
-current publication without starting another scan. The button appears only for
-explicit delayed, stale or failed read recovery; ordinary loading, selection,
-progress and informational messages do not expose it. An accepted authoritative
-replacement clears that recovery. Both Inventory's Reload and Plan's existing
-Check outcome/Refresh review button live in the top action row, retaining their
-original command-check behavior. If a refused Refresh has no
-current details and retains an earlier publication, guidance instead directs
-the user to check the location/reconnect its drive and use Refresh. Confirmed
-Refresh admission clears its transient action message; the current scan state
-owns progress and terminal feedback. The pane labels the current scan
-state separately from a displayed prior publication. The displayed scan summary
-names its producing scope: Entire location, an exact item, a folder including
-subfolders, or selected items. Completion and observed/missing counts apply to
-that scope; a scoped Refresh also states that other inventory items were not
-rescanned. Notices are labelled as belonging to this scan, with no accumulation
-of earlier scans' notices. A retained prior publication keeps its original scope.
-Refresh acts on the whole
-location or a selected file/folder; folder scope includes hidden and off-window
-descendants. Acknowledge missing hides missing subjects from default matches,
-while Restore visibility reverses only that acknowledgement and does not restore files.
-The controls show confirmed applied/noop/stale/conflict counts and an unresolved
-suffix. An uncertain original action retains Check original outcome across task
-navigation. Visibility needs a confirmed current publication; Refresh can recover
-from a prior publication after a failed rebuild. Notices have no action controls.
-Latest ordinary-integrity outcomes appear separately from stored ledger evidence
-in rows and Details. The primary row uses an outcome belonging to the current
-session or the displayed scan; a newer successful scan instead shows its current
-ledger state. Retained activity details, including errors and recording issues,
-remain inspectable. A pending or failed Refresh keeps the prior publication;
-selection and view changes do not make older outcomes current again.
-Their request/session/location identity fences late replies;
-terminal replacement repairs live gaps, including an empty result, without
-leaving missing result rows apparently pending.
+Toolbar order: square Arrow Clockwise Refresh, Baseline split button, accented
+Verify. Baseline runs directly; same-width/leading-edge dropdown offers Rebaseline
+with shared menu keyboard/currentness/dismissal/focus rules. Root region keeps
+Plan's two-line minimum while showing one real root. Status paragraph describes
+loading/action/gap/recovery and scoped/incomplete/previous publication without
+repeating rollups. Complete/hidden selection counts and scan scope live in Task
+details; visible row count is not another inventory total. Shared bar stays visible,
+unknown totals indeterminate, terminal stops without invented percentage.
 
-Plan and Inventory rows offer a shared context menu using the existing menu
-surface and item styles. Right-click targets the row under the pointer without
-changing execution selection or loading details. Shift+F10 or the ContextMenu
-key targets the focused Plan row or Inventory tree's active row. Show details
-opens the existing Details pane for that exact row; Plan selection and container
-Expand/Collapse reuse the existing server-scoped actions. Committed, disabled
-and informational Plan rows have no selection action. Inventory has no
-selection context-menu action; its checkboxes provide selection. Its domain file/folder rows offer Refresh selected;
-Acknowledge missing is offered only for a currently eligible row whose own
-presence is missing, including a domain folder, using the existing node-scoped
-visibility command. Missing descendants do not qualify a present folder. The
-toolbar retains its existing complete-folder actions. Notices offer details only.
-Opening a menu never initiates a command; stale, pending, closing or replaced
-owners cannot dispatch one. Inventory menu currency follows the nominated row,
-view revision, publication and action/session ownership. Repainting the same
-row after a highlight publication does not by itself dismiss its menu; a changed
-view or lost row still invalidates it.
-Owned row gestures suppress the browser context menu even when their current
-custom menu is stale or empty. The open menu also consumes the Menu key's native
-follow-up context gesture without moving the popup or its focus.
+Details shares disclosure/layout. Fact labels are tertiary; omit repeated status/
+file total, redundant target path/algorithm/observed-kind/current-ledger headings.
+Keep full baseline digest/attested metadata/Last verified and applicable abnormal
+dates/reasons. Leading file status adopts newer same-owner windows; superseded
+activity says Previous. Folder Details has path/object/scope totals and nonzero
+missing/acknowledged counts, no verification fields. Acknowledge/Restore follows
+facts, with compact folder-scope advisory and complete server-owned scope.
 
-Menus remain inside the viewport and work area. Arrow keys and Home/End move
-within the menu; Escape restores the current invoker and Tab dismisses while
-continuing normal navigation. Outside interaction, focus/foreground loss,
-scroll, resize, task/view replacement and disposal dismiss without stealing
-focus. Inventory pointer invocation preserves a partially visible row's scroll
-position, while keyboard invocation reuses the tree's active-row authority.
+Click/Enter and accepted keyboard highlight read exact detail, including off-window
+navigation. Domain rows read fresh ledger evidence; synthetic folders/notices use
+published facts labeled Path at scan time. Join supplied paths to publication root
+for display only; missing root keeps relative text, null notice path stays unavailable.
+Task/view/Close retires detail before late replies. Refresh rereads surviving focus
+under new view without stealing focus or reviving an old result.
 
-Rebaseline admits eligible selected files with or
-without evidence to rebaseline. It always hashes and conditionally replaces or
-creates evidence,
-even for a genuine match, and clears verification freshness; explicit
-acceptance remains required for all-null and mixed selections. Baseline stays
-missing-evidence-only; verify compares existing evidence or establishes an
-initial baseline without claiming a verification. The
-[three-operation policy](VERIFIER.md#accepted-standalone-operation-policy)
-owns the outcomes and deferred compare-and-accept behavior.
+#### Refresh and missing visibility
 
-The standalone integrity surface presents ledger-derived verification state
-separately from its latest ordinary-integrity overlay, including copied-file
-verification. Folder rollups exclude warnings and do not change when acknowledged
-rows are hidden. Overflow is displayed as unavailable, never a clamped total.
-Details label current digest currentness/invalidation and render
-times without floating-point authority. Exact inventory view, filter, overlay,
-rollup, scalar, warning-identity, and replacement rules remain bridge/domain
-authority.
+Refresh selected is file/folder context action, usable with Details hidden; notices
+offer none. Folder scope includes hidden/off-window descendants. Acknowledge hides
+missing subjects from default matches; Restore reverses acknowledgement, not files.
+Visibility needs confirmed current publication/released-session eligibility; a
+currently missing domain folder qualifies on its own presence, not its descendants.
 
-The future history page will use retained activity-aware envelopes and details
-and remain neither replay nor resume. It is explicitly deferred from this
-second-half reslice; task review does not depend on that page or use history as
-a fallback for missing task artifacts.
+Uncertain actions retain Check original outcome through navigation. Show actual
+applied/noop/stale/conflict counts and unresolved suffix. Failed/pending Refresh
+keeps prior complete publication with its producing scope. Current scan/status and
+published scope are separately labeled: whole location, exact item, recursive folder
+or selected items. Scoped completion/counts do not claim other items rescanned;
+notices belong only to that scan. Selecting/changing view cannot revive older results.
+
+Explicit delayed/stale/failed read offers Reload inventory view, reading current
+publication without new scan; ordinary loading/progress/info does not. Authoritative
+replacement clears recovery. Refused Refresh with retained old publication/no
+current detail directs reconnect/check location then Refresh. Recovery buttons live
+in top action row, preserve exact command semantics and do not move DOM focus.
+
+### Integrity operation semantics
+
+Baseline missing evidence only; Verify compares existing evidence or creates an
+initial baseline without claiming verification. Rebaseline freshly hashes and
+conditionally replaces/creates even matching/null evidence, clearing verification
+freshness. Nonempty complete server selection and revision-bound blocking count/
+scope confirmation are required, including all-null/mixed sets; Cancel changes
+nothing. Request/view change invalidates consent. [VERIFIER](VERIFIER.md#accepted-standalone-operation-policy)
+owns exact outcomes/deferred compare-and-accept. Current ordinary controls target
+only that exact activity, with original-command Check and no replay. Scan scope/
+counts continue describing the actual published scan, not an integrity activity.
+
+### Context menus
+
+Right-click targets the pointed row without changing execution selection or loading
+Details; Shift+F10/Menu targets focused Plan/active Inventory row. Show details
+opens that exact row; Plan selection/Expand/Collapse reuse server scope. Committed,
+disabled/info Plan rows offer no selection; Inventory uses checkboxes, never context
+selection. Domain file/folder rows offer Refresh selected; eligible missing/acknowledged
+rows offer missing visibility, notices Details only. Opening never dispatches.
+
+Menu currency binds nominated row, view/publication and action/session; same-row
+highlight repaint alone need not dismiss, lost row/changed view does. Stale/pending/
+closing/replaced owners cannot act. Owned gestures suppress browser menu, including
+its Menu-key follow-up. Popup stays in viewport/work area, arrows/Home/End navigate,
+Escape restores current invoker, Tab dismisses and continues. Outside/focus loss,
+scroll/resize/replace/dispose dismiss without stealing focus. Pointer may preserve
+partly visible-row scroll; keyboard uses current active authority.
 
 ## Presentation and responsiveness
 
-Progress is replaceable telemetry. The browser reports the active nested event
-version truthfully; exact current/target versions and atomic cutover are owned
-by [BRIDGE.md](BRIDGE.md).
-Every snapshot self-describes its phase and may carry optional nominal
-active-item identity plus an opaque attempt id and paired attempt-local byte
-counters alongside aggregate bytes, item counts, and the display path. Only
-nominal identity may locate a row; `item_type` selects the opaque id's
-operation/integrity lookup namespace and `current_path` remains informational,
-may outlive an intermediate or terminal settlement, and never implies an
-active item when nominal identity is absent. Executor cancellation/exception
-publishes live aggregate item and byte state after reliable unwind settlement
-while clearing nominal item state and `current_path`. Executor pause publishes
-one coherent live snapshot that retains the active item, attempt, and path; its
-live aggregate high-water also continues through resume. Verifier pause
-publishes its live reporter state.
-Attempt counters may restart only under a newly minted attempt id when an
-actual retry or resumed copy/read stream begins. If work exceeds the admitted
-item total, item and attempt identity stay active but the determinate byte pair
-becomes absent, while aggregate progress retains the producing module's
-monotonic semantics. The bridge drain consumes these fields through its pure
-protocol reducer and exposes a frozen derived state to update consumers; the
-Plan row adapter consumes nominal active-item progress without changing the
-settled operation lifecycle during automatic verification.
-At the accepted cutover, the UI preserves large quantities exactly and keeps
-opaque identity non-arithmetic. Scalar and event-containment mechanics remain
-bridge/defense authority.
-Executor pipeline diagnostics are opt-in developer data, not the rolling
-transfer rate or ETA promised to users.
+The Python snapshot/reducer owns authoritative phase, counts, nominal active item,
+display high-water and rate/ETA; BRIDGE owns scalar/event validation and cadence.
+The browser formats facts, never parses diagnostics for status or derives identity
+from path. Reliable item/terminal delivery stays distinct from lossy progress;
+ordinary sequence holes/coalescing do not imply Gap or recovery.
 
-**M1-8 progress presentation.** Events carry dispatcher-stamped UTC `at`;
-ordinary executor/verifier progress is throttled (normally 100 ms), with forced
-boundaries and lossy coalescing, not a delivery metronome. The Python adapter
-reduces accepted Progress and publishes presentation facts (BRIDGE owns the
-snapshot contract); the browser formats those facts.
-The digest uses phase aggregate bytes, with item-count fallback only for known
-byte-free work. Nominal active-item bytes feed Plan row progress independently;
-automatic verification preserves the settled operation lifecycle.
+Phase aggregate bytes drive percent, with known byte-free item-count fallback;
+unknown totals remain indeterminate and zero/zero is not success. Settled items
+are distinct from active ordinal. Row bar uses matching nominal item/attempt bytes,
+not aggregate percent, and terminal outcome retires decoration. Verify cannot turn
+a completed copy back into Copying. Within phase/item retain displayed high-water
+through valid retry/pause/hidden return; new phase/item, Gap or retirement resets
+the domain. Raw attempt counters may restart; held/100% never asserts success.
 
-- The status line shows phase aggregate byte progress and settled item count
-  (`items_done` of `items_total`); an active ordinal, if shown, is labeled
-  separately and never increments the settled count. The overall percentage
-  uses phase `bytes_done / bytes_total`; known byte-free work may use known item
-  counts, while unknown totals stay indeterminate. Zero/zero alone is not success.
-- An active row uses only nominal `item_type`/`item_id` matching and its own
-  `item_bytes_done / item_bytes_total`. No aggregate percentage is copied into
-  a row; a path is never identity. Unknown item counters remain indeterminate.
-  Reliable outcomes retire active decoration and supply the terminal row result.
-  Verification progress remains separate from the already-settled operation
-  result; it must not turn a completed copy back into an executing copy.
-- Throughput uses aggregate byte deltas divided by Python monotonic sample deltas
-  stamped when Progress reaches the adapter sink, independent of drain cadence.
-  Share one five-second smoothing horizon with phase ETA: a time-weighted EMA
-  with `alpha = 1 - exp(-dt / 5s)`, seeded by the first valid two-sample rate.
-  Retain only a prior sample and smoothed rate. Subtract Scalar64 bytes exactly
-  before approximate rate/ratio conversion. No per-item rate or second filter.
-  Sample once per newly accepted Progress update, never on replay, repaint or an
-  outcome update that merely retains the prior Progress body.
-- ETA is `(bytes_total - bytes_done) / smoothed_rate` for this phase only.
-  Unknown totals or a zero/unavailable rate give unavailable ETA; throughput can
-  remain available without a total. Estimates never predict subsequent verify
-  work from execute, or survive terminal settlement. Display the measured rate
-  in bytes per second and append **remaining** to the estimated duration. Round
-  up to whole seconds first. Show seconds below one minute, minutes and seconds
-  through three minutes, whole minutes above three minutes, and hours and whole
-  minutes from one hour on. Omit zero units except in **0 seconds remaining**.
-- Equal/backward sample times simply rebase sampling and make the estimate
-  unavailable until another positive interval; do not reject valid progress.
-  Ordinary item handoffs retain aggregate sampling, including handoff after a
-  reliable outcome; outcomes themselves do not sample. A stream's first attempt
-  ID retains sampling. Pause/resume, retry of the same item and budget changes
-  restart sampling; phase, session, explicit Gap and terminal/reset retire the
-  old estimate. Navigation
-  does not create a second rate history: returning to a task adopts its current
-  authoritative estimate. Ordinary sequence holes/coalescing use observed
-  deltas with no recovery or compensation.
-- Inconsistent progress clears the affected estimates and comparison state,
-  with visible diagnostic feedback. Reliable control and final results continue
-  to arrive; a presentation fault cannot keep a settled task looking active.
-- Preserve ARCHITECTURE's aggregate high-water rule. Within a phase, displayed
-  percentage is a high-water of the valid computed percentages, so an expanded
-  verifier budget does not move the bar backward. For the same active item,
-  retain its displayed high-water across new attempts; raw attempt bytes may
-  restart. Keep only that active item's display state. Pause/resume and hidden
-  return preserve visual high-water; new phase/item, explicit Gap or session
-  retirement starts a fresh display domain. Unknown counters do not become
-  fabricated known values. Neither a held bar nor 100% claims success.
+One five-second time-weighted EMA serves rate/phase ETA (`alpha = 1-exp(-dt/5s)`),
+seeded by valid positive monotonic sample intervals at adapter-sink acceptance,
+independent of drain/repaint/replay. Exact byte subtraction precedes approximate
+ratio conversion. Unknown total or zero rate means unavailable ETA; rate may still
+exist. Item handoff retains aggregate sampling; pause/resume, same-item retry or
+budget change restarts it; phase/session/Gap/terminal retires it. Invalid samples
+clear estimates with diagnostic feedback without blocking reliable final truth.
+Equal/backward sample time rebases and leaves estimate unavailable until a positive
+interval, without rejecting otherwise valid progress. Sample only newly accepted
+Progress, not outcome updates carrying old Progress; navigation adopts current
+estimates rather than starting another history.
+No second history/filter, background timer, per-item rate, SLO or device-speed claim.
 
-Executor retry catch-up may temporarily produce zero observed throughput, and
-verifier counters measure physical read work with a growing budget. These are
-approximate progress estimates, not certified device speed or durable bytes.
-Loss/retry noise is acceptable; no accuracy SLO, retained sample history,
-background sampling timer or adaptive estimator is required for M1-8.
+Show rate in bytes/second and phase-only time **remaining**. Round up whole seconds:
+seconds below a minute; minutes+seconds through three minutes; whole minutes above
+three; hours+whole minutes from an hour. Omit zero units except 0 seconds remaining.
+Do not predict later Verify time from Execute. Retry catch-up may show zero rate;
+verifier budget may grow. Pipeline diagnostics are separate developer observations.
 
-Filter/search state never changes the underlying plan or inventory selection;
-changing a location or plan option invalidates only the state that semantically
-depends on it.
+Use accessible text/non-color cues, stable layout and complete elided-path labels.
+Empty/unavailable/ambiguous/blocked/failure feedback names the next action. Installed
+acceptance exercises native keyboard/accessibility, 200% zoom, forced colors,
+reduced motion, layout-safe hostile names, exact bounded rows/identity, material
+and focus/scroll ownership. Gallery-only/source-only/DOM-only evidence does not
+prove native input, compositor pixels or the unresolved physical-wheel/label-blur
+reports. TESTS owns exact scenario mechanics; performance observations remain separate.
 
-Plan search uses a fixed 150 ms trailing debounce and remains editable during
-view refresh. If a query arrives while a view request is in flight, the task
-retains only the newest query and dispatches it after that request settles;
-switching tasks does not discard a queued query for a retained review. Search
-and filter navigation never mutates selection. Stale successes and failures do
-not replace the current valid page. The pure Slice 4 helper admits the
-documented bounded literal query rather than an arbitrary responsiveness limit.
-
-Use accessible text and non-color outcome cues, stable layouts, and full-path
-accessibility text for elided paths. Empty, unavailable, ambiguous, blocked,
-and failure states must say what the user can do next. The desktop presents as a
-Fluent 2 (Windows 11) app that follows the system light/dark theme and reads the
-system accent, over a standard window frame on a Mica base; the visual authority
-is the design-token/material/motion contract above.
-Contrast and no-color-only signaling remain requirements in every theme.
+History stays deferred; future activity-aware retained details are neither replay,
+resume nor fallback for missing task artifacts. No task review depends on that page.
 
 ## Acceptance criteria
 
@@ -2612,7 +1067,8 @@ Contrast and no-color-only signaling remain requirements in every theme.
   identity Plan again, and action-guiding refusal/close states.
 - Plan and inventory headed evidence proves server-owned hierarchy, accessible
   grouping, independent evidence/result axes, confirmation-gated rebaseline,
-  exact-handoff fallback labeling, and no browser-retained full result.
+  ordinary copied-file Verify with separate original/current results, and
+  no browser-retained full result.
 - Exact target contracts and gates remain in
   [BRIDGE.md](BRIDGE.md), delivery coverage in
   [M1_PLAN.md](M1_PLAN.md), and test-scope policy in

@@ -278,7 +278,8 @@ never hides the other result axes in rendered output.
 - [Bridge](docs/BRIDGE.md) — external protocol, transport, retry/recovery and evidence.
 - [Presentation](docs/PRESENTATION.md) — tree/view, search/sort and scale contracts.
 - [Interfaces](docs/INTERFACES.md) — adapters, host/package and lifecycle contracts.
-- [M1 plan](docs/M1_PLAN.md) — remaining outcomes, order and verification.
+- [M1 delivery register](docs/M1_PLAN.md) — completed outcomes, decisions,
+  release verification and unresolved dispositions.
 - [M2 proposal](docs/M2_PROPOSAL.md) — proposed later features, without an
   implementation plan or delivery commitment.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
@@ -304,6 +305,14 @@ README intentionally stops at milestone and phase summaries.
 
 M1 expands the reviewed-sync runtime into a complete headless integrity,
 history, and workflow product while building its secured headed WebView2 shell.
+
+### M1 Release
+
+The unsigned Windows x64 v0.1.0 Gertrud tester set completes M1 with exact
+source/build identities, serviced runtime inputs, notices, recipient terms and
+guides. Final release and packaged workflow checks pass; measured resources
+retain the user's scoped acceptance and recorded qualifications. Preparation
+does not include signing, publishing or external delivery.
 
 ### M1 Performance
 
@@ -350,7 +359,7 @@ and filter-scoped file selection
 and standalone integrity controls/results. Plan/Verify navigation keeps original
 execution review separate from ordinary current-state verification, including
 repeatable verification of successful copy targets. Integrated lifecycle
-verification is complete, and the `v0.1.0` portable tester release closes M1.
+verification is complete.
 
 ### M1 Features
 

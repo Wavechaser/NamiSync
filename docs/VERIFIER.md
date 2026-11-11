@@ -273,8 +273,8 @@ content verdict. Successful replacement clears invalidation/reappearance only
 atomically with the evidence transaction. Pause/resume retains exact admitted
 ids/order and completed results without reapplying fresh-selection filters.
 Automatic linked post-copy verification remains separate from ordinary Verify.
-Delivery and regression gates live in the
-[active M1 plan](M1_PLAN.md#remaining-checkpoints).
+Completed delivery and regression evidence are recorded in the
+[completed M1 decision record](M1_PLAN.md#m1-10-integrity-and-review-decisions).
 
 ## Selected And Post-Execution Verification
 

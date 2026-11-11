@@ -2624,7 +2624,7 @@ helper's search input may not exceed that bound.
 > authority in JavaScript.
 
 The landed presentation-core realignment and its browser evidence are recorded
-under [Complete and harden the accessible desktop foundation](../../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18).
+under [Complete and harden the accessible desktop foundation](../../CHANGELOG.md#secure-the-headed-desktop-foundation-2026-07-31--2026-08-18).
 
 ### DR-BR-16 — Paging bounds payload, and must also bound work
 
@@ -3894,10 +3894,10 @@ artifact documents.
 | Disposition | Landed record |
 | --- | --- |
 | User selection, subtree scope, partial subject-local integrity, and page size use the contracts in DR-BR-01–06 and DR-BR-15. | [Add scoped review trees and revisioned selection](../../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30) |
-| Recorder mutations use reproducible row receipts; session-creating commands use service-held lifecycle receipts. | [Close the M1 safety and post-refactor audit](../../CHANGELOG.md#close-the-m1-safety-and-post-refactor-audit-2026-08-08--2026-08-11) |
-| Drain recovery triggers only on explicit `Gap` or uncertain drain failure; legal progress sequence holes do not trigger it. | [Close transport custody and realign the bridge boundary](../../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14) |
-| The 100,000-subject performance fixture and transport-custody authority are governed by BR-G-42; the former separate BR-G-45 terminal-artifact model is retired. | [Ratify measurement and documentation authority](../../CHANGELOG.md#ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18) |
-| Move-ghost filtering removes synthetic-only ancestors with the ghost. | [Complete and harden the accessible desktop foundation](../../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18) |
+| Recorder mutations use reproducible row receipts; session-creating commands use service-held lifecycle receipts. | [Close the M1 safety and post-refactor audit](../../CHANGELOG.md#establish-the-safety-and-evidence-model-2026-07-30--2026-08-18) |
+| Drain recovery triggers only on explicit `Gap` or uncertain drain failure; legal progress sequence holes do not trigger it. | [Close transport custody and realign the bridge boundary](../../CHANGELOG.md#secure-the-headed-desktop-foundation-2026-07-31--2026-08-18) |
+| The 100,000-subject performance fixture and transport-custody authority are governed by BR-G-42; the former separate BR-G-45 terminal-artifact model is retired. | [Ratify measurement and documentation authority](../../CHANGELOG.md#establish-the-safety-and-evidence-model-2026-07-30--2026-08-18) |
+| Move-ghost filtering removes synthetic-only ancestors with the ghost. | [Complete and harden the accessible desktop foundation](../../CHANGELOG.md#secure-the-headed-desktop-foundation-2026-07-31--2026-08-18) |
 
 ---
 
@@ -4844,7 +4844,7 @@ headings are organizational, not lane ownership.
   **Status.** The historical v1 representation's event correctness and
   transport custody are closed by the frozen calibration/ceiling and
   independent holdout recorded in
-  [Close transport custody and realign the bridge boundary](../../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14).
+  [Close transport custody and realign the bridge boundary](../../CHANGELOG.md#secure-the-headed-desktop-foundation-2026-07-31--2026-08-18).
   Current-source event timing and the Slice 5–7 product-view rows remain open on
   their owning slices. The former BR-G-45 terminal-retention model is retired;
   shell-owned SH-G-15 scoped resource acceptance remains separate. *Not satisfied by* changing

@@ -1,2183 +1,17 @@
 # Performance measurement methods and observations
 
-This is the single owner for measurement fixtures, profiles, scaling axes,
-sample aggregation, commands, artifact provenance and results. It records
-historical observations at their measured revisions; it does not turn them
-into a guarantee for the current checkout. [DEFENSE](DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
-owns evidence authority and consequence. [PRESENTATION](PRESENTATION.md#focused-scale-acceptance),
-[BRIDGE](BRIDGE.md#evidence-and-ongoing-checks) and [INTERFACES](INTERFACES.md#sh-g-release-criteria)
-retain behavior and gate decisions. AB-2 moved Plan/UI latency and empirical
-representation-memory collection to optional developer observations while
-preserving fixture/action, counted-work and independent release/custody gates.
-
-## Row attachment fix: remaining idle observations — 2026-11-10–11
-
-After the user authorized the small rail fix and remaining idle measurements,
-clean `1d936876` was rebuilt in a fresh environment. Portable ZIP SHA-256:
-`fca5c839cb9e4fb7a47e343656b08a9587961e2cdf2ccf8a920652875970311f`.
-Independent comparison finds unchanged native inputs/notices and byte-identical
-embedded executable archives; bundle differences are the rail asset and
-attributable README/install/build metadata. The earlier package is untouched.
-
-The unchanged collector ran only `idle-open-01` then `payload-01`, from
-2026-11-10 23:05 to 2026-11-11 00:13 Shanghai time. The complete 3,600-second
-open-task idle window follows a reviewed 10k × 32 B copy. Both requested runs
-are valid and pass every applicable historical predicate. No soak was repeated.
-The existing estimator omits the first ten idle minutes; its final 3,000 seconds
-contain 3,000 complete samples with a maximum sample gap of 1.016 seconds.
-
-| Observation | Open 10k task | Payload (1 × 4 GiB, 64 × 4 MiB) |
-| --- | ---: | ---: |
-| Whole-app sampled peak | 1,129.746 MiB | 442.828 MiB |
-| Open-idle median private memory | 554.715 MiB | — |
-| Open-idle memory slope | +0.001 MiB / 10 min | — |
-| Maximum settled memory after task close | 551.262 MiB | 405.535 MiB |
-| Final idle median private memory | 551.262 MiB | 404.104 MiB |
-
-All three task closes succeeded. Both apps exited 0 with empty owned Jobs;
-all three deferred source/target hash comparisons passed. The collector also
-verified the supplied corpus metadata and extracted bundle were unchanged.
-The original timeout's exact input ordering remains unproven; these results
-verify the corrected package's requested paths, not universal leak freedom.
-
-Evidence: `build/m1-release-repair-20261110/acceptance/20261110-04/`, with
-`package/independent-comparison-02.json`, `package/artifact-comparison-review.md`,
-and `resources/{identity.json,validation.json,schedule/}`. The raw schedule
-validator correctly reports FAIL because the other 15 profiles were deliberately
-not repeated. Its two present run rows are valid with no failed predicates.
-Do not relabel this partial collection a complete 17-run pass or rewrite the
-earlier Resources03 receipt. M1_PLAN retains the user's non-blocking SH-G-15
-resource disposition.
-Independent metric/provenance review is `resources/review.md`.
-
-## Release repair resource attempt on `cfeac2d9` — 2026-11-10
-
-Resources03 used the independently reviewed serviced portable ZIP, SHA-256
-`a840c9b0fedc31a442e677cb81c7281d5901ed9eafa1e1d25f31c991d9ceff5a`,
-the selected CPython 3.15.2 stack, the same reference host and the unchanged
-SH-G-15 v1 schedule and budgets. Collection started at 07:29:56 UTC and
-stopped at the payload profile; the runner finished at 11:12:46 UTC.
-**The raw verdict is FAIL and incomplete.** Fifteen
-runs are valid, the payload run is invalid and `idle-open-01` never started.
-On 2026-11-10 the user confirmed that resource measurements are non-blocking
-under the accepted SH-G-15 disposition, including the approximately 2.4 GB
-peak observed in the 100k collections. The raw validator yardsticks below are
-not renewed release blockers. The user requested targeted Close investigation
-without another long soak; missing coverage remains explicitly unmeasured.
-
-| Observation | Runs 1 / 2 / 3 | Historical validator yardstick |
-| --- | --- | --- |
-| 100k whole-app peak | 2,309.039 / 2,348.285 / 2,346.273 MiB | 2,048 MiB |
-| Soak memory slope, cycles 21–100 | 0.366 / 0.448 / 0.347 MiB/cycle | 0.2 MiB/cycle |
-| Soak first/last median memory shift | 24.129 / 28.631 / 20.109 MiB | 20 MiB |
-| Soak handle slope | 2.699 / −1.780 / 2.575 handles/cycle | 1 handle/cycle |
-| Soak GUI-object growth | 0.5 / −1.5 / −0.5 | 10 |
-
-There are eleven exceeded run/predicate pairs across six valid runs, versus
-seven pairs in the previously accepted candidate. The other nine valid runs
-have no numerical exceedances, including three startup controls without
-numerical predicates. Plain startup, 10k and closed-memory checks pass;
-the new handle-slope observations do not by themselves establish a leak.
-Recomputing the same cycle-window estimator by role locates the two rising
-handle trends in the host: 2.645 / −1.766 / 2.631 handles/cycle. Browser,
-renderer and GPU handle slopes are near zero. The samples cannot identify
-handle types or owners. The final 120-second idle ends only five handles
-below each cycle-100 median, still 560 / 846 / 174 above that app's initial
-idle count. Ownership/lifetime investigation is a deferred diagnostic, not a
-leak claim or a blocker for the requested Close investigation.
-Renderer memory slopes remain about 0.20–0.22
-MiB/cycle across both attempts; higher GPU contributions in runs 1/2 and host
-memory in run 2 contribute to the current whole-app memory observations.
-Role medians are not additive, and this decomposition is not causal proof.
-
-The payload's second copy (64 × 4 MiB) reached execution and verification
-completion, but the driver timed out after its Close gesture. Its screenshot
-shows the retained completed task without a Close-pending/refusal message.
-The driver records CDP input delivery, not proof that the intended control
-received the trusted click; the failure's cause is not established. No
-product or collector correction is included in this attempt. The final idle
-window and the following hour-long open-task case are missing.
-Two separately retained payload-only diagnostic pilots add bounded passive
-input/completion tracing while preserving the original gestures and timeout.
-Both complete with exact mirrors and normal empty-Job exits. They do not
-reproduce the timeout, establish its cause or replace the missing acceptance
-coverage; instrumentation can perturb an input race.
-
-All sixteen launched apps exited 0 with empty owned Jobs. All 300 soak and
-six scale mirror checks passed, as did the first payload mirror. Because the
-second payload audit is registered only after task Close, a separate read-only
-post-failure SHA-256 audit verified all 64 source/target files. Supplemental
-post-stop checks also confirm all 65 supplied-corpus sizes/timestamps and all
-341 extracted bundle paths/hashes remain unchanged. They do not repair the
-incomplete collector receipt or supply missing observation windows.
-
-Raw evidence: `build/m1-release-repair-20261110/acceptance/20261110-03/resources/`,
-including `validation.json`, `schedule/runs/payload-01/failure.png` and
-`payload-failure-mirror.json`. Independent reconciliation and comparison:
-`build/m1-release-repair-20261110/renewal/resources-review.md`.
-The user's non-blocking disposition does not turn missing observations into
-measurements or establish universal leak freedom. Preserve the original raw
-verdict and distinguish the Close investigation from resource optimization.
-
-### Bounded Close-input diagnosis — 2026-11-10
-
-The exact `cfeac2d9` packaged WebView2 reproduces a lost click in the shipped
-`rail.js`. A fixture rail uses inert callbacks and trusted native mouse input.
-Two controls without a repaint each invoke the fixture Close callback once. One unchanged
-`rail.render` between mouse-down and mouse-up removes and re-adds the existing
-row; the same enabled button remains at the same coordinates, but focus is
-lost and the browser emits no click. Close's callback is never invoked.
-This demonstrates a product input defect, without filesystem effects or a
-soak. It does not prove that this ordering caused the original untraced timeout.
-
-Evidence: `build/m1-release-repair-20261110/portable/rail-click-probe-20261110-02/`.
-The follow-up correction leaves correctly positioned rows attached. The
-ordinary regression fails on the old renderer and passes after correction;
-the native trusted down/render/up diagnostic now retains focus and invokes
-the exact fixture callback once. Both controls also pass, with no row moves.
-The native diagnostic uses a separate old-package extraction with only the
-corrected rail asset overlaid; it is not new-package acceptance. Evidence is
-under `portable/rail-fix-20261110/` and `portable/rail-fix-native-20261110-02/`.
-No Close replay or backend lifecycle change is included.
-
-## R4 candidate resource schedule on `1f632b13` — 2026-11-10
-
-**Artifact.** `build/m1-r4-20261109/package/NamiSync-windows-x64-dev.zip`,
-SHA-256 `58429fa854c3161cd5e43bffeaedda05fc6373541430ece369009af40547478f`,
-built by that folder's `build_package.ps1` (same hash-locked recipe and offline
-downloads as R2) from clean `1f632b13`. The final R4 candidate `3ece185f`
-changes only a test driver; its package has identical wheel members and
-executable payloads ([M1_PLAN](M1_PLAN.md#m1-release--authorized-2026-11-04), "R4 candidate run"), so these results
-apply to it unchanged. The collector, corpus, host and frozen
-17-run schedule are those of the [`733f0cb1` study](#full-resource-schedule-on-733f0cb1--2026-110708).
-The runs took about 4.4 hours (00:32–04:55 local) with the machine otherwise
-quiet. All 17 runs completed (`soak.log` ends `exit 0`). All 306 mirror checks
-matched, and every app exited 0 with no remaining processes, unlike the
-overnight slow closes on `733f0cb1`. `soak-validation.json` reports
-FAIL; as before, that verdict is informational. On 2026-11-10 the user accepted
-these results for SH-G-15, including the peak and soak-growth observations below.
-
-| Profile (runs) | Peak, whole app | Settled after close | `733f0cb1` peak / settled |
-| --- | ---: | ---: | ---: |
-| Startup (3 plain, 3 DevTools) | 338–343 MiB | 334–338 MiB (plain) | 341–354 / 335–350 |
-| 10,000 × 32 B (3) | 964–1,111 MiB | 501–558 MiB | 1,101–1,224 / 527–540 |
-| 100,000 × 32 B (3) | 2,316–2,404 MiB | 719–726 MiB | 3,298–3,674 / 689–793 |
-| Payload (1) | 440 MiB | 418 MiB | 428 / 404 |
-| Soak, 100 cycles (3) | 607–618 MiB | 458–552 MiB per cycle | 605–620 / 510–536 |
-| 10k task open, idle 60 min (1) | 995 MiB | 536 MiB | 1,086 / 522 |
-
-Startup idle CPU was 0.13–0.40%; DevTools added 2.8 MiB settled. Against the
-historical yardsticks, startup, closed memory, payload, the 10k profiles and
-the open-task idle (+0.015 MiB/10 min) are inside. The validator reports three
-failing predicates across two measured topics (seven failed run/predicate pairs):
-
-- **100k execution peak**: 2,316–2,404 MiB exceeds the 2,048 MiB yardstick but is about 1 GiB
-  below `733f0cb1`, consistent with the Plan Follow and DOM reconciliation
-  work since then. 10k peaks also fell (964–1,111 versus 1,101–1,224 MiB).
-- **Soak growth**: whole-app post-close slopes over cycles 21–100 are +0.35,
-  +0.28 and +0.31 MiB/cycle (yardstick 0.2); soak-01's first/last shift is
-  26.629 MiB against 20, a separate failed predicate. By role the renderer contributes +0.20–0.22 MiB/cycle,
-  matching `733f0cb1`'s +0.19–0.20; host +0.03–0.07, GPU +0.03–0.08, others
-  flat. Handle slopes are +0.9, −1.1 and −2.5 per cycle; GUI objects move
-  by at most one. The renderer trend is unchanged; the whole-app difference
-  comes from GPU/host variance, not a new growth source.
-
-Raw samples, events, fixtures and per-run results live under `soak/`; the
-validator report is `soak-validation.json`.
-
-## DOM mutation and bridge follow-up — 2026-11-09
-
-The follow-up to `fb448fac` isolates DOM reconciliation, viewport measurement
-and redundant paints while preserving 250 ms local paints, 500 ms routine
-window reads and 25 ms clean-result collection. Focused probes observe retained
-row attachment, geometry updates and prompt progress during delayed reads.
-Native comparisons use frozen base/candidate package trees and a shared driver,
-fresh owned profiles/targets, the existing read-only 10k × 32 B corpus and normal
-GC. Targets are inside this task's workspace evidence root, so absolute times
-are not interchangeable with the earlier study's `H:\test_dir` targets.
-The initial Plan bracket (baseline/candidate/candidate/baseline) is retained
-but excluded from performance conclusions: the user reported external machine
-activity during the preceding roughly fifteen minutes, ending around 11:47
-Asia/Shanghai. Two fresh opposite-order Plan pairs run after that idle report,
-with the Inventory pair between them. Inventory covers baseline, verify and
-rebaseline. CPU, memory and elapsed
-values are diagnostics, not new acceptance budgets or leak guarantees. Exact
-mirror/source checks and normal empty-Job shutdown qualify complete runs.
-Source/driver identities, raw receipts and review live under
-`build/dom-costs-20261109/`.
-
-The final interface department passes 2,289 cases (4,237 deselected), and all
-six affected installed journeys pass, including both window sizes for execution
-review and task shell. The focused probes distinguish the old source through
-retained-row detachment, synchronous Follow measurement and unchanged read-tick
-paint assertions. Two initial-candidate issues were corrected before freezing:
-cached geometry during resize, and temporary scroll collapse during structural
-Plan publication. Existing native assertions remain unchanged. An independent
-actual-window resize witness confirms the final reconciliation frame restores
-loaded coverage without an extra read. Failed attempts, exact native source
-identities and negative controls remain under `builder/` and `review/`.
-
-Quiet Plan baseline → candidate observations, after the idle report:
-
-| Pair and execution order | Seconds | Renderer CPU seconds | Renderer peak MiB | Window reads |
-| --- | --- | --- | --- | --- |
-| 03: candidate, baseline | 128.16 → 137.56 | 40.48 → 46.63 | 689 → 732 | 247 → 265 |
-| 04: baseline, candidate | 117.83 → 112.24 | 33.44 → 31.88 | 683 → 664 | 227 → 217 |
-
-The unfavorable first quiet pair did not repeat in reversed order. Both arms
-drifted substantially downward, so these observations establish neither a
-stable resource/speed benefit nor a regression. Host and GPU CPU and created
-element totals also changed direction between pairs. The deterministic
-reduction in row detachments and redundant calls is separate evidence; it does
-not account for the entire native-rendering bucket. Main receipts include the
-four excluded pre-idle Plan runs, four quiet Plan runs and two Inventory runs.
-
-Quiet Inventory baseline → candidate observations (one pair):
-
-| Phase | Seconds | Renderer CPU seconds | Renderer peak MiB | Window reads |
-| --- | --- | --- | --- | --- |
-| Baseline | 26.35 → 25.96 | 10.25 → 8.27 | 307 → 286 | 55 → 52 |
-| Verify | 25.49 → 25.42 | 8.50 → 7.42 | 343 → 312 | 52 → 53 |
-| Rebaseline | 25.51 → 25.52 | 6.17 → 8.92 | 332 → 315 | 57 → 54 |
-
-Elapsed time and combined renderer CPU (24.92 → 24.61 seconds) are effectively
-unchanged in this diagnostic pair. Sampled renderer peaks are about 6–9% lower;
-the CPU direction varies by phase. These are observations, not a broad CPU,
-throughput or leak claim. Each phase has an exact durable population audit.
-
-**Post-DOM collection and ACK attribution.** A separate quiet 25/200 ms pair
-uses the same frozen final package and its own matched instrumentation. Only
-the diagnostic wrapper changes the collection constant in process memory;
-shipped collection remains 25 ms. Both runs pass exact audits and normal
-empty-Job shutdown. Execution-phase observations:
-
-| Metric | 25 ms | 200 ms |
-| --- | ---: | ---: |
-| Elapsed seconds | 113.447 | 112.176 |
-| Host CPU seconds | 80.344 | 69.813 |
-| Renderer CPU seconds | 31.953 | 32.000 |
-| Drain commands | 3,207 | 562 |
-| Plan window commands | 218 | 215 |
-
-Whole-application call-thread attribution includes startup, planning and close;
-it must not be summed into the execution-only values above:
-
-| Bucket | 25 ms calls / CPU seconds | 200 ms calls / CPU seconds |
-| --- | ---: | ---: |
-| Ordinary ACK | 3,523 / 1.453 | 876 / 0.250 |
-| Event drain | 3,214 / 5.438 | 569 / 3.469 |
-| Window | 220 / 4.641 | 217 / 4.500 |
-| All bridge call threads, including other commands and completion ACKs | 7,052 / 12.266 | 1,758 / 8.969 |
-
-Thread count falls 75.1% and execution-phase host CPU 13.1%, but elapsed time
-falls only 1.271 seconds. Worker whole-lifetime CPU is nearly unchanged
-(58.906 → 58.234 seconds). Fewer calls still carry the same reliable results;
-file/durable work and window/rendering traffic remain. This supports resource
-savings without a proportional critical-path gain, not an exact decomposition
-of waits or a stable speed/latency guarantee from one ordered pair.
-
-The diagnostic classifies the installed pywebview call closure before measuring
-its original thread body through native return. It includes handler and
-serialization CPU, excludes caller-side thread creation and final teardown,
-retains no payload, and avoids the earlier live/ended double count. Eleven
-classifier cases and the installed closure/request-prefix checks pass; all
-classified command counts match independent handler counters, with zero
-unclassified calls. Native phase CPU has one-second sampling boundaries;
-thread-time accounting has finite resolution. Full provenance, raw samples,
-audits and checker identities are in
-`build/dom-costs-20261109/measurement/collection/ack-summary.json` and
-`build/dom-costs-20261109/measurement/collection/final-summary.md`.
-These instrumented runs are separate from the
-DOM comparison. Slower local painting and frontend pulls remain deferred.
-
-**Collection and ACK investigation.** Reanalysis of the three adjacent
-25/200 ms pairs with reversed ordering in `build/exec-time-20261109/out5` finds
-mean bridge-thread
-counts 6,988 versus 1,715 (−75.4%), but sampled bridge-thread CPU only 11.6
-versus 8.2 seconds (−29.3%). Host CPU falls 77.37 to 66.5 seconds; execution
-averages 112.60 versus 110.47 seconds with overlapping ranges, including one
-adjacent pair slower with collection. Worker CPU stays about 49–52 seconds;
-Plan reads and renderer/GPU CPU barely change. Collection removes fixed call,
-thread, envelope and snapshot overhead while retaining reliable item data,
-serialization/validation, filesystem/durable work and independent rendering.
-Saved CPU overlapping IO waits is a plausible explanation for the small elapsed
-gain, not a measured GIL/wait decomposition. That earlier instrumentation combines
-ACK and command calls, so it cannot establish ACK-only CPU or a speed forecast.
-The old `report.py` also double-counts a live/ended worker at one `gui-02`
-boundary; its negative residual is unusable. Process totals and ended bridge
-target deltas do not depend on that residual. The investigation records exact
-sample-window differences and receipts.
-
-A possible later design is drain-only predecessor-receipt piggybacking, with
-cleanup before successor admission/long-poll waiting and standalone cleanup
-when no successor is issued or delivery is uncertain. Ordinary, mutation and
-async-completion cleanup would remain unchanged. This is not approved product
-behavior: BRIDGE still requires current ACK custody. General timed ACK batching
-would add bounded retention, flush and retry responsibilities. Approximate
-drain-ACK call opportunities fall from 3.2k of 7k calls at 25 ms to 0.58k of
-1.7k at 200 ms; these use slightly different count windows and are not CPU
-forecasts. Collection and ACK savings overlap, rather than adding independently.
-Piggybacking would still perform custody release in the successor thread;
-measured ACK-thread CPU would not all disappear. Its potential savings are the
-separate call/thread/return overhead, not the required cleanup itself.
-The new pair separates call-thread CPU, but a future collection change still
-needs clean/urgent delivery and concurrent-task checks. A future ACK change
-needs exact custody/admission, saturation, failed delivery, terminal/no-successor
-cleanup and worker-exit evidence. Current asynchronous ACK cleanup does not
-gate successful response adoption; fewer calls cannot be equated with the same
-fraction of delivery time saved. Detailed source owners and proposed checks are in
-`build/dom-costs-20261109/bridge/investigation.md`.
-
-## Execution time: GUI versus headless — 2026-11-09
-
-Source runs of `7413a833` on the frozen 10k study fixture (10,000 × 32 B in
-100 folders, 10,100 operations, verify on). Each batch alternates arms in fresh
-processes. Drivers, receipts, thread CPU samples and timers are under
-`build/exec-time-20261109/` (`gui.py`, `svc.py`, `threadprobe.py`,
-`timers.py`, `phase_cpu.py`; batches `out`–`out10`). GUI fixtures are registered per batch in
-`fixtures.jsonl`; headless targets are torn down after their mirror check.
-Every run completed with an exact mirror and normal close.
-
-| Batch | Headless service | GUI | GUI variant |
-| --- | --- | --- | --- |
-| 1 | 94.4 / 95.8 / 96.5 s | 126.7 / 135.2 / 167.0 s | — |
-| 2 | — | 117.6 / 127.9 / 134.2 s | 0.5 ms GIL switch interval: 111.7 / 113.3 / 127.5 s |
-| 3 (timers) | 97.6 / 98.8 s | 126.9 / 139.9 s | — |
-| 5 | — | 109.8 / 112.5 / 115.5 s | 200 ms result collection: 109.1 / 111.0 / 111.3 s |
-| 7 | 93.3 / 93.8 / 94.2 s | 110.1 / 117.0 / 117.4 s | Power throttling off: 113.6 / 114.5 / 115.0 s |
-| 9 | — | 128.3 / 129.6 / 129.7 s | Minimized: 116.7 / 118.1 / 120.2 s; minimized, throttling off: 116.1 / 116.6 / 119.7 s |
-| 10 | 105.2 / 106.9 s | 128.4 / 129.4 s | Minimized: 115.1 / 117.7 s |
-
-**Variation.** Headless execution stays at 93–99 s through batch 7 and rises
-to 105–107 s in batch 10 alongside the GUI arms, so the host state itself
-drifts. The same GUI build ranges from 110 to 167 s across batches on one day. Within a batch, the GUI adds
-16–23 s in later batches and 31–71 s in the first. A single pair cannot resolve
-a 14% speed change. Earlier source bisection of this harness found `b6a4fefe`'s
-source at 117–125 s against 113–152 s for later commits, with no
-commit-dependent difference ([`733f0cb1` schedule](#full-resource-schedule-on-733f0cb1--2026-110708)).
-`b6a4fefe`'s fastest packaged 10k run (85 s) is below today's headless floor,
-so no GUI change can reach it on this host state. It reflects a different
-environment, not a faster product.
-
-**Where the GUI adds time.** In-process thread CPU sampling shows that the
-session worker does the same file work in both modes but uses more CPU with
-the GUI (49–51 s headless versus 51–68 s GUI). Inclusive function timers
-(batch 3, two runs each) attribute the extra ~34 s across the whole
-pipeline. Python-heavy guards slow most: `RootHold.require_ordinary` (271k
-calls) 3.3 → 7.0 s, path resolution 11.5 → 16.5 s and `_prepare_copy`
-22.7 → 30.7 s. The verification open of the just-copied file slows least:
-33.7 → 40.7 s. A uniform slowdown of Python work points to contention: other
-host Python threads hold the GIL, and other threads share physical cores. The
-following candidates were tested and ruled out:
-
-- **GIL handoff latency.** Lowering the switch interval from 5 ms to 0.5 ms
-  moved the mean ~9 s, within the overlapping ranges.
-- **Bridge thread volume.** pywebview starts a thread per bridge call, and each
-  command response triggers a second `ack:` call: 7.6k–9.7k threads use
-  11.5–16.5 s CPU per run. A 200 ms clean-result collection window (runtime
-  patch) cut drains 3.2k → 0.59k, bridge threads 7k → 1.7k and host CPU
-  77 → 66 s, but execution time only 1–5 s.
-- **Efficiency cores.** The i7-13700K's logical processors 16–23 are efficiency
-  cores. Sampled worker calls ran on them 0.0–0.6% of the time, and opting the
-  host process out of execution-speed throttling did not change the time.
-
-The headless floor is the pipeline itself: about 43 s of copy and 51 s of
-verification. The just-copied file's first open alone takes ~34 s (see the
-[`b6a4fefe` cost attribution](#multiple-open-tasks-and-cost-attribution-on-b6a4fefe--2026-11-07)). The remaining GUI cost is not owned by one
-host path. The minimized-window runs below split it about evenly between
-rendering contention and in-process work. Removing the in-process half
-entirely would need execution outside the GUI host's interpreter, a separate
-architectural decision. Larger execution gains are in
-the pipeline's existing M2 candidates: verification overlap, grouped
-recording and copy guards.
-
-**Renderer CPU.** A V8 CPU profile of one 114 s GUI execution (`out6`) shows
-the renderer main thread idle for 85.5 s. Of 28.5 s busy, JavaScript is about
-3.5 s. The other 25 s is native work that the profiler does not split:
-style, layout, paint and compiling each bridge response script.
-`table_controller.js` `height()` takes 1.2 s. `setFollowScrollTop` calls it on
-each Follow paint, which forces a synchronous layout. Column resizer
-measurement takes 0.5 s and Plan row rendering 0.5 s. Lowering renderer CPU
-means fewer paints or cheaper frames, not faster JavaScript. Rendering does
-slow execution even though it runs in other processes; the minimized-window
-runs below show this.
-
-**Minimized window (batches 8–10).** The driver minimizes the app window right
-after Execute, which makes the page `hidden`, and restores it at completion.
-Restoring adds about 1 s to the minimized times shown. Execution-phase CPU by
-process (`phase_cpu.py`):
-
-| Arm | Execution | Host process | Renderer | GPU process | Worker thread |
-| --- | --- | --- | --- | --- | --- |
-| Headless (batch 10) | 105–107 s | — | — | — | 55.6–56.5 s |
-| GUI visible | 128–130 s | 85.6–88.1 s | 35.7–39.8 s | 12.8–16.8 s | 60.6–62.6 s |
-| GUI minimized | 115–120 s | 75.6–80.0 s | 8.5–10.1 s | < 0.5 s | 55.6–58.5 s |
-
-Minimizing removes about 28 s of renderer and 15 s of GPU-process CPU, and the
-worker's CPU drops to the headless level. Execution recovers 11–13 s, about
-half of the GUI's 23 s excess in batch 10. The rest (~10 s) remains with
-rendering nearly idle. The hidden page still issues 92% of the `next_events`
-pulls (3.3k versus 3.6k), against half the Plan window reads (116 versus 252). Host
-Python work outside the worker (≈20 s CPU) still competes for the GIL. So
-roughly half the GUI cost is cross-process rendering contention, which
-rendering cuts can reduce. The other half is in-process bridge and drain work,
-which a smaller bridge volume or execution outside the GUI interpreter would
-address. Turning off power throttling while minimized changes nothing.
-
-The first minimized run (batch 8, single smoke run) took 177.4 s with 13.2% of
-sampled worker calls on efficiency cores, against ≤1.3% in every other run.
-Windows can deprioritize a minimized process, but this did not recur in five
-later minimized runs. It is recorded as an unexplained outlier.
-
-## Coalesced table refresh measurements — 2026-11-08–09
-
-This follow-up compares Git `39255ca30672a0d978a9e8ad423b389cbbd27244`
-with the shared automatic scheduler and renderer changes described in
-[PRESENTATION](PRESENTATION.md). Evidence is under
-`build/refresh-cadence-20261108/`, `build/render-costs-20261108/` and
-`build/cadence-measurement-20261108/`. These are diagnostic comparisons, not
-latency, heap-size or throughput acceptance budgets.
-
-A complete baseline/candidate asset comparison at 8/64/256 rows counts 26 versus
-15 created elements for one entering Plan row plus one changed execution row.
-An unchanged dynamic-cell update creates no elements or text writes. Both
-detail bodies retain their current fact nodes and perform no unchanged text
-writes; this is not a zero-allocation claim for the whole pane or its status
-header. The superseded mixed-asset counting receipt is retained, with corrected
-asset/helper/fixture provenance in `row-counts.json`.
-
-The matched native corpus has 10,000 32-byte files in 100 folders. Each arm uses
-a frozen complete package, fresh task-owned profiles/data/targets and the same
-producer/runtime/corpus. Inventory runs Baseline, Verify and Rebaseline; Plan
-runs copy plus linked Verify. Passive private-memory sampling and element
-counters leave execution GC policy unchanged. Exact database-copy audits check
-all expected paths/results; Plan also checks source preservation and the exact
-mirror. Single pairs cannot establish stable speed, leaks or 100k behavior.
-
-The final revision uses independent 500 ms routine full-read and 250 ms local
-paint clocks, plus the approved 25 ms successful integrity collection. Only
-`app.js` changes logically from the prior integrated freeze; `plan.js` also has
-a recorded newline-only byte change after recovery restoration. Complete raw
-hashes and normalized differences are in `final-identity-check.json`, with the
-prior manifest preserved as `manifest.integrated.json`. The performance producer
-and helper bytes remain unchanged. Original → final observations are:
-
-| Workload | Seconds | Full-window reads | Drain commands | Created elements | Renderer private peak MiB |
-| --- | --- | --- | --- | --- | --- |
-| Inventory Baseline | 38.14 → 33.37 | 434 → 72 | 844 → 838 | 168,707 → 115,236 | 1,367 → 357 |
-| Inventory Verify | 40.06 → 29.84 | 371 → 62 | 713 → 746 | 174,437 → 98,501 | 1,285 → 327 |
-| Inventory Rebaseline | 41.00 → 28.91 | 368 → 57 | 713 → 734 | 168,380 → 92,925 | 1,246 → 334 |
-| Plan copy + linked Verify | 157.98 → 135.68 | 320 → 260 | 11,634 → 3,590 | 361,809 → 226,288 | 840 → 644 |
-
-Inventory V8 peaks are 76.96/68.81/72.18 MiB and sampled renderer CPU is
-10.80/11.06/8.69 seconds. Full reads fall 83–85% and sampled renderer peaks
-73–75% versus the original. Plan sampled renderer peak falls 23.4%, full-window
-reads 18.8% and overall duration 14.1%. Plan host CPU falls from 141.48 to 104.33
-seconds, but renderer CPU rises from 38.78 to 43.53 seconds (12.2%). Lower overall
-cost does not establish that every rendering path got cheaper. Local painting,
-bounded row comparison, entering-row/changed-cell construction and full-window
-decode/validation remain work; no compact delta payload or off-window cache was
-introduced. Same-window/shifted Plan read medians are 507/515 ms; Inventory is
-about 504–505/513 ms, including permitted immediate and viewport reads.
-
-All eight native performance runs pass exact audits and frozen-source/runtime
-checks and exit normally with empty Jobs. The separate native delivery receipt
-below remains valid because the drain/bridge dependencies did not change. Final
-installed/API-floor checks pass across five initial cases and two unchanged-candidate
-retries: the first confirmation-dialog Tab observations failed before execution,
-outside the scheduler's active-session path. No product/helper/assertion change
-was made between attempts; both failed and passing receipts are retained under
-`build/read-cadence-20261109/`. `final-summary.md`, `comparison-final.json` and
-the independent final native receipt review own the complete four-way comparison.
-These are single matched observations, not guarantees or a 100k/leak study.
-
-The frontend-only candidate is not an accepted performance delivery. In the
-following table each cell is baseline → candidate; the source freeze and all
-producer/checker identities are retained with `comparison-summary.md` and
-`comparison.json` under the native evidence root.
-
-| Workload | Seconds | Window reads | Drain commands | Created elements | Renderer private peak MiB |
-| --- | --- | --- | --- | --- | --- |
-| Inventory Baseline | 38.14 → 54.89 | 434 → 190 | 844 → 8,244 | 168,707 → 133,376 | 1,367 → 761 |
-| Inventory Verify | 40.06 → 61.37 | 371 → 218 | 713 → 8,282 | 174,437 → 136,090 | 1,285 → 985 |
-| Inventory Rebaseline | 41.00 → 61.34 | 368 → 200 | 713 → 8,511 | 168,380 → 127,255 | 1,246 → 856 |
-| Plan copy + linked Verify | 157.98 → 199.96 | 320 → 697 | 11,634 → 11,882 | 361,809 → 223,957 | 840 → 1,463 |
-
-Inventory same-window/shifted-window median start gaps are approximately
-251/511 ms. Plan changes from 530/544 to 253/511 ms. These include permitted
-explicit, terminal and viewport reads; deterministic tests own automatic cadence
-assertions. Plan returned rows rise from 81,404 to 177,157, and sampled renderer
-CPU from 38.78 to 74.52 seconds. Lower DOM construction alone is insufficient to
-claim lower footprint. The faster loaded-window read policy merits reconsideration.
-
-Inventory renderer CPU falls, but host CPU roughly doubles and cumulative drain
-handler time rises from 3–5 to about 19 seconds per mode. Recorded activity
-durations confirm actual slowdown rather than merely a delayed terminal paint.
-Source review finds an unchanged immediate single-flight browser rearm and
-immediate reliable integrity delivery. Previously synchronous rendering supplied
-incidental backpressure; smaller drain batches are inferred, not measured.
-The stream retains its queue/response/concurrency bounds. Evidence supports
-amplified host/drain work, without isolating GIL, serialization or Defender.
-`drain-amplification-review.md` records the finite review and proposed reuse of
-COPY's wakeable 25 ms collection. A delivery-latency change needs separate scope
-approval; durable recording and verification concurrency remain excluded.
-
-All four runs exit normally with empty Jobs and pass the exact durable/mirror
-audits and frozen source/runtime checks. These audits do not prove exact browser
-event delivery. The premature Plan audit failed before `result.json` existed
-during producer finalization; its receipt is retained and the final rerun passes.
-
-The user then approved extending the existing wakeable 25 ms successful-result
-collection to ordinary and linked integrity outcomes. The integrated source
-freeze differs from the frontend-only freeze only in `drain.py`; the measurement
-producer/helpers are byte-identical, with the original manifest retained as
-`manifest.frontend-only.json`. Original → integrated observations are:
-
-| Workload | Seconds | Window reads | Drain commands | Created elements | Renderer private peak MiB |
-| --- | --- | --- | --- | --- | --- |
-| Inventory Baseline | 38.14 → 44.86 | 434 → 143 | 844 → 1,021 | 168,707 → 118,957 | 1,367 → 567 |
-| Inventory Verify | 40.06 → 41.29 | 371 → 126 | 713 → 951 | 174,437 → 108,290 | 1,285 → 538 |
-| Inventory Rebaseline | 41.00 → 40.79 | 368 → 125 | 713 → 952 | 168,380 → 107,399 | 1,246 → 469 |
-| Plan copy + linked Verify | 157.98 → 199.48 | 320 → 684 | 11,634 → 4,729 | 361,809 → 231,255 | 840 → 1,305 |
-
-Inventory renderer CPU falls to 18.80/13.75/14.52 seconds, with host CPU
-45.94/42.66/42.78 seconds. The exposed drain amplification is largely removed;
-Baseline duration remains 17.6% higher than the original in this single sample,
-so no throughput improvement is claimed. Cumulative drain handler wall time
-now includes intentional collection waits and must not be described as CPU cost.
-Integrated Plan reduces drain traffic, renderer CPU and peak relative to the
-frontend-only candidate, but remains about 26% slower and 55% higher in sampled
-renderer peak than the original. Renderer CPU is 65.44 seconds versus original
-38.78; host CPU is 159.81 versus 141.48. Its full-window traffic remains more
-than twice the original. Exact phase/mirror/durable audits pass and all six
-performance runs close normally; this does not make the cost tradeoff acceptable.
-That combined candidate was preserved as recovery-only `ce09180e`. The user
-subsequently approved 250 ms local paints with 500 ms full-window reads; its
-separate implementation and verification must not inherit this cost result.
-`integrated-summary.md` and
-`comparison-integrated.json` retain the final three-way observations; no stable
-throughput, leak or 100k claim is made.
-
-A separate 256-file native diagnostic uses byte-identical production browser
-bridge callbacks to compare accepted reliable identities against producer order.
-It verifies 1,327 identities over six sessions, including four exact 256-subject
-integrity populations, no Gap, one terminal event/record/release per session,
-both task Close receipts and an empty-Job normal exit. Its source/helper/checker
-hashes and independent raw comparison are under
-`build/integrity-drain-20261108/`. A first diagnostic missed the borrowed helper's
-exact HTML/native title requirements; its populated fixture and failed receipt
-are retained, with normal owned-host closure and a fresh successful retry.
-These delivery observations are separate from the performance producer and
-durable database audits; deterministic tests own fixed-deadline/urgent-wake timing.
-
-The optional table-loading profiler has a pre-existing bridge instrumentation
-anchor mismatch, reproduced on both baseline and candidate. The changed app,
-Plan and tree instrumentation consumers transform and parse successfully;
-this does not certify the whole optional profiler. The mismatch remains
-deferred, with receipts under `build/refresh-cadence-20261108/`.
-
-## Inventory Follow allocation investigation — 2026-11-08
-
-The Inventory follow-up uses `e80cec1a` as its baseline. The delivered scope
-reuses compatible overlapping rows, without changing the 256-row window,
-automatic Follow cadence or collection policy. The user deferred the attempted
-loaded-target shortcut after its native diagnostic exposed read amplification.
-Functional evidence belongs in `build/inventory-follow-20261108/`; counted and
-native diagnostic evidence belongs in `build/inventory-costs-20261108/`.
-
-An unchanged same-offset window of 8/64/256 rows creates 112/896/3,584 elements
-and 56/448/1,792 listeners before reuse, versus zero after. A one-row shift with
-one changed integrity cell creates 16 elements and seven listeners after reuse
-at all three widths and all three integrity modes; the baseline rebuilds the
-complete window with the same counts above. The common renderer driver counts
-the complete panel paint, including temporary cell construction. These named
-fixtures are deterministic allocation diagnostics, not a fixed memory budget.
-
-The unsuccessful combined variant is important to the next design. Its Baseline
-phase completes, but takes 150.78 seconds and makes 3,788 window reads/3,843 drain
-calls, against 47.62 seconds and 542/1,045 in the baseline. Element construction
-falls from 1,850,962 to about 153,000, yet sampled renderer private memory peaks
-around 6,709 MiB. Verify is deliberately canceled and the owned host closes
-normally with an empty Job; this partial run is not acceptance evidence. The
-driver's bounded error-state CDP capture also fails after the connection closes; retained
-events and application logs establish cleanup and command counts.
-
-The shortcut removes the foreground anchor/window lifetime that used to suppress
-separate overlay admission. Nearly every drain reply then admits a new complete
-overlay window. Unconditionally retiring viewport demand for each local target
-also invalidates an in-flight overlay even when no viewport request exists.
-Rendering itself does not create a self-sustaining read loop: new snapshot demand
-or navigation invalidation drives it. The favorable DOM counts therefore cannot
-justify shipping the combined variant. Row reuse alone is measured separately.
-
-One fresh-process baseline and one reuse-only process each run Baseline, Verify
-and Rebaseline in that order over the same isolated 10k × 32 B corpus, with
-normal terminal collection and two-second settled pauses. The same counters,
-sampling driver and runtime apply to both. All three modes in both usable runs
-complete cleanly; independent database-copy audits verify exact 10k path/result
-sets per mode and final baseline attestations, without changing original database
-bytes. Corpus file hashes remain unchanged, and both hosts exit normally with empty
-Jobs. All 303 package files are recorded; the final variant differs in only
-`tree.js` and `inventory_review.js` after newline normalization. Raw newline-only
-differences are retained in the identity report rather than hidden.
-
-| Mode | Elements created, before → reuse | Listeners created, before → reuse | Renderer private peak, MiB, before → reuse | Window reads, before → reuse |
-| --- | ---: | ---: | ---: | ---: |
-| Baseline | 1,850,962 → 171,834 | 925,351 → 75,782 | 1,759 → 1,811 | 542 → 512 |
-| Verify | 1,194,903 → 168,538 | 597,401 → 74,137 | 1,295 → 1,585 | 359 → 500 |
-| Rebaseline | 935,222 → 174,666 | 467,599 → 77,209 | 1,082 → 1,629 | 279 → 497 |
-
-Whole-run window/anchor/drain counts are 1,181/1,135/2,270 before and
-1,510/1,467/2,942 after. The phase command-timing filter misspells the anchor
-command; only whole-run anchor totals are supported. These single samples show
-reduced DOM construction, not footprint or throughput improvement. The final
-candidate's private peaks are higher in all three modes. An earlier row-reuse
-run before the own-property-call compatibility correction had mixed peaks;
-it remains separate historical evidence, not a substitute for the final table.
-Observed durations are 47.62/35.80/37.92 seconds before versus 38.35/36.98/37.38
-after. Faster painting can change drain/read frequency under unchanged scheduling;
-the exact private-memory difference is not attributed to one allocation path.
-Sampled heap and
-private-memory peaks are independent observations, not additive components.
-No 100k, soak or release-resource gate was rerun. Failed setup/socket attempts,
-the failed combined variant, raw receipts and audit corrections remain retained.
-
-Source tracing distinguishes navigation from result freshness. A new uncached
-Inventory target ordinarily resolves an authoritative anchor and landing window,
-and Follow can sample a newer target immediately after landing. The deferred
-shortcut would remove that transaction for an exact loaded row. Independently, ordinary integrity
-updates dirty the current overlay; `refreshInventoryOverlay` reads a complete
-bounded window and optional open detail, coalescing newer dirty revisions.
-Local navigation can remove its own lookup without eliminating overlay or
-viewport-coverage reads. Row reuse removes repeated DOM construction, not the
-serialization, transport, parsing and comparison of those window facts.
-
-Remaining costs also include newly entering rows, changed integrity cells,
-task/panel rendering, and detail reconstruction when detail is open. The number
-of newly visited rows and the number of paints are different scaling axes:
-slower verification may reduce allocation per second while still visiting the
-same rows over a longer run. A short private-memory slope is not an extrapolated
-retention rate because runtime collection and allocator high-water behavior
-affect the sampled footprint. Further cadence or rendering-limit changes need
-a separate behavior decision; this investigation does not apply either.
-
-Plan has a distinct remaining allocation path: `updateExecutionCells` builds a
-temporary complete row and transfers only its intent, checksum and notes cells
-into the retained row. Its earlier counted witness creates 26 elements for one
-entering row plus one changed execution row. That is a possible future local
-rendering optimization without changing Follow cadence; it was not changed here.
-Inventory's measured fixture creates fourteen elements and seven listeners per
-entering row, plus two elements for a changed presence cell. Even perfect overlap
-reuse still constructs rows as traversal advances. None of these counts attributes
-the user's specific 40 MiB per eight seconds to a particular owner.
-
-Before revisiting Inventory local Follow, give overlay refresh an explicit
-freshness/coalescing policy rather than relying on time spent in navigation IPC.
-The existing full-window replies carry both structure and current results; a
-future design should account for both consumers before eliminating either read.
-Changing that policy, reusing departed DOM as a fixed pool, or introducing wire
-deltas are separate proposals. Lowering the row limit or adding execution GC is
-not required by the findings and is not part of the delivered change.
-
-## Plan Follow allocation reduction — 2026-11-08
-
-The follow-up to the execution-peak investigation below changes only Plan Follow
-navigation and row rendering. Loaded exact operation targets scroll within the
-current compatible window. Active committed windows reuse structurally matching
-rows from their overlap, updating current execution cells and handler bindings.
-The retained set remains one bounded window, with no off-window DOM cache.
-
-Counted browser witnesses in `build/follow-allocation-20261108/` verify two
-successive loaded verification targets cause no new Follow anchor/window calls.
-A one-row shift with one entering row and one changed execution row creates
-98/770/3,074 elements before versus 26/26/26 after at window widths 8/64/256.
-The same retained driver executes both renderer variants and counts only the
-shifted render, including temporary cell construction. Retained DOM/listener
-identity, current handler facts, static-change rebuilding and retirement of
-off-window nodes are checked independently of elapsed time. These witnesses
-describe the named workload, not a fixed whole-app memory budget.
-
-The native comparison in `build/follow-memory-20261108/` uses isolated frozen
-source trees and four fresh-process 10k × 32 B runs, ordered baseline/candidate
-then candidate/baseline. Baseline is `b5b6071b`. Candidate uses baseline canonical
-bytes plus the two changed assets, with normalized package identity checked
-against the checkout. Source/runtime/driver manifests, command counts, sampled
-DOM/heaps and process memory remain with the raw runs. Every run uses the same
-two-second terminal pause before Close to avoid conflating the earlier immediate
-close-click race. Collection policy is unchanged. Exact mirrors, source
-preservation, durable verification and normal empty-Job shutdown are required
-before interpreting a sample. This bounded diagnostic is not a repeat of the
-100k or long-run release/resource schedule.
-
-All four runs pass those checks on Edge 157.0.4341.42 / V8 15.7.11.4.
-Each independent post-close database audit verifies exactly 10,100 operation
-records, 10,000 verified target paths and the expected completed phases, with
-original database bytes unchanged. All 303 package files match the frozen
-variant, and only the two approved assets differ between variants. The final
-source freeze supersedes an unrun pre-review candidate retained for provenance.
-
-| Observation, range across two runs per variant | Baseline | Candidate |
-| --- | ---: | ---: |
-| Whole-app private-memory peak, MiB | 1,400.1–1,505.0 | 1,201.1–1,212.1 |
-| Renderer private-memory peak, MiB | 976.2–1,079.8 | 776.3–779.4 |
-| Execute-phase sampled DOM nodes, maximum | 137,903–159,745 | 64,225–68,455 |
-| Execute-phase sampled listeners, maximum | 51,035–59,091 | 16,435–16,466 |
-| Execute-phase sampled embedder heap, MiB | 415.14–483.56 | 212.04–220.83 |
-| Execute-phase sampled V8 used heap, MiB | 372.26–373.16 | 335.01–337.55 |
-| Plan window requests per run | 340–347 | 271–281 |
-| Plan anchor requests per run | 213–219 | 52–57 |
-
-All whole-app peaks occur during `task-execute`, which includes copy and linked
-verification. Heap/counter maxima are sampled independently and are not additive
-parts of one simultaneous private-memory observation. Execute plus Verify takes
-118.3–121.6 seconds before and 117.2–121.2 after, with no throughput improvement
-claim. These two pairs support reduced churn and lower peaks on this fixture,
-not universal memory or leak-freedom claims. `summary.json`, `report.py` and
-per-run raw samples/audits retain the aggregation and provenance.
-
-## Full resource schedule on `733f0cb1` — 2026-11-07/08
-
-**Artifact.** `build/resource-study-20261108/package/NamiSync-windows-x64-dev.zip`,
-SHA-256 `c14d1691ed8fde68d073c76c58ba2a29c9925c8817f537a5cb91dcc676a7c082`,
-built by `build_package.ps1` (same locked recipe as the `b6a4fefe` study) from
-clean `733f0cb1`: idle renderer collection, bounded admission, response-copy
-removal, executor spelling reuse and later GUI fixes. Same host, collector,
-corpus and frozen 17-run schedule as the [`b6a4fefe` study](#full-resource-schedule-on-b6a4fefe--2026-110607).
-Runtime changed underneath: Edge 157.0.4341.42 here versus 156.0.4314.58 there.
-All 17 runs completed (`full.log` ends `exit 0`); every deferred mirror matched
-and every app exited 0. `validation.json` verdict is FAIL, informational as
-before; its causes are below.
-
-| Profile (runs) | Peak, whole app | Settled after close | `b6a4fefe` peak / settled |
-| --- | ---: | ---: | ---: |
-| Startup (3 plain, 3 DevTools) | 341–354 MiB | 335–350 MiB | 346–374 / 342–372 |
-| 10,000 × 32 B (3) | 1,101–1,224 MiB | 527–540 MiB | 950–976 / 826–842 |
-| 100,000 × 32 B (3) | 3,298–3,674 MiB | 689–793 MiB | 2,365–2,557 / 1,999–2,126 |
-| Payload (1) | 428 MiB | 404 MiB | 444 / 423 |
-| Soak, 100 cycles (3) | 605–620 MiB | 510–536 MiB per cycle | 732–781 / 643–753 |
-| 10k task open, idle 60 min (1) | 1,086 MiB | 522 MiB | 962 / 804 |
-
-**Settled memory.** Boundary collection does what it was built for. After close,
-100k tasks keep 1.2–1.4 GiB less than before and now fall under the 1 GiB
-yardstick; 10k tasks keep ~300 MiB less. The open-task idle held 560 MiB
-instead of 837 MiB, so terminal release alone collects. The 60-minute slope was
-flat (−0.01 MiB/10 min).
-
-**Execution peak rose.** Peaks moved from `task-executed-open` to
-`task-execute`, driven by the renderer: 685–801 MiB at 10k (was 499–541) and
-2.32–2.71 GiB at 100k (was 1.37–1.53). Boundary collection cannot act during
-Execute. Two old-package 10k runs on runtime 157 (`oldpkg-runtime157/`) peaked
-at 894 and 1,131 MiB. The interleaved same-morning control
-(`build/close-probe-20261108/pkg/`, three 10k runs per package, alternating)
-separates them: new 1,203–1,258 MiB (renderer 778–828), old 951–1,082 MiB
-(renderer 519–635), with execute times equal (119–122 s vs 121–129 s). Every
-new run is above every old run, so most of the 10k rise comes from the product
-change since `b6a4fefe`, not runtime 157. 100k was not rerun on the old package.
-
-**Execution peak isolated to `323b5377`.** `build/peak-bisect-20261108/`
-(`peak_probe.py`) runs the source app from detached worktrees of each candidate
-commit through the same collector and 10k workload, interleaving arms, on
-runtime 157. Peaks, whole app:
-
-| Tree | Peak (runs) |
-| --- | ---: |
-| `b6a4fefe` (old package source) | 741–959 MiB (3) |
-| `cbf3f090` response-copy removal | 855–923 MiB (3) |
-| `2ca0b291` idle collection, live / no-op | 773–897 / 822–859 MiB (10 / 3) |
-| `323b5377` linked-verification follow | 1,369–1,420 MiB (7) |
-| `650cddbc`, `733f0cb1` (HEAD), collection live | 1,323–1,454 MiB (7) |
-
-Response-copy removal and collection are cleared; the step is `323b5377`, and
-later commits add nothing. HEAD with collection replaced by a no-op peaked at
-1,188–1,231 MiB (3), still far above `2ca0b291`. Renderer heap samples during Execute (`runs4/`) show
-what grew: max DOM nodes 37–43k → 117–142k, JS event listeners 12.6–14.3k →
-45–53k (`323b5377` with and without the variant below), Blink heap ~143 → 354–430 MiB, V8 used 208–225 → 347–382 MiB. Each Plan
-follow step anchors a new 256-row window at the target's index − 4, and
-`plan_review.js` `renderRows` reuses rows only for an identical offset and node list, so every
-step to a new item rebuilds all rows (~4.4k nodes, ~1.5k listeners) until the
-next collection. Before `323b5377` this happened during the copy half only; the
-table went quiet once verification began because fast verification left no
-active target. `323b5377` deliberately follows `last_settled_integrity_item_id`,
-so the rebuild churn now runs through verification too (anchor reads 88–107 →
-213–243 per run, window reads 230–264 → 307–356). Restricting the new chained
-re-follow to explicit requests (`nochain.diff`) did not lower the peak
-(1,299–1,410 MiB), so the target change, not the chaining, drives it. The 100k
-rise is probably the same mechanism over a longer verification, but was not
-measured. Two of 19 runs carrying `323b5377` (none of 19 earlier) timed out
-waiting for the task card to leave after a Close clicked 30–35 ms after
-completion; unexplained and not investigated.
-
-**Soak.** Whole-app post-close slopes over cycles 21–100 were +0.28, +0.27 and
-+0.17 MiB/cycle (shifts +17, +16, +9 MiB), against +0.14/−0.02/+0.30 before.
-Two runs exceed the 0.2 yardstick. Collection removed most of the sawtooth, and
-the remaining renderer slope is consistent across runs (+0.19–0.20 MiB/cycle,
-~12 MiB per 100 syncs). Host +0.03–0.06 MiB/cycle, GUI objects flat. soak-02
-browser handles rose 3.8/cycle, as soak-01/02 did before; it is the same
-plateau-shaped pattern, not newly measured growth.
-
-**Slower exit overnight, environmental.** Five of the eleven task runs
-(soak-03, all three 10k runs, payload) still had the WebView2 browser and
-crashpad processes after the collector's 10-second grace; the owned Job then
-terminated them. From soak-03's close (03:35 local) onward every task run took
-10–14 s to close: pywebview's close path disposes the controller and waits 3 s
-for the browser (`edgechromium.py` `clear_user_data`), the browser idled at zero
-CPU past that wait and outlived the host. Earlier runs, including soak-01/02 with
-200 collections, closed in 1.1–2.6 s. Runtime 157.0.4341.42 was installed six
-hours before the study and stayed constant. An Office Click-to-Run update ran
-03:09–03:38 local and left the machine reporting a required restart; that
-coincidence is the only environmental change found, not a demonstrated cause.
-
-`build/close-probe-20261108/` clears the product. A bare pywebview window with
-the app's WebView2 settings closed in ~0.6 s with the browser gone immediately
-across 26 trials, with or without one `HeapProfiler.collectGarbage` call and with
-or without the remote-debugging port. The source app with collection live or
-replaced by a no-op closed in 1.0–2.5 s after plan-only and executed 10k tasks
-(`app/results.jsonl`). The next morning, packaged 10k runs alternating old and
-new closed in 2.8/3.8/2.4 s (old) and 2.9/2.1/2.4 s (new), none with leftovers
-(`pkg/`). The earlier old-package-only control is superseded: it ran in the
-morning, while every slow close was overnight. No product change follows.
-
-## Shared executor root spelling consolidation — 2026-11-07
-
-The follow-up to the investigation below reuses exact admitted root and reviewed
-anchor spellings in native root revalidation. Active invocation/adapter ownership,
-reviewed evidence matching and fresh held-root attribute queries remain. The
-shared method benefits COPY, UPDATE, MOVE_UPDATE and non-byte operation guards;
-there is no operation-specific cache or descendant-walk change.
-
-Evidence lives in `build/path-consolidation-20261107/`, based on `323b5377` with
-the native source hashes recorded for each variant. The retained native COPY
-driver runs 48 fresh 4 KiB files, sixteen each at relative depths 1, 2 and 5.
-Both variants pass exact SHA-256 mirror, 48 published-evidence entries, source
-preservation, terminal/recording and owned-fixture cleanup checks. Within each COPY body,
-lexical conversions fall from 30 to 10 and held-native spelling calls fall by
-20. Fresh held-root queries remain 19, descendant attribute reads remain
-10/20/50 by depth, and six leaf stats plus three existence checks remain.
-Outer operation-entry guards are outside these counts. Instrumented timings
-are inclusive diagnostics, not an end-to-end speed comparison.
-
-A separate microbenchmark exercises real held-root revalidation with exact root,
-anchor and volume arguments, including the fresh native attribute query. Five
-paired fresh processes per variant alternate order; each uses 100 warmups and
-five batches of 1,000 calls. The median of process medians is 15.20 µs before
-(range 14.98–16.15) versus 2.09 µs after (2.08–2.20); paired savings range
-12.78–14.06 µs per call. The baseline method is loaded from its frozen source
-with unchanged collaborators. These isolated diagnostics do not establish a
-per-file or headed-session throughput gain. Raw samples, driver/source hashes
-and aggregation are retained beside the counted traces.
-
-Verification passes 203 native tests (193 baseline plus ten new exact/fallback
-cases), all 658 executor tests and the unchanged settlement oracle's 30 scenarios
-over three runs. An initial restricted-Temp setup failure is retained separately;
-the successful native and department runs use the normal Windows Temp route.
-
-The earlier verification-overlap and post-Close retention records below remain
-unchanged research context. The user defers verification pipelining to M2 and
-declines further post-task-close collection work.
-
-## Copy paths, verification overlap and host retention — 2026-11-07
-
-This investigation inspects `2ca0b291`; it changes no product code or safety
-contract. The measurements below are diagnostics, not throughput, memory or
-latency acceptance. Evidence lives in `build/path-scope-20261107/`,
-`build/verify-scope-20261107/` and `build/host-retention-20261107/`;
-`build/optimization-scope-20261107/` owns integration and independent review.
-
-### Copy path work
-
-A current-source native executor probe copied 48 fresh 4 KiB files, 16 each at
-relative depths 1, 2 and 5, with local held roots and the ledgerless rig.
-All publications matched expected identities and SHA-256 contents; source
-preservation, complete outcome and fixture teardown checks passed. Wrappers
-counted work only inside `_copy`, excluding directory operations and outer
-operation-entry guards. Instrumented inclusive timings are not additive and
-are not a baseline for predicting savings.
-
-| Calls per COPY body | Depth 1 | Depth 2 | Depth 5 |
-| --- | ---: | ---: | ---: |
-| Native `resolve` | 10 | 10 | 10 |
-| Held-root current-attribute query | 19 | 19 | 19 |
-| Descendant attribute read | 10 | 20 | 50 |
-| `_held_native_path` spelling conversion | 53 | 63 | 93 |
-| Repeated identical input to that conversion | 47 | 55 | 79 |
-
-Each body also performed six no-follow leaf stats and three existence checks.
-Two outer operation-entry guards bring the executor held-root count to 21.
-The earlier cost profile's approximately 25 root-hold queries per file included
-preflight and verifier calls; it is not an executor-only count or evidence of
-a reduction since that profile. `trace-copy.json` records the exact scope,
-driver hash, revision and raw counts.
-
-A separate pure-helper replay used those path arguments and confirmed holds,
-five loops of 1,000 batches per variant in one process, with identical outputs.
-At depth 2, twenty lexical root/anchor conversions took median 100.1 µs per
-batch (95.6–113.8); thirty-three native conversions took 116.1 µs
-(114.5–125.2). Ideal known-spelling lookup and illustrative memo controls cost
-1.2 and 20.1 µs respectively. Those controls omit production ownership checks
-and are not an implementation. The two timings overlap work and must not be
-added. `price-pure.json` supports a roughly 0.1 ms pure-work opportunity for
-exact root spelling on this fixture, not a measured end-to-end saving.
-
-The best remaining local candidates are pure spelling work in
-`modules/executor/native.py`: recognize an exact already-admitted root/anchor
-before repeating lexical conversion in `revalidate_root`, and reuse validated
-relative components/native prefix composition during a single `resolve` walk.
-Keep current held-handle attribute queries and every descendant observation.
-Aliases, unheld roots, custom adapters and unusual spelling retain their
-existing validation/fallback behavior. This is a proposed measured optimization,
-not permission to cache a successful filesystem observation across access
-boundaries. The previous general spelling cache was superseded by admitted-root
-prefix composition at `6157226`; do not reintroduce a task-sized path cache.
-
-Combining source/target stat and resolution, or carrying absence/metadata across
-open, checkpoint, finalization or publication, is a different safety change.
-Fresh COPY preparation already reuses the appropriate observations at publish;
-UPDATE, resumed copies and final target admission have distinct obligations in
-[EXECUTOR](EXECUTOR.md). A local spelling change would need native path/hold/
-fallback tests, runtime retry/root-swap cases, the executor department and its
-unchanged settlement stability gate. No variant or throughput gain is claimed.
-
-### Verification overlap scope
-
-The earlier 10k × 32 B profile measured 5.13 ms per verification candidate,
-including 3.32 ms opening the newly copied file. The serial fresh-file probe
-found similar first-open latency with buffered/unbuffered and flushed/unflushed
-variants, much faster repeat and attributes-only opens, and Defender enabled.
-That is consistent with first-access filtering, but the mechanism was not
-isolated and Defender causality was not proven. It does not establish
-concurrent-open scaling.
-
-Recommend M2 discovery inside the existing automatic Verify phase: compare
-bounded outstanding first opens on fresh matched targets; if that probe helps,
-compare the smallest promising lookahead prototype end to end. One next-file
-open can overlap only the preceding candidate's remaining work (about 1.81 ms
-in that historical profile); it cannot be assumed to hide most of a 3.32 ms
-open stage. More simultaneous opens may serialize in the filter/storage stack
-or worsen HDD seeks. Keep Defender enabled for the comparison.
-
-The narrow candidate retains one ordered read/hash/record/event coordinator,
-the actual guarded readback handle, conditional ledger writes and the existing
-Execute→Verify boundary. Native root admission is invocation- and context-local;
-worker ownership must be explicit rather than sharing a mutable root hold.
-Earlier file locks and earlier sampling of missing, sharing or root refusals
-change observation/effect timing; accepting that change needs an explicit M2
-decision, even when outcome publication stays ordered.
-Bound pending handles and bytes, close/join before pause, cancellation or custody
-release, and freshly admit on resume. A synchronous native open has no current
-force-abort mechanism; a timeout cannot stand in for worker settlement. Keep
-custom readers serial unless their contract explicitly supports the handoff.
-
-Verifying while copying continues is a larger workflow redesign: current
-`VerifyContinuation` requires settled execution, and canceled execution enters
-no verification. Overlap changes candidate availability, target lock lifetimes,
-checkpoint/retry semantics, recorder ordering and phase/progress/history truth.
-It is separate from both verifier lookahead and M2 copy batching. Proposed
-verification starts with native/linked recorder cases, ordered out-of-order-ready
-and blocked-open controls, pause/cancel/resume and handle cleanup, then affected
-verifier/workflow/tools/database/history and interface consumers. The detailed
-source population and proposed experiment are in the ignored scope report;
-neither concurrency nor a new performance threshold is activated.
-
-### Host state after Close
-
-The native retention probe uses the current installed wheel, with all 303
-product files matched to the checkout and the earlier frozen wheel, plus
-recorded runtime/producer identities. It owns separate profiles, fixtures and
-Windows Jobs. An untraced 1k × 32 B run and an allocation-traced 10k × 32 B run
-exercise Plan, Execute, automatic Verify, terminal release and task Close.
-Allocation tracing starts before product imports; its timings and private-memory
-figures are not ordinary production measurements. Owner counts, Python object
-types, SQLite allocator counters and CLR heap estimates distinguish live data
-from process residency. These are bounded observations, not a leak certificate.
-
-At terminal the 10k run had 50,400 `FileStat`, 10,100 `PlanOperation` and 10,000
-`IntegrityOutcome` objects; after Close their census counts were zero. All
-checked task/session/plan/review/start-response/worker/subscription and native
-bridge-response populations were empty. One bounded close receipt remained.
-Source inspection confirms that shared service, dispatcher and database owners
-remain process-lived intentionally; they are not task-owned leftovers.
-
-| Traced live Python memory, 10k run | MiB |
-| --- | ---: |
-| Startup | 24.59 |
-| Terminal task retained | 78.33 |
-| After Close | 26.26 |
-| After diagnostic Python GC | 26.08 |
-
-The explicit idle Python collection reported zero collected objects and took
-16.94 ms. That establishes no large cyclic-garbage population, but does not by
-itself exclude allocator reclamation. In sequential instrumented windows host
-private medians fell 292.64→260.95 MiB around collection and then to 196.96 MiB
-after stopping tracing. Neither delta is an isolated GC benefit or an ordinary
-host footprint: snapshots also allocated substantial temporary memory, and
-renderer memory fell during the Python-only interval. Tracemalloc's own
-tables occupied 12.28 MiB at startup, 47.67 at terminal and 16.63 after Close;
-the diagnostic includes a later stop-tracing interval to expose that overhead.
-The SQLite native allocation counter rose from 0.35 to 6.17 MiB and the CLR
-heap estimate from 11.90 to 18.35 MiB after the 10k task. These are separate
-runtime counters, not a complete partition of host private memory.
-
-A separately frozen untraced 10k repeat tests whether the traced decline recurs
-without tracing. Host-private 10-second-window medians were 88.93 MiB at startup,
-174.66 at terminal, 163.28 after Close, 165.01 in a second passive post-Close
-window, and 161.00 after explicit idle Python GC. Collection reported 95 objects
-and 12.6 ms; the latter times Python collection, not a product latency bound.
-The approximately 4 MiB sequential decline does not support importing the
-traced run's approximately 32 MiB decline into a production policy. About
-72 MiB of process-private growth remained relative to this startup, without
-a corresponding large task graph. SQLite allocations were 6.42 MiB and the CLR
-estimate 16.20 MiB afterward; allocator/native residency was not fully attributed.
-No general host GC, allocator trimming or database-lifetime change is justified
-by this bounded investigation.
-
-Host handle medians in that short run were 688 at startup, 1,259 after Close,
-1,255 in the passive control and 1,255 after GC. The other current-product
-probes vary substantially (the earlier two-task probe returned to 686 at both
-ends). These aggregate handle counts do not identify handle owners or establish
-long-term growth. They neither overturn the prior stability study nor establish
-a new handle-reclamation policy.
-
-The untraced 1k host-private medians were 89.03 MiB at startup, 117.94 at
-terminal and 114.60 after Close; host handles were 688 and 701 at the first
-and last windows. SQLite allocations rose from 0.35 to 3.74 MiB while the CLR
-estimate stayed about 12 MiB. Four SQLite connections and 64 prepared statements
-remained versus two and 21 at startup, consistent with lazy opening of the
-shared history owner/store alongside the ledger owner/reader. Database anchor
-connections preserve admitted database identity; indiscriminate closure would
-change that ownership contract. This modest cache population is not evidence
-that another large task graph remains or that host working-set trimming would
-reclaim equivalent committed memory.
-
-The separately frozen `renderer-post-close-1k-01` producer waits for frontend
-task-card removal before requesting the existing native collector through the
-service's idle reservation. Production Close collection runs before its command
-response and therefore before that teardown. In this diagnostic, an additional
-collection reduced embedder heap 20.26→4.93 MiB and JS heap 2.70→2.63 MiB;
-DOM nodes changed only 5,877→5,814 and listeners 2,225→2,173. Renderer-private
-10-second-window medians changed 76.86→69.79 MiB. That sequential private-memory
-decline also includes idle time and is not a proven production saving. The
-receipt's `native_gc_seconds` includes the subsequent diagnostic census, so it
-must not be quoted as native GC latency. This is evidence of some post-teardown
-collectability, not a reason to cap the heap, collect during execution or
-claim another leak. A later policy change would need to preserve backend-idle
-admission exclusion while coordinating frontend teardown and avoiding duplicate
-collections; this investigation changes no lifecycle policy.
-
-All four successful native runs passed exact source/target namespaces and
-SHA-256 contents, unchanged source metadata/product, clean native terminal axes,
-and independent durable history/inventory audits: 1,010/10,100 operations and
-1,000/10,000 verified target files as appropriate. Database audits use copies
-after normal exit and recheck the original bytes. All reported windows have
-complete samples and stable relevant process identities; all apps exited zero
-with empty owned Jobs. `summary.json` binds raw reports, audits and producers;
-the three manifests distinguish original, renderer and untraced-Python-GC
-drivers. Runtime is Edge 157.0.4341.42 / V8 15.7.11.4 / Python 3.13.17.
-The initial sandboxed loopback startup failure is retained separately; it made
-no target changes and left no owned processes. No measuring-session process,
-profile or fixture was changed. Product/tests are unchanged, so no broad test
-suite is claimed or required for this documentation-only delivery.
-
-## Backend-idle renderer collection — 2026-11-07
-
-Production collection is now attempted after successful terminal-session release
-and completed task close, only after all backend sessions release and pending
-admissions clear. The service reserves that interval against new admissions.
-Paused and terminal-but-unreleased sessions also prevent collection. Busy attempts
-are skipped until a later successful boundary; this is not an idle timer. No
-phase-transition collection, heap cap or Low memory target is introduced.
-[INTERFACES](INTERFACES.md#session-and-worker-boundary) owns this behavior and its
-native-completion/renderer-exit ordering.
-
-Evidence is retained in `build/idle-gc-20261107/`. The 229 focused tests and all
-2,239 ordinary interface tests pass, including concurrent admission, pending and
-unreleased sessions, collection failure, renderer exit and shutdown behavior.
-Six installed native transport cases pass. Earlier temporary-directory failures
-are retained separately: the sandbox default directory could not create fixture
-paths, and a repository-local replacement was refused by the existing custody
-child's source-tree pycache guard. The unchanged candidate passes with normal
-access to the default external temporary directory.
-
-The reclamation witness uses the exact installed wheel from that native gate,
-with all 303 product files matched to the working tree and frozen reference.
-It runs a 10k-file copy plus automatic verification while a second, 1k-file
-execution is paused, then closes the large task, resumes the held execution and
-closes it. An external diagnostic wrapper records existing release/close calls,
-backend association state and the production collector's before/after heap. It
-never requests collection itself. Native heap reads bracket the production call;
-the recorded collection duration excludes those reads but remains an API round
-trip, not an isolated GC pause. Separate profiles/targets, exact mirrors,
-unchanged source hashes/metadata and normal empty-Job shutdown are checked.
-This is installed-wheel evidence, not a rebuilt executable release or a new
-footprint, latency or long-run stability budget.
-
-In `native-paused-10k-01`, the large task's exact Plan release, execution release
-and Close each skipped collection while the other execution stayed paused.
-Its terminal heap was 310.77 MiB during that deferral. After resuming and
-completing the held task, its final release found zero admissions and zero
-unreleased sessions: the production collection reduced JS heap from 334.74 to
-3.24 MiB, taking 70.31 ms native round trip. The subsequent successful task Close
-collected 3.97 to 3.18 MiB in 137.90 ms. These are individual observations, not
-pause or footprint limits. The 10k execution plus automatic verification took
-about 138 seconds in this concurrent-task diagnostic; it is not a matched
-throughput comparison.
-
-Final-15-second renderer-private medians were 745.40 MiB with the large task
-terminal and the other task paused, 109.30 MiB after all sessions released, and
-99.02 MiB after all tasks closed. Whole-Job private medians were 1,186.25,
-528.16 and 507.75 MiB respectively, including the Python launcher. These are
-sequential windows with intervening task Close and resumed 1k work, not isolated
-causal deltas. All reported windows contain complete samples and the same
-renderer identity. Both exact mirrors, unchanged source hashes/metadata,
-unchanged installed/reference product and normal exit with an empty owned Job
-pass. All three observed collection reservations had zero admissions and zero
-unreleased sessions; no native collection failed. All owned apps are closed.
-
-This run used Edge 157.0.4341.42 / V8 15.7.11.4 and Python 3.13.17, unlike the
-earlier 156/15.6 browser diagnostics below. The retained wheel SHA-256 is
-`2e5084e9b26344785874b5e6685ea8e1da5be286f6b01a3e4ae1af11ab9f3ab6`.
-`native-report.json` and its hashed raw inputs record exact windows, producer and
-runtime provenance. No cross-runtime speed or memory comparison is claimed.
-
-## Post-allocation reclamation probes — 2026-11-07
-
-These diagnostics use the candidate committed as `cbf3f090`. They do not add a
-production GC policy. Evidence and exact producer/runtime/input identities are
-in `build/memory-probe-20261107/`; `candidate-commit-binding.json` binds the
-private candidate asset to the committed source. `gc-report.json` selects valid
-measurement windows and rejects incomplete resource samples. JS heap numbers
-are instantaneous CDP observations; process values below are final-15-second
-window medians, in MiB. No heap-allocation sampling was active in these probes.
-
-**Forced collection, 10k native packaged run.** `candidate-gc-10k` completed
-automatic verification, waited 30 seconds with the task open, collected through
-CDP, then observed another 30 seconds. It subsequently closed the task, waited
-30 seconds and collected again. Thus its closed measurements follow the earlier
-open-task GC; they are not an independent unforced-after-close experiment.
-
-| Observation | Open, unforced | After open-task GC |
-| --- | ---: | ---: |
-| JS heap | 214.87 | 3.08 |
-| Renderer private | 353.20 | 95.45 |
-| Renderer working set | 378.70 | 148.45 |
-| Whole-app private | 781.90 | 524.34 |
-
-The open collection command took 38.03 ms round trip over CDP, not an isolated
-stop-the-world pause measurement. A later closed-task collection took 12.75 ms
-and reduced renderer private from 92.89 to 78.96 MiB, with heap already near
-3 MiB. Subsequent five animation-frame response probes at each stage took
-about 1–9 ms. The exact mirror, unchanged source/bundle and normal exit with
-empty Job all passed. This demonstrates collectability for this optimized 10k
-run; it is not a claim that production should force GC or that pauses are bounded.
-
-**Forced collection, 100k native packaged run.** `candidate-gc-100k` uses the
-same sequence on 100,000 × 32 B files (101,000 planned items including folders).
-Execution and automatic verification took 847.807 seconds. Source identity
-preparation and final independent filesystem checks are outside that timing.
-Terminal JS heap was 865.57 MiB and fell naturally to 718.12 MiB during the
-30-second unforced idle. Then:
-
-| Observation | Open, unforced | After open-task GC |
-| --- | ---: | ---: |
-| JS heap | 718.12 | 4.55 |
-| Renderer private | 1,141.58 | 131.31 |
-| Renderer working set | 977.92 | 183.13 |
-| Whole-app private | 2,160.61 | 1,150.34 |
-
-The open GC command took 83.06 ms round trip. After closing the task, whole-app
-private memory was 725.06 MiB; a second collection took 21.64 ms and reduced
-it to 706.57 MiB, with renderer private falling from 133.74 to 116.25 MiB.
-Post-GC frame-response checks remained about 1–9 ms. Every reported resource
-window is complete and has a stable renderer identity. Independent source
-hash/metadata, exact target mirror, bundle hashes and normal exit/empty Job
-all passed. This closes the previously unmeasured 100k collectability question
-for this candidate/run; it does not establish repeated-100k stability, bounds
-on GC pauses, or behavior under system memory pressure.
-
-**Native memory target, separate 10k source host.** `candidate-low-10k-02`
-uses a frozen candidate source copy and the recorded pinned Python/pywebview/
-WebView2 environment, with interpreter and SDK DLL hashes in `low-runtime.json`.
-A diagnostic UI-thread wrapper reads and sets the actual native property.
-This host differs from the packaged executable: compare its own Normal/Low
-windows, not its absolute host memory with the packaged run. After execution
-it waits 60 seconds at Normal, 60 at Low, restores Normal for 15 seconds,
-closes, then creates and closes another no-op Plan. There is no forced GC.
-
-| Observation | Normal control | Low | Normal restored |
-| --- | ---: | ---: | ---: |
-| JS heap | 202.38 | 202.40 | 202.41 |
-| Renderer private | 341.41 | 337.41 | 337.61 |
-| Renderer working set | 374.64 | 0.00 | 14.06 |
-| GPU private | 189.65 | 113.21 | 113.20 |
-| Whole-app private | 770.75 | 690.28 | 690.47 |
-
-The Low renderer working-set zero is the actual OS counter in all 15 complete
-tail samples for the same live process, not an absent role or default value.
-Private memory and JS heap remain substantial. This is consistent with residency
-trimming; it does not demonstrate JS-heap reclamation. Neither disk paging nor
-the exact trimming mechanism was measured. After subsequent app activity, the
-reported working set increased:
-after the restored no-op Plan, renderer working set was 229.68 MiB. Its Plan
-took 4.036 seconds.
-
-The native target read back Normal, Low and Normal as requested. Matched
-self-stopping frame counters watched approximately the first five seconds of
-the control and each transition: maximum gaps were 50.1 ms for Normal control
-and 8.8 ms for Low and restoration, with no gaps above 50 ms in those two
-transition samples. Later frame-response probes took about 1–9 ms. This is
-limited responsiveness evidence, not a no-jank guarantee. The same-process
-sequence is not randomized; elapsed time and natural collection remain
-confounders. Microsoft's [memory-target contract](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2.memoryusagetargetlevel)
-describes a best-effort hint, continued script execution and explicit restoration
-to Normal, rather than forced collection.
-
-The first Low pilot, `candidate-low-10k`, passed its behavioral/mirror/closure
-checks but the packaged collector classified both Python redirector and real
-host as host, invalidating aggregate-sample completeness. Preserve and exclude
-those aggregate values. The corrected diagnostic wrapper distinguishes exact
-executable paths, includes both processes in totals and retains normal
-completeness checks; every reported Low/Normal/closed/replan window is complete.
-The corrected run also passed mirror, unchanged inputs and normal empty-Job exit.
-
-**Disposition.** The optimized renderer retains a large collectable heap after
-large executions. Explicit GC demonstrates reclamation at both named sizes;
-the native Low target showed lower reported working set and GPU private memory,
-with no substantial JS-heap reduction during either 60-second Low window.
-Do not use that hint as a promised JS cleanup mechanism. No production timer,
-terminal-triggered GC or memory-target policy was added. An inactive-window
-policy would need its own activity/restore
-design and memory-pressure/resume evidence; these idle diagnostics do not settle
-that user-experience tradeoff.
-
-## Execution allocation reduction — 2026-11-07
-
-From `ade6ba75`, the browser adopts private parsed native responses without
-copying them again, freezes ordinary drain snapshots in place, and shares the
-already frozen terminal snapshot across presentation retries. Mutable terminal
-updates still receive a fresh copy per callback; shared completion-event data
-still receives capture. BRIDGE owns these ownership requirements.
-
-**Method.** `build/memory-probe-20261107/` contains private copies of the
-`b6a4fefe` packaged app and full bundle manifests. Canonical product population
-matches the current source except for the candidate's loose `bridge.js` asset;
-only that asset differs between bundles. This is a diagnostic asset-overlay
-comparison, not a rebuilt release. `probe.py` ran baseline, candidate, candidate,
-baseline in fresh processes/profiles, with the retained 10,000 × 32 B source,
-fresh targets under the repository's ignored build tree on F:, automatic
-verification and 30-second unforced terminal/closed windows. Both source and
-target are on F:, unlike the earlier F:/H: study. V8 sampling at 16 KiB includes
-later-collected objects from Execute to terminal. Runtime: Edge 156.0.4314.58,
-V8 15.6.12.10. Full tool/input hashes and source metadata accompany the receipts.
-
-Only verified `baseline-sample-02`, `candidate-sample-01`,
-`candidate-sample-02` and `baseline-sample-03` enter this comparison. Every run
-had an exact mirror, unchanged source/bundle, exit 0 and an empty owned Job.
-`baseline-sample-01` failed on sandbox loopback access and remains excluded.
-
-| Observation (two fresh processes per arm) | Baseline | Candidate |
-| --- | ---: | ---: |
-| Sampled allocation during Execute, MiB | 533.06 / 490.95 | 434.50 / 427.50 |
-| Mean sampled allocation, MiB | 512.00 | 431.00 |
-| Execute + automatic verification, seconds | 84.269 / 83.255 | 85.300 / 85.309 |
-| Renderer execution peak private MiB | 421.2 / 369.0 | 517.7 / 489.0 |
-| Whole-app execution peak private MiB | 818.6 / 754.6 | 914.0 / 893.9 |
-| Renderer final-15-second closed median private MiB | 322.3 / 299.2 | 395.5 / 393.8 |
-| Whole-app final-15-second closed median private MiB | 757.8 / 715.9 | 821.6 / 818.8 |
-
-Sampled allocation fell 15.82% by the two-run means. This small diagnostic
-sample establishes neither a throughput gain nor lower process memory: both
-peak and closed private memory were higher in the candidate. Allocation volume,
-live heap and allocator/collector timing are different observations. No forced
-GC occurred in these four runs. Reclamation probes are separate evidence.
-All execution samples were complete; each run had one incomplete startup
-sample. The sampling profiler was active during execution, so these process
-figures do not establish unprofiled memory behavior. Clone-inclusive sampled
-allocation averaged 138.53 MiB baseline and 0.031 MiB candidate; that attribution
-is not interchangeable with the net total reduction. `allocation-comparison.json`
-selects the verified runs explicitly and records both measures.
-
-**Repeated use without allocation profiling.** `baseline-soak-01` and
-`candidate-soak-01` reuse the existing 1,000 × 4 KiB fixture and 20-cycle
-schedule: initial mirror, then ten changed files per cycle, explicit replacement
-confirmation, automatic verification, 15-second closed windows and a final
-120-second idle. All 40 mirrors and preserved-version counts passed, both
-bundles stayed unchanged, and both processes exited 0 with empty Jobs.
-`soak-comparison.json` records per-cycle windows. Medians across cycles 6–10
-and 16–20 respectively:
-
-| Observation | Baseline early → late | Candidate early → late |
-| --- | ---: | ---: |
-| Whole-app private MiB | 638.8 → 703.8 | 659.1 → 705.7 |
-| Renderer private MiB | 239.9 → 306.1 | 274.1 → 304.4 |
-| Browser-process handles | 1,266 → 1,265 | 1,263 → 1,265 |
-| Renderer handles | 521 → 522 | 532 → 534 |
-| Host private MiB | 122.9 → 126.4 | 122.3 → 124.5 |
-| Host handles | 1,302 → 1,374 | 1,374 → 1,612 |
-
-The final 120-second idle medians were 702.3/653.7 MiB whole-app and
-306.1/256.5 MiB renderer, baseline/candidate (`soak-final.json`). Candidate
-host handles dropped from 1,890 to 597 about 26 seconds into that idle and
-stayed there; baseline finished at 1,369. Thus the candidate's higher late-cycle
-host count did not persist. Final browser handles were 1,257 for both and
-renderer handles were 522/524. Both ended with 55 GDI and 97 USER objects.
-These observations show no additional browser handle accumulation or larger
-late-cycle memory footprint in this bounded comparison. They do not fit a leak
-slope or replace the earlier 100-cycle/long idle schedule; allocator and
-collection timing remain visible in both arms.
-
-**Bridge microbenchmark.** `build/allocation-20261107/` freezes source, fixture,
-driver and runtime hashes and all six raw receipts. After 200 warmup reads,
-2,000 public `getPlanWindow` reads of 64 rows per fresh Node 24.22.1 process
-ran in B,C,C,B,B,C order. Every reply crosses a fresh JSON parse and normal
-validation. Sampled bytes were 1,028–1,030 MB baseline and 267–269 MB candidate;
-elapsed times were 708–718 ms and 272–278 ms. This isolates direct-response
-copying; native script compilation, DOM, filesystem IO, drain snapshots and
-terminal retries are absent. It cannot substitute for the app observations.
-
-## Multiple open tasks and cost attribution on `b6a4fefe` — 2026-11-07
-
-Same package and host as the full schedule below. Drivers and receipts are in
-`build/resource-study-20261106c/`: `multitask.py`, `heapsample.py`,
-`hosttimers.py`, `hostprofile.py`, `openprobe.py`, `freshopen.py`; runs
-`multi/runs/multi-02` and `multi/runs/heapsample-01`; host reports in
-`profiling/`. Fixtures are registered in `multi/fixtures.jsonl`. `multi-01-aborted`
-is a stopped first attempt whose driver tracked rail rows by index (the rail lists
-newest first).
-
-**Several open tasks.** One process opened six 10k-file tasks on the shared
-10k source with fresh H: targets. Tasks 1, 3, 5 and 6 executed with
-verification; tasks 2 and 4 stayed at Plan. All four mirrors matched, both
-unexecuted targets stayed empty, and the app closed with exit 0 and an empty
-Job. Whole-app private MiB, last 30 s of each window:
-
-| State | Whole app | Host | Renderer |
-| --- | ---: | ---: | ---: |
-| Startup idle | 360 | 93 | 36 |
-| 1 executed | 735 | 175 | 315 |
-| + 1 at Plan | 766 | 200 | 327 |
-| 2 executed, 1 at Plan | 1,030 | 262 | 514 |
-| 2 executed, 2 at Plan | 1,051 | 285 | 519 |
-| 4 executed, 2 at Plan (peak 1,274) | 1,260 | 380 | 617 |
-| Same, after one forced GC | 764 | 380 | 120 |
-| All six closed | 660 | 287 | 118 |
-
-Adding single-task deltas (+465–485 MiB per executed 10k task, +77–102 per
-open Plan) predicts ~2.4 GiB for this state. The app used 1.26 GiB. Renderer
-garbage is reused across tasks rather than stacking, and one forced GC left
-84 MiB of live renderer state for all six tasks. Host memory is roughly
-additive: about +50–90 MiB per executed open task. Closing all six released
-93 MiB, and the host settled at 285 MiB. A single 10k task settled at
-162–166 MiB, so host retention follows peak use. A second same-volume task
-does not run concurrently. Task 6 spent 87 s in planning while task 5
-executed on the same F:/H: volumes. Its plan normally takes 5 s. This
-matches the dispatcher's per-volume admission queues
-([DISPATCHER](DISPATCHER.md)). Peak memory therefore reflects one execution
-at a time for same-volume tasks. Concurrent executions on disjoint volumes
-were not measured.
-
-**Renderer allocation.** `heapsample-01` ran V8 sampling heap profiling,
-including later-collected objects, from Execute to terminal on one verified
-10k task. It sampled 552 MiB, about 55 KB per item. The JS heap was 210 MiB at
-terminal and 3 MiB after one forced GC. Attribution, inclusive:
-
-- About half (~280 MiB): pywebview's return path. Each bridge response arrives as a new
-  script that embeds the JSON (`(anonymous):1`, `(V8 API)`, `(PARSER)`,
-  bytecode compiler, `_returnValuesCallbacks`, `stringify`).
-- About 27% (151 MiB): `cloneJsonValue` in `bridge.js` deep-copies responses
-  pywebview has just parsed, including through `acceptNativeResponse`.
-  Its `Object.entries` arrays account for 86 MiB of that.
-- About 3–5% each: drain arming/ID minting, Plan-window row validation, and
-  Plan row rendering.
-
-**Host execution cost.** Two source-service runs used the same 10k source with
-verification on and no GUI. Product bytes are unchanged since `b6a4fefe`.
-`hosttimers.py` wraps hot functions with nested inclusive wall timers. Its
-run took 99 s, with 55 s of process CPU. It spent 43.5 s in execute and
-52.8 s in verify. Per file:
-
-| Path | ms/file | Calls/file |
-| --- | ---: | ---: |
-| Verification candidate | 5.13 | 1 |
-| — open of the just-copied file | 3.32 | 1 |
-| — integrity recording (ledger commit) | 0.54 | 1 |
-| — unbuffered read | 0.43 | 1 |
-| Copy operation | 4.01 | 1 |
-| — `_prepare_copy` | 2.37 | 1 |
-| — path `resolve` / attribute reads / root-hold queries | 1.17 / 0.59 / 0.32 | 10 / 20 / 25 |
-| — completion (copied-record commit 0.64) | 1.25 | 1 |
-| — `finalize_temp` / file flush / parent-directory flush | 0.69 / 0.63 / 0.37 | 1 / 1 / 1 |
-
-`openprobe.py` timed raw `CreateFileW` on retained study files at 0.01–0.04 ms
-for every flag set. `freshopen.py` wrote 500 new 32 B files per variant on H:.
-Each file's first data open cost 3.3–3.7 ms, buffered or unbuffered, flushed or
-not. Its second open cost 0.03–0.07 ms, and an attributes-only open 0.01–0.02 ms.
-Defender real-time protection was on. The first-access penalty was insensitive
-to `FILE_FLAG_NO_BUFFERING` in this probe and is consistent with filtering,
-but no provider trace isolated its cause. The
-`hostprofile.py` stack sampler over-weights GIL-releasing calls. Use it for
-call paths only, not shares.
-
-**Optimization candidates** (observations, not accepted changes; owners decide):
-
-1. Renderer: stop deep-cloning freshly parsed bridge responses and
-   drain snapshots. These are private parse results; the owner must confirm no
-   aliasing contract depends on the copy. That removes up to ~27% of
-   per-item allocation. Owner: [BRIDGE](BRIDGE.md).
-2. Renderer: reduce response volume during Execute or move returns off
-   per-response script evaluation. The current path compiles every payload
-   (about half). Fewer Plan-window rereads during Follow is the smaller step; a
-   message-channel return path is the larger one.
-3. Renderer settled memory: the garbage is collectable, from 617 to 120 MiB
-   with six tasks open. The packaged WebView2 SDK (1.0.3856) exposes
-   `CoreWebView2.MemoryUsageTargetLevel`. Lowering it after terminal/close and
-   restoring it on activity could return memory without waiting for V8. Its
-   side effects need a probe.
-4. Verification on small files spends ~65% of its candidate time in the
-   first data open. Concurrent opens are an untested latency-hiding hypothesis,
-   not a demonstrated benefit or isolated antivirus cost. The later
-   [scope investigation](#verification-overlap-scope) qualifies the opportunity
-   and recommends M2 discovery without disabling protection.
-5. Copy guards: each copied file costs 10 path resolutions, 20 attribute reads
-   and about 25 aggregate root-hold queries, ~2.4 ms in `_prepare_copy`.
-   The later [copy-path investigation](#copy-path-work) separates native
-   executor counts from other owners and finds repeated spelling work.
-   The original ~1 ms/file saving was an untested estimate; no such gain is
-   established. [EXECUTOR](EXECUTOR.md) owns the distinct time-of-use guards.
-6. Already assigned to M2: grouped ledger commits (two commits/file,
-   ~1.2 ms) and parent-directory flushes (0.37 ms/file).
-7. Host retention after close follows peak use: 285 MiB after six 10k tasks
-   and 344–418 MiB after 100k. It is unattributed; a `tracemalloc` snapshot
-   comparison would show whether it is allocator high-water or retained
-   objects.
-
-## Full resource schedule on `b6a4fefe` — 2026-11-06/07
-
-**Artifact.** `build/resource-study-20261106c/package/NamiSync-windows-x64-dev.zip`,
-SHA-256 `a4b1a042404d6a9abf69f16e9af6e47349acaefc31e8df7e28d4367f0320b98d`,
-built by `tools/packaging/build.py` from clean `b6a4fefe` (plan-refusal fixes,
-150,000-row headroom, small-file copy optimizations). Host: 24 logical CPUs,
-63.7 GiB RAM. The collector (`tools/performance/resources.py`, tool hashes in
-`full/collection.json`) now attaches DevTools to the launched profile's own
-browser. All 17 scheduled runs completed in one invocation with exit 0: exact
-SHA-256 mirrors, expected `.synctrash` counts, normal close (exit 0, empty
-Job), and unchanged corpus and bundle. `validation.json` holds the window
-statistics. Its PASS/FAIL against the pilot yardsticks is informational only;
-the judgment below is on measured behavior, as the user directed.
-
-| Profile (runs) | Peak, whole app | Settled after close | Notes |
-| --- | ---: | ---: | --- |
-| Startup (3 plain, 3 DevTools) | 346–374 MiB | 342–372 MiB | Idle CPU 0.19–0.69 %. Host 93 MiB, GPU 149–178, renderer 32–34. DevTools port +10.6 MiB median. |
-| 10,000 × 32 B (3) | 950–976 MiB | 826–842 MiB | Execute 85–130 s. Renderer peak 499–541 MiB. Host 180 MiB peak, 162–166 after close. |
-| 100,000 × 32 B, 101,000 items (3) | 2,365–2,557 MiB | 1,999–2,126 MiB | Plans now admitted. Execute 834–1,372 s. Renderer peak 1.32–1.50 GiB and kept after close. Host 383–385 MiB with plan open, 766–796 peak, 344–418 after close. |
-| Payload: 1 × 4 GiB and 64 × 4 MiB (1) | 444 MiB | 423 MiB | Streaming adds no size-dependent memory. |
-| Soak: 1,000 × 4 KiB, 100 cycles of 10 updates (3) | 732–781 MiB | 643–753 MiB per cycle (cycles 21–100) | See below. |
-| 10k task open, idle 60 min (1) | 962 MiB | 804 MiB | 845 MiB while idle open; slope −3.6 MiB/10 min. |
-
-**Leak and stability.** Over cycles 21–100 the whole app moved +0.14, −0.02
-and +0.30 MiB per cycle (last-20 minus first-20 medians: +10, −6, +21 MiB).
-Renderer garbage sawtooth dominates; every soak ended 662–677 MiB. Host
-private memory rose steadily but slightly: +0.04 to +0.09 MiB/cycle, 4–9 MiB
-per 100 syncs. GUI objects stayed flat (142–151). Host handles swing 590–1,950
-with no trend. WebView2 browser-process handles climbed about 2 per cycle in
-soaks 01–02 to ~1,430–1,450, and soak-03 held at 1,413–1,442 throughout. That
-pattern is a plateau, not growth. The 60-minute open-task idle drifted
-slightly downward. No crash, hang, failed close or mirror error occurred in
-about 6.5 hours of driven use.
-
-**Where memory goes at scale.** Execute leaves uncollected renderer garbage,
-and idle V8 does not collect it. On the previous package a 10k task left
-~400 MiB of JS heap, and a forced GC returned the renderer to ~90–120 MiB.
-Here the renderer held ~0.4 GiB after 10k and 1.3–1.5 GiB after 100k.
-Collection is not proven at 100k.
-After close, host memory reaches a first-task high-water mark rather than
-growing per task: three 10k tasks in one process settled at 167, 177 and
-178 MiB. 100k repetition in one process was not measured.
-
-**Throughput.** 100k execution averaged 8.3–13.6 ms per item wall; the first
-run took 1,372 s with 11.3 ms host CPU per item. This is about half the
-earlier package's ~21 ms per item at 50k. 10k runs took 8.4–12.9 ms per item.
-
-**Assessment.** The app's resource behavior is stable, with no observed leak:
-startup, payload streaming, repeated use and long idle are flat and modest.
-Memory scales with task size, and the highest figure is the renderer's
-uncollected garbage. A 100k task needs ~2.4–2.6 GiB at peak and keeps ~2 GiB
-until later work. That is acceptable on this 64 GiB host but heavy for 8 GiB
-machines near the 120,000-item support target. The clearest improvement is
-per-item renderer allocation during Execute. Prompting collection when a task
-closes would only lower the settled figure, and that assumes the 100k garbage
-proves collectable like the 10k garbage. Host per-sync creep
-(~5 MiB/100 syncs) is too small to act on now but should be watched over
-longer use.
-
-## Rebuilt package resource study — 2026-11-06 (paused)
-
-Superseded by the full schedule above; its resume instructions no longer apply.
-
-**Artifact.** `build/resource-study-20261106b/package/NamiSync-windows-x64-dev.zip`,
-SHA-256 `30e83c33b27503691775d8c99326b2e03163d18647af6fbcfaa6d648d273eb91`,
-built by `tools/packaging/build.py` from clean `48b1f708` (renderer and
-dead-page shutdown fixes plus later GUI fixes) in a fresh locked environment
-from the 2026-11-04 downloads. Same control and 1 Hz Job sampling as the
-continuation below; collector `tools/performance/resources.py` unchanged
-since `edd02012`. Each run is a fresh process and profile; workload runs use
-automatic verification and end with an exact SHA-256 mirror check.
-
-**Startup** (3 plain, 3 with the DevTools port; final 60 s median, whole Job):
-352–378 MiB settled, ≤ 388 MiB peak, 0.24–0.32 % idle CPU across all six;
-the port adds no measurable cost. GPU process 159–191 MiB, host 93–97 MiB,
-renderer 32–36 MiB.
-
-**Workloads** (whole-Job private MiB; renderer in parentheses):
-
-| Run | Idle before | Execute | Peak | Task open after | All tasks closed |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 1,000 × 4 KiB, 3 cycles (smoke) | 345 (34) | 15 s, then 3.5 s for 10 updates | 662 (252) | — | 596–633 (225–248) per cycle; 582 (200) after 2 min |
-| 10,000 × 32 B (smoke) | 360 (38) | 148 s | 1,234 (787) | 1,157 (723) | 1,141 (720) |
-| 10,000 × 32 B (`scale-10k-01`) | 405 (36) | 233 s | 1,390 (947) | 1,376 (940) | 1,380 (946) |
-| 50,000 × 32 B, 50,500 items (`scale-50k-01`) | 362 (35) | 1,202 s | 1,877 (1,195) | 1,851 (1,147) | 1,673 (1,149) |
-
-Every mirror, `.synctrash` count and close (exit 0, empty Job) passed. Against
-the original pilot (3,029 MiB at 1,000 files; OOM at 10,100 items) the renderer
-fix holds across sizes, and renderer peak grows sublinearly (947 → 1,195 MiB
-for 5× the items).
-
-**Retention is uncollected garbage, not accumulation.** A diagnostic run
-(`retention/`) executed three 10k tasks in one process. After each close the
-JS heap held ~400 MiB and the renderer ~610–660 MiB. One forced GC
-(`HeapProfiler.collectGarbage`) dropped the heap to 3.6–3.9 MiB and the
-renderer to 88, 109 and 120 MiB, and the whole app to 520–548 MiB. Idle V8 does not
-collect it without allocation pressure, so a closed 10k/50k task leaves the
-app at ~1.1–1.7 GiB until later work. The ~15 MiB/task post-GC drift over
-three tasks is too short to call. At 50k the host also kept ~270 MiB after
-close (93 MiB at start); not yet attributed.
-
-**Throughput.** Execution is now host-bound: at 10k the host used 132 s CPU
-of 148 s wall (renderer 28 s) in the smoke run, 226 of 233 s in
-`scale-10k-01`, and 1,055 of 1,202 s at 50k (~21 ms host CPU per item). The
-smoke/full 10k difference is unexplained.
-
-**Not measured.** The 100k scale point was refused at planning (BUGS,
-Interfaces › Planning refusal presentation). By source reading, a copy plan
-trips the 120,000-row domain wall at about 60,000 operations; the exact
-boundary was not measured. The user paused the
-study after `scale-50k-01` to look into that refusal. Not yet run:
-`scale-10k-02/03`, `scale-50k-02/03`, payload (4 GiB and 64 × 4 MiB), the
-three 100-cycle soaks and the 60-minute idle-open run. `scale-10k-02-interrupted`
-is a launch-only stub from stopping the collector. `resume.py` substitutes
-`scale-50k-0N` for the refused 100k entries; continue with
-`resume.py collect … --out build/resource-study-20261106b/full --only …` and
-the remaining names. Fixtures are registered in `full/fixtures.jsonl`,
-`retention/fixtures.jsonl` and `debug100k/fixtures.jsonl`; the 100k source
-is `F:\NamiSync-resource-scale-100k-7f8dda2c`.
-
-The subsequent source fix completed this 100k Plan and a separate 130k-file
-dry run. Both are planning correctness witnesses. The packaged 100k execution,
-memory and throughput point still needs a rebuilt candidate and a fresh profile.
-
-The current packaged collector requests a new DevTools port per launch and
-discovers its browser endpoint through the fresh profile's `DevToolsActivePort`.
-Before sending page commands it checks that the browser belongs to the launched
-Job and that exactly one local NamiSync page matches. A rebuilt-package pilot
-rejected another Job, completed a verified copy, and exited with an empty Job
-(`build/cdp-isolation-20261106/`). This changes the driver identity. Use a
-fresh collection directory for this driver; reproducing the earlier collection
-requires its recorded driver and artifacts.
-
-### Small-file copy attribution — 2026-11-06
-
-Source diagnostics used the rebuilt-package study's F: source trees and a
-new empty H: target for each sync run and checked the mirror by SHA-256.
-The 1,000-file comparison ran the three paths in forward then reverse order.
-The five-run 3.627 s executor median at `23589bd` used F: to G: and timed
-only execution. A later user rerun reported 3.150 s for the same size band.
-
-| F: to H: elapsed seconds | 1,000 × 4 KiB | 10,000 × 32 B |
-| --- | ---: | ---: |
-| Prepared executor, preflight timed separately | 5.03, 3.80 | 57.63 |
-| Service, execution request to terminal, verification off | 6.53, 5.11 | — |
-| Service, same interval, automatic verification on | 8.40, 8.30 | 150.92 |
-| Source WebView2, Execute click to terminal, automatic verification on | 21.61 | — |
-| Earlier rebuilt package, same click/terminal interval | 14.67 | 148 smoke, 233 full |
-
-A second 10k verified service run took 148.93 s. Inclusive timers measured
-62.46 s in executor work and 80.01 s in post-copy verification. Inside those
-phases the native byte-copy calls totaled 1.65 s, copied-record writes 9.28 s,
-verification candidates 78.62 s (including 7.62 s of integrity-record writes),
-and verification completion/event updates 1.31 s. Timers nest. The verification
-phase consumed 8.00 ms/file at this size, even without a page or renderer.
-
-To separate verification reads from recording, a read-only probe ran the
-production verifier classifier and native reader over 64 retained 32-byte
-files on H: (local fixed NTFS) and checked all 64 against their F: digests. Classification
-averaged 6.04 ms/file. Opening the verification file took 4.62 ms/file,
-the unbuffered read 0.45 ms, final-path corroboration 0.23 ms and digest
-work about 0.007 ms. These host-specific timings localize the delay to the
-open call but do not distinguish storage, cache management and filesystem
-filters. The next comparison should isolate native open behavior on the
-same files and preserve the verifier's access, path and integrity guarantees.
-Probe and receipt: `build/background-cdp-20261106/`.
-
-The instrumented source GUI at 1k measured 10.06 s in execution and 10.74 s
-in verification. In the same interval the bridge served 58 Plan windows
-(1.66 s total, 1.53 s thread CPU) and 2,010 event polls (14.03 s including
-waits, 0.50 s thread CPU). These requests overlap the workflow. The host
-exited normally with an empty Job. Runs used shared hardware under variable
-load, including a concurrent 100k planning probe during the source GUI run.
-They distinguish code paths but cannot price a fixed GUI overhead or explain
-the full 148–233 s packaged spread. Evidence in `build/coverage-study-20261106/`:
-`copy.jsonl`, `timed-owners.json`, `profiled-0eb01313-calls.json`, and the
-matching run's events and verification receipt.
-
-### Copy phase only — matched revision and GUI comparisons, 2026-11-06
-
-The table measures wall time **inside executor execution**, including its
-filesystem guards, publication, recording and settlement. Planning, execution
-preflight and post-copy verification are outside the timer. Service and GUI
-runs explicitly disabled verification. The historical and current code ran
-from separate Git snapshots (`23589bd` and `a91bf617`) in fresh processes,
-using the same source, Python environment and fresh H: targets. Every mirror
-passed SHA-256. These are small sample ranges on shared hardware.
-
-| 1,000 × 4 KiB, F: → H: | Samples | ms/file |
-| --- | ---: | ---: |
-| Original flat corpus, historical executor | 2 | 3.79–3.79 |
-| Original flat corpus, current executor | 2 | 2.82–2.84 |
-| Ten-directory GUI fixture, historical executor | 3 | 4.85–4.88 |
-| Same fixture, current executor | 3 | 3.18–3.22 |
-| Same fixture, current service and durable ledger | 3 | 4.09–4.15 |
-| Same fixture, source GUI with Settings covering the Plan | 2 | 6.05–6.20 |
-| Same fixture, source GUI with Plan visible | 2 | 6.53–6.95 |
-
-The current executor beat the historical one on both folder layouts. Its
-byte-copy backend took about 0.10 s per nested run versus 0.42 s historically.
-In separate instrumented runs, recording took 0.636 s through the service
-versus 0.014 s in the ledgerless rig. That explains much of the roughly
-0.9 ms/file service increment.
-
-Counting calls that started inside the executor interval, the visible Plan
-issued 1,004–1,010 event reads and 25–26 Plan window reads. Hiding the Plan
-reduced window reads to 0–1 but left event reads near 1,010. A test-only
-25 ms delay before each event read in the session reduced executor-interval
-reads to 174 visible and 164 hidden in one trial each. Executor time fell to
-5.23 and 4.74 ms/file, respectively. Visible window reads also fell to 11.
-All six GUI runs issued zero verification calls, returned matching mirrors
-and exited normally with an empty Job. The diagnostic implicates event-drain
-frequency independently of visible-window work. It does not establish a
-production delay: latency, replay gaps, cancellation and terminal delivery
-need separate checks for any batching change. The previously observed ~10 ms
-inside a loaded GUI run remains a valid single observation. Evidence in
-`build/copyonly-20261106/`: `copy.jsonl`, `*-calls.json`, `gui-summary.json`, `gui.xml`
-and `delay.xml`.
-
-### Durable copy recording — 2026-11-06
-
-Six source-service runs each copied 1,000 × 4 KiB in ten directories on F:
-to a fresh F: target with automatic verification off. Each independently
-checked the mirror hashes, all 1,000 durable identities and copy operations,
-SQLite integrity and the successful terminal record. With only outer timers,
-`record_copied` averaged 0.662 and 0.700 ms/file. Two instrumented runs gave
-0.747–0.786 ms/file, including 0.404–0.416 in commit, 0.201–0.211 in the
-transaction body and 0.045–0.051 in the payload hash. The identity SELECT
-took about 0.003 ms/file. Timers nest and include instrumentation overhead.
-
-Two instrumented private trials suppressing repeated, identical busy-timeout
-assignments gave 0.729 and 0.782 ms/file. The ranges overlap; retain the
-writer's existing timeout and per-item commit behavior. See
-`build/copy-record-opt/summary.json` for raw receipt paths, driver hash,
-instrumentation boundaries and producer provenance. Recorder dependencies were
-stable; concurrent native executor edits exclude whole-executor comparisons.
-
-### Windows descendant attribute check — 2026-11-06
-
-The native executor rig copied 1,000 × 4 KiB across ten directories on F: to
-fresh F: targets, with ledgerless recording. Five fresh processes per variant
-ran in ABBAABBAAB order. Frozen source trees differed only in the Windows
-descendant walk in `native.py` against `b2e872e6`. Baseline executor wall
-time was 3.446–3.545 s, median 3.513 s. Attribute-only reads gave
-2.810–2.944 s, median 2.905 s, or 0.609 ms less per file on this fixture.
-Every sample had both roots held, 1,010 successful operations, 1,000 matching
-file hashes and publications, successful terminal/recording/audit results,
-unchanged source and scoped teardown. See `build/copy-native-opt/`:
-`samples-v2.jsonl`, `provenance.json` and `driver-v2-provenance.json`.
-Earlier v1 diagnostics lacked the complete rig-result check and are excluded.
-
-A follow-up on `5c7e40cd` timed the two explicit source-root checks in
-`_prepare_copy` immediately preceding source predicates. Three instrumented
-1,000-file runs each made 2,000 calls at those sites. Their combined time
-was 69.16–69.83 ms per run, including the held-handle queries. This is a ceiling of about
-0.070 ms/file before any replacement admission work. Retain both checks.
-Receipts and driver: `build/copy-native-opt/source-root-price/` and
-`build/copy-native-opt/source_root_price.py`.
-
-### Headed COPY-result collection — 2026-11-06
-
-Eight source WebView2 runs on a private desktop used the same 1,000-file,
-ten-directory, 4 KiB fixture, fresh F: targets and durable recording. Each
-Plan-visible/Settings-covered condition ran twice per variant in balanced
-order. The frozen `b2e872e6` packages differed only in event delivery.
-Verification was off. Measurements below cover executor execution alone.
-
-| Plan during copy | Baseline ms/file | 25 ms collection ms/file | Median event reads, before → after |
-| --- | ---: | ---: | ---: |
-| Visible | 7.328 | 5.680 | 1,007 → 167.5 |
-| Covered | 6.675 | 5.543 | 1,009 → 171.5 |
-
-Every completed run returned 1,000 distinct successful COPY receipts in
-the same path order, zero gaps, one terminal event and record, an exact
-SHA-256 mirror, and an empty Job on normal exit. Visible Plan-window reads
-fell from 26 to 19 (medians). A passive 50 ms page timer's p95 rose from
-about 54 to 62 ms; its maximum was 68.2 ms. It does not measure control
-delivery latency. Focused drain tests exercise urgent wakeups and the fixed
-deadline. See `build/copy-drain-opt/summary.json`, the per-run delivery,
-timing and close receipts, and the final candidate-v2 manifest. Earlier
-startup failures produced no copy samples and remain in the evidence.
-The native executor optimization above was excluded from both variants.
-
-### Visible Plan refresh during Follow — 2026-11-06
-
-Two forward/reverse pairs per Plan visibility condition used the integrated
-`5c7e40cd` executor and event drain, with only the order of Follow and
-background refresh varied. The fixture again used 1,000 × 4 KiB in ten
-directories, durable recording, fresh F: targets and verification off.
-Letting Follow claim the foreground read first reduced visible window reads
-from 16 to 10 (medians) and bridge thread CPU for those reads from 0.266 to
-0.172 s. Reads per anchor fell in both visible pairs. Executor time was
-5.386 → 4.931 ms/file with the Plan visible and 4.665 → 4.569 covered; the
-covered runs each made one window read. Visible click-to-terminal time was
-6.031 → 5.535 s. All eight runs passed receipt-order, terminal, hash and
-shutdown checks. The page still showed completed filesystem and recording
-results. `build/copy-plan-read-opt/` retains the prior decision rule,
-source and driver manifests, initial driver failure, and per-run receipts
-indexed by `summary.json` and `audit.json`.
-
-A separate four-run visible-Plan comparison measured the combined changes
-directly against `b2e872e6`. Fresh baseline/candidate/candidate/baseline
-sessions used the same source fixture and driver checks. Executor time was
-7.52 / 5.12 / 5.50 / 7.49 ms/file, with medians of 7.51 and 5.31 ms/file
-(29% less). Median Execute-click to terminal fell from 8.03 to 6.03 s.
-Event reads fell from 1,007.5 to 158.5 and Plan-window reads from 26.5 to
-13 (medians). All four sessions delivered every COPY receipt in order,
-showed completed filesystem and OK recording, matched the source hashes and
-closed normally with an empty Job. These local F:-to-F: observations cover
-copy execution with automatic verification off. Raw evidence and exact
-product differences are in `build/copy-net-opt/summary.json` and `audit.json`
-in that directory.
-
-## Driven package resource pilot — 2026-11-06 (continuation)
-
-A new session took over the study below with a simpler control method and
-stopped at the first workload pilot because it exposed a renderer memory
-defect (BUGS, Interfaces › Live execution rendering). No baseline beyond the
-earlier startup runs is claimed. At the user's direction, SH-G-15 acceptance is
-treated as a judgment on measured behavior rather than a predeclared apparatus;
-the proposed yardsticks were startup settled ≤ 450 MiB / peak ≤ 600 MiB, work
-peak ≤ 2 GiB, all-tasks-closed ≤ 1 GiB and soak growth ≤ 0.2 MiB/cycle.
-
-**Control.** The unchanged build-d package runs with only
-`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` adding a loopback
-`--remote-debugging-port`; trusted CDP mouse/text input drives the page, so no
-window focus, UIA or native typing is involved. Each run is a fresh process,
-`--data-dir` profile and kill-on-close Job, sampled passively at 1 Hz (private
-bytes, working set, handles, GDI/USER, CPU per process and role). Pilot
-drivers: `tools/performance/resources.py` (collector, schedule, fixtures,
-mirror/trash checks, cleanup) and `validate_resources.py` (window statistics);
-pilot runs used shortened profiles via `build/resource-baseline-20261106/pilot.py`.
-
-**Pilot observations** (whole-Job private MiB; renderer in parentheses):
-
-| Run | Idle before | Sampled peak | After task close |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB, cycle 1 copy | 371 (36) | 3,029 (2,668) | 2,053 (1,703) |
-| Same, cycles 2–3 (10 updates each) | — | 2,738 (2,364) | 2,680 (2,319), flat through 2-minute final idle |
-| 10,100 items, 32 B files | 342 (33) | 7,799 (7,409), OOM twice | renderer gone; forced Job end |
-
-Host peak private memory was 127 MiB in the soak and 178 MiB at 10k. A diagnostic 1,000-file run
-recorded JS heap 2.4 → 914 MiB and DOM nodes 5.2k → 61k during execution, back
-to 2.9 MiB/5.7k after one forced GC; CPU samples were dominated by native
-layout/style and `getBoundingClientRect`. All mirror checks, `.synctrash`
-counts, durable run rows (10,100 succeeded, verify phase, recording/audit ok)
-and normal-closed runs passed; the 10k run could not close normally (BUGS,
-Interfaces › Desktop bridge and native-owner lifecycle). While planning, the
-task card briefly reported status `completed` with title "Completed".
-
-Resume after the renderer fix with the full collector schedule: startup ×3
-plain and ×3 driven (port overhead), 100-cycle soak ×3, 10k/100k scale ×3,
-4 GiB and 64 × 4 MiB payload, and 60-minute idle with an open task. Pilot
-fixtures remain registered in `pilot/fixtures.jsonl`. Before removing them,
-independently resolve and verify each owned root. The collector's cleanup
-command trusts paths in the collection records. The validator's historical
-PASS/FAIL output does not decide SH-G-15.
-
-### Renderer fix comparison
-
-The two `verified-*` runs in `build/render-fix-20261106/` used fresh
-extractions of the same verified build-d archive. Only `app.js` and
-`plan_review.js` were replaced with the candidate bytes. Each run used the
-original source fixture, a new empty target, automatic verification, the
-pilot's CDP controls and 1 Hz Job sampling. Each file matched by SHA-256,
-both windows closed with exit 0, and both Jobs emptied.
-
-| Files | Whole-app peak, original → fixed (MiB) | Renderer peak, original → fixed (MiB) | Whole app after 15 s idle, fixed (MiB) |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 3,029 → 553 | 2,668 → 192 | 549 |
-| 10,000 × 32 B (10,100 plan items) | 7,799 → 1,307 | 7,409 → 899 | 991 |
-
-Grouping paints alone brought the 10k run to completion. Preserving stable
-rows across background reads further reduced terminal DOM nodes from 94,453
-to 16,061. At 10k the final run still had 394 MiB of live-or-uncollected JS
-heap at terminal sampling. No forced GC was used. Each size ran once for the
-final comparison, and other verification overlapped part of the 10k run.
-The longer resource profiles on a rebuilt package remain open.
-
-## Updated portable resource study — 2026-11-06
-
-Collection stopped at the user's request after the three startup runs below.
-The workload matrix remains unmeasured. No runtime replacement was scheduled;
-the user authorized collection against the exact build-d artifact described here.
-
-### Collected startup observations
-
-Three fresh processes and isolated profiles each remained open for 90 seconds
-after their native window was observed. Sampling starts at launch; final
-15-second medians describe settled use. This is fresh-process startup with
-uncontrolled filesystem cache, not forced OS-cache-cold startup. The package
-and all 477 extracted files matched before and after every run, as did the
-frozen driver/checker/helper/method dependencies. WebView2 process image paths
-identify version 156.0.4314.58. Host: Windows 11 Pro build 26200, i7-13700K,
-63.69 GiB visible RAM, Balanced power plan; F: and H: are NTFS/NVMe. No workflow
-or filesystem copy was started. All three normal closes returned exit 0 and
-empty Jobs, without forced termination.
-
-| Run | Sampled whole-Job peak, MiB | Settled whole-Job, MiB | Host | Renderer | GPU | Other WebView2 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1 | 380.58 | 363.41 | 94.03 | 35.67 | 166.29 | 67.40 |
-| 2 | 359.77 | 357.80 | 93.63 | 36.80 | 163.06 | 64.31 |
-| 3 | 355.55 | 352.90 | 93.56 | 33.54 | 162.00 | 63.79 |
-
-Role columns are independent settled medians and need not sum exactly to the
-median total. GPU-process private bytes are not GPU VRAM usage. Unknown process
-roles were included but contributed zero here.
-Of 558 raw samples, 550 are complete; the eight incomplete samples occur at
-startup/shutdown membership transitions. All three settled windows have 30
-complete samples. Maximum observed sample gap is 0.5143 seconds and maximum
-observer duration is 0.1061 seconds. Fixed-window validation rejects incomplete
-selected samples or gaps above 1 second, including window edges. This is an
-observer-fidelity criterion, not a product memory budget. Peaks include launch
-and close observation and remain lower bounds on transient peaks.
-
-The independently checked settled range is 352.90–363.41 MiB (median 357.80).
-This gives a current startup baseline and process-role attribution, not a
-task-size coefficient, retained-growth bound, release pass or leak conclusion.
-R3/SH-G-15 remains open; build-d's native-input provenance limitation remains.
-
-### Workload control attempts and stop
-
-Two automatic dry-run pilots stopped before typing: Windows denied foreground
-activation, then the one reviewed caption-activation retry found no visible
-owned HTCAPTION point. Both retained source and target unchanged. After the
-recurrence review, the user authorized manual activation followed by guarded
-automation. The first manual handoff exceeded its three-minute wait and the
-harness normally closed the window before processing the reply; no app crash
-or path input occurred. A new pilot with a ten-minute handoff accepted the
-manual acknowledgement and reached input, but UIA SetValue failed immediate
-path readback before Create plan. That is an observer/input failure; this
-evidence does not establish whether delivery was delayed or ignored by the app.
-Source/target filesystem checks remained unchanged; no Plan or Execute was
-issued. All four failed pilots have normal exit 0 and empty Jobs. Their short
-or human-wait samples are excluded from measured startup results.
-
-The user then chose to stop after startup, declining further manual-phase
-collection for now. There is no successful workload-control pilot and no valid
-metadata, retained-task, payload or repeated-lifecycle measurement. Resume with
-a reviewed control method; do not repeat the failed automatic activation or
-typing attempts as another local workaround. Preserve failed receipts and
-fixture/profile specimens before task-owned cleanup. Evidence lives under
-`build/resource-study-20261106/`, with per-run frozen dependencies, raw samples,
-reports and independent checker results. All 24 registered temporary roots
-were removed after independent preservation/cleanup review; the verified
-specimen archive retains 5,035 files, with only exact regenerable package
-extractions omitted. Original corpus and pre-existing targets were excluded.
-No product source was changed.
-
-### Prepared method and corpus
-
-This is a diagnostic study, not SH-G-15 acceptance or a calibrated ceiling.
-The user selected the latest settled repeatable package and authorized reading
-`F:\NamiSyncExecutorBenchSource\` and syncing to new test folders beneath
-`H:\test_dir\`. Preparation inspected `825c5618`. The latest completed local
-repeatable artifact is `build/m1-release-20261104/repeatable/build-d/`
-`NamiSync-windows-x64-dev.zip`, SHA-256
-`1d73619bb23e567f5c461e15fb9c82595853b419e1da169dafb17c165e7cf552`,
-with 477 files. Its native-input provenance gap remains open under TOOLS/R2;
-do not treat this as the final settled distribution runtime. If R2 supplies a
-replacement before collection, bind the new ZIP, source, bundle and runtime
-identities before the first run. Never pool samples across those builds.
-
-Preparation evidence is `build/resource-study-20261106/`: its read-only census
-records all corpus paths/sizes/mtimes, package hashes and disk space. It does
-not hash corpus contents or establish physical drive type. The five groups are
-1,000 x 4 KiB, 512 x 128 KiB, 64 x 4 MiB, 4 x 128 MiB and 1 x 4 GiB:
-1,581 payload files, 5,171,478,528 bytes. Exclude the root benchmark marker
-from payload workloads. Never edit the supplied corpus. At preparation H:
-had 430,374,912,000 bytes free; recheck before staging/execution.
-
-### Questions and finite workload matrix
-
-Measure total process-tree private bytes and host versus WebView2 attribution.
-Separate metadata population, file-content size, open-task retention and repeat
-count. Measurements test behavior at these points; they do not prove asymptotic
-complexity or an analytical whole-runtime bound.
-
-| Profile | Fixture and actions | Repetitions |
-| --- | --- | --- |
-| Startup | Fresh profile, blank app, 90 seconds idle, normal close | 3 fresh processes |
-| Metadata | Synthetic 1,000 / 10,000 / 100,000 files, 32 bytes each, 100 files per directory; source-only COPY plan against empty target; Details, sort, filter, clear filter, close task | Each size in 3 fresh processes; rotate size order per repetition |
-| Path shape | 10,000 files with nested Japanese directory/file names, depth 8 and relative path length 180–220 UTF-16 units; same Plan gestures as metadata profile | 3 fresh processes; diagnostic contrast with 10,000 short-path case, not an isolated text-length effect |
-| Retained tasks | Eight distinct 10,000-file source-only Plan tasks, common immutable source and separate empty targets; observe at 1/2/4/8 open cards, then close in reverse order | 3 fresh processes |
-| Streamed payload | Each supplied corpus group separately: review COPY plan, Execute, Verify copied, close; recreate Plan against completed target to witness all NOOP, close | Each group in 3 fresh processes, rotated group order; fresh empty target per repetition |
-| Repeated lifecycle | Synthetic 1,000-file, 4 KiB fixture; 20 Plan/Execute/Verify copied/Close cycles. First copies all; later cycles change one owned source file and preserve its old target version | 3 fresh processes; cycles 1–3 are disclosed warm-up, not discarded raw data |
-| Combined larger journey | All five corpus groups in one isolated source staging root; reviewed COPY, Execute, Verify copied, close; then NOOP Plan and close | 1 fresh process; functional/diagnostic observation only |
-
-Synthetic fixtures live in a registered study-owned F: directory. Generate
-deterministic content and old, fixed mtimes; enumerate complete expected paths,
-directories, operations and hashes before launch. The 100,000-file fixture has
-1,000 directories: count actual projection rows instead of claiming exactly
-100,000 rows. Short-path names and the long-path generator must be frozen in
-the run manifest before use. Stage the combined payload by ordinary copying
-outside measurement, with no links or reparse points, excluding the marker.
-Validate staging against original hashes; never use the supplied source as an
-update fixture. Distinct empty targets are newly registered children of
-`H:\test_dir\NamiSync-resource-<unique-id>\`; no pre-existing target is reused.
-
-Run Startup, the 1,000-file metadata case and one small payload journey first.
-Review observer fidelity and correctness before the heavier profiles. Then run
-metadata/path shape, retained tasks, payload, repeated lifecycle and combined
-journey serially. This is a multi-hour study, not one short hands-off interval.
-No other tests, builds, hashing or fixture generation run during measurement.
-Treat filesystem cache as warm/uncontrolled; do not claim OS-cache-cold I/O.
-
-### Observation, correctness and analysis
-
-Reuse the existing passive Job sampler's PID/creation-time bracketing and raw
-per-process private-byte/handle/thread records. Exclude only the launch wrapper;
-include unknown descendant roles in totals. Record executable and WebView2
-runtime versions/hashes, OS, RAM, CPU, volume/filesystem facts and power context.
-Sample every 0.5 seconds. Preserve actual gaps, observer duration, missing reads
-and process-topology changes. A sampled peak is a lower bound on transient peak.
-Report frozen host, renderer, GPU, other WebView2 and unknown groups separately
-when command-role identity supports them; never force unknowns into a role.
-
-Use unchanged installed executable/assets with isolated app data. Native input
-must bind the owned window and correct control. Use the successful post-fix
-single-click journey as the input basis, but do not restore repeated full-tree
-UIA polling. Run a bounded, unmeasured control pilot first. Between actions use
-passive sampling; a bounded targeted observation or manual acknowledgement
-records phase completion. Keep human wait and observer time explicit. A failed
-click is not repaired by blindly double-clicking. If targeted UIA fails, stop
-that driver attempt; preserve evidence and use the already authorized manual
-phase-witness method rather than repeat the failed observation mechanism.
-
-For each process record 60 seconds of initial idle (startup profile uses 90),
-30 seconds after each stable Plan/completed verification/task-count checkpoint,
-30 seconds after each task close, and 120 seconds after the final close. Use
-the last 15 seconds of each ordinary window and last 30 seconds of final idle.
-Checkpoint windows begin only after witnessed completion; incomplete windows
-cannot be substituted with shorter ones. Record action/request, acknowledgement,
-completion, capture and idle boundaries separately; manual timings are not
-pure operation latency. Phase peaks include all samples in the named interval.
-
-Before Execute, witness exact source/target, operation counts and destructive
-intent. Empty-target workloads permit only expected copies/directory creation;
-one-file update cycles require explicit confirmation of that owned update.
-After timed phases, verify complete target namespace, content hashes, preserved
-versions and source metadata/content. Reconcile durable sync/verification runs
-with actual gestures, including any extra verification, without relabeling a
-deviation as the declared workload. Hash outside measurement; no measured
-phase spans these checks. Do not infer correct execution from resource samples.
-
-Report per-run sampled peak, fixed-window median/range, final-minus-initial
-idle and incremental retained memory at 1/2/4/8 tasks. For repeated lifecycle,
-report every post-close value, cycles 4–20 slope (MiB/cycle), median of cycles
-4–8 versus 16–20, and final idle. Preserve individual fresh-process results
-and their min/median/max; do not pool time samples as independent replications
-or report p95 from three processes. Growth is evidence to investigate, not
-automatically a leak; stable private bytes alone do not prove graph release.
-Any object-retention instrumentation is a separately identified source-build
-diagnostic and cannot be folded into the unchanged-package observations.
-
-### Collection boundary and execution controls
-
-The initial preparation created the method and census only. Collection then
-implemented dry-run pilot/startup/metadata drivers and an independent checker,
-reusing the passive sampler rather than the old attempt-03, 256-file/three-cycle
-recipe. Only startup completed. Before resuming, freeze the artifact and all
-generator/driver/checker dependencies, settle a usable control pilot and verify
-the exact fixture oracle. Larger/mutating profile drivers and checkers remain
-unimplemented. No automatic Execute capability was enabled in this session.
-
-Use a 30-minute stage deadline and two-hour process deadline; a timeout means
-incomplete evidence, not product failure or success. Resource emergency stops
-at whole-Job private bytes above 8 GiB for ten consecutive complete samples
-or system available physical RAM below 4 GiB for ten samples. These conservative
-lab stops are not product budgets. Record the stop and request normal cancellation
-and closure; never kill during an unconfirmed active mutation merely to finish
-measurement. Observer failure does not authorize closing an active task. Existing
-mandatory safety stops apply. Record failed normal teardown and obtain recovery
-adjudication rather than silently treating forced termination as a normal close.
-
-Preserve raw samples, events, all failed attempts, screenshot/phase witnesses,
-content/history receipts, exact inputs and analysis before cleanup. Remove only
-registered task-owned staging/targets/profiles after the complete session;
-retain unresolved-failure inputs. No app launch, target creation or corpus
-mutation occurred during preparation; subsequent collection is accounted above.
-R3/SH-G-15 remains open. A later budget
-derived from these observations requires DEFENSE's calibration/holdout separation;
-these measurements cannot validate a ceiling fitted to themselves.
-
-## Portable development-package diagnostics — 2026-11-04
-
-Attempt-03's portable ZIP SHA-256 is
-`acc2c253057bce8af3c497053dfab3765da0621c9c507792b2aa4fb6e553bd69`.
-Its recorded source is `3aa03caa` plus staged packaging/host inputs, not a clean
-release candidate. Evidence and exact drivers are retained under
-`build/bughunt-20261104/packaged-round/evidence/`; `cold-bundle-01.json` binds
-all 471 extracted files before/after collection, while `cold-idle-01.json`
-records the driver dependency hashes and their before/after comparison.
-Host: Windows 11 Pro build 26200, i7-13700K, about 63.7 GiB visible RAM, local
-NTFS; packaged Python 3.13.17 and WebView2 156.0.4314.58.
-
-Three fresh GUI processes/profiles were observed for 60 seconds each, serialized
-with functional tests. This is fresh-process startup, not forced OS-cache-cold
-startup. The Windows Job includes the frozen host and all descendants; only the
-launch wrapper is excluded. PID/creation identity brackets resource reads.
-Private-byte totals are sampled nominally every 0.5 seconds; settled values are
-the final 15-second medians. Unknown descendant roles remain included.
-
-| Run | Sampled peak private bytes | Settled private bytes | Normal close, seconds |
-| --- | ---: | ---: | ---: |
-| 1 | 375,414,784 | 373,381,120 | 1.010 |
-| 2 | 372,514,816 | 371,609,600 | 1.060 |
-| 3 | 377,425,920 | 377,331,712 | 1.060 |
-
-Settled totals are approximately 354–360 MiB. Of 360 samples, 357 are complete;
-each run's first sample precedes product Job membership. Retain those gaps in
-`cold-idle-01.samples.jsonl`; sampled peaks are lower bounds on transient peaks.
-All three processes exit 0 with empty Jobs before closure and no forced teardown.
-Native-window observation time is not interactive-ready latency.
-
-The separately declared repeated workload was three cycles of Plan, Execute,
-Verify copied and Close task over 256 files of 16 KiB, changing one file between
-cycles, with bounded idle windows. Both native-input attempts stopped at the
-first Create plan transition; neither produced any repeated-workload result.
-The second attempt proves cursor placement over the intended UIA button, but
-not delivery/processing of mouse events. The user independently observed cursor
-movement and could not confirm click acknowledgement. The harness timed out
-and closed the window; logs and exit 0 do not establish a crash. Two remaining
-WebView descendants in the retry required final Job cleanup. Failed profiles,
-drivers and captures are preserved in `gui-repeat-preservation-02.json` and its
-named archive. No third attempt was made, and cause remains unresolved.
-
-### Manual workload continuation — 2026-11-04
-
-The user subsequently authorized input diagnosis and another measured run.
-Two dry-run-only SendInput probes accepted both mouse events but reached Plan
-only after manual activation; the second had explicit hands-off readiness.
-Acceptance by Windows does not establish browser delivery. No specific product
-cause was proven. Live UIA enumeration then failed during startup and execution;
-the latter observer closed a partially copied run. Archived private-copy checks
-confirmed truthful cancellation: 118 succeeded, 138 canceled, recording/audit ok.
-
-After explicit user review of the recurring observer mechanism, collection used
-passive Job sampling and human actions, screenshots and phase acknowledgements.
-The same 256-file, 16 KiB/file fixture ran three sync/task-close cycles in one
-fresh process, changing only one source file between cycles. Copy/update counts
-were 256/1/1 with 0/255/255 no-ops; all managed hashes and prior-version backups
-matched. Actual verification scopes were 256/1/1/1: the user confirmed a second
-Verify copied click in cycle 2. This is a disclosed deviation from the declared
-three-verification profile, not an exact-profile pass. Retain its failed exact-
-count oracle alongside the reconciled actual workload.
-
-| Fixed idle window | Median whole-Job private memory, MiB |
-| --- | ---: |
-| Initial 10 seconds | 352.96 |
-| 15 seconds after cycle 1 task close | 853.20 |
-| 15 seconds after cycle 2 task close | 664.53 |
-| 15 seconds after cycle 3 task close | 627.84 |
-| Final 15 seconds of the final 60-second idle | 624.00 |
-
-The 818.51-second session includes human response and screenshot-review time;
-it is not an execution-latency measurement. Of 1,637 samples, 1,633 are complete;
-the four incomplete samples comprise startup and changing Job membership.
-All fixed idle windows have complete samples. The maximum observed sample gap
-was 0.5152 seconds and observer duration 0.1146 seconds. The whole-session
-sampled private-memory maximum was 1,270.89 MiB, including mixed manual/work
-phases; sampled maxima remain lower bounds on transient peaks. The host exited
-0 and its Job was empty before release; no forced cleanup was required.
-
-Final idle was 271.03 MiB above initial idle, while post-close medians decreased
-by 225.36 MiB from cycle 1 to cycle 3. These correlated observations do not prove
-a leak, bounded long-session retention or release acceptance. No budget is
-derived from them. Longer/heavier profiles and resource acceptance remain open.
-Raw samples, fixed-window aggregation, exact producer identities, manual
-witnesses and private-copy history reconciliation live in
-`build/bughunt-20261104/packaged-round/continuation-native-20261104/`.
-The first parent screenshot was cropped by DPI virtualization and remains
-unused; corrected captures use a separately recorded DPI-aware producer.
-Sampler, app and workload-driver bytes stayed unchanged during collection.
-
-These are diagnostics without a resource budget, SH-G-15 pass or leak-freedom
-claim. Longer/heavier-session growth, representative-corpus
-acceptance and clean-candidate release evidence remain open. Changed package,
-driver or checker dependencies require new evidence for the affected claim.
-
-## Handle-relative compatibility probes — 2026-10-21
-
-At product revision `e6734bbd`, the user-provided K: SD card was natively
-identified as exFAT, serial BA1F1F45. Strict relative opens with DONT_REPARSE
-and NO_RECALL succeeded under both confirmed restrictive and freshly acquired
-metadata root handles. Basic/Standard information matched current FileStat
-for files, directories and a 370-character path, with identity absent by profile.
-Combined StatInformation(68) returned C000000D on present entries; it is not a
-universal query. This establishes bounded compatibility, not implementation
-acceptance or coverage of every supported filesystem.
-
-Raw contained probes, driver receipts, exact commands and retained fixture
-manifest live under `build/handle-relative-investigation-20261021/exfat/`.
-The isolated K: fixture is recorded there; no unrelated SD-card contents were
-changed. Warm three-round, twenty-call subject diagnostics are in that report;
-they are incomplete-adapter microbenchmarks, not end-to-end planning speedups.
-The earlier NTFS five-round comparison is retained under
-`build/handle-relative-investigation-20261020/`. Cloud and final integrated
-observer acceptance remain separate from these prototype receipts.
-
-## Integrated PO4 profile — 2026-10-21
-
-Source `17822b1` on the same Windows 11/NTFS host reused the exact historical
-two 8,000-file fixtures. Each mix received one excluded warmup, three alternating
-fresh-process light samples and one separate counted sample. All ten children
-produced complete ready plans, expected COPY/NOOP populations, 256-row first
-windows and clean shutdown/custody release. Full before/after fixture digests
-matched the earlier digests; product/helper/driver dependencies stayed unchanged.
-
-| Request to first window, seconds | Post-PO3/PO5 historical | Integrated PO4 |
-| --- | ---: | ---: |
-| 90% NOOP | 2.976–3.052 | 2.626–2.660 |
-| 10% NOOP | 6.813–6.995 | 3.844–3.917 |
-| Observation only, 90% NOOP | 0.724–0.747 | 0.360–0.364 |
-| Observation only, 10% NOOP | 4.925–5.069 | 1.913–1.979 |
-
-Counted subject root and candidate resolutions fell from 1,680 each / 14,480
-each to zero in both mixes. Root-admission, chain and temp-discovery call counts
-were unchanged. Final subject stats increased from 880/7,280 to 1,680/14,480:
-missing leaves now reach the authoritative final read instead of ending in the
-early chain check. This does not mean duplicate leaf reads were retained.
-
-These warm local samples are historical comparisons, not randomized paired
-causal estimates, cold/remote-storage guarantees or p95 acceptance criteria.
-No plan executed. Counts came from separately instrumented runs; inclusive
-boundary durations must not be summed. Raw provenance, receipts and analysis:
-`build/handle-relative-investigation-20261021/final-profile/`
-`run_c5df5b36a3254270b98b92acbd468846/`. Earlier unit/native gates and independent
-reviews are retained under the sibling `implementation/` directory.
+This document owns measurement fixtures/profiles, scaling axes, aggregation,
+commands, provenance and qualified results. [DEFENSE](DEFENSE.md#7-quantitative-evidence-and-measurement-authority)
+owns evidence authority; PRESENTATION, BRIDGE, HISTORY and INTERFACES own their
+behavior and acceptance criteria. Optional Plan/UI timing and representation
+memory are developer observations, separate from enforced bounds, counted work,
+Inventory cold construction, custody and release resources.
+
+Methods precede results. Historical observations certify their recorded inputs,
+not the current checkout. The pre-compaction narrative is in Git at `f80773b5`;
+the before-text and disposition ledger are in `build/mop-up-survey-20261111/`.
+Condensing a study does not turn an incomplete receipt into a pass or discard
+its runtime, observer, source or workload qualifications.
 
 ## Evidence retention
 
@@ -2191,260 +25,6 @@ cannot otherwise be reconstructed. No unresolved recovery work or user data is
 eligible. Historical observations remain bound to their measured dependencies.
 Methods and current result summaries belong here; detailed investigation
 chronology belongs in the named evidence root or archived historical material.
-
-## Planning observation continuation — PO3/PO5 and PO4 study (2026-10-19)
-
-PO3 `b1c433c2` reduces per-call lexical work with identical results/messages;
-PO5 `30349d0` omits NOOP direct file checks only during review. Execution,
-resume and verification keep full fresh observation. PREFLIGHT owns that scope.
-The following measurements describe the integrated PO3/PO5 source, with no
-PO4 product changes. They are not a controlled before/after speedup comparison.
-
-The existing two 8,000-file fixtures below were checked for exact path/content/
-size/mtime identity before and after. Each mix received one excluded warmup,
-three fresh-process light samples (alternating mixes), and one separate counted
-sample. Product, helper and driver hashes and fixture digests remained equal.
-All ten real planning children produced the expected COPY/NOOP counts, complete
-scans, ready plans, 256-row windows and complete shutdown/custody release.
-No plan executed. Host: Windows build26200, Python3.13.14, SQLite3.50.4, local
-NTFS, warm filesystem, outside-source databases. Tests and measurements were
-serialized. Source execution, small samples and uncontrolled background/power
-limit generalization; remote/cold/deep-tree and installed release are unmeasured.
-
-| Three light samples, seconds | 90% NOOP | 10% NOOP |
-| --- | ---: | ---: |
-| Request through first window | 2.976–3.052 | 6.813–6.995 |
-| Current-world observation | 0.724–0.747 | 4.925–5.069 |
-
-Counted boundary durations include Python processing and wrapper overhead;
-admission/chain cover all preflight callers and overlap temp discovery. Root/
-candidate resolution and final stat below are subject-only. Do not sum rows
-or use counted-run elapsed times as the light timing comparison.
-
-| Boundary | 90% NOOP: calls / seconds | 10% NOOP: calls / seconds |
-| --- | ---: | ---: |
-| Root admission or held-attribute check | 1,684 / 0.015 | 14,484 / 0.094 |
-| Chain admission | 1,760 / 0.177 | 14,560 / 1.437 |
-| Subject root resolution | 1,680 / 0.135 | 14,480 / 1.117 |
-| Subject candidate resolution | 1,680 / 0.178 | 14,480 / 1.503 |
-| Final subject leaf stat | 880 / 0.028 | 7,280 / 0.226 |
-| Temporary-file discovery | 1 / 0.117 | 1 / 0.100 |
-
-PO4 native probes used task-owned NTFS fixtures and read-only experimental
-observer variants. Root/ancestor renames failed while held and succeeded after
-release; conversion of a nonempty ancestor to a junction failed with error145.
-An empty held root could become a junction, but the fresh held-attribute query
-refused it. These support retaining that guard and bounded root-reuse reasoning.
-Stable present/missing/nondirectory/reparse and path-length cases agreed.
-Case-alias roots retained unconfirmed fallback. Native cloud placeholders were
-not provisioned; the volume supplied no short alias, so neither is claimed as
-native equivalence coverage. Conditional fallback variants were not implemented.
-
-Two actual mutation barriers challenge unconditional equivalence: after chain
-admission found a missing intermediate, an existing ancestor was converted to
-a junction. Current resolution refused an escape while the no-resolution
-prototype returned absence (no outside-root
-metadata read or effect was demonstrated); creating a missing leaf after chain
-admission returned absence with retained early observation but present metadata
-with one final leaf read. Disappearance cases agreed. These are precise changes
-in observed drift, not demonstrated corruption. The user's conditional scope
-therefore pauses every PO4 implementation unit for review. Timing does not
-accept a residual, and execution's quiescence wording does not automatically
-dispose of planning-observation differences.
-
-Evidence: `build/planning-optimization-next-20261019/po4/` retains native scripts,
-numbered native receipts, profile driver/inputs, fixture digests, ten child
-receipts, raw counts and independent review. Recollect affected evidence when
-product, driver, helper, fixture or host dependencies change. M1_PLAN owns the
-pause and next decision; no PO4 candidate speedup is claimed.
-
-## Planning lexical preparation — PO1/PO2 (2026-10-19)
-
-This diagnostic follows the `ca31654` observation study retained in
-`build/observation-study-20261012/report.md`. That study identified repeated
-absolute spelling validation and candidate input preparation; it did not
-authorize filesystem-fact reuse. NOOP current-state observation remains intact.
-
-PO1 compares archived source `d1d19c61` with the same package plus the reviewed
-`core/pathing.py` change integrated as `5216bf0`. Two sequential fresh-process/
-database light samples per version use each of two real 8,000-file fixtures:
-80 groups, 32 fixed bytes per file and fixed mtimes, with either 7,200 or 800
-matching target files. The remaining targets are absent. Exact paths, bytes,
-size and timestamps are verified outside timing. Fixture absolute paths differ
-between mixes, so compare versions within a mix, not mixes as an isolated
-action-ratio experiment. This is warm-filesystem source execution, not installed
-release, cold-cache, p95 or universal-device evidence. The observed host is
-Windows build 26200, i7-13700K, 63.69 GiB RAM, NTFS, Python 3.13.14 and SQLite
-3.50.4; power and unrelated workload are uncontrolled. Tests and measurements
-run in separate intervals.
-
-| PO1 interval, seconds; two-sample min–max | Baseline | PO1 |
-| --- | ---: | ---: |
-| 90% NOOP: request through first window | 12.381–12.394 | 10.794–10.854 |
-| 90% NOOP: current-world observation | 9.105–9.111 | 7.536–7.583 |
-| 10% NOOP: request through first window | 11.181–11.206 | 9.868–9.872 |
-| 10% NOOP: current-world observation | 8.568–8.579 | 7.254–7.257 |
-
-Four separate instrumented children count whole-planning absolute-spelling
-validation calls: 211,391→130,239 for 90% NOOP and 192,147→117,417 for 10% NOOP.
-Their timings are excluded. The source mechanism removes one repeat validation
-only when a validated absolute input equals its normalization result; the counts
-witness that reduction on these fixtures without establishing a latency gate.
-All twelve children produce the expected COPY/NOOP populations, complete scans,
-256-row initial windows and complete shutdown/custody release. No plan executes.
-
-`build/planning-optimization-20261019/` retains frozen baseline/candidate sources,
-helper/containment hashes, runtime, fixture census, raw sample receipts, count
-receipts and reproduction scripts. `frozen_inputs.json` equals
-`inputs_after.json`; the candidate source matches the integrated change.
-`summary.json` contains all eight light observations, and `report.md` explains
-their limits. Recollect for changed product, producer, checker, fixture, driver
-or host dependencies. PREFLIGHT/CORE own behavior; these figures promise no
-speed for other operation mixes, root depths, devices or remote paths.
-
-PO2 uses a separate frozen driver/source set in the `po2-measurement/` child
-directory, preserving all PO1 inputs. Fresh baseline `5216bf0` is compared with
-only the candidate `modules/preflight.py` overlay, at the same fixture paths
-and with the same correctness checks. Tests are again serialized outside
-measurement. All eight light and four count children complete with unchanged
-inputs, expected actions, complete scans/windows and clean shutdown.
-
-| PO2 interval, seconds; two-sample min–max | PO1 baseline | PO2 |
-| --- | ---: | ---: |
-| 90% NOOP: request through first window | 10.819–11.234 | 10.322–10.401 |
-| 90% NOOP: current-world observation | 7.570–7.828 | 7.043–7.114 |
-| 10% NOOP: request through first window | 9.803–9.850 | 9.494–9.504 |
-| 10% NOOP: current-world observation | 7.197–7.243 | 6.889–6.919 |
-
-Separate instrumented counts of preflight native-input preparation fall from
-47,603 to 32,323 for 90% NOOP, and 41,203 to 32,323 for 10% NOOP. The removed
-15,280/8,880 conversions correspond to existing subjects reaching final stat;
-absent subjects retain candidate preparation for resolution but never reach
-that final read. Both leaf reads and root/candidate resolutions remain.
-The slower second 90%-NOOP baseline is retained, not discarded as an outlier.
-Each checkpoint has its own comparison; combined cross-checkpoint timings are
-sequential observations rather than a new controlled aggregate experiment.
-
-## Initial planning observation — LS1 (2026-10-12)
-
-The LS1 display-sequence candidate based on `42aa079` was measured without
-backend changes. Real fixtures contain 8,000 or 32,000 source files, 100 per
-folder, with 90% matching target files and 10% missing. Each file has 32 fixed
-bytes and a fixed mtime; exact path sets, bytes and timestamps were checked
-outside timing. Three sequential fresh-process/database children per size use
-the installed wheel and existing containment. Filesystem caches are warm after
-fixture creation; this is not a cold-device or p95 collection. The recorded host
-is Windows build 26200, i7-13700K, 63.69 GiB RAM, NTFS, Python 3.13.14 and SQLite
-3.50.4; power/background activity was not controlled as a reference-profile gate.
-
-The interval starts before `start_setup_plan` and ends after terminal drain,
-release, full projection, initial view and the first 256-row window. Coarse
-`perf_counter_ns` wrappers time existing calls without per-file instrumentation.
-All six children produced the expected 800/3,200 COPY and 7,200/28,800 NOOP
-operations, complete scans and 256-row windows, then closed cleanly.
-
-| Interval (seconds; median unless range shown) | 8,000 files | 32,000 files |
-| --- | ---: | ---: |
-| Request through first window | 12.669 | 50.482 |
-| Minimum–maximum | 12.602–12.673 | 50.454–50.754 |
-| Source scan | 0.684 | 2.733 |
-| Target scan | 0.620 | 2.469 |
-| Planner | 0.923 | 3.774 |
-| Current-world observation | 9.341 | 37.166 |
-| Preflight evaluation | 0.107 | 0.436 |
-| Full projection | 0.092 | 0.483 |
-| Initial view | 0.028 | 0.115 |
-
-Spans nest inside workflow/open-view/total intervals and must not be summed
-across those levels. `modules.preflight.observe` gathers guarded filesystem
-facts for scoped source/target/parent subjects, root evidence and space/trash
-facts. It is distinct from the subsequent preflight decision. Observation is
-about 74% of the total in this fixture; these coarse timings do not attribute
-its internal cost or justify removing checks. No backend optimization was made.
-
-One separate installed 8,000-file browser observation used a synthetic DOM
-Create plan click. The synchronous snapshot at 4.9 ms showed Checking folders;
-the next animation frame at 9.3 ms showed Planning. Both had a visible blank
-table. The first 256 rows were observed at 13,389.3 ms (25 ms polling resolution),
-with Plan ready on the following frame at 13,389.5 ms. This is DOM geometry/frame
-evidence, not compositor presentation or physical-input latency. The visible,
-focused viewport was 1267×764 at DPR 1.75. Native held-work tests independently
-verify blank Planning and Scanning shells.
-
-Raw evidence is under `build/loading-sequence-20261012/measurement/`: accepted
-`runs/planning_81a64a2b9e0940bf99e8673d15996f7a` and
-`runs/browser_5e6c8b6722c3490cb9b5acfc3e1fdc24`. Receipts retain every sample,
-fixture census, source/helper hashes, runtime, and matching before/after inputs.
-The installed wheel SHA-256 is
-`c3597454d262c9991ae4256a99da962b51b28f86568754f3e030d6de906df33e`.
-The preceding smoke is retained separately and excluded from aggregation.
-Recollection is needed for changed workflow/fixture/observer/host dependencies;
-these observations establish no latency acceptance threshold.
-
-## Axis-switch investigation — AX1 (2026-10-12)
-
-**AX2 follow-up:** the user subsequently authorized the single-scroller migration
-without requiring confirmation of the suspected mechanism. Plan/Inventory
-loading probes now measure the outer list and subtract the 24 px sticky header
-from usable height; Inventory keyboard inputs still target the inner semantic
-tree. Existing historical timing receipts retain their original viewport and
-producer identity. This migration does not recollect startup/window latency or
-establish a performance improvement, and does not alter prefetch policy.
-
-The unchanged AX2 candidate passed on 2026-10-13 in
-`build/single-scroller-20261012/axis-candidate-03`: ten sequences on each actual
-Plan/Inventory table, with isolated axes and both switch orders at requested
-50/250/600/1,000 ms gaps. All 36 trusted, unprevented browser wheel events
-produced their full 32 px horizontal or 80 px vertical movement. Focus, row
-identity, scroll room and geometry remained valid; the body had zero internal
-vertical range and the sticky header stayed at the outer viewport's top.
-Source/helper/installed identities match before and after; wheel SHA-256 is
-`433dbf6974deb6cf360c43fa2821a03f663cc549b677313736d8f229e9b15ecb`.
-The runtime was WebView2 154.0.4258.62 with pywebview 6.2.1. Earlier candidate
-attempts 01/02 stopped before input on foreground ownership and are retained.
-This confirms candidate browser-axis functionality, not physical-device
-equivalence, sustained scrolling or the original suspected cause.
-
-At `81731de`, the installed WebView2 154.0.4258.62 diagnostic compared actual
-Plan/Inventory tables, inert copies with their nested scrollers, a temporary
-single two-axis scroller with sticky header, and restored nested copies. No
-installed asset or production behavior was changed. Existing contained host and
-CDP helpers supplied trusted browser-default wheel input over loaded rows,
-with foreground/focus checks and interior scroll positions. Each page/layout
-received isolated X/Y inputs and both axis orders at requested gaps of
-50/250/600/1,000 ms: 40 trials per page, 80 total. Deltas were 32 px horizontally
-and 80 px vertically; quiet resets separated trials.
-Observed switch gaps were 66.6–75.7, 266.3–275.8, 614.9–626.8 and
-1,016.5–1,025.3 ms respectively; requested delays are not exact delivered gaps.
-
-All 80 corrected trials moved the requested axes fully. Raw checks retain
-trusted unprevented deltas, actual event gaps, signed scroll room, intermediate
-positions, stable row populations/geometry and focus. The single control used
-CSSOM, proving outer overflow auto/auto, body visible/visible with zero internal
-vertical range and sticky header. Its outer box was retained; removing the body
-gutter narrowed header/body tracks by about 9.7 CSS px. Restoration returned the
-original nested ownership. These injected browser trials did not reproduce the
-reported physical wheel/tilt-wheel lock; they cannot disprove that report.
-
-An earlier attempt's stylesheet was blocked by CSP, leaving its single control
-nested; that layout comparison is invalid and retained separately. A subsequent
-Windows SendInput WHEEL/HWHEEL attempt, including planned sustained sequences,
-stopped before cursor movement or any input. The focused HWND passed owned-form
-ancestry but failed job-process membership. Exact PID/job values were not retained
-at the thrown exception, so the cause cannot be attributed to foreground loss,
-WebView process topology or a helper query error. Cursor restoration confirmed
-no movement; containment closed the child. No native or sustained-input result
-was collected. The planned horizontal stream alternated signs to avoid limited
-travel and would not have established unidirectional hardware equivalence.
-
-Evidence: `build/loading-sequence-20261012/axis/runs/attempt-01` (invalid single
-control), `attempt-02` (80 valid CDP trials), and `attempt-03` (pre-input ownership
-failure). Source/driver/installed identities are retained before and after.
-The nested-scroller hypothesis remains unconfirmed; no single-scroller product
-migration was made. If reopened, first retain a passive ownership snapshot with
-numeric HWND/PID/job facts, then resolve that mismatch before sending native
-input. A valid physical/native reproduction and nested/single/restored comparison
-remain necessary to attribute the report to this mechanism.
 
 ## Reference profile and collection
 
@@ -2491,6 +71,239 @@ bytes and producer identity. Changed fixture and payload representation require
 fresh affected observations; those historical timings do not describe the
 corrected fixture. No timing baseline is accepted by this correction.
 
+## Release resource method
+
+The completed SH-G-15 v1 schedule is implemented by
+`tools/performance/resources.py`; `validate_resources.py` independently computes
+the historical yardstick verdict. INTERFACES owns the user's scoped acceptance,
+including its distinction from the raw FAIL and later partial collections.
+Freeze the actual installed archive, source/bundle identity, native/runtime and
+driver/checker inputs before collection. Do not pool builds or profiles.
+
+| Frozen family | Population and repetitions |
+| --- | --- |
+| Startup | Three fresh processes without and three with DevTools; blank app, 180-second startup idle. |
+| Scale | Three fresh 10k and three 100k processes; deterministic 32-byte files, 100 per directory, immutable shared source per size and new targets. |
+| Payload | One process: supplied 1 × 4 GiB then 64 × 4 MiB groups, distinct new targets. |
+| Repeated use | Three fresh processes; 100 sync/verify/Close cycles of 1,000 × 4 KiB, ten changed files per later cycle and expected preserved versions. |
+| Open idle | One reviewed 10k sync followed by a 60-minute open-task observation. |
+
+Observe the owned host and runtime descendants by stable process identity,
+including unknown roles, with passive private-byte/CPU/handle/GUI-object samples.
+Private bytes are not working set or GPU VRAM; independent role medians need
+not sum to a median total. Sampled peaks are lower bounds on transient peaks.
+Native control binds the actual owned window and exact action; foreground/input
+refusal is an invalid driver attempt, not a product result. No repeated UIA
+polling, concurrent tests/builds/hashing or active instrumentation belongs in a
+hands-off statistic window. Use isolated app state and registered new fixtures;
+the supplied F: benchmark corpus is read-only, not an update fixture.
+
+The validator uses final spans of 60 seconds for startup, 30 for initial/final
+idle, 10 for closed tasks, 15 for Plan/executed-open, and 3,000 for the long idle
+(omit its first ten minutes). Its source owns minimum coverage/gap validation.
+Soak uses cycles 21–100, ordinary least-squares slope and last-20 minus first-20
+median shift; do not pool time samples as independent fresh processes. Record
+all samples, selected windows, missing observations, observer duration, runtime
+changes and exact statistics. Separate declared warm-up from discarded evidence.
+
+The historical yardsticks include 2,048 MiB work peak, 0.2 MiB/cycle soak slope
+and 20 MiB retained shift. They remain unchanged diagnostic predicates in the
+validator; user acceptance is recorded separately below. A missing scheduled
+profile/window remains incomplete, even if every present row meets its predicate.
+Use the predeclared procedure and frozen checker rather than deriving a new
+passing budget from the same observations.
+
+Witness exact reviewed paths/operations and destructive confirmation before
+execution. After timed phases, independently compare full namespace/content,
+preserved versions, supplied-source metadata and extracted bundle identity.
+Hash outside the measured interval. Every expected task Close and normal
+exit/empty owned Job is a separate witness. Forced Job termination is not a
+normal close. An observer failure does not authorize killing an active mutation;
+preserve state and apply the repository's safety/recovery rules.
+
+Early November's manual/automatic pilot matrix was superseded by this completed
+17-run schedule. It must not be presented as fully measured: old long-path,
+eight-retained-task and combined-corpus proposals did not acquire acceptance
+merely by being listed. Multi-task attribution below is a separate diagnostic.
+Changed product, producer, checker, driver, dependency, runtime or accepted
+machine/profile reopens affected evidence under DEFENSE; unchanged source bytes
+alone do not authorize evidence reuse.
+
+## R3 timing collection
+
+### R3 acceptance collection — predeclared 2026-11-09
+
+R3 maps the open timing obligations by owner before any acceptance sample:
+
+| Obligation | Owner and limit | Collection | Statistic |
+| --- | --- | --- | --- |
+| Cold Inventory projection | PRESENTATION 3 s / 6 s maximum | Existing `tools.performance.inventory --collect` and `validate_inventory`, five fresh children per case; renewal needed because `b2e872e6` changed gating `core` sources | Per-case maximum |
+| History release | HISTORY 3 s summary; 500 ms p95 / 1 s maximum per 256-row page | `python -m tools.performance.br_g_42 collect`, five fresh `history release` children | Maximum of ten summary readings; pooled nearest-rank p95 and maximum over 200 item and 200 event page samples |
+| Bridge event | BRIDGE 100 ms p95 / 250 ms max reliable/terminal; 1 s / 2 s progress; no Gap | Same collector, five fresh `bridge-event installed` children | Worst child p95 and overall maximum per stream; every child `passed`, `measurement_valid`, runtime/machine profile match and clean archive scope |
+| Plan and execution UI | Advisory under DEFENSE §7 | Not collected; the named 2026-11-09 diagnostics are the comparison | None |
+| SH-G-15 | INTERFACES; user judgment on measured behavior | R4 resource schedule on the rebuilt candidate | Not R3 |
+
+All collections run once, on one clean revision, on the reference profile with
+CPython 3.13.17, AC power and no concurrent task, test or build work. Children
+are never retried. `python -m tools.performance.br_g_42 validate DIR` is the
+separate checker: it requires exactly five complete children per case, the
+collection revision with a clean tree in every report, and recomputes each
+statistic from the raw reports. Any invalid child or exceeded limit fails R3;
+a rerun needs a recorded cause and a new collection directory. Raw reports
+stay in ignored `build/r3-acceptance-20261109/` (Inventory child logs in its
+existing `build/m1-9-20261001/` root); the validation JSON, with
+each report's SHA-256, and the Inventory compact raw/validation JSON are
+committed under `tests/interfaces/web/`.
+
+### R3 release repair renewal — predeclared 2026-11-10
+
+The [approved repair](M1_PLAN.md#approved-release-repair--2026-11-10) selects
+official Windows x64 CPython 3.15.2 with SQLite 3.53.4. The installed bridge
+child uses pywebview 6.2.1, pythonnet 3.2.1 and the selected package dependency
+set. Record the actual interpreter, SQLite, WebView2, CLR and package versions
+alongside the reference machine facts, AC power and quiet desktop. Collect
+after the input changes settle on one clean commit. Build and install each
+archived wheel against the selected dependencies in a fresh environment.
+
+The prior R3 collection procedure and limits above carry forward. Inventory
+uses five cold children for each of the two cases and its separate validator.
+History and installed bridge events use five fresh children apiece with the
+existing BR-G-42 checker. Keep failed attempts and do not retry individual
+children. Record results with distinct filenames and preserve the 2026-11-09
+receipts, budgets, fixture and statistics. The live SH-G-8 custody drift guard
+runs on CPython 3.15.2 and xxhash 4.1.0 against the same frozen ceiling.
+The [v2 authority](../tests/interfaces/web/sh_g_8_transport_authority_v2.json)
+authenticates the working verifier against its Git introduction and the
+original v1 verifier and artifacts against their historical Git identities.
+Calibration and holdout retain their CPython 3.13 qualifier, original raw
+receipts and source closure. The current guard leaves that empirical claim
+scoped to the historical profile. SH-G-15 runs separately on the rebuilt
+release package.
+
+### R3 release repair result — 2026-11-10
+
+The renewed collection passes on clean `cfeac2d9`, using the selected runtime
+above, the same reference machine, AC power and the user-confirmed quiet
+desktop. All twenty timed children completed without retries. Independent
+review reconciles source/runtime/profile identities, raw hashes and metrics.
+
+| Obligation | Children | Result | Unchanged limit |
+| --- | ---: | ---: | ---: |
+| Inventory cold base / information-heavy | 5 / 5 | max 1.479 / 2.114 s | 3 / 6 s |
+| History 50-run summary | 5 (10 readings) | max 1.681 s | 3 s |
+| History item / event pages | 5 (200 each) | p95 18.93 / 19.30 ms; max 33.82 / 29.81 ms | 500 ms / 1 s |
+| Bridge reliable/terminal | 5 (3,100 events) | worst p95 6 ms; max 51 ms; no Gap | 100 / 250 ms |
+| Bridge progress | 5 (7,490 events) | worst p95 42 ms; max 47 ms; monotonic | 1 / 2 s |
+
+History's worst normal commit was 54.03 ms; maximum pending state was 256
+events / 109,568 bytes, with recording and audit assertions satisfied.
+Committed receipts: [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261110_raw.json),
+[Inventory verdict](../tests/interfaces/web/r3_inventory_cold_20261110_validation.json)
+and [History/bridge verdict](../tests/interfaces/web/r3_br_g_42_validation_20261110.json).
+Full reports, profile and logs remain in
+`build/m1-release-repair-20261110/acceptance/20261110-03/r3/`; the Inventory
+raw path is recorded in its `identity.json`. Independent review is in
+`build/m1-release-repair-20261110/renewal/r3-review.md`.
+These results renew the named timing gates only, not SH-G-15 or a universal
+speed claim. Historical receipts and their scope remain unchanged.
+
+The preceding procedure was first completed on `cbb07d5f` with CPython 3.13.17 /
+SQLite 3.50.4. Its Inventory maxima were 1.623/2.297 seconds, History summary
+1.736 seconds, item/event page p95 21.2/20.8 ms and maxima 23.5/22.1 ms, bridge
+reliable worst p95/max 10/40 ms and progress 45/51 ms. It remains historical
+profile-qualified acceptance, not the serviced runtime's receipt. Committed
+`r3_*20261109*.json` authorities and original logs are unchanged; the result
+above is the renewed profile, not a retuned limit.
+
+### R3 acceptance result — 2026-11-09
+
+The original clean `cbb07d5f` five-child collections passed without retries;
+the profile and metrics are summarized above. [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261109_raw.json),
+[validation](../tests/interfaces/web/r3_inventory_cold_20261109_validation.json)
+and [History/bridge validation](../tests/interfaces/web/r3_br_g_42_validation_20261109.json)
+bind the original source/runtime/hash population. Raw collection:
+`build/r3-acceptance-20261109/collection/`; Inventory logs:
+`build/m1-9-20261001/measurement-inventory-cold-20261109T130416Z-bc2ffcb0/`.
+Relevant source/profile changes require renewal; those original passes remain
+scoped rather than silently authenticating the current checkout.
+
+## Cold inventory projection acceptance method
+
+PRESENTATION owns the retained base 3 s / information-heavy 6 s maxima. The
+inventory maxima remain fixed acceptance criteria; optional Plan/UI diagnostics
+do not replace or close this gate. The dedicated
+`python -m tools.performance.inventory --check` command validates its
+full deterministic fixtures without collecting timing. Acceptance collection
+uses `--collect --profile PATH` only after confirming the actual reference
+profile above, AC power and absence of unrelated sustained workload. The profile
+JSON records `captured_at`, OS name/build, CPU, physical/logical core counts,
+memory GiB, repository device and explicit `reference_profile_confirmed`,
+`ac_power` and `no_unrelated_sustained_workload` facts. A changed or unverified
+profile needs a DEFENSE §7 disposition before it can close acceptance.
+
+The inventory corpus uses seed `0x4E414D49`, 100,000 typed file rows and 20,000
+synthetic folders, five files per folder, for 120,000 displayed rows excluding
+the internal root. Raw sizes are 7 and mtimes 11; every fifth row retains typed
+verify-provenance attestation, giving 20,000 evidence rows. The information-heavy
+variant adds 120,000 typed warnings with indexed paths, bounded indexed detail
+and a stable ScanWarningCode cycle, for 240,000 displayed rows. These populations
+are fixture facts, not a new total-row admission wall.
+
+Each fresh child imports the product, constructs complete input tuples and runs
+`gc.collect()` before the clock. One interval surrounds only the real
+`build_inventory_projection` call, including its tree, indexes, rollups and
+validation. Startup, input generation, sibling view sorting, window/detail work
+and post-build correctness are outside it. GC remains enabled at its recorded
+normal setting. Post-build checks cover every subject/warning, exact populations,
+current/attested evidence, aggregate counts/bytes, warning attachment and index
+exclusion, plus independent path-derived first/middle/last folder membership.
+Wrong or unfinished construction invalidates the sample regardless of elapsed time.
+
+The collector launches five sequential fresh child processes per case, one cold
+sample each. Raw JSON and stdout/stderr record launch argv, repository cwd,
+invocation identity, Popen-launched and child/parent process ids, sample membership, nanoseconds,
+fixture seed, runtime/GC, candidate revision/dirty context and source SHA-256
+bindings. A direct child's id matches the launched id and its parent is the
+collector; a Windows venv redirector child's parent matches the launched id.
+Process ids may be reused; matching launch receipts substantiate actual
+collector launches without claiming cryptographic protection. Per-case maximum
+is the predeclared statistic; minimum/maximum dispersion accompanies it. The
+separate `python -m tools.performance.validate_inventory RAW_JSON` checker
+requires all ten matching samples and compares maxima with 3/6 seconds. Its
+acceptance checks remain active under optimized Python; the collector requires
+a normal interpreter so fixture assertions cannot disappear.
+
+The finite gating source corpus is the collector/fixture and separate checker;
+`workflows/inventory_projection.py` and `node_tree.py`; `core/models.py`,
+`evidence.py`, `integrity.py`, `pathing.py`, `scalars.py` and `review.py`; and
+`db/repositories.py` for row facts and derived verification state. These own the
+construction, type, scalar/path or property calls exercised by this interval.
+Unrelated facade/runtime/executor imports, Plan sorting and later view work are
+outside it; their edits alone do not invalidate cold construction evidence.
+Changed gating files, fixture, producer/checker/driver, Python/dependencies or
+accepted machine/profile require fresh affected samples.
+
+This local, predeclared named-reference criterion uses Tier 2 under DEFENSE §7:
+retain committed compact raw/validation JSON under `tests/interfaces/web/` and
+raw child logs under ignored `build/m1-9-20261001/`. Every run has a fresh exclusive
+directory; failures remain incomplete and neither reports nor validator results
+are overwritten. Samples apply only to the recorded profile and five children,
+without universal latency, memory or complexity claims. No acceptance samples
+are claimed merely by adding this method or passing correctness-only controls.
+
+### Earlier cold Inventory results
+
+| Recorded candidate/profile | Base / information-heavy maximum, five children each | Authority |
+| --- | --- | --- |
+| `ec3865c`-based source hashes, 2026-10-01 | 1.9712401 / 2.8123806 s | `m1_9_inventory_cold_{raw,validation}.json`; original child logs under `build/m1-9-20261001/`. |
+| Clean `cbf73a4f`, CPython 3.13.17, 2026-10-30 | 1.6487122 / 2.2893115 s | `m1_closeout_inventory_cold_20261030_{raw,validation}.json`; same accepted reference machine, AC/quiet. |
+
+Those committed files are under `tests/interfaces/web/`. The first collector
+attempt rejected venv-redirector identity before admission; its failure was not
+timing acceptance. Five launches and source/driver/checker closure were checked
+for each successful collection. No isolated speed comparison follows different
+revisions/runtimes or unrelated working-tree changes outside the timed corpus.
+
 ## Table-loading diagnostic method — GUI-C5
 
 **BC1 observer correction (2026-10-07).** The original C5 collector wrapped
@@ -2514,9 +327,9 @@ precedence/context. Exact byte/custody tests remain behavior gates, independentl
 of speed. Design microbenchmarks select a modest chunk size; the repeated
 installed baseline/comparison, not those loop samples, diagnoses user latency.
 
-This current-source observation has no latency SLO, tail percentile or release
-ceiling. It diagnoses Plan and Inventory separately after GUI-C4 (`3c984b6`),
-before Inventory request coalescing. The finite corpus is the existing base
+This diagnostic has no latency SLO, tail percentile or release ceiling.
+Its original baseline followed GUI-C4 (`3c984b6`) before Inventory request
+coalescing; new observations bind the current installed product separately. The finite corpus is the existing base
 Plan fixture (120,000 projection nodes; 119,968 visible rootless rows) and base
 Inventory fixture (120,001 projection nodes including root; 120,000 displayed
 rows). No information-heavy collection is required. C1's complete-envelope
@@ -2648,9 +461,8 @@ python -m tools performance table-loading inventory-base --installed-root SITE_P
 Reports and raw child/asset evidence use fresh paths under ignored `build/`.
 `tests/test_table_loading_performance.py` supplies independent fixture/action,
 encoding/budget and failure/restoration controls without timing acceptance.
-Review this method/baseline as one atomic outcome, then Inventory coalescing and
-identical remeasurement separately. Placement/prefetch or placeholders require
-a remaining measured gap; this method adds none of those product changes.
+Keep baseline and candidate inputs explicit when remeasuring. Historical
+coalescing/prefetch results below do not prescribe another product change.
 
 ### SW continuous-scroll follow-up method — 2026-10-09
 
@@ -2684,827 +496,6 @@ The separate key-cache experiment uses cold bounded per-capture caches, exact
 byte/error/partial-budget comparisons and unwrapped real-window captures;
 profile separately. Row-schema and renderer changes remain deferred.
 
-### SN2 directional prefetch — 2026-10-11
-
-`build/scroll-navigation-20261011/sn2-summary-01.json` aggregates
-`sn2-baseline-plan-02`, `sn2-candidate-plan-01`, `sn2-baseline-inventory-01`
-and `sn2-candidate-inventory-01`. Each contains three fresh installed children
-with both steady speeds and the same revised keyboard setup above. Baseline is
-committed SN1 `940c7ef`; candidate changes only the Plan, tree and Inventory
-panel assets. Source/wheel/install/restoration manifests are retained, including
-the failed initial keyboard-setup receipt and superseded candidate installation.
-
-The host and observed profiles match the SW profile below: Python 3.13.14,
-WebView2 154.0.4258.62, light theme, DPR 1.75, Details hidden, Plan 853×359 and
-Inventory 880×321 viewports. Collection was serialized after functional tests;
-power and unrelated host workload remain unknown. Each trajectory runs eight
-seconds forward and four reverse. Time not fully covered, seconds, median [range]:
-
-| Page and rows/s | SN1 baseline | Directional prefetch |
-| --- | --- | --- |
-| Plan 240 | 2.107 [2.106, 2.143] | 0 [0, 0] |
-| Plan 1,000 | 5.176 [5.070, 5.314] | 0 [0, 0.097] |
-| Inventory 240 | 1.237 [1.217, 1.282] | 0 [0, 0] |
-| Inventory 1,000 | 4.442 [4.400, 4.776] | 0 [0, 0] |
-
-The four-second reverse portions account for baseline median gaps of
-1.603/3.091 seconds in Plan and 0.920/3.085 seconds in Inventory at 240/1,000
-rows/s. Candidate reverse portions have zero median gaps; one Plan 1,000-row/s
-run has a 51.8 ms reverse gap and a separate 45.3 ms forward gap. All other
-candidate trajectories have zero frame-sampled gaps. This directly addresses
-the asymmetric upward loading observation within this measured corpus.
-
-Median read counts fall from Plan 36/98 and Inventory 33/116 to 20/81 in both
-pages. All steady samples retain one outstanding read, at most 256 rows and no
-discarded responses. Burst last-input coverage medians are Plan 82.4→57.0 ms
-and Inventory 71.1→69.2 ms; these sparse runs do not establish a universal burst
-latency improvement. Sampled frame intervals still reach 69.3 ms in Plan and
-33.4 ms in Inventory with prefetch. Zero sampled gaps is not compositor or native
-wheel proof, nor a guarantee of no visible flash. Per-frame DOM sampling adds
-overhead equally to both variants. No renderer rewrite or second retained window
-was introduced; navigation input coalescing remains the separate SN3 outcome.
-
-### SW observations and dispositions — 2026-10-09
-
-`sw-{baseline,candidate}-{plan,inventory}-01.json` and `sw-summary-01.json`
-retain twelve fresh children and their raw samples. Baseline is the retained
-BC1 bulk-counter installation; candidate changes only the four scroll-adoption
-JavaScript assets. Both ran Python 3.13.14, pywebview 6.2.1, pythonnet 3.1.0 and
-WebView2 154.0.4258.62 on Windows 11 build 26200, i7-13700K, 63.69 GiB RAM and
-SN850X NVMe. DPR was 1.75, light theme, normal motion, Details hidden and inner
-window 1267×764; Plan viewport 853×359, Inventory 880×321. Power and unrelated
-host workload are unknown. Source, wheel, installed and restored asset manifests
-match the declared populations; independent review reconstructed coverage gaps.
-
-Time not fully covered during each 12-second trajectory, seconds, median [range]:
-
-| Page and rows/s | Baseline | Candidate |
-| --- | --- | --- |
-| Plan 240 | 11.125 [11.117, 11.125] | 1.418 [1.392, 1.438] |
-| Plan 1,000 | 11.783 [11.775, 11.784] | 4.321 [4.248, 4.426] |
-| Inventory 240 | 11.067 [11.067, 11.067] | 1.228 [1.208, 1.247] |
-| Inventory 1,000 | 11.775 [11.775, 11.783] | 4.480 [4.410, 4.533] |
-
-Median candidate reads/discards were respectively 36/0, 114/1, 33/0 and 115/0;
-baseline was 459/458, 486/485, 440/439 and 468/467. All retained one outstanding
-read and at most 256 rows. Candidate median longest gaps were 54.4, 93.9, 45.2 and
-94.1 ms. Compatible replies now supply rows during movement, but edge-on-demand
-loading still leaves substantial uncovered time. Directional placement and a
-roughly 64-row margin are justified as a separately scoped follow-up. SW1's
-native gates subsequently passed on October 10; no prefetch was included.
-
-Burst last-input coverage medians were Plan 69.0→69.2 ms and Inventory 72.9→69.9 ms;
-candidate ranges were 65.1–73.0 and 52.3–78.9 ms. First-input medians remained
-122.9→124.8 and 126.3→123.3 ms, including roughly 54–57 ms scripted input spans.
-This is not evidence of a general burst speedup. Observed frame intervals had
-8.3–8.4 ms medians; candidate maxima 35.8–44.1 ms exceeded baseline 11.1–14.1 ms.
-More window adoption does not establish a blanket smoothness improvement, and
-frame sampling does not prove compositor output or a display refresh rate.
-Per-frame coverage sampling scans up to 256 DOM rows and adds instrumentation
-overhead; both variants use the same sampler.
-
-SW4 remains an ignored disposable bridge-capture prototype. `sw4-controls-01`
-and independent `sw-review-key-controls-01` pass 2,808 prefix and 664 capture
-comparisons, including invalid text, error chains, partial charges, hostile
-enumeration, duplicate/subclass keys and detached aliases. Each budget retains
-at most 256 successful exact-string keys of at most 128 codepoints. A cached
-comma/key/colon charge is combined only when it fully fits; otherwise original
-ordering is replayed. No product bridge or row schema changed.
-
-Prefer `sw4-crossover-01/result.json` over initial sequential-block timings:
-five warmups per variant, then 30 cold-cache captures per variant in 15 AB/15 BA
-alternating pairs for each stored producer window. Capture medians in ms:
-
-| Stored window | Original | Prototype | Median paired saving |
-| --- | --- | --- | --- |
-| Plan offset 0 | 12.324 | 5.525 | 6.767 |
-| Plan offset 60,000 | 12.204 | 5.386 | 6.758 |
-| Inventory offset 0 | 12.953 | 5.483 | 7.447 |
-| Inventory offset 60,000 | 12.810 | 5.512 | 7.322 |
-
-Separate `sw4-measurements-01` profiles at offset 60,000 reduce string-encoder
-calls from 11,230→2,688 for Plan and 11,354→2,171 for Inventory; budget charges
-fall from 45,640→20,485 and 48,238→21,202. Actual retained keys never exceed 52
-or 626 codepoints in these four samples. Canonical byte counts remain identical.
-These are one-process stored-payload capture observations, not installed
-round-trip or scrolling improvements. Production delivery needs ordinary
-response and actual drain-prefix/custody tests and review. The narrow cache
-experiment is promising enough to precede any row-schema migration; that
-migration and a renderer rewrite remain deferred.
-
-### BC1 bounded counter comparison — 2026-10-07
-
-Evidence: `build/bridge-counter-study-20261007/`, `bc1-baseline-*` and
-`bc1-candidate-*` probes and matrices, with `comparison-summary.json`. Each
-matrix contains three fresh children per component and nine observations per
-warm class. Both use collector `806df04`, identical browser probe/wrappers,
-pinned dependencies and the same host profile; candidate product changes only
-the bridge string counter. Source manifests, wheel/install identities and
-original/instrumented/restored assets bind every run. No tests or profiling ran
-alongside these timings. Power and unrelated workload remain unverified.
-
-| Median, milliseconds | Plan old → bulk | Inventory old → bulk |
-| --- | --- | --- |
-| Jump capture | 18.505 → 12.477 | 17.070 → 13.568 |
-| Jump native round trip | 29.0 → 23.3 | 28.5 → 25.1 |
-| Jump first coverage | 57.6 → 50.2 | 57.3 → 56.3 |
-| Eight-step burst first coverage | 120.6 → 120.6 | 144.7 → 128.0 |
-| Keyboard first coverage | 60.3 → 52.7 | 49.3 → 47.0 |
-
-Jump coverage ranges are Plan 53.8–61.3 → 45.9–52.0 ms and Inventory
-52.4–60.3 → 49.8–59.1 ms; Inventory's coverage ranges overlap. Burst ranges
-are Plan 116.3–125.6 → 118.4–127.2 ms and Inventory 116.2–148.7 →
-123.5–132.2 ms. Faster completion changes intermediate scheduling: burst reads
-rise 27→36 Plan and 34→36 Inventory, always maximum one concurrent read;
-discarded reads rise 18→27 and 25→27. This does not establish a burst speed
-improvement for Plan. The suggested 40/100 ms figures were not reached.
-Jump canonical envelopes remain exactly 198,624/176,388 bytes. Projection is
-3.321/3.594 ms, window building 1.249/1.905 ms, native encoding 0.610/0.644 ms;
-DOM spans remain non-equivalent at 6.0/22.4 ms. Nested values are not additive.
-
-The scalar-versus-bulk comparison uses the corrected baseline, not original C5
-capture timings polluted by per-consume observer work. This is a diagnostic
-on this host/corpus, not a general speed guarantee. Functional gates: 587
-composition checks, 191 post-control-migration checks, 5,982 ordinary checks,
-12 import contracts and six installed transport checks. The first ordinary
-failure was a measurement control forbidding legitimate product string encoding;
-its migrated version still prohibits whole-response and extra observer encoding.
-
-### BC2–5 investigation method — 2026-10-07
-
-After BC1 delivery, investigate only; no additional product optimization.
-Ignored `bc25_capture.py`, `bc25_loading.py`, `bc25_summarize.py` and
-`run-bc25.ps1` in the same evidence directory retain source/helper/profile and
-installed identity checks. Inspect actual field consumers separately in
-`row-consumers.md`; schema proposals are not implementations.
-
-Capture profiling uses four real fixture/producer windows (Plan with ordinary
-initial execution decoration and Inventory, offsets 0 and 60,000, 256 rows).
-Check identity/index/total facts, exact field/punctuation byte sums and actual
-success-budget consumption. For capture and ordinary capture-plus-projection,
-perform five warmups and 30 unwrapped calls, then 30 separately profiled calls
-with cProfile. Retain raw durations, call counts, cumulative/self times, outputs
-and hashes. Profile percentages include profiler overhead; these component
-replays do not measure native round trips or hostile-source behavior.
-
-Installed diagnostics use three fresh children per component, existing standard
-gestures and one trajectory at each of 60 and 240 rows/second per child: start
-20,000, eight elapsed-time seconds forward, four reverse. Record each animation
-frame's desired/actual index, ownership, visibility/focus and bounded row coverage;
-require final coverage and request settlement. Retain gap intervals, requests,
-discards and concurrency, three samples per speed/component, no p95. These are
-synthetic scroll trajectories through production handlers, not native wheel or
-compositor evidence. No prefetch is introduced. Children have 180-second bounds;
-parent-owned restoration and installed identity checks remain mandatory.
-
-DOM markers distinguish detached construction, attached replacement and
-post-insertion controller work; they do not partition the complete DOM span.
-Only standard tagged gestures additionally read the root rectangle after the
-original DOM endpoint, measuring residual geometry flush, not total layout CPU.
-Setup/steady gestures omit that forced read; setup summaries remain separate.
-These intrusive diagnostics are not headline comparison samples. Report raw
-dispersion and limits before proposing capture, row, DOM or prefetch changes.
-
-The first steady series exposed prolonged response discard while the viewport
-kept moving. Before generalizing, a separately hashed control runs one fresh
-child per component with both speeds, changing only the steady motion to direct
-`scrollTop` assignment without manually dispatching a scroll event. Standard
-gestures and all ownership/coverage/restoration checks remain. Browser-emitted
-scroll events still drive the product; this is not native wheel acceptance.
-Use `bc25_loading_natural.py`/`run-bc25-natural.ps1` and separate control receipts;
-do not pool these one-child observations with the original three-child series.
-
-### BC2–5 investigation results — 2026-10-08
-
-Product `9d09f70` is unchanged throughout. Evidence is `bc25-capture-candidate-01`,
-`bc25-dom-steady-{plan,inventory}-01`, `bc25-natural-{plan,inventory}-01`,
-`bc25-summary-01`, `bc25-field-proposals.json` and `row-consumers.md` under the
-BC1 directory. Wrappers preserve frozen source/helper/profile manifests and
-recheck installations after asset restoration. Component replay values use
-fixed identities/initial state, so their framing is not byte-identical to native
-gesture replies; do not substitute their bytes/timings for the BC1 matrix.
-
-**Remaining capture.** At offset 60,000, unwrapped component capture medians are
-12.526 ms Plan and 13.088 ms Inventory; capture-plus-projection medians are
-14.064/14.307 ms in separate blocks. Each window counts 11,230/11,354 string
-occurrences, including 8,592/9,221 keys, and makes 45,640/48,238 budget charges.
-Both contain only dictionaries, a list and primitives: no typed-view rebuild or
-registered view validation is repeated. Owned projection revisits the detached
-primitive tree in place; it does not make another dictionary copy. Profiles
-put string encoding/accounting and recursive dispatch ahead of container checks.
-They inflate capture to about 50.0/52.8 ms; use call counts and relative hotspots,
-not profiled milliseconds as predicted savings. No validation or custody walk
-was removed. A cheaper per-string encoder call is a potential narrow experiment;
-there is no measured justification for a broad trusted-response bypass.
-
-**Row payload.** Bounded Inventory basenames already shipped in C1. In these
-256-row windows, JSON keys alone contribute 123,218/113,201 bytes (Plan/Inventory).
-Inventory rollups contribute 57,387 bytes before row commas, including 47,925
-removable bytes with commas on the 213 noncontainers; container rollups have real
-detail/action consumers. A hypothetical producer/validator/consumer migration
-omitting noncontainer rollups plus redundant Inventory `has_baseline`, `row_kind`
-and window numeric `row_id` reduces this result from 176,302 to 113,488 bytes
-(35.6%). Presence nullness can distinguish ledger subjects; exact details retain
-their IDs. Full checksum still supplies the tooltip and should remain.
-
-Plan's four generic-tree geometry fields have no current grid consumer beyond
-validation; its three operation counts are read for containers only. Removing
-those geometry fields and noncontainer counts would reduce this sample from
-198,429 to 156,768 bytes (21.0%). Inventory uses those geometry fields for tree
-keyboard/ARIA behavior and must retain them. These are exact size estimates for
-the named samples, not accepted schemas, complete-domain ceilings or speed gains.
-Any implementation must migrate strict validators, producers, details/actions,
-fixtures and bounded-envelope proofs together. No packed-array/key-shortening
-schema or checksum truncation is proposed.
-
-**DOM work.** Nine diagnostic jumps per component give median detached build
-3.9/3.8 ms, attached replacement 2.1/1.9 ms, and post-insertion controller work
-0.0/15.9 ms (Plan/Inventory). The explicit residual rectangle read adds
-16.3/0.0 ms respectively. Zero is at the browser timer's observed precision.
-The old DOM spans charge similar layout-related work at different endpoints;
-Inventory's decorator is not demonstrated to be slower. These spans do not
-partition all render work or isolate pure layout CPU. Profile shared layout
-before rewriting the Inventory renderer; no DOM changes were made.
-
-**Continuous-scroll finding.** At 240 rows/second, all three children per
-component show about 11.1 seconds uncovered during each 12-second trajectory.
-Plan makes 454–459 reads, discarding all but one; Inventory makes 432–437,
-also discarding all but one. At 60 rows/second, uncovered totals range
-2.631–8.508 seconds Plan and 8.268–8.275 seconds Inventory. Both recover at
-settlement after scrolling stops, retain at most 256 rows and maximum one read
-in flight, and preserve the same task/publication/view ownership throughout.
-The browser-event-only controls reproduce this at 240: Plan 453 reads/452
-discarded and 11.117 seconds uncovered; Inventory 430/429 and 11.109 seconds.
-At 60, those controls observe 8.509/4.664 seconds uncovered. These controls
-exclude manual event dispatch as the sole cause, without certifying native
-wheel cadence or compositor presentation.
-
-Independent offline replay (`bc25-review-compatibility-01.json`) confirms all
-3,548 discarded 240-row/s responses cover both saved viewport frames bracketing
-their validation time, under unchanged recorded owner and valid 256-row replies.
-This is a frame-sampled compatibility witness, not interpolation of compositor
-state. All eight study/control asset restorations and 96 asset hashes were checked.
-
-The common failure mechanism is request freshness being invalidated by a newer
-viewport demand even when the in-flight response still covers that demand.
-`app.js` Plan checks exact window-request revision/offset; Inventory checks
-exact intent revision and `tree.js` separately checks request generation.
-Same-index events are deduplicated, but moving indices keep superseding reads.
-This behavior predates BC1's Python-only change. BUGS records it OPEN; no fix
-or prefetch was delivered. The abrupt-jump corpus did not test sustained movement.
-
-Recommended next decision: correct viewport-only response adoption in both
-consumers before adding prefetch, preserving task/session/publication, view,
-action, navigation and highlight fences and dropping superseded queued demand
-only when current viewport coverage is established. Then perform the bounded
-row migration and remeasure. Steady scrolling provides lead time inside a
-retained window; its absence cannot be inferred from abrupt jumps. Prefetch
-remains a separate experiment after starvation is resolved, not the current fix.
-
-### GUI-C5 baseline — 2026-10-07
-
-Evidence under `build/gui-inventory-refinement-20261005/`:
-`c5-baseline-plan-01.json`, `c5-baseline-inventory-01.json` and
-`c5-baseline-summary.md`. Source base `455fd49` plus the frozen diagnostic files
-are bound by each run's before/after manifest. All six fresh children completed
-16 observations each; Plan05 and Inventory01 representatives are excluded.
-No ordinary suite ran alongside collection. Independent review recomputed all
-per-child and combined summaries and checked raw receipts, asset restoration
-and wheel/installation identity.
-
-Recorded host: Windows 11 build 26200, i7-13700K, 63.69 GiB RAM, F: SN850X NVMe;
-Python 3.13.14, pywebview 6.2.1, pythonnet 3.1.0, WebView2 154.0.4258.53.
-All children used 1267×764 CSS pixels, DPR 1.75, Light, normal motion, hidden
-Details and 24px rows. Plan viewport was 853×359; Inventory was 880×321.
-Power and unrelated workload were not independently verified. Instrumentation
-overhead is uncalibrated; these observations are not production latency promises.
-
-First identity-correct target coverage, milliseconds, median [minimum, maximum]:
-
-| Gesture (observations per component) | Plan | Inventory |
-| --- | --- | --- |
-| Initial (3) | 112.9 [110.8, 137.7] | 99.3 [97.2, 101.1] |
-| Sequential edge (9) | 103.0 [83.0, 140.5] | 83.5 [78.4, 87.4] |
-| Jump (9) | 80.8 [75.6, 105.2] | 76.2 [72.5, 83.3] |
-| Covered return (9) | 16.5 [14.2, 16.6] | 16.6 [8.8, 16.7] |
-| Burst (9) | 192.9 [180.1, 199.4] | 413.8 [396.1, 435.1] |
-| Keyboard (9) | 158.6 [151.2, 162.2] | 72.2 [67.3, 74.6] |
-
-Nine Inventory bursts dispatched 72 reads, maximum concurrency eight, discarding
-63 responses. Plan dispatched 27, concurrency one, discarding 18. Covered-return
-visibility precedes discarded-read settlement; Plan keyboard legitimately adopts
-two windows per gesture, Inventory one. Counts and all phase/byte distributions
-remain explicit in the raw reports rather than assuming one request per gesture.
-
-For the nine jump reads, Plan/Inventory median round trips were 53.9/49.0 ms;
-registry outer work 1.417/1.909 ms versus inner window build 1.303/1.899 ms.
-That does not trigger the conditional registry-lock investigation. Bridge capture
-was 43.291/37.287 ms, projection 3.169/3.550 ms, native JSON encoding
-0.601/0.615 ms, browser validation 0.7/0.9 ms and adopted DOM 5.9/21.7 ms.
-Nested spans are not added; the unobserved round-trip remainder is not assigned
-to a queue. Jump median canonical-budget/native-wrapper/callback-script bytes
-were 198624/215696/215780 for Plan and 176388/194671/194755 for Inventory.
-Proceed with the accepted viewport coalescing and identical remeasurement;
-placement/prefetch and placeholders remain conditional on the remaining gaps.
-
-### GUI-C5 Inventory coalescing comparison — 2026-10-07
-
-`c5b-measured-plan-01.json`, `c5b-measured-inventory-01.json` and
-`c5b-comparison-summary.md` retain the repeated six-child matrix under the same
-evidence root. Base `61ee878` plus the seven frozen coalescing paths are bound by
-before/after manifests. A separate `c5-install-coalesced-01` installation uses
-the baseline's exact dependency pins; the original installation is unchanged.
-Collector/wrapper bytes, gestures, host profile and actual geometry are unchanged.
-No broad tests ran during timing. All 96 observations complete with truthful
-landing, at most 256 retained rows and verified asset restoration.
-
-First target coverage, milliseconds, median [minimum, maximum]:
-
-| Gesture | Plan candidate | Inventory candidate |
-| --- | --- | --- |
-| Initial (3) | 105.3 [103.8, 111.7] | 103.5 [99.2, 104.0] |
-| Sequential edge (9) | 84.7 [80.5, 120.3] | 79.2 [77.4, 106.5] |
-| Jump (9) | 82.3 [75.2, 83.9] | 74.0 [73.2, 78.0] |
-| Covered return (9) | 16.6 [14.1, 17.1] | 16.5 [10.8, 16.7] |
-| Burst (9) | 192.4 [179.1, 196.4] | 175.4 [169.2, 183.3] |
-| Keyboard (9) | 155.7 [152.9, 166.6] | 70.4 [69.0, 74.1] |
-
-Inventory burst reads fall from 72 to 27, discarded responses from 63 to 18 and
-maximum concurrency from eight to one. Median coverage falls from 413.8 to
-175.4 ms (57.6% in this instrumented run). Plan retains 27 burst reads,
-18 discarded responses and concurrency one; its median is 192.4 versus 192.9 ms.
-Single-read and initial differences receive no causal speed claim. Candidate
-Inventory burst request medians are 8.5 ms intent wait, 49.5 ms round trip and
-0.8 ms validation across 27 requests, with 19.4 ms DOM across nine adopted
-responses. Baseline burst round trip was 326.65 ms across 72 requests. Raw
-per-child counts, phases and bytes remain unsummed and retain the baseline's
-diagnostic limitations.
-
-Uncovered intervals remain for abrupt jumps and bursts, which provide no
-gradual-scroll lead time to support directional prefetch. The keyboard corpus
-also identifies a narrower Plan placement opportunity: two adopted reads expose
-rows above the first target-only window during focus reveal. That conditional
-follow-up stays a separate change; Inventory coalescing does not alter Plan.
-
-### GUI-C5 Plan keyboard placement comparison — 2026-10-07
-
-`c5c-measured-plan-01.json`, `c5c-measured-inventory-01.json` and
-`c5c-comparison-summary.md` retain the final identical six-child matrix. Base
-`4122b10` plus the frozen placement change uses separate
-`c5-install-placement-01`, the same dependency pins, collector, wrappers,
-gesture sequence and actual profile. All 96 observations complete; source,
-installed identity and asset restoration are checked before/after. Broad tests
-again run after timing, not alongside it.
-
-First target coverage, milliseconds, median [minimum, maximum]:
-
-| Gesture | Plan placement | Inventory comparison |
-| --- | --- | --- |
-| Initial (3) | 131.7 [129.9, 135.4] | 135.1 [127.0, 139.8] |
-| Sequential edge (9) | 94.0 [83.0, 121.2] | 105.1 [81.4, 115.9] |
-| Jump (9) | 82.1 [77.8, 94.9] | 101.0 [75.8, 108.0] |
-| Covered return (9) | 16.5 [12.2, 16.9] | 16.5 [10.0, 16.7] |
-| Burst (9) | 190.2 [182.2, 194.8] | 173.0 [135.7, 183.3] |
-| Keyboard (9) | 83.0 [80.4, 85.9] | 71.0 [67.4, 118.1] |
-
-All nine Plan keyboard actions now adopt one window at offset 19967 rather
-than two at 19999 then 19961. Target/active row 19999 remains visible within
-19993–20008, with 256 retained rows and no uncovered interval, compared with
-74.2–77.1 ms exposed intervals before placement. Median target coverage falls
-from 155.7 to 83.0 ms (46.7% in this instrumented profile). This establishes the
-specific duplicate-read correction, not a guarantee for every viewport size.
-
-Inventory remains at maximum concurrency one. Its nine bursts use 22 reads,
-13 discarded, with two or three per gesture as completion timing varies;
-the previous 27 count is not a contract. Initial and single-read latency varies
-in both components. No causal improvement or regression is inferred for those
-unchanged paths; workload/power and instrumentation overhead remain unverified.
-Raw reports retain all per-child phase/byte counts and distributions.
-
-No directional prefetch is added: the fixed corpus gives no gradual-scroll
-lead time. No placeholders are added: the corrected keyboard seam retains
-covered real rows, while the remaining exposed-spacer intervals under abrupt
-discontinuous input do not establish a useful loading visual. They remain
-observed limitations, not a claim of instantaneous loading. Compositor timing,
-tail latency and new release ceilings remain outside this diagnostic's authority.
-
-## Cold inventory projection acceptance method
-
-PRESENTATION owns the retained base 3 s / information-heavy 6 s maxima. The
-inventory maxima remain fixed acceptance criteria; optional Plan/UI diagnostics
-do not replace or close this gate. The dedicated
-`python -m tools.performance.inventory --check` command validates its
-full deterministic fixtures without collecting timing. Acceptance collection
-uses `--collect --profile PATH` only after confirming the actual reference
-profile above, AC power and absence of unrelated sustained workload. The profile
-JSON records `captured_at`, OS name/build, CPU, physical/logical core counts,
-memory GiB, repository device and explicit `reference_profile_confirmed`,
-`ac_power` and `no_unrelated_sustained_workload` facts. A changed or unverified
-profile needs a DEFENSE §7 disposition before it can close acceptance.
-
-The inventory corpus uses seed `0x4E414D49`, 100,000 typed file rows and 20,000
-synthetic folders, five files per folder, for 120,000 displayed rows excluding
-the internal root. Raw sizes are 7 and mtimes 11; every fifth row retains typed
-verify-provenance attestation, giving 20,000 evidence rows. The information-heavy
-variant adds 120,000 typed warnings with indexed paths, bounded indexed detail
-and a stable ScanWarningCode cycle, for 240,000 displayed rows. These populations
-are fixture facts, not a new total-row admission wall.
-
-Each fresh child imports the product, constructs complete input tuples and runs
-`gc.collect()` before the clock. One interval surrounds only the real
-`build_inventory_projection` call, including its tree, indexes, rollups and
-validation. Startup, input generation, sibling view sorting, window/detail work
-and post-build correctness are outside it. GC remains enabled at its recorded
-normal setting. Post-build checks cover every subject/warning, exact populations,
-current/attested evidence, aggregate counts/bytes, warning attachment and index
-exclusion, plus independent path-derived first/middle/last folder membership.
-Wrong or unfinished construction invalidates the sample regardless of elapsed time.
-
-The collector launches five sequential fresh child processes per case, one cold
-sample each. Raw JSON and stdout/stderr record launch argv, repository cwd,
-invocation identity, Popen-launched and child/parent process ids, sample membership, nanoseconds,
-fixture seed, runtime/GC, candidate revision/dirty context and source SHA-256
-bindings. A direct child's id matches the launched id and its parent is the
-collector; a Windows venv redirector child's parent matches the launched id.
-Process ids may be reused; matching launch receipts substantiate actual
-collector launches without claiming cryptographic protection. Per-case maximum
-is the predeclared statistic; minimum/maximum dispersion accompanies it. The
-separate `python -m tools.performance.validate_inventory RAW_JSON` checker
-requires all ten matching samples and compares maxima with 3/6 seconds. Its
-acceptance checks remain active under optimized Python; the collector requires
-a normal interpreter so fixture assertions cannot disappear.
-
-The finite gating source corpus is the collector/fixture and separate checker;
-`workflows/inventory_projection.py` and `node_tree.py`; `core/models.py`,
-`evidence.py`, `integrity.py`, `pathing.py`, `scalars.py` and `review.py`; and
-`db/repositories.py` for row facts and derived verification state. These own the
-construction, type, scalar/path or property calls exercised by this interval.
-Unrelated facade/runtime/executor imports, Plan sorting and later view work are
-outside it; their edits alone do not invalidate cold construction evidence.
-Changed gating files, fixture, producer/checker/driver, Python/dependencies or
-accepted machine/profile require fresh affected samples.
-
-This local, predeclared named-reference criterion uses Tier 2 under DEFENSE §7:
-retain committed compact raw/validation JSON under `tests/interfaces/web/` and
-raw child logs under ignored `build/m1-9-20261001/`. Every run has a fresh exclusive
-directory; failures remain incomplete and neither reports nor validator results
-are overwritten. Samples apply only to the recorded profile and five children,
-without universal latency, memory or complexity claims. No acceptance samples
-are claimed merely by adding this method or passing correctness-only controls.
-
-### Inventory projection renewal — 2026-10-30
-
-After the pre-closeout reductions, the unchanged 3/6-second limits pass on clean
-`cbf73a4f`: base maximum **1.6487122 s** (range 1.616232–1.6487122) and
-information-heavy maximum **2.2893115 s** (range 2.2703143–2.2893115), five fresh
-children per case. The recorded Windows 11 Pro build 26200, i7-13700K, 63.7 GiB,
-WD_BLACK SN850X NVMe and SQLite 3.50.4 profile remains on AC power. Python is
-3.13.17 after the security update; the register predeclared renewal on this
-runtime without changing budgets under DEFENSE §7. The user confirmed an idle
-machine; task tests were paused and measurement was announced before collection.
-
-The [new raw samples](../tests/interfaces/web/m1_closeout_inventory_cold_20261030_raw.json)
-and [independent validation](../tests/interfaces/web/m1_closeout_inventory_cold_20261030_validation.json)
-bind the final gating sources, unchanged collector/checker, complete fixtures
-and runtime. Raw child logs are retained in
-`build/m1-9-20261001/measurement-inventory-cold-20261029T165303Z-1a8d61fc/`
-(UTC directory stamp; local date is October 30). The correctness-only fixture
-check also passed before collection. Historical samples below remain unchanged;
-this renewal establishes current named-profile acceptance, not a universal
-latency guarantee or an isolated speed comparison between code changes.
-
-### Inventory projection result — 2026-10-01
-
-The coordinated quiet reference-profile run passed both fixed maxima:
-base **1.9712401 s** and information-heavy **2.8123806 s**, each the maximum
-of five fresh child samples. The observed hardware, AC power, Python and SQLite
-match the reference profile above. The [raw samples](../tests/interfaces/web/m1_9_inventory_cold_raw.json)
-bind the exact construction/driver/checker bytes, and the [separate validation](../tests/interfaces/web/m1_9_inventory_cold_validation.json)
-records their passing verdict. The candidate is based on `ec3865c` with the
-explicit working-tree source hashes in the receipt; unrelated read-surface
-changes were present but are outside the timed dependency corpus.
-
-Raw child logs remain under
-`build/m1-9-20261001/measurement-inventory-cold-20261001T115350Z-48927bf0/`.
-An earlier incomplete attempt rejected a Windows venv redirector's process
-identity before sample admission. It remains failed evidence; the corrected
-collector/checker were independently reviewed and tested with a real untimed
-launch before this complete run. No wider runtime or memory claim follows.
-
-## Source-linked historical observations
-
-All values below are independently derived from committed compact JSON.
-The M1-7 Plan profile was accepted at `3c3bbbc` in the 2026-09-16 P9
-collection; the M1-8 U-v2 profile at RC-1 `3ea4e6b` on 2026-09-24.
-The compact contracts and authority artifacts bind their specific source,
-fixtures and profile; the recorded bindings have not been revalidated
-against today's checkout. P2 receipt values belong to its earlier `4bbf943`
-build and are superseded by U-v2 for the corresponding delivered UI bytes.
-
-| Source/revision and fixture | Recorded profile and limitation | Statistic/unit | Children; samples | Observation | Limit |
-| --- | --- | --- | ---: | ---: | ---: |
-| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; cold base, 100,000 operations/120,000 rows | P9 reference; measured revision only | maximum ms | 5; 5 | 1,752.5309 | 2,000 |
-| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; cold information-heavy, 100,000 operations/240,000 rows | P9 reference; measured revision only | maximum ms | 5; 5 | 2,764.6222 | 4,000 |
-| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; unchanged 256-row window | P9 reference; measured revision only | nearest-rank p95 / maximum ms | 5; 30 | 1.6548 / 1.6856 | 250 / 500 |
-| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; incremental retained construction overlap | P9 reference; projection memory only | maximum bytes | 5; 5 | 280,768,512 | 335,544,320 (320 MiB) |
-| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst cold click (destructive start) | U-v2 installed headed; measured revision only | maximum ms | 5; 5 in case (40 across eight cases) | 20.3 | 50 |
-| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt p95 (cancel) | U-v2 installed headed; measured revision only | nearest-rank p95 ms | 5; 30 in case (150 across five cases) | 72.0 | 100 |
-| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt maximum (cancel) | U-v2 installed headed; measured revision only | maximum ms | 5; 30 in case | 73.3 | 250 |
-
-M1-7's [compact contract](../tests/interfaces/web/m1_7_plan_compact_contract.json)
-and companion authority, plus U-v2's [authority](../tests/interfaces/web/m1_8_execution_ui_authority.json)
-and [receipts](../tests/interfaces/web/m1_8_execution_ui_receipts.json),
-carry the source and profile bindings and raw sample membership. The P2
-[authority](../tests/interfaces/web/m1_8_execution_receipt_authority.json),
-[receipts](../tests/interfaces/web/m1_8_execution_receipt_receipts.json) and
-[result](../tests/interfaces/web/m1_8_execution_receipt_result.json) record
-the earlier 6.8/7.3 ms window and 58.8/65.1 ms start p95/max observations.
-Do not combine maxima and p95 across endpoints into one score.
-
-### Current-source BR-G-42 diagnostics — 2026-11-09
-
-These diagnostic runs, on clean `ddf1afe9`, check today's checkout against the
-historical budgets above. They are not acceptance: one child per case, no
-predeclared collection and a changed runtime. The machine matches the reference
-hardware, OS and AC-power profile with CPython 3.13.17 and SQLite 3.50.4. For
-the event runs, Telegram and stray `node_repl` processes were closed; the
-desktop otherwise ran ordinary applications (about 390 processes / 7,700 threads).
-
-| Family / case | Statistic | Observation | Historical limit |
-| --- | --- | ---: | ---: |
-| Bridge event, reliable/terminal (runs 5–6, 620 each) | p95 / max ms | 13–18 / 38–41 | 100 / 250 |
-| Bridge event, progress (1,472–1,486 each) | p95 / max ms | 43–46 / 52–61 | 1,000 / 2,000 |
-| Plan cold base, 120,000 rows | single cold ms | 1,856.0 | 2,000 max |
-| Plan cold information-heavy, 240,000 rows | single cold ms | 2,571.4 | 4,000 max |
-| Plan unchanged windows (7 cases) | p95 ms, 6 warm | 1.3–2.4 | 250 / 500 |
-| Plan retained construction overlap | bytes | 323,158,016 | 335,544,320 |
-| Execution UI cold click feedback (8 cases) | single cold ms | 3.0–19.3 | 50 max |
-| Execution UI warm receipts (5 cases) | p95 ms, 6 warm | 2.0–51.3 | 100 / 250 |
-| History release, 50-run summary / 256-row pages | s; p95 / max ms | 1.74; 20.1–20.4 / 21.3–21.5 | 3; 500 / 1,000 |
-
-Every bridge-event run kept order and monotonic progress with no Gap, but the
-report remains `incomplete`. Its job-memory limb requires memory samples no more
-than 0.1 s apart. Once a second the same sampling loop takes a resource snapshot
-whose thread count walks every system thread. That walk took about 88 ms with
-15,175 system threads (runs 1–4, 45–56 late samples each) and about 43 ms with
-7,700 (runs 5–6, maxima 0.119/0.117 s). Its validity therefore depends on
-unrelated desktop load. `runtime_profile_match` is also false because the
-harness reference still names CPython 3.13.14; the 2026-10-30 Inventory renewal
-already recorded 3.13.17 under DEFENSE §7.
-
-The harness now reads each named process's `NumberOfThreads` from one
-`NtQuerySystemInformation(SystemProcessInformation)` snapshot, reusing its
-buffer, instead of a Toolhelp thread walk. Python visits one record per process
-(about 390) rather than every thread. Counts match the walk exactly for 42
-processes, and the snapshot takes about 7.6 ms against 44–55 ms for the walk
-at 7,700 threads. The 0.1 s blind-interval criterion is unchanged.
-
-After that change and the 3.13.17 ratification, three consecutive runs on clean
-`ec194871` returned `passed=True` with `measurement_valid`, matching runtime
-and machine profiles and a clean archive scope. Reliable/terminal events were
-p95 7–13 ms and max 38–40 ms (620 each), progress p95 43–45 ms and max
-49–52 ms (1,490–1,496 each), and the longest memory-sample gap was
-0.021–0.022 s, with about 7,700 system threads. These remain the selected
-diagnostic case: BRIDGE keeps current-source timing acceptance open until a
-predeclared collection closes it.
-
-Plan warm changed-view windows took 350–740 ms p95, within the historical
-advisory 1.5 s p95 / 3 s maximum in the M1-7 compact contract. Incremental peak private bytes during construction overlap (308.2 MiB)
-exceeded the 267.8 MiB observation at
-`3c3bbbc`, leaving 11.8 MiB headroom. Cold base leaves 0.14 s. Both are single
-samples, so neither establishes a pass nor a regression.
-
-Repeats on `ec194871` cluster closely. Five fresh cold-base
-children took 1,819–1,833 ms, and three memory children recorded peaks of
-323.3–324.3 MB. Diagnostic attribution (`projection_profile.py`,
-`projection_phases.py` and their outputs in the evidence folder):
-
-- **Memory.** tracemalloc traces about 254 MiB for the base and
-  information-heavy states. The 360,000 `PlanProjectionNode` objects are 107 MiB
-  at 312 B each; at `3c3bbbc` a node had 25 fields, now 35, so the 10 added
-  fields cost about 27.5 MiB. The initial attribution of another 17.9 MiB to
-  retained folder paths was incorrect: `node_tree.py:283` allocates node IDs,
-  already present at `3c3bbbc`. This absolute allocation bucket is not evidence
-  of growth caused by `path`. This retained-object accounting does not
-  decompose the historical incremental private-byte peak under construction
-  overlap; how much of that peak difference it explains is unmeasured.
-- **Cold base time.** Over three wall-clock runs: node-tree build 658–672 ms,
-  draft append 499–563 ms, materialization 420–425 ms, selection 112–114 ms,
-  pre-order 50–52 ms and other work about 100 ms. Recall folding is only about
-  25 ms. In a 120,000-node microbenchmark, frozen-dataclass construction cost
-  208 ms with 25 fields and 291–304 ms with 35. Filling the same frozen slots
-  through their member descriptors took 188–199 ms. The node widening
-  is therefore a plausible contributor to the repeat range being about
-  67–81 ms above the historical 1,752.5309 ms maximum at `3c3bbbc`,
-  but this isolated comparison does not establish end-to-end attribution.
-
-No product change follows from this diagnosis.
-
-Follow-up inspection at `6673fc43` counted object identities in both exact
-fixtures (`build/projection-investigation-20261109/occupancy.json` and its
-helper). Each fixture has only 60 path strings, totaling 10,586 bytes, not
-also referenced by another node field or the inspected operation/scan facts.
-That is about 20.7 KiB combined, an upper bound within this census rather than
-a measured process-memory saving. Most folder paths already share their
-display strings; operation and warning paths share retained artifact facts.
-There are no nonidentical path/key strings with equal values in these fixtures.
-Path deduplication therefore cannot recover the proposed 17.9 MiB. Deriving
-paths from case-folded keys would also violate exact detail spelling.
-
-The narrower cold-time candidate is private materialization of the same frozen
-node type using slot descriptors. The earlier constructor microbenchmark is
-promising, but does not establish an end-to-end saving. Preserve all fields,
-defaults, selection replacement and public construction behavior; compare full
-projection values and measure fresh cold children before delivery. Optional
-records may reduce per-node slots, but add allocations where populated and
-change the exported dataclass representation. They need a separate design and
-fixture occupancy accounting. Tree/draft traversal costs remain candidates for
-profiling, not authority to remove validation, identity or ordering work.
-
-The separate table-loading driver investigation at the same revision reproduced
-two failures and 40 passes in `tests/test_table_loading_performance.py`. Both
-failures are one stale direct-settlement hook after `cbf3f090` removed a clone:
-the driver expects `settleAttemptResponse(attempt, response)` instead of the
-current `native.response`. The other 14 anchors match. An in-memory correction
-of both the anchor and observer argument parses all four instrumented modules
-and passes the existing bounded Plan bridge probe with 125 observed window
-requests and zero pending requests. No tracked driver fix or installed timing
-renewal was made. Evidence and the finite repair proposal are in
-`build/table-driver-investigation-20261109/summary.md`. The existing Plan DOM
-span measures structural rendering starting at checkbox-array initialization,
-not earlier diff/scroll reads or all rendering work; its released Plan fixture
-still takes that structural branch.
-
-The subsequent authorized repair updates the direct-settlement anchor and
-observer argument together. Its installed Inventory witness exposed a separate
-pre-input setup race: the driver dispatched ArrowUp after local active-row
-feedback but before the click's authoritative highlight was adopted. The move
-used the old revision and correctly received a conflict. The driver now waits
-for that intended settled setup before starting the keyboard interval; target,
-geometry, input and landing assertions are unchanged. No product behavior or
-performance budget changes. `build/table-driver-fix-20261109/` retains the
-failed attempts, command/frame trace, final verification and asset identities.
-
-The first execution-UI run failed 9 of 13 cases on three driver defects, all
-corrected in `8d599511`: stale task identity since `41afd262`, exact status
-matching since `2dcdc05f`, and a parent check that compared the page's typed
-control reply with the contract's bare verdict. Unchanged cases were retained;
-cases touching corrected code were rerun. The History release case applied its
-gates and stayed `audit=OK`: 3,919 window transactions, 262 ms maximum
-commit, at most 256 pending events and 109,568 pending bytes.
-
-Evidence, including failed attempts, the wheel (SHA-256 `CDC9E4B7…68`) and
-its installation, is in `build/bridge-timing-20261109/`; the `site/` installation
-was later removed as a regenerable environment. Acceptance under R3 still needs
-predeclared collections, including five-child cold collections.
-
-### Plan string-sharing diagnostics — 2026-11-09
-
-After the table-driver repair at `c4fb6340`, a narrow Plan candidate computes
-each operation-tree basename and casefold key once, shares equal display/key
-strings and reuses that key for member rows. Public frozen-node construction,
-all 35 fields, exact paths and raw Unicode sorting remain unchanged. A census
-found 119,996 equal-but-distinct keys / 6,139,876 shallow bytes per fixture;
-this is an allocation opportunity, not a process-memory prediction.
-
-The existing component producer and correctness validator ran in fresh bounded
-children against two 303-file package snapshots differing only in
-`workflows/plan_projection.py`. Three pairs per metric alternated arm order on
-CPython 3.13.17. No concurrent task benchmark ran. Background load and power
-state were not independently verified; these are diagnostics, not R3 acceptance
-or a new five-child cold collection. All 18 receipts satisfied the existing
-fixture checks and matched their snapshot origins and identities.
-
-| Metric | Baseline range | Sharing range | Interpretation |
-| --- | ---: | ---: | --- |
-| Cold base, 120k nodes | 2,190–2,263 ms | 2,128–2,226 ms | Overlap and mixed paired changes; no stable speed claim |
-| Cold information-heavy, 240k nodes | 3,124–3,329 ms | 3,097–3,384 ms | Overlap and mixed paired changes |
-| Incremental peak private bytes, construction overlap | 309.01–309.61 MiB | 292.62–295.76 MiB | Lower in all three pairs by 13.84–16.39 MiB |
-
-The current cold-base observations exceed the historical 2,000 ms reference
-budget in both arms and are slower than the earlier same-day diagnostics. This
-comparison neither renews acceptance nor attributes that host-time difference
-to the patch. The sampled process-memory reduction is not decomposed into
-string bytes versus allocator or temporary-object effects.
-
-A separate ignored trial bound all 35 slot setters once during materialization
-and initialized the same frozen node objects directly. Three fresh base pairs
-were sharing → trial: 2,471 → 2,089; 2,149 → 2,020; 1,882 → 1,609 ms.
-Each pair favors the trial, but both arms drift strongly, so 130–383 ms is an
-observed paired range rather than a stable expected saving. The trial remains
-unshipped: a second explicit field-initialization mapping is a maintenance cost
-not needed for the modest memory improvement. Sparse optional metadata likewise
-remains a separate design, with dense-workload overhead still unresolved.
-
-All 35 field values across the complete base and heavy projections have matching
-fingerprints for baseline, sharing and the ignored trial. Functional tests own
-sorting, selection and consumer behavior; fingerprints do not replace them.
-`build/projection-tuning-20261109/` retains manifests, scripts, raw receipts,
-comparisons, field fingerprints and test results. Failed evidence is retained.
-The final workflow/interface neighborhood passed 3,257 tests, with 3,281
-deselected. Current sharing assertions fail on the frozen baseline as intended;
-the two nonsharing casefold controls still pass. Independent review confirmed
-the source population, raw receipts, field fingerprints and final test results.
-
-### R3 acceptance collection — predeclared 2026-11-09
-
-R3 maps the open timing obligations by owner before any acceptance sample:
-
-| Obligation | Owner and limit | Collection | Statistic |
-| --- | --- | --- | --- |
-| Cold Inventory projection | PRESENTATION 3 s / 6 s maximum | Existing `tools.performance.inventory --collect` and `validate_inventory`, five fresh children per case; renewal needed because `b2e872e6` changed gating `core` sources | Per-case maximum |
-| History release | HISTORY 3 s summary; 500 ms p95 / 1 s maximum per 256-row page | `python -m tools.performance.br_g_42 collect`, five fresh `history release` children | Maximum of ten summary readings; pooled nearest-rank p95 and maximum over 200 item and 200 event page samples |
-| Bridge event | BRIDGE 100 ms p95 / 250 ms max reliable/terminal; 1 s / 2 s progress; no Gap | Same collector, five fresh `bridge-event installed` children | Worst child p95 and overall maximum per stream; every child `passed`, `measurement_valid`, runtime/machine profile match and clean archive scope |
-| Plan and execution UI | Advisory under DEFENSE §7 | Not collected; the 2026-11-09 diagnostics above are the comparison | None |
-| SH-G-15 | INTERFACES; user judgment on measured behavior | R4 resource schedule on the rebuilt candidate | Not R3 |
-
-All collections run once, on one clean revision, on the reference profile with
-CPython 3.13.17, AC power and no concurrent task, test or build work. Children
-are never retried. `python -m tools.performance.br_g_42 validate DIR` is the
-separate checker: it requires exactly five complete children per case, the
-collection revision with a clean tree in every report, and recomputes each
-statistic from the raw reports. Any invalid child or exceeded limit fails R3;
-a rerun needs a recorded cause and a new collection directory. Raw reports
-stay in ignored `build/r3-acceptance-20261109/` (Inventory child logs in its
-existing `build/m1-9-20261001/` root); the validation JSON, with
-each report's SHA-256, and the Inventory compact raw/validation JSON are
-committed under `tests/interfaces/web/`.
-
-### R3 acceptance result — 2026-11-09
-
-Every collection passed on clean `cbb07d5f` (CPython 3.13.17, SQLite 3.50.4,
-captured reference profile on AC power, total CPU 3.6–5.1% beforehand, R2 work
-held). No child failed or was retried.
-
-| Obligation | Children | Result | Limit |
-| --- | ---: | ---: | ---: |
-| Inventory cold base / information-heavy | 5 / 5 | max 1.623 s (1.583–1.623) / 2.297 s (2.250–2.297) | 3 s / 6 s |
-| History 50-run summary | 5 (10 readings) | max 1.736 s | 3 s |
-| History item / event 256-row pages | 5 (200 each) | p95 21.2 / 20.8 ms; max 23.5 / 22.1 ms | 500 ms / 1 s |
-| Bridge event reliable/terminal | 5 (3,100 events) | worst p95 10 ms; max 40 ms; no Gap | 100 / 250 ms |
-| Bridge event progress | 5 (7,367 events) | worst p95 45 ms; max 51 ms; monotonic | 1 s / 2 s |
-
-Committed: [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261109_raw.json)
-and [validation](../tests/interfaces/web/r3_inventory_cold_20261109_validation.json);
-[History/bridge-event validation](../tests/interfaces/web/r3_br_g_42_validation_20261109.json)
-with each raw report's SHA-256. Raw reports and logs:
-`build/r3-acceptance-20261109/collection/` and
-`build/m1-9-20261001/measurement-inventory-cold-20261109T130416Z-bc2ffcb0/`.
-This closes R3's timing obligations for the recorded profile and revision only;
-changed gating sources, runtime or profile require renewal under DEFENSE §7.
-
-### R3 release repair renewal — predeclared 2026-11-10
-
-The [approved repair](M1_PLAN.md#approved-release-repair--2026-11-10) selects
-official Windows x64 CPython 3.15.2 with SQLite 3.53.4. The installed bridge
-child uses pywebview 6.2.1, pythonnet 3.2.1 and the selected package dependency
-set. Record the actual interpreter, SQLite, WebView2, CLR and package versions
-alongside the reference machine facts, AC power and quiet desktop. Collect
-after the input changes settle on one clean commit. Build and install each
-archived wheel against the selected dependencies in a fresh environment.
-
-The prior R3 collection procedure and limits above carry forward. Inventory
-uses five cold children for each of the two cases and its separate validator.
-History and installed bridge events use five fresh children apiece with the
-existing BR-G-42 checker. Keep failed attempts and do not retry individual
-children. Record results with distinct filenames and preserve the 2026-11-09
-receipts, budgets, fixture and statistics. The live SH-G-8 custody drift guard
-runs on CPython 3.15.2 and xxhash 4.1.0 against the same frozen ceiling.
-The [v2 authority](../tests/interfaces/web/sh_g_8_transport_authority_v2.json)
-authenticates the working verifier against its Git introduction and the
-original v1 verifier and artifacts against their historical Git identities.
-Calibration and holdout retain their CPython 3.13 qualifier, original raw
-receipts and source closure. The current guard leaves that empirical claim
-scoped to the historical profile. SH-G-15 runs separately on the rebuilt
-release package.
-
-### R3 release repair result — 2026-11-10
-
-The renewed collection passes on clean `cfeac2d9`, using the selected runtime
-above, the same reference machine, AC power and the user-confirmed quiet
-desktop. All twenty timed children completed without retries. Independent
-review reconciles source/runtime/profile identities, raw hashes and metrics.
-
-| Obligation | Children | Result | Unchanged limit |
-| --- | ---: | ---: | ---: |
-| Inventory cold base / information-heavy | 5 / 5 | max 1.479 / 2.114 s | 3 / 6 s |
-| History 50-run summary | 5 (10 readings) | max 1.681 s | 3 s |
-| History item / event pages | 5 (200 each) | p95 18.93 / 19.30 ms; max 33.82 / 29.81 ms | 500 ms / 1 s |
-| Bridge reliable/terminal | 5 (3,100 events) | worst p95 6 ms; max 51 ms; no Gap | 100 / 250 ms |
-| Bridge progress | 5 (7,490 events) | worst p95 42 ms; max 47 ms; monotonic | 1 / 2 s |
-
-History's worst normal commit was 54.03 ms; maximum pending state was 256
-events / 109,568 bytes, with recording and audit assertions satisfied.
-Committed receipts: [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261110_raw.json),
-[Inventory verdict](../tests/interfaces/web/r3_inventory_cold_20261110_validation.json)
-and [History/bridge verdict](../tests/interfaces/web/r3_br_g_42_validation_20261110.json).
-Full reports, profile and logs remain in
-`build/m1-release-repair-20261110/acceptance/20261110-03/r3/`; the Inventory
-raw path is recorded in its `identity.json`. Independent review is in
-`build/m1-release-repair-20261110/renewal/r3-review.md`.
-These results renew the named timing gates only, not SH-G-15 or a universal
-speed claim. Historical receipts and their scope remain unchanged.
-
 ## Selected Plan and execution UI observations
 
 Run an optional case through `python -m tools performance --list`, then
@@ -3517,8 +508,7 @@ The report names the case, fixture/action correctness, raw samples, current
 revision/dirty state and runtime. Failure or timeout is an incomplete report
 with a nonzero command exit; an elapsed time cannot turn a wrong or unfinished
 action into a successful observation. Each invocation is a diagnostic sample,
-not an acceptance run or a new speed/memory guarantee. The historical targets
-above remain comparison context only.
+not an acceptance run or a new speed/memory guarantee. Historical targets remain comparison context only.
 
 The Plan fixture uses seed `0x4E414D49`, 100,000 operations, 120,000 base
 projection rows and a 240,000-row information-heavy variant with 120,000
@@ -3658,1017 +648,6 @@ outlier deletion, or implicit warm-up discard is applied.
 is valid for an all-NOOP/non-copy plan; otherwise every published candidate and
 byte must verify with non-degraded recording.
 
-### Shared root admission optimization — 2026-09-28
-
-The core candidate reuses native bindings and replaces default admission's
-second anchor discovery with a volume-information query at the admitted anchor.
-Consumer invocation holds are not integrated in this measurement.
-
-`build/root-admission-optimization-20260928/core/measure_admission.py` measures
-1,000 sequential default admissions of `F:\GitHubRepositories\NamiSync` on
-NTFS in a fresh process per revision, with Python 3.13.14. Baseline `b8baf42d`
-runs from its isolated checkout; the candidate is the core edit over `3c8b4b41`,
-identified by source SHA-256 in `resume/admission-finalpath-serialized.json`. Both receipts record
-the imported source, runtime, root and native call counts.
-
-| Observation | Baseline | Core candidate |
-| --- | ---: | ---: |
-| `GetVolumePathNameW` calls | 2,000 | 1,000 |
-| `GetVolumeInformationW` calls | 1,000 | 1,000 |
-| Median admission, microseconds | 985.7 | 488.95 |
-| p95 admission, microseconds | 1,248.2 | 687.1 |
-
-These sequential single-root diagnostics establish the call reduction and
-describe the observed timing; they do not establish depth scaling,
-instrumentation neutrality or executor throughput. Consumer measurements follow
-below; the core figures remain a separate endpoint.
-[M1_PLAN](M1_PLAN.md#root-admission-optimization--2026-09-28) records that goal
-and the round's delivery.
-The retained `admission-finalpath.json` diagnostic overlapped the ordinary test
-run; the table uses the subsequent sample with those gates finished.
-Earlier identity-only candidates and their rejected native witnesses remain
-retained separately. The final-path correction has passing one-/two-swap
-regressions and confirmed hold lifetime/release witnesses on NTFS and exFAT
-(K:, serial `BA1F1F45`). `resume/exfat-invocation.txt`, `exfat-volume.json` and
-`exfat-finalpath.xml` bind the external fixture to the frozen implementation.
-The non-admin subst fixture failed full volume admission (native error 144),
-so it does not establish a held-mode transition. Exact mapping removal was
-verified; strict alias rejection has a focused comparison witness.
-
-### Executor invocation holds — 2026-09-28
-
-The initial hold-only observation below predates the required per-access
-held-handle attribute guard. It remains historical timing evidence, not acceptance
-of an unchecked hold. The corrected observation is recorded after its table.
-
-The frozen executor candidate over `6536c04` was measured after the ordinary
-gate finished, using the same preserved 1,000 × 4 KiB F: source and a fresh G:
-rig workspace. Three serialized samples without the native-call wrapper took 11.059, 11.204
-and 11.708 seconds (median 0.349 MiB/s), versus the earlier assessment's
-28.2 seconds / 0.14 MiB/s. Each sample copied and verified all 1,000 files;
-the source recheck was unchanged and manifest-scoped teardown succeeded.
-Both roots report held mode. Backend copy time was 0.491–0.522 seconds;
-10.568–11.186 seconds remained outside the backend. This does not isolate
-all remaining path costs, and the above-1-MiB/s goal remains unmet.
-
-A separate native-call wrapper counted only `execute`, on isolated baseline
-`b8baf42d` and the frozen candidate, using identical driver bytes and fresh
-targets. Its timing is instrumented diagnostic data, excluded from the samples.
-
-| Project ctypes Win32 binding calls during execute, 1,000 copies | Baseline | Held candidate |
-| --- | ---: | ---: |
-| `GetVolumePathNameW` | 48,000 | 6,002 |
-| `GetVolumeInformationW` | 20,000 | 6,002 |
-| `CreateFileW` / `CloseHandle` each | 2,000 | 2,002 |
-| `GetFinalPathNameByHandleW` | 0 | 2 |
-| `GetFileInformationByHandleEx` | 4,000 | 4,000 |
-
-Receipts and source/driver hashes live in
-`build/root-admission-optimization-20260928/resume/`: `executor-held.json`,
-`executor-baseline-counts.json`, `executor-held-counts.json` and corresponding
-logs/run reports. The independent K: exFAT root-scope witness passes, while
-the copy witness fails with error 87. Read-only metadata queries expose a
-pre-existing unsupported handle-identity query; the first failing copy API is
-not traced. [BUGS](BUGS.md) records that separate limitation. No exFAT copy
-throughput or compatibility success is inferred from the root-hold evidence.
-
-The corrected core/executor guard uses `FileBasicInfo` on the held handle before
-admission reuse, retaining one final-path confirmation. Following its completed
-ordinary/import/oracle/differential gates, three serialized samples on the same
-preserved F: source and a fresh G: target took 15.271, 15.711 and 15.047 seconds
-(median 0.256 MiB/s). All 1,000 copies and readbacks per sample passed; the source
-scan was unchanged and manifest-scoped teardown completed. Backend copy time
-was 0.564–0.594 seconds, with 14.481–15.117 seconds outside the backend. The
-goal remains unmet. These samples are slower than the earlier unchecked hold
-samples; no controlled per-query timing attribution is claimed.
-Receipts: `resume/executor-attributes.json` and its log under the same evidence
-root. Standard rig metrics are enabled; the separate binding-call wrapper is
-excluded from these timing samples. NTFS conversion/regression witnesses and
-two K: production guard/lifetime tests establish correctness separately.
-The same execute-only counter driver records 6,002 anchor and 6,002 volume-
-information calls, 2,002 opens/closes, two final-path confirmations and 31,998
-handle-information calls (4,000 in the unchecked hold sample). The added current-
-attribute checks preserve the reduced pathname/volume work. The counted run
-also copied and verified all files and cleaned its owned target; its elapsed
-time is instrumented diagnostic data. `executor-attributes-counts.json` and
-`executor-attributes-counted-run.json` retain hashes, imports and raw counts.
-
-### Preflight invocation holds — 2026-09-28
-
-After the corrected core/executor commit `8cdd669`, preflight owns confirmed
-root holds and checks current handle attributes before cached admission reuse.
-The candidate includes the earlier core call reductions as well as this consumer
-change; comparison with baseline `b8baf42d` does not isolate their timing effects.
-
-The identical `resume/measure_preflight.py` driver runs from each checkout,
-prepares a 1,000 × 4 KiB COPY plan using the preserved F: source and the same
-empty G: target, then performs three fresh observations and judgments. It never
-executes the plan. Source scan equality, exact target emptiness and manifest
-equality are checked outside timed samples; successful exact-empty teardown
-removes the owned fixture. Samples are serialized after broad/native gates;
-there is no cache eviction or control of unrelated desktop activity.
-
-| Observation, seconds | Baseline min / median / max | Candidate min / median / max |
-| --- | --- | --- |
-| Filesystem observation | 2.261 / 2.722 / 2.779 | 0.549 / 0.551 / 0.587 |
-| Pure judgment | 0.0100 / 0.0101 / 0.0137 | 0.0095 / 0.0098 / 0.0117 |
-
-A separate identical wrapper counts project ctypes Win32 binding calls only
-inside `observe`; its timing is excluded. Every counted sample agrees:
-
-| Call per 1,000-file plan | Baseline | Candidate |
-| --- | ---: | ---: |
-| `GetVolumePathNameW` | 4,009 | 3 |
-| `GetVolumeInformationW` | 2,005 | 3 |
-| Root opens / closes each | 0 | 2 |
-| Final-path confirmation | 0 | 2 |
-| Current handle basic information | 0 | 2,002 |
-
-All observations and verdicts pass. Receipts under
-`build/root-admission-optimization-20260928/resume/` are
-`preflight-baseline-timing.json`, `preflight-guarded-timing.json`,
-`preflight-baseline-call-counts.json` and `preflight-guarded-counts.json`, with
-driver/import/manifests and associated counted reports. The ordinary gate passes
-5,480 tests; the unchanged 46-group differential retains complete worlds/verdicts,
-explicit prevented-swap controls and strict mixed-source fallback.
-
-Separate F:→K: observations on exFAT `BA1F1F45` also pass with the candidate
-counts above and successful source/empty-target checks. These ran alongside the
-ordinary gate and are functional evidence only, not timing observations or
-exFAT copy acceptance. Receipts are `preflight-guarded-exfat-*`; the existing
-executor handle-identity compatibility issue remains separate in BUGS.
-
-### Verifier invocation holds and geometry — 2026-09-28
-
-After preflight `4263b12`, the verifier holds its root through each invocation
-and guards reused admission with current handle attributes. The comparison with
-`b8baf42d` includes earlier core improvements; it does not isolate their effect.
-A second atomic outcome queries sector geometry on the opened file handle,
-retaining fresh pathname fallback when that query is unavailable or zero.
-
-The same `verifier/measure_verifier.py` runs from both checkouts on the preserved
-F: 1,000 × 4 KiB corpus. It primes real evidence outside timing, then measures
-three fresh VERIFY invocations through the standard native reader tap. Scanning,
-authority/selection construction and priming are outside the measured runner.
-All 1,000 outcomes are verified/applied with successful recording, 4,096,000
-actual read bytes and matching command/outcome IDs. Source FileStat observations
-and product/tools manifests match before/after. Samples run serially after the
-gates and native captures; unrelated desktop activity remains uncontrolled.
-
-| VERIFY runner, seconds | Minimum | Median | Maximum |
-| --- | ---: | ---: | ---: |
-| Baseline | 3.827 | 3.885 | 3.940 |
-| Invocation holds | 1.964 | 1.998 | 2.002 |
-| Holds and handle geometry | 1.267 | 1.512 | 1.551 |
-
-A separate one-invocation wrapper counts project ctypes bindings only inside
-VERIFY. Its timings are excluded. Per 1,000 files:
-
-| Call | Baseline | Invocation holds | Holds and handle geometry |
-| --- | ---: | ---: | ---: |
-| `GetVolumePathNameW` | 4,000 | 1,001 | 1 |
-| `GetVolumeInformationW` | 1,000 | 1 | 1 |
-| Opens / closes / final paths, each | 2,000 | 2,001 | 2,001 |
-| File handle information | 12,000 | 12,000 | 12,000 |
-| Current root basic information | 0 | 1,999 | 1,999 |
-| Handle sector information | 0 | 0 | 1,000 |
-| Pathname sector query | 1,000 | 1,000 | 0 |
-| Reads / allocations / frees, each | 1,000 | 1,000 | 1,000 |
-
-The file-information calls still cover four snapshots per file; the added root
-queries and handle-sector information are separate. These are
-diagnostics, not a latency gate or executor-throughput claim. Receipts under
-`build/root-admission-optimization-20260928/verifier/` are
-`baseline-verify-timing.json`, `candidate-verify-timing.json`, `geometry-verify-timing.json`,
-their `*-verify-counts.json`
-and their counted reports, with frozen driver/import/source/product provenance.
-The hold gate passed 5,502 ordinary tests; geometry passes 5,514. Both pass 12
-imports, unchanged oracle 30 × three and guard scan; the same qualified 67-group
-differential has no unexpected differences. Geometry timings run after its gate;
-the unchanged baseline/hold receipts remain diagnostic references, not randomized
-or fresh-process causal measurements.
-No exFAT verification or identity-compatibility claim is made.
-
-**Executor continuation profile.** After these verifier measurements, a separate
-caller-thread cProfile sample wraps only `execute` on 1,000 × 4 KiB F:→fresh G:.
-Copies, native readback, source observations, product manifests and manifest-based
-cleanup pass. Its instrumented 32.4 seconds is not a throughput sample. It records
-160,030 extended-path conversions, 435,084 absolute-spelling validations, 26,000
-physical resolutions and 9,000 `_stat_path` calls. Inclusive costs overlap;
-worker threads are outside this profile. Repeated pure path work and leaf stat
-remain measured leads, not permission to retire physical/descendant checks.
-Raw `resume/executor-after-verifier-profile.{prof,txt,json}` and `-run.json`
-retain the driver/input provenance and complete rig report.
-
-**Executor single leaf observation.** The checked no-follow snapshot now also
-supplies leaf metadata. Three serialized uninstrumented samples on the same
-1,000 × 4 KiB F:→G: fixture measure 12.365 seconds median (11.934–13.104),
-0.316 MiB/s, versus the prior guarded 15.271 seconds. All copies/readbacks and
-source rechecks pass; rig-owned targets are removed. This remains a diagnostic
-comparison without randomized order or cache eviction, below the 1 MiB/s goal.
-Separate project-ctypes counts remain unchanged: 6,002 anchor and volume calls
-each, 2,002 opens/closes, two final-path queries and 31,998 information queries.
-The caller-thread profile records 17,006 `nt.stat` and 16,000 `nt._path_lexists`
-calls, versus 20,006 and 25,000 before consolidation: 12,000 fewer observations.
-Physical resolutions remain 26,000. Extended-path conversions rise from 160,030
-to 163,030 because missing leaves now reach the checked observation; pure-path
-reuse remains a separate optimization. Instrumented time is not throughput.
-Receipts are `resume/executor-single-stat-{timing,counts,counted}.json` and
-`resume/executor-single-stat-profile.{prof,txt,json}` plus `-run.json`; profile
-input manifests match.
-
-**Bounded executor path reuse.** On the same serialized fixture, three samples
-measure median 10.757 seconds (10.656–11.819), 0.363 MiB/s. The preceding leaf-only
-median is 12.365 seconds. Copies, native readbacks, source rechecks and scoped rig
-cleanup all pass. Separate caller-thread profiles show extended conversions
-163,030→22,025, spelling validations 441,084→90,074 and lexical conversions
-77,018→8,018. Actual observations remain 17,006 `nt.stat`, 16,000 existence probes,
-26,000 physical resolutions and the unchanged project-ctypes counts above.
-This isolates the count reduction to pure path work; it does not establish a
-randomized causal speedup or satisfy the 1 MiB/s goal. Receipts use the same
-`resume/executor-path-cache-` timing/counts/counted/profile suffixes as the leaf
-outcome; the separate profile summary is diagnostic, and input manifests match.
-
-**Single-lstat descendant walks and final breakdown.** Three serialized samples
-measure median 9.684 seconds (9.155–10.471), 0.403 MiB/s, versus the preceding
-10.757 seconds. Every copy/readback and source recheck passes, and all rig-owned
-targets are removed. Separate profiles show existence probes 16,000→3,000 and
-`nt.stat` 17,006→23,006 as unavailable descendants now reach the checked lstat:
-7,000 fewer observations in this step, 19,000 fewer across leaf and descendant
-consolidation. Actual extended conversions stay 22,025 despite helper calls
-rising by 6,000; the bounded cache absorbs that duplicate pure work. Project-
-ctypes counts remain unchanged. Receipts use `resume/executor-descendant-stat-`
-with timing/counts/counted/profile suffixes; profile input manifests match.
-
-The goal remains unmet. Remaining caller-thread profile leads are 26,000 physical
-resolutions (4.326 inclusive seconds), 6,000 leaf volume observations (3.822) and
-90,074 absolute-spelling validations (3.610). Inclusive times overlap and are
-instrumented; do not sum them or subtract them from uninstrumented throughput.
-Each leaf volume observation currently performs one fresh anchor and one fresh
-volume query; none is a duplicate within that observation. Replacing these with
-held-root facts and dropping the two held-path physical resolutions were explicitly
-authorized in the resumed round. Other guard retirements are not inferred from
-these measurements.
-
-**String-only cache eligibility.** Three serialized samples on the same fixture
-measure median 7.756 seconds (7.519–7.851), 0.504 MiB/s, versus 9.684 seconds.
-All 1,000 copies and readbacks per sample, source rechecks and scoped cleanup
-pass. Separate counts retain 6,002 anchor and volume queries each, 2,002 opens
-and closes, two final-path queries and 31,998 handle-information queries.
-The caller-thread profile retains 23,006 `nt.stat`, 26,000 physical resolutions,
-6,000 leaf volume observations and 22,025 actual extended conversions. Receipts
-use `resume/executor-cheap-cache-` timing/counts/counted/profile suffixes; inputs
-match before and after. Instrumented runs are diagnostic, not timing authority.
-
-**Leaf volume from the checked stat.** Three same-fixture serialized samples
-measure median 5.383 seconds (5.332–5.387), 0.726 MiB/s, versus 7.756 seconds.
-All copies/readbacks, source checks and manifest-scoped cleanup pass. Separate
-counts show anchor and volume queries each falling from 6,002 to two; opens,
-closes and final-path queries stay 2,002/2,002/two. Handle-information queries
-rise from 31,998 to 37,998 because stat-derived volume reuse checks current held
-attributes. Receipts use `resume/executor-stat-volume-` with the same timing,
-counts, counted and profile suffixes. The profile remains diagnostic; its
-dependency manifests match. These sequential observations are not a randomized
-causal estimate, and the 1 MiB/s goal remains unmet.
-
-**Held-root physical-resolution removal.** Three serialized samples measure
-median 3.387 seconds (3.370–3.388), 1.153 MiB/s, versus the preceding 5.383
-seconds. The goal is exceeded on this fixture, not promoted into a release
-gate. Every sample completes 1,000 copies and native readbacks, preserves the
-source and cleans the exact rig-owned target set. Separate caller-thread
-profiles show 26,000 physical-resolution calls falling to zero; stat calls
-remain 23,006, and runtime root revalidation still runs 27,000 times. Project-
-native counts remain two anchor/two volume queries, 2,002 opens/closes, two
-final-path queries and 37,998 handle-information queries. Receipts use
-`resume/executor-held-resolve-` timing/counts/counted/profile suffixes, with
-matching input manifests. These are sequential same-fixture observations;
-instrumented runs remain separate from timing authority.
-
-**Historical instrumentation and fast-path eligibility.** Before result 7,
-method-wrapping stage timers could change the path being measured. Replacing methods checked by the
-resolve or stat-derived leaf-volume selectors, even through `functools.wraps`,
-made the corresponding selector use its custom-method fallback. Such timings characterize that
-wrapped adapter, not the default production shortcuts. Root diagnostics showing
-`held=true` attest the root hold; they do not prove that both resolve and leaf
-volume shortcuts ran. Result 7 removes method-identity selection; instrumentation
-must still be kept separate from uninstrumented timing, and historical receipts
-remain bound to their original code and drivers.
-
-For current diagnostics, use a sampling/call profiler or count the module
-physical resolver and native volume bindings. Method wrappers no longer select
-another admission sequence, but their timing overhead still matters. A combined native regression
-checks the normal production stat/resolve composition after held admission:
-correct file evidence, zero physical resolutions and zero leaf-volume probes.
-These finite call assertions detect lost shortcut selection; they are not a
-throughput gate. Collect throughput separately without instrumentation. The
-historical timings above remain bound to their recorded inputs and drivers.
-
-### User rerun after clearing source-drive contention — 2026-09-29
-
-The user reported that F: was occupied during the finishing measurements below.
-Those contended historical endpoints do not establish a performance regression.
-The user's subsequent rerun supplied the medians below. HEAD is the user's
-label; sample counts and ranges were not supplied with this table.
-
-| Band | HEAD median (user label) | `23589bd` median | `db05e317` |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 3.150 s (1.24 MiB/s) | 3.627 s | 7.99 s |
-| 512 × 128 KiB | 1.640 s | 1.958 s | 4.25 s |
-| 64 × 4 MiB | 0.373 s | 0.372 s | 0.64 s |
-| 4 × 128 MiB | 0.297 s | 0.304 s | 0.31 s |
-| 1 × 4 GiB | 1.956 s (2,095 MiB/s) | 2.004 s | 1.96 s |
-
-The raw earlier runs remain below for chronology and correctness/readback
-evidence. Their throughput-goal observations describe those runs, not a stable
-regression attributable to the changes. The target-check follow-up is measured
-separately after correctness verification.
-
-### Integrated direct target writes — 2026-09-30
-
-Result 8 implements the user-selected blanket 8 MiB threshold across device
-types. Five serial samples per original F:→G: band use the production executor
-with buffered source reads. All 25 executions and readbacks pass, with recording
-OK, zero final reservations and stable source/product/tools/tests/driver hashes.
-The three smaller bands report only buffered writes; the two larger bands report
-only direct writes with no fallbacks. Aligned backing allocations remain within
-32 MiB. The rig removes every owned target and sidecar.
-
-| Band | Median [min–max], s | MiB/s | Result 7 median, s |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 2.789 [2.557–2.902] | 1.401 | 3.341 |
-| 512 × 128 KiB | 1.474 [1.322–1.581] | 43.428 | 1.740 |
-| 64 × 4 MiB | 0.351 [0.328–0.385] | 728.517 | 0.356 |
-| 4 × 128 MiB | 0.129 [0.127–0.137] | 3,965.116 | 0.290 |
-| 1 × 4 GiB | 0.909 [0.778–1.135] | 4,504.627 | 1.924 |
-
-Only the 4 MiB band overlaps its predecessor's range. Small-file backend/outside
-medians are 0.106/2.683 s; the 4 GiB split is 0.904/0.006 s. Separate medians
-need not sum to the total. The 4 KiB goal of 1.6 MiB/s remains unmet; per-file
-work outside the copy backend dominates. The 4 GiB median is 52.7% shorter,
-but these sequential historical endpoints do not isolate causality. All five
-samples remain, including the 1.135 s large-file tail. Repeated-source results
-are not cold-cache ceilings, other-device throughput, SQLite or GUI measurements.
-
-Evidence prefix: `build/executor-simplification-20260929/measurements/`
-`result8-b9c4ad3e-20260930-201114-989e90d9`. Before/after physical hashes bind the
-uncommitted candidate on `b9c4ad3`; predecessor receipts separately identify
-accepted result 7 (`878f15e`). The task's `five_band_result8.ps1` and
-`five_band_result8_receipt.py` retain the original five-band procedure and add
-mode/fallback checks. The earlier threshold sweep below remains diagnostic;
-it does not select device-specific shipping policy.
-
-### Direct-write threshold probe — 2026-09-30
-
-The user's subsequent implementation decision is a blanket 8 MiB threshold
-across device types, with no volume/model discrimination. The recommendations
-below remain the experiment's observations; M1_PLAN owns the chosen policy.
-
-After consolidation was reviewed and committed as `878f15e`, a standalone
-Win32 helper compared buffered and `FILE_FLAG_NO_BUFFERING` target writes.
-No production writer, pipeline or threshold was changed. These are Tier 0
-diagnostic recommendations for the measured devices, not class-wide rules or
-integrated executor throughput claims.
-
-**Method.** F: (a separate SN850X) supplied read-only prefixes of the existing
-4 GiB source. Each trial warmed that prefix, then timed target create/allocation,
-buffered sequential source read, `xxh3_128`, synchronous QD1 writes, exact EOF
-and file flush. Both modes used identical aligned buffers, chunk bands and the
-existing allocation policy from 8 MiB. Geometry came from native handle storage
-information; direct tails were padded privately and truncated on the same
-handle before flushing. Untimed unbuffered readback checked exact length and
-digest. This excludes metadata/publication/directory flush, recording, pipeline
-overlap and pool setup. It does not measure cold-source reads or sustained SLC
-cache exhaustion. Source and complete script/product dependency hashes matched
-before/after every run.
-
-The primary grid was 2/4/8/16/32 MiB on G/H/E/J/L, six balanced AB/BA pairs per
-cell. Device order rotated and size order reversed between rounds. The recorded
-criterion, set before measurement, was at least five of six direct-faster pairs
-and median paired elapsed-time saving at least 5%, sustained at larger sampled
-sizes. Single points at the upper edge do not establish a sustained boundary.
-Only observed crossover brackets were refined (G at 6 MiB, L at 24 MiB).
-
-| Target | 2 MiB | 4 MiB | 8 MiB | 16 MiB | 32 MiB |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| G: SN850X | +36.6% (6/6) | +14.6% (4/6) | +34.8% (6/6) | +30.0% (6/6) | +31.7% (6/6) |
-| H: SN550 | +18.7% (6/6) | +18.3% (4/6) | +30.5% (6/6) | +25.2% (5/6) | +6.4% (4/6) |
-| E: Optane 905p | +5.7% (6/6) | +12.6% (6/6) | +27.1% (6/6) | +19.3% (6/6) | +26.9% (6/6) |
-| J: HC550 HDD | −30.2% (0/6) | −2.4% (3/6) | −3.2% (3/6) | +2.8% (5/6) | −2.1% (3/6) |
-| L: Samsung T7 | +12.9% (5/6) | +3.2% (3/6) | +10.6% (5/6) | +8.9% (4/6) | +14.3% (6/6) |
-
-Cells show median **paired** saving and direct-faster pair count. They are not
-the percentage difference between independently computed mode medians. Positive
-values favor direct writes; meeting the percentage alone is insufficient.
-
-| Target | Recommendation for future integration | Evidence and bound |
-| --- | --- | --- |
-| G: SN850X | Direct from 6 MiB | Refinement: +35.8%, 6/6; buffered/direct median 5.780/3.813 ms. All 8–32 MiB cells qualify. This is the smallest sustained sampled candidate, not a precisely located physical crossover. |
-| E: Optane 905p | Direct from 2 MiB | Every primary cell qualifies; 2 MiB medians 2.167/2.008 ms. The crossover could be below 2 MiB; this sweep does not establish it, and the lowest-size margin is modest. |
-| H: SN550 | Keep buffered | No sustained qualifying suffix: the 32 MiB cell wins only 4/6 pairs. |
-| J: HC550 HDD | Keep buffered | No primary cell meets both criteria. |
-| L: Samsung T7 | Keep buffered | 24 MiB refinement wins 0/6, paired saving −18.7%. A qualifying 32 MiB endpoint alone does not establish a stable threshold. |
-
-L's 24 MiB timing is notably variable: buffered median 69.751 ms
-[48.985–340.994], direct 331.576 ms [49.983–378.840]. All observations remain;
-no favorable rerun or sample exclusion replaced them. The experiment does not
-isolate the cause. H/L may benefit under a different workload, but this finite
-probe does not justify enabling them. Do not infer a universal SSD threshold
-or add device classification machinery from these five physical devices alone.
-The future integrated implementation must validate its chosen buffering,
-concurrency and finishing costs; this probe determines candidates, not its
-speed or correctness acceptance.
-
-**Evidence.** The G-only pilot passed 12 timed copies and two tail witnesses;
-it validated the helper and is not pooled into the primary estimate. The primary
-sweep passed 300 copies and ten 8 MiB+123-byte tail witnesses. Two refinements
-passed 24 copies and four tail witnesses. All 336 copies and 16 tails had exact
-readback, unchanged source/dependencies and exact owned-file/directory cleanup.
-Raw samples, per-mode ranges and paired summaries remain under
-`build/executor-simplification-20260929/ceilings/`:
-
-- `threshold-baeeeab32bd6495ca4a5f75799619bbe/`: pilot.
-- `threshold-d230a636d6fc4f38b79e20d003c59b93/`: primary grid.
-- `threshold-0dfc0f6a45f1463a9ea6cf4feacd4fad/`: G 6 MiB refinement.
-- `threshold-09c326775f964b919f8e4eccac9ed1cf/`: L 24 MiB refinement.
-
-The immutable helper copy is `direct_write_threshold-reviewed-878f15e.py`
-(SHA-256 `58ce54f72d0b330734449a6a120d29541dde5990eb95ea4d0366360e5f63f63f`).
-`threshold-device-profile-20260930.json` records actual drive/model mappings;
-`summarize_threshold.py` reproduces `threshold-observations-878f15e.json` from
-raw receipts, checking pairs, allocation parity, hashes, readbacks and cleanup.
-
-### Single held-root dispatch — 2026-09-30
-
-Result 7's frozen candidate on `6157226` passed 331 native/runtime and 5,699
-ordinary tests, imports, unchanged three-run oracle and the fixed 67-group
-differential before measurement. All 25 serial executions/readbacks passed,
-with recording OK, zero reservations, stable source/dependencies and exact
-owned-target/sidecar cleanup.
-
-| Band | Median [min–max], s | MiB/s | Result 6 median, s |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 3.341 [3.242–3.873] | 1.169 | 3.211 |
-| 512 × 128 KiB | 1.740 [1.710–3.611] | 36.774 | 1.682 |
-| 64 × 4 MiB | 0.356 [0.332–0.614] | 719.644 | 0.348 |
-| 4 × 128 MiB | 0.290 [0.286–0.319] | 1,763.455 | 0.302 |
-| 1 × 4 GiB | 1.924 [1.883–2.294] | 2,128.908 | 1.999 |
-
-Every predecessor range overlaps; this establishes no throughput gain or
-regression. All samples remain, including the slow 128 KiB tail. Small-file
-backend/outside medians are 0.413/2.928 s; the 4 GiB split is 1.428/0.646 s.
-Separate medians need not sum to the total. These repeated-source buffered
-runs are neither cold-cache/device ceilings nor direct-write threshold probes.
-Evidence prefix: `build/executor-simplification-20260929/measurements/`
-`result7-6157226f-20260930-170339-3d6968b5`; predecessor receipts identify result 6.
-
-### Held-root path composition — 2026-09-30
-
-Result 6's frozen candidate on `d43f832` passed 343 native/runtime tests and
-5,711 ordinary tests, imports, unchanged three-run oracle and the fixed
-67-group differential before measurement. All 25 serial executions/readbacks
-passed with recording OK and zero reservations. Source and dependency manifests
-stayed fixed; the rig removed its owned targets and sidecars.
-
-| Band | Median [min–max], s | MiB/s | Result 5 median, s |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 3.211 [3.144–3.274] | 1.217 | 3.222 |
-| 512 × 128 KiB | 1.682 [1.669–1.944] | 38.058 | 1.685 |
-| 64 × 4 MiB | 0.348 [0.340–0.397] | 735.772 | 0.341 |
-| 4 × 128 MiB | 0.302 [0.299–0.312] | 1,696.785 | 0.296 |
-| 1 × 4 GiB | 1.999 [1.791–2.060] | 2,048.743 | 1.981 |
-
-All predecessor ranges overlap; this establishes no throughput lift. Small-file
-backend/outside medians are 0.412/2.799 s; the 4 GiB split is 1.242/0.743 s.
-Separate medians need not sum to the total. Every sample is retained; buffered
-repeated-source measurements are not cold-cache/device-ceiling evidence.
-Evidence prefix: `build/executor-simplification-20260929/measurements/`
-`result6-d43f8324-20260930-133019-7ae09623`; its predecessor comparison points to
-result 5's physical candidate and accepted `d43f832` separately.
-
-### Own-effect version recognition — 2026-09-30
-
-Result 5's frozen candidate on `8b2b00e` passed 5,714 ordinary tests, 27 focused
-checks, imports, the unchanged three-run oracle and fixed 67-group differential
-before measurement. Five serial samples per original F:→G: band all completed
-with recording OK, exact readback and zero reservations. Source and dependency
-manifests stayed fixed; the rig removed its owned targets and sidecars.
-
-| Band | Median [min–max], s | MiB/s | Previous target-consolidation median, s |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 3.222 [3.130–3.804] | 1.212 | 3.134 |
-| 512 × 128 KiB | 1.685 [1.629–3.619] | 37.993 | 1.641 |
-| 64 × 4 MiB | 0.341 [0.337–0.640] | 751.398 | 0.351 |
-| 4 × 128 MiB | 0.296 [0.293–0.321] | 1,730.414 | 0.303 |
-| 1 × 4 GiB | 1.981 [1.792–2.148] | 2,067.759 | 2.011 |
-
-All ranges overlap the predecessor; no causal throughput lift is established.
-Small-file backend/outside medians are 0.421/2.801 s; the 4 GiB split is
-1.293/0.758 s. Separate medians need not sum to the total. Every sample is
-retained; these buffered repeated-source observations do not establish cold-cache
-or device ceilings. Small-file and large-copy headroom goals remain open.
-Evidence prefix: `build/executor-simplification-20260929/measurements/`
-`result5-8b2b00e4-20260930-130559-e544fed6`; its predecessor comparison binds the
-earlier target-consolidation receipt separately to accepted `eb18611`.
-
-### Target-check consolidation follow-up — 2026-09-29
-
-Measured the frozen candidate on documentation commit `9c96893` after the
-5,704-test native ordinary run, reviewed deletion-only oracle classification
-and fixed starting-baseline differential. Five serial samples in each original
-F:→G: band used normal metrics and native readback. All 25 executions/readbacks
-passed with recording OK and zero reservations. Product/rig/test/driver and
-source manifests stayed fixed; the original 1,587-entry source was unchanged,
-and all owned targets/sidecars were removed.
-
-| Band | Candidate median [min–max], s | MiB/s | User-reported pre-follow-up median, s |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 3.134 [3.092–3.516] | 1.247 | 3.150 |
-| 512 × 128 KiB | 1.641 [1.626–1.700] | 38.992 | 1.640 |
-| 64 × 4 MiB | 0.351 [0.338–0.453] | 728.387 | 0.373 |
-| 4 × 128 MiB | 0.303 [0.296–0.332] | 1,691.124 | 0.297 |
-| 1 × 4 GiB | 2.011 [1.810–2.082] | 2,036.859 | 1.956 |
-
-These results are close to the user's separate rerun. They do not isolate a
-throughput gain from the two removed checks. The older contended finishing runs
-are not a causal comparison. Small-file backend/outside medians are
-0.405/2.728 s; the 4 GiB split is 1.453/0.440 s. Separate medians need not sum to
-the total median. No sample was discarded; these buffered repeated-source
-observations do not establish cold-cache/device ceilings. The non-gating
-small-file goal and large-copy headroom goal remain open.
-
-Evidence prefix: `build/executor-simplification-20260929/measurements/`
-`target-9c96893b-20260929-191353-d421178a`. The existing predecessor comparison
-retains the contended `result3b-84ce0fb2-20260929-175649-85162057` receipt and its
-accepted `d444a6a` attribution for chronology, not causal performance judgment.
-
-### Source-check consolidation — 2026-09-29
-
-The first executor-simplification candidate on `dadc1fe` reuses fresh-copy
-source fidelity and removes source admissions with no later source access.
-Its exact precommit product/tool/test/driver hashes and status match before and
-after measurement; the original 1,587-entry source manifest is unchanged.
-The existing five F:→G: bands ran serially, five samples each, with normal rig
-metrics and native readback. All 25 executions/readbacks completed with recording
-OK and zero payload reservations; manifest-owned teardown removed every target
-and sidecar. Timings cover executor calls, not preparation or readback.
-
-| Workload | Candidate median [min–max], s | MiB/s | Time versus latest `23589bd` |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 3.358 [3.262–4.044] | 1.163 | −7.4% |
-| 512 × 128 KiB | 1.775 [1.681–3.619] | 36.049 | −9.4% |
-| 64 × 4 MiB | 0.349 [0.345–0.648] | 732.733 | −6.2% |
-| 4 × 128 MiB | 0.316 [0.307–0.337] | 1,617.852 | +4.0% |
-| 1 × 4 GiB | 2.135 [1.976–2.335] | 1,918.723 | +6.5% |
-
-All ranges overlap the latest historical endpoint below; these sequential,
-buffered repeated-source observations do not isolate causal speedup or establish
-cold-cache/device ceilings. No sample was discarded. The non-gating 1.6 MiB/s
-small-file goal remains unmet: its backend median is 0.417 s and time outside
-the backend is 2.941 s. The 4 GiB split is 1.579 s inside and 0.545 s outside
-the backend. The rig excludes SQLite, workflow and GUI costs.
-
-Receipts are under `build/executor-simplification-20260929/measurements/`,
-prefix `result1-dadc1fef-20260929-153840-0bb41f93`: raw reports/logs, commands,
-before/after manifests, environment, comparison and latest-comparison files.
-The task's `scripts/five_band.ps1` and `five_band_receipt.py` adapt the existing
-full-corpus driver to bind an exact precommit candidate; historical references
-and all failed correctness receipts remain intact.
-
-### Copied-file handle continuity — 2026-09-29
-
-Measured the frozen precommit candidate on `a6e23064`, with exact dirty-source
-hashes recorded, after 5,633 ordinary tests and the reviewed native lifecycle,
-ACL and fallback-control migration. The same five F:→G: bands ran serially with
-five samples each, normal rig metrics and readback. All 25 executions/readbacks
-passed with recording OK and zero remaining reservations. Source identity and
-the original 1,587-entry manifest stayed unchanged; product/rig/test/driver
-dependencies stayed fixed, and manifest-owned cleanup removed all targets and
-sidecars.
-
-| Workload | Candidate median [min–max], s | MiB/s | Time versus source-consolidation result |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 5.298 [4.705–5.661] | 0.737 | +57.8% |
-| 512 × 128 KiB | 2.720 [2.045–2.855] | 23.530 | +53.2% |
-| 64 × 4 MiB | 0.526 [0.396–0.589] | 486.584 | +50.6% |
-| 4 × 128 MiB | 0.365 [0.345–0.424] | 1,401.369 | +15.4% |
-| 1 × 4 GiB | 2.232 [1.963–2.312] | 1,834.736 | +4.6% |
-
-These sequential endpoint measurements show slower medians, not a throughput
-lift. The 4 KiB and 128 MiB ranges do not overlap the preceding run; the other
-three do. The small-file goal remains unmet. Its backend median is 0.696 s and
-time outside the backend is 4.616 s; the 4 GiB split is 1.820 s and 0.403 s.
-Separate medians need not sum to the median total. These buffered repeated-source
-results do not establish cold-cache/device ceilings or isolate the cause of the
-change. No samples were discarded.
-
-Receipts are under `build/executor-simplification-20260929/measurements/`, prefix
-`result2-a6e23064-20260929-163929-812e188a`, including the immediate-predecessor
-comparison against `result1-dadc1fef-20260929-153840-0bb41f93` and accepted
-predecessor `a6e2306`. That comparison preserves the earlier precommit identity
-instead of relabeling its recorded HEAD.
-
-To discriminate handle-selection cost from the historical endpoint difference,
-a bounded diagnostic ran four fresh processes in retained/fallback/fallback/
-retained order on 1,000 × 4 KiB, five samples each. The fallback only overrides
-`NativeFileSystem._copied_files` to return `None` inside that process; it uses
-the current candidate's existing path-finishing branch, not the whole old
-commit. Rig flags, readback and cleanup remain unchanged. All 20 samples passed
-with matching dependency/source manifests and owned-target teardown.
-
-The ten retained-handle samples have median 5.679 s [4.672–6.127], versus 5.909 s
-[5.009–6.100] for fallback: −3.9% pooled time, with paired process differences
-of −5.1% and −0.2%. Overlapping ranges and uncontrolled host variation prevent
-a throughput-lift claim. The comparison does not support attributing the
-historical +57.8% small-file delta to handle selection. It adds no gate and
-discards no sample. Prefix `handle-abba-20260929-164758-75598d0c` retains the
-four reports, mode/import receipts, driver hashes and summary. The preceding
-`handle-abba-20260929-164651-840e44f6` failed before any sample or target creation
-because the child lacked the repository import path; its exact driver and
-failure receipts remain. The corrected child puts this checkout first before
-product and rig imports; a supplemental read-only origin check records both
-module paths against unchanged driver/source bytes.
-
-### Planner-used drift facts — 2026-09-29
-
-The frozen precommit candidate on `0d7dd6bf` passed 5,702 ordinary tests,
-the unchanged oracle and differential before measurement. The same serial
-five-band F:→G: procedure passed all 25 executions/readbacks with recording OK,
-zero remaining reservations, unchanged 1,587-entry source and dependency
-manifests, and complete manifest-owned target/sidecar cleanup.
-
-| Workload | Candidate median [min–max], s | MiB/s | Time versus handle-continuity result |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 6.489 [5.338–6.617] | 0.602 | +22.5% |
-| 512 × 128 KiB | 3.503 [3.188–5.160] | 18.268 | +28.8% |
-| 64 × 4 MiB | 0.708 [0.470–0.734] | 361.539 | +34.6% |
-| 4 × 128 MiB | 0.354 [0.327–0.436] | 1,445.077 | −3.0% |
-| 1 × 4 GiB | 2.482 [1.996–2.520] | 1,650.365 | +11.2% |
-
-No throughput lift is established; four medians are slower and the small-file
-goal remains unmet. Only the 128 KiB ranges do not overlap the preceding run.
-The small-file backend/outside-backend medians are 0.776/5.720 s; the 4 GiB
-split is 2.025/0.341 s. Separate medians need not sum to the total median.
-These sequential, buffered repeated-source measurements do not isolate a code
-cause or establish cold-cache/device ceilings. No samples were discarded.
-
-Receipts under `build/executor-simplification-20260929/measurements/` use prefix
-`result3a-0d7dd6bf-20260929-173343-1dcc369e`. The predecessor comparison retains
-the raw `result2-a6e23064-20260929-163929-812e188a` identity and its accepted
-commit `0d7dd6b`; candidate source hashes distinguish this later precommit tree.
-
-### Equivalent verifier classifier cleanup — 2026-09-29
-
-Measured the frozen precommit candidate on `84ce0fb2` after 5,702 ordinary
-tests and 85 fresh package-consumer checks for the final README correction.
-The verifier change removes a redundant Boolean classifier; it preserves the
-component walk, filesystem queries and results. The same five serial F:→G:
-bands passed all 25 executions/readbacks with recording OK and zero reservations.
-Source/dependency manifests stayed fixed and all owned targets/sidecars were
-removed by the existing teardown.
-
-| Workload | Candidate median [min–max], s | MiB/s | Time versus planner-fidelity result |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 6.218 [5.018–6.526] | 0.628 | −4.2% |
-| 512 × 128 KiB | 3.452 [1.854–3.518] | 18.540 | −1.5% |
-| 64 × 4 MiB | 0.489 [0.457–0.732] | 523.690 | −31.0% |
-| 4 × 128 MiB | 0.329 [0.317–0.431] | 1,556.501 | −7.2% |
-| 1 × 4 GiB | 2.320 [1.930–2.391] | 1,765.673 | −6.5% |
-
-All ranges overlap the preceding run. These sequential endpoints establish
-neither a causal throughput lift nor cold-cache/device ceilings; no sample was
-discarded. Both performance goals remain unmet. Small-file backend/outside
-medians are 0.764/5.463 s, and the 4 GiB split is 1.905/0.415 s. Separate medians
-need not sum to the total median. The classifier cleanup saves no filesystem call.
-
-The evidence prefix is `build/executor-simplification-20260929/measurements/`
-`result3b-84ce0fb2-20260929-175649-85162057`. Its predecessor comparison preserves
-the raw `result3a-0d7dd6bf-20260929-173343-1dcc369e` identity and accepted commit
-`84ce0fb`; exact candidate hashes distinguish these two precommit trees.
-
-### Full executor corpus after narrow runtime admission — 2026-09-29
-
-Measured clean implementation `23589bd39a620ef4e5b31ddf8a9940a6628cadbf`
-after its correctness gates and commit. This includes the prior unreadable-
-descendant fix (`db03926`) and removes only adjacent target-root admission in
-the concrete native runtime path. Broader error-classification work is deferred.
-
-The original five F: source bands ran serially to fresh G: targets, five samples
-per band in one fresh process per band. Preparation and initial preflight ran
-once per band; normal pipeline metrics and native readback ran for every sample.
-No method wrappers or profiler were installed. All 25 executions and readbacks
-succeeded with recording OK and zero remaining payload reservations. The 1,587-
-entry source stat manifest still matches the original assessment and is unchanged
-before/after; all product/rig/driver hashes match across the run. All five targets
-and rig sidecars were removed by manifest-owned cleanup. The five bands contain
-1,581 payload files and exclude the original root marker, as both reference runs do.
-
-This is the same Windows/CPython/xxhash and F:/G: NTFS storage profile described
-below. Times cover executor calls only, excluding preparation, preflight,
-readback and cleanup. Current and pre-optimization samples number five per band;
-the separate full-corpus `db05e317` receipts contain three per band. Every sample
-is retained, including the slower first 128 KiB and 4 MiB samples. No warmup or
-outlier was discarded. The table reports median [minimum–maximum] seconds.
-
-| F: → G: workload | Pre-optimization | `db05e317` | `23589bd` | Current MiB/s |
-| --- | ---: | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 28.248 [27.367–29.745] | 7.992 [7.981–8.028] | 3.627 [3.538–4.204] | 1.077 |
-| 512 × 128 KiB | 14.068 [13.983–16.096] | 4.255 [4.205–6.058] | 1.958 [1.881–3.925] | 32.678 |
-| 64 × 4 MiB | 2.051 [2.019–2.107] | 0.641 [0.640–0.936] | 0.372 [0.354–0.659] | 687.661 |
-| 4 × 128 MiB | 0.424 [0.414–0.449] | 0.311 [0.309–0.339] | 0.304 [0.295–0.325] | 1,683.043 |
-| 1 × 4 GiB | 2.287 [2.104–2.385] | 1.956 [1.881–2.119] | 2.004 [1.779–2.120] | 2,043.484 |
-
-Relative to `db05e317`, median execution time changes are −54.6%, −54.0%,
-−41.9%, −2.1% and +2.5% in table order; against pre-optimization they are
-−87.2%, −86.1%, −81.8%, −28.3% and −12.3%. The largest improvements remain in
-per-file-heavy bands. The last two bands overlap the `db05e317` ranges, so these
-observations do not establish a clear change there. Current 4 KiB backend time
-is median 0.428 seconds, versus 3.199 seconds outside the backend. This aggregate
-does not identify the remaining runtime cost. The earlier isolated 3.387-second
-held-resolution reading is faster than this full-corpus 3.627-second reading;
-neither comparison isolates the effect of this narrow runtime commit.
-
-The `db05e317` table uses the separately retained full-corpus run, not the earlier
-9.684-second per-checkpoint 4 KiB receipt. These are sequential historical
-observations with different target spellings/plan fingerprints and sample counts,
-not interleaved causal controls. Policy fingerprints, operation populations,
-source identity and rig flags match. The endpoint delta includes cheap-cache,
-stat-volume, held-resolution, ACL-refusal and runtime changes. Buffered repeated-
-source results make no cold-cache/device-peak claim and exclude SQLite, workflow
-and GUI costs. Stat identity cannot exclude historical same-stat content changes.
-
-Evidence is under `build/root-admission-optimization-20260928/resume/` with prefix
-`executor-runtime-full-23589bd3-20260929-000521-7fea29aa`: five `-fg-*.json/log`
-pairs, `-before.json`, `-after.json`, `-comparison.json`, commands and environment
-receipts. Retained drivers are `runtime_full_corpus.ps1` and
-`runtime_full_corpus_receipt.py`. Reference raw reports remain in
-`build/executor-bench-20260928-db05e317/` and
-`build/executor-assessment-20260927/`. These are diagnostics, not release gates.
-
-### Device ceilings — 2026-09-29
-
-Standalone probes outside NamiSync, recorded to size the executor finishing and
-direct-write work in [M1_PLAN](M1_PLAN.md). They are diagnostics, not acceptance.
-Each used 4 MiB requests with one outstanding at a time, so they are not the
-devices' queue-depth maxima. G: writes went to a uniquely named owned scratch
-folder that was removed afterwards; F: was only read. Raw results and scripts are
-in `build/executor-simplification-20260929/ceilings/`.
-
-| 4 GiB probe | Median total, s | MiB/s |
-| --- | ---: | ---: |
-| G: buffered write, then file flush (the executor's current pattern) | 1.579 (flush 0.651) | 2,594 |
-| G: unbuffered write, then file flush | 0.733 (flush ~0) | 5,588 |
-| G: buffered write-through, mean of two | 1.883 | 2,175 |
-| F: unbuffered read, mean of two | 0.835 | 4,908 |
-| F: buffered sequential read, with or without `xxh3_128` | ~1.07 | ~3,830 |
-
-The executor's 0.685 s large-file flush tail in the 2026-09-27 assessment is
-therefore dirty cache draining through a buffered path that tops out near
-2,600 MiB/s, not a slow device flush.
-
-Per 4 KiB file on G: (median of three 500-file runs): create, write, close and
-rename take 0.164 ms; adding a file flush gives 0.447 ms; adding a per-file
-directory flush gives 0.677 ms; one directory flush per 500-file batch instead
-gives 0.460 ms; write-through with per-file directory flushes gives 0.627 ms.
-The current durability contract's raw floor is about 0.68 ms per file, against
-about 3.5 ms per file in the executor at `23589bd`.
-
-### Executor assessment — 2026-09-27
-
-Read-only assessment of `milestone1-adelbert` at
-`0e4595e4142fc78cfbf8e274832520a4344f3b5e`. These are Tier 0 diagnostic
-observations and optimization leads, not release criteria or approved changes.
-No production, test, rig, policy, or settlement-baseline files were changed.
-Executor history includes September 8 runtime consolidation and September 20
-capacity-failure handling; early August is not its last meaningful change.
-
-**Profile and evidence.** Windows 11 Pro 26200, i7-13700K, 63.7 GiB RAM,
-CPython 3.13.14, xxhash 3.8.1; F: and G: are separate 4 TB WD_BLACK SN850X
-NVMe devices (disk 3 and disk 5), both NTFS. The existing read-only
-`F:\NamiSyncExecutorBenchSource` supplied the five size bands below. Its original
-generator seed was not reconstructed; membership/stat identity is retained in
-`source-manifest.json`, and the rig checks published digest consistency and
-source snapshot stability. No cache eviction, device-counter saturation study,
-or control of unrelated desktop activity was performed. Storage benchmarks
-were serialized; read-only source reviews ran alongside them. Results describe
-buffered repeated-source workloads, not cold reads or device peak bandwidth.
-
-Local raw evidence and temporary drivers are retained in
-`build/executor-assessment-20260927/`: `baseline.ps1`, `followup.ps1`,
-`finalcases.ps1`, `diagnostic.py`, `fg-*.json/log`, `gf-1x4GiB.json/log`,
-`stages-*.json/log`, `poll-*.json/log`, `no-metrics-small.json/log`,
-`profile-*.prof/txt/json/log`, environment receipts, source hashes, and derived
-`summary.json`. `summarize.py` derives medians/ranges from raw samples without
-discarding any run. Each invocation used a fresh dedicated target named
-`NamiSyncExecutorAssessment-20260927-*`; all such F:/G: roots and rig artifacts
-were subsequently removed through manifest-validated rig cleanup. The original
-F: corpus remains in place. Ignored build evidence is local, not committed
-acceptance authority. Relevant source, driver, runtime, fixture, or storage
-changes require new observations before carrying these findings forward.
-
-**Baseline.** Each F: band ran five times in one fresh process, using one
-empty-target prepared plan, initial preflight, metrics enabled and readback on
-every sample. All 25 executions and readbacks succeeded with recording OK and
-zero remaining payload reservations. Times cover the public executor call;
-preparation, preflight, manifest handling, cleanup and readback are separate.
-The recorder/event sink are the rig's in-memory seams, so this does not measure
-SQLite, history, workflow event validation or GUI delivery costs.
-
-| F: → G: workload | Execute median [min–max], s | Median MiB/s | Backend median, s | Outside backend median, s | Reader blocked median, s | Writer queue wait median, s |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 28.248 [27.367–29.745] | 0.138 | 0.512 | 27.739 | 0 | 0.114 |
-| 512 × 128 KiB | 14.068 [13.983–16.096] | 4.55 | 0.291 | 13.775 | 0 | 0.074 |
-| 64 × 4 MiB | 2.051 [2.019–2.107] | 124.8 | 0.204 | 1.841 | 0 | 0.103 |
-| 4 × 128 MiB | 0.424 [0.414–0.449] | 1,207.4 | 0.191 | 0.236 | 0 | 0.048 |
-| 1 × 4 GiB | 2.287 [2.104–2.385] | 1,791.3 | 1.592 | 0.733 | 0.062 | 0.135 |
-
-Columns are independently aggregated; their medians need not sum. A reverse
-G: → F: 4 GiB control, using a rig-created and verified G: source, returned
-1.987 s median [1.818–2.029], 2,061.6 MiB/s across three samples in one process;
-all readbacks passed. Direction, source-root spelling and run order differ, so
-this is not a controlled device asymmetry claim.
-
-The [historical hash-refactor table](obsolete/M1_HASH_REFACTOR.md#28-final-m1-executor-results)
-records 2.426 s for 1,000 × 4 KiB and 2.014 s for 4 GiB on F: → G:.
-Today's small-file result is substantially slower, while the large-file result
-is much closer. That old single-pass driver/profile was not rerun: the ratio
-is historical context, not a causal regression measurement or attribution to
-one commit. Its `Final` column is not equated with today's outside-backend time.
-
-**Where the small-file time goes.** A separate instrumented 1,000 × 4 KiB
-run took 27.901 s, including 0.524 s in the backend. Wrappers around synchronous
-runtime/native functions retain call counts and nested inclusive/exclusive
-elapsed time. Inclusive rows overlap and must not be summed with their parents.
-They do not partition the concurrent reader/hasher/writer internals. One sample
-does not prove instrumentation neutrality.
-
-| Observed function or stage | Calls | Inclusive seconds |
-| --- | ---: | ---: |
-| Native root revalidation | 27,000 | 16.832 |
-| Native root-relative resolution, overlapping root revalidation | 13,000 | 10.005 |
-| Temp metadata finalization, including its file flush | 1,000 | 0.453 |
-| Atomic new-file publication | 1,000 | 0.188 |
-| Published metadata observation/conditional repair | 1,000 | 0.303 |
-| Parent directory flush | 1,000 | 0.311 |
-| Recorder call wrapper, in-memory recorder | 1,000 | 0.017 |
-| Reliable settlement | 1,000 | 0.037 |
-
-Root revalidation consumes about 60% of this instrumented execution, including
-its nested work. There are 14 full root admissions and 13 chain-only admissions
-per COPY; `resolve()` repeats chain admission even immediately after
-`_resolve_target_path()` has performed full admission. Freshness across streaming,
-callbacks, finalization and publication remains necessary; repeated adjacent
-derivation is a separate optimization question.
-
-The supplementary small-file cProfile receipt records 508,000
-`to_extended_length_path` calls, 311,000 `lexical_absolute_path` calls and
-1,401,000 `_validate_absolute_path_spelling` calls. The one-file profile repeats
-exactly 1,401 spelling validations and stage instrumentation repeats 27 root
-revalidations. These are observed counts on these fixtures. The small profile
-slowed execution to 64.064 s; worker-thread cumulative timings also overlap.
-Do not use cProfile timing sums or percentages to predict an unprofiled gain.
-Source inspection identifies `lexical_absolute_path`'s ordinary → extended →
-ordinary roundtrip and repeated component validation as avoidable-work leads.
-
-All 1,000 directory flushes succeeded. Exactly 1,000 metadata handles/file
-flushes were used, consistent with one temp finalization and no post-publication
-repair reopen on this corpus. The existing conditional repair is doing its job.
-A diagnostics-off control still took 27.190 s median [27.163–27.978] over three
-samples; diagnostics cannot explain the dominant fixed cost. This control was
-later, not interleaved, so it does not establish a precise instrumentation tax.
-
-**Pipeline bubbles and finishing.** The 4 GiB baseline reaches the 32 MiB
-reservation cap but has only 0.062 s median reader blocking and 0.135 s median
-writer queue waiting inside a 1.592 s median backend call. This does not show
-a large polling-induced bubble. A separate interleaved nine-process probe used
-the existing `poll_seconds` constructor seam, leaving production defaults intact:
-
-| Poll interval | Fresh processes | Execute median [min–max], s | Backend median, s |
-| --- | ---: | ---: | ---: |
-| 10 ms, default | 3 | 1.994 [1.837–2.046] | 1.322 |
-| 1 ms | 3 | 2.047 [1.828–2.099] | 1.311 |
-| 0.1 ms | 3 | 1.936 [1.926–1.946] | 1.334 |
-
-Order was default/1/0.1, default/0.1/1, default/1/0.1 ms. Every readback passed.
-Backend medians stay within 1% of the default; the end-to-end spread does not establish a
-material polling improvement. These nine observations are separate from the
-baseline, not pooled with it. The rig report does not encode the override;
-the retained driver and filename identify it.
-
-Writer wait includes startup, queue acquisition and EOF handoff; reader blocking
-excludes actual read latency and ordinary coordinator work. Reservation high-water
-includes the next whole-chunk reservation before read, even the EOF probe; it is
-not actual memory use or queue occupancy. Low small-file high-water therefore
-does not prove underutilization, and these waits are not device utilization.
-In particular, the 4 MiB band's approximately 0.103 s writer queue wait is only
-one part of its 0.204 s backend and 2.051 s whole execution. Its fixed per-file
-work is the larger opportunity.
-
-A separate 4 GiB stage run took 2.158 s: backend 1.385 s and the required temp
-file flush 0.685 s. There is a real serial durability tail, but removing that
-flush would weaken the contract. A whole-corpus stage run (1,582 files, including
-the 51-byte corpus marker, plus five directories; 4,931.9 MiB) took 44.388 s,
-of which 2.561 s was backend work. Final directory completion took 0.016 s;
-all 1,587 directory flush attempts succeeded. A template case with 60 COPY and
-four UPDATE operations took 2.269 s; four hardlinks took 0.0006 s and four atomic
-replacements 0.0008 s, with 68 successful parent flushes taking 0.024 s. All
-published bytes verified. This covers ordinary hardlink-backed updates, not
-MOVE_UPDATE, ACL preservation, readonly/tunneling repair, cancellation or a
-hardlink-unsupported backup performance profile.
-
-**Review correction and native-call attribution.** User review correctly
-distinguished fresh evidence from preservation of today's probe APIs/counts.
-The initial recommendation to keep every native probe and optimize only pure
-derivation first was too restrictive. cProfile charges ctypes execution to its
-Python caller: `_observe_root_anchor` self time is not pure Python path work,
-although it also includes buffer allocation and other unprofiled native work.
-
-A supplemental read-only diagnostic, `root_probe_review.py/json`, timed the
-actual bound APIs on the existing F: 4 KiB corpus directory. At review the branch
-had advanced to `6de6d1c0`; executor and core source are byte-unchanged from the
-original measured revision. Original rig receipts remain tied to that original
-revision, not reissued for the newer checkout. In one process,
-1,000 full admissions took 1.131 s total: 2,000 `GetVolumePathNameW` calls took
-0.577 s, and 1,000 `GetVolumeInformationW` calls took 0.032 s. Median individual
-calls were 269.6 and 28.3 microseconds respectively; full admission median was
-1,083 microseconds. Separately, 1,000 open-directory/read-`FILE_ID_INFO`/check-basic-
-attributes/close probes had a 30.4 microsecond median [26.9–289.4]. This is a
-single-root microdiagnostic, not an executor speedup or depth-scaling result.
-Native mount discovery is therefore a priority alongside repeated derivation.
-
-The same probe confirmed `st_dev == 0x98AC4C7AAC4C5542`, equal to the handle's
-64-bit serial, with low 32 bits matching `GetVolumeInformationW`'s `AC4C5542`.
-[CPython 3.13.14's stat implementation](https://github.com/python/cpython/blob/v3.13.14/Python/fileutils.c)
-obtains volume identity from file-stat/handle information. The current NamiSync
-handle-identity adapter explicitly truncates the serial to 32 bits; a proposed
-full-width root binding must retain the original 64-bit value separately.
-
-**Revised investigation order, without production implementation authorization:**
-
-1. Reduce calls and reconstruct immutable facts less often. Build the two
-   reviewed `RootAuthority` values once per execution invocation and pass them
-   through without rebuilding them in the native adapter. This retains facts,
-   not successful admission. Add direct lexical normalization while preserving
-   UTF-16, namespace and before-normalization rejection rules. A single no-follow
-   stat can supply entry type, attributes, identity and volume evidence;
-   `_stat_path` need not perform lexists/lstat/stat plus another path-volume
-   lookup. Compare its observed volume against admitted expectations, preserving
-   the existing serial representation and filesystem capability policy. Likewise,
-   classify a root component from its lstat instead of a later following is_dir.
-   Preserve missing-path/error behavior deliberately: the legacy executor adapter
-   and tests currently encode the second is_dir result as authoritative.
-2. Discover the anchor once per admission where that API is still needed, and
-   query volume information using the admitted anchor. Current `admit_root`
-   independently re-observes and compares the anchor after chain traversal;
-   replacing the second observation with the first value would make that equality
-   check tautological. Explicitly revise this observation policy and its tests
-   rather than claiming that two independent observations still occur. For an
-   ordinary drive-root anchor, a fresh no-reparse chain plus observed volume
-   identity is the candidate evidence; mounted-folder anchors need their own
-   binding. A reparse tag alone identifies a kind, not a particular mount target.
-3. Define one admission per actual access/effect step and reuse it only within
-   that step. Source open, temp creation, finalization, final guards, publication
-   and published-file observation are useful COPY phases, not a universal six-
-   check maximum: owned-temp cleanup, backup/security work, retries and resumes
-   also have access/effect boundaries. Prefer a combined native operation over
-   a general `already_admitted=True` bypass. Keep child containment and required
-   leaf guards; do not retain successful admission across intervening work.
-4. Evaluate fresh root-handle identity against a baseline established by full
-   admission. The [Windows identity tuple](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)
-   supplies a 64-bit volume serial and 128-bit file ID, stronger object binding
-   than anchor spelling plus the existing 32-bit volume serial. It does not make
-   subsequent pathname operations handle-relative or atomic. Opening with
-   [OPEN_REPARSE_POINT](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew)
-   does not certify all intermediate components or descendants; specify whether
-   root-object continuity replaces repeated ancestry validation, while retaining
-   required child-path checks. Decide baseline lifetime across pause/resume,
-   handle retention/identity reuse, mounted-folder handling, unsupported identity
-   behavior and binding to reviewed evidence. Fewer user-space component probes
-   is a credible gain; constant syscall count does not imply depth-independent
-   kernel lookup latency. A shallow/deep fixture comparison remains outstanding.
-5. Keep current single-handle finalization and conditional metadata repair.
-   Small-file worker elimination could save at most the measured backend portion
-   (about 2% on this fixture), while recorder/settlement CPU is smaller still.
-   Directory-flush batching, overlapping publish with the next file, or retaining
-   multiple prepared files changes durability, cancellation and effect ownership;
-   the measurements do not justify starting there. The large-file flush tail
-   merits investigation only under a design preserving durable publication.
-6. Runtime condensation beyond admission work has limited remaining value:
-   `_ProgressTracker.__init__`
-   can combine its two plan walks and avoid its temporary settled-ID set while
-   preserving signed-64 sums and resumed progress. Existing shared rename and
-   publication-observation mechanics already address larger duplication. Earlier
-   [reduction dispositions](obsolete/REDUCTION_FOLLOWUP.md#scope-and-decisions)
-   shelved pause/cancel merging, recording-tail builders and verdict compression;
-   their different effect/recovery order remains a reason to keep them distinct.
-   Structural settlement work still requires EXECUTOR's protected oracle gate.
-
-Across this assessment, 23 benchmark invocations produced 47 successful execution
-samples, including 42 successful readback samples (the diagnostics-off control
-and cProfile runs omitted readback). Existing rig/pipeline tests passed 80/80.
-Independent source/instrument review checked timing boundaries, call attribution,
-poll overrides and metric limitations. These checks support the assessment;
-they do not certify a future optimization or replace its required gates.
-
 ### Benchmark reports
 
 Console output is the artifact-free default. `--json PATH` opt-in publishes one
@@ -4748,133 +727,6 @@ time plus median sample throughput. Baseline preparation is labeled and timed
 separately as setup, not silently counted as a sample. Reports retain that setup
 receipt, and sidecar-backed reports include the explicit path, validation
 counts, and stored identity mode.
-
-### Verifier admission assessment — 2026-09-27
-
-The verifier shares the executor's repeated native admission cost, with much
-lower per-file multiplicity. This follow-up measured unchanged code at
-`6de6d1c002fa0b9f22a4d76c25519b6d0dbfae8a` on the same reference machine and
-read-only `F:\NamiSyncExecutorBenchSource` size bands described above. The native
-unbuffered reader used 4 MiB chunks and `xxh3_128`; each band ran five timed
-`tools verifier <band> --baselines primed --repeat 5` samples. Scanning, context
-construction and the one-time baseline pass are outside `run_seconds`. This
-is a single-volume read assessment, not another F:/G: copy measurement or a
-controlled cold-cache experiment. Raw `verifier-*.json/log` and the temporary
-`verifier_baseline.ps1`/`verifier_diagnostic.py` live beside the executor evidence
-in ignored `build/executor-assessment-20260927/`.
-
-| Corpus | Median run seconds | Min–max seconds | Median MiB/s |
-| --- | ---: | ---: | ---: |
-| 1,000 × 4 KiB | 3.652 | 3.575–3.772 | 1.07 |
-| 512 × 128 KiB | 1.913 | 1.837–2.025 | 33.5 |
-| 64 × 4 MiB | 0.311 | 0.307–0.317 | 822.6 |
-| 4 × 128 MiB | 0.237 | 0.236–0.246 | 2,160.0 |
-| 1 × 4 GiB | 1.926 | 1.862–1.956 | 2,126.3 |
-
-All 25 samples returned exactly the expected verified items/bytes and recording
-OK. Three later small-file `--no-tap` samples had median 3.287 s
-(3.282–3.337 s). These were not interleaved controls: timing variation prevents
-attributing their difference solely to instrumentation. The rig's open timer
-covers native reader entry, excluding the engine's earlier admission; its read
-timer covers iterator advancement, including a handle stat, buffer management
-and byte materialization, not only the native read call. Outside-open/read time
-therefore is not pure hashing overhead.
-
-Separate synchronous Python/API wrappers measured one small-file pass at
-3.196 s and one 4 GiB pass at 2.008 s, both fully verified. Counts below apply
-to the 1,000-file pass; native API timings are measured directly rather than
-inferred from cProfile self time. Parent timings overlap their children and
-must not be added. Instrumented timing is diagnostic, not a predicted saving.
-
-| Observation | Calls | Seconds |
-| --- | ---: | ---: |
-| `GetVolumePathNameW` | 4,000 | 1.1566 |
-| `GetVolumeInformationW` | 1,000 | 0.0235 |
-| `GetDiskFreeSpaceW` | 1,000 | 0.0205 |
-| `ReadFile` | 1,000 | 0.5209 |
-| Full root admission, inclusive | 1,000 | 0.9800 |
-| Chain admissions, including those inside full admission | 2,000 | 1.0792 |
-| Native API object construction/signature setup, inclusive | 1,000 | 0.1079 |
-| Handle-stat snapshots, inclusive | 4,000 | 0.0786 |
-| `GetFileInformationByHandleEx`, inside those snapshots | 12,000 | 0.0249 |
-| `VirtualFree` | 1,000 | 0.1031 |
-
-The four anchor lookups per readable file are two in full engine admission,
-one in the reader's later chain admission, and one for sector geometry. Native
-anchor lookup is the largest individually timed API cost here too. The 4 GiB
-pass has the same four anchor calls and four handle snapshots, but 1,024 reads;
-the setup tax is per file rather than per chunk. Root/child chain work also
-scales with path depth; this shallow corpus does not quantify that slope.
-
-Unlike executor, verifier already constructs and passes an immutable
-`RootAuthority` in its run context: instrumentation counted no construction
-during the timed file loop. There are still two selected-root validations per
-readable item and repeat lexical normalization in the bound reader. Both
-standalone verification and post-copy readback reach `_classify_subject` and
-the same native reader, so the native findings apply to both paths; the timing
-table measures standalone verification only.
-
-Priorities and constraints for a future implementation:
-
-- Apply the shared core admission work identified above: fewer anchor calls
-  and potentially fresh root identity at access boundaries. Engine admission
-  and reader admission currently enforce different protocol seams; combining
-  them needs an explicit admission handoff that preserves custom-reader
-  enforcement and the last check before opening. No cached successful admission
-  across files, and no claim that current path checks make the later open atomic.
-- Reuse the verifier reader's native bindings across files. Binding fixed API
-  signatures is not filesystem evidence and requires no per-file refresh.
-  Sector geometry should reuse an admitted anchor where valid; any longer-lived
-  geometry reuse must be bound to volume identity, not merely a drive letter.
-- Consider sharing the immediately consecutive native pre-yield and engine
-  before-read handle snapshot. Native direct-reader rejection of directories
-  and reparse files must remain. The third snapshot is inside `iter_chunks`,
-  after `on_stream_start` can run external code; do not discard it solely from
-  the count. The fresh after-read snapshot, opened-volume identity and final
-  path-by-handle comparison have separate jobs and remain required evidence.
-- Lower-priority candidates are one selected-root normalization per item and
-  reader-lifetime aligned-buffer reuse. The measured buffer release cost makes
-  reuse worth testing, but requires explicit close/error/cancellation ownership.
-  Handle-stat consolidation is modest: all four snapshots together cost only
-  0.079 s here, far below anchor lookup.
-
-These are investigation findings, not changed [VERIFIER](VERIFIER.md) or
-[DEFENSE](DEFENSE.md) contracts. No optimization variant was implemented or
-benchmarked, and no throughput improvement is claimed.
-
-### Preflight and scanner follow-up — 2026-09-27
-
-Source inspection at `6de6d1c0` confirms that preflight shares the admission
-mechanism. `preflight.observe()` already constructs authorities once per root
-and deduplicates subjects by root ID and normalized relative path. Each
-`LocalObservationFileSystem.stat()` nevertheless performs a full `admit_root`,
-then selected-relative chain checks, root/candidate resolution and a final
-no-follow leaf stat. A flat 1,000-COPY plan with distinct source and target
-paths therefore has 2,000 subject admissions, two root observations and two
-target admissions for free-space/reclaimable-temp observation: 2,004 full
-admissions before any optional trash path. Each full admission has the same two
-anchor lookups measured above. Reclaimable-parent volume observations can add
-further native calls; this is not an exact whole-preflight API total. Parent,
-prior-target and trash subjects make other operation mixes different.
-
-This is a source-derived count, not a new preflight timing measurement. Executor
-rig timing excludes its preflight setup, so that cost must not be added to or
-subtracted from the reported execute medians. Shared core probe improvements
-would reach preflight as well as executor and verifier. Pure derivation and
-repeated root resolution deserve investigation, but per-subject freshness is
-separate from immutable authority reuse. Nor are the two leaf observations
-automatically interchangeable: the chain check precedes path resolution; the
-final stat supplies the returned observation afterward. Consolidation must
-preserve rejection before following a reparse target during resolution.
-
-Scanner does not exhibit the same per-file full-admission pattern. Full scans
-bracket enumeration with root/volume checks and discard observations on closing
-drift; individual entries use enumeration and no-follow entry stats. Scoped
-scans add selected-path ancestor checks. This source inspection supports leaving
-scanner out of the current optimization priority, not a claim of measured
-scanner throughput. Borrowing its batch observation boundary for preflight
-would be a separate contract proposal, not permission to cache admission across
-subject observations. No production, acceptance or safety contract was changed.
 
 ### Sidecars
 
@@ -5001,40 +853,20 @@ including one 100,000-item run, and record:
 - peak pending event count and serialized bytes;
 - 50-run summary latency and 256-row item/event page latency.
 
-The 2026-08-05 baseline ran the then-current
-`.\.venv\Scripts\python.exe tests\history_benchmark.py` on Windows 11
-10.0.26200, Intel64 Family 6 Model 189 with 8 logical CPUs, Python 3.14.6, and
-SQLite 3.50.4. The 650,465,280-byte fixture contained exactly 50 runs and
-1,000,000 items, with one 100,000-item run. The full-range recording took
-87.969 seconds over 3,919 transactions; commit latency was 7.969 ms p50,
-25.237 ms p95, and 104.301 ms maximum. Peak retained state
-was 256 events and 79,360 serialized bytes. A fresh-reader 50-run summary took
-0.984 seconds and the immediate repeat took 0.652 seconds. Fresh-reader
-item/event pages took 9.556/8.012 ms; full-range warm item pages were 10.686 ms
-p50, 17.746 ms p95, and 37.898 ms maximum, while event pages were 9.800 ms p50,
-13.995 ms p95, and 22.100 ms maximum. “Fresh reader”
-means a new SQLite connection after fixture creation, not a forced cold OS
-filesystem cache. All locked gates passed.
+Historical million-item runs used 50 runs, 3,919 recording transactions and
+256-event / 79,360-byte peak pending state on their recorded Windows/Python/
+SQLite profile. Fresh reader means a new SQLite connection after fixture
+creation, not forced OS-cache-cold I/O.
 
-The 2026-08-06 rerun after sparse event-bound and official-watermark validation
-used the same environment, fixture, and policy. Recording took 48.826 seconds
-over 3,919 transactions; commit latency was 3.676 ms p50, 14.382 ms p95, and
-204.203 ms maximum, with the same 256-event/79,360-byte retained peak. Summary
-readback took 0.409 seconds on a fresh reader and 0.516 seconds immediately
-afterward. Fresh-reader item/event pages took 3.650/5.092 ms; warm item pages
-were 3.927 ms p50, 7.486 ms p95, and 8.861 ms maximum, while event pages were
-3.614 ms p50, 6.163 ms p95, and 6.752 ms maximum. All locked gates passed; no
-window-policy default changed.
+| Historical run | Recording elapsed | Commit p50 / p95 / maximum | Fresh summary |
+| --- | ---: | ---: | ---: |
+| 2026-08-05 baseline | 87.969 s | 7.969 / 25.237 / 104.301 ms | 0.984 s |
+| 2026-08-06 sparse-bound/watermark validation | 48.826 s | 3.676 / 14.382 / 204.203 ms | 0.409 s |
+| 2026-08-08 history-v5 receipt hardening | 136.700 s | 20.899 / 44.491 / 121.026 ms | 1.670 s |
 
-The final 2026-08-08 history-v5 receipt rerun used the same million-item
-fixture and 256-event/1-MiB policy after receipt/projection hardening. Recording
-took 136.700 seconds over 3,919 transactions; commit latency was 20.899 ms p50,
-44.491 ms p95, and 121.026 ms maximum, with retained state peaking at 256
-events/79,360 bytes. Fresh and immediate-repeat 50-run summaries took
-1.670/1.605 seconds. Warm item pages were 12.386 ms p50, 15.156 ms p95, and
-16.256 ms maximum; event pages were 12.375 ms p50, 14.087 ms p95, and 14.818 ms
-maximum. Audit remained OK for the ordinary fixture and every locked gate
-passed; no window-policy default changed.
+All then-locked gates passed without changing the window-policy default; these
+are historical logs, not current-source compact authority. Final R3 renewal
+above supplies the release profile's summary/page/recording observations.
 
 ## Other measurement families
 
@@ -5095,40 +927,485 @@ bytes, with three fresh runs below that ceiling. These results do not claim
 complete-domain or current v5 transport memory containment. [BRIDGE](BRIDGE.md#evidence-and-ongoing-checks)
 owns the accepted custody behavior and current gate status.
 
-- [BRIDGE](BRIDGE.md#evidence-and-ongoing-checks) retains transport custody
-  and behavior authority. Its event fixture uses four active tasks for 60
-  seconds at 100 aggregate Progress and 10 reliable events per second;
-  current-source timing remains open. The committed SH-G-8 custody JSON and
-  validator have distinct frozen v1 provenance.
-- [HISTORY](HISTORY.md) retains query behavior and limits; use its named
-  fixture and query-method evidence without merging it with Plan timings.
-- [TOOLS](TOOLS.md#performance-drivers) owns the executor/verifier driver
-  structure and isolated harness boundary. Their throughput observations do
-  not certify Plan, bridge or release resources.
-- [INTERFACES](INTERFACES.md#sh-g-release-criteria) retains SH-G-15 cold-start
-  and repeated/long-workload release resource acceptance. It has no numeric
-  budget or acceptance artifact yet.
+Current bridge timing is closed for the recorded final R3 profile above.
+SH-G-15 has the scoped user disposition and completed/partial records below;
+neither remains an unmeasured preparatory obligation. Frozen v1 custody,
+current event-v5 timing and whole-application resources remain distinct claims.
 
-M1 release resource preparation distinguishes absolute cold/settled resource
-use from retained growth over repeated, sustained and heavier supported use.
-The finite workload selection is owned by M1_PLAN; instantiate its typical
-Plan/review/copy/verify/close journey, repeated task cycles, sustained session
-and heavier tree/task population with exact sizes and durations before
-acceptance collection. Include a small declared edge-case set, not exhaustive
-combinations or unsupported uses. Record host and relevant renderer/runtime
-children separately, with stable identities, metric definitions and aggregation
-that does not silently count shared resident pages as private memory. Declare
-warm-up/quiescence, repetitions, statistics and separate absolute/growth/trend
-predicates before measuring. General resource baseline and numeric budgets
-remain unestablished; existing bridge timing observations retain their own
-provenance and are not a substitute. INTERFACES and DEFENSE retain acceptance
-authority and the calibration-versus-predeclared-budget distinction.
+## Release resource results
 
-Raw child logs, screenshots, installed wheels, failure context and generated
-reports under ignored `build/` remain at their recorded paths, including
-`build/m1-7/evidence/p9-full-20260916/` and
-`build/m1-8-archive-20260924/evidence/`. Committed JSON preserves selected
-samples and authority, not necessarily every native or visual artifact.
-Ignored `build/` is not durable archival storage; preserve existing raw
-directories and consider a separately managed archive before cleanup of
-irreplaceable evidence.
+### Row attachment fix: remaining idle observations — 2026-11-10–11
+
+After the user authorized the small rail fix and remaining idle measurements,
+clean `1d936876` was rebuilt in a fresh environment. Portable ZIP SHA-256:
+`fca5c839cb9e4fb7a47e343656b08a9587961e2cdf2ccf8a920652875970311f`.
+Independent comparison finds unchanged native inputs/notices and byte-identical
+embedded executable archives; bundle differences are the rail asset and
+attributable README/install/build metadata. The earlier package is untouched.
+
+The unchanged collector ran only `idle-open-01` then `payload-01`, from
+2026-11-10 23:05 to 2026-11-11 00:13 Shanghai time. The complete 3,600-second
+open-task idle window follows a reviewed 10k × 32 B copy. Both requested runs
+are valid and pass every applicable historical predicate. No soak was repeated.
+The existing estimator omits the first ten idle minutes; its final 3,000 seconds
+contain 3,000 complete samples with a maximum sample gap of 1.016 seconds.
+
+| Observation | Open 10k task | Payload (1 × 4 GiB, 64 × 4 MiB) |
+| --- | ---: | ---: |
+| Whole-app sampled peak | 1,129.746 MiB | 442.828 MiB |
+| Open-idle median private memory | 554.715 MiB | — |
+| Open-idle memory slope | +0.001 MiB / 10 min | — |
+| Maximum settled memory after task close | 551.262 MiB | 405.535 MiB |
+| Final idle median private memory | 551.262 MiB | 404.104 MiB |
+
+All three task closes succeeded. Both apps exited 0 with empty owned Jobs;
+all three deferred source/target hash comparisons passed. The collector also
+verified the supplied corpus metadata and extracted bundle were unchanged.
+The original timeout's exact input ordering remains unproven; these results
+verify the corrected package's requested paths, not universal leak freedom.
+
+Evidence: `build/m1-release-repair-20261110/acceptance/20261110-04/`, with
+`package/independent-comparison-02.json`, `package/artifact-comparison-review.md`,
+and `resources/{identity.json,validation.json,schedule/}`. The raw schedule
+validator correctly reports FAIL because the other 15 profiles were deliberately
+not repeated. Its two present run rows are valid with no failed predicates.
+Do not relabel this partial collection a complete 17-run pass or rewrite the
+earlier Resources03 receipt. M1_PLAN retains the user's non-blocking SH-G-15
+resource disposition.
+Independent metric/provenance review is `resources/review.md`.
+
+### Release repair resource attempt on `cfeac2d9` — 2026-11-10
+
+Resources03 used the independently reviewed serviced portable ZIP, SHA-256
+`a840c9b0fedc31a442e677cb81c7281d5901ed9eafa1e1d25f31c991d9ceff5a`,
+the selected CPython 3.15.2 stack, the same reference host and the unchanged
+SH-G-15 v1 schedule and budgets. Collection started at 07:29:56 UTC and
+stopped at the payload profile; the runner finished at 11:12:46 UTC.
+**The raw verdict is FAIL and incomplete.** Fifteen
+runs are valid, the payload run is invalid and `idle-open-01` never started.
+On 2026-11-10 the user confirmed that resource measurements are non-blocking
+under the accepted SH-G-15 disposition, including the approximately 2.4 GB
+peak observed in the 100k collections. The raw validator yardsticks below are
+not renewed release blockers. The user requested targeted Close investigation
+without another long soak; missing coverage remains explicitly unmeasured.
+
+| Observation | Runs 1 / 2 / 3 | Historical validator yardstick |
+| --- | --- | --- |
+| 100k whole-app peak | 2,309.039 / 2,348.285 / 2,346.273 MiB | 2,048 MiB |
+| Soak memory slope, cycles 21–100 | 0.366 / 0.448 / 0.347 MiB/cycle | 0.2 MiB/cycle |
+| Soak first/last median memory shift | 24.129 / 28.631 / 20.109 MiB | 20 MiB |
+| Soak handle slope | 2.699 / −1.780 / 2.575 handles/cycle | 1 handle/cycle |
+| Soak GUI-object growth | 0.5 / −1.5 / −0.5 | 10 |
+
+There are eleven exceeded run/predicate pairs across six valid runs, versus
+seven pairs in the previously accepted candidate. The other nine valid runs
+have no numerical exceedances, including three startup controls without
+numerical predicates. Plain startup, 10k and closed-memory checks pass;
+the new handle-slope observations do not by themselves establish a leak.
+Recomputing the same cycle-window estimator by role locates the two rising
+handle trends in the host: 2.645 / −1.766 / 2.631 handles/cycle. Browser,
+renderer and GPU handle slopes are near zero. The samples cannot identify
+handle types or owners. The final 120-second idle ends only five handles
+below each cycle-100 median, still 560 / 846 / 174 above that app's initial
+idle count. Ownership/lifetime investigation is a deferred diagnostic, not a
+leak claim or a blocker for the requested Close investigation.
+Renderer memory slopes remain about 0.20–0.22
+MiB/cycle across both attempts; higher GPU contributions in runs 1/2 and host
+memory in run 2 contribute to the current whole-app memory observations.
+Role medians are not additive, and this decomposition is not causal proof.
+
+The payload's second copy (64 × 4 MiB) reached execution and verification
+completion, but the driver timed out after its Close gesture. Its screenshot
+shows the retained completed task without a Close-pending/refusal message.
+The driver records CDP input delivery, not proof that the intended control
+received the trusted click; the failure's cause is not established. No
+product or collector correction is included in this attempt. The final idle
+window and the following hour-long open-task case are missing.
+Two separately retained payload-only diagnostic pilots add bounded passive
+input/completion tracing while preserving the original gestures and timeout.
+Both complete with exact mirrors and normal empty-Job exits. They do not
+reproduce the timeout, establish its cause or replace the missing acceptance
+coverage; instrumentation can perturb an input race.
+
+All sixteen launched apps exited 0 with empty owned Jobs. All 300 soak and
+six scale mirror checks passed, as did the first payload mirror. Because the
+second payload audit is registered only after task Close, a separate read-only
+post-failure SHA-256 audit verified all 64 source/target files. Supplemental
+post-stop checks also confirm all 65 supplied-corpus sizes/timestamps and all
+341 extracted bundle paths/hashes remain unchanged. They do not repair the
+incomplete collector receipt or supply missing observation windows.
+
+Raw evidence: `build/m1-release-repair-20261110/acceptance/20261110-03/resources/`,
+including `validation.json`, `schedule/runs/payload-01/failure.png` and
+`payload-failure-mirror.json`. Independent reconciliation and comparison:
+`build/m1-release-repair-20261110/renewal/resources-review.md`.
+The user's non-blocking disposition does not turn missing observations into
+measurements or establish universal leak freedom. Preserve the original raw
+verdict and distinguish the Close investigation from resource optimization.
+
+#### Bounded Close-input diagnosis — 2026-11-10
+
+The exact `cfeac2d9` packaged WebView2 reproduces a lost click in the shipped
+`rail.js`. A fixture rail uses inert callbacks and trusted native mouse input.
+Two controls without a repaint each invoke the fixture Close callback once. One unchanged
+`rail.render` between mouse-down and mouse-up removes and re-adds the existing
+row; the same enabled button remains at the same coordinates, but focus is
+lost and the browser emits no click. Close's callback is never invoked.
+This demonstrates a product input defect, without filesystem effects or a
+soak. It does not prove that this ordering caused the original untraced timeout.
+
+Evidence: `build/m1-release-repair-20261110/portable/rail-click-probe-20261110-02/`.
+The follow-up correction leaves correctly positioned rows attached. The
+ordinary regression fails on the old renderer and passes after correction;
+the native trusted down/render/up diagnostic now retains focus and invokes
+the exact fixture callback once. Both controls also pass, with no row moves.
+The native diagnostic uses a separate old-package extraction with only the
+corrected rail asset overlaid; it is not new-package acceptance. Evidence is
+under `portable/rail-fix-20261110/` and `portable/rail-fix-native-20261110-02/`.
+No Close replay or backend lifecycle change is included.
+
+### R4 candidate resource schedule on `1f632b13` — 2026-11-10
+
+**Artifact.** `build/m1-r4-20261109/package/NamiSync-windows-x64-dev.zip`,
+SHA-256 `58429fa854c3161cd5e43bffeaedda05fc6373541430ece369009af40547478f`,
+built by that folder's `build_package.ps1` (same hash-locked recipe and offline
+downloads as R2) from clean `1f632b13`. The final R4 candidate `3ece185f`
+changes only a test driver; its package has identical wheel members and
+executable payloads ([M1_PLAN](M1_PLAN.md#m1-release--authorized-2026-11-04), "R4 candidate run"), so these results
+apply to it unchanged. The collector, corpus, host and frozen
+17-run schedule are those of the [`733f0cb1` study](#historical-resource-comparisons).
+The runs took about 4.4 hours (00:32–04:55 local) with the machine otherwise
+quiet. All 17 runs completed (`soak.log` ends `exit 0`). All 306 mirror checks
+matched, and every app exited 0 with no remaining processes, unlike the
+overnight slow closes on `733f0cb1`. `soak-validation.json` reports
+FAIL; as before, that verdict is informational. On 2026-11-10 the user accepted
+these results for SH-G-15, including the peak and soak-growth observations below.
+
+| Profile (runs) | Peak, whole app | Settled after close | `733f0cb1` peak / settled |
+| --- | ---: | ---: | ---: |
+| Startup (3 plain, 3 DevTools) | 338–343 MiB | 334–338 MiB (plain) | 341–354 / 335–350 |
+| 10,000 × 32 B (3) | 964–1,111 MiB | 501–558 MiB | 1,101–1,224 / 527–540 |
+| 100,000 × 32 B (3) | 2,316–2,404 MiB | 719–726 MiB | 3,298–3,674 / 689–793 |
+| Payload (1) | 440 MiB | 418 MiB | 428 / 404 |
+| Soak, 100 cycles (3) | 607–618 MiB | 458–552 MiB per cycle | 605–620 / 510–536 |
+| 10k task open, idle 60 min (1) | 995 MiB | 536 MiB | 1,086 / 522 |
+
+Startup idle CPU was 0.13–0.40%; DevTools added 2.8 MiB settled. Against the
+historical yardsticks, startup, closed memory, payload, the 10k profiles and
+the open-task idle (+0.015 MiB/10 min) are inside. The validator reports three
+failing predicates across two measured topics (seven failed run/predicate pairs):
+
+- **100k execution peak**: 2,316–2,404 MiB exceeds the 2,048 MiB yardstick but is about 1 GiB
+  below `733f0cb1`, consistent with the Plan Follow and DOM reconciliation
+  work since then. 10k peaks also fell (964–1,111 versus 1,101–1,224 MiB).
+- **Soak growth**: whole-app post-close slopes over cycles 21–100 are +0.35,
+  +0.28 and +0.31 MiB/cycle (yardstick 0.2); soak-01's first/last shift is
+  26.629 MiB against 20, a separate failed predicate. By role the renderer contributes +0.20–0.22 MiB/cycle,
+  matching `733f0cb1`'s +0.19–0.20; host +0.03–0.07, GPU +0.03–0.08, others
+  flat. Handle slopes are +0.9, −1.1 and −2.5 per cycle; GUI objects move
+  by at most one. The renderer trend is unchanged; the whole-app difference
+  comes from GPU/host variance, not a new growth source.
+
+Raw samples, events, fixtures and per-run results live under `soak/`; the
+validator report is `soak-validation.json`.
+
+### Historical resource comparisons
+
+| Study | 10k peak / settled, MiB | 100k peak / settled, MiB | Scope and limitation |
+| --- | --- | --- | --- |
+| `b6a4fefe`, WebView2 156 | 950–976 / 826–842 | 2,365–2,557 / 1,999–2,126 | Full 17-run invocation; exact mirrors and normal exits; informational yardstick verdict. |
+| `733f0cb1`, WebView2 157 | 1,101–1,224 / 527–540 | 3,298–3,674 / 689–793 | Same schedule; lower settled memory, higher execution allocation; runtime/product both changed. |
+| R4 `1f632b13` / `3ece185f` | 964–1,111 / 501–558 | 2,316–2,404 / 719–726 | User accepts measured schedule; raw failed predicates retained above. |
+
+`build/resource-study-20261106c/` and `build/resource-study-20261108/` retain
+original schedule identities and samples. The first schedule's soak slopes were
++0.14/−0.02/+0.30 MiB per cycle; the second +0.28/+0.27/+0.17. Those figures
+describe renderer sawtooth and modest host/GPU contributions, not universal
+graph-release or leak conclusions. Handle plateaus must not be relabeled
+unbounded growth. The later R4 failed slope/shift predicates remain separate.
+
+Matched runtime-157 package/source controls localized the 10k execution peak
+step to `323b5377`'s verification Follow target: row/window churn continued
+through verification. Deep-copy removal and idle collection were cleared by
+the controls; explicit-only rechaining did not lower the peak. The analogous
+100k mechanism was a hypothesis, not measured attribution. Subsequent Plan row
+reuse/cadence studies address this churn without changing verification scope.
+
+Five overnight `733f0cb1` closes left browser/crashpad processes past grace;
+the owned Job terminated them. Normal matched old/new package, source and bare
+pywebview controls later closed cleanly. Coincident Office update/restart state
+was not a demonstrated cause; no product close change followed that observation.
+These exits must not be pooled with normal empty-Job closes. Early build-d
+startup-only and input-control failures stayed partial diagnostics with their
+native-input provenance limits. Their old proposed workload matrix was not
+completed retrospectively; early manual waits/UIA failures are observer history.
+
+### Multi-task, copy and verification attribution
+
+On `b6a4fefe`, six open 10k tasks (four executed, two Plan-only) used 1,260 MiB,
+not the approximately 2.4 GiB predicted by adding isolated task deltas. Forced
+GC left 764 MiB; closing all left 660 MiB, with about 285 MiB in the host.
+Renderer garbage was reused, while host high-water retention followed prior
+peak use. Same-volume work was serialized by admission: a concurrent Plan took
+87 seconds rather than its normal five. Disjoint-volume concurrent executions
+were not measured. Evidence: `build/resource-study-20261106c/{multi,profiling}/`.
+
+Source-service timers on the same 10k corpus found about 43.5 seconds in Execute
+and 52.8 in Verify. Freshly written files' first data opens cost 3.3–3.7 ms;
+second opens 0.03–0.07 ms, insensitive to buffered/unbuffered flags in the probe.
+Defender was enabled but no provider trace isolated the cause. GIL-releasing
+calls are overweighted by the stack sampler; use it for paths, not shares.
+
+### Verification overlap scope
+
+The measured first-open cost motivates only a future bounded concurrent-open
+investigation. Execute→Verify remains sequential. Preserve ordered classification
+and recording, native readback, bounded handle/buffer ownership and full worker
+settlement on control; review earlier observation/sharing-lock timing before
+adopting lookahead. Serial fresh-file timing is not evidence that concurrency
+will help. [M2_PROPOSAL](M2_PROPOSAL.md) owns the unactivated proposal;
+VERIFIER/WORKFLOWS own any eventual behavior. The copy/verification/host-retention
+investigation is `build/copyonly-20261106/` and the November resource study roots.
+
+## Rendering and copy-cost comparisons
+
+These are matched diagnostics at their named revisions, not new performance
+gates. Allocation, sampled peak, settled memory, CPU and elapsed time are separate
+metrics. Keep original/failed runs and order/observer limits when comparing.
+
+| Family | Qualified observation | Disposition / provenance |
+| --- | --- | --- |
+| Response/snapshot copy removal | Sampled execution allocation fell 15.8%; peak/closed memory was higher. | No footprint/throughput improvement claim. `build/allocation-20261107/`; interfaces/transport and 40 repeated-use mirrors passed. |
+| Renderer reclamation / idle collection | Forced GC returned retained 10k/100k JS heaps to about 3–5 MiB; native Low-memory target affected working set/GPU more than JS heap. | Diagnostic source and boundary-only policy remain distinct; Normal restoration and responsiveness checked. No heap cap or execute-time GC. |
+| Host after Close | Python/task objects and native allocator retention were investigated separately from renderer state. | Stable object release is not identical to returning private pages to Windows; no unbounded-cache conclusion from high-water retention alone. |
+| Root spelling / small-file copy | Reuse admitted immutable spelling; consolidate adjacent checks without omitting fresh effect admission. | Correctness/differential and real seam checks separate from timing. No batching/verification concurrency change. |
+| Plan Follow reuse | Compatible overlapping row reuse reduces churn at current window. | Preserve focus/selection/identity and exact one-window bounds. See the dated summary below. |
+| Inventory Follow reuse | Created elements fell 81–91% in bounded 10k comparisons, while final memory peaks rose. | No footprint/throughput claim. Initial loaded-target shortcut deferred after drain amplification; later cadence owns its reintroduction. |
+| Refresh/read cadence | Final Plan 135.68 versus 157.98 s; renderer peak 644 versus 840 MiB; Inventory peaks lower 73–75%. Plan renderer CPU remained 12.2% higher. | 250 ms local / 500 ms routine full reads and existing 25 ms integrity-result collection; immediate urgent paths retained. `build/cadence-measurement-20261108/`. |
+| DOM mutation follow-up | Quiet opposite-order Plan pairs establish no stable CPU/speed benefit; Inventory elapsed/CPU effectively unchanged with modest sampled peak reduction. | Four externally disturbed pre-idle Plan runs excluded; resize/scroll-collapse corrections verified. `build/dom-costs-20261109/`. |
+| 200 ms / ACK diagnostic | About 75% fewer bridge threads and 13% less host CPU for only 1.27 s elapsed saving in final-source comparison. | Discussion only. ACK call-body CPU excludes caller thread creation and cleanup remains necessary; no protocol change. |
+
+### Plan Follow allocation reduction — 2026-11-08
+
+Compatible rows remain attached as the window moves; compatible detail facts
+update without rebuilding unchanged cells. The measured reduction addresses
+allocation churn, not a new retained window or looser identity fence. Evidence:
+`build/follow-allocation-20261108/` and `build/follow-memory-20261108/`.
+PRESENTATION owns current behavior and the one-window/focus/selection contracts.
+
+### Inventory Follow allocation investigation — 2026-11-08
+
+Initial row/cell reuse and loaded-target shortcuts were evaluated separately.
+The shortcut removed a foreground-read lifetime that incidentally coalesced
+overlay refreshes; native diagnostics exposed amplified drain work. The user
+shipped row reuse alone, then approved the later scheduler. Evidence retains
+the failed/intermediate variant; final lower element counts are not lower
+private-memory evidence. `build/verify-follow-20261107/` and the November
+follow/read/refresh-cadence roots retain the separate inputs and comparisons.
+
+### Execution time: GUI versus headless — 2026-11-09
+
+Alternating batches of `7413a833` measured headless execution at 93–99 seconds
+through batch 7 and 105–107 in batch 10; unchanged GUI ranged 110–167 seconds.
+Within-batch GUI excess was 16–71 seconds, so a single pair cannot resolve a
+14% gain. Lower GIL switch interval, 200 ms collection and disabled throttling
+did not remove the difference; sampled worker calls rarely used efficiency cores.
+Minimizing recovered about half the GUI excess, leaving in-process bridge/drain
+work. A source move outside the GUI interpreter would be a separate architecture
+decision. One minimized efficiency-core outlier remained unexplained. Evidence:
+`build/exec-time-20261109/`; no product scheduling change follows these trials.
+
+### Post-allocation reclamation probes — 2026-11-07
+
+V8/allocator/working-set diagnostics use distinct mechanisms and endpoints.
+Forced collection demonstrates collectability at measured fixture sizes, not
+automatic timely collection or universal leak freedom. Native Low-memory target
+and browser GC were separately observed with Normal restoration, exact mirrors
+and normal shutdown. The shipped backend-idle collection gate remains bounded
+maintenance with admission waiting; new phase/owner/input retires stale intent.
+
+### Backend-idle renderer collection — 2026-11-07
+
+Idle collection is a host-owned Windows maintenance operation, separate from
+task mutation and rate/ETA. The renderer stays responsive and active workflow
+work is excluded. Subsequent admission waiting closes the maintenance/start
+seam without imposing an execute-time heap policy. Historical controls distinguish
+the live collector from no-op variants; resource effects must use the recorded
+product/runtime pairing.
+
+### Shared executor root spelling consolidation — 2026-11-07
+
+Shared admitted spelling and direct consumers were consolidated without lending
+one consumer's root hold to another. Source/native/differential witnesses preserve
+fresh held attributes, descendants and fallback. Evidence:
+`build/path-consolidation-20261107/`; EXECUTOR/CORE own the mechanism and policy.
+
+### Copy paths, verification overlap and host retention — 2026-11-07
+
+The attribution and future-overlap boundary above separate copy, first Verify
+opens and host high-water retention. No grouped durability, Execute/Verify
+overlap or concurrent verifier was implemented by this investigation. Resource
+and timing observations stay with their original source/driver/runtime identities.
+
+### Visible Plan refresh during Follow — 2026-11-06
+
+Visible Plan refresh and first-open/recording diagnostics motivated later row
+reuse and cadence work. The early timed variants are historical observations,
+not shipped 200 ms collection or a durable-batching design. Later matched
+comparisons and current PRESENTATION/BRIDGE behavior supersede their tentative
+remedy instructions; original raw measurements retain their endpoints.
+
+## Planning and table history
+
+| Family | Conclusion and retained limitation | Evidence |
+| --- | --- | --- |
+| LS1 / PO1–PO5 | Filesystem observation and lexical derivation dominate some real-tree starts; no backend speed claim from table-loading timing. NOOP direct checks omitted during review only; later PO4 accepts observation timing/logical spelling explicitly. | `build/planning-optimization-next-20261019/` and `build/handle-relative-investigation-20261021/`; PREFLIGHT owns final policy. |
+| Handle-relative compatibility | Real native profile/candidate controls bound compatibility; no plan executed in final-profile observation. | `build/handle-relative-investigation-20261021/final-profile/`; no blanket guard replacement. |
+| AX1 axis switching | 80 valid installed browser wheel trials did not reproduce the physical lock; Windows input stopped before ownership admission. | Original physical-device report unresolved; source/control/geometry differences are not a product diagnosis. |
+| BC1 byte counting | Corrected capture-scope observer avoids per-consume overhead; canonical 4,096-character chunk counter preserves exact Unicode/byte refusal and ordering. | `build/bridge-counter-study-20261007/`; old observer overstates capture cost by an uncalibrated amount. |
+| BC2–5 / SW | Remaining capture/row-field/DOM/scroll stages were investigated without treating different Plan/Inventory endpoints as equivalent. | Correctness, per-stage counts and raw intervals survive; partial controls do not authorize speculative payload or renderer redesign. |
+| Continuous-scroll adoption / SN2 | Bounded compatible response adoption and directional prefetch retain one outstanding read, current owner and exact keyboard target. | `build/scroll-window-study-20261009/`, `build/scroll-navigation-20261011/`; no artificial-delay performance evidence. |
+| GUI-C5 coalescing/keyboard | Installed six-child before/after method retains fixture/actions, full coverage, asset restoration and request accounting. | `build/gui-inventory-refinement-20261005/`; baseline/variants remain diagnostic, not a new SLO. |
+
+PO3/PO5's two 8,000-file mixes used one excluded warmup, three fresh-process
+light samples and one separately counted sample per mix; 90% and 10% NOOP
+fixtures were checked before/after. No plan executed. Small source-run samples,
+warm filesystem and uncontrolled power/background limit generalization;
+remote/cold/deep-tree and installed release behavior were not measured there.
+PO4's native controls did not provision cloud placeholders or a short alias.
+Its original pause followed two demonstrated observation differences: omitted
+candidate resolution could lose an extra escape refusal after a missing
+intermediate, and a leaf appearing after admission could be seen by one final
+stat instead of earlier absence. Later explicit acceptance is scoped by
+PREFLIGHT/DEFENSE to confirmed logical spelling and observation timing, never
+to mutation or omission of independent effect guards. Original failures and
+that disposition remain distinct.
+
+Old fixed 40 ms jump / 100 ms burst suggestions remain hypotheses, not criteria.
+BC/scroll results may report gesture-to-coverage, first/last-input spans,
+uncovered paint opportunities and full settlement separately; compositor
+presentation is not measured. Different sampled frame populations, nested
+durations and independent process clocks cannot be summed or subtracted into a
+new latency. Intermediate starved/canceled/failed responses remain failures;
+later success does not establish their earlier suspected cause.
+
+### Plan string-sharing diagnostics — 2026-11-09
+
+Projection attribution corrected the 17.9 MiB bucket to existing node IDs rather
+than new folder paths; about 20.7 KiB of exclusive display strings cannot explain
+the construction-overlap peak. Slot growth does not itself decompose private
+memory. Final equal-key/basename sharing reduces diagnostic overlap peak about
+14–16 MiB in three matched pairs; cold timing ranges overlap. Sparse-record
+materialization, field mapping and combined projection builders remain unshipped.
+`build/projection-tuning-20261109/` retains source manifests, fingerprints,
+comparisons and failures; no broader memory/speed acceptance follows.
+
+### Current-source BR-G-42 diagnostics — 2026-11-09
+
+Diagnostics at `ddf1afe9` stayed within the historical targets for bridge events,
+Plan, execution UI and History. The selected execution-UI driver was realigned
+to typed replies/task identity, and Inventory keyboard setup now waits for
+authoritative highlight adoption. Source/fixture changes invalidate affected
+observations; original frozen contracts are not rewritten. Ratified CPython
+3.13.17 precedes the later serviced R3 renewal above. These Plan/UI numbers are
+advisory under DEFENSE rather than revived release gates.
+
+## Source-linked historical observations
+
+All values below are independently derived from committed compact JSON.
+The M1-7 Plan profile was accepted at `3c3bbbc` in the 2026-09-16 P9
+collection; the M1-8 U-v2 profile at RC-1 `3ea4e6b` on 2026-09-24.
+The compact contracts and authority artifacts bind their specific source,
+fixtures and profile; the recorded bindings have not been revalidated
+against today's checkout. P2 receipt values belong to its earlier `4bbf943`
+build and are superseded by U-v2 for the corresponding delivered UI bytes.
+
+| Source/revision and fixture | Recorded profile and limitation | Statistic/unit | Children; samples | Observation | Limit |
+| --- | --- | --- | ---: | ---: | ---: |
+| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; cold base, 100,000 operations/120,000 rows | P9 reference; measured revision only | maximum ms | 5; 5 | 1,752.5309 | 2,000 |
+| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; cold information-heavy, 100,000 operations/240,000 rows | P9 reference; measured revision only | maximum ms | 5; 5 | 2,764.6222 | 4,000 |
+| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; unchanged 256-row window | P9 reference; measured revision only | nearest-rank p95 / maximum ms | 5; 30 | 1.6548 / 1.6856 | 250 / 500 |
+| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; incremental retained construction overlap | P9 reference; projection memory only | maximum bytes | 5; 5 | 280,768,512 | 335,544,320 (320 MiB) |
+| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst cold click (destructive start) | U-v2 installed headed; measured revision only | maximum ms | 5; 5 in case (40 across eight cases) | 20.3 | 50 |
+| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt p95 (cancel) | U-v2 installed headed; measured revision only | nearest-rank p95 ms | 5; 30 in case (150 across five cases) | 72.0 | 100 |
+| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt maximum (cancel) | U-v2 installed headed; measured revision only | maximum ms | 5; 30 in case | 73.3 | 250 |
+
+M1-7's [compact contract](../tests/interfaces/web/m1_7_plan_compact_contract.json)
+and companion authority, plus U-v2's [authority](../tests/interfaces/web/m1_8_execution_ui_authority.json)
+and [receipts](../tests/interfaces/web/m1_8_execution_ui_receipts.json),
+carry the source and profile bindings and raw sample membership. The P2
+[authority](../tests/interfaces/web/m1_8_execution_receipt_authority.json),
+[receipts](../tests/interfaces/web/m1_8_execution_receipt_receipts.json) and
+[result](../tests/interfaces/web/m1_8_execution_receipt_result.json) record
+the earlier 6.8/7.3 ms window and 58.8/65.1 ms start p95/max observations.
+Do not combine maxima and p95 across endpoints into one score.
+
+## Backend historical comparisons
+
+Repeated-source F:→G: bands use the retained read-only
+`F:\NamiSyncExecutorBenchSource`: 1,000 × 4 KiB, 512 × 128 KiB, 64 × 4 MiB,
+4 × 128 MiB and 1 × 4 GiB. Its original generator seed was not reconstructed;
+membership/stat manifests and consistent published digests identify the corpus.
+The original source remains outside automatic cleanup. Device topology, flags,
+metrics/readback, preparation and storage contention differ across studies.
+
+| Study / mechanism | Qualified conclusion | Historical evidence |
+| --- | --- | --- |
+| Initial assessment `0e4595e` | 4 KiB band 28.248 s median; 4 GiB 2.287 s. Root admission dominated instrumented small-file wall time. Old hash-refactor ratios are context, not a causal regression measurement. | `build/executor-assessment-20260927/`; separate 4 TB SN850X F:/G:, CPython 3.13.14 / xxhash 3.8.1. |
+| Root admission holds, 2026-09-28 | Immutable root evidence and invocation holds reduce repeated admission; exact final-path corroboration and current held attributes remain required. | `build/root-admission-optimization-20260928/`; fallback/native swap and differential controls separate from throughput. |
+| Verifier/preflight holds | Candidate geometry and admitted root resolution reuse have consumer-specific scopes. Scanner's bracketed enumeration is not permission to cache preflight subject admission. | Same root, verifier/resume subtrees; source-derived call counts are not timings. |
+| Planner-used drift facts / own-effect version | Reviewed planner facts and actual published metadata remain stable on immediate rerun. | `build/executor-simplification-20260929/measurements/`; exact readback/recording/source checks, not relaxed source drift. |
+| Handle continuity / adjacent native checks | Consolidated derivation and retained published-file handle avoid duplicate work while preserving explicit access guards. | Same evidence root; ranges frequently overlap, so no per-commit causal speedup. |
+| Direct target writes | Final eligible local direct-write bands passed exact readback; small files retain buffered behavior, source reads remain buffered. | Final result-8/ceilings receipts below; no device ceiling from buffered repeated-source throughput. |
+| Source-drive contention | Retain the contended receipt and user-cleared rerun separately. | No hidden outlier deletion or claim that unchanged product explains environmental shifts. |
+| Verifier admission assessment | Compare full real reads with tap/null-hasher controls; current evidence/outcome membership is checked. | `build/executor-assessment-20260927/`; open/read costs and hashing are distinct. |
+
+### Integrated direct target writes — 2026-09-30
+
+Result 8 implements the user-selected blanket 8 MiB threshold across device
+types. Five serial samples per original F:→G: band use the production executor
+with buffered source reads. All 25 executions and readbacks pass, with recording
+OK, zero final reservations and stable source/product/tools/tests/driver hashes.
+The three smaller bands report only buffered writes; the two larger bands report
+only direct writes with no fallbacks. Aligned backing allocations remain within
+32 MiB. The rig removes every owned target and sidecar.
+
+| Band | Median [min–max], s | MiB/s | Result 7 median, s |
+| --- | ---: | ---: | ---: |
+| 1,000 × 4 KiB | 2.789 [2.557–2.902] | 1.401 | 3.341 |
+| 512 × 128 KiB | 1.474 [1.322–1.581] | 43.428 | 1.740 |
+| 64 × 4 MiB | 0.351 [0.328–0.385] | 728.517 | 0.356 |
+| 4 × 128 MiB | 0.129 [0.127–0.137] | 3,965.116 | 0.290 |
+| 1 × 4 GiB | 0.909 [0.778–1.135] | 4,504.627 | 1.924 |
+
+Only the 4 MiB band overlaps its predecessor's range. Small-file backend/outside
+medians are 0.106/2.683 s; the 4 GiB split is 0.904/0.006 s. Separate medians
+need not sum to the total. The 4 KiB goal of 1.6 MiB/s remains unmet; per-file
+work outside the copy backend dominates. The 4 GiB median is 52.7% shorter,
+but these sequential historical endpoints do not isolate causality. All five
+samples remain, including the 1.135 s large-file tail. Repeated-source results
+are not cold-cache ceilings, other-device throughput, SQLite or GUI measurements.
+
+Evidence prefix: `build/executor-simplification-20260929/measurements/`
+`result8-b9c4ad3e-20260930-201114-989e90d9`. Before/after physical hashes bind the
+uncommitted candidate on `b9c4ad3`; predecessor receipts separately identify
+accepted result 7 (`878f15e`). The task's `five_band_result8.ps1` and
+`five_band_result8_receipt.py` retain the original five-band procedure and add
+mode/fallback checks. The earlier threshold sweep below remains diagnostic;
+it does not select device-specific shipping policy.
+
+Intermediate Result 3–7 tables remain recoverable from the source revision and
+named reports. Stable
+metadata, all-copy readback, source/dependency rechecks, zero reservations and
+manifest-scoped cleanup are validity conditions, not optional timing overhead.
+Independent backend/outside medians need not sum to executor medians, and
+inclusive profiles overlap. Neither the
+unbuffered-read probes nor warm repeated-source numbers establish integrated
+cold-read gains. Parent-directory flush saving around 0.22 ms per 4 KiB file
+does not justify grouped flush/ledger acknowledgment without a new durability
+design. Device-ceiling probes are controls, not universal throughput guarantees.
+
+Keep source/runtime/storage/producer/checker closure and complete original
+samples when reusing a historical conclusion. Current commands and their
+validity/cleanup semantics remain in the methods above; no new optimization or
+measurement obligation is activated by these compact result summaries.

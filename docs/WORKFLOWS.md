@@ -784,8 +784,8 @@ selected scope and current-evidence acceptance before location binding; resume
 retains the admitted selection. Rebaseline hashes and conditionally replaces or
 creates evidence even when content matches; it clears verification freshness
 rather than reporting a verified match. See the [three-operation policy](VERIFIER.md#accepted-standalone-operation-policy)
-for behavior and the [active M1 plan](M1_PLAN.md#remaining-checkpoints)
-for delivery and regression requirements.
+for behavior and the [completed M1 decision record](M1_PLAN.md#m1-10-integrity-and-review-decisions)
+for delivery and regression history.
 
 ## Other Workflows
 

@@ -18,6 +18,39 @@ versioning begins, headings use the version and codename, such as
 M1 expands the reviewed-sync runtime into a complete headless integrity,
 history, and workflow product while building its secured headed WebView2 shell.
 
+### M1 Release
+
+Portable packaging, exact runtime/native inputs, distribution contents and
+final candidate verification prepare the unsigned tester release. M1_PLAN
+owns identities and acceptance decisions; external delivery remains separate.
+
+#### Build the portable M1 debug package (2026-11-04 – 2026-11-11)
+
+- Deliver the unsigned Windows x64 v0.1.0 Gertrud tester set: app/source ZIPs,
+  wheel, identities, dependency/build records, guides, Microsoft recipient terms,
+  notices, checksums and short release notes in ignored dist/v0.1.0/.
+- Lock exact build inputs and CI Actions; enforce no-ambient-DLL provenance,
+  corresponding-source identity and complete collected notices. Local/hosted
+  source/wheel/executable repeatability does not claim whole-ZIP equality.
+- Repair R5 prerequisites: actual GUI token admission before exposure, serviced
+  CPython 3.15.2/native inputs, versioned custody authority and renewed gates.
+  Preserve the original calibration/holdout, limits and failed receipts.
+- Fix rail attachment so trusted press/release survives repaint. Complete only
+  the missing serviced-package idle/payload observations; original timeout
+  ordering remains unproven, and the partial aggregate FAIL is not relabeled.
+- Close R5 on b0a3fe13 (Package05): 6,575 passes, four capability skips, all
+  35 headed obligations and 12 import contracts; exact-package Medium witness
+  and reconciliation pass. SH-G-15 retains the user's qualified acceptance of
+  the measured R4 schedule despite raw failed predicates. No signing, tagging,
+  upload or external delivery. M1_PLAN owns final identities and gate accounting.
+
+#### Exercise the portable package beyond startup (2026-11-04)
+
+- Exercise the real extracted app through reviewed copy, inventory, baseline,
+  verification and Close, checking exact filesystem results and owned shutdown.
+- Preserve native input/foreground failures and partial attempts independently;
+  an installed wheel or startup-only smoke does not certify the portable ZIP.
+
 ### M1 Performance
 
 Executor, verifier, Plan and development measurements use the fixtures,
@@ -27,334 +60,95 @@ owning contracts.
 
 #### Measure and accept current-source BR-G-42 timing (2026-11-09)
 
-- Run the bridge-event, Plan, execution-UI and History release diagnostics on
-  `ddf1afe9`. All observations stay within the historical budgets.
-- Close R3: map Plan/UI numbers as advisory under DEFENSE §7, predeclare
-  five-child History release and bridge-event collections with a separate
-  validator, and pass them plus the Inventory cold renewal on clean `cbb07d5f`.
-- Realign the optional execution-UI driver with current task identity, status
-  lines and typed control replies; 9 of 13 cases had been failing.
-- Ratify CPython 3.13.17 as the reference runtime. Count harness threads from
-  process records instead of walking every system thread, so the bridge-event
-  memory limb no longer depends on desktop load; three runs now pass.
-- Identify widened frozen-node construction as a plausible cold-time cost
-  and account for 27.5 MiB of additional node slots. Correct the initial path attribution: the
-  17.9 MiB bucket contains existing node IDs, while the two fixtures retain
-  only about 20.7 KiB of path strings exclusive to the inspected path fields.
-  Investigate the stale table-loading driver hook without changing product
-  contracts, performance budgets or claiming new acceptance.
-- Repair that optional driver's direct-settlement hook without restoring the
-  removed response clone. Cover all four asset drift points and exercise the
-  actual instrumented bridge's response accounting; preserve fail-before-write
-  and byte-for-byte restoration. Make Inventory's diagnostic keyboard setup
-  await authoritative highlight adoption before sending its timed movement;
-  preserve the target, timing interval and landing assertions.
-- Compute Plan basenames and filename sort keys once, sharing equal strings
-  and member keys without changing node fields, raw Unicode sorting or paths.
-  Three matched diagnostic pairs reduce construction-overlap peak private
-  bytes by about 14–16 MiB; cold timings overlap, so no stable speed gain is claimed.
+- Close R3 on the named reference profile: five-child Inventory cold, History
+  release and bridge-event collections pass unchanged limits. Ratify CPython
+  3.13.17, later renewed on the serviced release runtime.
+- Keep Plan/UI diagnostics advisory. Repair current optional feedback/keyboard
+  drivers without weakening fixture/action assertions or frozen authorities.
+- Correct projection attribution to existing node IDs; modest equal-string
+  sharing reduces measured overlap peak, with no stable cold-time gain.
+  [PERFORMANCE](docs/PERFORMANCE.md) owns results, profiles and limits.
 
 #### Reduce renderer memory and copy path overhead (2026-11-07 – 2026-11-09)
 
-- Keep compatible overlapping Plan and Inventory rows attached during window
-  updates, retain Plan spacers and avoid redundant focus calls. Cache passive
-  Follow viewport measurements and skip unchanged pre-read paints while keeping
-  immediate feedback and the existing 250/500 ms cadence. Investigate longer
-  clean-result collection and drain ACK piggybacking without changing bridge
-  timing or custody. Quiet DOM comparisons show no stable CPU/speed gain;
-  test-only 200 ms collection cuts bridge threads about 75% and host CPU 13%
-  for only 1.27 seconds elapsed saving. PERFORMANCE records the evidence and
-  remaining decisions.
-- Compare `7413a833` GUI and headless 10k executions in alternating batches.
-  Headless stays at 93–99 s. The same GUI build ranges 110–167 s across one
-  evening and adds 16–71 s within a batch. Timers spread the GUI cost across
-  the whole pipeline. A 0.5 ms GIL switch interval, 200 ms result collection
-  and turning off power throttling do not remove it; the worker stays on
-  performance cores. Renderer CPU is mostly native rendering, not JavaScript.
-  Minimizing the window during execution recovers about half of the GUI
-  excess; the rest is in-process bridge and drain work. Record findings
-  without a product change.
-- Coalesce automatic Plan and Inventory work:
-  500 ms full-window reads and 250 ms local cursor/progress paints. Keep explicit navigation,
-  control/phase/gap and terminal feedback immediate. Restore automatic Inventory
-  loaded-row Follow under this scheduler, clamp passive landings to loaded
-  coverage, update Plan dynamic cells directly, and reuse current detail nodes.
-  Preserve the 256-row limit, read ownership and collection policy.
-- Extend the existing wakeable 25 ms COPY-result collection to successful
-  ordinary and linked integrity results, preserving ordered individual events,
-  immediate urgent bypass and response bounds. Keep filesystem work and durable
-  recording unchanged. The frontend-only native comparison exposes amplified
-  drain work and a cost from faster Plan full reads; retain that evidence.
-  Final matched 10k diagnostics lower Inventory renderer peaks 73–75%; Plan
-  changes from 158 to 136 seconds and 840 to 644 MiB, with renderer CPU still
-  12.2% higher. No stable speed or leak claim is made. Pass 2,289 interface
-  tests, all installed/API-floor cases and exact native browser delivery,
-  with independent review. Retain intermediate failures and the rebuilt recovery.
-- Reuse compatible Inventory rows and unchanged integrity cells during Baseline,
-  Verify and Rebaseline, keeping only current-window controls. Preserve Follow
-  scheduling, selection/focus and collection policy. A bounded 10k comparison
-  reduces created elements by 81–91%; final sampled private-memory peaks are
-  higher, so no footprint or throughput improvement is claimed. Defer
-  the loaded-target shortcut in that delivery after its combined native probe exposed independent
-  overlay read amplification; retain the failed variant and residual-cost trace.
-  Pass 2,261 interface tests and both installed Inventory/default tree gates,
-  with independent source, scope and evidence review.
-- Reduce Plan Follow churn by scrolling to an operation already in the loaded
-  window and reusing compatible rows across overlapping execution windows.
-  Preserve verification Follow targets, bounded window retention, current row
-  handlers and navigation ownership. Keep collection policy unchanged.
-  Two paired 10k runs reduce sampled DOM peaks from 138–160k to 64–68k and
-  renderer private peaks from 976–1,080 to 776–779 MiB, with exact mirrors,
-  durable verification and clean shutdown. No throughput or 100k claim is made.
-  Pass 2,261 interface tests and four installed navigation/execution-review
-  cases, with independent source and evidence review.
-- Measure the rebuilt `733f0cb1` package over the full 17-run schedule. Settled
-  memory after close falls ~300 MiB at 10k and 1.2–1.4 GiB at 100k; all mirrors
-  match. Execution peaks rise (100k 3.3–3.7 GiB); an interleaved 10k control on
-  runtime 157 attributes most of the rise to the product, and source bisection
-  isolates it to `323b5377`'s verification follow rebuilding full Plan windows.
-  Overnight WebView2 close lingering is traced to the environment:
-  interleaved old/new packages and source collection on/off close normally.
-  Record findings without a product change.
-- Bound new session admission behind idle renderer collection to one five-second
-  wait budget. Return an explicit retryable refusal without starting a session
-  or releasing the collection reservation. Preserve late completion/retry and
-  provisional-start cleanup. The original native collection/release handler
-  remains completion-bound; no collector timeout or renderer recovery is added.
-  Pass all 2,261 interface tests and independent review.
-- Reuse exact admitted root/anchor spellings in shared executor revalidation,
-  benefiting copy and other operation guards while preserving fresh filesystem
-  checks. Native COPY traces remove twenty lexical conversions per body;
-  isolated guarded revalidation improves without an end-to-end speed claim.
-  Pass 203 native tests, 658 executor tests and the unchanged 30-scenario
-  settlement oracle over three runs. Keep verification pipelining in M2 and
-  retain post-Close investigation findings without adding further GC policy.
-- Investigate remaining COPY path work without changing freshness guards.
-  Verify 48 native copies at three depths; pure-helper replay identifies about
-  0.1 ms of repeated root/anchor spelling work on the depth-two fixture, with
-  no integrated speedup claim. Scope bounded verification open lookahead as
-  conditional M2 discovery, separate from simultaneous copy/verify and batching.
-- Attribute post-Close retention in four isolated native runs. Large task
-  graphs retire; an untraced 10k Python-GC control shows only a modest private
-  memory change. A separate 1k collection after frontend teardown reclaims
-  renderer embedder garbage. Preserve exact mirrors, durable verification,
-  source/product identity and normal empty-Job shutdown; add no new GC policy.
-- Collect renderer garbage after successful terminal release or task close only
-  when all backend sessions have released. Reserve that idle interval against
-  new admission; pending, running, paused and unreleased terminal sessions defer
-  collection. Preserve successful command results on collection failure. Add
-  no phase-transition collection, execution-time policy or heap cap. Pass
-  2,239 interface tests and six installed native transport cases; an installed
-  two-task witness verifies deferred collection and a 334.74 → 3.24 MiB heap
-  reduction after final release, with exact mirrors and normal shutdown.
-- Remove redundant parsed-response and snapshot copies in the browser while
-  retaining terminal retry isolation and native receipt custody. Matched 10k
-  executions sampled 15.8% less allocation; observed peak/closed memory was
-  higher, so this is not a process-memory or throughput improvement claim.
-  Pass the interface and installed transport gates plus matched 20-cycle
-  repeated-use checks with all 40 mirrors correct and normal exits.
-- Verify that the optimized renderer's retained heap is collectable at 10k and
-  100k files, falling to about 3–5 MiB after explicit GC. Probe the native Low
-  memory target separately: reported working set and GPU private memory fall
-  without substantial JS-heap reduction in the measured idle windows.
-  Preserve Normal restoration, responsiveness, exact mirrors and normal exits;
-  add no production reclamation policy.
+- Reuse compatible Plan/Inventory rows and current detail cells; preserve focus,
+  selection, exact identity and one bounded window. Plan keeps spacers/scroll;
+  passive geometry and unchanged paints avoid redundant DOM work.
+- Use independent 250 ms local-paint and 500 ms routine-read clocks. Explicit
+  navigation and urgent/control/phase/Gap/terminal feedback remain immediate.
+  Extend wakeable 25 ms collection to successful integrity outcomes while
+  preserving ordered individual delivery, custody and durable recording.
+- Remove redundant response/snapshot copies and collect only at backend-idle
+  boundaries, with bounded admission behind maintenance. Add no execute-time
+  GC, JS heap cap, durable batching or verification concurrency.
+- Diagnostics distinguish allocation, private peaks, retained state, CPU and
+  elapsed time. Initial Inventory loaded-target work was deferred, then
+  reintroduced under the scheduler; 200 ms collection/ACK changes stay unshipped.
+  Exact comparisons, failures and non-causal limits remain in PERFORMANCE.
 
 #### Measure updated-package startup and prepare workload profiles (2026-11-06 – 2026-11-07)
 
-- Define startup, metadata/path-size, retained-task, streamed-payload and
-  repeated-close diagnostic profiles with process-role attribution, fixed idle
-  windows, correctness witnesses and explicit incomplete-run handling.
-- Record three independently checked build-d startup runs: settled whole-app
-  private memory 352.90–363.41 MiB, with host/WebView2 attribution and normal
-  shutdown. Preserve runtime-provenance and release-budget limitations.
-- Stop at the user's request after failed native-input pilots; no workload
-  measurement or sync ran. Retain evidence and isolate cleanup to study fixtures.
-- Continue with DevTools-protocol control of the unchanged package; the first
-  workload pilots found renderer memory growing to 2.5 GiB at 1,000 files and
-  an Out of Memory crash at 10,100 items, plus a shutdown that cannot finish
-  after renderer death. Log both in BUGS and stop until the renderer is fixed.
-- Coalesce execution progress paints and reuse unchanged committed Plan rows.
-  Verify the renderer correction on the 1,000- and 10,000-file pilot workloads.
-- Replay eight copy receipts in narrow and wide Plan windows in the ordinary
-  component probe to detect element creation that scales with unchanged rows.
-- Let native script callers finish when their browser or main renderer exits.
-  A controlled crash during a bridge reply now allows orderly host shutdown.
-- Update the installed shell keyboard test to reach Theme by tabbing through
-  the Setup defaults controls that precede it.
-- Rebuild the package from `48b1f708` and resume collection: startup settles at
-  352–378 MiB; 10k and 50k syncs peak at 1.4 and 1.9 GiB with exact mirrors.
-  Show that post-close renderer memory is collectable garbage. Log the 100k plan
-  refusal below the supported item target and its retry-only presentation, then
-  pause at the user's request.
-- Bind packaged DevTools automation to a per-launch endpoint, its owned
-  browser process and a unique NamiSync page before sending input.
-- Restore the table-loading probe's post-render measurement at the updated
-  Plan progress read.
-- Move eleven installed page tests to an unattended private desktop,
-  preserving trusted browser input and real filesystem outcomes. Exercise
-  native blur and activation separately on Windows.
-- Trace both 100k planning defects to the preflight observation count and
-  the Plan reader's handling of a typed refusal. Measure small-file sync
-  across the executor, service and WebView2, including verified readback.
-- Count reviewed operations once across preflight observation and adoption.
-  The reported 101,000-operation Plan now reaches review with both endpoints checked.
-- Show the specific terminal Plan limit on release and reselection. A refused
-  Plan keeps Execute disabled and no longer prompts a retry of a missing artifact.
-- Compare copy-only executor time across matched revisions, the durable service
-  and the live GUI. Attribute service recording cost and measure the effect of
-  fewer event reads with a test-only intervention.
-- Profile real durable copy transactions. Commit averaged 0.40–0.42 ms/file
-  on the local fixture; suppressing repeated timeout assignments showed no
-  clear improvement. Defer grouped durability to M2 with small-file batching.
-- Read Windows attributes directly when checking descendants for reparse
-  points. On the matched 1,000-file executor fixture the median fell from
-  3.51 to 2.90 ms/file.
-- Collect ordinary successful COPY receipts for up to 25 ms per headed drain
-  while urgent updates wake it immediately. The visible-Plan comparison
-  reduced event reads by 83% and executor time by 22% on the measured fixture.
-- Prioritize Follow's foreground Plan read on ordinary execution paints.
-  The matched visible runs needed 10 window reads instead of 16 (medians).
-- Trace the individual host receipt checks when the installed execution
-  review fails at completion. The default-window failure reproduced on
-  both the baseline and the optimized build.
-- Keep the 120,000-item performance envelope and admit best-effort workloads
-  up to 150,000 logical rows and 300,000 ordered results. Record the exact
-  refusal in history v8. Prior database pairs require the manual archive and
-  fresh-start procedure.
-- Run the full 17-run resource schedule on a `b6a4fefe` package. Startup settles
-  at 342–372 MiB; 10k peaks below 1 GiB; 100k peaks at 2.4–2.6 GiB and keeps
-  ~2 GiB of mostly renderer garbage. Soaks, payload and the 60-minute idle stay
-  flat, with exact mirrors and normal exits throughout. Assess as no leak, with
-  renderer allocation the main large-task cost.
-- Measure six simultaneously open 10k tasks: 1.26 GiB against ~2.4 GiB for
-  summed single-task deltas, since renderer garbage is reused and collectable.
-  Attribute renderer allocation to bridge transport and response cloning, and
-  verification time to the antivirus first-open scan of new files. List
-  optimization candidates for their owners.
+- Establish exact-package startup and full 17-run resource observations,
+  separating host/runtime roles, scale, streamed payload, repeated use and long
+  idle. Preserve pilot/foreground/input failures and incomplete attempts.
+- Diagnose per-response allocation, renderer garbage, first-file-open cost and
+  host high-water retention. Same-volume work is serialized; disjoint-volume
+  concurrent execution resources were not measured.
+- Keep historical yardstick verdicts separate from product acceptance. Earlier
+  startup-only/manual studies did not complete their proposed workload matrix;
+  the later R4 schedule and serviced follow-up have their own identities.
+  PERFORMANCE retains methods, results and unresolved environmental observations.
 
 #### Reduce planning observation work (2026-10-19 – 2026-10-21)
 
-- Reuse the confirmed invocation root spelling for subject observation after
-  fresh held-attribute admission, avoiding repeated physical root resolution.
-  Unheld observation retains full resolution.
-- Omit repeated candidate resolution on that confirmed held path, retaining
-  component admission and applying the approved validated logical-spelling
-  path-length budget. Concurrent disappearance/replacement diagnostics may
-  differ; independent execution guards remain unchanged.
-- Observe the held-path leaf once at the final no-follow metadata read while
-  retaining intermediate-component admission and the full unheld fallback.
-- Final ordinary verification passes 6,178 tests with four existing privilege
-  skips. Warm 8,000-file planning samples measure 2.626–2.660 seconds at 90% NOOP
-  and 3.844–3.917 seconds at 10% NOOP; PERFORMANCE records historical comparison
-  limits, unchanged fixtures and complete plan/shutdown evidence.
-- Preserve handle-relative observation as a future option with actual NTFS,
-  exFAT and OneDrive evidence; cloud intermediate-component semantics remain
-  unresolved by a single native open. Continue the selected PO4 path instead.
-
-- Skip duplicate absolute spelling validation only when normalization returns
-  the exact already-validated string; reuse a subject's prepared native spelling
-  for candidate resolution and final stat.
-- Reduce each lexical validation's work: share component checks, prove UTF-16
-  text properties once when possible, remove an unreachable surrogate scan,
-  and avoid impossible reserved-name matches. Preserve results and error messages,
-  including the original component-order fallback for overlong whole paths.
-- Preserve both leaf reads, both physical resolutions, held-root checks,
-  missing/unsafe refusal and resolved-output validation.
-  Root-resolution reuse, leaf removal and shared-parent safety caching remain
-  deferred.
-- Planning now omits selected NOOP direct file observations and stat judgments,
-  while retaining their target parents, temporary-file capacity credit and other
-  checks. Execution, resume and verification retain full fresh observation.
-  NOOP drift can leave review ready, then refuse execution before target effects.
-- Independently reviewed atomic core/preflight outcomes pass focused native,
-  ordinary/dependency, service, import and package-identity checks. Separate
-  warm 8,000-file PO1/PO2 measurements cover 90% and 10% NOOP mixes; their first-window
-  observations are 10.322–10.401s and 9.494–9.504s respectively, with no latency
-  guarantee. [PERFORMANCE](docs/PERFORMANCE.md) retains both checkpoint comparisons.
-- After PO3/PO5, three warm 8,000-file samples measured 2.976–3.052s for 90% NOOP
-  and 6.813–6.995s for 10% NOOP. Native PO4 study supports bounded root reuse but
-  demonstrates changed descendant-refusal and leaf-appearance observations.
-  Pause all PO4 implementation for the requested review; no PO4 product changes.
+- Reduce repeated lexical path work and omit NOOP direct file checks only in
+  review; execution/resume/verification retain their own fresh observations.
+- After explicit review, reuse held-root/candidate spelling and one final leaf
+  observation under the accepted logical-spelling and timing policy. Preserve
+  current held attributes, descendant refusal and unheld fallback.
+- Keep native handle-relative compatibility studies diagnostic. No scanner
+  admission borrowing or universal path-guard removal; PREFLIGHT/DEFENSE own
+  boundaries and PERFORMANCE owns qualified source/native measurements.
 
 #### Deliver bounded direct target writes (2026-09-29 – 2026-09-30)
 
-- On supported local volumes, copies at or above 8 MiB use aligned unbuffered
-  target writes with one 32 MiB bounded buffer pool. Hashing consumes borrowed
-  real-byte views before buffer reuse; arbitrary input chunk sizes, tail padding and
-  exact logical EOF retain the same handle through metadata, one flush and
-  atomic publication. Remote roots, unknown geometry and refused direct opens
-  fall back to buffered writes before streaming; a later write or EOF failure
-  fails the private temp without publishing or switching modes. Source reads
-  remain buffered; unbuffered reads are deferred to M2.
-- Create the exclusive temp before attempting guarded leftover recovery, and
-  give regular-file single-chunk buffered copies a synchronous EOF-proven path.
-  Preserve custom `BinaryIO` backends, pause/cancel, error identity, pool release,
-  recorder ordering and verifier readback. A follow-up confirmed aligned bulk
-  writes use the original buffer address and one native call without changing
-  runtime behavior.
-- Native failure and ownership controls, copy-to-ledger-to-verifier integration,
-  5,720 ordinary tests and, after one obsolete assertion was corrected, 95 audit
-  tests, imports, oracle and differential review,
-  and all 25 production readbacks passed. Five-band medians were 2.789 / 1.474
-  / 0.351 / 0.129 / 0.909 s. The 4 KiB band reached 1.40 MiB/s but its goal
-  remains unmet; the 4 GiB band reached 4,505 MiB/s. Device-specific standalone
-  threshold candidates were studied but did not alter the chosen blanket 8 MiB
-  policy; PERFORMANCE keeps their samples and comparison limits.
+- Use bounded aligned direct target writes for eligible local copies at or above
+  8 MiB, exact EOF and target-volume atomic publication. Keep buffered small-file
+  behavior and select capability fallback before streaming.
+- Preserve buffered source reads, exact tails/hashes, stable metadata, pause/
+  retry/cleanup and durable settlement. Differential/native/readback gates pass.
+- Final historical bands reach 1.40 MiB/s for 4 KiB and 4,505 MiB/s for 4 GiB;
+  the small-file headroom goal remains unmet. These repeated-source observations
+  are not cold-cache/device-ceiling claims. Unbuffered sources remain deferred.
 
 #### Consolidate executor and verifier work without claiming a speed lift (2026-09-29 – 2026-09-30)
 
-- Reuse planner-used metadata facts, a fresh COPY/MOVE_UPDATE target observation,
-  and admitted own-effect file versions while keeping UPDATE, retries, final
-  target-root admission, conditional publication, durable settlement and
-  recording independent. Retain the native temp handle across finalization.
-  Remove duplicate source/target observations, method-identity dispatch,
-  conversion-only probes and the verifier's duplicate placeholder classifier.
-  Delegate held-root admission only for concrete `NativeFileSystem`; subclasses
-  keep their resolver admission. The pre-existing NORMAL→ARCHIVE rename/hardlink
-  mismatch was fixed through own-effect version recognition and marked resolved
-  in BUGS.
-- Each reviewed outcome passed its ordinary, import, settlement-oracle and
-  differential gates with native refusal and recovery controls. Across the
-  sequential 25-readback bands, predecessor ranges overlapped and no isolated
-  throughput lift was established. The final pre-direct-write 4 KiB/4 GiB
-  medians were 1.169/2,128.908 MiB/s. PERFORMANCE holds all samples, the F: occupancy
-  correction, ACL/fixture provenance and limits on cross-run attribution.
+- Consolidate planner-used drift facts, adjacent native derivation and copied-
+  file handle continuity while preserving fresh safety checks and own-effect
+  rerun recognition. Remove equivalent verifier classification duplication.
+- Preserve typed settlement, exact readback, source/dependency stability and
+  scoped cleanup. Overlapping measured ranges establish no per-commit speed lift;
+  PERFORMANCE retains original/contended runs and independent stage medians.
 
 #### Reduce root-admission cost with invocation-scoped holds (2026-09-27 – 2026-09-29)
 
-- Core holds an admitted local root only after exact normalized final-path
-  confirmation. Executor, preflight and verifier reuse the hold for one
-  invocation with fresh handle attributes before each access; descendant guards
-  remain, and remote, unholdable, uncorroborated or custom paths retain
-  per-access admission. Native path conversion, checked leaf snapshots and
-  volume/geometry observation were reduced without caching filesystem truth.
-  A fail-open descendant walk was separately corrected: only not-found ends
-  the walk; permission and observation failures refuse access.
-- The final five-band root-admission run passed 25 executions/readbacks and the
-  unchanged differential/oracle gates. Its 4 KiB median was 3.627 s / 1.077
-  MiB/s, compared with 7.992 s in the retained full-corpus predecessor and
-  28.248 s before optimization; those runs do not isolate one mechanism.
-  Preflight's 1,000-file observation fell from 2.72 to 0.55 s, and verifier's
-  1,000-file run from 3.885 to 1.998 s before its handle-geometry improvement.
-  Evidence remains in PERFORMANCE. The separately observed exFAT
-  handle-metadata compatibility issue remains deferred.
+- Reuse only fully admitted, invocation-held local roots corroborated by exact
+  normalized final spelling. Query current held attributes before every reused
+  access and refuse reparse/placeholder state or query failure.
+- Keep descendant guards, release on pause/exit and per-access fallback for
+  remote/unholdable/uncorroborated roots. Core supplies evidence; executor,
+  verifier and preflight each own admission. Native swap/differential and
+  component gates pass; PERFORMANCE records measured cost separately.
 
 #### Establish current measurement tooling and Plan-scale evidence (2026-09-15 – 2026-09-27)
 
-- Move optional Plan, installed receipt/UI, bridge-event and history samples
-  into `python -m tools performance`, retaining raw samples, runtime/source
-  identity, bounded children and honest incomplete reports. PERFORMANCE owns
-  methods and historical results; DEFENSE owns evidence authority. The stale
-  bridge-event diagnostic was repaired for event v5, then completed its
-  60-second installed run; earlier incomplete runs remain non-acceptance.
-- M1-7 Plan review and execution overhead reductions kept bounded windows,
-  stable selection and fresh commitment. After separate readiness/authority
-  repairs and a failed fixed run, the final clean-source run passed all 35
-  fixed criteria across 175 children and 775 samples. Six changed-sort p95s
-  were 0.756–1.109 s, review memory 267.762 MiB, and execution admission
-  p95/max 54.6/55.4 ms. Earlier failures and criterion limits remain in
-  PERFORMANCE; the final integrated GUI behavior is recorded below.
+- Establish deterministic Plan/Inventory fixtures, independent action/fixture
+  checks, bounded installed probes and truthful incomplete reports. Keep selected
+  Plan/UI diagnostics optional while retaining counted-work, custody and
+  Inventory/release gates.
+- Complete the historical Plan scale population with source-linked authority;
+  do not make old rootful/timing/representation-memory receipts certify new
+  rootless inputs or current source. PERFORMANCE owns methods and provenance.
 
 ### M1 Consolidation
 
@@ -362,27 +156,38 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
+#### Survey and clear post-M1 cleanup candidates (2026-11-11)
+
+- Clear six local codex branches under the user's superseded-recovery disposal
+  decision; detach and retain the acceptance worktree. Delete 61 registered
+  external test roots (21.37 GiB logical), keeping the F: benchmark corpus and
+  both H: human-testing directories with matching baseline counts/sizes.
+- Remove approved generated build populations under retained holds and receipts;
+  last census is 4.80 GiB / 99,527 files. Further cleanup is paused pending an
+  evidence-retention/storage decision; remaining worktrees are retained.
+- Compact M1_PLAN/PERFORMANCE/CHANGELOG by outcome and service DESKTOP_UI's
+  structure and stale ownership prose. Preserve methods, qualifications,
+  deferrals, unresolved observations and source-linked evidence; repair links.
+- Further condense DESKTOP_UI's repeated behavior/implementation/test detail;
+  preserve visual specifications and acceptance. Survey BUGS access and sibling
+  analysis without changing records; defer ID/index tooling pending its own scope.
+
 #### Reduce retained build artifacts (2026-10-29 – 2026-11-04)
 
-- Remove 713,567 files / 21.32 GiB of logical payload across the authorized
-  cleanup batches, preserving must-keeps, raw receipts and recent work.
-- Restore read access to two protected wheels in `ab8-20260926` and `m1-7`
-  without changing their owners or contents.
-- Remove 112,349 duplicate source files after proving exact reconstruction
-  from a retained Git bundle; preserve 531 large fixture inputs in a verified
-  eight-payload archive with original filesystem facts before removing copies.
-- Remove 239,978 more files / 5.91 GiB and 156,445 empty directories in round
-  2: wheel staging proven against retained wheels and identity records,
-  RECORD-verified venv files, per-test pytest state and uncited scratch roots.
-  Only open-question failure fixtures (RV1/RV2B/RV3 failing tests, named AB-7/AB-8
-  witnesses) are kept.
-- Remove 39,435 more files / 1.55 GiB and 13,082 empty directories in round 3:
-  SQLite state, fixture and package-metadata TXT, Git-reconstructible JSON/TXT
-  copies, root-admission differential fixtures and superseded cleanup journals.
-  Run-output TXT and per-test outcome JSON are kept.
-- Verify each round by hash. Recovery artifacts, holds and limits are recorded
-  in the `build/build_cleanup_*_summary.json` files. Product and test code are
-  unchanged.
+- Remove generated caches, reconstructible source copies and test payloads under
+  reviewed exact manifests; preserve unique source, receipts and required
+  reconstruction capsules. Verify deletion and retained-byte accounting.
+- Preserve the source bundle/mapping, compact fixture archive, metadata and
+  baseline patch needed for historical reconstruction. Later cleanup rounds
+  remain separately accounted; logical size is not a measured free-space delta.
+
+#### Consolidate database and history test setup (2026-11-04)
+
+- Share local schema-role and bounded-history-window setup across four schema
+  and six history tests, preserving fault SQL, assertions and cleanup order.
+- Retain all test identities and parameters: 261 cases pass before and after,
+  and all 461 database department tests pass. Independent review approved;
+  product code and global test fixtures are unchanged.
 
 #### Pilot Setup journey simplification (2026-11-01)
 
@@ -392,158 +197,61 @@ behavioral evidence.
 
 #### Consolidate before M1 closeout (2026-10-29 – 2026-10-30)
 
-- Formalized the amended reconciliation as a finite register, with nested
-  candidate-ingress tests preceding legacy-slot removal and separate reason
-  retirement. M1-12 and release remain inactive.
-- Made the About license witness independent of checkout line endings: pin
-  LICENSE to LF, update its static embedded text/hash, and compare packaged
-  JavaScript to raw checkout bytes. Fresh LF/CRLF checkouts build and verify
-  the wheel without changing third-party notices or pinning JavaScript EOLs.
-- Corrected README and FEATURES desktop/Inventory status, explicitly retained
-  future scoped planning, clarified supported target versus compatibility,
-  and replaced nonexistent workflow publication APIs with current source owners.
-- Added ordinary typed/remembered location ingress witnesses, including exact
-  nested shapes and canonical ID bounds, with refusals before admission or slot
-  effects. These precede removal of the legacy string-slot representation.
-- Removed raw-string slot conversion and alternate pair results. Slots now use
-  typed candidates throughout, preserving expiry, capacity, ambiguity, atomic
-  pair lookup, fresh admission and original-result replay. Native picker and
-  installed Setup witnesses passed.
-- Retired the finite unconsumed contract, repository, service, workflow and
-  presentation helpers and their resulting orphans. Preserved live facade
-  imports and similarly named APIs; no tests were deleted for this outcome.
-- Reused Inventory's canonical traversal and inverse for PATH sorting; other
-  sorts still rebuild indexes after sibling ordering. The finite ablation
-  preserves complete outputs while removing one redundant PATH traversal.
-- Covered Setup reads/preparation, frozen readiness and database-pair refusal
-  through their real entry points, including unchanged database/sidecar bytes
-  and refusal before resource admission.
-- Routed required transport Node probes through existing process/memory/output
-  containment. Retired one helper-spelling pin and duplicate wheel population
-  assertion, with harmless-change and fault controls for the retained witnesses.
-- Removed the unused Scope planner contract and caller plumbing while retaining
-  whole-plan behavior, execution selection and future scoped-planning/History
-  Replay outcomes. Updated signatures and subject documentation together.
-- Corrected the installed shell driver's stale assumption that Theme is the
-  last Settings control. Mount the reviewed tree in the work body before native
-  Tab navigation from the rail; retain exact focus, arrow-navigation and visual
-  assertions independently of intervening About controls.
-- Retired test-facing bridge/tree/database/planning/runtime conveniences after
-  migrating their witnesses to real dispatch, window, probe and native seams.
-  Removed the unused flush protocol slot together with zero-call assertions;
-  actual native durability flush and settlement/recording order remain covered.
-  Verification passed 6,327 ordinary cases, twelve import contracts, before/after
-  settlement checks and affected installed Inventory/shell journeys; four
-  symlink-privilege cases remain explicit skips.
-- Retired the never-produced execution `already-exists` and planning
-  `empty_directory` reasons across enums, browser consumers and documentation.
-  Real producer-derived event, Plan-window and execution-detail controls reject
-  the retired values while accepting current output. Historical process-local
-  decoding is distinguished from current supported persistence and producers.
-- Consolidated completed delivery chronology and source inventories, kept one
-  M2 proposal index, and shortened test incident notes. Retained exact wire
-  rules, accepted future outcomes, exclusions, uncertainty and evidence pointers;
-  a deletion disposition ledger accounts for the documentation reductions.
-- Closed the batch with 6,326 ordinary passes, four explicit privilege skips,
-  twelve import contracts and a final installed real-copy/execution-review
-  journey. Renewed cold Inventory acceptance at unchanged 3 s/6 s limits:
-  maxima 1.649 s/2.289 s on the recorded Python 3.13.17 reference profile.
-  Retained exact raw/validation bytes, original failures and recovery evidence;
-  M1-12 and release remain separate pending work.
-- Corrected the four deferred subject-document status mismatches: current
-  history schema/epoch, active desktop Setup, null-evidence rebaseline and
-  same-task manual post-copy Verify. Preserved historical cutovers and future
-  policy boundaries; source, link and independent documentation review apply.
-- Accounted and pruned five obsolete local Codex recovery/rebuild branches;
-  retained their complete histories in a verified bundle. Integrated trees,
-  rebuilt patches and saved-path dispositions account for their contents.
-  Stashes, remote branches, hidden refs and product files remain unchanged.
+- Consolidate narrow task/view/lifecycle wrappers and bounded helper catalogs;
+  remove unused Scope placeholder plumbing while retaining scoped planning and
+  history replay as unrealized outcomes.
+- Preserve current result ownership, missing visibility, admission, frozen
+  custody authority and consumer fixtures. Reconcile schema/status prose and
+  condense completed registers with explicit dispositions and owner links.
+- Complete dependency-scoped ordinary/native/installed, cold Inventory,
+  import, settlement and independent review gates. Recover useful changes as
+  reviewed commits rather than merging WIP; account for branch/worktree cleanup.
+  Detailed decisions remain in M1_PLAN and the closeout evidence root.
+
+#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
+
+- Share bounded view/controller infrastructure while retaining Plan/Inventory
+  domain policy, current-window identity, stale-response fences and focus.
+- Replace the exact-first-manual desktop handoff with repeatable ordinary
+  server-derived successful-copy Verify. Keep original execution/automatic
+  results separate from current scan/evidence and ordinary activity results.
+- Preserve selected Verify, confirmation-gated rebaseline, missing visibility,
+  original-outcome recovery and live controls. Retire duplicate wrappers and
+  classify helpers/fixtures by direct ownership; installed/ordinary gates pass.
 
 #### Simplify executor ownership and post-M1-8 machinery (2026-09-25 – 2026-09-30)
 
-- The executor/verifier reductions above kept each effect and refusal boundary
-  in its owning layer. Shared admitted path composition, target fidelity and
-  source-version recognition replaced repeated checks; method-identity
-  dispatch and stale oracle spelling variants were removed. The protected
-  settlement oracle, differential comparison and native no-effect witnesses
-  remained acceptance authorities rather than test-count preservation.
-- AB-1–AB-10 reduced copied bridge/page state, recovery flags and duplicate
-  CSS/visual assertions. Current-state view/highlight/theme commands refresh
-  from revisions; effect and lifecycle commands retain original-result custody,
-  bounded Check and duplicate protection. Valid late results are accepted
-  independently of cleanup ACK. AB-8 moved task progress and rate reduction
-  into one native-owned snapshot per admitted drain; page adoption retains Gap,
-  replay, terminal custody and bounded item windows. Unreadable final results
-  remain fixed-unknown and cannot invite mutation replay.
-- Keep rendered forced-color, focus, native geometry, security and interaction
-  detectors while removing duplicate CSS recipes. Desktop Plan receives a
-  compact revision/aggregate summary instead of full operation previews;
-  workflow selection and mutation admission remain authoritative. Remove the
-  unused historical mapping lookup while preserving live scan-scoped move
-  detection, hardlink guards and durable history. Ordinary, headed, import and
-  independent review gates passed for these reductions; their detailed
-  evidence and deferred AB-8 stack/wrap investigation remain in M1_PLAN,
-  TESTS and PERFORMANCE.
-- Close the delivered executor register and compact this history under the new
-  Performance phase. Remove the clean, integrated `b8baf42d` baseline checkout
-  after accounting for its revision and ignored outputs; carry unbuffered source
-  reads into M2_PROPOSAL as a measurement-dependent proposal.
+- Keep native effects behind the executor package and typed reducer, with
+  stable settlement/oracle and differential evidence. Consolidate redundant
+  continuation/check spelling without changing publication or durability.
+- Remove unused historical mapping reads, duplicate preview/traversal and
+  browser task reduction; retain public previews, one Python snapshot and
+  exact command-result custody. Document replacement retires page authority
+  without replaying effects or canceling admitted work.
+- Retire recipe pins using behavioral/native/security checks. Keep optional
+  Plan/UI metrics separate from enforced bounds, release resources and custody;
+  no speed gain, generic owner merger or blanket command resend is claimed.
 
 #### Consolidate product, tests and documentation (2026-09-01 – 2026-09-09)
 
-- Remove internal workflow JSON transports and repeated event certification;
-  share admitted stats, event/progress projections, finishing and bounded query
-  policy while retaining external and persistence validation. Consolidate task
-  effects, plan retirement, observer lifetime and idempotent cleanup. History
-  schema/shared data epoch is 7 and ledger schema is 4; old or mixed pairs
-  require coordinated reset. Native copy and settlement policy were unchanged
-  in this earlier reduction.
-- Consolidate behavioral tests by owner while retaining settlement, native
-  mutation, source admission, snapshot, atomicity, visual/privacy and scale
-  witnesses. Isolated fault/harmless-variation replay and the final 4,862-test
-  ordinary, headed, import and three-run oracle gates checked detection, not
-  merely test color; TEST_REFINEMENT and TEST_ABLATION retain qualified evidence.
-- Make M1_PLAN the sole active delivery register and move superseded studies
-  to `docs/obsolete/`. Component docs own behavior, PERFORMANCE owns methods,
-  and DEFENSE owns evidence authority. Retain fresh Plan-again review and
-  pending inventory, capacity/trash and integrity surfaces; terminal domain
-  retries and user-invoked session cleanup remain proposed for M2.
+- Align core contracts, component facades, persistence/workflow boundaries and
+  layered tests; remove obsolete wrappers and duplicate source recipes.
+- Preserve reviewed effects, atomic publication, result truth and domain-owner
+  policies. Use the typed settlement reducer with frozen differential/oracle
+  witnesses; keep current documents with historical plans under obsolete/.
 
 #### Align historical criteria and layered verification (2026-08-10 – 2026-08-27)
 
-- Separate retrospective M0 criteria from active contracts, archive imported
-  PoC and superseded checklists, and keep current M1 gates in their owners.
-  Establish focused, department, ordinary and headed test routes through one
-  fail-closed primary-ownership manifest without relaxing protected custody,
-  settlement, 33k-row database or CLI lifecycle evidence.
-- Centralize fresh root-authority evidence in core while consumers retain
-  distinct admission policies. Split executor and verifier behind stable
-  facades only after freezing the three-run 30-scenario settlement oracle;
-  typed effects and a pure reducer replace monolithic settlement code.
+- Reconcile historical acceptance with current component ownership and test
+  departments. Keep diagnostic observations separate from executable bounds,
+  frozen authority and actual native/installed witnesses.
+- Preserve narrow residual dispositions, failure diagnostics and original
+  evidence rather than treating aggregate green tests as complete safety proof.
 
 ### M1 Hardening
 
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
-
-#### Survey and clear post-M1 cleanup candidates (2026-11-11)
-
-- Inventory NamiSync entries at F: root, H:\test_dir and build without following
-  reparse points; match 61 external resource roots to fixture registries.
-- Exclude the user's H: source/target play directories. Separate generated
-  fixtures from benchmark inputs, evidence and Git worktrees.
-- Remove all six local codex branches under the user's explicit superseded-recovery
-  disposal decision; detach the acceptance worktree and retain its files.
-- Delete 61 external test roots (934,265 files, 21.37 GiB logical size). Verify
-  their absence and matching baseline counts/sizes for the kept benchmark corpus
-  and both human-testing directories. Preserve build evidence and worktrees.
-- Clear build Tiers A and B: uncited/obsolete-only entries plus environments,
-  pytest temp state, ZIP-matched app extractions and SQLite state in evidence
-  roots (151,464 files, 10.36 GiB). Build falls from 17.04 to 6.67 GiB; holds
-  verified and 1,081 sandbox-owned files await an elevated rerun.
-- Remove PyInstaller work intermediates, ZIP-matched app trees and byte copies of
-  Git-reachable blobs (47,590 files, 1.37 GiB), then leftover pytest temp state
-  and synthetic payloads (31,604 files, 603 MiB); build is 4.80 GiB.
 
 #### Separate Inventory page and full-run verification evidence (2026-11-07)
 
@@ -554,172 +262,13 @@ explicit, reviewable and regression-backed.
   coverage. Fault controls reject missing, extra, duplicate and substituted
   results. Both installed execution window sizes pass; production is unchanged.
 
-#### Refine live execution and verification feedback (2026-11-06 – 2026-11-09)
-
-- Restore the disabled Filters control during linked verification, retaining
-  its inherited count and keeping Search in the toolbar's right column.
-- Display human-readable time remaining, using seconds for short estimates,
-  minutes above three minutes and hours from one hour. Shorten linked Verify's
-  waiting label to Pending. Format Inventory's Modified tooltip consistently
-  with local `yyyy-MM-DD HH:mm` table/detail dates.
-- Follow reliable completed integrity items in automatic and ordinary Verify,
-  baseline and rebaseline even when fast files never appear in active progress.
-  Let one automatic navigation read finish while newer targets coalesce;
-  preserve user overrides, session/view guards and the automatic Inventory
-  release transition. Enabled ordinary Inventory Follow can land on the final
-  completed item in the same retained session and view.
-- Display live throughput as a rate.
-- Follow the latest settled execution operation between files and land on the
-  final row even when the last operation was a no-op.
-- Keep Go and Follow available between files. A click takes the user to the
-  item that was current when they clicked, even if another file starts.
-- Open Verify when automatic post-copy verification begins. Show progress
-  against the original operations, keep settled execution results on Plan,
-  and open the ordinary target Inventory when the run releases.
-
 #### Preserve Setup actions during folder validation (2026-11-04 – 2026-11-05)
 
-- Keep Create plan and Create inventory responsive during blur-triggered folder
-  checks; show Checking folders and reuse the running result without duplicate
-  admission or starting from an older accepted choice.
-- Allow Add pair to capture its private snapshot during a check. Preserve
-  independent batch admission, stale-edit/refusal guards and single-attempt
-  ownership; no change to explicit Plan review before execution.
-- Let Create batch start immediately after an editable path loses focus;
-  unrelated live-row checks no longer discard the action. Keep the existing
-  saved-pair approval reuse and candidate admission behavior. The follow-up
-  passes its red/green probe, 2,208 interface cases and three installed cases.
-- Centralize Setup feedback to the left of its action buttons, retaining
-  accessible path descriptions and avoiding error text beneath the path rows.
-- Verify focused race/refusal controls, all 2,208 interface cases across the
-  department and corrected-fixture rerun, and three installed Setup/shell cases.
-- After committing the fix, confirm a single native click while Target retains
-  focus reaches Plan ready for three files without preparatory blur or retry;
-  the dry-run leaves files unchanged and closes normally.
-
-#### Exercise the portable package beyond startup (2026-11-04)
-
-- Verify 30 frozen CLI invocations and 70 checks across reviewed copy, integrity,
-  history, eight database refusal cases, isolated placement and relocation.
-  Exercise native GUI copy/verification, Unicode paths and settings persistence.
-- Record three fresh-process idle diagnostics with 354–360 MiB settled private
-  bytes, then a manually operated three-sync-cycle diagnostic with four explicit
-  verification runs. Final idle is 624 MiB versus 353 MiB initially; preserve
-  the extra-verification deviation, failed observers and unresolved synthetic
-  input evidence without a resource-budget or release-acceptance claim.
-- Reconcile the accumulated handoff into current resumption context and account
-  for task-owned fixture cleanup while retaining evidence.
-
-#### Build the portable M1 debug package (2026-11-04 – 2026-11-11)
-
-- Close R5 and M1. Reconcile Package04 against `1d936876`. Ship
-  `MICROSOFT-TERMS.txt` beside START-HERE so every recipient receives the
-  Microsoft Distributable Code terms. Freeze final candidate `b0a3fe13`: Package05
-  reconciles with only that file, the two edited guides, executable stamps and
-  install metadata changed. The complete release command passes (6,575 passed,
-  4 privilege skips, all 35 headed cases, 12 imports), as does the packaged
-  Medium witness. Stage the tester set with short M1 release notes in
-  `dist/v0.1.0/`.
-- Keep correctly ordered task-rail rows attached across repaints, preserving
-  clicks between trusted press/release. Verify attachment/order regression and
-  native focus/click behavior without changing Close effects or claiming the
-  original untraced timeout's cause is proven.
-- Rebuild `1d936876` and complete only the missing open-idle and payload
-  observations. All three task closes and mirrors pass; both apps exit cleanly.
-  The 60-minute open-task memory trend is +0.001 MiB per 10 minutes. Preserve
-  the separate partial receipt and prior evidence without repeating the soak.
-- Preserve Resources03's raw FAIL/incomplete receipt, exact post-failure
-  mirrors and normal app shutdowns. Record the user's confirmation that
-  resource measurements remain non-blocking under accepted SH-G-15; pursue
-  the payload Close timeout with targeted investigation, without another soak.
-- Renew the complete release, settlement and R3 timing gates on `cfeac2d9`:
-  6,575 tests pass with four unchanged capability skips, all 12 import contracts
-  hold, and Inventory/History/bridge collections pass unchanged limits. Preserve
-  separately versioned receipts and the failed predecessor run.
-- Build and independently audit the serviced portable package: 341 files,
-  38 native inputs and 52 notices. Verify the actual Medium-token app's About,
-  reviewed copy, integrity actions and clean exit. Verify actual packaged
-  High-token refusal before app data creation, with exit 1 and an empty Job.
-- Preserve strict event timestamp clock ranges under Python 3.15, align the
-  installed desktop witnesses with Python.NET 3.2.1, and keep the executor's
-  single no-follow snapshot check independent of Python's stat delegation.
-- Select serviced CPython 3.15.2, setuptools 84.1.0, pythonnet 3.2.1 and
-  xxhash 4.1.0 inputs; renew exact notices and remove the no-longer-shipped
-  .NET compatibility-assembly attribution. Preserve native-origin enforcement.
-- Version the active custody verifier authority while retaining the original
-  calibration, holdout, provenance and 1,966,080-byte ceiling. Separate the live
-  runtime from historical qualification and reject byte or introduction drift.
-- Refuse elevated or unverified desktop process tokens before singleton
-  activation, application path leases, logging and browser setup. Verify real low, standard
-  medium and elevated High-token behavior, preserving console operation.
-- Check wheel identity and license metadata as headers, allowing the release
-  nickname in its README description while requiring exact package name/version
-  and preserving the full GPL/license-byte checks.
-- Review R5's exact accepted candidate, source, notices, native origins and R4
-  gate evidence; stage unchanged tester archives, matching provenance, checksums
-  and draft release notes. Hold closure for elevated-GUI refusal, an explicit
-  security-servicing disposition and the required external agreement.
-- Reconcile shipped behavior and release status in current docs; archive the
-  old UI mockup under `docs/obsolete/ui_mockup/` at the user's request. Correct
-  the SH-G case count and resource units/predicate accounting without changing
-  the accepted R4 result or raw validator verdict.
-- Activate M1-Release for a small tester group receiving a portable Windows x64
-  app; retain existing per-user data placement and GUI/console entry points.
-- Record packaging, distribution contents, quantitative acceptance, clean
-  candidate verification and tester handoff in the owning delivery register.
-  Resource acceptance separates absolute use from longer/heavier-session growth
-  over a finite supported workload set; existing bridge timing remains a baseline.
-- Build a portable ZIP containing GUI/console executables, with a source archive,
-  wheel, dependency record and checksums. Validate native startup/icon/close from
-  an extraction outside the checkout. This is a development build, not release
-  acceptance; the product version remains unchanged.
-- Establish stable Windows shell identity and wire the ratified full-color icon.
-  Track the reviewed ICO; tests decode all nine sizes without regenerating it
-  or imposing an exact-byte artwork oracle.
-- Refresh all four Actions to latest stable immutable pins using Node 24;
-  retain the project toolchain and read-only workflow permissions. Select
-  `v0.1.0` for distribution without a beta suffix.
-- Verify the refreshed Actions in hosted run `42056121788`: 6,371 tests,
-  twelve imports and portable upload pass without the Node 20 warning.
-- Complete R2 distribution contents: ship tester/source guides and export the
-  About records with exact Python, compiled-library, freezer and embedded-package
-  license supplements. Retain source directions and Microsoft binary conditions;
-  external agreement and candidate delivery remain R5 work.
-- Trace 43 ambient DLLs to PyInstaller's PATH fallback. Restrict freezer inputs,
-  use Windows 11's system UCRT/API sets, retain Python's VC runtime and export
-  native hashes/origin tables locally and through CI. Verify the actual ZIP and
-  isolated standard-user About/startup/close; preserve previous measured builds.
-- Run R4 on clean candidate `1f632b13`. The portable reviewed copy/inventory/
-  verify witness passes, every DESKTOP_UI criterion maps to passing cases, and
-  the 17-run SH-G-15 schedule completes for the user's judgment. The release
-  command's one intermittent failure is a task-shell driver race: it focused
-  Pause while the closing confirmation still kept the page inert. The driver
-  now waits for the close and asserts focus landed; product focus is unaffected.
-- Freeze final candidate `3ece185f`: the complete release command passes on an
-  idle desktop (6,556 passed, 4 privilege skips), satisfying BR-G-44, and the
-  witness passes on its ZIP. Its app content matches the soaked package apart from
-  PE timestamps and install metadata. Component-gallery flakes seen under
-  concurrent desktop use did not recur on an idle desktop.
-- Close R4: the user accepts the SH-G-15 schedule as measured, including the
-  100k execution peak and soak growth slope above historical yardsticks.
-- Add Windows GitHub CI for ordinary tests/import contracts and development
-  package artifacts. Hosted ordinary/import and portable jobs pass at `b3095886`;
-  release publication remains open.
-- Lock portable dependency downloads and bootstrap tools by hash; build from a
-  clean commit with explicit newline handling, fixed archive metadata and
-  source/bundle manifests. Pin CI Action commits and Python/Node versions;
-  fetch full history so frozen custody evidence remains available to tests.
-- Verify two fresh builds with identical source archives, wheels and executables;
-  retain four environment-specific installer metadata differences. Local ordinary,
-  headed and import gates pass; hosted ordinary passes all 6,371 cases.
-- Download and verify the hosted artifact's digest, contents and source/dependency
-  identity; its GUI starts and closes normally on Windows 11. Source archives,
-  wheels and executables also match across hosts; platform DLL and installer
-  metadata differences prevent a whole-ZIP byte-reproducibility claim.
-- Refresh the development package from clean `939e57c1`, then `248b510c`, including
-  the Setup and Create batch fixes. Verify source and bundled assets, archive checksums,
-  executable classification, console help and extracted native startup/close.
-  Previous artifacts remain intact; final release acceptance stays open.
+- Keep Create available during ordinary folder validation; one guarded start
+  waits for the current admission without replaying a check or using stale choice.
+- Add pair captures private options; batch preparation admits that snapshot
+  independently. Editing/removal retires pending intent; unresolved outcomes
+  retain exact read-only Check. Focused and real Setup/batch journeys pass.
 
 #### Sample Setup action visibility before navigation (2026-11-04)
 
@@ -736,14 +285,6 @@ explicit, reviewable and regression-backed.
 - Preserve caller-owned streams, their encoding and existing I/O-error handling.
   Real module/console round trips and the original retained history reproduction
   verify both cp1252 and UTF-8 output without changing file or database identity.
-
-#### Consolidate database and history test setup (2026-11-04)
-
-- Share local schema-role and bounded-history-window setup across four schema
-  and six history tests, preserving fault SQL, assertions and cleanup order.
-- Retain all test identities and parameters: 261 cases pass before and after,
-  and all 461 database department tests pass. Independent review approved;
-  product code and global test fixtures are unchanged.
 
 #### Complete the behavioral invariant and sibling sweep (2026-11-04)
 
@@ -778,110 +319,12 @@ explicit, reviewable and regression-backed.
 
 #### Verify integrated M1 lifecycle and retention (2026-10-30)
 
-- Map activated task surfaces to shared lifecycle owners and real composition
-  witnesses; independent review found no blocking supported defect in that corpus.
-- Pass 717 composition and 6,326 ordinary checks (four symlink-privilege skips),
-  twelve import contracts and the pinned 30-scenario, three-run settlement gate.
-- Complete all 35 installed headed obligations, including five unchanged journeys
-  resumed after foreground refusals. Preserve original failures and verified
-  artifact identities; complete independent review and documentation checks.
-  M1-12 is complete. Release remains separate; no product or test changes.
-
-#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-11-01)
-
-- Select the newly launched Plan Again task automatically, while preserving
-  navigation made by the user during a delayed launch.
-
-- Show `Filters · matching/total` beside the existing filter glyph and dropdown
-  chevron. Use 32px Go/Follow insets and 1.2px content-card outlines; align the
-  Rebaseline dropdown to the full Baseline split button and match its width.
-- Remove the unused document gutter and include the retained work-panel gutter
-  in the shell's right spacing: 14px padding plus the normal 10px gutter.
-  Give the scrolling gallery its own gutter and symmetric padding override.
-- Align the native-size cloud artwork optically within its row slot and move
-  floating Go/Follow controls to 28px logical insets.
-- Group item details with divider lines and 1:1.5 metadata columns. Put Plan
-  actions before paths and metadata; group Inventory checksum/results, attested
-  facts, observed facts and dates. Combine recording/disposition, omit folder
-  size and show the folder advisory only with its available actions.
-- Replace the standalone counter with a matching/total badge inside Filter,
-  restoring the prior Search layout. Reuse Plan All-item counts including mkdir;
-  Inventory All excludes acknowledged rows while the denominator includes them.
-  Keep filter emphasis tied to active categories and add Inventory's All count.
-- Use Microsoft navigation-target and location-arrow glyphs for Go/Follow,
-  with 16px floating insets and square compact action controls on both pages.
-- Keep four preceding rows of context for Go, Follow and move jumps where
-  available, while retaining the existing viewport during refresh.
-- Offer ordinary selected-file Baseline/Rebaseline on the sync task's Inventory
-  page, with Verify selected and Verify copied labels. Keep copied scope
-  exclusive to verification and preserve Rebaseline confirmation. Add Restore
-  for eligible missing items to the context menu and explicit folder-wide labels.
-- Show green Present for ordinary observed folders, simplify repetitive details,
-  mute metadata labels and describe unchanged execution items as No change.
-- Follow accepted Inventory keyboard highlights in Details. Preserve surviving
-  highlights through refresh and reload current details, including off-window
-  items, without moving the viewport or taking focus from another control.
-- Limit multi-highlight checkbox changes to highlighted rows' own selectable
-  items. Single-folder and outside-range folder actions remain recursive;
-  folder checkboxes still summarize their contents, and Plan dependencies remain
-  workflow-owned.
-- Keep Inventory highlight geometry stable. Both task-view switchers retain
-  the selected half's accent and hover/click behavior while unavailable
-  destinations stay locked.
-- Hide Plan Again during execution admission and active work. Keep icon-only
-  Pause/Resume and Cancel beside the headline in the top action row, with
-  accessible names and the existing cancel confirmation gesture.
-- Order Inventory actions as an ordinary clockwise refresh icon, Baseline
-  split button and accented Verify. Rebaseline moves into the dropdown with
-  confirmation preserved; Refresh selected remains in the row context menu.
-  Inventory Pause/Resume and Cancel also use labelled icon-only controls.
-- Match task-rail headline colors to the main status's semantic colors, including
-  paused and unavailable states, while preserving system high-contrast text.
-- Share explicit operation headlines between task tabs and ordinary status
-  cards, preserving recovery and retained-result exceptions. Keep task-tab
-  details concise and on one line; full advice remains in task details or
-  the rail tooltip. Include three representative task tabs in the gallery.
-- Open one blank task at startup when no tasks exist. Closing the last task
-  leaves the app empty, with a task-card-sized ordinary New Task button;
-  the existing top create button remains available.
-- Reuse confirmed Inventory views on navigation, refreshing for session changes
-  and uncertain or invalidated state. View reads no longer masquerade as scans;
-  rereads preserve the mounted pane, table controller and expanded Details.
-- Render filename cloud indicators at 12 px with more spacing. Use Filled Play
-  for Resume and icon-only eye/location-ripple controls for Go and autoscroll,
-  with opaque backing wrappers and ordinary button colors, retaining accessible
-  names and action emphasis. Use the simpler cloud glyph and Remote files
-  filter label; restore the blanket restriction on derived palette colors.
-- Investigate queued input across refresh, invalidation, navigation and Reload.
-  Record current retirement behavior and assess a bounded full-refresh
-  coordinator as a later option; no coordinator or input-policy change follows.
-- Report clean Verify baseline creation as **Baseline created**, explaining
-  the absence of prior comparison evidence while retaining adverse outcomes
-  and the underlying workflow/CLI classification.
-- Check every Inventory file only on the first view opened from a scan. Later
-  scans retain checked and unchecked surviving rows, including Missing files;
-  new files start unchecked and departed inventory IDs leave selection.
-- Show live per-item integrity progress and retained results in Presence,
-  preserving row focus and keeping Notes for diagnostics. Leave ordinary folder
-  Presence blank while retaining missing, reappeared and exceptional states.
-- After a newer Inventory scan, show current row evidence instead of an older
-  retained verification label. Preserve the previous result in item details;
-  selected missing files still correctly make integrity work incomplete.
-- Share Details visibility across task pages for the app session. Give item
-  details more height, full-width paths and hashes, and compact metadata blocks.
-  Plan leads with action and reason, then actual execution outcomes where known;
-  exact source paths reuse target-path display infrastructure. Inventory combines
-  current presence/integrity, omits inapplicable evidence and folder verification
-  fields, and places shorter Acknowledge/Restore actions below the facts.
-- Show Inventory reload only for actionable read recovery, clear it when the
-  read recovers, and place both pages' reload controls in their top action rows.
-- Prevent accidental text selection on cards while keeping expanded Task/Item
-  details and editable fields selectable.
-- Reduce both status cards to a short headline, supporting facts and one
-  advisory row, with both text rows left of Details. Keep selection and retained
-  result counts in Task details; preserve visible recovery and event-gap advice.
-- Shorten execution guidance and remove the redundant cloud-provider paragraph
-  from Plan details, retaining the per-item remote-file advisory.
+- Close M1-12 across admitted, refused, live, terminal, auxiliary and unsupported-
+  reload paths. Preserve retained truth, stale-response retirement and exact
+  observation/resource release without product changes.
+- Pass 6,326 ordinary tests, four skips, all 35 headed obligations, settlement
+  and 12 imports. Original foreground failures remain; unchanged resumed native
+  cases pass after availability and dependency revalidation. No release claim.
 
 #### Preserve Inventory viewport through refresh (2026-10-24)
 
@@ -900,366 +343,20 @@ explicit, reviewable and regression-backed.
 
 #### Expose scan-time local availability and clarify cloud behavior (2026-10-22)
 
-- Clarify that chosen cloud-synced folders may download source content or
-  propagate approved target changes; these are advisory provider effects,
-  not catastrophe backstops or separate network authorization. Success covers
-  local work, not cloud upload completion or remote verification.
-- Document current hidden-marker detection limits and the complete native
-  enumeration/stat boundary. Defer universal detection and hydration-proof
-  scanning to M2; the authorized M1 advisory reuses observed metadata.
-- Retain observed attributes and known file sizes for unsupported scan records
-  and inventory persistence without making them executable or verification-
-  eligible. Recall classification uses the visible bit independently of hidden
-  reparse markers, adds no scan I/O and preserves existing receipt hashes when
-  the optional evidence is absent.
-- Expose separate source/target scan recall summaries and inventory scan totals
-  through the desktop bridge, including logical-byte partial/overflow state.
-  Row availability flags and overlapping filters preserve operation reasons,
-  selection and unsupported eligibility; missing historical rows are unflagged.
-  Totals remain independent of review selection, filtering and visible windows.
-- Add accessible Microsoft Fluent cloud-arrow-down indicators and **Not fully
-  local** filters to Plan and Inventory. Keep the scan aggregate out of the
-  status panel, and make provider/local-completion guidance available in the
-  existing expanded Plan details.
+- Carry observed recall-required evidence into a plain cloud indicator and
+  Remote files filters, independently of operation reasons and unsupported state.
+- Explain that access may retrieve provider content; unmarked files are not
+  certified local. Aggregate recall facts remain available through the bridge,
+  without download-volume predictions, extra confirmation or remote completion
+  claims. SCANNER/DEFENSE own supported provider limits.
 
 #### Update local runtimes and verify security-update compatibility (2026-10-22)
 
-- Install official Node.js 24.22.1 x64 for the local user, verify its SHA-256
-  checksum and OpenJS signature, and persist user PATH plus `NAMISYNC_TEST_NODE`.
-  Codex's separately managed bundled 24.19.0 runtime remains unchanged.
-- Frontend/bridge compatibility: 266 focused tests pass. Ordinary verification
-  passes 6,178 tests with four existing symlink-privilege skips and 35 headed
-  tests deselected; all 12 import contracts pass. No product or dependency
-  changes are required by these checks.
-- Installation receipts and test output, including temporary-directory failures,
-  are retained in ignored `build/node-security-20261022/`.
-- Follow-up read-only security triage identifies outdated pip/certificate bundles,
-  Chrome and vendor-managed runtimes, plus older VMware Workstation exposure.
-  GitLab's advisory does not apply to the GitHub-hosted repository; private
-  Dependabot alerts remain uninspected because authentication was unavailable.
-  No further updates or product changes were made by the triage.
-- Apply the subsequent authorized Python/pip updates: managed Python3.13.17
-  and3.14.9, pip26.2.2 with vendored certifi2026.10.19, and the refreshed existing
-  NamiSync virtual environment on3.13.17. Preserve every project package version
-  except pip. After Windows consent, also update the separate system-wide Python
-  to3.13.17; installer exit0, no restart required. Verify fixed pip/certificates
-  in normal and isolated mode for every updated interpreter.
-- Verify Python3.13.17 compatibility: ordinary6,178 passes/four existing privilege
-  skips, host/native87, imports12, clean dependency checks and one real installed
-  WebView2 startup/ready/close pass. No product or test fixes are needed.
-
-#### Consolidate review infrastructure and ordinary copied-file verification (2026-10-16 – 2026-10-19)
-
-- Share server view/cache/scope mechanics, browser viewport/navigation and
-  revision-aware read ownership beneath separate Plan and Inventory panels.
-  Preserve their distinct read-cancellation, selection and publication rules.
-- Add Inventory Follow and Go through the common browser infrastructure.
-  Passive windows retain active identity and Refresh selected's target while
-  ARIA follows the rendered element; focus alone never reveals the row.
-  Manual scrolling disables Follow even during pending work. Actual view removal,
-  including parent collapse, clears the target. Keep menus valid through harmless
-  repaint and settle native input stages against committed publications.
-- Replace one-shot exact copied-file verification with repeatable ordinary
-  scan/Verify over workflow-admitted successful copied paths, including partial
-  and linked executions. Preserve checkbox selection, truthful empty/incomplete
-  results, original execution truth and linked automatic verification. Known-empty
-  copied scope disables the action; unknown facts retain server admission.
-  Retire exact readiness/claim/result machinery and the Refresh-forfeiture warning.
-- Refresh execution-relative evidence after auxiliary Inventory work without
-  resetting Plan selection, viewport or Follow. Share typed delivery snapshots
-  and owned recovery-handle attachment while preserving map-copy depth, rollback,
-  settlement and Check's original-command routing; recovery never repeats effects.
-- Consolidate independent command/policy expectations and real Inventory specimen
-  production. Retain negative controls, local gallery appearance overlays,
-  independent visual verdicts and installed-only product imports.
-- Replace only two native Filename sort click/wait stages with real server/native
-  receipts, real Plan header callbacks and independent rendered-order checks.
-  Keep the installed Size cycle and native input/focus/effect guards. Move the
-  gallery-only integrity adapter/validators to tests, sharing the product cell
-  renderer and row skeleton.
-- Close with 6,111 ordinary passes (four capability skips), affected installed
-  checks, 12 import contracts and independent review. Condense completed delivery
-  records and replace the session handoff. Remove one duplicate test environment
-  while retaining wheels, raw evidence, failed fixtures and recovery refs.
-
-#### Align Verify table interaction and action consequences (2026-10-15 – 2026-10-16)
-
-- Generate browser session-kind and pause-capability mirror cases from the
-  Python task-port catalog, preserving independent invalid/coercive verdicts.
-  New Python kinds now enter those checks without a second handwritten list.
-- Give installed shell/execution input a nonblocking, bounded foreground wait
-  with visible flashing and unchanged ownership/focus/hit checks. Keep expected
-  guidance distinct from unexpected output. Suppress duplicate trace observations
-  while retaining transitions, events and strict overflow rejection; rebuild the
-  execution recorder's current-readiness correction.
-  Align the shell's native acknowledgement deadline with foreground acquisition,
-  preserving the shorter ordinary browser-state waits and every input guard.
-- Reconcile copied-file readiness when Verify opens during execution release.
-  Observe current execution facts without repainting retained Plan rows; coalesce
-  renewed demand and bound conflict recovery, with actionable Reload on failure.
-  The production release/pane regression and both installed execution sizes pass.
-- Share Plan/Verify server range highlighting and browser navigation. Verify
-  header, folder and highlighted-range checkboxes select search/filter matches
-  across collapsed and unloaded rows; starts retain the complete selection,
-  including hidden files. Preserve live scroll and checkbox focus after selection,
-  and defer live-result refresh behind newer foreground interaction. Re-check
-  rejected reads too: independently invalidated demand rereads once after both
-  window/detail reads settle; a read error alone does not start polling.
-- Index bounded manual/ordinary result windows once while retaining detail
-  generation and operation binding. Remove repeated window self-validation
-  without changing result ownership or adding a timing threshold.
-- Make Verify copied files primary and warn before whole, selected or context-row
-  Refresh can forfeit exact verification, including when readiness is unresolved.
-  Cancel leaves the task and reads untouched; Confirm submits the captured scope
-  once after fresh ownership/revision checks. Superseded wording describes stale
-  evidence rather than changed file contents. The execution-evidence contract
-  stays unchanged.
-- Correct the earlier shell diagnosis: all eight untraced D2 shared01/shared02
-  and hardening native09/native10 failures are foreground refusals after Plan
-  again succeeded. The Task 52 snapshot preceded Task 53 selection; native11
-  rejected its own overflowing trace. Keep failed receipts and separate gallery evidence.
-- Investigate the third async browser-read reconciliation instance before fixing
-  D2 copied-file readiness. M1_PLAN records owners, consequences, common policy,
-  approved finite scope and the scratch reproducer's producer-path limits.
-- Rebuild and independently review the table candidate after harness/readiness
-  correction. All affected installed Inventory, execution, shell and gallery
-  cases pass, alongside 6,070 ordinary tests and 12 import contracts. Retain
-  failed receipts and the recovery branch. Both native execution sizes also
-  prove Refresh Cancel has no scan effect and Confirm submits exactly once.
-  The final Refresh candidate passes all nine installed cases, 6,073 ordinary
-  tests with four skips, and all 12 import contracts.
-- Complete the read-only D/Verify ablation study and independent evidence review.
-  Retain distinct ownership, attribution and consent guards; identify delivered
-  reuse/indexing savings and remaining probe-coupling/native-wait maintenance
-  costs. Bound fault-control conclusions to the assertions actually reached;
-  make no study-driven simplification or measured speedup claim. Integrate the
-  reviewed rebuild into `milestone1`, condense the register and restore HANDOFF
-  to latest-session context while retaining recovery evidence.
-
-#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-13)
-
-- Use one two-axis scroller with a sticky header for Plan, execution and
-  Inventory tables, following the user's decision to try the suspected remedy.
-  Preserve virtual-window policy, keyboard reveal and column alignment; keep
-  Setup's existing table behavior. Migrate direct probes, native/gallery and
-  loading-tool consumers together in one independently revertible commit.
-  Interfaces/tools, all seven installed native cases and 20 candidate browser
-  wheel sequences pass. The original physical wheel/tilt-wheel symptom is not
-  claimed resolved.
-
-- Investigate axis switching in both installed tables. Eighty valid browser
-  wheel trials did not reproduce the lock in nested or single-scroller controls.
-  Windows wheel injection stopped before input at an ownership check, so the
-  physical-device report remains unresolved. Retain evidence and limitations;
-  no speculative scroller migration was made.
-
-- Show Plan/Inventory review shells immediately after starting, with Checking
-  folders then Planning/Scanning, indeterminate progress and a blank table until
-  publication. Preserve refusal and original-command Check recovery, and retain
-  the shell on admitted terminal failures. Composition, interfaces/tools and
-  installed Plan/Inventory checks pass. Real 8k/32k startup medians are
-  12.669/50.482 seconds; PERFORMANCE separates filesystem observation from
-  preflight evaluation. No backend optimization was made.
-
-- Distinguish completed no-ops from deselected skips in execution rows: actual
-  no-ops display green Completed, deselected operations neutral Skipped. Keep
-  raw operation notes and backend results unchanged. Red/green renderer probes,
-  interfaces/tools and installed execution/shell/gallery checks pass.
-
-- Align move-badge text with filenames, use fill-only hover/press feedback,
-  separate inline rename notes and match Inventory's disclosure chevrons to
-  Plan. Installed gallery checks cover light, dark, forced colors and reduced
-  motion; focused and interfaces/tools checks pass.
-
-- Preserve compatible Plan/Inventory scroll reads during repeated wheel,
-  pointer and touch input while still retiring queued keyboard/highlight intent.
-  Event-based regressions reproduce the SN3 cancellation error; focused,
-  interfaces/tools and installed tree/Inventory/shell checks pass.
-
-- Bound held navigation to one read and the latest pending target in Plan and
-  Inventory. Later input retires its visual authority immediately; admitted
-  highlight mutations retain settlement custody without replay. Preserve server
-  Shift-range semantics, discrete gesture ordering and the revisions displayed
-  when highlighted selection was requested. Delayed regression probes,
-  interfaces/tools and installed tree, Inventory and shell checks pass.
-
-- Prefetch Plan and Inventory windows on the travel side, retaining 32 rows
-  behind travel and starting within 64 rows of the edge. Preserve early reads,
-  reverse direction safely and respect actual short-window endpoints. Installed
-  tree/Inventory/shell and interfaces/tools checks pass. Matched steady-scroll
-  runs remove most sampled uncovered time without adding concurrent reads or
-  a second retained window; PERFORMANCE records the qualified results.
-
-- Preserve Plan scroll position when a rebuilt row regains focus, retaining
-  deliberate keyboard reveal. Settle discarded window requests back to their
-  owning renderer so Settings and zero-height return can retry without loops.
-  Reproduce focus, hidden-return, zero-height ordering and synchronous keyboard
-  publication failures; pass focused/method controls, interfaces/tools and the
-  installed shell with unchanged focus/visibility/input assertions.
-
-- Report last-input burst delay and observed input cadence separately from the
-  scripted input span. Three installed children per page reduce median uncovered
-  time at 240 rows/s from about 11.1 seconds per 12-second run to 1.42 seconds
-  Plan and 1.23 seconds Inventory; larger gaps remain at 1,000 rows/s. Record
-  sampling overhead and frame-interval limits, recommending directional edge
-  prefetch without implementing it. A bounded key-cache prototype reduces stored
-  window capture medians from 12.2–13.0 ms to 5.4–5.5 ms under balanced order;
-  no production bridge or row-schema change is included. Method controls,
-  tools department and independent evidence reviews pass.
-- Adopt compatible Plan and Inventory windows during continuous scrolling,
-  coalescing newer demand while preserving owner fences and exact keyboard/
-  external intent. Reconcile the current viewport, settle matching failures
-  without retry loops, and preserve newer demand across old navigation replies.
-  Pass 59 frontend and 1,979 interfaces checks plus installed tree, Inventory
-  and full task-shell gates. Correct native fixture visibility geometry and
-  wait for highlight publication before menu input; keep existing assertions.
-
-- Investigate remaining capture, row bytes, DOM stages and steady scrolling
-  without further product changes. Identify unused row payload candidates and
-  non-equivalent Plan/Inventory DOM timing endpoints. Record continuous-scroll
-  response starvation OPEN after browser-event-only controls; prefetch remains
-  a separate decision after fixing adoption, not an implemented optimization.
-- Count canonical bridge string bytes in bounded 4K chunks, preserving Unicode
-  refusal, exact limits, first-failure ordering and detached response custody.
-  Pass 5,982 ordinary checks, twelve import contracts and six installed transport
-  checks. Corrected-observer measurements reduce jump capture from 18.5→12.5 ms
-  Plan and 17.1→13.6 ms Inventory; Plan burst coverage is unchanged. Keep further
-  capture, row-payload, DOM and prefetch work investigative.
-- Remove per-character observer work from the loading diagnostic's response
-  byte accounting. Retain actual successful budget consumption and original
-  C5 receipts; collect a corrected baseline before optimizing the counter.
-- Give off-window Plan keyboard highlights the existing 32-row leading buffer,
-  preserving pointer/in-window placement. In the repeated installed profile,
-  all nine keyboard gestures use one read instead of two, with no exposed
-  viewport interval and median coverage 155.7→83.0 ms. Pass 88 focused,
-  2,348 interface/tools checks, twelve import contracts and both installed
-  task-shell sizes. Close C5 with independent review; prefetch/placeholders
-  remain unjustified by the fixed abrupt-jump corpus.
-- Coalesce Inventory viewport reads to one running read and the latest queued
-  intent. Retire obsolete callbacks on covered returns, loaded-row gestures and
-  lifecycle changes while preserving action ordering. The repeated diagnostic
-  reduces burst reads from 72 to 27 and median coverage from 413.8 to 175.4 ms;
-  pass 88 focused, 2,348 interface/tools checks, twelve import contracts and
-  two installed journeys, with independent source and raw-evidence review.
-- Add the optional installed table-loading diagnostic and freeze a six-child
-  Plan/Inventory baseline. Separate first visible coverage from discarded-read
-  settlement, correlate real bridge phases and preserve installed assets after
-  every run. Inventory bursts dispatch eight concurrent reads; the accepted
-  coalescing follow-up remains separate. Pass 29 focused and 5,953 ordinary
-  checks, twelve import contracts and independent raw-evidence review.
-- Repair synthetic recase evidence in the shared Plan scale fixture, preserving
-  populations, sorting witnesses and selection facts. Validate a real published
-  window through the unchanged browser validator; historical measurements retain
-  their original producer identity.
-- Migrate the installed measurement helper's prior-location label expectation
-  to the bounded destination display, preserving full-path identity and rootless
-  geometry checks.
-- Align the Verify table with shared file rows: 24px geometry, zebra striping,
-  disabled unchecked selection visuals, Notes, concise Presence and consistent
-  typography. Preserve hierarchy and navigation; only Filename expands with
-  the viewport, while Notes supplies deliberate resizing space.
-  Correct active forced-color text across cells and verify 114 focused tests,
-  1,951 interfaces checks with a refreshed gallery checker, 12 import contracts
-  and eight installed obligations. Retain the review's red contrast witness.
-- Suppress native context-menu fallback for stale/empty owned row gestures and
-  the Menu key's follow-up event on the custom menu. Preserve popup placement,
-  focus and existing command scope without duplicate-event machinery. Cover
-  own-missing domain-folder acknowledgement separately from descendant counts.
-  Pass 67 focused, 1,951 interfaces, 12 import contracts and seven installed
-  checks, retaining failed characterization and target-readiness receipts.
-- Make Inventory Refresh selected follow the current highlighted row, including
-  arrow navigation with Details hidden. Preserve item-card action scope and
-  disable the toolbar action when its current window has no eligible target.
-  Verify 64 focused and 1,951 interfaces tests, 12 import contracts and both
-  installed Inventory and shared-tree journeys; complete independent review.
-- Bound Inventory window labels and warning tails while retaining full-path
-  search and complete scan-time paths in revision-guarded item details. Keep
-  fresh ledger evidence separate. Preserve Plan scan-notice side/code in compact
-  labels and verify complete 256-row envelopes, including execution overlays,
-  remain below the unchanged response cap. Migrate bridge validators and direct
-  consumers together. Pass 5,921 ordinary tests, 12 import contracts and all
-  seven installed checks; retain foreground-blocked receipts before the
-  successful Inventory retry and complete independent review.
-- Make a stale move-destination follow-up read visibly refreshable while
-  retaining the last coherent review. A coherent conflict response now scrolls
-  to its loaded window instead of leaving the viewport at an unrelated offset.
-  Preserve task/revision ownership and original-command recovery without retries.
-- Verify the narrow recovery fix with seven focused cases, 1,921 interfaces
-  tests and both installed task-shell window-size journeys.
-- Keep non-filename Plan columns at their first visible fitted widths, letting
-  Filename absorb later enlargement. Preserve existing minimum widths,
-  horizontal scrolling and Notes-limited manual resizing.
-  Pass 36 focused, 1,921 interfaces and six installed task-shell/gallery checks.
-- Replace Plan and Inventory filter buttons with one counted Fluent checkbox
-  menu. Keep category choices open for multiple selections, preserve search
-  when All clears filters, and retain authoritative counts and request guards.
-  Add pinned Regular Filter icons and remove the replaced controls and styles.
-  Verify 84 focused, 2,286 interfaces/tools and seven installed UI cases, plus
-  pinned icon provenance and independent review.
-- Move Details into an optional full-height right column with separate scrolling
-  task and item cards. Restore category counts and supplied item facts; let the
-  capped details column and task rail narrow as the window shrinks.
-  Pass 89 focused, 1,921 interfaces and six installed cases across retained runs;
-  correct natural text-row sizing and migrate gallery layout observations.
-- Align standalone Verify/Inventory with the shared Setup, status, table and
-  details surfaces. Move Refresh actions to status, reuse semantic state labels,
-  sort through column headers and show stored baseline checksums without
-  implying current-byte verification. Share bounded column sizing with Plan;
-  remove the replaced Inventory controls and migrate their direct consumers.
-  Correct inherited tree/header styling through the ratified combined review;
-  verify actual column edges, scroll owners and status placement. Pass 23 early
-  service, 84 focused, 12 token and all seven installed checks; finish with
-  5,887 ordinary passes (four Windows symlink-privilege skips), all 12 import
-  contracts and independent review.
-- Ratify seven GUI units in M1_PLAN. Execution-to-Verify navigation remains
-  deferred to M1-10. Resume previous-location/rename presentation as a focused
-  unit with explicit Python-server and projection scope: classify recase and
-  pure same-parent moves as Rename, align row labels and filters, and keep
-  Move + update distinct. Preserve real operation kinds and execution behavior.
-  Start informational move groups collapsed, fit destination paths inside
-  action-shaped purple badges, and show previous names/paths beside canonical
-  filenames. Migrate projection, bridge, navigation and gallery consumers together.
-  Preserve filename space for long origin annotations; verify 5,903 ordinary
-  passes (four privilege skips), six installed UI checks and all 12 import
-  contracts. Complete independent internal review; the requested Claude review
-  was unavailable because its OAuth session expired.
-- Restore compact Plan windows for supported long paths, including previous
-  locations and scan notices. Read complete original-case paths and notices for
-  one highlighted item through a revisioned projection-only command. Keep full
-  search text, selection and node-id reveal unchanged; validate closed display
-  kinds, their operation relationships and bounded row labels. Migrate command
-  catalogs, browser consumers and fixtures together. Pass 5,913 ordinary checks
-  (four privilege skips), 12 import contracts and 12 installed UI/transport cases;
-  independently review the contract and its corrected row-kind validation.
-- Align Verify Setup height and consolidate scan, loading and recovery facts
-  into one persistent status-detail paragraph. Retain current/prior publication
-  distinctions and existing actions. Reuse shared progress animation for unknown
-  totals and keep terminal progress visible without manufacturing a percentage.
-  Pass 41 focused, 1,943 interfaces and seven installed gallery/shell/Inventory
-  checks, including actual setup-height and progress observations.
-- Standardize existing UI timestamps to local `yyyy-MM-DD HH:mm`, including
-  Verify mtime/evidence details and execution completion. Preserve raw timestamp
-  values, unavailable states, nanosecond conversion order and elapsed durations.
-  Pass 13 focused, 1,944 interfaces and seven installed presentation checks,
-  including local-time boundaries and representative gallery dates.
-- Narrow Details to 20rem, give item details three-fifths of the card height,
-  and retain separate scrolling. Join detail paths to their established source,
-  target or Inventory root without filesystem probes; preserve raw receipts,
-  nullable facts and the existing compact status presentation.
-  Pass six focused, 1,944 interfaces and nine installed obligations across
-  retained runs, including an unchanged-input retry of an initial readiness timeout.
-- Add shared row context menus for existing details, Plan selection, folder
-  expansion and Verify refresh/missing acknowledgement actions. Target the
-  clicked row independently of displayed details, with keyboard access and
-  pending/retired-owner guards. Preserve clipped-row scroll position and existing
-  toolbar actions; migrate gallery and installed gesture consumers together.
-  Pass 5,914 ordinary tests (four privilege skips), all 12 import contracts,
-  86 final focused checks and seven installed obligations across retained runs.
-  Correct test-driver visibility and coherent gallery measurement, retain failed
-  receipts, and complete independent review before the atomic commit.
-- Defer the entire further Verify table alignment (B2) for separate user review.
-  Preserve the recurrence investigation and consolidated proposal for Inventory
-  full-path window amplification; no checkbox or payload correction is included.
+- Verify the selected local Python/SQLite security update against ordinary,
+  native/installed and cold Inventory dependencies without retuning budgets.
+- Keep exact runtime/profile identity on each receipt and original failures;
+  historical timing/custody evidence does not silently qualify a different
+  interpreter. Later release servicing has its own completed Release record.
 
 #### Repair bridge diagnostic composition receipts (2026-10-04)
 
@@ -1274,57 +371,27 @@ explicit, reviewable and regression-backed.
 
 #### Correct inventory lifecycle feedback (2026-10-02)
 
-- Label each displayed scan with its producing scope, qualify scoped completion
-  and counts, and identify notices as belonging to that scan. Retained prior
-  publications preserve their scope across newer scans and refusals.
-  Scope-label verification passes 406 focused and 2,797 workflow/interface
-  checks, twelve import contracts, and all 35 headed cases across the main run
-  and focused reruns; the initial execution capture-readiness timeout is retained.
-- Record independent command-result retirement as an M2 design item so routine
-  inventory actions need not eventually force task closure. Keep M1's shared
-  capacity and original-result recovery behavior unchanged.
-- Preserve observed session state when a delayed start receipt arrives after
-  that same session has finished, while still invalidating older task-list reads.
-- After a refused Refresh leaves only a prior publication, direct users to
-  check the location/reconnect its drive and Refresh instead of retrying an
-  unavailable view. Clear the transient Refresh message on confirmed admission;
-  the existing current-scan indicator owns subsequent progress and completion.
-- Reproduce all three failures and pass 58 focused frontend checks, all 1,890
-  ordinary interfaces checks and all 35 headed cases across the full run and a
-  manually focused inventory rerun. Independent review approves the correction.
+- Keep activity status separate from a view read, scan publication and current
+  evidence. Preserve navigation/drafts through background updates and exact
+  request/session adoption, Refresh and terminal release.
+- Retain current UI facts on stale/failed responses; installed and ordinary
+  witnesses cover truthful retained feedback without changing integrity policy.
 
 #### Resolve reviewed open bugs (2026-10-01)
 
-- After failed handle identity queries, probe that handle's filesystem and permit
-  absent identity only outside NTFS/ReFS. Scanner and native adapters share the
-  same predicate; successful queries add no lookup. Database ownership leases
-  keep their strict identity refusal. Native exFAT COPY/UPDATE/readback and
-  immediate NOOP replanning pass; reviewed-volume verifier policy is unchanged.
-  Independent review, 5,733 ordinary tests, 12 import contracts and the
-  30-scenario × three-run settlement gate pass.
-- Make replacement-option advice optional. Performance reports now refuse
-  overwrite with guidance to choose a new `--json` path; existing replacement
-  commands retain their flag advice. Focused CLI tests preserve refusal before
-  launch and existing report bytes.
-- Close the open-ended exception-retirement remainder as a bounded disposition,
-  without product changes. Host/document follow-up now requires measured
-  product-owned retention past named lifecycle endpoints; the diagnostic that
-  deliberately held a returned exception does not establish that trigger.
+- Resolve the reviewed inventory, lifecycle and presentation defects at their
+  owning seams with reproducing controls and component/installed verification.
+- Preserve independent execution/integrity/ledger/audit results, current-root
+  admission and exact original outcomes. BUGS retains causes, fixes, residuals
+  and reopening context; unconfirmed observations remain unconfirmed.
 
 #### Ratify proportional defense and root safety (2026-09-28 – 2026-09-29)
 
-- DEFENSE distinguishes plausible accident from adversarial content and
-  out-of-baseline crafted structure, requires one planner-used fidelity check
-  per effect, and retains only catastrophe backstops with demonstrable triggers.
-  Accurate refusal reasons may vary without changing publication or durable
-  truth. Held-root admission requires current attributes and exact binding;
-  descendant checks and per-access fallback remain. The fail-open descendant
-  observation correction and the concrete native-only delegation witness pass
-  without allowing subclass resolution to bypass admission.
-- Historical RO continuity proposals were narrowed to invocation binding and
-  then superseded by the held-root contract. Directory-flush batching remains
-  proposed for M2; direct target writes were authorized separately and are
-  recorded under Performance.
+- Classify supported consequences/enforceability before selecting defense tiers;
+  distinguish diagnostics from acceptance and retain named residual assumptions.
+- Require current held-root attributes and fail-closed descendant observation,
+  preserving local-hold/fallback limits and exact logical root corroboration.
+  DEFENSE and component owners retain criteria; tests back supported seams.
 
 #### Separate cold and live database admission (2026-09-27)
 
@@ -1339,16 +406,11 @@ explicit, reviewable and regression-backed.
 
 #### Classify installed incidents and preserve truthful diagnostics (2026-09-25 – 2026-09-27)
 
-- Repair the optional bridge diagnostic's event-v5 fixture and failure
-  cleanup; retain original failure and incomplete-stream evidence. The
-  installed run completed after repair, without promoting old timing samples
-  to acceptance. The AB-7 focus-ring failure was classified as external test
-  interruption; no actor or product fix is inferred. The separate AB-8
-  stack/wrap race remains an uncaptured, deferred investigation in TESTS.
-- Retire the unrealized DWM sentinel obligation without treating a green
-  headed test as compositor-health evidence. Earlier focus, picker and bridge
-  incident traces remain qualified by their recorded limits; the original
-  wrong-directory picker observation has no confirmed cause.
+- Separate native foreground/observer failures, unsupported conditions and
+  demonstrated product defects. Bound diagnostics and retain original failure
+  context without promoting a later passing retry into an earlier diagnosis.
+- Preserve actual normal/forced shutdown, source/asset identities and exact
+  installed endpoint scope. TESTS/BUGS retain unresolved conditions and triggers.
 
 #### Preserve command outcomes and desktop recovery (2026-09-25 – 2026-09-26)
 
@@ -1371,33 +433,29 @@ explicit, reviewable and regression-backed.
 
 #### Bound task inputs, custody and cross-layer truth (2026-08-26 – 2026-08-30)
 
-- Admit complete raw populations before normalization, bound 120,000-item
-  support targets and reject excess without partial artifacts. Task reservation,
-  document/response custody, longest-prefix drains and exception-graph
-  retirement preserve exact ownership across reload, cancellation and
-  reentrancy. Execution retains reliable outcomes before callbacks, immutable
-  selection identities, ordered pause/resume and recording settlement.
-- Align event v5, signed-64 scalars, full-width file identity, canonical JSON
-  and database WAL-visible topology so malformed inputs fail before custody or
-  mutation. Ledger/history data epoch 6 at that cut required paired reset;
-  the later consolidation advanced the shared epoch to 7. Native and workflow
-  controls covered mounted roots, verifier chunks and shutdown release.
-
-<a id="close-the-m1-safety-and-post-refactor-audit-2026-08-08--2026-08-11"></a>
-<a id="ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18"></a>
+- Bound external requests before presentation construction and maintain exact
+  event/scalar/opaque-identity validation. Keep original command custody across
+  uncertain delivery, settlement and task release without duplicate effects.
+- Reconcile task/session/result owners and direct consumers under the import
+  law. Preserve durable truth, capacity admission and controlled recovery;
+  frozen historical evidence remains distinct from current runtime guarantees.
 
 #### Establish the safety and evidence model (2026-07-30 – 2026-08-18)
 
-- DEFENSE became the normative source for supported assumptions, hard walls,
-  tolerances and residual-risk decisions. Measurement targets, drift guards,
-  reference acceptance and protected release authority were separated; bug
-  severity follows worst supported consequence. Architecture and subject docs
-  replaced stale implementation checklists without changing those contracts.
-- M1 safety audits re-probed roots and volumes, guarded junction/remount,
-  target/trash and hostile-name paths, and preserved publication, backup,
-  non-byte mutation, retry, cancellation, recorder and hash-mismatch truth.
-  SQLite snapshots, malformed persisted/bridge input and integrated lifecycle
-  settlement gained native race, deep-path, temporal and recovery witnesses.
+- Establish supported assumptions, trust boundaries, hard walls, proportional
+  tolerances and evidence authority. Root safety, guarded effects and honest
+  durable/terminal results remain independently owned and tested.
+- Separate named empirical profiles, calibration and holdout from current
+  enforced limits; keep residual dispositions and reopen triggers explicit.
+  DEFENSE owns policy, component docs own criteria and PERFORMANCE owns methods.
+
+#### Harden development measurement tooling (2026-08-06 – 2026-08-18)
+
+- Add safe owned workspaces, exact output manifests, deterministic generation,
+  source-drift/readback checks, sidecar identity and atomic exclusive reports.
+- Keep fake persistence/development commands separate from product surfaces;
+  instrumentation and cache/null-hasher profiles remain explicit. Invalid,
+  incomplete or cleanup-failed samples cannot publish favorable reports.
 
 ### M1 GUI
 
@@ -1407,6 +465,15 @@ Standalone Inventory adds integrity selection, controls and retained results.
 Same-task Plan/Verify navigation adds first manual post-copy verification and
 explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain open.
 
+#### Refine live execution and verification feedback (2026-11-06 – 2026-11-09)
+
+- Restore Filters during linked verification, phase-specific headlines/counters,
+  independent warning axes, retained current verification target and truthful
+  copy/verify progress. Preserve control/recovery custody and actual result facts.
+- Use icon-only controls with accessible names, compact ETA units and local
+  Modified display. Keep Plan Again unavailable during execution/admission and
+  let explicit navigation retain its foreground owner; installed gates pass.
+
 #### Add the NamiSync app icon (2026-11-03)
 
 - Add color, two-tone and mono SVG masters for the app icon: a two-sheet copy
@@ -1415,6 +482,18 @@ explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain
 - Ship the masters as package data in `namisync/interfaces/branding/`, outside
   the web assets. The app does not load them yet; window, taskbar and installer
   icons remain later work.
+
+#### Refine Inventory and Plan GUI feedback (2026-10-23 – 2026-11-01)
+
+- Align task/status/table cards, path labels, column geometry, Details groups,
+  badges and controls across Plan/Inventory. Keep full-path accessibility,
+  stable focus/scroll, current result owners and non-color state cues.
+- Preserve manual versus automatic Follow intent, anchored Details and
+  filter/sort/selection scope. Refine Setup options, Settings navigation/footer,
+  current task activity and terminal feedback without changing domain policy.
+- Tune shared Fluent tokens/material/control states and icons with installed
+  light/dark/forced-color and native checks. Exact visual contracts and named
+  contrast/compositor qualifications remain in DESKTOP_UI.
 
 #### Add explicit Setup defaults to Settings (2026-10-29)
 
@@ -1439,238 +518,67 @@ explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain
   assets. Retain source/version attribution without changing navigation or
   claiming final release-license closure.
 
+#### Align Verify table interaction and action consequences (2026-10-15 – 2026-10-16)
+
+- Align server-derived selection, row activation, menus, keyboard highlighting
+  and context action targets between Plan and Verify while retaining exact scope.
+- Preserve selected/hidden counts, stale-owner refusal, fresh confirmation and
+  independent baseline/verify/rebaseline outcomes. Reconcile action labels and
+  source/target/result Details without treating baseline creation as verification.
+- Correct shared/native witnesses at their owning seams; keep failures and
+  original input/focus/geometry guards. PRESENTATION/DESKTOP_UI own the contract.
+
 #### Deliver M1-10 integrity controls and manual verification (2026-10-13 – 2026-10-14)
 
-- Close the integrated A–E review and stop for GUI recap. Final verification
-  includes 2,024 interfaces checks, affected helper reruns, nine installed
-  Inventory/gallery/shell/execution checks, twelve import contracts and the
-  dependency-accounted ordinary suite. Condense delivered plan sections; archive
-  four accounted recovery snapshots in a verified bundle and remove task refs
-  and clean temporary worktrees while retaining all evidence and unrelated stashes.
-- Make the installed Inventory confirmation witness derive focus restoration
-  from invoker availability at modal close, prove Cancel returns focus to its
-  enabled invoker, and retain bounded close-state diagnostics.
-- Preserve foreground Plan navigation when execution start/release triggers a
-  concurrent full reload. Defer stale replacement and reconcile authoritative
-  execution summary/window facts after the interaction settles; keep selection,
-  detail and viewport ownership intact.
-- Add retained Plan/Verify navigation, exact first **Verify copied files** and
-  the explicit selected **Verify current state** fallback. Hide inapplicable
-  standalone actions on sync tasks, route controls to the current auxiliary
-  session, and keep manual/ordinary results separate from ledger and original
-  execution truth. Pane changes preserve Plan review state and fence late reads.
-  Adopt each accepted activity's current request/session separately from original
-  Plan identity, and prevent an older task-list response from overwriting it.
-- Consolidate repeated lifecycle effect catalogs and native/browser task/session
-  kind admission. Reuse one session pause-capability map per language owner,
-  retaining strict string admission, intentional subsets and execution's distinct
-  reviewed-plan backstop. No kind, wire command or capability is added.
-- Restore task-execution publication's missing-reviewed-plan backstop and
-  original execution-session binding after C3b combined it with optional
-  auxiliary association. A missing-plan regression fails before the fix;
-  successful execution and standalone auxiliary publication remain covered.
-  No supported path to the lost check was found.
+- Add complete server-owned file selection and confirmation-gated rebaseline,
+  including eligible null-evidence files; baseline creation is not verification.
+- Deliver standalone integrity controls, exact current request/session adoption,
+  partial/live result handling and mounted Plan/Verify panes with original
+  execution, automatic verification and ordinary results kept separate.
+- Expose existing target ledger reads without inventing scan provenance; preserve
+  Refresh/missing visibility, current mutation release and exact Close.
+- Correct historical-stat, publication-backstop and foreground-owner defects;
+  ordinary/import and all affected installed gates pass by dependency. The
+  original exact-manual handoff was later superseded by ordinary copied-file
+  Verify. No persisted hashes, terminal subset retry or schema redesign shipped.
 
-- Activate M1-10 alone, condense delivered register history while retaining
-  evidence and binding dispositions, and expand the remaining implementation
-  into independently reviewed atomic outcomes. The user subsequently requested
-  a hold after C, before desktop controls; the later checkpoint completion still
-  stops for recap and GUI tweaks. M1-12 and release remain inactive.
-- Require explicit selected-scope/current-evidence acceptance before service or
-  workflow rebaseline admission and forward the existing CLI confirmation.
-  Rebaseline now includes eligible files without prior evidence; every admitted
-  file is freshly hashed and conditionally baselined, including matching content,
-  without claiming verification. Existing engine/recorder behavior is preserved.
-  The database/verifier/workflows/interfaces gate passes 3,504 checks; all 12
-  import contracts pass.
-- Implement the backend for exact manual post-copy verification: classify the
-  complete selected byte-producing population in one ledger snapshot, freshly
-  admit only the target, then classify again to freeze current evidence. A new
-  verification session/history result preserves original execution truth,
-  conditional scope, pause/resume/cancel and recording degradation. No inventory
-  scan or persistent operation-time hashes are introduced. Focused checks pass
-  239, the affected department gate passes 3,520, and all 12 imports pass.
-  Later units below attach these workflows to retained tasks and desktop controls.
-- Add server-owned Inventory file selection with complete folder/location scope,
-  revision fences, tri-state and selected/hidden counts. Filtered, collapsed and
-  unloaded rows remain in scope; replacement retains surviving exact identities.
-  The API grants no session-start authority; desktop controls follow separately.
-  Its corrected interfaces/tools gate passes 2,399 tests with three expected skips,
-  all 12 imports pass, and seven installed Inventory/host/transport/gallery checks
-  pass. Earlier foreground refusals remain retained as environment evidence.
-- Attach ordinary baseline/verify/rebaseline sessions to Inventory tasks with
-  exact selected scope, explicit rebaseline acceptance, original-command recovery,
-  pause/resume/cancel and rollback to the prior publication on admission failure.
-  Retain the latest ordinary result separately from current ledger evidence;
-  terminal reconciliation repairs event gaps and Close retires its state.
-  Full desktop action controls remain the following delivery unit.
-  The affected gate passes 3,348 tests with three expected skips and all 12
-  imports. Eight installed checks pass, including a separately repaired Setup
-  driver whose stale hidden-editor expectation also failed on the accepted
-  baseline. Its replacement verifies immutable context in the visible review
-  panes while retaining Plan-again/new-task/revisit and trace checks.
-- Expose current target-ledger Inventory browsing and complete file selection
-  on released execution tasks while preserving original Plan review and exact
-  Close. Opening creates no location, scan or native admission; absent actual
-  scan provenance is explicit. Auxiliary mutations and pane navigation follow
-  in their separate delivery units. Verification passes 2,946 workflows/interfaces
-  checks, all 12 imports and three installed Inventory/execution checks.
-- Add same-task first manual post-copy verification and explicit ordinary
-  integrity/Refresh and missing-row acknowledge/restore on execution tasks. Keep original Plan/execution identity,
-  terminal facts and automatic results separate from current activity and
-  bounded manual/ordinary results. Preserve original-command recovery, first
-  attempt consumption, linked-execution exclusion, live controls and exact Close.
-  Browser reconstruction preserves original review while current task status
-  follows auxiliary activity. Actual scan provenance advances only for scans.
-  Visible controls and pane navigation remain the following UI delivery units.
-  Fix original-execution review retirement after auxiliary Close, and migrate
-  direct contract fixtures, gallery identities and measurement anchors without
-  weakening their behavioral checks. Admit visibility directly from the existing
-  execution ledger view without requiring Refresh or invented scan metadata.
-  Final verification passes 6,049 ordinary
-  tests (four expected skips), nineteen affected installed obligations and all
-  twelve import contracts; independent review covers the source and corrections.
-- Resume with an independent integrated A–C review. Correct execution-task
-  Inventory reads during active/paused auxiliary work by retaining the original
-  execution's release proof; selection and further activity still require the
-  current session's release. Public live-read and terminal-repair regressions
-  cover the boundary, and stale verifier/workflow delivery descriptions are updated.
-  The correction passes 234 drain checks, 2,015 interfaces checks and twelve
-  import contracts, with independent native/source review.
-- Admit manual-verification terminal records in the browser with their correct
-  pause capability, allowing the complete terminal drain and release to finish.
-  All registered kinds retain positive/wrong-capability coverage; Plan and manual
-  variants exercise the production drain. Independent review confirms 164 focused
-  checks, two installed host/transport gates and 2,016 interface obligations by
-  dependency. A separate test correction allows result revision advancement
-  between independent live reads without weakening their remaining fact checks.
-- Activate standalone Inventory's complete location/folder/file selection,
-  selected and hidden counts, Baseline/Verify and revision-bound Rebaseline
-  confirmation. Retain original-command observation, exact current-session
-  pause/resume/cancel, separate ordinary result overlays and actual scan
-  provenance. Extend the existing installed Inventory journey through real
-  hashing, control transitions and conditional ledger evidence replacement.
-  Preserve row-only DOM identity and the original facts/Details alignment.
-  Final verification passes 2,018 interface checks, nine installed obligations
-  and the unchanged Inventory table-loading consumer; no speed claim is made.
-- Correct the pre-existing integrity selection conversion that treated a missing
-  file's retained historical stat as current, failing the whole selection before
-  hashing. Real present-to-missing Baseline/Verify/Rebaseline cases now emit the
-  missing outcome and continue eligible siblings without discarding ledger
-  history or weakening core validation.
+#### Align desktop review surfaces and recovery (2026-10-05 – 2026-10-13)
+
+- Use one two-axis viewport and sticky header for Plan/Inventory, preserving
+  current-window limits, keyboard reveal, resizing and shared columns. The
+  physical wheel/tilt report remains unresolved by browser controls.
+- Show truthful Checking/Planning/Scanning shells before complete publication;
+  preserve old review through uncertain Plan Again and original-command Check.
+- Adopt compatible scroll responses, bound held navigation and directional
+  prefetch to one read/current intent, and preserve anchored scroll/focus through
+  discarded, hidden, resized and superseded requests.
+- Align rootless rows, operation/move labels, selection/highlighting, Filter
+  counts/menu focus, Details, controls and neutral/semantic styling. Keep
+  server-owned hierarchy, full query scope and independent result axes.
+- Repair counted-byte and table-loading observers without relaxing Unicode,
+  ingress/custody or action assertions; preserve source/asset restoration.
+  PERFORMANCE owns qualified latency/capture comparisons and unresolved controls.
 
 #### Refine Plan refusal messages, move context and controls (2026-10-04)
 
-- GUI-RF1 carries bounded preflight codes and refusal origin through retained
-  Plan execution review and execution admission. The page distinguishes
-  preflight, invalid commitment and other refusals with actionable guidance,
-  preserved after release/navigation. Raw diagnostics stay native; execution
-  authority, selection commitment and original-command recovery are unchanged.
-- RF1 verification: 628 focused passes, 5,854 ordinary passes/four skips plus
-  the corrected service-fixture module's 40 passes, twelve import contracts,
-  and all 35 installed cases across the main run and one unchanged focus retry.
-  Independent review found no remaining substantive defect.
-- GUI-RF2 groups prior locations beneath their deepest surviving scanned parent,
-  with one purple count badge and capped relative destination per move target
-  parent. Activating the pill reveals the canonical destination, expands its
-  ancestry and clears only obstructing query settings. Informational contents
-  stay expandable and excluded from selection, operation totals and bytes.
-  Projection, bridge, navigation and performance/test consumers migrate together.
-- RF2 verification covers the large projection/folder-size oracle, 5,866 ordinary
-  passes/four skips plus corrected host/catalog modules (84/96 passes), and all
-  35 installed cases across retained runs. Independent review approved. The
-  benchmark's older missing inventory-command catalog is recorded separately in
-  BUGS; no new quantitative benchmark result is claimed.
-- GUI-RF3 shortens action badges
-  to Delete and Recase. Pause/Resume shares one
-  toggle with regular Fluent pause/play artwork and accented Resume while paused.
-  Cancel arms for five seconds on its first click, showing accented Filled Stop;
-  its second click submits cancellation. Expiry and task/session/panel retirement
-  disarm it, while ordinary renders preserve the deadline. Stop's pinned Regular
-  and Filled assets are generated through the catalog; control and timing
-  consumers retain authoritative lifecycle/recovery behavior.
-- RF3 verification: 5,875 ordinary passes/four skips, focused control and timing
-  consumers, pinned icon archive and twelve import contracts pass. All 35
-  installed cases pass across retained runs, including the unchanged inventory
-  retry after desktop foreground availability returned. Independent review
-  approved; the recovery candidate was rebuilt as one verified atomic unit.
-- Synchronize the component gallery with persistent refusal, prior-move and
-  execution-control specimens using production renderers. Local preview callbacks
-  expose informational expansion, destination reveal, Pause/Resume and five-second
-  two-click Cancel without domain commands; Delete/Recase labels remain aligned.
-  Independent review approved after 1,915 interfaces tests and all four installed
-  gallery tests passed across light, dark, forced-color and reduced-motion modes.
+- Show actionable Plan/preflight refusal without losing the immutable review;
+  distinguish recoverable original-outcome observation from a new start.
+- Clarify same-parent rename/casing versus cross-parent move and Move + update,
+  preserve raw operation identity in Details and make supported risks visible.
+- Align Plan search/filter/selection/context controls with server authority,
+  native focus and complete query scope; component and installed checks pass.
 
 #### Deliver M1-9 inventory review (2026-10-01 – 2026-10-02)
 
-- Complete the desktop inventory actions: same-task Refresh, exact item/folder
-  scope, acknowledge missing and restore visibility, with original-command
-  recovery and truthful partial-result feedback. Refresh adopts the shared
-  admitted identity immediately; prior complete results remain readable.
-  The installed witness proves real folder-command clicks, replacement results,
-  missing-row hide/return, screenshot and task/host Close. Final ordinary checks
-  pass 5,829 cases/four skips; all 35 headed cases pass across dependency-scoped
-  runs, with initial incomplete/failed receipts retained. Stop after M1-9 for
-  user recap and GUI tweaks; no next-checkpoint work is activated.
-- Correct the existing live host witness's local native-completion wait budget
-  after diagnostics showed matching canceled events arriving beyond ten seconds.
-  Preserve the whole-scenario limit and every cancellation, identity, ordering
-  and post-cancellation transport assertion; product behavior is unchanged.
-  Both actual live-host gates and all 1,890 interfaces checks pass. Migrate the
-  existing exact production/extended command catalogs for the seven delivered
-  inventory commands without weakening the security assertions.
-- Adopt admitted starts directly in the desktop rather than relying on a later
-  task-list read. Share the lifecycle correction across Plan, inventory and
-  Plan again, including serial pair-batch starts, and Refresh. Ignore pre-admission
-  list responses, contain later read failures and replace the old event drain.
-  Fresh Plan requests no longer imply execution merely because a review exists.
-  Failed/stale-list and Plan-again probes reproduce the old failure and pass
-  after correction, including the delivered Refresh call site.
-  The corrected interfaces suite passes all 1,890 checks; independent review
-  also verifies batch admission and the migrated Plan-again trace helper.
-- Add the immutable workflow inventory projection with independent domain and
-  warning populations, complete-folder membership, raw evidence provenance,
-  checked rollups and explicit partial byte totals. Share canonical sibling
-  ordering with Plan while preserving its existing sort and selection behavior.
-  Real rows use their raw basename even when mixed-case descendants choose a
-  different tree spelling; independent review supplied that regression witness.
-  Corrected focused/workflow checks pass 160/894 cases; imports and independent
-  correction review pass. Ordinary evidence and environment reruns are retained
-  by dependency under `build/m1-9-20261001/`.
-- Add a dedicated cold inventory projection collector and independent checker,
-  including real Windows venv launch provenance and incomplete-evidence controls.
-  Five fresh samples per fixture pass the retained reference-profile maxima:
-  1.97 s base and 2.81 s information-heavy. Commit the raw samples and validation;
-  keep the failed first launch receipt and detailed logs in the task evidence.
-- Add task-bound inventory review reads: retain scan metadata through release,
-  lazily publish a whole ledger projection, cache revisioned search/filter/
-  collapse/sort windows, and query fresh exact-row evidence for Details.
-  Warning rows remain outside domain scope; acknowledged folders may remain
-  as ancestor context for visible descendants. Native/browser validation and
-  stale task/view/Close guards are covered. Independent review and real composed
-  scan-to-Details checks pass; the combined affected departments pass 3,109 tests
-  with three skips.
-- Add the desktop inventory read pane with server-owned search, facets,
-  collapse, paging and sibling sort/reset. Details distinguish observed facts
-  from current attestation; warnings stay informational and prior publications
-  stay visibly distinct from newer scans. Independent review corrected stale
-  viewport adoption and nested-row indentation. Focused browser checks and the
-  installed tree/keyboard/reflow witness pass.
-- Add same-task inventory Refresh through the service and production bridge.
-  Full, exact-item and complete-folder scans admit the location afresh, preserve
-  prior complete reads during failure/replacement and retain original success
-  or failure until task Close. Repeated starts share the existing bounded
-  response capacity; no automatic resubmission occurs. Fresh review and composed
-  admission, replay, offline recovery and replacement checks pass; the final
-  workflows/interfaces neighborhood passes 2,769 cases.
-- Add task-bound missing-row acknowledge/restore through the production bridge.
-  Complete server-owned folder scope includes hidden and off-window subjects;
-  conditional writes preserve reappeared rows. Frozen command facts and bounded
-  actual disposition counts survive response loss and failed view replacement,
-  including explicit unresolved rows after a partial failure. A dirty prior view
-  remains readable but cannot authorize another visibility change until rebuilt.
-  Task Close waits for active writes and retires the task's receipts.
-  Fresh review, 795 focused and 2,785 workflow/interface checks pass.
+- Add bounded Inventory browsing, server hierarchy/search/facets/sibling sort,
+  exact current evidence and on-demand Details, with keyboard/highlight/selection
+  authority independent of execution and ledger facts.
+- Add same-task Refresh and conditional missing-item acknowledge/restore,
+  original-outcome recovery and truthful complete/partial publication. No hash
+  or hidden execution policy follows a view read or visibility change.
+- Ordinary/import and all installed obligations pass with source/receipt identity
+  accounting. Later M1-10 supplies integrity controls; this checkpoint did not
+  deliver terminal subset retry, new performance targets or release acceptance.
 
 #### Mitigate the Advanced Color flyout halo (2026-09-24)
 
@@ -1684,111 +592,52 @@ explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain
 
 #### Complete M1-8 execution review and task recovery (2026-09-20 – 2026-09-24)
 
-- Bind M1-8 integration to the accepted tree and exact package/artifact
-  identity, preserving recovery evidence. The Plan window shares live and
-  terminal status, bounded row facts and requested detail; automatic
-  verification, recording and capacity failures remain separate. Recognized
-  disk-full/quota stops later executor work after current settlement while
-  retaining truthful prior results and recovery. Installed receipt latency
-  stayed within its existing budgets.
-- A suspended observation drain offers Retry updates on the same task. Pending
-  Close fences new admission, requests cancellation and waits for terminal
-  settlement; uncertain Close retains an exact Retry close action. Independent
-  action/error feedback, stale-callback rejection and bounded terminal review
-  remain. The final R0–R2 integration, ordinary, 33 installed headed and import
-  gates passed; the fresh U series completed 78 attempts. Filter/Search and
-  the later reduction study stayed deferred at this checkpoint.
+- Deliver bounded live/retained execution review with independent filesystem,
+  verification, recording and audit facts, native controls and original-outcome
+  recovery. Retain readable terminal truth through non-stopping degradation.
+- Recognized capacity failure stops later admission after current settlement;
+  recorder-only failure remains degradation. Preserve atomic publication, fresh
+  preflight and exact busy Close/release. U-v2 supersedes earlier UI timings;
+  terminal retry and durable task survival remain outside M1.
 
 #### Deliver bounded Plan review, selection and execution (2026-09-14 – 2026-09-20)
 
-- Build a revision-bound hierarchy with literal search, counted filters,
-  stable sorting, bounded row windows, server-owned selection and snapshot-
-  bound destructive confirmation. Tri-state header/folder gestures act on the
-  active filtered view, including off-window descendants; navigation does not
-  silently change selection. Highlight ranges, keyboard/pointer distinction,
-  stale-revision refusal and workflow dependency closure remain guarded.
-- Distinguish a built Plan from execution readiness; no selection or preflight
-  refusal may start work. Same-task Execute preserves rollback, live controls,
-  exact session binding and terminal facts. Plan again re-resolves retained
-  identities into a new task; closing and settlement races cannot replay
-  effects. User-facing status, density, table sizing, semantic colors and
-  bytes/metadata labels were refined without changing numeric sort facts.
-  The final installed desktop and ordinary gates passed; M1-7's fixed scale
-  criteria and earlier failed readiness attempts are recorded under Performance.
+- Deliver rootless bounded Plan review, search/category facets, sibling sorting,
+  complete server-owned selection and exact destructive confirmation.
+- Preserve immutable Plan/options, dependency-closed execution membership,
+  current preflight/root authority and virtualized keyboard/focus behavior.
+  Scale and installed gates pass on their recorded fixtures; retired criteria
+  are not relabeled as passes or current-source timing guarantees.
 
 #### Deliver Setup, task navigation and selective icons (2026-09-09 – 2026-09-14)
 
-- Process-live blank tasks have newest-first navigation, safe busy Close,
-  retained terminal status and generation-safe reinjection. Bounded async
-  create/start/release/close commands separate admission from delivery. Setup
-  uses fresh shared location admission, typed/picker/recent inputs, frozen task
-  options, serial best-effort pair creation, per-row queued setting snapshots
-  and current-root re-admission. Remembered locations are run-derived hints,
-  never lasting authority; Add pair and removal retain exact retry ownership.
-- Settings/About preserves active tasks. Compact recent/batch tables, scoped
-  feedback, accessible control states and the fixed offline Fluent icon
-  catalog refine the headed shell. Native overlay scrollbars, verify-only
-  batching and persistent custom pair presets remain deferred to M2. The
-  transparent-host rendering issue and intermittent disabled-label blur retain
-  their qualified diagnostics; neither is claimed fixed. Ordinary, installed
-  and import gates passed with independent review.
+- Deliver process-live blank tasks, newest-first rail/navigation/Close, typed,
+  picker and recent location starts, frozen per-task options and fresh Plan Again.
+- Add serial best-effort pair composition and explicit creation results without
+  a hidden global queue or lasting admission. Curate fixed local Fluent icons;
+  keep accessible input, forced colors and source/license provenance.
 
 #### Establish exact events and presentation semantics (2026-08-19 – 2026-08-25)
 
-- Core event v5 has exact bounded reliable envelopes, ordered item reasons,
-  signed-64 scalars and full-width Windows file identity. The coordinated
-  persistence cut used ledger v4/history v6 at data epoch 5; later revisions
-  advanced the shared epoch as recorded above. The v4 per-item progress model
-  distinguishes attempted bytes from durable publication, survives retry and
-  Gap, and feeds an O(1) browser reducer without inferring domain outcomes.
-- Ratify a compact semantic palette across operation, task and integrity
-  channels with labels and accessible state authoritative over hue. Persisted
-  System/Light/Dark choice belongs to a bounded cosmetic document, not plan or
-  workflow state; Windows retains forced-color, accent and motion authority.
-  The shared file-row renderer began dormant and test-only before Plan wiring;
-  its bounded hierarchy, controls and responsive layout gained headed
-  light/dark/forced-color/reduced-motion evidence. Bridge contract authority
-  was consolidated without weakening origin or custody limits.
-
-<a id="complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18"></a>
-<a id="close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14"></a>
+- Establish exact versioned progress/result facts, bounded publication and
+  coherent selection/search/sort/window identities. Keep unreliable progress
+  separate from reliable item/terminal custody and durable outcomes.
+- Retain phase-aware truthful feedback, independent filesystem/integrity/
+  recording/audit axes and current-owner stale refusal across adapters.
 
 #### Secure the headed desktop foundation (2026-07-31 – 2026-08-18)
 
-- Pin WebView2, exact packaged origins, navigation/frame/popup guards and a
-  strict bounded bridge; no MSHTML fallback. The installed host owns document
-  readiness, command admission, observation custody and shutdown. A workflow-
-  owned visible tree and bounded virtualized row windows retain keyboard,
-  zoom, forced-color, hostile-text, geometry and stale-generation evidence.
-- The editable-source GUI launcher isolates development data and processes
-  from clean-wheel evidence. Transport drains coalesce progress for at most
-  150 ms while receipts, reliable and terminal feedback bypass that wait.
-  Historical compositor-health limits remain explicit; inventory and later
-  release closure were not delivered by this foundation.
+- Deliver the lazy GUI-subsystem launcher, per-user paths/logging, fixed desktop
+  singleton, strict WebView2 host, same-origin inert assets and bounded bridge.
+- Refuse missing prerequisites, off-origin/navigation/popup exposure and unsafe
+  documents; preserve attach-before-start observation and ordered shutdown.
+- Establish Fluent/material/theme/accessibility, local icon and clean-installed
+  native witnesses. No browser fallback, domain policy in UI or durable tasks.
 
 ### M1 Features
 
 Stages 1–5.5 delivered the headless reviewed-sync, inventory/integrity, history,
 CLI, and reusable workflow product plus its development measurement tooling.
-
-#### Harden development measurement tooling (2026-08-06 – 2026-08-18)
-
-- Added a reusable empty-target executor profile that resets the target before
-  each sample, scans/plans once per batch, preflights the first fresh execution
-  set, and then measures full copy-plus-finishing work with fresh mutable state
-  per sample; mutable template/update workloads remain prepare-each.
-- Kept diagnostics on by default, made executor pipeline and verifier reader
-  splits useful on the console, bound repeated samples to one fixture, retained
-  unrounded raw samples, and separated setup, samples, validation, and summaries
-  in one atomic versioned report.
-- Replaced marker-wide descendant deletion with strict root-bound output
-  manifests, exact printed-plan application, whole-tree and per-entry
-  revalidation, generic reparse/alias refusal, truthful partial-state receipts,
-  and explicit inspected `--force-all` recovery.
-- Made benchmark reports and baseline sidecars create-exclusive and
-  destination-identity-bound, required explicit sidecar paths and replacement
-  authority, removed implicit append/cleanup behavior, and added adversarial
-  corpus, verifier, sidecar, artifact-race, cleanup, and CLI regressions.
 
 #### Add bounded durable history readback (2026-08-05 – 2026-08-06)
 
@@ -1804,13 +653,6 @@ CLI, and reusable workflow product plus its development measurement tooling.
 - Added deselection provenance, dependency closure, authoritative selection
   re-derivation, risk previews, and retry-safe facade admission.
 
-#### Complete headless integrity workflows, service, and CLI (2026-07-25)
-
-- Added the bounded XXH3 copy pipeline, role-free inventory,
-  baseline/verify/rebaseline, and optional post-copy verification.
-- Completed the reusable service facade and typed CLI commands/results for
-  sync, history, and integrity work.
-
 #### Establish M1 contracts and persistence boundaries (2026-07-24 – 2026-07-27)
 
 - Made reviewed plans immutable at execution, separated semantic settings from
@@ -1820,6 +662,13 @@ CLI, and reusable workflow product plus its development measurement tooling.
 - Removed persisted mapping-filter projections: filters stay immutable per-plan
   scan input while the ledger retains role-free inventory and mapping
   correspondence.
+
+#### Complete headless integrity workflows, service, and CLI (2026-07-25)
+
+- Added the bounded XXH3 copy pipeline, role-free inventory,
+  baseline/verify/rebaseline, and optional post-copy verification.
+- Completed the reusable service facade and typed CLI commands/results for
+  sync, history, and integrity work.
 
 ## M0
 
