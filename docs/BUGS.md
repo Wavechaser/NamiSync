@@ -52,11 +52,36 @@ to a global chronological list. Target 6–12 rendered lines per entry; include
 only the test conditions or residual threat boundary needed to explain the
 defect, and move implementation-level test choreography out of the log.
 
+### Stable references and access
+
+Each entry has a standalone `<a id="bug-NNNN"></a>` immediately before its
+paragraph. Refer to it as `BUG-NNNN`; the number is identity, not chronology,
+severity or mechanism. Keep it when editing or moving the entry. Allocate the
+next unused number above the largest assigned ID (at least four digits); never
+renumber, recycle or delete an assigned identity. Retain superseded records
+with their disposition instead. Existing module/scope links remain valid.
+
+This file is the canonical record. `python -m tools.bugs` validates every entry
+and generates full-record Markdown or JSONL views on demand; see
+[TOOLS](TOOLS.md#bug-log-access). Generated catalogs belong in ignored `build/`,
+not in a second maintained log. Validation rejects missing/duplicate IDs and
+malformed records rather than silently reducing the corpus. Preserve raw status
+and date qualifiers; older prose does not need mechanical Cause/Fix extraction.
+
+For sibling analysis, filter across owners using causal terms as well as
+categories, then read the complete candidate entries and relevant current
+code/tests. Record the compared IDs, population and exclusions. Exact category
+or text matches retrieve candidates; they do not prove common cause, duplicate
+records, current defects or applicability of a recurrence stop. Do not truncate
+entries to fit a batch; use explicit record offsets/limits.
+
 ---
 
 ## DEVELOPMENT TOOLS
 
 ### Executor settlement authority
+
+<a id="bug-0001"></a>
 
 - MINOR - FIXED (2026-08-26). Derived oracle acceptance truth. The seven-row
   recording oracle reconstructed item attribution from frozen event-v4 detail
@@ -71,6 +96,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+<a id="bug-0002"></a>
+
 - MINOR - FIXED (2026-10-04). Stale observation contract. The optional
   `bridge-event installed` diagnostic rejects current complete composition
   receipts as invalid even when its event and resource observations qualify.
@@ -84,6 +111,8 @@ defect, and move implementation-level test choreography out of the log.
   `build/bridge-catalog-20261004/`; original source comparison remains in
   `build/gui-refinements-20261004/rf2-command-catalog-audit.json`.
 
+<a id="bug-0003"></a>
+
 - MINOR - FIXED (2026-10-01). Unsupported recovery advice. Reusing a
   `tools performance --json` destination safely refuses before launching,
   but suggests `--replace-report`, which that subcommand does not accept.
@@ -94,6 +123,8 @@ defect, and move implementation-level test choreography out of the log.
   preservation of the existing report. Current evidence:
   `build/open-bugs-20261001/`; historical reproduction remains under
   `build/admission-bridge-closeout-20260927/`.
+
+<a id="bug-0004"></a>
 
 - MINOR - FIXED (2026-09-27). Stale observation contract. The optional
   bridge-event diagnostic rejects current decimal-string Progress positions
@@ -112,6 +143,8 @@ defect, and move implementation-level test choreography out of the log.
   AB-2/AB-10 causes remain unproven. Evidence: `build/incident-trace-20260927/`,
   `build/trace-20260927/` and `build/admission-bridge-closeout-20260927/`.
 
+<a id="bug-0005"></a>
+
 - MINOR - FIXED (2026-09-26). Stale observation contract. Seven optional
   execution-UI feedback cases produced the current pending-or-accepted frame
   receipt, then rejected it against historical busy/pending-frame fields.
@@ -121,6 +154,8 @@ defect, and move implementation-level test choreography out of the log.
   current feedback shape while preserving exact action/fixture fields and the
   frozen historical JSON. Focused receipt checks and the installed endpoint
   verify the correction; no product command or timing budget changed.
+
+<a id="bug-0006"></a>
 
 - MINOR - FIXED (2026-09-25). Dialog completion conflated with selection.
   The native transport test helper reported a selected folder when the dialog
@@ -133,12 +168,16 @@ defect, and move implementation-level test choreography out of the log.
   a still-open dialog fails within the existing bound without another click.
   No production picker change or diagnosis of the original timing is claimed.
 
+<a id="bug-0007"></a>
+
 - MINOR - FIXED (2026-09-23). Duplicated badge expectation drift. The gallery
   correctly emitted a yellow fill capacity badge, but its child validator and
   a separate parent assertion expected text, rejecting valid installed evidence.
   Both direct consumers now follow the documented fill form. The saved original
   report passes both and a text-form mutation fails both; the existing parser
   test retains its negative control. Product badge behavior is unchanged.
+
+<a id="bug-0008"></a>
 
 - MODERATE - FIXED (2026-09-23). Window-fixture acceptance without a visible
   row. The gallery returned one row at the renderer's overscan start, then
@@ -148,6 +187,8 @@ defect, and move implementation-level test choreography out of the log.
   operation at its actual index. Acceptance observes a whole rendered row and
   row activation and the card disclosure's hit target and focus. Logical row
   count, eight-state corpus and product request limits are unchanged.
+<a id="bug-0009"></a>
+
 - MINOR - FIXED (2026-09-23). Failure-packet reason mismatch. The gallery
   attached layout predicates under a generic failure reason, so its receiver
   rejected the rich packet and retained only a later fallback. The actual
@@ -158,6 +199,8 @@ defect, and move implementation-level test choreography out of the log.
   a missing refresh still fails within the original bound. The native keyboard
   fixture starts its browser call on the UI thread and observes actual scroll
   movement before recording; failures retain their keyboard-stage location.
+<a id="bug-0010"></a>
+
 - SEVERE - FIXED (2026-09-22). Unbounded assertion diagnostics. A failed
   `plan_review_probe.mjs` DOM identity assertion exhausted Windows commit;
   Event 2004 recorded one Node process at 67,223,269,376 bytes, with coincident
@@ -172,6 +215,8 @@ defect, and move implementation-level test choreography out of the log.
   No product data-loss or filesystem-damage consequence was established.
 
 
+<a id="bug-0011"></a>
+
 - MINOR - FIXED (2026-09-07). Fixed-wait headed synchronization. The native-host
   evidence child could exhaust its 10-second reinjection waits before WebView
   reported the next ready document, losing the off-thread URL measurement.
@@ -183,6 +228,8 @@ defect, and move implementation-level test choreography out of the log.
   launched child plus all eight observed descendants. Evidence and hashes are
   under `build/test-refinement/1026541/st-h/`; no product defect was found.
 
+<a id="bug-0012"></a>
+
 - MINOR - FIXED (2026-08-29). Checkout line-ending conversion. Windows clones
   rewrote the pinned Fluent token transcripts and shipped icon-source assets to
   CRLF, so their working-tree SHA-256 values no longer matched the reviewed
@@ -190,6 +237,8 @@ defect, and move implementation-level test choreography out of the log.
   fixture and asset directories were not exempt from Git's global text
   conversion. Fixed by marking both fixed trees as non-text in
   `.gitattributes`; their committed bytes and recorded hashes are unchanged.
+<a id="bug-0013"></a>
+
 - MINOR - FIXED (2026-08-18). Cross-sample fixture drift. Verifier repetitions
   could aggregate different corpus memberships or stats, and priming or sidecar
   validation did not bind the following measured scan; a shorter corpus could
@@ -198,6 +247,8 @@ defect, and move implementation-level test choreography out of the log.
   first-sample fixture binding, exact key/stat coverage, repeated baselining
   content-evidence comparison, visible setup timing, and whole-batch report
   refusal on drift.
+<a id="bug-0014"></a>
+
 - SEVERE - FIXED (2026-08-18). Implicit artifact replacement authority.
   Baseline seeding could silently replace an unrelated ordinary file at the
   inferred sibling name, while report files appended partial or semantically
@@ -208,6 +259,8 @@ defect, and move implementation-level test choreography out of the log.
   authority with pre-work destination binding and immediate identity/reparse
   revalidation, one versioned atomic batch report, and no guessed cleanup or
   retention policy.
+<a id="bug-0015"></a>
+
 - SEVERE - FIXED (2026-08-18). Coarse descendant deletion authority. A valid
   marker on an old rig directory allowed reset, executor teardown, generation,
   or `clean` to recursively erase unrelated files later placed anywhere below
@@ -218,6 +271,8 @@ defect, and move implementation-level test choreography out of the log.
   printed-plan application, individual unlink/rmdir cleanup, failure retention,
   and truthful pre/post/partial deletion receipts. Marker-only or unknown
   content now requires an inspected explicit `clean --force-all`.
+<a id="bug-0016"></a>
+
 - SEVERE - FIXED (2026-08-06). Unbound destructive workspace authority. Corpus
   generation could overwrite matching files in any existing directory and
   retain stale files, while executor teardown trusted only the existence of a
@@ -227,6 +282,8 @@ defect, and move implementation-level test choreography out of the log.
   signed lease artifacts, live-claim-only mutators, deterministic owned
   regeneration, and refusal of nonempty unowned roots, replacement/reparse
   aliases, overlap, and partial template walks.
+<a id="bug-0017"></a>
+
 - MODERATE - FIXED (2026-08-06). Measurement artifact self-contamination.
   Sidecar or JSON paths could overwrite corpus content, alter later repeats,
   collide with ownership state, or disappear with target teardown. Cause: the
@@ -235,6 +292,8 @@ defect, and move implementation-level test choreography out of the log.
   artifact before claiming or writing, refusing existing multi-link outputs,
   reserving ownership paths and explicit report/sidecar collisions, and testing
   corpus-file preservation, repeat bounds, template overlap, and path aliases.
+<a id="bug-0018"></a>
+
 - MINOR - FIXED (2026-08-06). Invalid-sample acceptance. Partial
   scans and priming, failed execution, mixed verifier outcomes, degraded
   recording, and readback mismatches could still report throughput and exit 0;
@@ -246,6 +305,8 @@ defect, and move implementation-level test choreography out of the log.
 ## EXECUTOR
 
 ### M1 Hardening
+
+<a id="bug-0019"></a>
 
 - MODERATE - FIXED (2026-09-30). Own-effect metadata mismatch. On native Windows,
   a reviewed NORMAL-only file can gain ARCHIVE during rename or hardlink
@@ -262,6 +323,8 @@ defect, and move implementation-level test choreography out of the log.
   cases and changed-version controls pass. Evidence under
   `build/executor-simplification-20260929/differential/`: `result3a-archive-*.json`
   retains the reproductions; `result5-final-focused.log` records the regression gate.
+<a id="bug-0020"></a>
+
 - SEVERE - FIXED (2026-09-28). Unreadable descendant admitted as absence.
   The native descendant walk treated every `OSError` as a missing component.
   A preplaced junction with ACL-denied no-follow attributes could therefore
@@ -273,6 +336,8 @@ defect, and move implementation-level test choreography out of the log.
   failures propagate through resolve and both owned-trash consumers. Native regressions
   assert refusal without writing through the junction, check ACL restoration,
   and remove the junction before fixture cleanup.
+<a id="bug-0021"></a>
+
 - MODERATE - FIXED (2026-10-01). Native handle metadata on exFAT.
   K: copies failed before publication when temp finalization requested unsupported
   `FileIdInfo`. Cause: handle metadata required identity before an identity-weak
@@ -285,6 +350,8 @@ defect, and move implementation-level test choreography out of the log.
   refuses absent identity when required for reviewed-volume corroboration.
   Evidence: `build/open-bugs-20261001/identity-fix.json`; original failure receipts
   remain in `build/root-admission-optimization-20260928/`.
+<a id="bug-0022"></a>
+
 - MODERATE - FIXED (2026-08-26). Cancellation settlement ownership gap.
   A reliable collaborator raising `Canceled` after outcome retention could
   replace cancellation with an invariant error despite publication and a
@@ -295,6 +362,8 @@ defect, and move implementation-level test choreography out of the log.
   under that owner's settlement. Recording and metadata are not repeated, and
   persistent sink refusal never fabricates acceptance. The production EventHub
   does not raise this control exception; the boundary is latent.
+<a id="bug-0023"></a>
+
 - MODERATE - FIXED (2026-08-26). Diagnostic-coupled recording attribution.
   Executor and workflow recording boundaries rendered exception text before
   establishing the typed cause. A failing `__str__` or logical filename access
@@ -303,6 +372,8 @@ defect, and move implementation-level test choreography out of the log.
   before guarded optional rendering and retaining `detail=None` on renderer
   failure. Result messages and secondary notes have a fixed safe fallback;
   ordinary rendered details retain existing bounds and first-observation rules.
+<a id="bug-0024"></a>
+
 - MODERATE - FIXED (2026-08-26). Exception-bound recording attribution.
   A safely refused UPDATE could report recording clean when owned-temp cleanup
   replaced its flush error or a retained-backup retry settled through the
@@ -314,6 +385,8 @@ defect, and move implementation-level test choreography out of the log.
   clears the cause, and a newly refused barrier replaces its diagnostic.
   Accepted-journal validation is guarded once: inconsistency preserves the
   original external error and retained evidence rather than retiring it.
+<a id="bug-0025"></a>
+
 - SEVERE - FIXED (2026-08-26). Reliable-sink settlement receipt loss. A
   successful recorder transaction lived only in a transient settlement while
   its item outcome was offered, so sink rejection sent the exception backstop
@@ -323,6 +396,8 @@ defect, and move implementation-level test choreography out of the log.
   emission and replaying that exact value once. Only accepted delivery advances
   continuation state or retires the journal; persistent rejection remains
   pending and terminalizes from accepted items under the original sink error.
+<a id="bug-0026"></a>
+
 - MODERATE - FIXED (2026-08-22). Deferred-settlement activity conflation. A
   successful directory create remained the active Progress item until later
   descendant and metadata finalization, so the next operation replaced its
@@ -333,6 +408,8 @@ defect, and move implementation-level test choreography out of the log.
   newer lossy snapshot to repoint activity without implying settlement, and
   exercising the real executor/event-view stream through presentation reduction.
   AB-8 moves that reducer to Python and retains the producer-to-page witness.
+<a id="bug-0027"></a>
+
 - MODERATE - FIXED (2026-08-21). Continuation progress-state loss. Pausing
   after a partial copy retained operation status and mutation evidence but not
   the aggregate byte high-water, so a resumed task could rebuild its reporter
@@ -343,6 +420,8 @@ defect, and move implementation-level test choreography out of the log.
   authoritative live pause emission that coherently refreshes aggregate items,
   bytes, path, and nominal item/attempt state. Resume stalls at retained
   high-water until new work catches up.
+<a id="bug-0028"></a>
+
 - MODERATE - FIXED (2026-08-21). Throttled terminal-progress settlement.
   Cancellation or an escaping executor failure could reliably settle every
   operation yet leave the session's last lossy `Progress` snapshot naming a
@@ -353,6 +432,8 @@ defect, and move implementation-level test choreography out of the log.
   settlement: aggregate items and byte high-water remain current, while nominal
   item fields and `current_path` clear. An emitter failure remains secondary to
   the original executor exception.
+<a id="bug-0029"></a>
+
 - SEVERE - FIXED (2026-08-11). Exception-safety settlement gap. A
   failure policy or retry sleep could raise after MOVE or another mutation had
   committed, and a later checkpoint could raise with a completed MKDIR still
@@ -363,12 +444,16 @@ defect, and move implementation-level test choreography out of the log.
   exception backstop that finalizes pending directories and retires every
   active effect before propagation. Process-fatal `BaseException` retains its
   cleanup-only contract.
+<a id="bug-0030"></a>
+
 - MINOR - FIXED (2026-08-11). Authority-source mismatch. Executor root
   guards derived and admitted the reviewed plan root but ignored the root
   argument that the following resolver used. Existing callers supplied the
   same path, but an extension or future call-site error could validate one root
   and touch another. Fixed by requiring lexical equality with the derived
   source or target authority before any probe or resolution.
+<a id="bug-0031"></a>
+
 - MODERATE - FIXED (2026-08-10). Retry-cleanup error suppression. A retryable copy
   failure before continuation installation attempted owned-temp cleanup but
   discarded its error and cleared process-local ownership. Cancellation at the
@@ -376,6 +461,8 @@ defect, and move implementation-level test choreography out of the log.
   run's temp remained without diagnostics. Fixed by requiring cleanup to
   succeed before retry sleep or control checkpoints and settling a failed
   cleanup immediately as `cleanup-failed`; exact-name rerun recovery remains.
+<a id="bug-0032"></a>
+
 - MODERATE - FIXED (2026-08-10). Multi-effect settlement omission. UPDATE
   could retain its reviewed backup in owned trash, fail replacement and
   readonly restoration, then discard all backup evidence from ordinary or
@@ -384,6 +471,8 @@ defect, and move implementation-level test choreography out of the log.
   backup was durable. Fixed by retaining backup detail as the primary byte
   state and composing readonly truth under `mutation_durable_state`; confirmed
   publication still suppresses the subordinate marker.
+<a id="bug-0033"></a>
+
 - MODERATE - FIXED (2026-08-10). Non-atomic settlement re-observation. An
   ordinary operation failure with retained byte or mutation state was probed
   before owned-temp cleanup, then probed again if cleanup failed. A one-shot
@@ -392,6 +481,8 @@ defect, and move implementation-level test choreography out of the log.
   `cleanup-failed`. Fixed by taking one pre-cleanup settlement snapshot and
   adding cleanup diagnostics without another probe; failures with no retained
   effect keep the existing cleanup-owned reason.
+<a id="bug-0034"></a>
+
 - MODERATE - FIXED (2026-08-10). Sibling-effect settlement short-circuit. UPDATE could
   clear readonly, fail replacement and restoration, then lose its publication
   state probe; the resulting publication-unverified settlement short-circuited
@@ -400,6 +491,8 @@ defect, and move implementation-level test choreography out of the log.
   only confirmed publication authoritative and composing unverified byte
   diagnostics with marker truth under `mutation_durable_state`. A regression
   covers failed restoration plus an unavailable ordinary publication probe.
+<a id="bug-0035"></a>
+
 - MODERATE - FIXED (2026-08-10). TOCTOU backup-evidence mismatch. On a target without
   hardlink support, UPDATE copied the reviewed live file and then sampled its
   path for backup metadata; a concurrent grow, truncation, or rewrite could
@@ -409,6 +502,8 @@ defect, and move implementation-level test choreography out of the log.
   stats from one open read handle, requiring the exact copied byte count, and
   publishing neither backup nor update on detectable drift. Same-size mutation
   with restored metadata remains inside the documented inference boundary.
+<a id="bug-0036"></a>
+
 - SEVERE - FIXED (2026-08-09). Cancellation settlement short-circuit. UPDATE
   could clear readonly, fail replacement and restoration into retry, then
   cancel while publication probing failed; the failed byte settlement returned
@@ -419,6 +514,8 @@ defect, and move implementation-level test choreography out of the log.
   degradation. Exact restored pre-state remains recording-OK; regressions cover
   restored, changed, and committed-publication precedence without success
   evidence.
+<a id="bug-0037"></a>
+
 - SEVERE - FIXED (2026-08-09). TOCTOU parent redirection. TRASH,
   MOVE_UPDATE, and UPDATE validated `.synctrash/<run>` before a recorder or
   copy barrier but checked only the destination leaf afterward; a same-volume
@@ -429,6 +526,8 @@ defect, and move implementation-level test choreography out of the log.
   recovery probes.
   Real junction regressions cover all three operation families. The final
   validation-to-syscall external-writer micro-window remains path-based.
+<a id="bug-0038"></a>
+
 - SEVERE - FIXED (2026-08-09). Non-byte effect settlement omission. MOVE, RECASE,
   TRASH, DELETE, and MKDIR could commit and then raise while the failed item
   still reported `recording=OK`; failed readonly restoration could likewise
@@ -438,6 +537,8 @@ defect, and move implementation-level test choreography out of the log.
   state probes retained across retry/pause/cancel and deferred mkdir metadata.
   Exact unchanged pre-state stays recording-OK; ambiguous, unreadable, and
   case-only RECASE state degrades conservatively without success evidence.
+<a id="bug-0039"></a>
+
 - SEVERE - FIXED (2026-08-09). TOCTOU prepared-artifact substitution. UPDATE
   validated its prepared temp before a recorder flush, allowing a same-size,
   same-mtime replacement during that wait to publish foreign bytes under the
@@ -448,6 +549,8 @@ defect, and move implementation-level test choreography out of the log.
   filesystem call. Identity-weak substitution and same-object byte mutation
   still require handle-bound publication or a byte reread and remain outside
   the external-writer contract.
+<a id="bug-0040"></a>
+
 - SEVERE - FIXED (2026-08-08). TOCTOU guard-to-rename race. MOVE, RECASE,
   MOVE_UPDATE old-path cleanup, and TRASH performed their recorder flush after
   a path guard and before the non-replacing rename. An external writer could
@@ -458,6 +561,8 @@ defect, and move implementation-level test choreography out of the log.
   source/destination guards, re-reading MOVE_UPDATE state after the wait, and
   gating same-size/same-mtime foreign replacements across all four operations.
   The smaller path-guard-to-rename external-writer boundary remains non-atomic.
+<a id="bug-0041"></a>
+
 - SEVERE - FIXED (2026-08-08). Post-publication settlement omission. COPY,
   UPDATE, or MOVE_UPDATE could publish its new target and then fail metadata
   repair or another completion step while reporting `recording=OK`, leaving a
@@ -468,6 +573,8 @@ defect, and move implementation-level test choreography out of the log.
   target/backup/old-path drift detail, settling the item failed, and degrading
   recording without inventing success-only published evidence. An unsuccessful
   state probe degrades as publication-unverified rather than claiming OK.
+<a id="bug-0042"></a>
+
 - SEVERE - FIXED (2026-08-08). TOCTOU guard-to-mutation race. UPDATE and DELETE
   performed their recorder durability flush after the final target guard, so a
   foreign replacement during that potentially long wait could be overwritten
@@ -475,6 +582,8 @@ defect, and move implementation-level test choreography out of the log.
   recorder work inside the guard-to-mutation interval. Fixed by flushing before
   the final live guard. The remaining path-based `stat`/readonly/syscall gap is
   still non-atomic and remains the documented external-writer boundary.
+<a id="bug-0043"></a>
+
 - MINOR - FIXED (2026-08-06). Test-observation race. The one-core
   `test_b2_hash_fifo_independently_plateaus_at_32_items` intermittently failed
   although both FIFOs remained capped at 32 items. Cause: separately sampled
@@ -483,6 +592,8 @@ defect, and move implementation-level test choreography out of the log.
   before signaling and proving no reader advance after two blocked-enqueue
   checkpoints. Delay stress and an injected hidden read validate the gate;
   production queue-cap behavior passed throughout.
+<a id="bug-0044"></a>
+
 - SEVERE - FIXED (2026-08-04). TOCTOU backup-baseline replacement. An external
   replacement of the live UPDATE
   target while NamiSync created its backup could become the continuation's new
@@ -494,6 +605,8 @@ defect, and move implementation-level test choreography out of the log.
   copied-backup repair and target replacement. An external swap after the final
   guard but before the path-based replace remains the documented non-atomic
   threat boundary.
+<a id="bug-0045"></a>
+
 - MODERATE - FIXED (2026-08-04). Backup provenance confusion. UPDATE
   cancellation called any file present at
   its planned backup path `retained`, even if another process replaced the owned
@@ -505,6 +618,8 @@ defect, and move implementation-level test choreography out of the log.
   Before repaired evidence is cached, stable identity binds the backup when the
   target profile supplies it; an identity-weak same-kind/same-size replacement
   remains outside the evidence available to this minimal guard.
+<a id="bug-0046"></a>
+
 - MODERATE - FIXED (2026-08-04). Retry-stage omission. A copied UPDATE
   backup whose atomic publish
   succeeded but post-publish metadata repair hit a sharing violation could
@@ -517,6 +632,8 @@ defect, and move implementation-level test choreography out of the log.
   second attempt restores the displaced target metadata before replacing the
   live target. Hardlink repair remains after replacement because its backup
   still shares the displaced live inode until then.
+<a id="bug-0047"></a>
+
 - MODERATE - FIXED (2026-08-04). Retry-state revalidation gap. A sharing retry
   could record COPY, UPDATE, or MOVE_UPDATE success for a same-size/same-mtime
   target replaced during backoff. Cause: resumed continuations reused prepared
@@ -526,6 +643,8 @@ defect, and move implementation-level test choreography out of the log.
   detectable replacement or absence as `target-drift` without success evidence.
   First-pass execution adds no stat; replacement after the guard, or before a
   cache on an identity-weak volume, remains outside this non-locking guarantee.
+<a id="bug-0048"></a>
+
 - SEVERE - FIXED (2026-08-03). Publication provenance misattribution. Cancel
   after a failed UPDATE replace could claim
   `canceled-after-publish` for a foreign write made by the process that held the
@@ -538,6 +657,8 @@ defect, and move implementation-level test choreography out of the log.
   preferring the continuation's synchronous/cached publish evidence, and
   keeping genuinely unverified state failed under its drift/I/O reason without
   degrading recording or claiming publication.
+<a id="bug-0049"></a>
+
 - SEVERE - FIXED (2026-08-03). Cancellation post-commit settlement gap.
   Cancellation after a published byte operation
   could label COPY or UPDATE `CANCELED` even though the new target was already
@@ -547,6 +668,8 @@ defect, and move implementation-level test choreography out of the log.
   settling a published-but-unfinished operation `FAILED` with the typed
   `canceled-after-publish` reason and explicit durable-state detail, degrading
   recording, and never attaching success-only `PublishedCopyEvidence`.
+<a id="bug-0050"></a>
+
 - SEVERE - FIXED (2026-08-03). Composite cancellation settlement gap. Cancellation
   during MOVE_UPDATE's durable retry
   could report `CANCELED` after the new target published, whether the old target
@@ -555,6 +678,8 @@ defect, and move implementation-level test choreography out of the log.
   `new-and-trash` state, settling the unfinished operation `FAILED` with
   `canceled-after-publish`, degrading recording, and leaving the next reviewed
   scan/plan to converge without rollback.
+<a id="bug-0051"></a>
+
 - MODERATE - FIXED (2026-08-03). Cancellation recovery-evidence omission. Cancellation
   after UPDATE created its durable
   backup but before replacement hid that retained old version from the canceled
@@ -564,6 +689,8 @@ defect, and move implementation-level test choreography out of the log.
   M1 still has no trash purge: reclamation remains with the deferred
   maintenance-session retention workflow, and cancellation never deletes the
   only recoverable old version.
+<a id="bug-0052"></a>
+
 - SEVERE - FIXED (2026-08-03). Pause/resume continuation loss. Pausing UPDATE after a
   backup, MOVE_UPDATE after publication, or COPY during metadata retry made
   resume reapply scan-time guards and reject NamiSync's own durable state.
@@ -572,6 +699,8 @@ defect, and move implementation-level test choreography out of the log.
   boundary, latching pause through settlement, and reusing staged bytes before
   raising `PauseRequested`. Cancellation remains immediate; policy `Stop`
   suppresses a latched pause and settles later operations as `policy-stop`.
+<a id="bug-0053"></a>
+
 - MODERATE - FIXED (2026-07-30). Rename-attestation policy mismatch. Pure-move
   recording within timestamp granularity. A valid MOVE could rename the
   reviewed target and then degrade recording when its timestamp differed
@@ -581,6 +710,8 @@ defect, and move implementation-level test choreography out of the log.
   checking the reviewed old-target version; fixed by making
   `prior_target_expected` the complete pure MOVE/RECASE attestation while
   retaining intended-content validation for MOVE_UPDATE.
+<a id="bug-0054"></a>
+
 - SEVERE - FIXED (2026-07-30). Point-of-touch revalidation omission. Pure rename and
   directory source revalidation.
   MOVE could rename a reviewed old target after the corresponding source
@@ -590,6 +721,8 @@ defect, and move implementation-level test choreography out of the log.
   source point-of-touch guard and accepted intended metadata without binding the
   rename result to the reviewed old target identity; fixed with source guards,
   post-rename version checks, and the same defensive recorder check.
+<a id="bug-0055"></a>
+
 - MODERATE - FIXED (2026-07-25). Managed-metadata policy drift. Post-publish
   metadata repair on volumes with
   last-access updates enabled, observing a renamed file could change its access
@@ -600,6 +733,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M0 hardening
 
+<a id="bug-0056"></a>
+
 - MODERATE - FIXED (2026-07-20). Orphaned-artifact lifecycle gap. Temps left
   by killed or crashed runs accumulated permanently while preflight counted
   their bytes as reclaimable, leaking target capacity and potentially stranding
@@ -608,17 +743,23 @@ defect, and move implementation-level test choreography out of the log.
   ignores owned temps; fixed with one post-preflight, pre-copy exact-grammar
   sweep over preflight's touched target parents, excluding current-run files and
   `.synctrash`.
+<a id="bug-0057"></a>
+
 - MODERATE - FIXED (2026-07-20). Self-induced drift misclassification. Cleanup of a
   directory emptied by same-run moves or trash operations was rejected as target
   drift, preventing folder rename/removal in one run. Cause: the final guard
   compared scan-time mtime and link count that planned child removal changes;
   fixed with a cleanup matcher that validates stable metadata and treats absent
   reviewed identity as absent evidence before atomic empty-directory removal.
+<a id="bug-0058"></a>
+
 - MODERATE - FIXED (2026-07-20). Native access-right mismatch. Every Windows
   parent-directory flush failed and warned despite successful mutations. Cause:
   `CreateFileW` requested `GENERIC_READ`, while `FlushFileBuffers` requires
   write access; fixed by requesting `GENERIC_WRITE` on the existing directory
   handle.
+<a id="bug-0059"></a>
+
 - MODERATE - FIXED (2026-07-19). Retry-stage replay. A transient sharing
   violation after update backup or publish restarted against the operation's own
   mutation, causing false target drift or destination occupancy. Cause: generic
@@ -628,6 +769,8 @@ defect, and move implementation-level test choreography out of the log.
 ## DISPATCHER AND HISTORY
 
 ### M1 Hardening
+
+<a id="bug-0060"></a>
 
 - MODERATE - FIXED (2026-08-27). Pre-run exception closure retention. Lock
   acquisition, continuation open, and canceled-session settlement passed a raw
@@ -639,6 +782,8 @@ defect, and move implementation-level test choreography out of the log.
   passing only the fixed value into the runner. Process-fatal propagation and
   retry semantics are unchanged; hostile-rendering and weak-reference
   regressions cover all three admitted failure seams.
+<a id="bug-0061"></a>
+
 - MODERATE - FIXED (2026-08-27). Worker retirement ownership gap. Terminal
   publication and retirement handoff could expose a session as closable while
   its exact worker, invocation frame, or exception hook was still live. Cause:
@@ -648,6 +793,8 @@ defect, and move implementation-level test choreography out of the log.
   outside dispatcher locks under its existing bounded deadline. Timeout and
   self-close leave all cleanup ownership retryable; failing-first regressions
   cover ordinary exit, exception-hook exit, successor fencing, and shutdown.
+<a id="bug-0062"></a>
+
 - MODERATE - FIXED (2026-08-27). Audit factory exception retention. A failed
   observer factory kept its original exception, traceback, and any attached
   private graph in the degraded observer for the session lifetime. Cause: the
@@ -655,6 +802,8 @@ defect, and move implementation-level test choreography out of the log.
   Fixed by discarding it at the boundary and raising fresh fixed errors from no
   cause, while preserving degraded audit and failed-prefix behavior. A weak-
   reference regression proves the factory graph retires during the live run.
+<a id="bug-0063"></a>
+
 - MODERATE - FIXED (2026-08-27). Exception graph retention. Contained
   store-write and custody-release failures could retain earlier session,
   continuation, or result graphs after close, accumulating across sessions.
@@ -665,6 +814,8 @@ defect, and move implementation-level test choreography out of the log.
   Failing-first weak-reference regressions cover both dependency boundaries
   through real admission, session close, and shutdown. This does not claim
   whole-process erasure or close the complete task-retention gate.
+<a id="bug-0064"></a>
+
 - MODERATE - FIXED (2026-08-26). Live/store record aliasing. A store accepting
   admission but rejecting later updates retained the original continuation,
   including execution attestations, after successful terminal live scrubbing.
@@ -675,6 +826,8 @@ defect, and move implementation-level test choreography out of the log.
   process pause/resume and full terminal result axes remain intact. Terminal
   live scrubbing stays required; this does not erase other live references or
   turn metadata persistence into restart recovery.
+<a id="bug-0065"></a>
+
 - MINOR - FIXED (2026-08-19). Audit-barrier observation race. The paused-
   verification integration regression could read retained history before its
   `PAUSED` event reached the durable-audit attempt, intermittently producing a
@@ -684,6 +837,8 @@ defect, and move implementation-level test choreography out of the log.
   audit-read barrier. Fixed by subscribing after submit and waiting for live
   `StateChanged(PAUSED)` before reading history; production ordering is
   unchanged.
+<a id="bug-0066"></a>
+
 - MODERATE - FIXED (2026-08-08). Observer failure-domain poisoning. One
   oversized valid event or exact repeated item could make the observer reject
   its whole window, permanently discard every later event, and omit terminal
@@ -697,6 +852,8 @@ defect, and move implementation-level test choreography out of the log.
   identity/semantic hashes so changed reuse remains fail-stop. Strict
   `WITHOUT ROWID` receipt storage, append/finality guards, and physical-tail
   checks prevent replacement, reopening, or unauthenticated summary rows.
+<a id="bug-0067"></a>
+
 - SEVERE - FIXED (2026-08-08). Worker-generation ABA race. Canceling a session
   after scheduler dequeue but before RUNNING could launch a second worker; the
   losing worker could then settle twice or release the successor's reservation
@@ -705,6 +862,8 @@ defect, and move implementation-level test choreography out of the log.
   process-local generation owner per session, generation-keyed custody, strict
   stale-callback rejection, serialized retirement handoff, and shutdown that
   reports terminal-but-not-retired attempts as unfinished.
+<a id="bug-0068"></a>
+
 - MODERATE - FIXED (2026-08-06). Sparse-sequence pagination assumption. Event-page
   repair rejected two valid recovery
   states: a live subscriber cursor ahead of the last committed history window,
@@ -717,6 +876,8 @@ defect, and move implementation-level test choreography out of the log.
   traversal, sparse fixed bounds, indexed verification of the official durable
   maximum on every request, and a raw `limit + 1` lookahead that decodes only
   the requested rows.
+<a id="bug-0069"></a>
+
 - MODERATE - FIXED (2026-08-06). Close-state conflation. A terminal close
   that timed out before it
   acquired the hub publication gate left the session in `_closing`, so attach
@@ -728,6 +889,8 @@ defect, and move implementation-level test choreography out of the log.
   keeps its global claim, irreversible cleanup and store-drop failures retain
   ownership for retry, and attach reports typed `SessionCleanupPending` rather
   than `SessionNotFound`.
+<a id="bug-0070"></a>
+
 - MODERATE - FIXED (2026-08-05). Gap-reservation capacity off-by-one.
   Subscribing to a hub whose retained replay was
   longer than one subscriber's bound produced a stream holding
@@ -739,6 +902,8 @@ defect, and move implementation-level test choreography out of the log.
   session that has emitted more events than the subscriber bound. Fixed by
   recomputing the allowance once truncation forces the gap; a regression pins
   the initial buffer at the bound.
+<a id="bug-0071"></a>
+
 - MODERATE - FIXED (2026-08-05). Broken-worker queue retention. A broken audit
   prefix stopped the pump without
   draining its bounded command queue. Each degraded terminal hub could therefore
@@ -749,6 +914,8 @@ defect, and move implementation-level test choreography out of the log.
   check plus a best-effort stop wakeup for the timeout-boundary race.
   Full-capacity blocking-cleanup, idle-wakeup, and late-flush regressions cover
   these exits.
+<a id="bug-0072"></a>
+
 - MODERATE - FIXED (2026-08-05). Premature cleanup-ownership release. Explicit close
   could discard the terminal
   session record, store row, hub owner, and cleanup lock before audit-observer
@@ -758,6 +925,8 @@ defect, and move implementation-level test choreography out of the log.
   Fixed by serializing close/shutdown per session, closing the hub before
   ownership removal, retaining timed-out cleanup for retry, and snapshotting
   hub/lock pairs under the dispatcher condition.
+<a id="bug-0073"></a>
+
 - MODERATE - FIXED (2026-08-05). Split shutdown-deadline budgeting. Shutdown's shared
   deadline stopped at the
   session publication gate: cancellation could persist `CANCELING` and then
@@ -769,6 +938,8 @@ defect, and move implementation-level test choreography out of the log.
   one close deadline across hub-lock and observer cleanup, and clearing replay
   with subscribers under the hub lock. Blocked-offer, lock-deadline, and
   replay-cleanup regressions cover the boundary.
+<a id="bug-0074"></a>
+
 - MODERATE - FIXED (2026-08-05). Concurrent commit-time regression. Concurrent
   history observers could advance the
   committed sequence while regressing `last_committed_at`. Cause: commit time
@@ -777,6 +948,8 @@ defect, and move implementation-level test choreography out of the log.
   Fixed by sampling inside the owned transaction and clamping the logical commit
   timestamp to prior durability, admission, and actual start; tail finalization
   uses that same effective time.
+<a id="bug-0075"></a>
+
 - MODERATE - FIXED (2026-08-05). Nullable lifecycle-timestamp conflation.
   Finalized queued cancellations fabricated an
   execution start at admission time even though their disposition was `UNRUN`.
@@ -786,6 +959,8 @@ defect, and move implementation-level test choreography out of the log.
   terminal end against `created_at`, and returning an exact reopened terminal
   replay before validating any newly sampled end time. Queued cancellation and
   regressed-clock replay are both covered.
+<a id="bug-0076"></a>
+
 - MODERATE - FIXED (2026-08-05). Unbounded-cardinality aggregation. Fixed-query
   history summaries could still
   allocate one Python aggregate object for every distinct free-form item kind
@@ -794,6 +969,8 @@ defect, and move implementation-level test choreography out of the log.
   strings. Fixed with one conditional aggregate fact object per selected run;
   workflows supply finite selection/no-op predicates and retain classification
   policy while SQL returns only bounded primitive counts.
+<a id="bug-0077"></a>
+
 - SEVERE - FIXED (2026-08-05). Unbounded preterminal buffering. History claimed
   a bounded crash window while
   retaining every reliable-event hash and result item until terminal
@@ -805,6 +982,8 @@ defect, and move implementation-level test choreography out of the log.
   pause/close/finalization flushes, rolling hashes/counts and watermarks, and
   explicit `incomplete` restart views. Oversized events and failed windows
   degrade audit without changing domain or ledger truth.
+<a id="bug-0078"></a>
+
 - MODERATE - FIXED (2026-08-05). Post-materialization read bound. History readback was
   bounded only after
   materialization. `list_recent()` invoked the full-run getter once per run,
@@ -813,6 +992,8 @@ defect, and move implementation-level test choreography out of the log.
   Fixed with fixed-query-count primitive summaries, shared live/retained fact
   classification, 1..256-row keyset item/event pages under captured durable
   watermarks, and streamed CLI detail. The unbounded full-run API was removed.
+<a id="bug-0079"></a>
+
 - MODERATE - FIXED (2026-08-04). Split close-deadline budgeting. Audit-pump close
   could spend the complete
   caller timeout waiting to enqueue its stop command and then spend the complete
@@ -820,6 +1001,8 @@ defect, and move implementation-level test choreography out of the log.
   not an end-to-end bound. Cause: queue and thread APIs each received the
   original duration. Fixed with one monotonic close deadline and recomputed
   remaining time for enqueue and join.
+<a id="bug-0080"></a>
+
 - MODERATE - FIXED (2026-08-04). Quadratic sequence tracking. History event
   admission recalculated `max(event_hashes)` for every new reliable envelope,
   making a large result stream quadratic before finalization and increasing
@@ -827,6 +1010,8 @@ defect, and move implementation-level test choreography out of the log.
   Cause: the duplicate hash map was also used as an ordered-sequence index.
   Fixed by retaining one highest-accepted-sequence scalar while preserving exact
   duplicate idempotency and conflicting/out-of-order rejection.
+<a id="bug-0081"></a>
+
 - MODERATE - FIXED (2026-08-03). Cross-axis timeout coupling. Audit backpressure
   coupled to finalization.
   One `audit_timeout` fed three unrelated bounds — the finalization cutoff, the
@@ -839,6 +1024,8 @@ defect, and move implementation-level test choreography out of the log.
   `Dispatcher`/`EventHub`, a service constant that must not scale with the
   history writer, and a regression that emits under a long finalization cutoff
   and asserts the producer still degrades promptly.
+<a id="bug-0082"></a>
+
 - MODERATE - FIXED (2026-08-03). Cross-axis retry-budget coupling. Shutdown allowance was
   visibly long: deriving
   every audit bound from the generic ten-second serialized-writer retry made
@@ -849,6 +1036,8 @@ defect, and move implementation-level test choreography out of the log.
   or integrity truth. Fixed by giving history its own five-second retry bound,
   which carries the derived cutoff to six seconds and service close to twelve,
   with tests pinning both the ordering and a shutdown ceiling.
+<a id="bug-0083"></a>
+
 - MODERATE - FIXED (2026-08-02). Finalization deadline race. A finalization
   that committed after its audit acknowledgement deadline delivered
   `audit=degraded` but retained `audit=ok`. Cause: the observer persisted a
@@ -857,6 +1046,8 @@ defect, and move implementation-level test choreography out of the log.
   a pump owner determines the final result. The immutable payload and its
   existing transaction now persist the decided audit axis; derived writer,
   audit, and close bounds are regression-tested in order.
+<a id="bug-0084"></a>
+
 - SEVERE - FIXED (2026-07-30). Pre-invocation cancellation settlement gap. Canceling a
   paused execution just after resume published RUNNING but before
   `invocation.run()` produced a generic canceled terminal while leaving runtime
@@ -864,18 +1055,24 @@ defect, and move implementation-level test choreography out of the log.
   checkpoint bypassed the registration-owned cancellation settlement for an
   already-started attempt; fixed by routing that race through the retained
   payload settlement before terminal publication.
+<a id="bug-0085"></a>
+
 - SEVERE - FIXED (2026-07-30). Independent-axis construction coupling. A corrupt
   or unwritable history database raised from the observer factory before the
   session was admitted, preventing filesystem and ledger work even though
   history is an independent axis. Cause: admission isolated observer delivery
   failures but not factory/open failures; fixed with a degraded-audit sentinel
   that preserves admission and yields `audit=degraded`.
+<a id="bug-0086"></a>
+
 - MODERATE - FIXED (2026-07-30). State/event publication race. A delayed
   `StateChanged(PAUSING)` publication could be overtaken by persisted
   `PAUSED`, leaving existing and late subscribers with a regressed current
   state. Cause: record transitions were locked but their reliable events were
   emitted after releasing the transition lock; fixed with a per-session
   publication gate spanning each transition and matching state event.
+<a id="bug-0087"></a>
+
 - MODERATE - FIXED (2026-07-30). Subscribe/close registration race. Subscription
   could capture a terminal session hub, lose a race with explicit close, and
   then append a stream to the already-closed hub; after replay drained, the
@@ -886,6 +1083,8 @@ defect, and move implementation-level test choreography out of the log.
 ## INTERFACES
 
 ### Live execution rendering
+
+<a id="bug-0088"></a>
 
 - SEVERE - FIXED (2026-11-06). Render allocation outpacing collection. A
   10,100-item Execute with automatic verification exhausted the renderer twice.
@@ -900,6 +1099,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Planning refusal presentation
 
+<a id="bug-0089"></a>
+
 - SEVERE - FIXED (2026-11-06). Supported-scale plan refused at half the
   target. A 100,000 × 32 B copy into an empty target (101,000 operations,
   1,000 directories) was refused with `ReviewFactLimitExceeded`
@@ -913,6 +1114,8 @@ defect, and move implementation-level test choreography out of the log.
   observations against the Plan's scope. The original fixture produced a saved
   review with every operation and an empty target. Evidence:
   `build/coverage-study-20261106/{refusal,fixed-plan}.json`.
+<a id="bug-0090"></a>
+
 - MODERATE - FIXED (2026-11-06). Review-limit refusal shown as retryable
   failure. When the plan above was refused, no plan was saved.
   The page still requested the Plan view; `open_plan_view` hit the missing
@@ -928,6 +1131,8 @@ defect, and move implementation-level test choreography out of the log.
   `build/refusal-ui-20261106/runs/refusal/verified.json`.
 
 ### Setup folder admission
+
+<a id="bug-0091"></a>
 
 - MINOR - FIXED (2026-11-05). In-flight validation gesture loss. Leaving a
   path textbox starts admission and immediately disables Create plan, Create
@@ -945,6 +1150,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### About notice packaging
 
+<a id="bug-0092"></a>
+
 - MINOR - FIXED (2026-10-29). Checkout-dependent byte comparison. The ordinary
   About notice test failed from fresh LF and CRLF checkouts despite passing in
   the working checkout. Cause: embedded GPL text retained CRLF while Git stored
@@ -956,6 +1163,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Execution row presentation
 
+<a id="bug-0093"></a>
+
 - MODERATE - FIXED (2026-10-16). Missing producer invalidation. Returning to
   Plan after same-task inventory work could retain a digest attributed to the
   execution even though the scan had superseded that ledger evidence. Cause:
@@ -965,6 +1174,8 @@ defect, and move implementation-level test choreography out of the log.
   the retained offset. Ordinary composition checks current superseded evidence,
   and browser probes cover pending-detail retirement and preserved review state.
   Original execution and linked verification outcomes remain unchanged.
+
+<a id="bug-0094"></a>
 
 - MINOR - FIXED (2026-10-11). Conflated outcome presentation. Execution rows
   labeled actual no-ops Skipped while giving both no-ops and deselected skips
@@ -976,6 +1187,8 @@ defect, and move implementation-level test choreography out of the log.
   installed gallery confirms labels and colors, with execution/shell checks.
 
 ### Row context menus
+
+<a id="bug-0095"></a>
 
 - MINOR - FIXED (2026-10-06). Incomplete gesture cancellation. Owned row
   context gestures can reach the WebView native menu when custom-menu
@@ -991,6 +1204,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Inventory action targeting
 
+<a id="bug-0096"></a>
+
 - MINOR - FIXED (2026-10-06). Highlight/detail target divergence. Status-card
   Refresh selected used the last activated detail row while arrow keys moved
   the visible highlight; with Details hidden, the command could refresh an
@@ -1001,6 +1216,8 @@ defect, and move implementation-level test choreography out of the log.
   installed keyboard witnesses distinguish retained detail A from refreshed B.
 
 ### Review viewport loading
+
+<a id="bug-0097"></a>
 
 - MODERATE - FIXED (2026-10-16). Lost read reconciliation. D2 copied-file
   verification can remain unavailable after a completed execution until another
@@ -1014,6 +1231,8 @@ defect, and move implementation-level test choreography out of the log.
   witness fails the baseline and passes the fix; no-crossing controls and both
   installed execution sizes pass. No data or safety impact.
 
+<a id="bug-0098"></a>
+
 - MODERATE - FIXED (2026-10-14). Unfenced publication replacement. A Plan row
   highlight can apply on the server but disappear from the visible review,
   leaving its detail unopened until the user reloads. Cause: a forced Plan
@@ -1026,6 +1245,8 @@ defect, and move implementation-level test choreography out of the log.
   adoption and invalid-window probes cover the common reload boundary; backend
   selection and execution admission fences remain intact.
 
+<a id="bug-0099"></a>
+
 - MODERATE - FIXED (2026-10-11). Conflated input cancellation. SN3's general
   input handlers retired scroll-window requests along with keyboard navigation,
   discarding useful reads during repeated wheel events in Plan and Inventory.
@@ -1034,6 +1255,8 @@ defect, and move implementation-level test choreography out of the log.
   authority. Real consumer event probes reproduce both failures and retain
   keyboard cancellation, mutation custody and external-generation guarantees.
   Interfaces/tools and installed tree, Inventory and shell checks pass.
+
+<a id="bug-0100"></a>
 
 - MODERATE - FIXED (2026-10-11). Unbounded navigation intent. Plan queued each
   repeated arrow or pointer replacement behind earlier highlight work, leaving
@@ -1046,6 +1269,8 @@ defect, and move implementation-level test choreography out of the log.
   highlighted-selection conflicts. Interfaces/tools and installed tree,
   Inventory and shell input gates pass.
 
+<a id="bug-0101"></a>
+
 - MODERATE - FIXED (2026-10-11). Split request settlement. Plan's renderer kept
   its pending offset after the app discarded a window for navigation or hidden
   geometry, suppressing a same-offset request on return. An exact request-token
@@ -1053,12 +1278,16 @@ defect, and move implementation-level test choreography out of the log.
   completion cannot retain an old visible geometry; unchanged failed reads do
   not automatically loop. Settings return, restore-before-frame, stale completion
   and failed-read probes cover the bounded retry behavior.
+<a id="bug-0102"></a>
+
 - MINOR - FIXED (2026-10-11). Implicit focus scrolling. Replacing Plan rows
   restored focus with default browser scrolling, pulling a retained offscreen
   highlight back into view during scrolling. Ordinary restoration now prevents
   scrolling; an accepted keyboard window explicitly permits reveal, including
   same-node endpoints. The marker precedes adoption's synchronous detail render.
   Component negative controls and installed preservation/keyboard checks pass.
+
+<a id="bug-0103"></a>
 
 - MODERATE - FIXED (2026-10-08–10). Moving-intent starvation. Continuous viewport
   movement can leave Plan and Inventory rows uncovered until scrolling stops,
@@ -1075,6 +1304,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Plan review windowing
 
+<a id="bug-0104"></a>
+
 - MODERATE - FIXED (2026-10-05). Repeated unbounded labels. Supported deep
   prior paths, move-group destinations and scan-warning paths travelled in
   every 256-row window; actual production bridge dispatch refused a window
@@ -1085,6 +1316,8 @@ defect, and move implementation-level test choreography out of the log.
   paths and diagnostics. Composition cases cover ASCII/CJK origins, groups
   and notices; closed operation/presentation kind pairs are admitted together.
 
+<a id="bug-0105"></a>
+
 - MINOR - FIXED (2026-10-05). Follow-up reveal recovery omission. A move
   reveal could change the server view before its bounded window was read; a
   conflicting or mismatched window then left the old rows and Opening message
@@ -1094,6 +1327,8 @@ defect, and move implementation-level test choreography out of the log.
   Direct browser probes cover rejection, revision mismatches, explicit Refresh
   without replay, conflict scroll and obsolete-response silence.
 
+<a id="bug-0106"></a>
+
 - MINOR - FIXED (2026-09-24). Null-state control retention. A newly loading
   or reused Plan panel could show Execute and other actions enabled without a
   review; their guarded handlers did nothing. The short headed driver mistook
@@ -1102,6 +1337,8 @@ defect, and move implementation-level test choreography out of the log.
   requires the currently connected, loaded review before its unchanged native
   focus/hit check. Fresh/retained-null and loading/detached readiness controls
   cover the mechanism; historical failed operands remain unavailable.
+<a id="bug-0107"></a>
+
 - MODERATE - FIXED (2026-09-24). Observer lifetime mismatch. Initial empty-panel
   rendering disposed the retained Plan renderer and disconnected its viewport
   ResizeObserver; later reuse never restored observation. Newly exposed rows
@@ -1110,6 +1347,8 @@ defect, and move implementation-level test choreography out of the log.
   duplicate observations on ordinary rerenders. A disposed/reused viewport
   growth witness checks the missing range request and preserves frame coalescing.
 
+<a id="bug-0108"></a>
+
 - MODERATE - FIXED (2026-09-23). Approximate/exact numeric representation
   mismatch. A valid Scalar64 progress delta could produce a finite observed
   rate above Number's safe-integer range; passing that approximate Number to
@@ -1117,18 +1356,24 @@ defect, and move implementation-level test choreography out of the log.
   converts the rounded estimate to the formatter's supported integer type,
   leaving raw bytes and the formatter's exact API unchanged. The rendered
   progress probe covers a 90,071,992,547,409,920-byte delta over five seconds.
+<a id="bug-0109"></a>
+
 - MODERATE - FIXED (2026-09-23). Repeated navigation side effects. Cached
   follow-target updates reset scroll on every progress tick, undoing a user's
   position even while the active row remained visible. Automatic same-target
   updates now reuse the anchor without a new scroll request; explicit Go still
   jumps. The task-shell witness preserves offset across progress/window refresh
   and proves the explicit action, without adding lookups or changing selection.
+<a id="bug-0110"></a>
+
 - MODERATE - FIXED (2026-09-23). Terminal/result conflation. A terminal
   execution without a retained result could retain the in-progress card label.
   The shared card now uses terminal session state independently and shows known
   matching live-record timing while identifying the absent retained result.
   Focused status/card probes cover that fallback and the pre-capture terminal
   record; unavailable elapsed time is never fabricated.
+
+<a id="bug-0111"></a>
 
 - MODERATE - FIXED (2026-09-23). Unshrinkable row-note content. Long Plan
   notes displaced the appended Details button outside its clipped cell without
@@ -1137,6 +1382,8 @@ defect, and move implementation-level test choreography out of the log.
   the approved shared-card redesign subsequently removed the per-row button.
   Row highlighting now chooses detail, and the populated long-text gallery
   checks row activation and whole-card disclosure reachability.
+<a id="bug-0112"></a>
+
 - MODERATE - FIXED (2026-09-23). Live-row contract composition. Unsettled
   execution combined a copy intent with an executing lifecycle, which the real
   row renderer rejected. Rendering before Pause dispatch could then leave the
@@ -1144,6 +1391,8 @@ defect, and move implementation-level test choreography out of the log.
   intent when a lifecycle is present and recognizes operation-typed post-copy
   verification by phase, preserving settled copy truth. The panel probe uses
   the production row renderer across execution, verification and settlement.
+<a id="bug-0113"></a>
+
 - MINOR - FIXED (2026-09-23). Incomplete presentation invalidation. Retained
   detail rendering reopened a user-collapsed disclosure, while an unchanged
   Plan window prevented newer active-row progress from appearing. Detail
@@ -1151,10 +1400,14 @@ defect, and move implementation-level test choreography out of the log.
   focus out of its hidden controls. Progress changes update
   only the previous/current visible operation cells. Composed witnesses retain
   collapse, focus and row identity while progress and phase advance.
+<a id="bug-0114"></a>
+
 - MINOR - FIXED (2026-09-23). Unknown-total estimate suppression. The
   indeterminate status branch discarded a known observed throughput along with
   unavailable percentage and ETA. It now retains the rate independently;
   digest and rendered-status witnesses keep unknown totals and ETA unavailable.
+
+<a id="bug-0115"></a>
 
 - MODERATE - FIXED (2026-09-21). Competing window adoption. A background live-
   execution refresh could replace a newer foreground scroll window and regress
@@ -1168,6 +1421,8 @@ defect, and move implementation-level test choreography out of the log.
   completion orders, cancellation, reload/error cleanup, dirty replay, equal or
   older revisions, and genuine changed-result adoption.
 
+<a id="bug-0116"></a>
+
 - MODERATE - FIXED (2026-09-18). Gesture contract mismatch. Plan row arrows
   sent a row endpoint even though relative keyboard gestures require a null
   endpoint, causing bridge rejection instead of navigation. The browser now
@@ -1176,6 +1431,8 @@ defect, and move implementation-level test choreography out of the log.
   restored after row replacement, including arrows from child controls;
   pointer modality is retained across refresh and cleared on keyboard entry.
   Renderer/app probes and installed bridge navigation cover the correction.
+
+<a id="bug-0117"></a>
 
 - MODERATE - FIXED (2026-09-15). Redundant viewport publication. Rapid Plan
   scrolling could refetch an already covered viewport, disable review actions
@@ -1191,6 +1448,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Plan review confirmation
 
+<a id="bug-0118"></a>
+
 - MODERATE - FIXED (2026-09-14). Missing recovery dispatch. A failed Plan load
   advertised selecting the task to retry, but selection only reloaded Setup,
   leaving the Plan unavailable. Cause: the navigation consumer omitted the Plan
@@ -1199,6 +1458,8 @@ defect, and move implementation-level test choreography out of the log.
   load. Focused open/window failure probes verify exact-task recovery, stale-read
   rejection and error clearance. The original transient load failure remains
   unlocalized; public retry returned the exact current view and full 256-row window.
+
+<a id="bug-0119"></a>
 
 - MODERATE - FIXED (2026-09-14). Unordered live-state projection. Repeat Pause
   could remain available while pausing and Resume unavailable after reaching
@@ -1210,6 +1471,8 @@ defect, and move implementation-level test choreography out of the log.
   retained execution truth. Forced event/receipt/refresh orders and stale-session
   probes pass; the clean installed task flow verifies Pause, Resume and Cancel.
 
+<a id="bug-0120"></a>
+
 - MODERATE - FIXED (2026-09-14). Hidden-state cascade override. During Plan
   loading, an enabled Plan-again control could remain visible without a current
   review binding and silently ignore a click. Cause: authored grid/flex display
@@ -1218,6 +1481,8 @@ defect, and move implementation-level test choreography out of the log.
   for an unbound review; installed Setup reaches the complete Plan-again route.
   The separate task-shell 49th-task failure was an invalid capacity fixture,
   corrected without changing the 48-task limit or terminal task retention.
+
+<a id="bug-0121"></a>
 
 - SEVERE - FIXED (2026-09-14). Unbound destructive acknowledgment. A retained
   checkbox could acknowledge changed selection revisions without a fresh gesture.
@@ -1229,6 +1494,8 @@ defect, and move implementation-level test choreography out of the log.
   the correction; the overall M1-7 delivery gate remains open in M1_PLAN.
 
 ### Desktop material composition
+
+<a id="bug-0122"></a>
 
 - MINOR - DEFERRED (2026-09-11; cause isolated and mitigated 2026-09-24).
   Advanced Color translucency composition. Dark flyout key shadows over
@@ -1247,6 +1514,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Application task lifecycle
 
+<a id="bug-0123"></a>
+
 - MODERATE - FIXED (2026-11-10). Input-target detachment. A task-rail repaint
   between pointer press and release can discard the user's Close click,
   leaving the task retained without a pending/refusal message. Cause:
@@ -1259,6 +1528,8 @@ defect, and move implementation-level test choreography out of the log.
   rows. Regression covers refresh/prepend and removal/reorder; the native
   press/render/release probe now retains focus and invokes the callback once.
 
+<a id="bug-0124"></a>
+
 - MODERATE - FIXED (2026-10-14). Incomplete accepted activity adoption. After
   execution, Inventory Refresh can be refused despite a released session and
   current idle view. Cause: the browser adopts execution's new session but
@@ -1269,6 +1540,8 @@ defect, and move implementation-level test choreography out of the log.
   and both installed execution sizes complete real Refresh, superseded readiness
   and explicit selected ordinary verification; backend admission is unchanged.
 
+<a id="bug-0125"></a>
+
 - MODERATE - FIXED (2026-10-13). Closed kind catalog misses a registered activity.
   The browser rejected a genuine manual-verification terminal record and its
   co-batched events, preventing terminal observation and automatic release.
@@ -1277,6 +1550,8 @@ defect, and move implementation-level test choreography out of the log.
   now admit `manual-verify` with pause support. The canonical/wrong-capability
   corpus covers every registered kind, and the production drain journey runs
   with both Plan and manual terminal records. Unknown kinds remain refused.
+
+<a id="bug-0126"></a>
 
 - MODERATE - FIXED (2026-10-13). Current activity revokes retained read authority.
   Execution-task Inventory refused public windows, details and view gestures
@@ -1288,6 +1563,8 @@ defect, and move implementation-level test choreography out of the log.
   Real manual pause/resume/cancel cases exercise public live reads and terminal
   zero/partial/full replacement while preserving Plan truth and exact Close.
 
+<a id="bug-0127"></a>
+
 - MODERATE - FIXED (2026-10-13). Scan identity substituted for publication identity.
   The M1-10 execution-task candidate safely refused missing-row acknowledge/restore
   until Refresh, despite publishing a complete target-ledger view. Cause: the
@@ -1297,6 +1574,8 @@ defect, and move implementation-level test choreography out of the log.
   execution binding. Standalone tasks retain their scan/request check. Real missing
   rows exercise direct and refreshed execution views, exact replay, restore and
   Close without changing original Plan/execution truth or inventing scan provenance.
+
+<a id="bug-0128"></a>
 
 - MODERATE - FIXED (2026-10-13). Current-session cleanup omits task-owned state.
   The M1-10 auxiliary-session candidate retained the original execution review
@@ -1308,6 +1587,8 @@ defect, and move implementation-level test choreography out of the log.
   Close regressions failed before the correction and pass afterward; manual
   pause/resume/cancel and empty terminal results retain their separate truth.
 
+<a id="bug-0129"></a>
+
 - MODERATE - FIXED (2026-10-02). Late admission overwrites observation. An
   unrelated task-list read can discover a new session before its start response
   arrives; if its drain then observes completion, the late receipt reset it to
@@ -1316,6 +1597,8 @@ defect, and move implementation-level test choreography out of the log.
   state even for the already observed session. It now preserves same-session
   observations while still advancing the task-list revision fence. A delayed
   receipt probe covers completion before response and failed reconciliation.
+<a id="bug-0130"></a>
+
 - MINOR - FIXED (2026-10-02). Feedback outlives its applicable state. Refresh
   admission promised a future result after completion or refusal, and refused
   scans without current details advised repeatedly reloading an unavailable
@@ -1325,6 +1608,8 @@ defect, and move implementation-level test choreography out of the log.
   direct users to check the location/reconnect and Refresh. Ordinary read
   failures retain Reload guidance, and uncertain actions retain their recovery
   feedback. Frontend probes cover these distinct paths.
+
+<a id="bug-0131"></a>
 
 - MODERATE - FIXED (2026-10-02). Admitted-start identity loss. The desktop
   discarded a successful TaskStartView and relied on a later task-list read.
@@ -1338,6 +1623,8 @@ defect, and move implementation-level test choreography out of the log.
   list reconciliation. Fresh Plan requests stay distinct from execution.
   Failed/stale-list and Plan-again probes fail on the prior source and pass with
   the correction; the same-request execution transition remains covered.
+<a id="bug-0132"></a>
+
 - MODERATE - FIXED (2026-09-26). Delivery-clock sampling. Task rate/ETA used the
   time a drain reduced Progress rather than when the adapter accepted it.
   Delayed polling or a response retry therefore changed estimates for the same
@@ -1345,6 +1632,8 @@ defect, and move implementation-level test choreography out of the log.
   independently of the linger deadline, through coalescing and byte admission.
   A historical-source witness produces about 0.20 B/s for a 10 B/s interval;
   real sink/drain tests preserve the rate through delayed and failed delivery.
+<a id="bug-0133"></a>
+
 - MODERATE - FIXED (2026-09-26). Presentation-fault head-of-line blocking.
   A structurally valid but semantically inconsistent Progress caused repeated
   drain failures, leaving a queued terminal record undelivered. Cause: cosmetic
@@ -1353,6 +1642,8 @@ defect, and move implementation-level test choreography out of the log.
   committed degradation logs an internal error while terminal delivery continues.
   Malformed values, response bounds and contradictory terminal records still
   fail strictly. A direct witness checks terminal receipt and session release.
+<a id="bug-0134"></a>
+
 - MODERATE - FIXED (2026-09-26). Cross-session presentation retention. The AB-8
   candidate retained a completed Plan snapshot when Execute replaced its session.
   Cause: page admission changed session identity without retiring presentation,
@@ -1362,6 +1653,8 @@ defect, and move implementation-level test choreography out of the log.
   leaving revision admission in the bridge and preserving terminal handling.
   Page regressions cover the real transition and prevent Plan Gap from becoming
   execution history loss. Domain result and mutation authority were unchanged.
+<a id="bug-0135"></a>
+
 - MODERATE - FIXED (2026-09-26). Aggregate sampling domain fragmentation. The
   AB-8 native sampler treated each ordinary active-item handoff as a reset,
   suppressing rate and ETA throughout many-small-file execution. Cause: aggregate
@@ -1369,6 +1662,8 @@ defect, and move implementation-level test choreography out of the log.
   survives file handoff and outcomes, while same-item retry, phase, budget,
   control and Gap resets remain. A focused native witness failed before correction
   and now retains the independent expected rate across both handoff forms.
+
+<a id="bug-0136"></a>
 
 - MODERATE - FIXED (2026-09-24). Observation-recovery ownership loss. Exhausted
   browser drain recovery removed the exact task/session observation owner while
@@ -1380,6 +1675,8 @@ defect, and move implementation-level test choreography out of the log.
   restarting execution. Pending Close can settle; uncertain Close keeps its
   fence and exact retry. Terminal display/release retain distinct retry owners.
 
+<a id="bug-0137"></a>
+
 - MODERATE - FIXED (2026-09-24). Observation-loss state conflation. After task
   updates stopped, execution controls remained enabled and a locally rejected
   click reported an uncertain request despite dispatching nothing. Cause: drain
@@ -1388,6 +1685,8 @@ defect, and move implementation-level test choreography out of the log.
   retaining last-known execution truth. Production callback/renderer probes
   cover zero dispatch and review refresh. The subsequent observation-recovery
   fix above replaces the initial app-close fallback with exact-session retry.
+
+<a id="bug-0138"></a>
 
 - MODERATE - FIXED (2026-09-24). Presentation-bound action ownership. Replacing
   an execution review during Pause/Resume/Cancel lost its pending state and later
@@ -1398,6 +1697,8 @@ defect, and move implementation-level test choreography out of the log.
   accepted, refused and uncertain replies plus authoritative state, terminal
   and session changes; ordinary byte progress does not erase a refusal.
 
+<a id="bug-0139"></a>
+
 - MODERATE - FIXED (2026-09-14). Incomplete terminal-record discriminant.
   An execution could finish Refused while its task still appeared active and could
   not release. Cause: native and browser task-record validators retained older
@@ -1405,6 +1706,8 @@ defect, and move implementation-level test choreography out of the log.
   without pause support and execution records with pause support, preserving
   session/result validation. Producer-consumer tests and the installed execution
   trace verify terminal delivery, release and service retirement.
+
+<a id="bug-0140"></a>
 
 - SEVERE - FIXED (2026-09-14). Task-retirement admission race. A released Plan
   task used the same delivery-closing flag for terminal-session release and
@@ -1421,6 +1724,8 @@ defect, and move implementation-level test choreography out of the log.
   native work. Deterministic barriers cover both orderings, claim exclusion,
   rollback, two Close waiters, and source retirement.
 
+<a id="bug-0141"></a>
+
 - MODERATE - FIXED (2026-09-14). Mutable queued options. Add pair retained
   paths but no settings snapshot, so later form edits changed queued rows'
   displayed semantics and the options used to create their plans. Batch start
@@ -1430,6 +1735,8 @@ defect, and move implementation-level test choreography out of the log.
   settings, removal during preparation, row-local refusal and exact retry.
   Plan review remains required before execution; no filesystem mutation occurs
   merely from queueing or creating these plans.
+
+<a id="bug-0142"></a>
 
 - MODERATE - FIXED (2026-09-02). Plan-selection retirement race. A selection
   mutation could read a retained plan, lose a race to successful `drop_plan`,
@@ -1446,6 +1753,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+<a id="bug-0143"></a>
+
 - MODERATE - FIXED (2026-11-06). Dead-page shutdown dependency. After the
   pilot renderer crashed, the host failed to close within 130 seconds despite
   a durably completed sync. A controlled crash captured the native return
@@ -1455,6 +1764,8 @@ defect, and move implementation-level test choreography out of the log.
   Subframe failures and unresponsiveness leave those waits intact. Closure
   still requires admitted workers to exit. The same native crash during a
   reply now reaches `shutdown.complete` and exits with code 0.
+<a id="bug-0144"></a>
+
 - MINOR - FIXED (2026-10-02). Native observation budget mismatch. The existing
   live host witness could time out after correctly canceled navigation because
   its local native-completion and worker-join waits ended before the matching
@@ -1464,6 +1775,8 @@ defect, and move implementation-level test choreography out of the log.
   and passed the original semantic assertions. The three local waits now allow
   forty seconds; whole-scenario containment, event identity/order, cancellation
   and bridge/source assertions are unchanged. No product latency claim is added.
+<a id="bug-0145"></a>
+
 - MODERATE - FIXED (2026-09-26). Recovery-owner omission. A fixed-unknown
   execution admission left the Plan review status blank, or showing ordinary
   plan feedback after reconstruction, although Execute and Close stayed fenced.
@@ -1472,6 +1785,8 @@ defect, and move implementation-level test choreography out of the log.
   Plan review now selects the retained uncertain execution handle in both views.
   Page probes cover handle/message routing and unchanged control fences; bridge
   probes own the actual recovery wording and state policy.
+
+<a id="bug-0146"></a>
 
 - MODERATE - FIXED (2026-09-26). Delivery-state conflation. A rejected direct
   command followed by pending observation claimed to await an automatic result,
@@ -1484,6 +1799,8 @@ defect, and move implementation-level test choreography out of the log.
   repair its retained bytes. Communication loss still permits late valid-result
   adoption; page ownership, effect fences and the no-replay rule remain in force.
 
+<a id="bug-0147"></a>
+
 - MODERATE - FIXED (2026-09-26). Cleanup/result coupling. A valid asynchronous
   recent-pairs result could be reported as a transport failure when admission
   or completion cleanup ACK failed, while observed mutations adopted the same
@@ -1491,6 +1808,8 @@ defect, and move implementation-level test choreography out of the log.
   Capture/adoption now precedes best-effort ACK for both paths; exact identity,
   two-attempt cleanup, the five-second read deadline and late cleanup remain.
   Controlled ACK refusal covers both phases and command classes without replay.
+
+<a id="bug-0148"></a>
 
 - MINOR - FIXED (2026-09-10). Obsolete native-return delivery. A delayed
   create or terminal-release response crossed a document reload, then pywebview
@@ -1503,6 +1822,8 @@ defect, and move implementation-level test choreography out of the log.
   Pinned-worker controls and the installed-wheel create/release reload witness
   pass with strict empty stderr. This contains obsolete delivery, not an atomic
   JavaScript execution fence or a new asynchronous command boundary.
+<a id="bug-0149"></a>
+
 - MINOR - FIXED (2026-09-05). Receipt-cleanup trust conflation. An off-origin
   native call returned the exact structured refusal with a response token, but
   the same origin check rejected its cleanup acknowledgment; JavaScript then
@@ -1512,6 +1833,8 @@ defect, and move implementation-level test choreography out of the log.
   capacity is reaped. Native and browser regressions preserve recognizable
   refusal, zero handler calls, exact-token ownership, and duplicate-receipt
   refusal.
+<a id="bug-0150"></a>
+
 - MINOR - FIXED (2026-09-03 - 2026-09-05). Headed accessibility target expiry.
   The off-origin UI Automation provider could expire between root acquisition
   and descendant lookup, and the probe treated that transient as an
@@ -1520,6 +1843,8 @@ defect, and move implementation-level test choreography out of the log.
   `ElementNotAvailableException`. Timeout evidence retains transient and
   successful-read counts plus value-only error details; the parent hard
   deadline and exact-text acceptance remain unchanged.
+<a id="bug-0151"></a>
+
 - MINOR - FIXED (2026-09-03). Adapter-surface interception drift. After the
   bridge moved to task-port methods, the installed-wheel fixture still patched
   the valid session-oriented methods, so interception was inert and its recorder
@@ -1529,6 +1854,8 @@ defect, and move implementation-level test choreography out of the log.
   The old symbols still existed, so patch installation succeeded even though
   they were no longer on the call path; lint, types, and `raising=False` audits
   could not detect the lost observation.
+<a id="bug-0152"></a>
+
 - MINOR - FIXED (2026-09-05). Delayed-return observer aliasing. The BR-G-30
   fixture labeled any concurrent `evaluate_js` script containing the callback
   table after handler completion as the delayed result, so unrelated renderer
@@ -1536,6 +1863,8 @@ defect, and move implementation-level test choreography out of the log.
   with the serialized `returned-delayed_return` value and retaining one
   terminal observation. Reinjection, callback loss, and the working
   post-navigation bridge remain the asserted behavior.
+<a id="bug-0153"></a>
+
 - MODERATE - FIXED (2026-08-29). Orphan analytical admission. Desktop startup
   refused every runtime outside one exact CPython patch, GIL, and allocator
   profile even though no object model, validator, or acceptance evidence could
@@ -1544,6 +1873,8 @@ defect, and move implementation-level test choreography out of the log.
   the lower-bound-only Python
   metadata policy, and retaining exact runtime profiles only as measurement
   qualifiers; native dependency and WebView2 compatibility gates remain.
+<a id="bug-0154"></a>
+
 - MODERATE - SUPERSEDED (2026-08-27; superseded 2026-10-01). Response-copy
   ownership gap. Responses are charged against the 8 MiB canonical-JSON wall
   through worker exit and browser receipt, but CLR/WebView2/browser copies are
@@ -1557,6 +1888,8 @@ defect, and move implementation-level test choreography out of the log.
   consequence is host OOM without false durable state; an aggregate byte budget
   would add false `bridge_busy` refusals. Reopen if return encoding or a wall
   changes, or SH-G-15 attributes growth to native return copies.
+<a id="bug-0155"></a>
+
 - MODERATE - FIXED (2026-08-28). Document-generation custody accumulation. A
   reload reconstructed the post helper while queued callbacks, encoded values,
   and sent appearance/readiness values had no page-acknowledged retirement, so
@@ -1567,6 +1900,8 @@ defect, and move implementation-level test choreography out of the log.
   two queued slots, synchronous replacement retirement, and hostile stale-sink
   regressions. Native/browser byte charges are disposed in the SUPERSEDED
   entry above.
+<a id="bug-0156"></a>
+
 - MINOR - FIXED (2026-08-28). Surface-settlement waiter abandonment. Repeated
   readiness requests replaced an unresolved appearance waiter without invoking
   it, while close and partial attachment simply cleared the last callback.
@@ -1574,6 +1909,8 @@ defect, and move implementation-level test choreography out of the log.
   contract. Fixed by completing every superseded, closed, or aborted waiter
   once with a stale outcome outside the controller lock; only the latest waiter
   remains retained until settlement.
+<a id="bug-0157"></a>
+
 - MODERATE - FIXED (2026-08-27). Observation stream accumulation. Repeated
   Gap recovery retained every closed stream until the session observation was
   removed, so valid long-running sessions grew with recovery count. Cause: a
@@ -1581,6 +1918,8 @@ defect, and move implementation-level test choreography out of the log.
   current stream, synchronizing stop and replacement adoption, and closing
   retired/rejected streams outside the observer lock. Weak-reference churn and
   both stop/adopt orderings preserve close-before-join and retry behavior.
+<a id="bug-0158"></a>
+
 - MODERATE - FIXED (2026-08-28). Premature return-custody retirement. The
   admitted-handler ceiling released positions before pywebview serialized and
   the browser detached replies, permitting accumulated return graphs and
@@ -1590,12 +1929,16 @@ defect, and move implementation-level test choreography out of the log.
   reload retires the old generation atomically. Direct Python calls retain
   call-return semantics; pre-admission threads and renderer allocation remain
   outside this bound.
+<a id="bug-0159"></a>
+
 - MODERATE - FIXED (2026-08-28). Native receipt token collision. A refused
   second native call could expose an earlier response's colliding token because
   return wrapping checked only token membership, allowing its acknowledgment to
   release the wrong custody. Fixed by creating one per-call custody object and
   exposing a token only when the retained map holds that exact object. Collision
   now returns an unreceipted `bridge_busy` response.
+<a id="bug-0160"></a>
+
 - MODERATE - FIXED (2026-08-28). Response-refusal queue loss. A task drain
   removed reliable updates and advanced delivery state before the bridge could
   reject an over-8-MiB response, so retry could not recover the refused truth.
@@ -1604,12 +1947,16 @@ defect, and move implementation-level test choreography out of the log.
   prefix and committing only that longest nonempty prefix. A singular maximum
   reliable event still fits, and terminal delivery is earned only when its
   record is in that prefix.
+<a id="bug-0161"></a>
+
 - MODERATE - FIXED (2026-08-28). Response-capture reentry. A hostile queued
   body could synchronously offer or drain again under the reentrant task
   condition, replacing captured entries, popping undelivered successors,
   duplicating reliable updates, or self-waiting at capacity. Fixed by making
   hostile traversal an exact same-task mutation boundary: reentrant offer,
   drain, release, and close refuse before mutation or waiting.
+<a id="bug-0162"></a>
+
 - MODERATE - FIXED (2026-08-27). Unused callback retention. Every synchronous
   pywebview return left a new UUID-to-None entry in the window's callback
   registry, so completed calls caused lifetime growth. Cause: the pinned
@@ -1617,6 +1964,8 @@ defect, and move implementation-level test choreography out of the log.
   with a window-local registry that discards only None writes while preserving
   asynchronous callback lookup and deletion. Pinned-source and actual-runtime
   tests guard that dependency assumption; a runtime upgrade must revalidate it.
+<a id="bug-0163"></a>
+
 - MINOR - FIXED (2026-08-26). Cross-version gate aliasing. The unreachable
   private browser seam accepted v5-stamped numeric-v4 bodies and rejected v4,
   while source gates could find legacy text instead of the live route. Cause: a
@@ -1625,6 +1974,8 @@ defect, and move implementation-level test choreography out of the log.
   the consolidation pass later removed the redundant body-schema mirror while
   retaining wrong-version batch refusal and reducer regressions. No legacy
   route was added.
+<a id="bug-0164"></a>
+
 - MINOR - FIXED (2026-08-26). Unbound producer fixtures. Separate Python public
   view witnesses and browser literals could stay green while the real codec
   drifted away from JavaScript. Cause: no differential check passed the actual
@@ -1633,6 +1984,8 @@ defect, and move implementation-level test choreography out of the log.
   and the live event arm. The consolidation pass retained those positive
   producer witnesses while persistence and transport/reducer negatives remain
   with their real boundaries.
+<a id="bug-0165"></a>
+
 - MODERATE - FIXED (2026-08-26). Shallow view admission. Exact dataclass wrappers
   could carry old-version events, malformed nested results, or result-free
   terminal records through Python task drains and bridge serialization. Queue
@@ -1644,6 +1997,8 @@ defect, and move implementation-level test choreography out of the log.
   body semantics stay with supported producers and persistence decode. Valid
   result-free recovery snapshots do not earn receipts, and replay invalidation
   does not revoke a prior validated delivery receipt.
+<a id="bug-0166"></a>
+
 - MODERATE - FIXED (2026-08-25). Execution-authority state conflation. The
   accepted desktop design permanently froze a committed selection even when
   submission failed or the attached attempt terminated `unrun`, making its
@@ -1653,6 +2008,8 @@ defect, and move implementation-level test choreography out of the log.
   plan's selection at a new revision after submission failure or `unrun`,
   minting a fresh commitment for retry, and freezing permanently only at the
   first `ran` result.
+<a id="bug-0167"></a>
+
 - MODERATE - FIXED (2026-08-25). Display-path reactivation authority. A new
   plan requested from an unrun task had no ledger-derived recent pair and could
   only reuse `ReviewedLocation.display`; after drive-letter reassignment that
@@ -1662,6 +2019,8 @@ defect, and move implementation-level test choreography out of the log.
   identities and relative paths afresh, publishes two slots only when both
   accept, and creates a separate default-selection task without carrying old
   authorization.
+<a id="bug-0168"></a>
+
 - MODERATE - FIXED (2026-08-22). Post-Gap phase-authority lock. After a Gap,
   the first self-described Progress established only lossy phase context, but
   the reducer treated it like reliable `PhaseChanged` authority and rejected a
@@ -1670,6 +2029,8 @@ defect, and move implementation-level test choreography out of the log.
   under reliable authority, resetting progress-only temporal state on a newer
   self-described phase, retaining same-phase regression checks, and proving
   whole-batch refusal plus exact clean replay in the executable Node gate.
+<a id="bug-0169"></a>
+
 - MODERATE - FIXED (2026-08-22). Live event-version erasure. The bridge's
   `SessionEventView` discarded the core envelope version, leaving JavaScript to
   infer an exact live Progress contract only from body keys and inviting future
@@ -1677,6 +2038,8 @@ defect, and move implementation-level test choreography out of the log.
   core event version, requiring exact live v4 through a deliberately named
   live-only validator, and keeping mixed persisted v3/v4 `HistoryEventView`
   validation version-dispatched per row.
+<a id="bug-0170"></a>
+
 - MINOR - FIXED (2026-08-21). Executable consumer-evidence omission. The
   ordinary suite checked packaged Progress behavior through source-text tokens
   while its actual JavaScript behavior lived in an optional Node probe,
@@ -1688,6 +2051,8 @@ defect, and move implementation-level test choreography out of the log.
   event-v5 consumer probes; `TESTS.md` owns the unmarked-required versus
   `supplemental_node` policy. Installed WebView2 still owns named browser-
   behavior acceptance.
+<a id="bug-0171"></a>
+
 - MODERATE - FIXED (2026-08-19). Partial-attachment rollback gap. If `loaded`
   event registration failed and removal of the already-installed `before_load`
   handler also raised, appearance configuration escaped without aborting its
@@ -1697,6 +2062,8 @@ defect, and move implementation-level test choreography out of the log.
   remaining resource retirement. Fixed by fault-isolating removal, always
   aborting partial attachment, closing the cosmetic subscription exactly once,
   and invalidating the controller so a retained handler is inert.
+<a id="bug-0172"></a>
+
 - MINOR - FIXED (2026-08-17). Headed-evidence replacement contention. Headed
   children repeatedly replaced one live JSON snapshot while parents polled and
   opened it, so Windows delete sharing could reject an otherwise correct final
@@ -1707,6 +2074,8 @@ defect, and move implementation-level test choreography out of the log.
   proves final publication is independent of the open ready handle. Atomic
   per-invocation benchmark reports remain separate measurement artifacts, not
   milestones.
+<a id="bug-0173"></a>
+
 - MODERATE - FIXED (2026-08-17). Raw-readiness supersession race. On initial
   injection the bridge listener could resolve raw API readiness before the app
   listener rejected its old startup epoch, allowing that stale attempt and its
@@ -1715,6 +2084,8 @@ defect, and move implementation-level test choreography out of the log.
   and never mark the JavaScript bridge operational. Fixed by rechecking epoch
   ownership after every raced readiness wait; a bridge-first pending-readiness
   probe proves the superseded attempt sends no acknowledgement.
+<a id="bug-0174"></a>
+
 - SEVERE - FIXED (2026-08-17). Document-readiness admission gap. The
   desktop marked ordinary bridge commands available after native load, and
   kept them open across reload, even when the current packaged receiver had
@@ -1726,6 +2097,8 @@ defect, and move implementation-level test choreography out of the log.
   degradable and orthogonal; only unconfirmed rollback after native surface
   mutation refuses. Timeout, reload, close, and queued callbacks cannot settle
   a later document.
+<a id="bug-0175"></a>
+
 - MODERATE - FIXED (2026-08-17). Appearance observation ordering race.
   Independent callback-thread reads let an older Windows snapshot queue after
   a newer one and receive the newest publication revision; the initial read
@@ -1733,6 +2106,8 @@ defect, and move implementation-level test choreography out of the log.
   and coalescing generations into one UI-owned current-state drain. Each UI
   turn handles one generation and defers newer work, so sustained events yield;
   dispatch/read failures remain recoverable and close invalidates queued work.
+<a id="bug-0176"></a>
+
 - MODERATE - FIXED (2026-08-17). High-contrast composition evidence gap. The
   headed materials case injected a native high-contrast snapshot but left the
   renderer in normal-color mode, so it could claim palette coverage without
@@ -1741,6 +2116,8 @@ defect, and move implementation-level test choreography out of the log.
   card styles with independently resolved `Canvas`, `CanvasText`, and
   `ButtonBorder` values while retaining every native Mica-off assertion. This
   is a composition witness, not a real Windows contrast-theme toggle witness.
+<a id="bug-0177"></a>
+
 - MODERATE - FIXED (2026-08-17). Selected-state forced-color mismatch. Enabled
   selected/current task cards resolved their background to `Highlight` but
   inherited `CanvasText` at rest and focus, so contrast-theme text could lose
@@ -1749,6 +2126,8 @@ defect, and move implementation-level test choreography out of the log.
   and retaining `GrayText` for disabled cards. Static and clean-wheel gallery
   evidence covers both selectors, all enabled states, exact system colors, and
   text contrast; ordinary transparent, hover, and press behavior is unchanged.
+<a id="bug-0178"></a>
+
 - SEVERE - FIXED (2026-08-17). Startup-refusal authority gap. An initial,
   pre-open appearance or guard refusal attempted window destruction while the
   exposed dispatcher was still accepting; if public destruction threw or
@@ -1759,6 +2138,8 @@ defect, and move implementation-level test choreography out of the log.
   failed or ineffective public destroy. Both close paths may still fail, but
   authority then remains rejected. Manual or later native closure lets the GUI
   loop return, after which the startup-refused finalizer runs.
+<a id="bug-0179"></a>
+
 - MODERATE - FIXED (2026-08-17). Selected-state boundary contrast. Selected
   and current task cards used the subtle neutral boundary that belongs to
   quiet surfaces, leaving their actionable edge below the 3:1 non-text
@@ -1766,6 +2147,8 @@ defect, and move implementation-level test choreography out of the log.
   accessible neutral boundary, retained elevation/focus, and distinct
   forced-colors hover/press outlines. Transparent unselected rest cards remain
   intentionally boundary-free and outside that selected-state assertion.
+<a id="bug-0180"></a>
+
 - MODERATE - FIXED (2026-08-17). Renderer API floor mismatch. The packaged
   shell used `Object.hasOwn`, reflected `role` properties, and
   `crypto.randomUUID` even though the admitted WebView2 floor predates those
@@ -1773,6 +2156,8 @@ defect, and move implementation-level test choreography out of the log.
   could therefore fail on a supported runtime. Fixed with own-property calls,
   explicit role attributes, and `getRandomValues`-backed 32-hex identities,
   plus a shipped-asset floor guard and supplemental/real-browser evidence.
+<a id="bug-0181"></a>
+
 - MODERATE - FIXED (2026-08-17). Passive viewport resize paging gap. The
   virtual tree reconciled its mounted window after scroll and commit but not
   after a layout-only viewport resize, so newly exposed rows could remain a
@@ -1783,6 +2168,8 @@ defect, and move implementation-level test choreography out of the log.
   inert before root removal. Direct-module and installed-wheel WebView2
   witnesses grow a settled two-row viewport to four without scrolling, prove
   the newly exposed index is covered, then prove disposal admits no later page.
+<a id="bug-0182"></a>
+
 - MINOR - FIXED (2026-08-14). Acceptance drift-guard omission. Ordinary
   suites exercised the real current-source custody shape but checked only
   positive size, plausible density, and component/union relations; the frozen
@@ -1792,6 +2179,8 @@ defect, and move implementation-level test choreography out of the log.
   the unchanged ceiling contract and applies 1,966,080 bytes to both ordinary
   and maximum no-`Gap` custody. The verdict-free runner and blob-pinned
   acceptance validator remain unchanged.
+<a id="bug-0183"></a>
+
 - MODERATE - FIXED (2026-08-14). Progress wakeup-coalescing race. An attentive client
   could return and rearm once per progress snapshot, making adapter coalescing
   schedule-dependent and multiplying cross-runtime work. Cause: the waiter
@@ -1803,6 +2192,8 @@ defect, and move implementation-level test choreography out of the log.
   and unchanged cursor behavior. With an active long poll, the first detailed
   progress value intentionally may wait the full 150 ms; command receipt and
   reliable running-state feedback bypass it.
+<a id="bug-0184"></a>
+
 - MINOR - FIXED (2026-08-14). Measurement-boundary conflation. The headed
   harness retained every decoded browser sample, repeatedly serialized growing
   producer documents inside the measured child, admitted a wrapper rather than
@@ -1813,6 +2204,8 @@ defect, and move implementation-level test choreography out of the log.
   pre-composition direct-Job child admission, and per-PID role/private-byte plus
   thread/handle/topology diagnostics. Event acceptance is now independent of
   diagnostic completeness; whole-runtime acceptance remains undefined.
+<a id="bug-0185"></a>
+
 - MINOR - FIXED (2026-08-14). Reserved-capacity starvation. The bounded
   browser reporter reserved only four pending sample batches, so four tasks
   reaching terminal together could fill that allowance with ordinary reports
@@ -1820,6 +2213,8 @@ defect, and move implementation-level test choreography out of the log.
   retaining the four-batch ordinary limit while reserving a separately bounded
   16-batch total for the known terminal-adjacent burst; terminal reports remain
   isolated below bridge ingress size and cannot be mistaken for product loss.
+<a id="bug-0186"></a>
+
 - MINOR - FIXED (2026-08-14). Measurement-domain conflation. The old
   SH-G-8 evidence charged the complete headed Job, while its Python diagnostic
   mixed subject-scaled terminal results and short/shared values into queue
@@ -1833,6 +2228,8 @@ defect, and move implementation-level test choreography out of the log.
   This closes SH-G-8 and BR-G-42 event/transport custody only. BR-G-45 is now
   retired; scoped SH-G-15 resource and leak/growth acceptance remains open
   and untested by this evidence.
+<a id="bug-0187"></a>
+
 - MINOR - FIXED (2026-08-13). Split protocol authority. Active
   documents delegated exact errors and retry rules to `obsolete/M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers
@@ -1844,6 +2241,8 @@ defect, and move implementation-level test choreography out of the log.
   and status. Numeric-hole, `start_plan`, and installed real-WebView2 browser
   witnesses have landed. Realigned SH-G-8 later closed under its separate
   transport-custody contract rather than the former whole-Job predicate.
+<a id="bug-0188"></a>
+
 - MODERATE - FIXED (2026-08-13). Cross-lifetime cleanup coupling. Appearance
   authority was retired during task quiescence before `service.close()` proved
   terminal completion. An incomplete
@@ -1852,6 +2251,8 @@ defect, and move implementation-level test choreography out of the log.
   observations and window-owned appearance shared one cleanup hook. Fixed by
   keeping appearance live until complete service shutdown, then closing it once
   immediately before destruction.
+<a id="bug-0189"></a>
+
 - MODERATE - FIXED (2026-08-13). Fallback-state evidence conflation. Opaque
   fallback could be white in dark mode and report success after only the form
   background landed while full-client glass
@@ -1861,6 +2262,8 @@ defect, and move implementation-level test choreography out of the log.
   opaque claim based only on sufficient structured landing evidence; a later
   unconfirmed reapply publishes a truthful `degraded` state whose CSS base is
   opaque rather than retaining the prior material claim.
+<a id="bug-0190"></a>
+
 - MODERATE - FIXED (2026-08-13). Implementation-derived contract drift.
   A new 256-byte field cap rejected ordinary literal searches even though the
   external request envelope already had a 65,536-byte ceiling, while every
@@ -1869,6 +2272,8 @@ defect, and move implementation-level test choreography out of the log.
   promoted into requirements without boundary or scale evidence. Fixed by
   restoring the 65,536-byte field ceiling, direct workflow-node view, and indexed
   O(chain-depth) anchoring.
+<a id="bug-0191"></a>
+
 - MODERATE - FIXED (2026-08-13). Semantic-only accessibility implementation.
   The renderer advertised
   `tree`/`treeitem` roles but exposed no Tab stop, active descendant, keyboard
@@ -1877,6 +2282,8 @@ defect, and move implementation-level test choreography out of the log.
   asserted role strings and focusable landmarks instead of widget behavior.
   Fixed with server-derived structure, an exact Python-owned wire view, and one
   operable recycled focus model.
+<a id="bug-0192"></a>
+
 - SEVERE - FIXED (2026-08-17). Review-text layout-control injection.
   Filesystem display text rendered inertly with `textContent` but could still
   carry bidirectional, isolation, line, and invisible controls that reorder or
@@ -1890,6 +2297,8 @@ defect, and move implementation-level test choreography out of the log.
   exact markers, no surviving active controls, exact ordinary Unicode/long
   text, and raw ids;
   `DEFENSE.md` owns the narrower confusable-text residual.
+<a id="bug-0193"></a>
+
 - MODERATE - FIXED (2026-08-17). Projected-parent accessibility drift.
   Empty inventory roots and folders retained only by their own filter match
   exposed `aria-expanded=true` and a disclosure even though the active tree
@@ -1897,6 +2306,8 @@ defect, and move implementation-level test choreography out of the log.
   container bit rather than the filtered projection. Fixed with immutable
   retained-child metadata: only projected parents emit Boolean expansion;
   leaves and containers with no retained child emit `null` and no disclosure.
+<a id="bug-0194"></a>
+
 - MODERATE - FIXED (2026-08-17). Virtual-tree interaction ownership gaps.
   Keyboard navigation changed the active descendant without ensuring its row
   stayed inside the scroll viewport, while the visible disclosure had no
@@ -1904,6 +2315,8 @@ defect, and move implementation-level test choreography out of the log.
   fixed-row reveal math and a disclosure listener that stops propagation,
   focuses the tree, and requests one toggle without activation. A projected
   end node remains inert, and callback failure cannot leak into row activation.
+<a id="bug-0195"></a>
+
 - MODERATE - FIXED (2026-08-17). Virtual-window request omission. The tree
   exposed full-height spacers but did not convert user scrolling into a missing-
   window request, leaving a blank viewport and an offscreen active descendant.
@@ -1914,6 +2327,8 @@ defect, and move implementation-level test choreography out of the log.
   presentation focus to a fully visible row. The request binds its viewport
   snapshot, so a valid narrow response cannot start an automatic edge-to-edge
   retry loop while that viewport remains unchanged.
+<a id="bug-0196"></a>
+
 - MINOR - FIXED (2026-08-13). Presentation-state acceptance drift.
   The entire task rail inherited an opaque generic card, neutral hover/pressed
   and primary rest/pressed states collapsed visually, and dialog exit motion was
@@ -1921,6 +2336,8 @@ defect, and move implementation-level test choreography out of the log.
   were committed with implementation-mirroring tests. Fixed with a
   transparent rail/task rest surface, distinct Fluent/Windows states, real exit
   behavior, and computed/pixel headed evidence.
+<a id="bug-0197"></a>
+
 - SEVERE - FIXED (2026-08-13). Bridge object-capability exposure. Passing the
   dispatcher as `js_api` let pywebview recursively discover receiver members,
   so underscore-prefixed bridge state was not a security boundary and crafted
@@ -1928,6 +2345,8 @@ defect, and move implementation-level test choreography out of the log.
   with no `js_api` object and exposing one function-only `dispatch` entry.
   Ordinary and real-WebView2 probes send private dotted names and confirm that
   no private receiver or document mutation is reachable.
+<a id="bug-0198"></a>
+
 - SEVERE - FIXED (2026-08-13). Unbounded domain admission and teardown
   ownership. Pinned pywebview creates an exposed-call thread before NamiSync
   admission; the dispatcher then had no cap, and teardown could wait forever or
@@ -1937,6 +2356,8 @@ defect, and move implementation-level test choreography out of the log.
   complete service shutdown. Drains and producers wake before the wait;
   saturation returns `bridge_busy`. Raw exposed-call thread creation remains a
   dependency-owned availability boundary classified in `DEFENSE.md` §4.
+<a id="bug-0199"></a>
+
 - MODERATE - FIXED (2026-08-13). Unbounded task retention and recovery retry.
   Terminal tasks and start receipts had no production release command, an
   uncertain start could lose replay when its folder slots expired, and repeated
@@ -1945,6 +2366,8 @@ defect, and move implementation-level test choreography out of the log.
   compensation, pre-slot wire-intent replay, and finite delayed recovery that
   refuses after its budget. The real headed gate also proves a 25-second drain
   remains concurrent with another RPC and settles during window shutdown.
+<a id="bug-0200"></a>
+
 - MODERATE - FIXED (2026-08-13). Terminal/session ownership conflation.
   The browser automatically called `close_task` after a terminal record, while
   terminal callback failure discarded browser authority before cleanup could be
@@ -1952,6 +2375,8 @@ defect, and move implementation-level test choreography out of the log.
   failure, and automatically releasing only observation/session authority.
   Explicit `close_task` alone drops the plan and task; release and close share
   stepwise, race-safe cleanup and bounded same-payload recovery.
+<a id="bug-0201"></a>
+
 - SEVERE - FIXED (2026-08-13). Cross-layer discriminator drift. Real plan
   terminal records were rejected by the browser. The workflow emits its
   registered `sync-plan` kind, but the client
@@ -1960,6 +2385,8 @@ defect, and move implementation-level test choreography out of the log.
   never presented completion. Fixed by validating the exact workflow kind and
   deriving the installed-wheel fixture from `PLAN_KIND`; the real WebView2 gate
   now crosses that production identity before terminal release.
+<a id="bug-0202"></a>
+
 - MINOR - FIXED (2026-08-13). Primary-failure diagnostic loss. Decisive startup
   diagnostics were missing after logging configuration. The outer host catch
   entered teardown without first
@@ -1968,6 +2395,8 @@ defect, and move implementation-level test choreography out of the log.
   Fixed with one typed `startup.failed` traceback before fail-closed teardown;
   diagnostic failure cannot replace the native report or exit status, and
   pre-logging failures continue to use only the native startup reporter.
+<a id="bug-0203"></a>
+
 - MODERATE - FIXED (2026-08-13). TOCTOU pathname and window substitution.
   Startup validated resolved app paths and found an activation window by title,
   then used both after a replacement opportunity. Fixed by holding non-reparse,
@@ -1977,6 +2406,8 @@ defect, and move implementation-level test choreography out of the log.
   activation. A malicious same-principal process can still squat the mutex or
   spoof an accepted base interpreter; the primitive is not a same-principal
   security boundary.
+<a id="bug-0204"></a>
+
 - MODERATE - FIXED (2026-08-13). Receipt/shutdown lifecycle race. Service
   close could mark the facade closed and clear session receipts while a retry
   was already reading or replaying one, returning authority after shutdown had
@@ -1984,6 +2415,8 @@ defect, and move implementation-level test choreography out of the log.
   used by receipt lookup and publication. Fixed by performing the close mark
   and receipt-map clearing under that gate; an in-flight replay must now finish
   before shutdown invalidates receipt state.
+<a id="bug-0205"></a>
+
 - MINOR - FIXED (2026-08-13). Duplicated command-policy drift. Timeout and
   retry metadata in Python could differ from the behavior hand-coded in
   `bridge.js`, while malformed command names could inject control text into
@@ -1994,6 +2427,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+<a id="bug-0206"></a>
+
 - MODERATE - FIXED (2026-08-27). Adapter exception graph retention. Failed
   starts, observer workers and cleanup, service shutdown, and recovery retained
   initiating exception, current-view, or observation graphs; control exceptions
@@ -2003,6 +2438,8 @@ defect, and move implementation-level test choreography out of the log.
   retry, and cleanup truth remain unchanged; join faults retire stopped
   observations, stale unsubscribe failure leaves release retry authority, and
   weak-reference regressions prove private graphs are released.
+<a id="bug-0207"></a>
+
 - SEVERE - FIXED (2026-08-13). Publisher lifetime-control omission. The
   appearance-publication UI-thread deadlock remedy was not lifecycle-bounded.
   The 2026-08-12 fix moved synchronous pywebview DOM
@@ -2011,6 +2448,8 @@ defect, and move implementation-level test choreography out of the log.
   is also blocked by the shipped CSP and would clobber unrelated properties if
   allowed. Fixed by replacing the worker with UI-thread asynchronous
   host-to-page WebView2 publication and fixed validated CSSOM sinks.
+<a id="bug-0208"></a>
+
 - SEVERE - SUPERSEDED (2026-08-12). UI-thread re-entrant deadlock. The
   first loaded desktop window could apply its native backdrop and then stop
   responding before publishing theme, accent, and material state to the page.
@@ -2020,6 +2459,8 @@ defect, and move implementation-level test choreography out of the log.
   marshaling only for native DWM/controller work and serializing public DOM
   publication on the owned background publisher, with a regression that refuses
   native-UI reentry and proves publication occurs on that worker.
+<a id="bug-0209"></a>
+
 - MINOR - FIXED (2026-08-03). Prerequisite error conflation. A missing .NET
   Framework release key was reported as missing WebView2, obscuring the actual
   .NET 4.6.2 prerequisite. Cause: the side-effect-free detector returned one
@@ -2029,6 +2470,8 @@ defect, and move implementation-level test choreography out of the log.
   recommend repair. Tests pin the single read, intentional upstream divergence,
   and refusal messages. Windows 11 includes .NET Framework 4.8, so this state
   is unsupported-installation diagnostics rather than a normal user path.
+<a id="bug-0210"></a>
+
 - MODERATE - FIXED (2026-08-01). Fallback-import side effects. Refusing a
   missing WebView2 runtime wrote Internet Explorer feature-control keys first:
   `webview.start()` imported pywebview's MSHTML fallback before NamiSync's
@@ -2039,41 +2482,55 @@ defect, and move implementation-level test choreography out of the log.
   synchronous Edge Chromium check remains defense in depth. The
   `86.0.622.0` argument is pywebview's WinForms compatibility gate, not a
   NamiSync security-patch minimum.
+<a id="bug-0211"></a>
+
 - SEVERE - FIXED (2026-07-31). Partial-initialization state loss. Pywebview swallowed
   synchronous event-handler failures, so a failed `before_load` installer left
   dispatch closed without actionable host state and could retry after a partial
   subscription. Fixed with explicit pending/attached/failed state, one sticky
   attachment attempt, attachment-specific fail-closed dispatch, and a
   host-visible error state.
+<a id="bug-0212"></a>
+
 - SEVERE - FIXED (2026-07-31). Host popup-policy bypass. Pywebview's earlier
   `NewWindowRequested` handler opened attacker-chosen URLs in the default
   browser before NamiSync could handle them. Fixed by pinning
   `OPEN_EXTERNAL_LINKS_IN_BROWSER=False` before native startup, alongside
   disabled file URLs, downloads, remote debugging, and debug mode; native popup
   and navigation guards remain defense in depth.
+<a id="bug-0213"></a>
+
 - MODERATE - FIXED (2026-07-31). Incomplete navigation interception. Top-level
   `NavigationStarting` does not observe iframes, so weakened or late CSP left no
   native frame control. Fixed by attaching `FrameNavigationStarting` and
   canceling every frame navigation while retaining first-in-`head`
   `frame-src 'none'` for initial parsing.
+<a id="bug-0214"></a>
+
 - MODERATE - FIXED (2026-07-31). Startup error conflation. Broad
   `WebViewException` handling mislabeled unrelated startup failures as missing
   WebView2, despite pywebview's silent MSHTML fallback; asset-origin code could
   also trim `window.real_url` incorrectly. Fixed by refusing non-Edge-Chromium
   during `initialized`, preserving unrelated exceptions, and deriving origin
   from the complete URL with `urlsplit`.
+<a id="bug-0215"></a>
+
 - SEVERE - FIXED (2026-07-30). UI thread-affinity violation. `CoreWebView2`
   access from pywebview's setup worker could hang rather than raise a
   cross-thread error, preventing host startup. Cause: the initial mock treated
   the managed WinForms control as an ordinary Python object. Fixed with one
   idempotent synchronous `before_load` callback that accesses and subscribes
   native events only on the WinForms UI thread before exposing application calls.
+<a id="bug-0216"></a>
+
 - SEVERE - FIXED (2026-07-30). Wrapper/native state divergence. After canceling an
   off-origin request, WebView2 retained the packaged document but pywebview
   reported the rejected URL, indefinitely locking out the trusted-page bridge.
   Cause: the bridge treated wrapper navigation intent as committed document
   authority. Fixed with a lock-protected native `CoreWebView2.Source` snapshot,
   updated on the UI thread and read by dispatch workers without marshaling.
+
+<a id="bug-0217"></a>
 
 - MODERATE - FIXED (2026-07-30). Failed-join ownership loss. A blocked sink that
   exceeded the observer join timeout was removed from retained observation
@@ -2082,6 +2539,8 @@ defect, and move implementation-level test choreography out of the log.
   and service treated a failed join as an irreversible first attempt; fixed by
   retaining unjoined observations and retrying their close before the service
   may return cached success.
+<a id="bug-0218"></a>
+
 - MODERATE - FIXED (2026-07-30). Shutdown-state conflation. Once dispatcher
   shutdown completed, a runtime/history close exception made every later
   service close fail immediately; the runtime also discarded the store whose
@@ -2090,12 +2549,16 @@ defect, and move implementation-level test choreography out of the log.
   dependency succeeded; fixed by caching dispatcher completion separately,
   serializing close attempts, retrying only runtime closure, and retaining the
   store/open state after a failed close.
+<a id="bug-0219"></a>
+
 - MODERATE - FIXED (2026-07-30). Receipt/session lifecycle race. A retry could
   replay a session after dispatcher close but before receipt removal, while the
   inverse admit/close interleaving could publish a receipt for an already
   closed session. Cause: dispatcher retention and service receipt
   lookup/publication/removal had separate synchronization; fixed with one
   lifecycle gate and retained-session checks around all three transitions.
+<a id="bug-0220"></a>
+
 - MODERATE - FIXED (2026-07-30). Partial-shutdown admission gap. After an incomplete
   shutdown correctly kept runtime dependencies alive for a later close retry,
   public plan, settings, inventory, integrity, history, and observation calls
@@ -2103,6 +2566,8 @@ defect, and move implementation-level test choreography out of the log.
   Cause: `_closed` guarded receipt-bearing commands but not the complete domain
   facade; fixed with a shared open check while retaining only session
   status/control and shutdown cleanup after closure begins.
+<a id="bug-0221"></a>
+
 - MODERATE - FIXED (2026-07-30). Shutdown-phase conflation. A shutdown
   deadline permanently cached `complete=False` and still closed runtime/history,
   so non-cooperative workers could finalize through closed dependencies and a
@@ -2114,6 +2579,8 @@ defect, and move implementation-level test choreography out of the log.
 ## DATABASE AND INVENTORY
 
 ### Inventory windowing
+
+<a id="bug-0222"></a>
 
 - MODERATE - FIXED (2026-10-05). Repeated unbounded labels. Inventory domain
   displays and warning paths repeat complete supported paths in 256-row windows.
@@ -2130,6 +2597,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Planning evidence freshness
 
+<a id="bug-0223"></a>
+
 - MODERATE - FIXED (2026-09-25). Historical observation conflation. Repeated
   renames accumulated path-keyed inventory rows for one file identity, causing
   later plans to replace eligible moves with copy plus target trash. Cause:
@@ -2142,6 +2611,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Database artifact ownership and rollback
 
+<a id="bug-0224"></a>
+
 - MODERATE - FIXED (2026-09-27). Inconclusive admission reset guidance. Fresh
   CLI admission and the first history read could interpret normal external
   database activity as incompatibility and advise archiving or deleting the pair.
@@ -2153,6 +2624,8 @@ defect, and move implementation-level test choreography out of the log.
   Pair/history regressions and real SQLite write interleavings cover this
   distinction. No mutex or effect retry is introduced. Evidence:
   `build/cold-admission-followup-20260927/`.
+
+<a id="bug-0225"></a>
 
 - MODERATE - FIXED (2026-09-27). Owned-activity drift refusal. Plan, inventory,
   execution and integrity admission can refuse a healthy pair as
@@ -2169,6 +2642,8 @@ defect, and move implementation-level test choreography out of the log.
   exception. Cold admission can still refuse externally changing unowned files.
   Evidence: `build/trace-20260927/` and `build/admission-bridge-closeout-20260927/`.
 
+<a id="bug-0226"></a>
+
 - SEVERE - FIXED (2026-08-13). TOCTOU rollback-unlink race. Failed
   fresh-pair initialization compared a reserved artifact's identity and then
   unlinked its pathname, so a replacement between those operations could be
@@ -2181,6 +2656,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+<a id="bug-0227"></a>
+
 - SEVERE - FIXED (2026-08-28). Hostile resolution alias mutation. Inventory
   retained resolver-returned mount/evidence objects across the later root probe,
   so callback mutation could change the root or volume facts used for scan and
@@ -2189,6 +2666,8 @@ defect, and move implementation-level test choreography out of the log.
   binding/mount/evidence reconstruction, a second detached mounted-population
   observation after root admission, correspondence comparison, and downstream
   use of only the resolved binding. A changed population retries before effects.
+<a id="bug-0228"></a>
+
 - MODERATE - FIXED (2026-08-27). Historical correspondence amplification.
   Every plan loaded all retained pairs and identity aliases for a mapping's two
   locations, so a small current scan could materialize an arbitrarily large
@@ -2200,6 +2679,8 @@ defect, and move implementation-level test choreography out of the log.
   removes retained-alias disqualification from this scoped reader; current
   scans own alias and multi-link refusal. Nullable target-identity evidence
   remains supported; unrelated history is not planning input.
+<a id="bug-0229"></a>
+
 - MODERATE - FIXED (2026-08-27). Unbounded integrity candidate population.
   Fresh full and selected-path integrity, stale-plus-completed scope, and saved
   resume could materialize an arbitrary eligible ledger population before any
@@ -2211,6 +2692,8 @@ defect, and move implementation-level test choreography out of the log.
   saved order/missing checks, stale identity deduplication, and workflow
   settlement that starts no verifier work. The independently modeled retained-
   byte and codec-envelope axes remain unimplemented.
+<a id="bug-0230"></a>
+
 - MODERATE - FIXED (2026-08-26). Ambient snapshot placement. File admission
   copied complete database/WAL contents into an environment-selected temporary
   directory, which could place private validation data outside the required
@@ -2219,6 +2702,8 @@ defect, and move implementation-level test choreography out of the log.
   roles retain source-artifact no-mutation and cleanup-error behavior; the
   immutable no-sidecar path still needs no scratch space. DATABASE records
   writable-parent and full-copy costs, directory side effects, and crash leftovers.
+<a id="bug-0231"></a>
+
 - MODERATE - FIXED (2026-08-26). Reader-lifetime admission amplification.
   Repeated inventory and history requests opened a new repository each time,
   rehashing complete main/WAL artifacts even for small result pages. Fixed by
@@ -2228,6 +2713,8 @@ defect, and move implementation-level test choreography out of the log.
   new use until cleanup is retried. Standalone, pair, and writer admission are
   unchanged. First-open work still scales with database size; DATABASE records
   its logical I/O and fixture axes without claiming a latency or memory bound.
+<a id="bug-0232"></a>
+
 - MODERATE - FIXED (2026-08-26). WAL-blind admission. A database whose WAL
   changed its contract marker could pass main-only admission, then refuse in a
   normal reader after creating source SHM. Cause: immutable SQLite ignores WAL
@@ -2236,6 +2723,8 @@ defect, and move implementation-level test choreography out of the log.
   drift checks. Tests pin missing-SHM and poisoned-WAL refusal without source
   mutation, cleanup failures, and peer drift. Evidence is point-in-time, not a
   lease over later ordinary SQLite use.
+<a id="bug-0233"></a>
+
 - MODERATE - FIXED (2026-08-26). Metadata self-certification. Exact schema
   markers could admit databases with missing or poisoned objects; later queries
   failed, and initialization could silently add missing tables while preserving
@@ -2244,6 +2733,8 @@ defect, and move implementation-level test choreography out of the log.
   reader validation and shared initializer/repository/pair preflight before
   repair DDL. Both roles reject missing, extra, or poisoned definitions without
   mutation; only declared exact optional statistics tables are exempt.
+<a id="bug-0234"></a>
+
 - MODERATE - FIXED (2026-08-10). Message-based error classification. The
   serialized writer retried any `OperationalError` whose message contained
   "busy" or "locked", delaying unrelated failures and reporting them as lock
@@ -2251,6 +2742,8 @@ defect, and move implementation-level test choreography out of the log.
   by accepting only primary `SQLITE_BUSY`/`SQLITE_LOCKED` result codes, masking
   extended codes to their primary value, and failing misleading message text
   immediately within the original recording-error boundary.
+<a id="bug-0235"></a>
+
 - MODERATE - FIXED (2026-08-09). Result-precedence inversion. A
   retained `hash-mismatch` marker could be projected as ordinary `modified`
   while current stat or identity also drifted. Cause: the repository returned
@@ -2259,6 +2752,8 @@ defect, and move implementation-level test choreography out of the log.
   present row with current evidence as mismatched before ordinary drift, while
   unavailable evidence remains unverified; the public view is regression-tested
   at the intermediate drift state.
+<a id="bug-0236"></a>
+
 - MODERATE - FIXED (2026-08-08). Post-materialization selection bound. Frozen
   resume and stale-before integrity selection loaded every row for a location
   and filtered in Python, making small checks O(location size). Cause: the
@@ -2267,6 +2762,8 @@ defect, and move implementation-level test choreography out of the log.
   canonical row-ID lookup in 400-ID chunks under one read snapshot, direct stale
   rows plus exact completed-row fetches, and refusal of missing/foreign saved
   identifiers. Intentional full Verify All remains a full-location operation.
+<a id="bug-0237"></a>
+
 - SEVERE - FIXED (2026-08-08). Sticky invalidation omission. A verified
   file could change, be rescanned, and retain an apparently current
   `last_verified_at`; stale selection then omitted it and inventory presented a
@@ -2276,6 +2773,8 @@ defect, and move implementation-level test choreography out of the log.
   stale-query inclusion, negative verifier recording, and verified/modified/
   mismatched projections. Hash mismatch dominates later metadata drift, and
   only a successful guarded evidence write clears the marker.
+<a id="bug-0238"></a>
+
 - MODERATE - FIXED (2026-08-04). Split contention-budget enforcement. Serialized database
   contention could outlive
   its configured retry bound: waiting for the in-process writer lock was
@@ -2286,6 +2785,8 @@ defect, and move implementation-level test choreography out of the log.
   explicit zero-budget single immediate attempt and no positive-budget attempt
   after expiry. Transaction work after acquiring the write lock remains outside
   this contention budget.
+<a id="bug-0239"></a>
+
 - SEVERE - FIXED (2026-07-30). Incomplete-evidence authority leak. Non-authoritative
   full integrity verification.
   A full or stale-scope refresh with a global enumeration failure still entered
@@ -2293,11 +2794,15 @@ defect, and move implementation-level test choreography out of the log.
   conditional on exact selected paths; fixed by refusing every incomplete
   unbounded refresh and retaining only the fully explained exact-subject
   exception.
+<a id="bug-0240"></a>
+
 - MODERATE - FIXED (2026-07-30). Cross-batch snapshot fracture. Selecting
   more than 400 canonical keys could observe old rows in one batch and a newer
   concurrent commit in the next, producing a state that never existed. Cause:
   each bounded SELECT ran in its own autocommit snapshot; fixed with one explicit
   read transaction spanning all batches.
+<a id="bug-0241"></a>
+
 - MODERATE - FIXED (2026-07-30). State-transition asymmetry. A completed
   exact PATHS refresh did not mark an absent prior unsupported row missing, and
   missing-to-unsupported reappearance failed to set `reappeared_at`. Cause: the
@@ -2309,6 +2814,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+<a id="bug-0242"></a>
+
 - MODERATE - FIXED (2026-08-27). Unbounded verifier buffer policy. The ordinary
   runtime selects a 4 MiB chunk, but public `VerifierContext` accepts any
   positive size and the Windows reader simultaneously owns that aligned native
@@ -2318,6 +2825,8 @@ defect, and move implementation-level test choreography out of the log.
   from one byte through 4 MiB, keeping the existing default as the maximum.
   The task model can now charge one native buffer plus one Python chunk without
   narrowing ordinary runtime behavior.
+<a id="bug-0243"></a>
+
 - MODERATE - FIXED (2026-08-22). Verify-phase admission split. Linked
   post-copy Progress admitted only readable candidates while its terminal
   `PhaseResult` also counted selected items with missing evidence, allowing a
@@ -2326,6 +2835,8 @@ defect, and move implementation-level test choreography out of the log.
   carrying complete selected-item admission into the verifier, centralizing
   its physical-read budget across direct and resumed execution, and covering
   missing-only, mixed overrun, pause, cancel, and exceptional control paths.
+<a id="bug-0244"></a>
+
 - MODERATE - FIXED (2026-08-22). Continuation authority-axis loss. Paused
   standalone integrity custody retained processed bytes and item completion but
   discarded the verifier's expanded physical-read budget and aggregate
@@ -2336,6 +2847,8 @@ defect, and move implementation-level test choreography out of the log.
   high-water, one-way aggregate recording, reporter propagation across resume
   and overshoot, and exact paused-cancel/setup-failure regressions. Reliable
   outcomes and recorded evidence remain the durable-truth authority.
+<a id="bug-0245"></a>
+
 - MINOR - FIXED (2026-08-21). Progress namespace misclassification. Post-copy
   verification labeled an originating executor operation id as `integrity`, so
   the field intended to disambiguate opaque row ids pointed consumers at the
@@ -2343,6 +2856,8 @@ defect, and move implementation-level test choreography out of the log.
   family instead of the identity's lookup owner. Fixed by supplying
   `operation` for linked post-copy candidates and `integrity` for standalone
   rows while retaining `IntegrityOutcome` as the reliable settlement type.
+<a id="bug-0246"></a>
+
 - MODERATE - FIXED (2026-08-21). Unthrottled lifecycle telemetry amplification.
   Item start, stream start, and settlement each forced a Progress event, making
   fast verification emit three fixed snapshots per item while equivalent
@@ -2351,6 +2866,8 @@ defect, and move implementation-level test choreography out of the log.
   is lossy state telemetry. Fixed by sending those transitions through the
   ordinary throttle, retaining only forced initial/final successful boundaries
   and one forced pause or cancel boundary, with frozen-clock item-count guards.
+<a id="bug-0247"></a>
+
 - MINOR - FIXED (2026-08-11). Concrete-type dispatch coupling. Engine sent
   only the exact `WindowsUnbufferedReader` class through its reviewed-authority
   open, so a subclass or timing decorator instead received the ordinary
@@ -2366,6 +2883,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+<a id="bug-0248"></a>
+
 - MODERATE - FIXED (2026-09-28). Stale held-root attributes.
   A confirmed empty NTFS directory could become a junction through an
   attribute-only write handle while the admission hold stayed open. Cause:
@@ -2376,6 +2895,8 @@ defect, and move implementation-level test choreography out of the log.
   covers all three reuse sites without mutating through the redirected root.
   Sharing, root flushes, descendant writes and exFAT attribute queries remain
   compatible; DEFENSE's existing quiescence rule governs the check/use interval.
+<a id="bug-0249"></a>
+
 - MODERATE - FIXED (2026-08-30). Linear completion membership. Completing each
   linked or standalone integrity item scanned the immutable candidate tuple to
   confirm its id, making complete settlement quadratic even after workflow
@@ -2384,6 +2905,8 @@ defect, and move implementation-level test choreography out of the log.
   selection-owned immutable id index, validated against the fixed tuple and
   reused by verifier progress. Replay still checks the completed map first;
   continuation shapes, item order, authority, and outcome behavior are unchanged.
+<a id="bug-0250"></a>
+
 - MODERATE - FIXED (2026-08-27). Source primitive admission gaps. Core path,
   volume, capability, warning, filter, assignment, scan-scope, and inventory
   binding values could retain subclasses, malformed Unicode, or source-sized
@@ -2398,6 +2921,8 @@ defect, and move implementation-level test choreography out of the log.
   canonical length. Their theoretical schema maxima remain large; later task
   custody must reserve actual charge, and a smaller wire maximum requires
   versioned duplication removal.
+<a id="bug-0251"></a>
+
 - MODERATE - FIXED (2026-08-27). Typed detail canonicality bypass. A directly
   constructed or subclassed `DetailProjection` could retain duplicate keys,
   mutable or oversized values, hidden graphs, or excess leaves while its wire
@@ -2408,6 +2933,8 @@ defect, and move implementation-level test choreography out of the log.
   snapshots, serialization revalidation, duplicate refusal before omission,
   exact primitive/container checks, and bounded-before-encode key/path refusal.
   Raw diagnostic omission semantics are preserved.
+<a id="bug-0252"></a>
+
 - MODERATE - FIXED (2026-08-27). Full-result diagnostic divergence. Terminal
   summaries omitted oversized or invalid phase/failure diagnostics, while the
   retained `OperationResult` behind them kept the original values through
@@ -2415,6 +2942,8 @@ defect, and move implementation-level test choreography out of the log.
   whole-value rules before the first retained owner and counting only header
   omissions there; item omissions remain summary-local. Bounded header objects
   retain identity, and phase names/count policy is unchanged.
+<a id="bug-0253"></a>
+
 - MODERATE - FIXED (2026-08-27). Diagnostic formatting escape. An ordinary
   workflow exception whose `__str__` raised could escape terminal normalization
   after reliable items had settled, leaving the session without its one final
@@ -2422,6 +2951,8 @@ defect, and move implementation-level test choreography out of the log.
   ordinary formatting fails. `KeyboardInterrupt`, `SystemExit`, and other
   `BaseException` control flow still escapes; overflow refuses before any
   settle, audit, publication, or terminal owner.
+<a id="bug-0254"></a>
+
 - MINOR - FIXED (2026-08-27). Unicode-scalar boundary omission. Free-form
   request/evidence text could contain Python surrogate code units; an explicit
   high/low pair encoded successfully but decoded as one character, violating
@@ -2431,6 +2962,8 @@ defect, and move implementation-level test choreography out of the log.
   was not a JSON/hash collision. Malformed optional scan-warning detail is
   omitted at construction without dropping code, path, or observations. Frozen
   malformed receipt replay conflicts without writes; no new epoch/reset.
+<a id="bug-0255"></a>
+
 - MINOR - FIXED (2026-08-26). Implicit domain hash projection. Plan and
   recorder hashers descended through arbitrary dataclasses and coerced mapping
   keys, allowing undeclared forms to acquire idempotency identity silently.
@@ -2441,6 +2974,8 @@ defect, and move implementation-level test choreography out of the log.
   old identity-bearing v6 commitments fail re-fingerprinting before execution.
   Valid-Unicode identityless bytes remain stable; frozen malformed vectors stay
   historical evidence under the later strict Unicode-scalar boundary above.
+<a id="bug-0256"></a>
+
 - MODERATE - FIXED (2026-08-26). Projection byte-boundary omission. A
   structurally valid reliable event above 1,048,576 canonical bytes could pass
   Python's public-view validator and the browser, then advance browser state
@@ -2449,6 +2984,8 @@ defect, and move implementation-level test choreography out of the log.
   `canonical_event_bytes` the sole production enforcer before `EventHub`
   sequence, replay, audit, or subscriber mutation and removed the redundant
   downstream checks. Exact-maximum/plus-one canonical bytes remain frozen.
+<a id="bug-0257"></a>
+
 - MODERATE - FIXED (2026-08-26). Cross-runtime primitive grammar drift.
   Python and JavaScript admitted different timestamp spellings, and the browser
   normalized impossible dates. Its Unicode guard also admitted a trailing lone
@@ -2458,6 +2995,8 @@ defect, and move implementation-level test choreography out of the log.
   the UTC calendar and Unicode rules. The consolidation pass removed their
   duplicate live-event browser copy; supported producer projection and
   canonical UTF-8 encoding own that path instead.
+<a id="bug-0258"></a>
+
 - MODERATE - FIXED (2026-08-26). Cross-axis validation omission. Item and
   terminal projections could admit recording reasons that contradicted the
   filesystem outcome, or cancellation without matching execute/verify truth,
@@ -2468,6 +3007,8 @@ defect, and move implementation-level test choreography out of the log.
   public record/result validation retained. The consolidation pass removed only
   the live-event semantic mirror; valid plain and compound cancellation remains
   covered.
+<a id="bug-0259"></a>
+
 - MINOR - FIXED (2026-08-26). Scalar error-family drift. Shared decimal and
   public event decoders classified malformed strings as wrong types, while
   very long canonical Scalar64 overflow escaped as Python's generic conversion
@@ -2478,6 +3019,8 @@ defect, and move implementation-level test choreography out of the log.
   conversion, persistence event decoding, and explicit 16-byte unsigned
   construction. Public payload and optimized-mode regressions preserve valid
   full-width identity and unchanged volume/hash/epoch semantics.
+<a id="bug-0260"></a>
+
 - MODERATE - FIXED (2026-08-25). Native file-identity narrowing. Scanner and
   preflight could observe Windows/Python file indexes wider than 64 bits while
   executor and verifier reconstructed only legacy high/low 64-bit fields and
@@ -2487,6 +3030,8 @@ defect, and move implementation-level test choreography out of the log.
   Fixed with one complete core-owned `FILE_ID_128` adapter, witnessed NTFS/ReFS
   stat equivalence, canonical full-width text through codecs and ledger v4,
   and removal of legacy high/low handle projection and numeric storage.
+<a id="bug-0261"></a>
+
 - MINOR - FIXED (2026-08-27). Cross-consumer schema acceptance drift. The core
   decoder previously retained v3 history compatibility beside v4 while the live
   browser and canonical history projection accepted different populations.
@@ -2495,6 +3040,8 @@ defect, and move implementation-level test choreography out of the log.
   exclusive helpers, and positive compatibility fixtures are removed.
   Removal guards and all-family negative cases pin the source boundary;
   co-batched retired-version events preserve the drain cursor and replay.
+<a id="bug-0262"></a>
+
 - MODERATE - FIXED (2026-08-22). Lossy-progress authority conflation. Forced
   control snapshots combined aggregates from an earlier throttled emission with
   live item-attempt state, producing internally contradictory pause/cancel views;
@@ -2502,6 +3049,8 @@ defect, and move implementation-level test choreography out of the log.
   semantics, authoritative-live forced snapshots, cross-field v4 invariants,
   self-described phase and opaque attempt identity, and separate
   reporter-transition, settlement-oracle, and browser-reducer regression layers.
+<a id="bug-0263"></a>
+
 - SEVERE - FIXED (2026-08-10). Logical-root authority omission. Verifier
   contexts carried reviewed mount and volume facts but not the exact logical
   root, so a malformed selection could admit one reviewed authority and open a
@@ -2512,12 +3061,16 @@ defect, and move implementation-level test choreography out of the log.
   resolution and post-copy from the reviewed plan; opened-handle and final-path
   checks remain independent. Unbound mode is limited to explicit fake/custom
   readers.
+<a id="bug-0264"></a>
+
 - MINOR - FIXED (2026-08-10). Reserved-name coverage gap. Path validation
   rejected ordinary reserved names but admitted `CONIN$`, `CONOUT$`, and the
   superscript-one/two/three COM/LPT aliases recognized by Windows. Those names
   cannot safely participate in the ordinary relative-path contract. Fixed by
   extending the one core reserved-basename set with case- and extension-aware
   coverage; unsupported device namespaces remain refused separately.
+<a id="bug-0265"></a>
+
 - MINOR - FIXED (2026-08-09). Boundary-local diagnostic sanitization. Scanner
   enumeration warnings and executor failed/canceled temp-cleanup wrappers used
   raw exception text, allowing `\\?\` spelling to enter public results or
@@ -2525,6 +3078,8 @@ defect, and move implementation-level test choreography out of the log.
   logical filename rendering before warning/result construction, including
   copied-backup cleanup notes, with focused public and durable cleanup-detail
   regressions.
+<a id="bug-0266"></a>
+
 - MODERATE - FIXED (2026-08-08). Inconsistent native-path adaptation. A managed
   path over the legacy Windows limit could fail before execution because some
   service, preflight, scanner, executor, or verifier calls used ordinary
@@ -2535,12 +3090,16 @@ defect, and move implementation-level test choreography out of the log.
   device or ordinary-ambiguous absolute components that could retarget a root.
   SQLite database-file long paths and network-share coordination remain out of
   scope.
+<a id="bug-0267"></a>
+
 - MODERATE - FIXED (2026-07-30). Permissive JSON type coercion. Schema and sequence
   floats were truncated, scalar fields were stringified, and terminal
   `canceled="false"` became true. Cause: the versioned event decoder used
   Python conversion constructors instead of validating transported JSON types;
   fixed with exact integer/boolean/string decoding across envelopes, terminal
   results, phases, and nominal items.
+<a id="bug-0268"></a>
+
 - MODERATE - FIXED (2026-07-30). Incomplete recursive JSON validation. The security spike
   accepted boolean/float schema 1, duplicate keys, exponent-overflow infinity,
   and escaped lone surrogates; a handler could run on the last two before output
@@ -2552,6 +3111,8 @@ defect, and move implementation-level test choreography out of the log.
 ## WORKFLOW AND CLI
 
 ### Launcher ingress
+
+<a id="bug-0269"></a>
 
 - MODERATE - FIXED (2026-11-04). Complete-request admission omission. The GUI
   launcher accepts a Windows argument vector containing 66,123 UTF-8 bytes and
@@ -2568,6 +3129,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Output rendering
 
+<a id="bug-0270"></a>
+
 - MODERATE - FIXED (2026-11-04). Redirected-output encoding mismatch. Japanese
   filenames failed CLI review or produced partial history with exit 4 on
   redirected cp1252 streams; retained file and database state remained intact.
@@ -2577,6 +3140,8 @@ defect, and move implementation-level test choreography out of the log.
   and existing I/O-error handling. Parser diagnostics use the same boundary.
   Real module/console cp1252 and UTF-8 review/result/history cases, literal-marker
   controls and stream/error regressions pass. Evidence: `build/bughunt-20261104/evidence/fix-a2-*`.
+
+<a id="bug-0271"></a>
 
 - SEVERE - FIXED (2026-11-04). Review-text layout-control injection.
   CLI review displayed legal filenames containing U+0085 or bidi controls as
@@ -2592,6 +3157,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Plan projection
 
+<a id="bug-0272"></a>
+
 - MODERATE - FIXED (2026-09-18). Subtree/direct membership confusion.
   Selection refresh raised an internal error whenever the retained selection
   included a directory operation with eligible descendants. The UI reported
@@ -2603,6 +3170,8 @@ defect, and move implementation-level test choreography out of the log.
   correction; cloud-file and path-admission policies are unchanged.
 
 ### M1 Hardening
+
+<a id="bug-0273"></a>
 
 - SEVERE - FIXED (2026-10-13). Historical observation promotion. Baseline or
   Verify over any selection containing a previously observed, now-deleted file
@@ -2617,6 +3186,8 @@ defect, and move implementation-level test choreography out of the log.
   historical metadata and the verifier's missing-result policy. Real Baseline,
   Verify and Rebaseline regressions cover a missing file and present sibling.
 
+<a id="bug-0274"></a>
+
 - SEVERE - FIXED (2026-08-30). Population-scaled authority revalidation.
   Execution, post-copy, and standalone-integrity workflows rebuilt or rescanned
   complete immutable authority around item callbacks, making their result
@@ -2626,6 +3197,8 @@ defect, and move implementation-level test choreography out of the log.
   time, auditing each producer once on return, and removing execution plan
   hashing and duplicate immutable facts from callback guards. The separate core
   completion-membership defect is recorded above; no wall changed.
+<a id="bug-0275"></a>
+
 - MODERATE - FIXED (2026-08-29). Pre-checkpoint settlement gap. A direct
   workflow adapter's checkpoint callback could run after an executor changed
   settlement but before the workflow reconciled that change into its accepted
@@ -2636,6 +3209,8 @@ defect, and move implementation-level test choreography out of the log.
   linked verification, and standalone integrity now reconcile before and after
   the callback; an unreported delta blocks re-entry while accepted-prefix and
   pause/cancel truth remain unchanged.
+<a id="bug-0276"></a>
+
 - MODERATE - CLOSED, BOUNDED (2026-10-01). Phase exception-frame retention.
   Cause: consumed errors retained request, plan, result or callback graphs
   through traceback links. Lifecycle, workflow, history, dispatcher, service
@@ -2648,6 +3223,8 @@ defect, and move implementation-level test choreography out of the log.
   measured product-owned retention beyond the endpoints in
   [INTERFACES](INTERFACES.md#exception-retention-follow-up).
   Evidence: `build/open-bugs-20261001/` and existing host/document lifetime tests.
+<a id="bug-0277"></a>
+
 - MODERATE - FIXED (2026-08-30). Review-limit refusal provenance. A first-party
   plan or inventory collaborator could directly raise its domain's private
   exact signal and turn an internal bug into false `REFUSED+UNRUN`; a signal
@@ -2658,6 +3235,8 @@ defect, and move implementation-level test choreography out of the log.
   through the active plan capability, exact scope reconstruction, and raw-graph
   retirement. Tokenless, different-run, malformed, cross-domain, and lookalike
   failures never become refusal; reflective token forgery remains rung 4.
+<a id="bug-0278"></a>
+
 - SEVERE - FIXED (2026-08-27). Prepublication source-owner escape. Plan review
   could accept unbounded raw scanner, mapping, assignment, operation,
   observation, or refusal populations before a typed capacity outcome; generic
@@ -2674,6 +3253,8 @@ defect, and move implementation-level test choreography out of the log.
   complete graphs, exceptions, and multi-session owners remain outside active
   admission under [DEFENSE.md](DEFENSE.md) §1.3 and
   [BRIDGE.md](BRIDGE.md).
+<a id="bug-0279"></a>
+
 - SEVERE - FIXED (2026-08-28). Reliable result custody aliasing. The generic
   runner, execution workflow, and integrity workflow could give a callback the
   same item/result graph retained for terminal truth, or run a later validator
@@ -2684,6 +3265,8 @@ defect, and move implementation-level test choreography out of the log.
   seams. Supported read-only terminal owners now share that one canonical item
   graph across separate pre/post-audit headers; reflective frozen-object
   corruption remains outside the supported fault model.
+<a id="bug-0280"></a>
+
 - SEVERE - FIXED (2026-08-28). Exclusion delivery replay. A pause during
   plan-exclusion delivery retained no acceptance position, so resume began at
   the first exclusion and replayed already accepted reliable outcomes. Cause:
@@ -2693,6 +3276,8 @@ defect, and move implementation-level test choreography out of the log.
   and emits only the remaining suffix. Cursor cancellation cannot replay the
   accepted item; terminal refusal/failure/cancellation cannot become resumable
   midway. Crash-atomic publication is deferred.
+<a id="bug-0281"></a>
+
 - MODERATE - FIXED (2026-08-28). Terminal refusal control escape. Fresh
   preflight refusal emitted reviewed exclusions through a terminal-only helper,
   but a pause or cancellation raised there escaped direct workflow settlement
@@ -2703,6 +3288,8 @@ defect, and move implementation-level test choreography out of the log.
   The five pre-run failure/refusal sites now share one typed owner dispatcher,
   removing the divergent copies that produced this defect while retaining the
   distinct cancellation control path.
+<a id="bug-0282"></a>
+
 - SEVERE - FIXED (2026-08-28; hardened 2026-08-29). Recording boundary authority mutation.
   Recording open/fallback callbacks and linked run owners received mutable
   execution-set aliases, so a fallible collaborator could alter settlement,
@@ -2712,6 +3299,8 @@ defect, and move implementation-level test choreography out of the log.
   and prior-overlay guards retain the first safe pre-callback projection through
   finish and context exit; ordinary, paused-cancellation, fallback-finish, and
   context-exit regressions cover the seam.
+<a id="bug-0283"></a>
+
 - MODERATE - FIXED (2026-08-27). Verify-continuation diagnostic retention.
   Linked execution bounded failure type and message separately, then retained
   their unchecked concatenation in paused verify custody. The continuation also
@@ -2723,6 +3312,8 @@ defect, and move implementation-level test choreography out of the log.
   admission, and reconstructing the exact continuation again at v7 encoding,
   public execution, and canceled settlement. Pause/resume, cancellation, and
   terminal counters retain the same truth.
+<a id="bug-0284"></a>
+
 - MODERATE - FIXED (2026-08-26). Exceptional terminal attribution loss.
   Exclusion-outcome rejection followed by recording-close failure could publish
   and store a failed terminal with clean recording, then scrub the only exact
@@ -2733,12 +3324,16 @@ defect, and move implementation-level test choreography out of the log.
   Close attribution now reaches terminal before scrubbing; public runner and
   real runtime/dispatcher/store regressions cover partial acceptance as well.
 
+<a id="bug-0285"></a>
+
 - MODERATE - FIXED (2026-08-06). Cleanup-failure suppression. CLI terminal
   cleanup and final shutdown could fail without any visible indication. Cause:
   `_close_terminal` swallowed every exception and all three command paths
   discarded the service shutdown result. Fixed by reporting expected
   cleanup-pending timeouts and unexpected failures to stderr, inspecting every
   final `ShutdownView`, and preserving the settled typed result and exit class.
+<a id="bug-0286"></a>
+
 - MODERATE - FIXED (2026-08-04). Cross-mode result normalization gap. Cancellation
   without post-copy verification re-raised `Canceled` after ledger settlement,
   so the generic runner replaced degraded recording truth with `recording=OK`
@@ -2748,6 +3343,8 @@ defect, and move implementation-level test choreography out of the log.
   preserving `ExecutionSet` recording, merging the complete ordered item stream,
   and omitting the execute phase only when verification was not requested.
 
+<a id="bug-0287"></a>
+
 - SEVERE - FIXED (2026-07-30). Settlement cleanup omission. A failed
   ledger open or final write while settling a paused or just-resumed execution
   left its exact run token permanently claimed in
@@ -2755,11 +3352,15 @@ defect, and move implementation-level test choreography out of the log.
   session terminal. Cause: only successful recorder finish removed the
   process-local claim; fixed by releasing the validated exact start claim in a
   settlement `finally`, including thrown-open and degraded-finish regressions.
+<a id="bug-0288"></a>
+
 - MODERATE - FIXED (2026-07-30). Close-state publication race. One caller
   could mark the runtime closed and block in history-store close; a second
   caller then returned success before the first failed and reopened the runtime.
   Cause: the state lock protected flags but not the dependency-close attempt;
   fixed with a runtime-local close gate that serializes failure and retry.
+<a id="bug-0289"></a>
+
 - SEVERE - FIXED (2026-07-30). Resume-settlement authority confusion. A coherently
   tampered execute/verify continuation was correctly refused before domain work,
   but the refusal tried to reopen recording from the tampered selection. The
@@ -2769,6 +3370,8 @@ defect, and move implementation-level test choreography out of the log.
   fixed with a custody-bound finish-existing-run dependency, strict
   same-runtime start-token validation, and real dispatcher plus real-ledger
   pause/resume regressions.
+<a id="bug-0290"></a>
+
 - SEVERE - FIXED (2026-07-30). Plan-generation ABA race. Replacing a plan reset its
   selection revision to zero and discarded mutation receipts, so a lost
   checkbox response, Execute, or destructive confirmation formed against the
@@ -2778,6 +3381,8 @@ defect, and move implementation-level test choreography out of the log.
   did not survive replacement; fixed by monotonically advancing revisions,
   retaining recognized gesture tombstones, checking the current artifact after
   mutation, and returning the new preview as a conflict.
+<a id="bug-0291"></a>
+
 - SEVERE - FIXED (2026-07-30). Typed admission-response mismatch. With
   trash-on-update disabled, typing `execute` returned a
   `confirmation-required` view that the CLI treated as an execution session,
@@ -2786,6 +3391,8 @@ defect, and move implementation-level test choreography out of the log.
   CLI confirmation; fixed by rendering the exact irreversible-update warning,
   forwarding the typed response as an exact boolean acknowledgement, and
   handling every named admission view defensively.
+<a id="bug-0292"></a>
+
 - MODERATE - FIXED (2026-07-30). Idempotency check/submit race. Two simultaneous
   first deliveries with one plan/inventory/integrity command id could both pass
   receipt lookup and submit separate sessions; the initial closure left
@@ -2795,18 +3402,24 @@ defect, and move implementation-level test choreography out of the log.
   families; fixed with bounded command-id single-flight guards around every
   family, raw gesture signatures checked before mutable validation, and
   shutdown-safe receipt publication.
+<a id="bug-0293"></a>
+
 - MODERATE - FIXED (2026-07-30). Bulk-selection validation coupling. A single
   safety-disabled operation beneath a folder made the entire folder toggle
   raise, leaving otherwise selectable siblings inert. Cause: node expansion
   passed every descendant into the direct-operation safety validator; fixed by
   expanding folder gestures to toggleable descendants while retaining refusal
   for a disabled operation named directly.
+<a id="bug-0294"></a>
+
 - MODERATE - FIXED (2026-07-30). Permissive schema-version coercion. Inventory
   workflow version strictness.
   Inventory `2.9` and integrity `"1"` payload versions were accepted as current
   schemas. Cause: the shared decoder coerced version values with `int()`; fixed
   by requiring an exact JSON integer and the exact kind-specific version,
   including float, string, and boolean rejection coverage.
+<a id="bug-0295"></a>
+
 - MODERATE - FIXED (2026-07-30). Permissive persisted-field coercion. Inventory
   and integrity continuation fields converted strings, floats, booleans, and
   nulls with `str()`/`int()`/`bool()`, while settings accepted boolean/float
@@ -2814,6 +3427,8 @@ defect, and move implementation-level test choreography out of the log.
   version checks were hardened without applying the same rule to the remaining
   persisted shape; fixed with exact field/type validation and duplicate-key
   rejection at both boundaries.
+<a id="bug-0296"></a>
+
 - MODERATE - FIXED (2026-07-30). Premature custody acquisition. Opening a
   fresh execution claimed its run token before the dispatcher entered workflow
   work, and fresh commitment/preflight refusal or exception never released it;
@@ -2821,6 +3436,8 @@ defect, and move implementation-level test choreography out of the log.
   so later cancel settlement failed. Cause: custody was attached to adapter
   decode rather than actual/snapshotted start; fixed with lazy claim, terminal
   cleanup, and entry-checkpoint pause snapshotting.
+
+<a id="bug-0297"></a>
 
 - SEVERE - FIXED (2026-07-25). Post-entry exception settlement gap. Exceptions
   during execute-result projection, continuation publication, verify phase
@@ -2831,6 +3448,8 @@ defect, and move implementation-level test choreography out of the log.
   runtime discarded whether `started_at` came from a resumed payload; fixed
   with an explicit resumed bit, phase-aware exception results, and one guarded
   finish-once path for every post-entry terminal.
+<a id="bug-0298"></a>
+
 - MODERATE - FIXED (2026-07-25). Persistence/domain wrapper confusion. Reading
   a retained phase passed its `HistoryPhaseSnapshot` wrapper to the phase view
   and raised `AttributeError`; even without phases, the view omitted persisted
@@ -2838,6 +3457,8 @@ defect, and move implementation-level test choreography out of the log.
   projected repository wrappers as domain values and exposed an incomplete run
   view; fixed by unwrapping ordered snapshots, reconstructing the typed result,
   and routing retained classification through the same live result classifier.
+<a id="bug-0299"></a>
+
 - MODERATE - FIXED (2026-07-25). Cancellation/error precedence inversion. A malformed
   registration callback could be converted into a clean canceled terminal.
   Cause: dispatcher checked the already-requested cancel checkpoint before
@@ -2846,6 +3467,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M0 integration
 
+<a id="bug-0300"></a>
+
 - MODERATE - FIXED (2026-07-21). Rename-origin projection loss. Recase rows rendered
   the source and destination as the same spelling, and move/move-update rows
   likewise omitted the old target path, so review hid the filesystem rename a
@@ -2853,6 +3476,8 @@ defect, and move implementation-level test choreography out of the log.
   `prior_target_rel_path` and the CLI always used the source path as the
   displayed origin; fixed by retaining `prior_target_path` in the workflow read
   model and preferring it as the left side for rename-shaped operations.
+<a id="bug-0301"></a>
+
 - MODERATE - FIXED (2026-07-21). Optional-field canonicalization drift. A plan-request
   payload that omitted `propagate_source_casing` decoded as false and then
   re-encoded with the field present, so one accepted payload did not have a
@@ -2860,26 +3485,36 @@ defect, and move implementation-level test choreography out of the log.
   the newly added flag alone used `.get(..., False)` while every neighboring
   semantic option was required; fixed by requiring the field during decode and
   retaining explicit round-trip coverage.
+<a id="bug-0302"></a>
+
 - MODERATE - FIXED (2026-07-20). Whole-run blocker coupling. One blocked item or an
   incomplete scan refused the whole sync, while simply omitting blockers could
   expose target-only deletion from incomplete source evidence. Cause: workflow
   selected every operation and preflight gated the whole run; fixed with
   commitment-bound safe-subset selection, dependency quarantine, additive-only
   incomplete-scan fallback, and preflight enforcement.
+<a id="bug-0303"></a>
+
 - MODERATE - FIXED (2026-07-20). Excluded-item outcome omission. Blocked plan
   items were absent from results and history because only selected operations
   emitted outcomes. Cause: the outcome model had no blocker state and workflow
   emitted no exclusions; fixed with `BLOCKED`, reasoned `DEFERRED` exclusions,
   itemized history rows, and a version-2 blocked summary count.
+<a id="bug-0304"></a>
+
 - SEVERE - FIXED (2026-07-19). Local symbol shadowing. Every real execution
   crashed while presenting fresh-preflight results, before mutation began.
   Cause: local `refusal_views` shadowed the formatter; fixed by using a distinct
   result variable.
+<a id="bug-0305"></a>
+
 - SEVERE - FIXED (2026-07-19). Untrusted fingerprint reuse. A decoded plan's
   carried fingerprint was compared with its commitment without recomputing the
   content hash, allowing altered payloads to appear authorized. Cause: two
   transported fields were treated as independently derived; fixed by recomputing
   the fingerprint before commitment validation.
+<a id="bug-0306"></a>
+
 - MODERATE - FIXED (2026-07-19). Late boundary validation. Identical
   database paths or overrides inside a managed root were rejected only after
   planning and confirmation. Cause: location validation lived only on the
@@ -2888,6 +3523,8 @@ defect, and move implementation-level test choreography out of the log.
 ## SCANNER AND PREFLIGHT
 
 ### M1 Hardening
+
+<a id="bug-0307"></a>
 
 - MODERATE - FIXED (2026-08-10). Intermediate-path authority omission.
   Preflight no-follow checked configured roots but physically resolved subjects
@@ -2898,6 +3535,8 @@ defect, and move implementation-level test choreography out of the log.
   re-admitting each plan-bound root and no-follow admitting existing relative
   chains before every later probe; typed authority changes remain pure-verdict
   evidence. Executor final-touch guards still own the residual path-to-use race.
+<a id="bug-0308"></a>
+
 - MODERATE - FIXED (2026-08-10). Intermediate-path authority omission. PATHS and
   SUBTREES joined each requested relative path and no-follow statted only its
   final subject, so an intermediate junction could redirect observation and
@@ -2909,6 +3548,8 @@ defect, and move implementation-level test choreography out of the log.
   root exception is not inherited by scoped descendants. Component replacement
   after admission remains part of the documented path-to-use race until native
   traversal becomes handle-relative.
+<a id="bug-0309"></a>
+
 - MODERATE - FIXED (2026-08-09). Trusted-anchor/reparse conflation. A FULL
   scan rejected a location whose root exactly equaled its folder-mounted volume
   anchor because the walker treated the anchor's mount-point reparse tag as an
@@ -2919,6 +3560,8 @@ defect, and move implementation-level test choreography out of the log.
   mounted-volume identity rather than the host mount entry. Final/intermediate
   configured-root reparses, placeholders, invalid followed state, subtree
   starts, and descendants remain refused.
+<a id="bug-0310"></a>
+
 - SEVERE - FIXED (2026-08-09). Lexical/physical root-authority conflation. M6
   changed native
   scanner root normalization to `Path.resolve()`, following a final junction
@@ -2931,6 +3574,8 @@ defect, and move implementation-level test choreography out of the log.
   changes before return; physical resolution remains separate overlap evidence.
   The final check-to-I/O and swap-away-and-back windows remain until root work
   becomes handle-relative.
+<a id="bug-0311"></a>
+
 - SEVERE - FIXED (2026-07-30). Quadratic ancestry normalization.
   Normalizing
   sibling recursive roots compared every root with every retained root and then
@@ -2943,6 +3588,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M0 integration
 
+<a id="bug-0312"></a>
+
 - MINOR - FIXED (2026-07-21; superseded 2026-08-27). Inconsistent Unicode-
   encoding boundary. Free-form malformed diagnostic text could fail ledger,
   history, or workflow JSON encoding despite path validation. M0 aligned the
@@ -2951,6 +3598,8 @@ defect, and move implementation-level test choreography out of the log.
   optional scan-warning detail is omitted at construction, typed item detail
   retains its counted omission, and required text refuses. Valid observations
   remain recordable without claiming malformed identity text round-trips.
+<a id="bug-0313"></a>
+
 - SEVERE - FIXED (2026-07-20). Pre-validation name normalization. One NTFS, SMB,
   archive, or WSL-originated name outside NamiSync's relative-path contract
   could abort planning; an unpaired surrogate could later crash ID or fingerprint
@@ -2958,6 +3607,8 @@ defect, and move implementation-level test choreography out of the log.
   admitted surrogates, and canonical JSON required UTF-8; fixed with pre-use
   validation, typed escaped evidence, incomplete-scan isolation, surrogate
   rejection, and compatible serializer hardening.
+<a id="bug-0314"></a>
+
 - SEVERE - FIXED (2026-07-19). Native identity-acquisition gap. Windows scan evidence
   could omit an NTFS file identity while fresh observation supplied one, falsely
   refusing sync and disabling correspondence moves. Cause: extended-path
@@ -2967,6 +3618,8 @@ defect, and move implementation-level test choreography out of the log.
 ## PLANNER
 
 ### M1 Hardening
+
+<a id="bug-0315"></a>
 
 - MODERATE - FIXED (2026-08-10). Planner/executor policy drift. Planner
   compared the complete Windows attribute bitmap while executor intentionally
@@ -2979,6 +3632,8 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M0 hardening
 
+<a id="bug-0316"></a>
+
 - MODERATE - FIXED (2026-07-21). Operation-kind overloading. A
   metadata-equal case-only filename change was represented as `update`, causing
   a full source-content rewrite, capacity charge, and trash backup merely to
@@ -2987,6 +3642,8 @@ defect, and move implementation-level test choreography out of the log.
   explicit zero-byte `recase` operation that carries old/new spellings, uses a
   same-volume non-replacing rename, preserves identity/metadata, records updated
   correspondence, and creates no trash entry.
+<a id="bug-0317"></a>
+
 - MODERATE - FIXED (2026-07-21). Advisory/blocker conflation. A
   case-only source/target filename pair blocked even when source metadata had
   changed, suppressing the required update; canonically equivalent NFC/NFD
@@ -2999,12 +3656,16 @@ defect, and move implementation-level test choreography out of the log.
   through the semantic-settings facade, with no dedicated CLI/UI control), and
   pairing only unique same-parent NFC-equivalent files that are not already
   exact matches.
+<a id="bug-0318"></a>
+
 - MODERATE - FIXED (2026-07-20). Case-folded identity conflation. A pair
   such as `KEEP.txt` and `keep.txt` was reported as a metadata no-op forever,
   hiding unconverged target casing. Cause: Windows-key grouping discarded target
   spelling before no-op classification; initially made visible with a typed
   `case_mismatch` blocker. The 2026-07-21 follow-up above retains that typed
   visibility without suppressing content work.
+<a id="bug-0319"></a>
+
 - MODERATE - FIXED (2026-07-19). Incomplete equality predicate. A readonly,
   hidden, or system attribute change with unchanged size and mtime planned as
   `noop`, leaving the target stale. Cause: equality checked only size and

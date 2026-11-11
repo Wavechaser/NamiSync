@@ -170,7 +170,9 @@ behavioral evidence.
   deferrals, unresolved observations and source-linked evidence; repair links.
 - Further condense DESKTOP_UI's repeated behavior/implementation/test detail;
   preserve visual specifications and acceptance. Survey BUGS access and sibling
-  analysis without changing records; defer ID/index tooling pending its own scope.
+  analysis, then add immutable IDs to all 319 records without altering their
+  paragraphs or metadata. Provide validated, full-record Markdown/JSONL export,
+  cross-owner filters and explicit batches through `python -m tools.bugs`.
 
 #### Reduce retained build artifacts (2026-10-29 – 2026-11-04)
 

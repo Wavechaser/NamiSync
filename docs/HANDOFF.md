@@ -1,44 +1,58 @@
-# Latest session — UI compaction and BUGS access review, 2026-11-11
+# Latest session — documentation commit and BUGS access layer, 2026-11-11
 
-The user requested further DESKTOP_UI compaction and asked whether BUGS growth
-will impede access, surveys and cross-module sibling analysis. UI servicing is
-complete; BUGS was surveyed read-only. No permanent bug IDs/catalog tooling,
-record migration, product/test/authority changes or build cleanup were activated.
+Committed the preceding documentation cleanup as c27da6aa, then implemented the
+user-approved BUGS access layer as a separate independently reviewed checkpoint.
+No product behavior, defect classification, evidence authority or build cleanup
+changed. BUGS remains the canonical module-first log.
 
 ## Delivery
 
-- DESKTOP_UI: 2,481 lines / 22,913 words to 1,075 / 9,046. Consolidate shared
-  appearance values and visible behavior; delegate repeated source signatures,
-  projection/transport mechanics and test choreography to existing owners.
-- Keep all five existing specification tables, fifteen palette primitives,
-  thirty-three explicit color literals and the exact thirteen-bullet acceptance
-  section. Source-block dispositions cover all 215 blocks / 56 headings.
-- BUGS has 319 records across ten owner groups, median 82 words, p90 109 and
-  maximum 150. Statuses: 315 FIXED, two SUPERSEDED, one DEFERRED, one CLOSED,
-  BOUNDED; these are recorded states, not a new product audit. BUGS bytes unchanged.
-- Retrieval findings: 314 category spellings; only two exact repeated-category
-  groups cross owners. Module/date/category collides for two records, so it is
-  unsuitable as permanent identity. Qualified dates/compound statuses initially
-  escaped naive parsing; complete severity-header accounting catches omissions.
-- Recommend stable entry IDs and an on-demand lossless record catalog for filters
-  and entry-sized cross-owner analysis. Similarity/category matches are candidate
-  retrieval, not common-cause/recurrence proof. Physical module splitting and
-  taxonomy changes can wait. No fixed-record deletion or age archival proposed.
+- Add immutable BUG-0001 through BUG-0319 anchors, initially assigned in source
+  order. Preserve every original paragraph, metadata value and owner/scope heading.
+  BUGS owns allocation, retention and sibling-analysis conventions; TOOLS owns use.
+- `python -m tools.bugs` validates the whole log before filtering, then produces
+  complete Markdown/JSONL records with source spans, stable links and source hash.
+  Owner/scope/category, ID/status/severity and full-text filters compose across
+  owners; explicit offsets/limits batch whole records. No implicit truncation.
+- Reject missing/duplicate/orphan IDs, malformed/unaccounted records and nested
+  entries. Preserve compound statuses/date qualifiers. Exports create new files
+  exclusively; no automatic edit, semantic classification or maintained catalog.
+- A trial authority+path search returns 15 full records across eight owner groups.
+  The two same-owner/date/category records remain distinct as BUG-0307/0308.
+  Candidates still require full-entry and current-code review for common cause.
+- Add the requested Headed GUI test harness heading above its existing TOOLS
+  instructions; no harness behavior or acceptance guidance changed.
 
 ## Evidence and verification
 
-build/mop-up-survey-20261111/ui-round2-review.md and bugs-access-review.md own
-this session's detailed review. ui-round2-verification.json checks UI fragments,
-complete source accounting, unchanged BUGS hash and all 319 record headers.
-bugs-survey-records.jsonl is a derived snapshot export for analysis, not a second
-hand-maintained log or permanent tool. bugs-access-analysis.json records groups.
+Evidence: build/mop-up-survey-20261111/bug-access-review.md and
+bug-access-verification.json. Removing only new anchors/access conventions
+reproduces c27da6aa's original BUGS text exactly; all 319 records/IDs and 498
+local documentation links pass. The one-time migration map and sample exports
+are ignored evidence, not maintained authorities. Diff checks pass.
 
-The integrated documentation receipt validates all current local Markdown links,
-24 retained measurement methods/results, all 68 changelog tasks/date order and
-README phase alignment. Diff checks apply; no product tests for editorial changes.
-Earlier first-pass receipts remain historical. Do not run its UI composer alone
-to overwrite the final document; the follow-up UI composition is a second stage.
-No commit, push, publication or tester delivery occurred here.
+All 24 final access tests pass under the retained release-checkout Python 3.15.2
+while importing this working tree. Ordinary coverage totals 6,564 passes and
+four symlink-privilege skips; 35 headed cases remain deselected. The verification
+receipt accounts for every node: unaffected ordinary passes, all 95 previously
+failed/error nodes rerun with corrected external temp, then final access tests
+after phrase/link corrections. Receipts: bugs-ordinary-host, bugs-affected-rerun
+and bugs-phrase-final.{log,xml}. No test or product weakening.
+
+Use temporary directories outside the repository for corpus/custody tests;
+their location guards reject build-local temps. The main .venv is still 3.13.17
+and is not the selected release interpreter. Restricted native junction/temp
+access caused earlier fixture failures; failed/interrupted attempts remain
+documented in the review. Task-created fixtures were removed; receipts retained.
+
+A fresh subagent independently verified migration preservation and adversarially
+reviewed the tool, then passed the phrase-search delta and reran all 24 final
+focused tests on Python 3.15.2. No unresolved review findings remain.
+
+Earlier documentation receipts certify c27da6aa's editorial checkpoint, including
+the final 1,075-line DESKTOP_UI. Their unchanged-BUGS/Markdown-only assumptions
+are historical after this migration. Do not rerun old UI composers to overwrite
+current docs. No push, publication or tester delivery occurred.
 
 ## Retained operational context
 

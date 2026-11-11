@@ -7,9 +7,48 @@ launcher. `tools/icons.py` maintains the fixed local icon vocabulary from
 `tools/icons.json`. None is part of the shipped `namisync` package. Pytest covers
 their behavior; measurement output remains subject to the authority rules below.
 
+## Headed GUI test harness
+
 For unattended WebView2 page journeys, `python -m tools.headed_background`
 starts pytest on a private Windows desktop. [TESTS](TESTS.md#run-levels)
 describes which native checks still need the input desktop.
+
+## Bug log access
+
+`python -m tools.bugs` reads canonical [BUGS](BUGS.md), validates the complete
+population before filtering, and prints full records as Markdown (default) or
+`--format jsonl`. It never edits the log. Stable IDs and entry conventions are
+owned by BUGS. Only the Python standard library is required.
+
+```powershell
+python -m tools.bugs --id BUG-0001
+python -m tools.bugs --text authority --text path --format jsonl --output build/bug-path-authority.jsonl
+python -m tools.bugs --owner interfaces --status FIXED --offset 0 --limit 20
+```
+
+`--owner`, `--scope` and `--category` are case-insensitive substring filters;
+`--id`, `--status` and `--severity` are case-insensitive exact filters. Repeat
+one of those options for alternatives; different fields combine with AND.
+Each repeated `--text` must occur somewhere in the complete entry (literal,
+case-insensitive, with whitespace normalized in both the query and search text
+so source line wrapping does not hide phrases). Exported text stays unchanged.
+No filter implies an active-defect assessment. `--source`
+selects another conforming log; by default the tool locates the repository log
+independently of the working directory.
+
+No implicit result limit applies. `--offset` (zero-based) and `--limit` select
+whole-record batches in source order after filtering. Standard error reports
+the complete, matched and emitted populations plus the source SHA-256; JSONL
+standard output contains records only. Each record retains its complete original
+paragraph, owner/scope, category, severity, uncoerced status/date label, source
+line span and stable anchor link. The hash identifies the exact input bytes;
+line numbers describe that snapshot, while IDs survive edits/moves.
+
+`--output` creates a new UTF-8 file and refuses an existing destination. Keep
+exports in ignored `build/`; regenerate after log edits. Validation finishes
+before any output file is opened and rejects malformed headers, unanchored or
+duplicate records, orphan anchors and unexplained text inside owner sections.
+This is a retrieval tool, not a semantic classifier or a second bug authority.
 
 ## Portable build preparation
 

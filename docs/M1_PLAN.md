@@ -37,10 +37,30 @@ tests were needed for this documentation-only checkpoint.
 
 The approved follow-up further condenses DESKTOP_UI's remaining duplicated
 behavior/source/test descriptions while retaining its visual/interaction contract.
-BUGS is surveyed read-only for future access and cross-module causal analysis;
-record IDs/catalog tooling are recommendations, not activated work. Follow-up
-dispositions and verification: `ui-round2-review.md` and `bugs-access-review.md`
+BUGS was surveyed read-only for future access and cross-module causal analysis.
+Follow-up dispositions and verification: `ui-round2-review.md` and `bugs-access-review.md`
 in the same evidence directory. Build cleanup remains paused.
+
+The user subsequently approved the BUGS access layer: assign stable IDs to all
+319 existing records without changing their paragraphs or metadata, and add a
+standard-library development tool for validated full-record export, filters and
+explicit batches. BUGS owns identity/entry rules; TOOLS owns usage. The finite
+population is BUGS, the new tool and focused tests, department registration and
+matching delivery notes. Verify exact old-paragraph preservation, complete/unique
+ID coverage, malformed-input rejection, filter/batch/CLI behavior and source
+links; run the required tools/ordinary gates. No taxonomy rewrite, bug fixing,
+product contract, evidence authority or further build cleanup is included.
+
+Completed: all 319 original paragraphs/metadata and original log structure are
+preserved, IDs are unique, and 498 local links resolve. Final access tests: 24
+passes. Ordinary coverage after correcting the test-temp location: 6,564 passes,
+four symlink-privilege skips; unaffected passes reused and all 95 affected nodes
+rerun, with no remaining failures. Detailed accounting and same-agent adversarial
+review: `bug-access-verification.json` and `bug-access-review.md` under the survey
+directory. A fresh subagent passed the tool and final phrase-search delta review,
+independently rerunning all 24 focused tests. This is a separate reviewed
+checkpoint following documentation c27da6aa, including the requested small TOOLS
+headed-harness heading for discoverability.
 
 Artifact cleanup is paused at the user's direction: last census 4.80 GiB /
 99,527 build files. Evidence retention/storage restructuring remains undecided.
