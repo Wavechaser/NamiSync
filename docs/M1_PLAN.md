@@ -49,7 +49,11 @@ Codex-sandbox-owned files are access-denied pending an elevated rerun (`tierab-r
 Round 5, approved as deletions only, removed PyInstaller work intermediates,
 ZIP-matched app trees and byte copies of Git-reachable blobs (47,590 files,
 1.37 GiB; 340 more denied). Build is 5.38 GiB / 131,126 files. In-place archiving
-of closed evidence roots is not approved (`round5-result.json`).
+of closed evidence roots is not approved (`round5-result.json`). Round 6 removed
+leftover pytest temp state and synthetic payloads from closed roots (31,604
+files, 603 MiB; 455 denied); build is 4.80 GiB / 99,527 files. The user calls
+for a result-retention policy and a results location separate from temporary
+build output; not yet specified.
 Documentation tidying remains pending.
 
 ## Remaining checkpoints

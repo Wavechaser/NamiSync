@@ -31,9 +31,12 @@ instructions to retain these recovery references are superseded by that decision
   and byte copies of Git-reachable blobs. Build is now 196 entries / 131,126
   files / 5.38 GiB; holds re-verified (`round5-result.json`). In-place archiving
   of closed roots was not approved; build-report.md breaks down their content.
-- 1,081 Tier A/B rows and 340 round-5 rows (old Codex-sandbox-owned files) were
-  denied. From an elevated PowerShell in the repo, rerun
-  `.venv\Scripts\python.exe -I build\mop-up-survey-20261111\execute_tiers_ab.py obsolete-only uncited venv pyi-work frozen2 git-copy`,
+- Round 6 removed leftover test files from closed roots: non-receipt files in
+  256 pytest basetemps that escaped Tier B, plus synthetic copy payloads
+  (31,604 files / 603 MiB). Build is 99,527 files / 4.80 GiB (`round6-result.json`).
+- 1,081 Tier A/B, 340 round-5 and 455 round-6 rows (old Codex-sandbox-owned
+  files) were denied. From an elevated PowerShell in the repo, rerun
+  `.venv\Scripts\python.exe -I build\mop-up-survey-20261111\execute_tiers_ab.py obsolete-only uncited venv pyi-work frozen2 git-copy pytest-left synth-data`,
   then `--verify` with the same rules.
 - Documentation tidying remains pending. Earlier census numbers in report.md
   describe the pre-cleanup state.
