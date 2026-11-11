@@ -1,45 +1,52 @@
-# Latest session — R5 and M1 closed, 2026-11-11
+# Latest session — post-M1 cleanup, 2026-11-11
 
-The user handed administrative R5 closure to this session. M1_PLAN's
-[R5 closure](M1_PLAN.md#r5-closure--2026-11-11) owns the decision record; this
-file gives resumption context only.
+M1 building and validation are concluded. The user explicitly authorized clearing
+all six local codex branches without preserving superseded recoveries, and the
+61 registered external resource-test roots. M1_PLAN owns the disposition; earlier
+instructions to retain these recovery references are superseded by that decision.
 
-## Outcome
+## Changes
 
-- Final tester candidate is clean `b0a3fe133745b2212b8c7d1254c317879e980f90`
-  (Package05). It is `1d936876` plus the `MICROSOFT-TERMS.txt` bundle file and
-  guide pointers, followed by documentation-only commits. Portable ZIP SHA-256
-  `652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc`.
-- The complete release command passes on that commit: 6,575 passed, 4 symlink-privilege
-  skips, all 35 headed cases, 12 import contracts. The packaged Medium witness
-  passes on the exact ZIP. Package05 reconciles against the commit and Package04.
-- The tester set is in git-ignored `dist/v0.1.0/` (13 files, checksums verified)
-  and in `build/m1-r5-20261111/delivery/`. Its release notes are short and
-  M1-focused; the frozen START-HERE still calls the build a development package.
-- `MICROSOFT-TERMS.txt` is the maintainer's own wording of the recipient terms.
-  It was not legally reviewed.
+- All six local codex branches removed. No archive or replacement refs created.
+  Git may retain deleted-tip objects through ordinary reflogs; no object purge
+  or garbage collection was requested or run.
+- The acceptance worktree is detached at cfeac2d9; its files/environment remain.
+  The R5 checkout (b0a3fe13) and idle-followup checkout (1d936876) also remain.
+- External cleanup removed all 61 registry-matched roots (934,265 files,
+  22,944,192,000 logical bytes / 21.37 GiB). The
+  pre-deletion census checked boundaries, registries and every descendant for
+  reparse state. Receipts: build/mop-up-survey-20261111/external-cleanup-*.
+- Independent post-check finds zero resource-test roots or local codex branches;
+  retained directories' file counts and total sizes match the survey baseline.
+  Verification: build/mop-up-survey-20261111/cleanup-verification.json.
+- Keep F:\NamiSyncExecutorBenchSource, H:\test_dir\source and H:\test_dir\target.
+  Both H: directories, including their trash, are the user's human-testing trees.
+- Build Tiers A + B (user-selected, with SQLite) removed 151,464 files and 73
+  dangling in-build junctions: 10.36 GiB, build now 242 entries / 6.67 GiB.
+  Plan, holds and verification: build/mop-up-survey-20261111/build-report.md,
+  cleanup.md and tierab-result.json. Worktrees, their venv runtime, R5 delivery,
+  proof ZIPs and receipt-cited entries verified intact.
+- 1,081 rows (old Codex-sandbox-owned files, mostly m1-7-ablation) were denied.
+  From an elevated PowerShell in the repo, rerun
+  `.venv\Scripts\python.exe -I build\mop-up-survey-20261111\execute_tiers_ab.py obsolete-only uncited venv`,
+  then `--verify` with the same rules.
+- Documentation tidying remains pending. Earlier census numbers in report.md
+  describe the pre-cleanup state.
 
-## Not done
+## Evidence and next work
 
-- Nothing was pushed, tagged, uploaded, signed or sent to testers. Delivery is
-  the user's separate act.
-- CHANGELOG/README keep `M1` headings. Switching to `v0.1.0 "Gertrud"` headings
-  after delivery follows AGENTS' changelog rule.
-- The user plans a separate README cleanup/revision; only status lines changed here.
+Survey/cleanup tooling and receipts live in build/mop-up-survey-20261111/.
+The original inventory and branch audit retain provenance, not Git recovery
+archives. Tier A removed whole uncited/obsolete-only entries, including their
+old failure records, by user decision. Keep receipts in cited roots, prior cleanup
+reconstruction assets, all remaining worktrees and the final tester set. Remaining build is evidence receipts plus holds; Tier C (removing the three
+secondary worktrees through Git) is not authorized yet. No product/test
+changes or product test runs in this session.
 
-## Evidence and retained state
-
-Evidence root `build/m1-r5-20261111/` (README there defines layout):
-`reconcile.json` (Package04), `reconcile-package05.json`, `acceptance/20261111-01/`
-(setup, package, release), `portable/medium-20261111-01/receipt.json`,
-`delivery/`, superseded `delivery-package04-draft/`.
-
-- `build/m1-r5-20261111/checkout/` is a Git worktree at `b0a3fe13` with its own
-  `.venv`; remove it with `git worktree remove` after final accounting.
-- The Medium witness left its fixtures `F:\NamiSync-resource-repair-witness-20261111-01-d4ea4b42\`
-  and `H:\test_dir\NamiSync-resource-repair-witness-20261111-01-2f706228\`.
-- Earlier retained state is unchanged: frozen `acceptance-checkout` (`cfeac2d9`)
-  and `idle-followup-checkout` (`1d936876`) under `build/m1-release-repair-20261110/`,
-  recovery `ed18ad3e` on `codex/wip-20261110-release-repair`, R4 evidence
-  `build/m1-r4-20261109/`, and old R5 delivery `build/m1-r5-20261110/`. No cleanup
-  was performed; all of it awaits the user's final accounting.
+Final tester candidate remains b0a3fe133745b2212b8c7d1254c317879e980f90 (Package05),
+ZIP SHA-256 652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc.
+Prior release gate: 6,575 passes, four skips, 35 headed cases, 12 import contracts;
+packaged Medium witness passed. Tester set: dist/v0.1.0 and R5 delivery/;
+release evidence: build/m1-r5-20261111 and earlier repair/R4 roots. Nothing
+published or sent here. Keep M1 headings pending delivery; separate README
+revision remains pending. The terms file was not legally reviewed.

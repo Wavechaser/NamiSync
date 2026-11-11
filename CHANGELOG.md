@@ -526,6 +526,22 @@ behavioral evidence.
 Safety, settlement and authority work made high-consequence release claims
 explicit, reviewable and regression-backed.
 
+#### Survey and clear post-M1 cleanup candidates (2026-11-11)
+
+- Inventory NamiSync entries at F: root, H:\test_dir and build without following
+  reparse points; match 61 external resource roots to fixture registries.
+- Exclude the user's H: source/target play directories. Separate generated
+  fixtures from benchmark inputs, evidence and Git worktrees.
+- Remove all six local codex branches under the user's explicit superseded-recovery
+  disposal decision; detach the acceptance worktree and retain its files.
+- Delete 61 external test roots (934,265 files, 21.37 GiB logical size). Verify
+  their absence and matching baseline counts/sizes for the kept benchmark corpus
+  and both human-testing directories. Preserve build evidence and worktrees.
+- Clear build Tiers A and B: uncited/obsolete-only entries plus environments,
+  pytest temp state, ZIP-matched app extractions and SQLite state in evidence
+  roots (151,464 files, 10.36 GiB). Build falls from 17.04 to 6.67 GiB; holds
+  verified and 1,081 sandbox-owned files await an elevated rerun.
+
 #### Separate Inventory page and full-run verification evidence (2026-11-07)
 
 - Correct the installed execution test's fixture-wide comparison against a

@@ -19,6 +19,35 @@ product, producer, checker and driver dependencies; failures are not acceptance.
 [AGENTS](../AGENTS.md) owns scope, safety, recurrence and recovery rules for every
 row. A completed batch does not activate another pending outcome.
 
+## Post-M1 mop-up — 2026-11-11
+
+Building and validation are concluded. The user requests artifact/documentation
+mop-up, starting with F: root, H:\test_dir, build and local codex branches.
+Initial findings: `build/mop-up-survey-20261111/report.md`.
+The user explicitly retains `H:\test_dir\source` and `H:\test_dir\target` as
+human-testing play directories. Exclude both from cleanup. The survey identifies
+21.37 GiB of registered external fixture candidates and mixed build populations.
+The user subsequently authorizes deleting all six local codex branches, including
+superseded recovery branches without archival preservation, and all 61 external
+resource-test roots. This supersedes the earlier recovery-reference retention
+directions for `7b0744d4`, `987cba84`, `ce09180e` and `ed18ad3e`; their historical
+reconstruction records remain evidence, not merge/cherry-pick units. Keep
+`F:\NamiSyncExecutorBenchSource` and both H: play directories. Branch removal
+is complete; the acceptance worktree remains detached at `cfeac2d9`. All 61
+external roots are removed: 934,265 files / 22,944,192,000 logical bytes
+(21.37 GiB). Verification finds no remaining local codex branches or external
+resource roots; kept directories' counts/sizes match the survey baseline.
+Cleanup receipts are in the survey directory (`cleanup.md` and
+`cleanup-verification.json`). The user then selected build Tiers A
+(entries cited by no active tracked file) and B (installed environments, unused
+standalone runtime, pytest temp state, ZIP-matched app extractions and SQLite
+state inside cited evidence roots). Holds: worktrees and the runtime their venvs
+use, R5 delivery, `build_cleanup_*`, `gui-tuning`, exactly cited files, entries
+named by retained receipts and unmatched app trees. Removed 151,464 files and 73
+dangling in-build junctions (10.36 GiB); build is 6.67 GiB. 1,081 old
+Codex-sandbox-owned files are access-denied pending an elevated rerun (`tierab-result.json`).
+Documentation tidying remains pending.
+
 ## Remaining checkpoints
 
 ### Reduce redundant DOM work — delivered 2026-11-09
