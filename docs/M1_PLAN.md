@@ -46,6 +46,10 @@ use, R5 delivery, `build_cleanup_*`, `gui-tuning`, exactly cited files, entries
 named by retained receipts and unmatched app trees. Removed 151,464 files and 73
 dangling in-build junctions (10.36 GiB); build is 6.67 GiB. 1,081 old
 Codex-sandbox-owned files are access-denied pending an elevated rerun (`tierab-result.json`).
+Round 5, approved as deletions only, removed PyInstaller work intermediates,
+ZIP-matched app trees and byte copies of Git-reachable blobs (47,590 files,
+1.37 GiB; 340 more denied). Build is 5.38 GiB / 131,126 files. In-place archiving
+of closed evidence roots is not approved (`round5-result.json`).
 Documentation tidying remains pending.
 
 ## Remaining checkpoints

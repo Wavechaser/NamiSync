@@ -26,9 +26,14 @@ instructions to retain these recovery references are superseded by that decision
   Plan, holds and verification: build/mop-up-survey-20261111/build-report.md,
   cleanup.md and tierab-result.json. Worktrees, their venv runtime, R5 delivery,
   proof ZIPs and receipt-cited entries verified intact.
-- 1,081 rows (old Codex-sandbox-owned files, mostly m1-7-ablation) were denied.
-  From an elevated PowerShell in the repo, rerun
-  `.venv\Scripts\python.exe -I build\mop-up-survey-20261111\execute_tiers_ab.py obsolete-only uncited venv`,
+- Round 5 (user-approved deletions only) removed 47,590 files / 1.37 GiB:
+  PyInstaller work intermediates, app trees matching a ZIP elsewhere in build,
+  and byte copies of Git-reachable blobs. Build is now 196 entries / 131,126
+  files / 5.38 GiB; holds re-verified (`round5-result.json`). In-place archiving
+  of closed roots was not approved; build-report.md breaks down their content.
+- 1,081 Tier A/B rows and 340 round-5 rows (old Codex-sandbox-owned files) were
+  denied. From an elevated PowerShell in the repo, rerun
+  `.venv\Scripts\python.exe -I build\mop-up-survey-20261111\execute_tiers_ab.py obsolete-only uncited venv pyi-work frozen2 git-copy`,
   then `--verify` with the same rules.
 - Documentation tidying remains pending. Earlier census numbers in report.md
   describe the pre-cleanup state.

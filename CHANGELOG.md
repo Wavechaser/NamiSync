@@ -541,6 +541,8 @@ explicit, reviewable and regression-backed.
   pytest temp state, ZIP-matched app extractions and SQLite state in evidence
   roots (151,464 files, 10.36 GiB). Build falls from 17.04 to 6.67 GiB; holds
   verified and 1,081 sandbox-owned files await an elevated rerun.
+- Remove PyInstaller work intermediates, ZIP-matched app trees and byte copies of
+  Git-reachable blobs (47,590 files, 1.37 GiB); build is 5.38 GiB.
 
 #### Separate Inventory page and full-run verification evidence (2026-11-07)
 
