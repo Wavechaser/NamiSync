@@ -18,6 +18,13 @@ authority. Accepted future outcomes remain binding under their current owners.
 
 ## Post-M1 mop-up — 2026-11-11
 
+README follow-up: introduce delivered capabilities for prospective users,
+condense current state, and explain architecture and recommended hardware.
+Recommend at least 8 GB system RAM using measured resource use as guidance,
+without claiming validation on an 8 GB machine. Comparative positioning cites
+competitors' own documentation and claims integration, not market exclusivity.
+This editorial follow-up changes no release acceptance or product support scope.
+
 The user approved compaction of this register, PERFORMANCE and CHANGELOG,
 including phase reassignment, and servicing DESKTOP_UI. The checkpoint preserves
 methods, limits, authority, accepted residuals, deferrals and unresolved

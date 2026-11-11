@@ -1,158 +1,164 @@
 # NamiSync
 
-NamiSync is a safety-first, one-way file mirroring application for Windows. 
-It is for people maintaining a backup, archive, media collection, or
-working-tree replica who want to see exactly what will happen before granting
-filesystem mutations. It is deliberately not a bidirectional conflict resolver
-or an unattended deletion engine.
+NamiSync is an open-source Windows application for reviewed one-way file
+mirroring, persistent file inventory and content integrity checking. It is
+intended for maintaining collections such as photographs, media libraries,
+project archives and files on backup drives.
 
-Every sync scans both sides, builds a deterministic dry-run plan, and requires
-explicit human review and exact confirmation. The plan captures deletion,
-filter, preservation, and casing policy; execution then rechecks roots, volume
-identity, capacity, file types, planner-relevant metadata, and dependencies before
-touching files. Copies use a bounded pipeline and atomic target-volume
-publication, and completed mutations reach the local WAL-backed ledger only
-after the corresponding filesystem operation succeeds.
+Choose what to copy, inspect the changes, and confirm the plan. Afterward,
+NamiSync keeps a database-backed record of your files and their integrity
+evidence for later checks.
 
-NamiSync also keeps an inventory of known locations and XXH3-128 integrity
-evidence for baseline, verification, and explicit rebaseline workflows. Its
-independent activity history and separate filesystem, integrity, ledger, and
-audit result axes prevent one failure from being hidden behind another result.
+## Features
 
-The implemented core has been adversarially hardened and regression-tested
-against root, junction, and remount redirection; source/target substitution and
-review-to-execution drift; incomplete or hostile scans; case, Unicode,
-reserved-name, device-path, and long-path ambiguity; partial publication and
-retry/pause/cancel failures; recorder and SQLite contention; malformed stored
-or interface data; and dispatcher custody/lifecycle races. When safety evidence
-is missing or contradictory, NamiSync refuses or defers the affected work and
-reports the residual truth instead of guessing.
-Canonical hash inputs and boundary text require valid Unicode. Malformed
-optional scan-warning detail is omitted without losing the warning or valid
-observations; required text is refused rather than silently rewritten.
+### Persistent inventory
 
-The full data-preservation guarantee assumes managed roots are not being
-changed by other software while NamiSync is mutating them. Drift in the facts
-used to plan an action is refused or reported; incidental metadata changes do
-not veto plan-fidelity admission. A writer that wins after a final path-based guard is a
-documented external-writer boundary. The supported assumptions, tolerance
-classes, and exact residual dispositions live in the defense model.
+Inventory works independently of sync pairs. Catalog a location
+on its own, without assigning it a source or target partner. Revisit what was
+observed, search and filter the inventory, and see missing or reappearing files
+alongside their integrity evidence. The records live in a local SQLite database
+and survive application restarts.
 
-For user-chosen cloud-synchronized folders, source reads may download content
-and reviewed target changes may propagate through the sync provider. NamiSync
-reports local filesystem completion, not upload completion or remote-copy
-verification; [DEFENSE](docs/DEFENSE.md) §2.5 defines that boundary. Scanning
-requests metadata rather than file contents, but does not promise universal
-placeholder detection or hydration-free provider behavior; see
-[SCANNER](docs/SCANNER.md) for limitations and deferred guarantees.
+A scan updates observations without silently replacing an established integrity
+baseline. An incomplete scan or an offline drive does not turn unseen files into
+confirmed deletions, including when a removable drive is disconnected or a scan
+cannot finish.
+
+### Reviewed copying
+
+Every sync starts with a dry run. Review the proposed operations, search and
+filter the tree, and choose the files you want to include before confirming.
+NamiSync checks the selected work again before execution and reports files that
+have changed since review.
+
+Copies are published atomically on the destination volume. Replaced target
+versions are preserved in local trash by default, and removal uses trash by
+default too. Pause, resume and cancel controls keep long operations manageable;
+per-file results make partial completion visible.
+
+### Integrity checking
+
+NamiSync hashes content as it copies and offers a separate readback verification
+step. New desktop tasks enable automatic verification by default. You can also
+establish a baseline for an existing collection, verify selected files later,
+or explicitly accept changed content as a new baseline.
+
+XXH3-128 provides fast content fingerprints for detecting accidental changes.
+The inventory keeps current observations separate from recorded hash evidence,
+so a fresh scan does not replace a baseline with changed content.
+These fingerprints are integrity evidence, not cryptographic authentication.
+
+### How the features fit together
+
+Folder synchronization, collection catalogs and checksum tools each solve useful
+parts of this problem. For example, [FreeFileSync](https://freefilesync.org/manual.php?topic=synchronization-settings)
+offers folder synchronization with database-assisted change detection, while
+[digiKam](https://www.digikam.org/about/features/) offers database-backed photo
+collections across local, removable and network media.
+
+NamiSync combines reviewed mirroring, an independent persistent inventory and
+repeatable integrity verification for general files. These share workflows and
+stored evidence, so copying a collection and checking it later are related
+operations within the same application.
+
+### Desktop and command line
+
+The desktop presents searchable Plan and Inventory views, file-level details,
+progress, throughput and estimated time remaining. Filesystem completion,
+verification, database recording and audit results remain distinct: a successful
+copy does not conceal an unsuccessful verification or a failure to save evidence.
+Retained run history is available through the CLI; a desktop History view is
+planned. The desktop and CLI use the same underlying workflows.
 
 ## Current state
 
-M1's headless product is implemented and usable through the service and CLI:
-reviewed sync, inventory, integrity baseline/verify/rebaseline, optional
-post-copy verification, retained history, shared location-candidate admission
-and bounded run-derived remembered locations. The Windows desktop shell now has
-a secured WebView2 host, bounded command/event transport with asynchronous
-completion for small task commands, native folder picking,
-the Fluent/accessibility foundation, process-live blank task creation,
-newest-first navigation and explicit close, frozen Setup with typed/picker/recent
-locations, compact recent-pair and batch tables with retained creation results,
-serial plan and standalone inventory starts, Plan again, bounded Plan review
-with editable queued search, counted toggle-button filters, server-owned
-search/filter-scoped bulk selection, sibling sorting and a
-blocking Fluent confirmation
-for each destructive execution admission,
-live pause/resume/cancel controls, bounded live and retained execution review,
-and a Settings page with saved Setup defaults, theme control and About, alongside
-independent task-rail scrolling. Defaults include automatic verification for new
-desktop tasks; existing task choices and explicit CLI verification remain unchanged.
-About opens the license and open source acknowledgements as selectable local text.
-Execution review keeps filesystem, verification, recording and audit
-results distinct, with current stored evidence and on-demand operation detail.
-Canonical execution following has an explicit manual override and navigation
-controls; phase progress, observed throughput and ETA share the inline status
-card with folded global and operation Details.
-Inventory tasks have their own bounded review with search, facets, sibling
-sorting, current evidence Details, same-task Refresh and missing-row
-acknowledge/restore visibility, shared Ctrl/Shift row highlighting,
-filter-scoped file selection and standalone
-Baseline/Verify/Rebaseline with live controls and separate results. Execution
-tasks retain Plan review alongside a Verify pane for repeatable ordinary
-verification of copied files or the current checkbox selection. These actions
-scan current state and may supersede execution-relative evidence; original
-execution and automatic verification results remain unchanged. Desktop History
-is deferred. Retained runs are available through the CLI.
-Plan and Inventory mark observed recall-required items with a cloud indicator
-and a **Remote files** filter. Scan-wide recall file counts and logical sizes
-are available through the bridge for later status-panel integration; they are
-not download-volume predictions or a complete cloud inventory.
+The first milestone is complete. **v0.1.0 “Gertrud”** is prepared as an unsigned
+Windows x64 portable tester build, with reviewed copy, inventory and verification
+workflows tested in the packaged application. Public distribution is still
+pending. See the [tester guide](tools/packaging/START-HERE.txt) for prerequisites,
+extraction and first use, and the [delivery register](docs/M1_PLAN.md) for release
+evidence and known qualifications.
 
-M1 is complete. The unsigned Windows x64 portable tester build `v0.1.0`
-“Gertrud” (`b0a3fe13`) passes the complete release suite and the packaged
-reviewed copy, inventory, verification and close checks; its resource use was
-accepted as measured. Its tester set (app and source ZIPs, wheel, build
-identities, guides, Microsoft recipient terms, notices, release notes and
-checksums) is assembled in the git-ignored `dist/v0.1.0/` folder of the
-maintainer's checkout. [M1 delivery register](docs/M1_PLAN.md)
-
-The tester guide covers extraction, prerequisites, application data and
-feedback. The source and build guide explains how to rebuild from matching
-source. The bundled Microsoft runtime code ships under its recipient terms; the
-GPL and third-party notices accompany the guides.
-[Tester guide](tools/packaging/START-HERE.txt) · [Source and build guide](tools/packaging/BUILDING.txt) · [Microsoft terms](tools/packaging/MICROSOFT-TERMS.txt)
-
-External requests and applicable populations are bounded at their owners;
-the [defense model](docs/DEFENSE.md) states the active limits and support scope.
-
-M1 state is process-local: queued sessions and unexecuted plans do not survive
-restart, and committed nonterminal history returns as `incomplete`. The active
-local database pair is ledger v4/history v8 at data epoch 8. Incompatible or
-incomplete pairs are refused; startup never resets them automatically. Cold
-validation briefly retries observed file changes and gives retry guidance if
-activity persists. Unavailable files do not receive reset advice. For confirmed
-incompatibility, reset advice covers both database mains and their SQLite
-sidecars together. Reset loses app evidence/history, not managed files. See
-[database admission](docs/DATABASE.md) for the exact pair rules.
+Inventory, integrity evidence and recorded history persist. Open tasks and
+unexecuted plans do not survive restart; pause/resume applies within the current
+application session.
 
 ## Compatibility
 
-| Windows version / arch | NamiSync Core | Desktop shell (.NET FW) | Binary dependencies | Appearance | **Compatibility** |
-|---|:--:|:--:|:--:|:--:|---|
-| **Windows 11 x64** | ✅ | ✅ | ✅ | ✅ | ✅ **actively serviced** |
-| **Windows 11 ARM64 (native)** | ✅ | ❌ | ❌ | — | ❌ shell & dependencies blocked |
-| **Windows 11 ARM64 (emulation)** | ✅ | ⚠️ | ✅ | ⚠️ | ⚠️ runs (emulated) |
-| **Windows 10 (x86, < 1709)** | ❌ | ✅ | ⚠️ | ⚠️ | ❌ backend floor |
-| **Windows 10 (x86, ≥ 1709)** | ✅ | ✅ | ⚠️ | ⚠️ | ⚠️ runs with reduced appearance |
-| **Windows 10 (x64, < 1709)** | ❌ | ✅ | ✅ | ⚠️ | ❌ backend floor |
-| **Windows 10 (x64, ≥ 1709)** | ✅ | ✅ | ✅ | ⚠️ | ⚠️ runs with reduced appearance |
+**Windows 11 x64 is the supported and actively serviced platform.** The desktop
+uses Microsoft Edge WebView2 Runtime and .NET Framework 4.8 or a compatible later
+4.x runtime. Run it with standard user permissions; elevated launches are refused.
 
-**Legend:** ✅ works · ⚠️ works reduced · ❌ blocked · — unreachable (blocked upstream in same row)
+### Recommended minimum system
 
-- **Backcompatibility:** NamiSync is designed on and for Windows 11 x64, but
-  the engine is written to be version- and architecture-neutral and is therefore
-  compatible with Windows 10 and is ARM64 ready. However, database pairing currently
-  uses POSIX semantics with no fallback, therefore requiring Windows 10
-  **version 1709/build 16299 or later**.
-- **WebView2:** not natively included in Windows 10, and therefore requires one-time
-  Evergreen runtime install (x86/x64/ARM64 all exist); it is included in-box on
-  Windows 11. Runtime support on *very* old Win10 (< 1607) is unverified.
-- **Appearance:** Mica needs build ≥ **22621** (Windows 11 22H2). Windows 11 21H2 and
-  all Windows 10 fall back to an opaque window *by design* ([appearance.py:114](namisync/interfaces/web/appearance.py#L114)).
-  The header's persisted System/Light/Dark choice drives both native material
-  and page tokens; active high contrast still follows Windows without changing
-  that stored choice. Proper downgrading is accounted for, NamiSync will run,
-  just uglier.
-- **Shell / ARM block:** the `netfx` pin + `require_supported_pythonnet_runtime()`
-  refusal ([pywebview_runtime.py:44](namisync/interfaces/web/pywebview_runtime.py#L44))
-  anchor the shell to .NET Framework, which has no native ARM64 build. Native
-  ARM64 is therefore refused by dependencies.
-- **x64 emulation on WoA:** works with potentially reduced performance. XXH3 could
-  potentially see up to 50% performance loss, but actual loss should be negligible
-  given its speed. Non-native I/O may see 10-20% throughput loss depending on
-  exact situation. UI operations should be similar to native, but cold startups may
-  take longer due to emulator translations.
+| Component | Recommendation |
+| --- | --- |
+| Operating system | Windows 11 x64 |
+| Memory | **8 GB RAM or more**; allow additional headroom for large collections and other applications |
+| Processor | An x64 CPU that runs Windows 11 comfortably; no high-end CPU requirement |
+| Graphics | Windows 11-compatible graphics; integrated graphics are sufficient as the recommended starting point |
+| Storage | Space for copied files, temporary copies and retained replaced versions, plus the local inventory/history databases |
+
+The 8 GB recommendation leaves room for Windows and the desktop host as well as
+NamiSync. Our measured 100,000-entry collections reached approximately **2.4 GB
+of whole-application peak memory**. This is workload-based guidance, not a tested
+8 GB hardware floor or a universal memory ceiling; see the
+[resource measurements](docs/PERFORMANCE.md#release-repair-resource-attempt-on-cfeac2d9--2026-11-10).
+CPU, graphics and storage performance affect responsiveness and throughput;
+we have not established a separate minimum CPU/GPU model list.
+
+Windows 10 and Windows on ARM are not actively serviced targets. The engine's
+database-pairing operations require Windows 10 version 1709 or later; native
+ARM64 desktop use is blocked by the current .NET Framework/pythonnet stack.
+x64 emulation is a possible route on ARM, outside the supported configuration.
+Windows 11 22H2 or later provides Mica; older systems use an opaque window.
+
+## Working safely with your files
+
+Keep managed folders free of concurrent changes by other applications while
+NamiSync is writing to them. It checks for drift and unsafe path changes, but
+cannot guarantee protection against every external writer racing a final
+filesystem operation. Local trash is useful recovery protection; it is not a
+separate backup if the destination drive fails.
+
+For cloud-synchronized folders, reading a source can download content and target
+changes can propagate through the provider. NamiSync reports local completion,
+not completed cloud uploads or verified remote copies. Alternate data streams
+are not yet preserved. Review the [supported assumptions and limitations](docs/DEFENSE.md)
+and [feature scope](docs/FEATURES.md) before using a collection with special
+filesystem requirements.
+
+## Architecture
+
+NamiSync has a Python engine shared by its Windows desktop and command line.
+The desktop combines a WebView2 interface with native Windows integration;
+SQLite stores inventory, integrity evidence and independent activity history.
+The interface presents decisions and results while the engine owns sync policy.
+
+| Layer | Responsibility |
+| --- | --- |
+| Core | Shared contracts, path safety, identities and operation lifecycle |
+| Domain modules | Scanning, planning, preflight checks, copying and verification |
+| Workflows | Coordinate those operations into reviewed sync and inventory/integrity tasks |
+| Persistence | Record file evidence and history after the corresponding effects succeed |
+| Dispatcher | Admit tasks, coordinate control and distribute events |
+| Interfaces | Desktop and CLI access to the same workflows |
+
+Domain modules depend on shared contracts rather than calling each other;
+workflows are where they meet. This separation lets presentation evolve while
+keeping file operations and integrity decisions consistent across entry points.
+Copies use a bounded read/hash/write pipeline, and database-backed views load
+bounded windows for review. Automated tests and enforced import boundaries
+support these design rules. See [Architecture](docs/ARCHITECTURE.md) for the
+full design and [Performance](docs/PERFORMANCE.md) for measured behavior.
 
 ## Setup and dependencies
+
+For the portable tester package, follow the bundled
+[START-HERE guide](tools/packaging/START-HERE.txt). Python installation and the
+development tools below are for running from source, not for using that package.
+
+### Development from source
 
 NamiSync's supported and actively serviced target is Windows 11 x64; the
 compatibility section above describes other configurations without extending
@@ -260,16 +266,6 @@ never hides the other result axes in rendered output.
 - [Performance](docs/PERFORMANCE.md) — measurement methods, profiles, source-linked
   historical results and raw-evidence limitations; [Threat Model](docs/DEFENSE.md)
   owns evidence authority.
-- [Completed post-M1-8 reductions](docs/M1_PLAN.md#post-m1-8-reduction-plan) —
-  compact delivery register, retained decisions and deferred work. The
-  [archived study](docs/obsolete/POST_M1_8_ABLATION.md) preserves the investigation,
-  rejected alternatives and earlier-study accounting; it is not execution guidance.
-- Archived reduction history: [test ablation](docs/obsolete/TEST_ABLATION.md),
-  [test refinement](docs/obsolete/TEST_REFINEMENT.md),
-  [production reduction](docs/obsolete/PRODUCTION_REDUCTION.md),
-  [narrow follow-up](docs/obsolete/REDUCTION_FOLLOWUP.md), and
-  [M1-7 study](docs/obsolete/M1_7_ABLATION_STUDY.md). Their old execution registers
-  are inactive; current dispositions are in the M1 delivery register.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
@@ -284,17 +280,7 @@ never hides the other result axes in rendered output.
   implementation plan or delivery commitment.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
 
-Historical plans and delivery records are under `docs/obsolete/`:
-[M1-7/M1-8 working and recovery register](docs/obsolete/M1_8_U_RECOVERY.md),
-[M1 plan](docs/obsolete/M1_PLAN.md), [bridge](docs/obsolete/M1_BRIDGE.md),
-[shell](docs/obsolete/M1_SHELL.md), [second-half checklist](docs/obsolete/M1_SHELL_H2.md),
-[initial simplification](docs/obsolete/M1_SIMPLIFICATION.md),
-[task lifecycle](docs/obsolete/TASK_LIFECYCLE_SIMPLIFICATION.md),
-[test simplification](docs/obsolete/TEST_SIMPLIFICATION.md), and
-[documentation ablation](docs/obsolete/DOC_ABLATION.md).
-They preserve provenance rather than current implementation instructions.
-The [M0 plan](docs/obsolete/M0_PLAN.md) and
-[imported PoC documents](docs/obsolete/PoC_import/) remain historical references.
+Historical plans and investigations are indexed in the [M1 delivery register](docs/M1_PLAN.md).
 
 ## Changelog
 

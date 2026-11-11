@@ -173,6 +173,9 @@ behavioral evidence.
   analysis, then add immutable IDs to all 319 records without altering their
   paragraphs or metadata. Provide validated, full-record Markdown/JSONL export,
   cross-owner filters and explicit batches through `python -m tools.bugs`.
+- Reframe README around persistent inventory, reviewed mirroring and integrated
+  integrity workflows; condense delivery status, add architecture and recommended
+  hardware guidance, and distinguish measured resource use from a hardware floor.
 
 #### Reduce retained build artifacts (2026-10-29 – 2026-11-04)
 
