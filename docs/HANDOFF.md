@@ -1,23 +1,19 @@
-# Latest session — user-facing README, 2026-11-11
+# Latest session — hosted CI terminal wait, 2026-11-12
 
-Reworked README for prospective users: persistent inventory, reviewed mirroring,
-integrity baselines/readback and connected results lead the page. Current state
-is two short paragraphs. Added an architecture overview and recommended hardware
-table, with 8 GB RAM as guidance supported by approximately 2.4 GB measured
-whole-app peaks on 100k collections, not an experimentally established floor.
+PR #5's ordinary job (run 43054819649, job 130641477993) finished with
+6,567 passes and one failure: linked Copy/Verify did not settle within the
+web drain helper's two-second wait. This was not the GitHub job timeout.
+Runner slowness is plausible but unproven; no worker stacks were captured.
 
-Comparisons use FreeFileSync's synchronization manual and digiKam's feature page;
-they credit existing capabilities and describe NamiSync's integrated workflow
-without claiming unique databases or an exhaustive market comparison. Reduced
-archive-index clutter and kept milestone/phase headings and product limitations.
-Portable use is distinguished from source-development dependencies.
+The user authorized five seconds first. Changed only that test helper's deadline,
+with matching TESTS, CHANGELOG and M1_PLAN context. Product timing, polling and
+behavioral assertions are unchanged. PR #5 is already open; push updates it
+without a close/reopen cycle. The connector token expired; GitHub CLI works.
 
-Verification: subject-document consistency, local Markdown links, Git diff check
-and adversarial editorial review. No executable behavior or evidence authority
-changed, so product tests were not rerun. The user's follow-up toned down the
-promotional phrasing, retained the feature explanations and authorized commit.
-Evidence: build/mop-up-survey-20261111/readme-verification.json. Earlier completed
-checkpoints: documentation c27da6aa; independently reviewed BUGS access a9933f98.
+Verification before the change: all 12 parameter variants and all 295 owning
+module tests passed on selected Python 3.15.2. Post-change interfaces department:
+2,313 passed / 4,290 deselected in 184.20s
+on selected Python 3.15.2. Independent diff review found no actionable issues.
 
 ## Retained operational context
 

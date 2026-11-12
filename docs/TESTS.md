@@ -26,6 +26,10 @@ native launch verify the integrated distribution; R4 owns candidate acceptance.
 
 ### 1. Focused
 
+The web drain tests allow five seconds for dispatcher terminal settlement. This
+is a test-containment deadline, not a product latency requirement; all terminal
+and subsequent delivery assertions remain required.
+
 Use an exact node or file while editing and diagnosing a failure.
 
 ```powershell

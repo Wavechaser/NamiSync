@@ -24,6 +24,12 @@ Portable packaging, exact runtime/native inputs, distribution contents and
 final candidate verification prepare the unsigned tester release. M1_PLAN
 owns identities and acceptance decisions; external delivery remains separate.
 
+#### Allow hosted CI more terminal-settlement time (2026-11-12)
+
+- Raise the web drain test helper's terminal wait from two to five seconds after
+  PR #5 timed out in linked Copy/Verify. Preserve all behavioral assertions and
+  product deadlines; runner slowness is suspected, not proven.
+
 #### Build the portable M1 debug package (2026-11-04 – 2026-11-11)
 
 - Deliver the unsigned Windows x64 v0.1.0 Gertrud tester set: app/source ZIPs,

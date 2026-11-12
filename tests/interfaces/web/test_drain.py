@@ -1479,7 +1479,7 @@ class _EnvelopeInvocation:
 
 
 def _wait_terminal(dispatcher: Dispatcher, session_id: str) -> None:
-    deadline = monotonic() + 2
+    deadline = monotonic() + 5
     while monotonic() < deadline:
         record = dispatcher.get(session_id)
         if record.result is not None:

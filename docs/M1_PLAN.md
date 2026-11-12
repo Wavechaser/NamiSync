@@ -18,6 +18,12 @@ authority. Accepted future outcomes remain binding under their current owners.
 
 ## Post-M1 mop-up — 2026-11-11
 
+2026-11-12 CI follow-up: user authorized a five-second terminal wait in the web
+drain test helper (previously two seconds), then updating PR #5. Scope is test
+containment only; behavior assertions and product deadlines remain unchanged.
+Verify the interfaces department and independently review the diff before push.
+The original hosted failure remains evidence; it does not prove runner slowness.
+
 README follow-up: introduce delivered capabilities for prospective users,
 condense current state, and explain architecture and recommended hardware.
 Recommend at least 8 GB system RAM using measured resource use as guidance,
