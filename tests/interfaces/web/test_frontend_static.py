@@ -1,0 +1,1441 @@
+"""Static invariants over the exact wheel-shipped frontend file set."""
+
+from __future__ import annotations
+from namisync.workflows import RecallSummary
+
+import json
+import hashlib
+import re
+import subprocess
+import zipfile
+from html.parser import HTMLParser
+from pathlib import Path
+
+import pytest
+
+from conftest import BuiltWheel
+
+import _frontend_test_support as frontend_support
+from _command_catalog import assert_browser_command_policy
+from _tree_window_fixture import (
+    TREE_WINDOW_FIXTURE_SCHEMA,
+    TreeWindowFixture,
+)
+
+from namisync.core.evidence import RecordingStatus
+from namisync.core.execution import TaskRecordingIssueReason
+from namisync.core.session import Disposition, PhaseStatus, TERMINAL_STATES
+from namisync.interfaces.web.commands import production_command_specs
+from namisync.workflows.views import ResultCategory
+
+from _frontend_test_support import (
+    ASSET_ROOT, _node_executable, run_node_probe,
+)
+
+
+CSP = (
+    "default-src 'none'; script-src 'self'; style-src 'self'; "
+    "img-src 'self' data:; connect-src 'none'; frame-src 'none'; "
+    "object-src 'none'; base-uri 'none'; form-action 'none'"
+)
+PROJECT_ROOT = Path(__file__).parents[3]
+_FORBIDDEN_ACTIVE_SINKS = (
+    r"\b(?:innerHTML|outerHTML)\s*=",
+    r"\.insertAdjacentHTML\s*\(",
+    r"\bdocument\.write(?:ln)?\s*\(",
+    r"\bsrcdoc\s*=",
+    r"\bDOMParser\s*\(",
+    r"\bcreateContextualFragment\s*\(",
+    r"\.(?:href|src|style|cssText|on\w+)\s*=",
+    r"\beval\s*\(",
+    r"\bnew\s+Function\s*\(",
+    r"\bset(?:Timeout|Interval)\s*\(\s*[\"']",
+)
+
+
+def _active_sink_hits(source: str) -> tuple[str, ...]:
+    pattern_hits = tuple(
+        pattern
+        for pattern in _FORBIDDEN_ACTIVE_SINKS
+        if re.search(pattern, source, re.IGNORECASE)
+    )
+    return pattern_hits + tuple(
+        f"setAttribute:{name}" for name in _attribute_sink_hits(source)
+    )
+
+
+def _attribute_sink_hits(source: str) -> tuple[str, ...]:
+    calls = re.findall(r"\.setAttribute\s*\(", source)
+    fixed_names = re.findall(
+        r"\.setAttribute\s*\(\s*['\"]([^'\"]+)['\"]\s*,",
+        source,
+    )
+    if len(calls) != len(fixed_names):
+        return ("dynamic-attribute-name",)
+    allowed = {
+        "aria-activedescendant", "aria-controls", "aria-labelledby",
+        "aria-describedby", "role",
+    }
+    return tuple(name for name in fixed_names if name not in allowed)
+
+
+def _javascript_frozen_array(source: str, name: str) -> tuple[str, ...]:
+    match = re.search(
+        rf"const {re.escape(name)} = Object\.freeze\((\[[\s\S]*?\])\);",
+        source,
+    )
+    assert match is not None, name
+    value = json.loads(re.sub(r",\s*]", "]", match.group(1)))
+    assert isinstance(value, list)
+    assert all(isinstance(item, str) for item in value)
+    return tuple(value)
+
+
+def test_browser_bridge_and_public_result_vocabularies_match_python_owners() -> None:
+    source = (PROJECT_ROOT / ASSET_ROOT / "bridge.js").read_text(encoding="utf-8")
+    expected = {
+        "TERMINAL_STATES": tuple(item.value for item in TERMINAL_STATES),
+        "RECORDING_STATES": tuple(item.value for item in RecordingStatus),
+        "DISPOSITIONS": tuple(item.value for item in Disposition),
+        "PHASE_STATES": tuple(item.value for item in PhaseStatus),
+        "TASK_RECORDING_REASONS_V5": tuple(
+            item.value for item in TaskRecordingIssueReason
+        ),
+        "RESULT_HEADLINES": tuple(item.value for item in ResultCategory),
+        "RESULT_INTEGRITY_STATES": (
+            "mismatch",
+            "incomplete",
+            "not-run",
+            "modified",
+            "missing",
+            "baselined",
+            "verified",
+        ),
+    }
+
+    for name, values in expected.items():
+        actual = _javascript_frozen_array(source, name)
+        assert len(actual) == len(values)
+        assert set(actual) == set(values)
+    assert "const BRIDGE_SCHEMA_VERSION = 1;" in source
+    assert "schema_version: BRIDGE_SCHEMA_VERSION" in source
+    assert "response.schema_version !== BRIDGE_SCHEMA_VERSION" in source
+
+
+def _javascript_frozen_set(source: str, name: str) -> tuple[str, ...]:
+    match = re.search(
+        rf"const {re.escape(name)} = Object\.freeze\(new Set\((\[[\s\S]*?\])\)\);",
+        source,
+    )
+    assert match is not None, name
+    value = json.loads(re.sub(r",\s*]", "]", match.group(1)))
+    assert isinstance(value, list)
+    assert all(isinstance(item, str) for item in value)
+    return tuple(value)
+
+
+class _DocumentAudit(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.in_head = False
+        self.head_elements: list[tuple[str, dict[str, str | None]]] = []
+        self.inline_event_attributes: list[str] = []
+        self.script_sources: list[str | None] = []
+        self.stylesheet_sources: list[str | None] = []
+        self.in_script = False
+        self.inline_script_text: list[str] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        attributes = dict(attrs)
+        if tag == "head":
+            self.in_head = True
+        elif self.in_head:
+            self.head_elements.append((tag, attributes))
+        self.inline_event_attributes.extend(
+            name for name, _ in attrs if name.casefold().startswith("on")
+        )
+        if tag == "script":
+            self.in_script = True
+            self.script_sources.append(attributes.get("src"))
+        elif tag == "link" and attributes.get("rel") == "stylesheet":
+            self.stylesheet_sources.append(attributes.get("href"))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "head":
+            self.in_head = False
+        elif tag == "script":
+            self.in_script = False
+
+    def handle_data(self, data: str) -> None:
+        if self.in_script and data.strip():
+            self.inline_script_text.append(data)
+
+
+def _wheel_assets(wheel: BuiltWheel) -> dict[str, str]:
+    with zipfile.ZipFile(wheel.path) as archive:
+        return {
+            name.removeprefix(ASSET_ROOT): archive.read(name).decode("utf-8")
+            for name in archive.namelist()
+            if name.startswith(ASSET_ROOT) and not name.endswith("/")
+        }
+
+
+def test_shipped_page_has_exact_first_csp_and_no_inline_execution(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    assert assets["index.html"].isascii()
+    raw_csp = re.search(
+        r'<head><meta http-equiv="Content-Security-Policy" content="([^"]+)">',
+        assets["index.html"],
+    )
+    assert raw_csp is not None
+    assert raw_csp.group(1) == CSP
+    parser = _DocumentAudit()
+    parser.feed(assets["index.html"])
+
+    first_tag, first_attrs = parser.head_elements[0]
+    assert first_tag == "meta"
+    assert first_attrs == {
+        "http-equiv": "Content-Security-Policy",
+        "content": CSP,
+    }
+    csp_elements = [
+        attrs
+        for tag, attrs in parser.head_elements
+        if tag == "meta"
+        and (attrs.get("http-equiv") or "").casefold()
+        == "content-security-policy"
+    ]
+    assert csp_elements == [first_attrs]
+    assert parser.inline_event_attributes == []
+    assert parser.inline_script_text == []
+    assert parser.stylesheet_sources == [
+        "/tokens.css",
+        "/components.css",
+        "/app.css",
+    ]
+    assert parser.script_sources == ["/app.js"]
+
+
+def test_br_g_32_only_bridge_wrapper_references_pywebview(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    references = {
+        name for name, text in assets.items() if "window.pywebview" in text
+    }
+
+    assert references == {"bridge.js"}
+    assert assets["bridge.js"].count("window.pywebview") == 1
+
+
+def test_setup_defaults_editor_preserves_dirty_fields_and_never_replays() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the Setup defaults witness"
+    completed = run_node_probe(
+        [str(node), str(PROJECT_ROOT / "tests/assets/settings_probe.mjs"),
+         str(PROJECT_ROOT / ASSET_ROOT / "settings.js")], timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+    assert completed.stderr == ""
+
+
+def test_about_notices_keep_reviewed_text_and_modal_lifecycle(built_wheel: BuiltWheel) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the About notice witness"
+    completed = run_node_probe(
+        [str(node), str(PROJECT_ROOT / "tests/assets/about_probe.mjs"),
+         str(PROJECT_ROOT / ASSET_ROOT / "about.js"),
+         str(PROJECT_ROOT / ASSET_ROOT / "legal_content.js")], timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+    content = json.loads(completed.stdout)
+    license_bytes = (PROJECT_ROOT / "LICENSE").read_bytes()
+    assert content["license"]["text"] == license_bytes.decode("utf-8")
+    assert content["license"]["sha256"] == hashlib.sha256(license_bytes).hexdigest()
+    assert _wheel_assets(built_wheel)["legal_content.js"] == (PROJECT_ROOT / ASSET_ROOT / "legal_content.js").read_bytes().decode("utf-8")
+    # Reviewed upstream notice texts, including embedded libraries and source headers.
+    expected = {
+        "pywebview": "4a988dd3598832cd3653de20dc33cb677d0fb53ab5551c879ca31280ae653675",
+        "pythonnet": "e1dc3a6ff017a6800dc27a7220500f512b95fbcd996d38ebbbff85c693245369",
+        "Python.NET contributors": "65a13631f078bed51e9a4033dea257e57a7f23097f3003b1ce1ba1c8a9136c93",
+        "bottle": "af150257b1f7cce92b6207854f2e8f90ea9ae52d7cac758d13a47bd12e2a2443",
+        "xxhash": "b76e99529f3e47372029e11914a8f4b95d6313463ed5a1a5c9afe96c3e015114",
+        "typing_extensions": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf",
+        "clr_loader": "dd6bdca10cdc3b24c6b0b6cef5fd611b7feb6917f127833283ddcdb310d3b453",
+        "cffi": "5ba24ddc57067f9249add644c3afc41a5d6dc37e23433ef759d95df370b0af63",
+        "pycparser": "0c846399369ea76ddd7b5c44fe6d16497415fcf015f5cbb508c24bf98b81c5b1",
+        "proxy_tools": "a428fb8a2e762af3eb0a6edbbb88e9b42ccfee80fd9b423958bcacf9b9abbfe4",
+        "xxHash library": "6ffedbc0f7878612d2b23589f1ff2ab15633e1df7963a5d9fc750ec5500c7e7a",
+        "libffi notices in CFFI Windows sources": "6d2acfac1e3ff1e422964109de1073289691964cfbd92e314a9f90280620eb01",
+        "Microsoft WebView2 SDK": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55",
+        "Microsoft WebView2 SDK third-party notices": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90",
+        "Fluent UI System Icons": "69bc45dc42b9acb96a69823adbc6ae538374e3c0bde169b855b32c48eaaef52f",
+        "Fluent UI theme tokens": "1434c6b2a8417d41e4db20ff3b772888e66a0069e20d928f83fa1390f44758c7",
+        "domJSON": "9876c56a0a754e788f8bd7bc683e52ccf79b7a8eae05799407fffa798fc8f272",
+        "Native Promise Only": "87c815bfd1dc02ac37eb5593290e245b5dc1de6be1e0dbd00b18dcd2ed3523f6",
+        "Symbol-ES6": "24efa6399810650b5b060a735e2b6cb5d8657aaa507fe92a4bed1be8a1107167",
+    }
+    records = content["acknowledgements"]["notices"]
+    assert {record["name"]: hashlib.sha256(record["text"].encode("utf-8")).hexdigest() for record in records} == expected
+    assert len(records) == len(expected)
+    assert all(record["sha256"] == expected[record["name"]] and record["version"] and record["source"].startswith("https://") for record in records)
+
+
+def test_modules_use_only_local_explicit_js_imports(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    imports = {
+        name: re.findall(r"\bfrom\s+[\"']([^\"']+)[\"']", text)
+        for name, text in assets.items()
+        if name.endswith(".js")
+    }
+
+    assert imports == {
+        "app.js": [
+            "./bridge.js",
+            "./readiness.js",
+            "./appearance.js",
+            "./theme.js",
+            "./settings.js",
+            "./about.js",
+            "./execution_confirmation.js",
+            "./panels.js",
+            "./rail.js",
+            "./task_status.js",
+            "./render.js",
+        ],
+        "appearance.js": [],
+        "about.js": ["./legal_content.js", "./render.js"],
+        "legal_content.js": [],
+        "bridge.js": [],
+        "execution_confirmation.js": ["./render.js"],
+        "file_row.js": ["./render.js"],
+        "icons.js": [],
+        "integrity.js": ["./file_row.js", "./render.js"],
+        "panels.js": ["./render.js", "./setup.js", "./plan_review.js", "./inventory_review.js"],
+        "filter_menu.js": ["./icons.js", "./render.js"],
+        "row_menu.js": ["./render.js"],
+        "inventory_review.js": ["./table_columns.js", "./task_status.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./tree.js", "./row_highlight.js", "./integrity.js", "./render.js"],
+        "plan.js": ["./file_row.js", "./render.js"],
+        "table_columns.js": [],
+        "table_controller.js": [],
+        "plan_review.js": ["./table_controller.js", "./row_highlight.js", "./table_columns.js", "./plan.js", "./filter_menu.js", "./row_menu.js", "./icons.js", "./render.js", "./task_status.js"],
+        "rail.js": ["./icons.js", "./render.js", "./task_status.js"],
+        "task_status.js": ["./render.js"],
+        "readiness.js": [],
+        "render.js": [],
+        "setup.js": ["./icons.js", "./render.js"],
+        "settings.js": ["./bridge.js", "./render.js"],
+        "theme.js": ["./bridge.js", "./render.js"],
+        "tree.js": ["./render.js", "./row_highlight.js", "./table_controller.js"],
+        "row_highlight.js": [],
+    }
+    assert all(
+        value.startswith("./") and value.endswith(".js")
+        for values in imports.values()
+        for value in values
+    )
+    assert all("innerHTML" not in text for text in assets.values())
+
+
+def test_renderer_assets_stay_within_the_admitted_webview2_api_floor(
+    built_wheel: BuiltWheel,
+) -> None:
+    javascript = "\n".join(
+        source
+        for name, source in _wheel_assets(built_wheel).items()
+        if name.endswith(".js")
+    )
+
+    assert "Object.hasOwn(" not in javascript
+    assert "crypto.randomUUID" not in javascript
+    assert re.search(r"\.role\s*=", javascript) is None
+    assert javascript.count(
+        "new document.defaultView.ResizeObserver("
+    ) == 1
+
+
+def test_br_g_32_packaged_assets_exclude_active_markup_and_code_sinks(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    source = "\n".join(assets.values())
+
+    assert _active_sink_hits(source) == ()
+    assert _attribute_sink_hits(source) == ()
+
+    appearance = assets["appearance.js"]
+    assert {
+        name
+        for name, source in assets.items()
+        if "root.dataset.theme =" in source
+    } == {"appearance.js"}
+    assert "setAttribute" not in appearance
+    assert ".style =" not in appearance
+    assert ".cssText" not in appearance
+    assert ".postMessage" not in appearance
+    properties = re.findall(
+        r'root\.style\.setProperty\(\s*"(--[a-z-]+)"', appearance
+    )
+    assert appearance.count("root.style.setProperty(") == len(properties)
+    assert set(properties) == {
+        "--color-accent-fill",
+        "--color-accent-fill-hover",
+        "--color-accent-fill-pressed",
+        "--color-accent-fill-foreground",
+        "--color-accent-text-fill",
+    }
+
+
+def test_static_sink_guard_rejects_dynamic_and_authority_attributes() -> None:
+    assert _attribute_sink_hits('node.setAttribute(name, value);') == (
+        "dynamic-attribute-name",
+    )
+    assert _attribute_sink_hits('node.setAttribute("href", value);') == (
+        "href",
+    )
+    assert _attribute_sink_hits(
+        'node.setAttribute("aria-activedescendant", value);'
+    ) == ()
+    for name in ("aria-controls", "aria-labelledby", "aria-describedby"):
+        assert _attribute_sink_hits(f'node.setAttribute("{name}", value);') == ()
+    for name in ("onclick", "style", "src", "aria-href"):
+        assert _attribute_sink_hits(f'node.setAttribute("{name}", value);') == (name,)
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental appearance probe")
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "appearance_probe.mjs"),
+            str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "appearance.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    result = json.loads(completed.stdout)
+    assert result == {
+        "revision": 7,
+        "dataset": {
+            "theme": "light",
+            "highContrast": "false",
+            "windowMaterial": "degraded",
+            "advancedColor": "true",
+        },
+        "properties": {
+            "--color-accent-fill": "#123456",
+            "--color-accent-fill-hover": "#123456E6",
+            "--color-accent-fill-pressed": "#123456CC",
+            "--color-accent-fill-foreground": "#FFFFFF",
+            "--color-accent-text-fill": "#003E92",
+        },
+        "resolvedBeforeValidMessage": False,
+        "resolvedAfterValidMessage": True,
+        "resolvedBeforeNewRevision": False,
+        "resolvedAfterNewRevision": True,
+        "observerCalls": 2,
+        "observerRevisions": [2, 7],
+        "listenerRemoved": True,
+    }
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_readiness_receiver_buffers_exact_envelopes() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental readiness probe")
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "readiness_probe.mjs"),
+            str(
+                PROJECT_ROOT
+                / "namisync"
+                / "interfaces"
+                / "web"
+                / "assets"
+                / "readiness.js"
+            ),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_startup_runs_once_per_document() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental startup probe")
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "app_startup_probe.mjs"),
+            str(
+                PROJECT_ROOT
+                / "namisync"
+                / "interfaces"
+                / "web"
+                / "assets"
+                / "app.js"
+            ),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_process_live_task_shell_transitions_use_production_modules() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the task-shell witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "task_shell_probe.mjs"),
+            str(assets / "app.js"),
+            str(assets / "rail.js"),
+            str(assets / "panels.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.parametrize("scenario", ("empty", "manual-pending", "manual-close", "failed", "recovery", "fixed-unknown"))
+def test_startup_creates_only_one_blank_task_without_replenishing(scenario: str) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the startup task witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe([
+        str(node), str(PROJECT_ROOT / "tests/assets/task_shell_probe.mjs"),
+        str(assets / "app.js"), str(assets / "rail.js"), str(assets / "panels.js"), scenario,
+    ], timeout=10)
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+def test_plan_review_component_keeps_actions_bounded_and_generation_safe() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the plan-review witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "plan_review_probe.mjs"),
+            str(assets / "plan_review.js"),
+            str(assets / "render.js"),
+            str(assets / "icons.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+def test_inventory_refresh_observes_original_after_delivery_loss_without_resubmission() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the inventory Refresh bridge witness"
+    completed = run_node_probe([
+        str(node), str(PROJECT_ROOT / "tests/assets/inventory_refresh_bridge_probe.mjs"),
+        str(Path(ASSET_ROOT) / "bridge.js"),
+    ], timeout=10)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+
+
+def test_inventory_visibility_bridge_admits_bounded_actual_results_and_observes_original() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the inventory visibility bridge witness"
+    completed = run_node_probe([
+        str(node), str(PROJECT_ROOT / "tests/assets/inventory_visibility_bridge_probe.mjs"),
+        str(Path(ASSET_ROOT) / "bridge.js"),
+    ], timeout=10)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+
+
+def test_inventory_reads_validate_production_windows_and_current_evidence(tmp_path: Path) -> None:
+    from dataclasses import replace
+    from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+    from namisync.db.repositories import InventoryPresence, InventorySnapshot
+    from namisync.interfaces.web.inventory_review import InventoryReviewState
+    from namisync.workflows import build_inventory_projection
+    from namisync.workflows.views import inventory_current_detail
+    from _db_fixtures import NOW, file_stat, attestation
+
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the inventory bridge witness"
+    stat = file_stat(size=9223372036854775807, mtime_ns=9223372036854775807,
+                     identity_index=(1 << 100) + 1)
+    row = InventorySnapshot("1", 1, "subject.txt", "SUBJECT.TXT", EntryKind.FILE,
+        InventoryPresence.PRESENT, stat, attestation(stat), NOW, NOW, "scope",
+        None, None, None, None, None)
+    projection = build_inventory_projection(1, (row,), (
+        ScanWarning(ScanWarningCode.ACCESS_DENIED, "", "root warning"),))
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 1, 0, recall=RecallSummary(), scan_request_id="2" * 32)
+    detail = {"disposition": "current", "view_revision": 0,
+              "node_id": projection.node_id_by_row_id["1"], "snapshot": {"path": row.rel_path, "warning": None},
+              "detail": inventory_current_detail(row)}
+    folder = replace(row, row_id="2", rel_path="folder", rel_path_key="FOLDER",
+        entry_kind=EntryKind.DIRECTORY, observed=replace(stat, kind=EntryKind.DIRECTORY),
+        attestation=None, last_verified_at=None)
+    child = replace(row, rel_path=r"folder\subject.txt", rel_path_key=r"FOLDER\SUBJECT.TXT")
+    zero_scope = InventoryReviewState(view.task_id, view.request_id,
+        build_inventory_projection(1, (folder, child)), view.root_path, True, 2, 0,
+        recall=RecallSummary(), scan_request_id=view.request_id, filters=frozenset({"unverified"}))
+    fixture = tmp_path / "inventory-window.json"
+    fixture.write_text(json.dumps({"summary": view.summary(),
+        "window": view.window(expected_revision=0, offset=0, limit=256), "detail": detail,
+        "zero_scope": {"summary": zero_scope.summary(),
+            "window": zero_scope.window(expected_revision=0, offset=0, limit=256)}}), encoding="utf-8")
+    completed = run_node_probe([str(node), str(PROJECT_ROOT / "tests/assets/inventory_window_bridge_probe.mjs"),
+        str(Path(ASSET_ROOT) / "bridge.js"), str(fixture)], timeout=10)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+
+
+@pytest.mark.parametrize(
+    ("probe_name", "asset_names"),
+    (
+        ("plan_review_probe.mjs", ("plan_review.js", "render.js", "icons.js", "table_columns.js")),
+        ("task_shell_probe.mjs", ("app.js", "rail.js", "panels.js")),
+    ),
+)
+def test_fake_dom_identity_failure_keeps_bounded_diagnostics(
+    tmp_path: Path, probe_name: str, asset_names: tuple[str, ...],
+) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the fake-DOM failure control"
+    source = (PROJECT_ROOT / "tests" / "assets" / probe_name).read_text(encoding="utf-8")
+    probe = tmp_path / probe_name
+    (tmp_path / "fake_dom_assertions.mjs").write_bytes(
+        (PROJECT_ROOT / "tests" / "assets" / "fake_dom_assertions.mjs").read_bytes()
+    )
+    (tmp_path / "fake_recovery_handle.mjs").write_bytes(
+        (PROJECT_ROOT / "tests" / "assets" / "fake_recovery_handle.mjs").read_bytes()
+    )
+    if probe_name == "task_shell_probe.mjs":
+        graph, label = "app", "ElementFake<MAIN>"
+        mismatch = (
+            'assertSameNodes([app], [new ElementFake("main")], '
+            '"forced fake DOM identity mismatch");'
+        )
+    else:
+        graph, label = "document.documentElement", "ElementFake<HTML>"
+        mismatch = (
+            'assertSameNode(document.documentElement, new ElementFake("html"), '
+            '"forced fake DOM identity mismatch");'
+        )
+    probe.write_text(
+        source + '\nconst { inspect } = await import("node:util");\n'
+        + f'assert.equal(inspect({graph}), "{label}");\n' + mismatch + '\n',
+        encoding="utf-8",
+    )
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe(
+        (str(node), str(probe), *(str(assets / name) for name in asset_names)),
+        timeout=10,
+    )
+    assert completed.returncode != 0
+    assert "forced fake DOM identity mismatch" in completed.stderr
+    assert "AssertionError" in completed.stderr
+    assert len(completed.stderr.encode("utf-8")) < 4096
+
+
+def test_node_probe_contains_a_modest_external_allocation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the Job memory control"
+    monkeypatch.setattr(frontend_support, "_NODE_JOB_MEMORY_BYTES", 128 * 1024 * 1024)
+    completed = run_node_probe(
+        (
+            str(node), "-e",
+            'require("node:fs").writeSync(1, "allocation-started"); '
+            'Buffer.alloc(192 * 1024 * 1024, 1); process.stdout.write("survived")',
+        ),
+        timeout=10,
+    )
+    assert completed.returncode != 0
+    assert "allocation-started" in completed.stdout
+    assert "survived" not in completed.stdout
+
+
+def test_node_probe_binds_output_and_timeout() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the probe bounds control"
+    with pytest.raises(AssertionError, match="stdout exceeded 1 MiB"):
+        run_node_probe(
+            (str(node), "-e", 'process.stdout.write("x".repeat(1024 * 1024 + 1))'),
+            timeout=10,
+        )
+    with pytest.raises(subprocess.TimeoutExpired):
+        run_node_probe((str(node), "-e", "setTimeout(() => {}, 60000)"), timeout=2)
+
+
+def test_execution_review_projects_independent_terminal_and_row_axes() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the execution-review witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "execution_review_probe.mjs"),
+            str(assets / "plan_review.js"),
+            str(assets / "task_status.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+def test_plan_window_bridge_preserves_overflow_null_and_signed_64_boundaries() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the Plan-window bridge witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "plan_window_bridge_probe.mjs"),
+            str(assets / "bridge.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok\n"
+
+
+def test_execution_detail_bridge_validates_full_shape_and_request_identity() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the execution-detail witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "execution_detail_bridge_probe.mjs"),
+            str(assets / "bridge.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok\n"
+
+
+def test_execution_confirmation_keeps_smoke_and_focus_native() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the execution-confirmation witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "execution_confirmation_probe.mjs"),
+            str(assets / "execution_confirmation.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_theme_selector_reconciles_authoritative_state() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental theme probe")
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "theme_selector_probe.mjs"),
+            str(
+                PROJECT_ROOT
+                / "namisync"
+                / "interfaces"
+                / "web"
+                / "assets"
+                / "theme.js"
+            ),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_shared_test_bootstrap_is_generation_bound() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental test bootstrap probe")
+    completed = run_node_probe(
+        [
+            str(node),
+            str(
+                PROJECT_ROOT
+                / "tests"
+                / "assets"
+                / "bootstrap_test_bridge_probe.mjs"
+            ),
+            str(
+                PROJECT_ROOT
+                / "tests"
+                / "assets"
+                / "bootstrap_test_bridge.js"
+            ),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout == "ok"
+
+
+def test_text_inputs_mark_pointer_origin_only_until_blur(
+    built_wheel: BuiltWheel,
+) -> None:
+    app = _wheel_assets(built_wheel)["app.js"]
+
+    assert 'document.addEventListener?.("pointerdown"' in app
+    assert 'document.addEventListener?.("focusout"' in app
+    assert app.count('event.target?.matches?.(".nami-input, .nami-select")') == 2
+    assert 'event.target.dataset.namiFocusOrigin = "pointer";' in app
+    assert "delete event.target.dataset.namiFocusOrigin;" in app
+
+
+def test_br_g_32_production_inert_text_helper_owns_text_writes(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    renderer = assets["render.js"]
+    file_row = assets["file_row.js"]
+    integrity = assets["integrity.js"]
+    plan = assets["plan.js"]
+    tree = assets["tree.js"]
+
+    text_assignments = {
+        name: len(re.findall(r"\.textContent\s*=(?!=)", source))
+        for name, source in assets.items()
+        if name.endswith(".js")
+    }
+    assert sum(text_assignments.values()) == 1
+    assert {
+        name: count for name, count in text_assignments.items() if count
+    } == {"render.js": 1}
+    assert renderer.count(".textContent =") == 1
+    assert "element.textContent = text;" in renderer
+    assert 'import { renderText } from "./render.js";' in assets["app.js"]
+    assert "function renderHostStatus(message)" in assets["app.js"]
+    assert "renderText(status, message);" in assets["app.js"]
+    assert 'status.hidden = message === "Ready";' in assets["app.js"]
+    assert 'renderHostStatus("Ready");' in assets["app.js"]
+    assert re.search(r"\.textContent\s*=(?!=)", assets["app.js"]) is None
+    assert "export function renderFilesystemText(element, text)" in renderer
+    assert (
+        r"/[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b"
+        r"\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff"
+        r"\u27e6-\u27e7]/gu;"
+    ) in renderer
+    assert "`⟦U+${character.codePointAt(0)" in renderer
+    assert "renderText(element, visibleText);" in renderer
+    assert (
+        'import { renderFilesystemText } from "./render.js";' in tree
+    )
+    assert "renderFilesystemText(label, row.display);" in tree
+    assert "renderText(" not in tree
+    assert len(re.findall(r"\bdisplay\b", tree)) == 3
+    assert [
+        line.strip() for line in tree.splitlines() if "row.display" in line
+    ] == [
+        "display: row.display,",
+        "renderFilesystemText(label, row.display);",
+    ]
+    assert re.search(r"\.textContent\s*=(?!=)", tree) is None
+    assert (
+        'import { renderFilesystemText, renderText } from "./render.js";'
+        in file_row
+    )
+    assert "renderFilesystemText(label, rowView.nameText);" in file_row
+    assert "renderText(size, rowView.sizeText);" in file_row
+    assert "renderText(notes, rowView.notesText);" in file_row
+    assert 'intentLabel.className = "nami-file-state-label";' in plan
+    assert "renderText(intentLabel, rowView.intentText);" in plan
+    assert "intent.append(intentLabel);" in plan
+    assert "renderFileProgress(" in plan
+    assert "renderText(checksum, rowView.checksumText);" in plan
+    assert "renderText(cell, text);" in integrity
+    assert 'label.className = "nami-file-state-label";' in integrity
+    assert "renderText(label, text);" in integrity
+    assert "cell.append(label);" in integrity
+    assert "renderFileProgress(cell, text, progressPercent, lifecycle);" in integrity
+    assert re.search(r"\.textContent\s*=(?!=)", file_row) is None
+    assert re.search(r"\.textContent\s*=(?!=)", integrity) is None
+    assert re.search(r"\.textContent\s*=(?!=)", plan) is None
+
+
+def test_plan_row_renderer_is_active_and_consumes_only_projected_views(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    file_row = assets["file_row.js"]
+    integrity = assets["integrity.js"]
+    plan = assets["plan.js"]
+    layout = assets["app.css"]
+    production_shell = "\n".join(
+        assets[name]
+        for name in ("index.html", "app.js", "panels.js", "plan_review.js", "rail.js")
+    )
+
+    assert re.findall(r"export function ([A-Za-z0-9_]+)\(", plan) == [
+        "renderPlanRow",
+        "updatePlanRowExecution",
+    ]
+    assert re.findall(r"export function ([A-Za-z0-9_]+)\(", integrity) == [
+        "createIntegrityCell"
+    ]
+    assert re.findall(r"export function ([A-Za-z0-9_]+)\(", file_row) == [
+        "renderFileRow",
+        "renderFileProgress",
+    ]
+    assert '"./plan_review.js"' in production_shell
+    assert '"./plan.js"' in production_shell
+    assert "updatePlanRowExecution(" in production_shell
+    assert '"./integrity.js"' not in production_shell
+    assert "renderPlanRow" in production_shell
+    dormant_renderers = "\n".join((file_row, plan, integrity))
+    assert '"./bridge.js"' not in dormant_renderers
+    assert not any(
+        name in dormant_renderers
+        for name in (
+            "SyncPlan",
+            "workflow",
+            "dispatcher",
+            "session",
+            "dispatchInteractive",
+            "IntegrityResult",
+            "PlanOperation",
+        )
+    )
+    assert ".slice(" not in dormant_renderers
+    assert ".substring(" not in dormant_renderers
+    assert ".split(" not in dormant_renderers
+    assert _javascript_frozen_array(plan, "STRING_FIELDS") == (
+        "selectionLabel",
+        "nameText",
+        "sizeText",
+        "intentText",
+        "intentKey",
+        "checksumText",
+        "modifiedText",
+        "notesText",
+    )
+    assert _javascript_frozen_set(plan, "INTENT_KEYS") == (
+        "copy",
+        "mkdir",
+        "move",
+        "recase",
+        "rename",
+        "update",
+        "move_update",
+        "trash",
+        "delete",
+        "noop",
+        "error",
+        "unsupported",
+        "blocked",
+    )
+    assert _javascript_frozen_set(plan, "ROW_LIFECYCLE_KEYS") == (
+        "executing",
+        "completed",
+        "skipped",
+        "partial",
+        "degraded",
+        "incomplete",
+        "canceled",
+        "refused",
+        "capacity",
+        "failed",
+    )
+    assert "ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey)" in plan
+    assert 'rowView.lifecycleKey === "executing"' in plan
+    assert "Number.isFinite(rowView.progressPercent)" in plan
+    assert "rowView.progressPercent >= 0" in plan
+    assert "rowView.progressPercent <= 100" in plan
+    assert "rowView.progressPercent === undefined" in plan
+    assert "intent.dataset.lifecycle = rowView.lifecycleKey;" in plan
+    assert 'intent.dataset.intent = rowView.intentKey;' in plan
+    assert "intentTone" not in plan
+    assert "intentForm" not in plan
+    assert ".dataset.form" not in plan
+    assert 'intentLabel.className = "nami-file-state-label";' in plan
+    assert "intent.append(intentLabel);" in plan
+    assert 'element.setAttribute("role", "row");' in file_row
+    assert plan.count('cell.setAttribute("role", "cell");') == 1
+    assert integrity.count('cell.setAttribute("role", "cell");') == 1
+    assert 'checkbox.type = "checkbox";' in file_row
+    assert 'checkbox.indeterminate = rowView.mixed;' in file_row
+    assert 'renderFileRow(element, rowView, {' in plan
+    assert "cell.dataset.lifecycle = lifecycle;" in integrity
+    assert "cell.dataset.integrity = integrity;" in integrity
+    assert "presenceTone" not in integrity
+    assert "presenceForm" not in integrity
+    assert ".dataset.form" not in integrity
+    assert 'label.className = "nami-file-state-label";' in integrity
+    assert "cell.append(label);" in integrity
+    assert 'element.replaceChildren(selection, name, size, ...details.cells, notes);' in file_row
+    assert 'progress.className = "nami-progress nami-progress--inline";' in file_row
+    assert 'progress.setAttribute("role", "progressbar");' in file_row
+    assert 'progress.ariaLabel = label;' in file_row
+    assert 'progress.ariaValueNow = String(percent);' in file_row
+    assert 'bar.style.setProperty("--nami-progress-value", `${percent}%`);' in file_row
+    assert "item_bytes_done" not in dormant_renderers
+    assert "item_bytes_total" not in dormant_renderers
+
+    # File-list rendering and responsive geometry are exercised by the installed
+    # gallery. Keep the semantic-token boundary for the packaged stylesheet.
+    assert "--palette-" not in layout
+
+
+def test_sh_g_7_tree_row_height_and_accessibility_ownership(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    css = "\n".join(
+        text for name, text in assets.items() if name.endswith(".css")
+    )
+    tree = assets["tree.js"]
+
+    css_row_heights = re.findall(r"--row-h:\s*(\d+)px;", css)
+    javascript_row_heights = re.findall(
+        r"export const ROW_H\s*=\s*(\d+);",
+        tree,
+    )
+    assert css_row_heights == ["28"]
+    assert javascript_row_heights == ["28"]
+    assert int(css_row_heights[0]) == int(javascript_row_heights[0])
+
+    app_css = assets["app.css"]
+    row_rule = re.search(r"\.nami-tree-row\s*\{([^}]+)\}", app_css)
+    assert row_rule is not None
+    declarations = row_rule.group(1)
+    for required in (
+        "animation: none;",
+        "block-size: var(--row-h);",
+        "box-sizing: border-box;",
+        "margin-block: 0;",
+        "max-block-size: var(--row-h);",
+        "min-block-size: var(--row-h);",
+        "overflow: hidden;",
+        "transition: none;",
+    ):
+        assert required in declarations
+    label_rule = re.search(
+        r"\.nami-tree-row__label\s*\{([^}]+)\}",
+        app_css,
+    )
+    assert label_rule is not None
+    for required in (
+        "min-inline-size: 0;",
+        "overflow: hidden;",
+        "text-overflow: ellipsis;",
+        "unicode-bidi: isolate;",
+        "white-space: nowrap;",
+    ):
+        assert required in label_rule.group(1)
+
+    for forbidden in (
+        "window.pywebview",
+        '"./bridge.js"',
+        "current_path",
+        "rel_path",
+        "canonical",
+        "search",
+        "filter",
+        "collapse",
+        "ancestor",
+    ):
+        assert forbidden not in tree
+    assert 'root.setAttribute("role", "tree");' in tree
+    assert 'element.setAttribute("role", "treeitem");' in tree
+    assert "root.tabIndex = 0;" in tree
+    assert (
+        'root.setAttribute("aria-activedescendant", activeElement.id);'
+        in tree
+    )
+    assert 'root.removeAttribute("aria-activedescendant");' in tree
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_tree_probe_uses_production_modules(
+    tree_window_fixture: TreeWindowFixture,
+) -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental tree probe")
+    probe = PROJECT_ROOT / "tests" / "assets" / "tree_probe.mjs"
+    probe_source = probe.read_text(encoding="utf-8")
+    asset_root = (
+        PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    )
+    assert "Array.from({length: 256}" not in probe_source
+    assert "fixtureViews.maximum" in probe_source
+    assert "fixtureViews.empty" in probe_source
+    assert "fixtureViews.tail" in probe_source
+
+    completed = run_node_probe(
+        [
+            str(node),
+            str(probe),
+            str(asset_root / "tree.js"),
+            str(asset_root / "render.js"),
+            str(tree_window_fixture.path.resolve()),
+            tree_window_fixture.sha256,
+        ],
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+    assert json.loads(completed.stdout) == {
+        "fixture_schema": TREE_WINDOW_FIXTURE_SCHEMA,
+        "fixture_sha256": tree_window_fixture.sha256,
+        "fixture_size": tree_window_fixture.size,
+    }
+
+
+@pytest.mark.supplemental_node
+def test_setup_form_keeps_stable_controls_and_raw_filter_text() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the Setup probe")
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "setup_probe.mjs"),
+            str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "setup.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+    assert completed.stderr == ""
+
+
+@pytest.mark.supplemental_node
+def test_setup_app_guards_gestures_retries_and_serial_batch_ownership() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the Setup app probe")
+    completed = run_node_probe(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "setup_app_probe.mjs"),
+            str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "app.js"),
+        ],
+        timeout=20,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+    assert completed.stderr == ""
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_inert_text_rejects_before_coercion() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental render probe")
+    probe = PROJECT_ROOT / "tests" / "assets" / "render_text_probe.mjs"
+    renderer = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "render.js"
+    )
+
+    completed = run_node_probe(
+        [str(node), str(probe), str(renderer)],
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+@pytest.mark.supplemental_node
+def test_supplemental_node_byte_formatter_uses_binary_units_and_bigints() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the supplemental render probe")
+    probe = PROJECT_ROOT / "tests" / "assets" / "render_byte_formatter_probe.mjs"
+    renderer = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "render.js"
+    )
+
+    completed = run_node_probe(
+        [str(node), str(probe), str(renderer)],
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+def test_shared_date_formatter_uses_local_minutes_and_omits_unavailable_values() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for date formatting"
+    completed = run_node_probe([
+        str(node), str(PROJECT_ROOT / "tests/assets/render_date_formatter_probe.mjs"),
+        str(PROJECT_ROOT / ASSET_ROOT / "render.js"),
+    ], timeout=10)
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "node.innerHTML = hostile;",
+        "node.outerHTML=hostile;",
+        'node.insertAdjacentHTML("beforeend", hostile);',
+        "document.write(hostile);",
+        "frame.srcdoc = hostile;",
+        "new DOMParser().parseFromString(hostile, mime);",
+        "range.createContextualFragment(hostile);",
+        'node.setAttribute(name, hostile);',
+        "link.href = hostile;",
+        "image.src = hostile;",
+        "node.style = hostile;",
+        "node.cssText = hostile;",
+        "node.onclick = hostile;",
+        "eval(hostile);",
+        "new Function(hostile);",
+        'setTimeout("hostile()", 1);',
+        'setInterval("hostile()", 1);',
+    ],
+)
+def test_br_g_32_sink_scan_catches_counterexample_mutations(
+    mutation: str,
+) -> None:
+    assert _active_sink_hits(mutation)
+
+
+def test_browser_command_policy_is_an_exact_mirror_of_the_native_table() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+    match = re.search(
+        r"const COMMAND_POLICY_JSON = `([\s\S]*?)`;",
+        source,
+    )
+    assert match is not None
+    browser_policy = json.loads(match.group(1))
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=object(),  # type: ignore[arg-type]
+        registry=object(),  # type: ignore[arg-type]
+        cosmetics=object(),  # type: ignore[arg-type]
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+    native_policy = {
+        name: {
+            "response_policy": spec.response_policy.value,
+            "retry": spec.retry.value,
+            "phase": spec.phase.value,
+        }
+        for name, spec in commands.items()
+    }
+
+    assert_browser_command_policy(browser_policy)
+    assert_browser_command_policy(native_policy)
+
+
+def test_ready_transition_cannot_overwrite_a_native_close_status(
+    built_wheel: BuiltWheel,
+) -> None:
+    app = _wheel_assets(built_wheel)["app.js"]
+
+    assert "acknowledgeShellReady," in app
+    assert "BridgeTransportError," in app
+    assert "echoReadiness," in app
+    assert "markBridgeOperational," in app
+    assert "whenBridgeApiReady," in app
+    assert app.index("installReadinessReceiver(") < app.index(
+        "installAppearanceReceiver("
+    )
+    assert app.index("installThemeSelector(") < app.index(
+        "installAppearanceReceiver("
+    )
+    assert app.index("installAppearanceReceiver(") < app.index(
+        "app.append(rail.element, panel.element);"
+    )
+    startup = app.split("async function finishStartup(", 1)[1]
+    assert startup.index("whenBridgeApiReady()") < startup.index(
+        "acknowledgeShellReady()"
+    )
+    assert startup.index("acknowledgeShellReady()") < startup.index(
+        "readiness.whenReceivedAfter(readinessBaseline)"
+    )
+    assert startup.index(
+        "readiness.whenReceivedAfter(readinessBaseline)"
+    ) < startup.index("echoReadiness(challenge)")
+    assert startup.index("echoReadiness(challenge)") < startup.index(
+        "markBridgeOperational()"
+    )
+    assert "for (let attempt = 0; attempt < 2 && !acknowledged;" in startup
+    assert startup.count("echoReadiness(challenge)") == 1
+    assert "error instanceof BridgeTransportError" in startup
+    assert "attempt > 0" in startup
+    assert "if (!acknowledged)" in startup
+    assert "appearance.whenAppliedAfter" not in startup
+    assert startup.index("markBridgeOperational()") < startup.index(
+        "void theme.open(appliedPresentationRevision);"
+    )
+    assert startup.index(
+        "void theme.open(appliedPresentationRevision);"
+    ) < startup.index('renderHostStatus("Ready");')
+    assert "await theme.open()" not in startup
+    assert "void theme.refresh(revision);" in app
+    assert 'window.addEventListener("pywebviewready"' not in app
+    assert "const readinessBaseline = readiness.revision();" in startup
+    assert "StartupSupersededError" not in app
+    assert "error instanceof BridgeTransportError" in app
+    assert 'status.textContent === "Starting..."' in app
+    assert app.count('renderHostStatus("Ready")') == 1
+
+
+def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    index = assets["index.html"]
+    app = assets["app.js"]
+    rail = assets["rail.js"]
+    panels = assets["panels.js"]
+    shell = "\n".join((app, rail, panels))
+
+    assert '<main id="app">' in index
+    assert index.count('id="host-status"') == 1
+    assert '<p id="host-status" role="status" aria-live="polite">' in index
+    assert '<span class="nami-field__label" id="theme-mode-label">Theme</span>' in index
+    assert '<div class="nami-combobox" data-value="system" id="theme-mode">' in index
+    assert 'class="nami-combobox__trigger"' in index
+    assert 'role="combobox"' in index
+    assert 'aria-haspopup="listbox"' in index
+    assert 'aria-controls="theme-options"' in index
+    assert 'id="theme-options" role="listbox"' in index
+    assert re.findall(
+        r'class="nami-combobox__option"[^>]+data-value="([a-z]+)"[^>]*>.*?<span>([A-Za-z]+)</span>',
+        index,
+    ) == [("system", "System"), ("light", "Light"), ("dark", "Dark")]
+    assert "<select" not in index
+    assert '<main id="app" aria-live=' not in index
+    assert 'ariaLabel = "Task navigation";' in rail
+    assert 'renderText(heading, "Tasks");' in rail
+    assert 'renderText(emptyText, "New Task");' in rail
+    assert 'emptySlot.classList.add("nami-button", "nami-task-rail__empty-slot");' in rail
+    assert 'panel.ariaLabel = task === null ? "Work area" : `Work area — ${task.label}`;' in panels
+    assert 'panel.setAttribute("role", "region");' in panels
+    assert 'renderText(empty, "No task selected.");' in panels
+    assert "tabIndex" not in rail
+    assert "tabIndex" not in panels
+    assert 'rail.classList.add("nami-task-rail");' in rail
+    assert 'rail.classList.add("nami-card"' not in rail
+    assert 'panel.classList.add("nami-work-panel");' in panels
+    assert "app.append(rail.element, panel.element);" in app
+    assert 'create.append(createIcon(document, "add-square-multiple", "lg"));' in rail
+    assert 'create.ariaLabel = "New task";' in rail
+    assert 'close.append(createIcon(document, "dismiss", "sm"));' in rail
+    assert "entry.close.title = entry.close.ariaLabel;" in rail
+    assert 'document.createElement("h2")' not in panels
+    assert '"./plan_review.js"' in panels
+    assert '"./integrity.js"' not in app + panels
+    assert "createPlanReviewPanel" in panels
+    assert 'status.textContent === "Starting..."' in app
+
+    theme = assets["theme.js"]
+    assert "export function installThemeCombobox(root)" in theme
+    assert "popup.style.inlineSize" in theme
+    assert "window.innerHeight - popupBounds.height" in theme
+    assert 'trigger.ariaExpanded = "true"' in theme
+    assert 'root.dispatchEvent(new Event("change", { bubbles: true }))' in theme
+    assert "#host-status" not in theme
+
+    assert "window.pywebview" not in shell
+    assert '"./bridge.js"' not in rail + panels
+    assert "dispatch(" not in rail + panels
+    assert "innerHTML" not in shell
+    assert re.search(r"\.textContent\s*=(?!=)", shell) is None
+    assert not re.search(r"task-[0-9a-f]{32}", shell)
+    assert not re.search(r"[0-9a-f]{32}", shell)
+
+
+def test_shell_styles_use_semantic_tokens(built_wheel: BuiltWheel) -> None:
+    assert "--palette-" not in _wheel_assets(built_wheel)["app.css"]
+
+
+def test_gui_s9_scrollbars_and_table_overflow_stay_css_owned(
+    built_wheel: BuiltWheel,
+) -> None:
+    assets = _wheel_assets(built_wheel)
+    components_css = assets["components.css"]
+    owners = (
+        "html",
+        ".nami-work-panel",
+        ".nami-task-rail__items",
+        ".nami-setup__recent-popup",
+        ".nami-table-scroll",
+        ".nami-table__body",
+        ".nami-tree",
+        ".nami-combobox__popup",
+    )
+
+    before_scrollbars, separator, remainder = components_css.partition(
+        "@media (forced-colors: none) {"
+    )
+    assert separator
+    scrollbar_rules, separator, after_scrollbars = remainder.partition("\n}\n")
+    assert separator
+    assert "::-webkit-scrollbar" not in before_scrollbars + after_scrollbars
+    scrollbar_selectors = re.findall(
+        r"(?s)[{}]([^{}]*::-webkit-scrollbar[^{}]*)\{",
+        "{" + scrollbar_rules,
+    )
+    assert scrollbar_selectors
+    for owner in owners:
+        assert any(owner in selectors for selectors in scrollbar_selectors)
+    assert "scrollbar-gutter: stable;" in components_css
+    assert "overflow-x: auto;" in components_css
+    assert "overflow-y: auto;" in components_css
+    assert all(
+        "scrollbar" not in source
+        for name, source in assets.items()
+        if name.endswith(".js")
+    )
+
+    app_css = assets["app.css"]
+    assert "--nami-table-columns: var(--setup-recent-columns);" in app_css
+    assert "--nami-table-columns: var(--setup-batch-columns);" in app_css
+    assert "grid-template-columns: var(--nami-table-columns);" in app_css

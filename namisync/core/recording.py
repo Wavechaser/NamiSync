@@ -4,10 +4,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
 
 from .evidence import RecordingStatus
-from .models import ScanResult, VolumeEvidence, VolumeId
-from .planning import OpId, Plan, selection_digest as calculate_selection_digest
+from .models import (
+    ScanResult,
+    VolumeEvidence,
+    VolumeId,
+)
+from .pathing import validate_relative_path
+from .scalars import (
+    MAX_REQUEST_ID_UTF8_BYTES,
+    MAX_SAFE_INTEGER,
+    require_safe_int,
+    require_utf8_text,
+)
+from .planning import (
+    OpId,
+    Plan,
+    selection_digest as calculate_selection_digest,
+)
 from .session import SessionState
 
 
@@ -37,6 +53,18 @@ class VolumeCommand:
     observed_at: datetime
 
     def __post_init__(self) -> None:
+        if type(self.volume_id) is not VolumeId:
+            raise TypeError("volume command identity has the wrong type")
+        if type(self.evidence) is not VolumeEvidence:
+            raise TypeError("volume command evidence has the wrong type")
+        volume_id = VolumeId(self.volume_id.serial, self.volume_id.fs_type)
+        evidence = VolumeEvidence(
+            self.evidence.label,
+            self.evidence.device_id,
+            self.evidence.clone_ambiguous,
+        )
+        object.__setattr__(self, "volume_id", volume_id)
+        object.__setattr__(self, "evidence", evidence)
         _require_utc(self.observed_at, "observed_at")
 
 
@@ -47,8 +75,14 @@ class LocationCommand:
     observed_at: datetime
 
     def __post_init__(self) -> None:
+        require_safe_int(self.volume_row_id, "volume row id")
         if self.volume_row_id < 1:
             raise ValueError("volume row id must be positive")
+        canonical = validate_relative_path(
+            self.volume_relative_path,
+            allow_root=True,
+        )
+        object.__setattr__(self, "volume_relative_path", canonical)
         _require_utc(self.observed_at, "observed_at")
 
 
@@ -128,8 +162,53 @@ class InventoryCommand:
     online: bool = True
 
     def __post_init__(self) -> None:
+        require_safe_int(self.location_id, "inventory location id")
+        require_safe_int(self.host_id, "inventory host id")
         if self.location_id < 1 or self.host_id < 1:
             raise ValueError("inventory database ids must be positive")
-        if not self.scope_token:
-            raise ValueError("inventory scope token is required")
+        if type(self.scan) is not ScanResult:
+            raise TypeError("inventory scan must be an exact ScanResult")
+        for field_name, population in (
+            ("files", self.scan.files),
+            ("directories", self.scan.directories),
+            ("unsupported", self.scan.unsupported),
+            ("warnings", self.scan.warnings),
+        ):
+            if type(population) is not tuple:
+                raise TypeError(
+                    f"inventory scan {field_name} must be an exact tuple"
+                )
+        require_utf8_text(
+            self.scope_token,
+            "inventory scope token",
+            minimum_bytes=1,
+            maximum_bytes=(
+                MAX_REQUEST_ID_UTF8_BYTES
+                + len(":refresh:".encode("ascii"))
+                + len(str(MAX_SAFE_INTEGER).encode("ascii"))
+            ),
+        )
         _require_utc(self.observed_at, "observed_at")
+        if type(self.online) is not bool:
+            raise TypeError("inventory online state must be a bool")
+
+
+class InventoryVisibilityAction(StrEnum):
+    ACKNOWLEDGE = "acknowledge"
+    RESTORE = "restore"
+
+
+@dataclass(frozen=True, slots=True)
+class InventoryVisibilityCommand:
+    command_id: str
+    location_id: int
+    row_id: str
+    action: InventoryVisibilityAction
+    changed_at: datetime
+
+    def __post_init__(self) -> None:
+        if not self.command_id or not self.row_id:
+            raise ValueError("inventory visibility identifiers are required")
+        if self.location_id < 1:
+            raise ValueError("inventory visibility location id must be positive")
+        _require_utc(self.changed_at, "changed_at")

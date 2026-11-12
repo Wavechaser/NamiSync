@@ -1,0 +1,558 @@
+from __future__ import annotations
+
+from dataclasses import replace
+
+import pytest
+
+import namisync.interfaces.web.inventory_review as review_module
+from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+from namisync.core.pathing import normalize_relative_path
+from namisync.db.repositories import InventoryPresence, InventorySnapshot
+from namisync.interfaces.web.inventory_review import InventoryReviewState
+from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
+from namisync.workflows import PlanSortColumn, SortDirection, build_inventory_projection
+from _db_fixtures import NOW, attestation, file_stat
+
+
+def _row(row_id, path, **changes):
+    return replace(InventorySnapshot(
+        row_id, 1, path, normalize_relative_path(path), EntryKind.FILE,
+        InventoryPresence.PRESENT, file_stat(), None, NOW, None, "scope",
+        None, None, None, None, None,
+    ), **changes)
+
+
+def _view():
+    projection = build_inventory_projection(1, (
+        _row("1", r"a\z.txt", observed=file_stat(size=9)),
+        _row("2", r"a\b.txt", observed=file_stat(size=2)),
+        _row("3", "gone.txt", presence=InventoryPresence.MISSING, acknowledged_at=NOW),
+    ), (ScanWarning(ScanWarningCode.ACCESS_DENIED, "unreadable", "read failed"),))
+    return InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 2, 0)
+
+
+def _update(view, **changes):
+    values = dict(expected_revision=view.view_revision, search_query=view.search_query,
+                  filters=view.filters, sort_column=view.sort_column, sort_direction=view.sort_direction,
+                  collapse_node_id=None, collapsed=None)
+    values.update(changes)
+    return view.update(**values)
+
+
+def _select(view, node_id=None, selected=True, **changes):
+    values = dict(request_id=view.request_id, expected_revision=view.view_revision,
+                  node_id=node_id, selected=selected)
+    values.update(changes)
+    return view.set_selection(**values)
+
+
+def test_recall_filter_uses_current_positive_items_and_scan_totals_stay_fixed():
+    from namisync.core.models import MetadataSnapshot
+    from namisync.workflows import RecallSummary
+    marked = replace(file_stat(), metadata=MetadataSnapshot(0x400000, None))
+    projection = build_inventory_projection(1, (
+        _row("1", "cloud", observed=marked),
+        _row("2", "missing", observed=marked, presence=InventoryPresence.MISSING),
+        _row("3", "folder", entry_kind=EntryKind.DIRECTORY, observed=replace(marked, kind=EntryKind.DIRECTORY)),
+        _row("4", "blocked", presence=InventoryPresence.UNSUPPORTED, observed=None,
+             observed_attributes=0x400000, observed_size=13),
+        _row("5", "local"),
+    ))
+    summary = RecallSummary(2, 20)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", True, 4, 1,
+                                scan_request_id="2" * 32, recall=summary)
+    assert view.summary()["recall_item_count"] == 3
+    _update(view, filters=frozenset({"recall"}))
+    rows = view.window(expected_revision=view.view_revision, offset=0, limit=256)["rows"]
+    assert {row["display"] for row in rows} == {"cloud", "folder", "blocked"}
+    assert all(row["recall"] for row in rows)
+    assert view.summary()["recall"] == {"file_count": 2, "size": "20", "size_overflow": False, "size_partial": False}
+    _update(view, search_query="absent")
+    assert view.summary()["recall"]["file_count"] == 2
+    replacement = view.replacement("3" * 32, projection, r"C:\root", None, None, None,
+                                   scan_scope=None, scan_request_id=None)
+    assert replacement.summary()["recall"] is None
+
+
+def test_row_anchor_resolves_current_ancestor_and_never_changes_the_view():
+    view = _view()
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    node_id = view.projection.node_id_by_row_id["1"]
+    assert view.row_anchor(expected_revision=0, row_id="1")["node_id"] == node_id
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    before = view.summary()
+    assert view.row_anchor(expected_revision=1, row_id="1") == {
+        "disposition": "current", "view_revision": 1, "node_id": folder.node_id, "index": 0}
+    assert view.summary() == before
+    assert view.row_anchor(expected_revision=0, row_id="1")["disposition"] == "conflict"
+    _update(view, search_query="absent")
+    assert view.row_anchor(expected_revision=2, row_id="1")["index"] is None
+    assert view.row_anchor(expected_revision=2, row_id="new-scan-row")["index"] is None
+
+
+def test_filter_item_count_includes_notices_but_not_context_or_hidden_acknowledged():
+    view = _view()
+    assert view.summary()["matched_item_count"] == 3
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    assert view.summary()["matched_item_count"] == 3
+    _update(view, filters=frozenset({"acknowledged"}))
+    assert view.summary()["matched_item_count"] == 1
+    _update(view, filters=frozenset({"present", "unverified"}), search_query="z.txt")
+    assert view.summary()["matched_item_count"] == 1
+    _update(view, search_query="absent")
+    assert view.summary()["matched_item_count"] == 0
+
+
+def test_window_nominated_node_reports_exact_visibility_without_ancestor_fallback():
+    view = _view()
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    node_id = view.projection.node_id_by_row_id["1"]
+    before = view.summary()
+    full = view.window(expected_revision=0, offset=0, limit=256)
+    index = next(row["visible_index"] for row in full["rows"] if row["node_id"] == node_id)
+    window = view.window(expected_revision=0, offset=0, limit=1, anchor_node_id=node_id)
+    assert window["anchor_node_id"] == node_id
+    assert window["anchor_visible_index"] == index
+    assert node_id not in {row["node_id"] for row in window["rows"]}
+    assert "anchor_node_id" not in full
+    assert view.summary() == before
+    _update(view, sort_column=PlanSortColumn.SIZE, sort_direction=SortDirection.ASCENDING)
+    sorted_window = view.window(expected_revision=1, offset=0, limit=256, anchor_node_id=node_id)
+    assert sorted_window["anchor_visible_index"] == next(
+        row["visible_index"] for row in sorted_window["rows"] if row["node_id"] == node_id)
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    assert view.window(expected_revision=2, offset=0, limit=1, anchor_node_id=node_id)["anchor_visible_index"] is None
+    assert view.row_anchor(expected_revision=2, row_id="1")["node_id"] == folder.node_id
+    assert view.window(expected_revision=0, offset=0, limit=1, anchor_node_id=node_id)["anchor_visible_index"] is None
+    assert view.window(expected_revision=2, offset=0, limit=1,
+                       anchor_node_id="node-" + "f" * 32)["anchor_visible_index"] is None
+    _update(view, search_query="absent")
+    assert view.window(expected_revision=3, offset=0, limit=1, anchor_node_id=node_id)["anchor_visible_index"] is None
+
+
+def test_selection_matching_scope_hidden_counts_and_single_revision():
+    view = _view()
+    assert view.summary()["selected_file_count"] == 0
+    folder = view.projection.nodes[view.projection.position_by_path_key["A"]]
+    _update(view, search_query="b.txt", collapse_node_id=folder.node_id, collapsed=True)
+    summary = _select(view, folder.node_id)
+    assert (summary["selected_file_count"], summary["hidden_selected_file_count"], summary["selection"]) == (1, 0, "all")
+    assert view.selected_row_ids == frozenset({"2"})
+    assert summary["view_revision"] == 2
+    assert view.window(expected_revision=1, offset=0, limit=256)["disposition"] == "conflict"
+    assert view.window(expected_revision=2, offset=0, limit=256)["rows"][0]["selection"] == "all"
+    assert _select(view, folder.node_id)["disposition"] == "noop"
+    assert _select(view, selected=False, expected_revision=1)["disposition"] == "conflict"
+    assert _select(view, selected=False, request_id="f" * 32)["disposition"] == "conflict"
+    summary = _select(view)
+    assert (summary["selected_file_count"], summary["hidden_selected_file_count"], summary["selection"]) == (1, 0, "all")
+    _update(view, search_query="", filters=frozenset({"acknowledged"}))
+    assert view.summary()["hidden_selected_file_count"] == 1
+    assert view.selected_row_ids == frozenset({"2"})
+    assert view.summary()["selection"] == "none"
+    _select(view)
+    assert view.selected_row_ids == frozenset({"2", "3"})
+    warning = next(node for node in view.projection.nodes if node.warning)
+    with pytest.raises(ValueError, match="warnings"):
+        _select(view, warning.node_id)
+    assert _select(view, selected=False)["selected_file_count"] == 1
+    _update(view, search_query="", filters=frozenset())
+    assert _select(view, selected=False)["selected_file_count"] == 0
+
+
+def test_selection_replacement_retains_exact_files_and_invalidates_old_gestures():
+    view = _view()
+    _select(view)
+    projection = build_inventory_projection(1, (
+        _row("1", r"a\z.txt"), _row("4", r"a\b.txt"),
+        _row("3", "gone.txt", entry_kind=EntryKind.DIRECTORY),
+    ))
+    replaced = view.replacement("f" * 32, projection, view.root_path, True, 3, 0,
+                                scan_scope=("location", None))
+    assert replaced.selected_row_ids == frozenset({"1"})
+    assert replaced.summary()["selectable_file_count"] == 2
+    assert replaced.view_revision == 2
+    assert _select(replaced, request_id=view.request_id)["disposition"] == "conflict"
+    directory = projection.node_id_by_row_id["3"]
+    assert _select(replaced, directory)["disposition"] == "noop"
+
+
+def test_replacement_retains_checked_unchecked_and_missing_rows_but_drops_removed_ids():
+    rows = (_row("1", "checked.txt"), _row("2", "unchecked.txt"),
+            _row("3", "removed.txt"), _row("4", "missing.txt", presence=InventoryPresence.MISSING))
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, rows), r"C:\root", True, 3, 1,
+        selected_row_ids=frozenset({"1", "3", "4"}))
+    projection = build_inventory_projection(1, (rows[0], rows[1], rows[3], _row("5", "new.txt")))
+    replaced = view.replacement("f" * 32, projection, view.root_path, True, 3, 1,
+        scan_scope=("location", None))
+    assert replaced.selected_row_ids == frozenset({"1", "4"})
+    assert {row["row_id"]: row["selection"] for row in replaced.window(
+        expected_revision=replaced.view_revision, offset=0, limit=256)["rows"]} == {
+        "1": "all", "2": "none", "4": "all", "5": "none",
+    }
+
+
+def test_initial_selection_survives_filtered_offwindow_replacement():
+    projection = build_inventory_projection(1, (
+        _row(str(i), rf"folder\{i:03}.txt") for i in range(300)))
+    all_files = frozenset(projection.node_id_by_row_id)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", True, 300, 0,
+        selected_row_ids=all_files)
+    _update(view, search_query="299.txt")
+    fresh = view.replacement("f" * 32, projection, view.root_path, True, 300, 0,
+        scan_scope=("location", None))
+    assert fresh.selected_row_ids == all_files
+    assert fresh.summary()["selected_file_count"] == 300
+    assert fresh.summary()["hidden_selected_file_count"] == 299
+    assert fresh.summary()["selection"] == "all"
+    same_scan = fresh.replacement("e" * 32, projection, view.root_path, True, 300, 0,
+        scan_scope=("selection", None))
+    assert same_scan.selected_row_ids == all_files
+
+
+def test_inventory_highlight_ranges_cross_windows_and_keep_checkbox_membership_separate():
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (_row(str(i), rf"folder\{i:03}.txt") for i in range(300))),
+        r"C:\root", True, 300, 0)
+    first = view.window(expected_revision=0, offset=0, limit=256)["rows"][1]
+    last = view.window(expected_revision=0, offset=280, limit=256)["rows"][-1]
+    def highlight(gesture, node_id=None, **changes):
+        values = dict(expected_view_revision=view.view_revision,
+            expected_highlight_revision=view.highlight_revision, gesture=gesture, node_id=node_id)
+        return view.mutate_highlight(**(values | changes))
+    highlight("replace", first["node_id"])
+    highlight("extend", last["node_id"])
+    assert view.summary()["highlighted_count"] == 300
+    assert view.summary()["selected_file_count"] == 0
+    assert all(row["highlighted"] for row in view.window(expected_revision=0, offset=280, limit=256)["rows"])
+    stale = view.set_highlighted_selection(request_id=view.request_id, expected_revision=0,
+        expected_highlight_revision=1, selected=True)
+    assert stale["disposition"] == "conflict" and not view.selected_row_ids
+    selected = view.set_highlighted_selection(request_id=view.request_id, expected_revision=0,
+        expected_highlight_revision=2, selected=True)
+    assert selected["selected_file_count"] == 300 and selected["highlighted_count"] == 300
+    assert highlight("toggle", first["node_id"], expected_view_revision=0)["disposition"] == "conflict"
+    highlight("toggle", first["node_id"])
+    assert view.summary()["highlighted_count"] == 299
+    highlight("add-range", first["node_id"])
+    assert view.summary()["highlighted_count"] == 300
+    highlight("move_up_extend")
+    assert view.summary()["highlight_focus_visible_index"] == 0
+    _update(view, sort_column=PlanSortColumn.FILENAME, sort_direction=SortDirection.DESCENDING)
+    assert view.summary()["highlighted_count"] == 2
+    _update(view, search_query="299.txt")
+    assert view.summary()["highlighted_count"] == 0
+    assert view.summary()["hidden_selected_file_count"] == 299
+    assert _select(view, selected=False)["selected_file_count"] == 299
+
+
+def test_inventory_multi_highlight_does_not_expand_folder_but_single_folder_does():
+    view = _view()
+    folder = view.projection.nodes[1]
+    leaf = view.projection.node_for_id(view.projection.node_id_by_row_id["2"])
+    for node in (folder, leaf):
+        view.mutate_highlight(expected_view_revision=0, expected_highlight_revision=view.highlight_revision,
+            gesture="replace" if node is folder else "toggle", node_id=node.node_id)
+    _update(view, collapse_node_id=folder.node_id, collapsed=True)
+    assert view.summary()["highlighted_count"] == 2
+    result = view.set_highlighted_selection(request_id=view.request_id, expected_revision=1,
+        expected_highlight_revision=2, selected=True)
+    assert result["selected_file_count"] == 1 and view.selected_row_ids == frozenset({"2"})
+    assert view.window(expected_revision=view.view_revision, offset=0, limit=256)["rows"][0]["selection"] == "partial"
+    _select(view, node_id=folder.node_id)
+    assert view.selected_row_ids == frozenset({"1", "2"})
+    view.set_highlighted_selection(request_id=view.request_id, expected_revision=view.view_revision,
+        expected_highlight_revision=view.highlight_revision, selected=False)
+    assert view.selected_row_ids == frozenset({"1"}), "unchecking the range preserves other descendants"
+    view.mutate_highlight(expected_view_revision=view.view_revision,
+        expected_highlight_revision=view.highlight_revision, gesture="replace", node_id=folder.node_id)
+    for selected, expected in ((True, frozenset({"1", "2"})), (False, frozenset())):
+        view.set_highlighted_selection(request_id=view.request_id, expected_revision=view.view_revision,
+            expected_highlight_revision=view.highlight_revision, selected=selected)
+        assert view.selected_row_ids == expected
+        assert view.window(expected_revision=view.view_revision, offset=0, limit=256)["rows"][0]["selection"] == ("all" if selected else "none")
+    replaced = view.replacement("f" * 32, view.projection, view.root_path, True, 2, 0,
+        scan_scope=("location", None))
+    assert replaced.highlighted_node_ids == view.highlighted_node_ids
+    assert replaced.highlight_focus_node_id == folder.node_id
+    assert replaced.highlight_anchor_node_id == folder.node_id
+    assert replaced.selected_row_ids == view.selected_row_ids
+
+
+def test_inventory_replacement_prunes_missing_highlights_and_rejects_old_gestures():
+    view = _view()
+    first, second = (view.projection.node_id_by_row_id[key] for key in ("1", "2"))
+    for gesture, node_id in (("replace", first), ("toggle", second)):
+        view.mutate_highlight(expected_view_revision=0,
+            expected_highlight_revision=view.highlight_revision, gesture=gesture, node_id=node_id)
+    projection = build_inventory_projection(1, (_row("1", r"a\z.txt"),))
+    replaced = view.replacement("f" * 32, projection, view.root_path, True, 1, 0,
+        scan_scope=("location", None))
+    assert replaced.highlighted_node_ids == frozenset({first})
+    assert replaced.highlight_anchor_node_id == first
+    assert replaced.highlight_focus_node_id is None
+    assert replaced.mutate_highlight(expected_view_revision=0,
+        expected_highlight_revision=view.highlight_revision, gesture="replace",
+        node_id=first)["disposition"] == "conflict"
+    _update(replaced, search_query="z.txt")
+    assert not replaced.highlighted_node_ids
+
+
+def test_inventory_replacement_retains_suppressed_identity_without_visible_focus():
+    view = _view()
+    _update(view, filters=frozenset({"present"}))
+    node_id = view.projection.node_id_by_row_id["1"]
+    view.mutate_highlight(expected_view_revision=view.view_revision,
+        expected_highlight_revision=0, gesture="replace", node_id=node_id)
+    projection = build_inventory_projection(1, (
+        _row("1", r"a\z.txt", presence=InventoryPresence.MISSING),))
+    replaced = view.replacement("f" * 32, projection, view.root_path, True, 0, 1,
+        scan_scope=("location", None))
+    assert replaced.highlighted_node_ids == frozenset({node_id})
+    assert replaced.highlight_focus_node_id == node_id
+    assert replaced.summary()["highlight_focus_visible_index"] is None
+    assert not replaced.window(expected_revision=replaced.view_revision, offset=0, limit=256)["rows"]
+
+
+def test_ledger_publication_preserves_absent_scan_provenance_through_gestures_and_replacement():
+    previous = _view()
+    view = InventoryReviewState(previous.task_id, previous.request_id, previous.projection,
+        previous.root_path, None, None, None, scan_scope=None)
+    _select(view)
+    view.update(expected_revision=view.view_revision, search_query="hidden", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None)
+    replaced = view.replacement(view.request_id, view.projection, view.root_path,
+        None, None, None, scan_scope=None)
+    assert replaced.selected_row_ids == view.selected_row_ids
+    assert replaced.search_query == "hidden" and replaced.view_revision == view.view_revision + 1
+    assert all(replaced.summary()[key] is None for key in (
+        "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count"))
+
+
+def test_selection_large_folder_does_not_rederive_or_rescan_per_window(monkeypatch):
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (_row(str(i + 1), rf"folder\{i}.txt") for i in range(120_000))),
+        r"C:\root", True, 120_000, 0)
+    folder = view.projection.nodes[1]
+    assert _select(view, folder.node_id)["selected_file_count"] == 120_000
+    scope = view._view.scope
+    def refuse(*args, **kwargs):
+        raise AssertionError("window must use retained selection prefixes")
+    monkeypatch.setattr(InventoryReviewState, "_scope", refuse)
+    monkeypatch.setattr(InventoryReviewState, "_derive", refuse)
+    assert view.window(expected_revision=1, offset=119_745, limit=256)["rows"][-1]["selection"] == "all"
+    assert view.summary()["selection"] == "all" and view._view.scope is scope
+
+
+def test_complete_view_of_incomplete_scan_keeps_warnings_ack_hiding_and_rollups():
+    view = _view()
+    rows = view.window(expected_revision=0, offset=0, limit=256)["rows"]
+    assert [row["display"] for row in rows] == ["a", "b.txt", "z.txt", "access_denied: unreadable"]
+    assert rows[-1]["row_kind"] == "notice" and rows[-1]["row_id"] is None
+    assert view.summary()["scan_complete"] is False
+    rollup = view.summary()["rollup"]
+    assert rollup["domain_count"] == 3 and rollup["acknowledged"] == 1
+    _update(view, filters=frozenset({"acknowledged"}))
+    assert [row["row_id"] for row in view.window(expected_revision=1, offset=0, limit=256)["rows"]] == ["3"]
+    assert view.summary()["rollup"] == rollup
+
+
+def test_search_collapse_sort_reset_and_exact_generic_row_frame():
+    view = _view()
+    folder_id = view.projection.nodes[view.projection.position_by_path_key["A"]].node_id
+    _update(view, sort_column=PlanSortColumn.SIZE, sort_direction=SortDirection.DESCENDING)
+    rows = view.window(expected_revision=1, offset=0, limit=256)["rows"]
+    assert [row["row_id"] for row in rows[1:3]] == ["1", "2"]
+    assert rows[0]["depth"] == 0 and rows[0]["parent_visible_index"] is None
+    assert rows[0]["first_child_visible_index"] == 1
+    assert rows[1]["parent_visible_index"] == 0 and rows[1]["position_in_set"] == 1
+    _update(view, collapse_node_id=folder_id, collapsed=True)
+    assert view.window(expected_revision=2, offset=0, limit=256)["rows"][0]["expanded"] is False
+    _update(view, search_query="b.txt", collapse_node_id=folder_id, collapsed=False,
+            sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING)
+    assert [row["row_id"] for row in view.window(expected_revision=3, offset=0, limit=256)["rows"]] == [None, "2"]
+    assert view.window(expected_revision=2, offset=0, limit=256)["disposition"] == "conflict"
+
+
+def test_windows_reuse_sequence_and_failed_update_retains_complete_view(monkeypatch):
+    view = _view()
+    previous = view.summary()
+    sequence = view._view.visible
+    def refuse(*args, **kwargs):
+        raise ValueError("derivation refused")
+    monkeypatch.setattr(review_module, "_derive_visible_sequence_from_validated", refuse)
+    for offset in range(5):
+        assert len(view.window(expected_revision=0, offset=offset, limit=1)["rows"]) <= 1
+    with pytest.raises(ValueError, match="refused"):
+        _update(view, search_query="new")
+    assert view.summary() == previous and view._view.visible is sequence
+    assert _update(view)["disposition"] == "noop"
+    with pytest.raises(ValueError, match="256"):
+        view.window(expected_revision=0, offset=0, limit=257)
+
+
+def test_inventory_sort_and_collapse_reuse_complete_matching_scope(monkeypatch):
+    view = _view()
+    _select(view)
+    scope = view._view.scope
+    membership = view.selected_row_ids
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("sort and collapse cannot change matching selection scope")
+
+    monkeypatch.setattr(InventoryReviewState, "_scope", refuse)
+    _update(view, sort_column=PlanSortColumn.SIZE, sort_direction=SortDirection.DESCENDING,
+            collapse_node_id=view.projection.nodes[1].node_id, collapsed=True)
+
+    assert view._view.scope is scope and view.selected_row_ids == membership
+    assert view.summary()["selected_file_count"] == 2
+    assert view.summary()["scope_selected_file_count"] == 2
+    assert _update(view)["disposition"] == "noop"
+
+
+@pytest.mark.parametrize("failure", ["scope", "highlight_revision"])
+def test_inventory_failed_query_preserves_complete_highlighted_view(monkeypatch, failure):
+    view = _view()
+    _select(view)
+    view.mutate_highlight(expected_view_revision=view.view_revision, expected_highlight_revision=0,
+        gesture="replace", node_id=view.projection.nodes[1].node_id)
+    if failure == "highlight_revision":
+        view.highlight_revision = MAX_JAVASCRIPT_SAFE_INTEGER
+    else:
+        def refuse(*_args, **_kwargs):
+            raise RuntimeError("scope refused")
+        monkeypatch.setattr(InventoryReviewState, "_scope", refuse)
+    before, cache = view.summary(), view._view
+    window = view.window(expected_revision=1, offset=0, limit=256)
+
+    with pytest.raises(OverflowError if failure == "highlight_revision" else RuntimeError):
+        _update(view, search_query="b.txt")
+
+    assert view._view is cache and view.summary() == before
+    assert view.window(expected_revision=1, offset=0, limit=256) == window
+
+
+def test_inventory_failed_selection_keeps_membership_and_cached_view(monkeypatch):
+    view = _view()
+    before, cache = view.summary(), view._view
+
+    def refuse(*_args, **_kwargs):
+        raise RuntimeError("scope refused")
+
+    monkeypatch.setattr(InventoryReviewState, "_scope", refuse)
+    with pytest.raises(RuntimeError, match="scope refused"):
+        _select(view)
+
+    assert not view.selected_row_ids
+    assert view._view is cache and view.summary() == before
+
+
+def test_empty_search_has_no_synthetic_ancestors_and_warning_cannot_collapse():
+    view = _view()
+    _update(view, search_query="no match")
+    assert view.window(expected_revision=1, offset=0, limit=256)["total"] == 0
+    warning = next(node for node in view.projection.nodes if node.warning)
+    with pytest.raises(ValueError, match="folders"):
+        _update(view, collapse_node_id=warning.node_id, collapsed=True)
+    assert view.view_revision == 1
+
+
+def test_acknowledged_folder_remains_only_as_required_ancestor_context():
+    folder = _row("1", "folder", entry_kind=EntryKind.DIRECTORY,
+                  observed=replace(file_stat(), kind=EntryKind.DIRECTORY),
+                  presence=InventoryPresence.MISSING, acknowledged_at=NOW)
+    child = _row("2", r"folder\missing.txt", presence=InventoryPresence.MISSING)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (folder, child)), r"C:\root", True, 0, 1)
+    _update(view, filters=frozenset({"missing"}))
+    rows = view.window(expected_revision=1, offset=0, limit=256)["rows"]
+    assert [(row["row_id"], row["acknowledged"]) for row in rows] == [("1", True), ("2", False)]
+    _update(view, search_query="no matching descendant")
+    assert view.window(expected_revision=2, offset=0, limit=256)["rows"] == []
+
+
+@pytest.mark.parametrize("state", ["present", "missing", "modified", "reappeared", "mismatched"])
+def test_window_keeps_recorded_checksum_independent_of_observation_state(state):
+    from namisync.core.integrity import VerificationInvalidation, VerificationInvalidationReason
+    stat = file_stat()
+    changes = {"attestation": attestation(stat)}
+    if state == "missing":
+        changes.update(presence=InventoryPresence.MISSING, observed=None)
+    elif state in {"modified", "mismatched"}:
+        changes["invalidation"] = VerificationInvalidation(NOW,
+            VerificationInvalidationReason.METADATA_DRIFT if state == "modified"
+            else VerificationInvalidationReason.HASH_MISMATCH)
+    elif state == "reappeared":
+        changes["reappeared_at"] = NOW
+    row = _row("1", r"folder\subject.txt", **changes)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (row, _row("2", "unverified.txt")), (
+            ScanWarning(ScanWarningCode.ACCESS_DENIED, "unreadable", "read failed"),)),
+        r"C:\root", True, 2, 0)
+    rows = view.window(expected_revision=0, offset=0, limit=256)["rows"]
+    assert next(item for item in rows if item["row_id"] == "1")["recorded_checksum"] == row.attestation.content.digest.hex()
+    assert all(item["recorded_checksum"] is None for item in rows if item["row_id"] != "1")
+
+
+def test_compact_windows_keep_complete_path_search_and_bound_unicode_labels():
+    path = "ancestor\\" + "😀" * 1000 + ".txt"
+    warning = ScanWarning(ScanWarningCode.SCALAR_UNREPRESENTABLE, path, "\x01" * 1024)
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32,
+        build_inventory_projection(1, (_row("1", path),), (warning,)), r"C:\root", False, 1, 0)
+    _update(view, search_query="ancestor")
+    rows = view.window(expected_revision=1, offset=0, limit=256)["rows"]
+    assert any(row["row_id"] == "1" for row in rows)
+    assert all(len(row["display"].encode("utf-16-le")) // 2 <= 300 for row in rows)
+    notice = next(row for row in rows if row["warning"])
+    assert notice["display"].startswith("scalar_unrepresentable: …")
+    assert set(notice["warning"]) == {"code", "detail"}
+    assert len(notice["warning"]["detail"].encode("utf-16-le")) // 2 == 300
+
+
+def test_complete_inventory_256_row_envelope_has_margin_under_response_wall():
+    import json
+    from namisync.interfaces.web.bridge import snapshot_bridge_response_result
+
+    # This valid projection exercises the former repeated-full-path failure.
+    prefix = "\\".join(["文" * 250] * 100)
+    paths = [prefix + rf"\item-{index:03}.txt" for index in range(256)]
+    projection = build_inventory_projection(1, (), tuple(
+        ScanWarning(ScanWarningCode.SCALAR_UNREPRESENTABLE, path, "\x01" * 1024) for path in paths))
+    view = InventoryReviewState("task-" + "1" * 32, "2" * 32, projection, r"C:\root", False, 0, 0)
+    actual = view.window(expected_revision=0, offset=0, limit=256)
+    assert len(actual["rows"]) == 256
+    snapshot_bridge_response_result(actual, "3" * 32)
+
+    # A conservative all-fields row upper bound also covers ledger rows and
+    # synthetic folders. Control escaping is six bytes per UTF-16 unit; IDs
+    # stay 37 ASCII bytes (BLAKE2b), SQLite ids/scalars stay <=19 decimal bytes,
+    # and view/frame/count integers are <= the 16-digit JavaScript safe maximum.
+    row = _view().window(expected_revision=0, offset=1, limit=1)["rows"][0]
+    assert set(row) == {"node_id", "display", "depth", "is_container", "visible_index",
+        "parent_visible_index", "first_child_visible_index", "position_in_set", "set_size", "expanded",
+        "row_kind", "row_id", "presence", "verification_state", "has_baseline", "recorded_checksum",
+        "acknowledged", "reappeared", "size", "mtime_ns", "rollup", "warning", "selectable", "selection", "highlighted", "recall"}
+    assert set(row["rollup"]) == {"domain_count", "file_count", "present", "unverified", "verified", "modified",
+        "reappeared", "unsupported", "missing", "mismatched", "acknowledged", "size", "size_overflow", "size_partial"}
+    assert set(actual) == {"disposition", "view_revision", "highlight_revision", "offset", "total", "rows"}
+    assert set(actual["rows"][0]["warning"]) == {"code", "detail"}
+    row.update(display="\x01" * 300, row_id="9" * 19, recorded_checksum="f" * 32,
+               size="9" * 19, mtime_ns="9" * 19, presence="unsupported",
+               verification_state="unverified", selection="partial",
+               warning={"code": "scalar_unrepresentable", "detail": "\x01" * 300})
+    row["rollup"] = {key: "9" * 19 if key == "size" else False if type(value) is bool else 9007199254740991
+                     for key, value in row["rollup"].items()}
+    for key, value in tuple(row.items()):
+        if type(value) is int or key in {"parent_visible_index", "first_child_visible_index"}:
+            row[key] = 9007199254740991
+        elif type(value) is bool or key == "expanded":
+            row[key] = False
+    bounded = {**actual, "view_revision": 9007199254740991, "offset": 9007199254740991,
+               "total": 9007199254740991, "rows": [row] * 256}
+    envelope = {"schema_version": 1, "request_id": "3" * 32, "ok": True, "result": bounded}
+    size = len(json.dumps(envelope, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    assert size < 2 * 1024 * 1024  # Derived margin, not a new runtime wall.
+    snapshot_bridge_response_result(bounded, "3" * 32)

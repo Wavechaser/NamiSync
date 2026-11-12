@@ -1,0 +1,1019 @@
+# NamiSync Threat, Fault, and Tolerance Model
+
+This document is the normative security, safety, and failure-tolerance policy.
+It defines the environment in which NamiSync's guarantees hold, the outcomes
+that are forbidden there, the degradations that are acceptable, and the tests
+used to decide whether a new finding requires engineering work.
+
+`BUGS.md` records concrete defects and their residual technical boundaries.
+`FEATURES.md` records product behavior. `ARCHITECTURE.md` records the durable
+contracts that implement that behavior. None of those documents accepts a
+residual risk merely by describing it; acceptance and exclusion are decisions
+owned here.
+
+The product contract determines which outcomes are forbidden. The supported-
+environment model determines when those guarantees apply. The tolerance policy
+determines how NamiSync may degrade when it cannot complete a guarantee.
+NamiSync therefore owes **authorization, containment, recoverability, bounded
+operation, and truthful evidence**. It does not promise universal mutual
+exclusion with external software or protection from a compromised same-user
+trusted computing base.
+
+---
+
+## 1. Contract, assets, and hard walls
+
+The product thesis is:
+
+> reviewed plan -> execution matches the review -> durable evidence truthfully
+> describes the effects that occurred
+
+Atomic publication, fresh preflight, selection-bound commitment, effect
+settlement, and separate result axes exist to preserve that chain. Evidence is
+truthful at the observation or effect time it records; an external writer may
+make it stale immediately afterward. "Never wrong, only behind" is a temporal
+truth rule, not a claim that the filesystem remains frozen.
+
+### 1.1 Protected assets and properties
+
+The protected assets are:
+
+- **user data** inside reviewed source and target roots, including recoverable
+  versions NamiSync intentionally moves to owned trash;
+- **mutation authority** derived from reviewed roots, plan, selection, and
+  current root/volume evidence;
+- **execution integrity** connecting the reviewed plan to the operations that
+  actually run;
+- **filesystem, integrity, ledger, and audit truth**, kept as independent axes;
+- **host availability and bounded resources** at documented valid scale; and
+- **local operational privacy** against accidental interface or diagnostic
+  disclosure, without a confidentiality claim against the same Windows user,
+  administrators, backups, or screen access.
+
+### 1.2 Hard walls under the supported baseline
+
+NamiSync must not:
+
+1. mutate managed user data without the exact reviewed plan and selection;
+2. mutate outside the reviewed roots or an exact owned-artifact location;
+3. cause silent, permanent loss of file bytes;
+4. publish partial content at a live destination;
+5. assert false success, integrity, recording, audit, or durability evidence;
+6. infer destructive absence from an incomplete scan;
+7. let untrusted data become executable content, command authority, URL
+   authority, presentation structure, or filesystem authority;
+8. let the GUI commit a materially different plan or selection from the
+   backend-bound view; or
+9. admit unbounded externally triggered work at documented valid scale.
+
+Probability does not excuse a hard-wall violation. Convergence is not a remedy
+after irreversible loss, and another process having similar authority does not
+excuse NamiSync crossing a hard wall during supported use.
+
+### 1.3 Stage 6 scalar and retention walls
+
+The scalar/native-identity, source-population, reliable-result-occurrence, and
+bridge-handler walls named below are active. The former complete retained-
+graph and task-artifact byte targets were never production-enforced, had no
+finite derivation domain, and are retired by the initial simplification run;
+they confer no production guarantee. The active task and response-retention
+rules below are exact count bounds only; they introduce no aggregate byte or
+whole-runtime memory guarantee. `BRIDGE.md` owns current external protocol contracts,
+exact wire shapes, and active refusal schemas; other active documents point
+here instead of reproducing these limits.
+
+- Every durable or externally presented byte quantity and filesystem
+  nanosecond is in `0..9_223_372_036_854_775_807`. Typed relational values use
+  checked SQLite `INTEGER`; bridge values use canonical unsigned-decimal text.
+  Sequence numbers, bounded counts, offsets, and revisions remain
+  JavaScript-safe integers. Native file indices are an opaque exception: their
+  full Windows 128-bit value is canonical unsigned-decimal `TEXT`, never an
+  arithmetic scalar or JSON number.
+- Source primitives are admitted before they enter scans, plans, task roots,
+  persistence projections, or codec projections. Complete paths use the
+  Windows 32,767-UTF-16-unit ceiling; native volume label/filesystem buffers
+  retain at most 260 units and native volume paths at most 32,767. Optional
+  scan/resolution diagnostics retain a complete value of at most 1,024 UTF-8
+  bytes or omit the whole value. Filters accept an exact tuple of at most 64
+  nonempty valid-Unicode spellings, each at most 1,024 UTF-8 bytes and together
+  at most 16,384 bytes, charged before slash normalization, deduplication, or
+  sorting. One scan scope charges at most 150,000 supplied selected/subtree
+  entries before canonical maps or sets are allocated. Root ids are nonempty
+  valid Unicode and use a mechanically derived byte ceiling: the request-id
+  maximum plus the UTF-8 lengths of the longest inventory namespace/suffix and
+  the decimal width of `MAX_SAFE_INTEGER`.
+- Verifier read chunks are exact integers in `1..4,194,304`. The Windows reader
+  may simultaneously own one aligned native buffer and one Python `bytes`
+  materialization at that maximum; a runtime default is not accepted as a
+  substitute for this public component bound.
+- Destination-policy name/version and optional assignment annotations have no
+  narrower production grammar yet. Constructors and projections enforce only
+  the plan-domain ceiling per value. No aggregate retained-graph byte guarantee
+  is claimed. This boundary is not an empirical source-primitive maximum.
+- A plan-capacity refusal requires the private exact plan-limit signal carrying
+  the active same-run admission token and an exact PLAN fact. Plan and inventory
+  use different private signal types and tokens; workflow copies the fact,
+  retires the raw signal graph, and saves no plan. A tokenless, different-run,
+  or wrong-scope exact signal fails loudly, while ordinary lookalike exceptions
+  remain ordinary failures. Reflective token extraction or mutation is an
+  unsupported rung-4 fault under §2.2.
+- Reachability determines whether the signed-domain guard is a product branch
+  or an assertion; the two are not presented as equivalent risks:
+
+  | Value or calculation | Reachability on supported NTFS/ReFS | Required treatment |
+  | --- | --- | --- |
+  | Native file index | Reachable through the full unsigned 128-bit Windows/Python domain | Keep canonical unsigned-decimal `TEXT` from one complete `FILE_ID_128` adapter and compare only as opaque identity; when the complete identifier is unavailable, record no identity rather than coerce it into `Scalar64`, a JSON number, legacy 64-bit handle fields, or SQLite arithmetic. |
+  | Filesystem timestamp converted to Unix nanoseconds | Reachable | Reject the stat before ledger construction when it is negative or above the signed domain; never clamp a preservable timestamp. |
+  | One file size, volume capacity, free-space observation, or `free + reclaimable` | Unreachable under the supported filesystem maxima | Validate at the native boundary and assertion-check the sum. Unavailable probes remain typed unavailable, but scalar overflow is not a user-facing capacity state or dedicated preflight refusal. |
+  | Aggregate logical bytes across admitted rows | Reachable because sparse or cloned files can make apparent-size totals exceed physical volume capacity | Use checked accumulation. Refuse an unrepresentable plan before publication with the plan/domain `logical-bytes` review-limit witness; expose the inventory rollup's existing null-plus-overflow witness. |
+  | Static Plan presentation folder totals | Reachable; includes no-op, removal and blocked facts outside execution-space admission | Accumulate exact retained file facts in Python; publish null with an explicit overflow note above MAX_SIGNED_64. Containing folders also report overflow. This display-only unavailable value does not change plan admission, execution counters or bridge scalar validation. |
+  | Post-admission byte counters, bounded counts, and retention-budget arithmetic | Unreachable after their owning aggregate/capacity admission | Keep checked assertions that fail closed as an internal invariant violation; do not add ordinary overflow UX or a second refusal vocabulary. |
+  | Bridge or persistence scalar supplied by an untrusted/corrupt producer | Reachable at the trust boundary | Strictly reject Boolean, signed, noncanonical, or above-domain values before state, cursor, queue, or ledger mutation. |
+
+  The platform basis is explicit: Microsoft's [ReFS limits and feature
+  table](https://learn.microsoft.com/en-us/windows-server/storage/refs/refs-overview)
+  caps one file and one volume at 35 PB while supporting sparse files and block
+  cloning; Windows [`FILETIME`](https://learn.microsoft.com/en-us/windows/win32/sysinfo/file-times)
+  is a 64-bit 100-nanosecond value, and
+  [`SYSTEMTIME`](https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-systemtime)
+  accepts years through 30827. Python 3.13 documents that Windows
+  [`st_ino` may reach 128 bits](https://docs.python.org/3.13/library/os.html#os.stat_result).
+  CPython 3.13 derives that integer from the low/high halves of Windows
+  [`FILE_ID_128`](https://github.com/python/cpython/blob/3.13/Python/fileutils.c#L1014-L1049),
+  and Windows defines the file identifier plus volume serial as the comparison
+  identity in
+  [`FILE_ID_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info).
+  Therefore individual size/capacity overflow is not reachable, aggregate
+  apparent-size overflow is, timestamp conversion can exceed signed Unix
+  nanoseconds, and file identity must stay outside the scalar domain. Values are
+  never clamped, wrapped, or narrowed.
+
+The M1 performance envelope is 100,000 operations plus 20,000 supporting
+items in the reference Plan workload. Plan, inventory and standalone integrity
+retain their 120,000-item support target. Larger populations may proceed on
+a best-effort basis. The hard row ceiling is 150,000 per applicable population,
+giving 25% headroom. Each owner still defines what it counts and checks its
+independent byte, input and retention limits. This policy sets capacity; time
+and memory acceptance require the evidence in §7.
+
+The following population and process-live admission walls are active now:
+
+- Planning and inventory each admit their independent raw domain and
+  informational source populations at 150,000 rows, before normalization,
+  omission, sorting, indexing, or retained-artifact construction. The first
+  excess is classified by its owning workflow and no partial artifact is
+  published. Preflight derives source, target, prior-target and parent
+  observations from the admitted plan operations. It validates the observations
+  against that scope and charges their retained slots to the artifact byte limit.
+- A standalone-integrity candidate admits at most 150,000 unique inventory-
+  domain rows before selection retention or verifier start. This count is
+  independent of any inventory-tree population.
+- One dispatcher session admits at most 300,000 ordered reliable result-item
+  occurrences across its complete process-live paused/resumed lifetime. A
+  repeated reference remains a retained occurrence. Admission precedes event
+  publication, audit observation, and accumulator mutation; an excess producer
+  result is an internal failure, not truncation or a review-limit refusal.
+- One reliable event admits at most 1,048,576 canonical UTF-8 bytes before
+  dispatcher sequence, replay, subscriber, or audit mutation.
+  `canonical_event_bytes` is the named production enforcer; removing a semantic
+  self-validation pass must not remove or move this byte check after mutation.
+- The bridge admits at most 64 exchanges before invoking command work. Direct
+  calls and small asynchronous native commands share this count. An async
+  exchange adds at most one command worker and one completion, with no pending
+  work queue; its slot remains charged through both worker exits and both
+  delivery settlements. This count wall does not establish whole-runtime
+  thread or memory acceptance or a task/artifact containment model.
+- The application admits at most 48 active desktop task effects. The
+  `TaskLifecycle` count check runs before task publication, delivery-factory
+  invocation, workflow work, observer adoption, or dispatcher admission. A
+  same-command joiner replays the one admitted effect; a distinct 49th task is
+  refused without beginning lower work.
+- The adapter retains at most 48 start-response entries, which retire with their
+  successful tasks or failed participants, and 48 close-response tombstones,
+  which use least-recently-used eviction. Those transport caches own response
+  replay only. Retirement or eviction cannot retire or revive application
+  effects, associations, observer subscriptions, or dispatcher sessions.
+
+The retired complete-graph figures, task-artifact byte model, 4,096-receipt
+design, projection-generation count, and phase-ahead graph reservation are not
+active walls. They may remain historical design context, but they are not
+acceptance evidence and may not be revived by reference. The active 48-count
+rules above do not revive any byte claim. Future resource acceptance remains scoped to the SH-G-15 policy and evidence requirements below.
+
+---
+
+## 2. Supported baseline and threat ceiling
+
+Adversaries and failures are classified by capability and consequence, not by
+guessed intent. An editor, cloud client, test harness, confused user, and
+malicious process can produce the same filesystem transition.
+
+### 2.1 Supported environment and trusted computing base
+
+The M1 baseline is a headed or headless, standard-integrity process for one
+authorized Windows user, using supported local Windows filesystem semantics.
+The trusted computing base includes installed NamiSync Python and packaged web
+assets, CPython and pinned Python dependencies, WebView2 and its native host
+stack when the desktop is used, Windows, and the documented behavior of the
+filesystem primitives on which an operation relies.
+
+Validation and custody follow four distinct rungs:
+
+| Rung | Scope | Obligation | Violation |
+| --- | --- | --- | --- |
+| **1 — external** | Filesystem and persisted state; interface-adapter ingress, currently the bridge and CLI and equally any future API; user-supplied values | Treat as adversarial; validate and bound at ingress. | Typed product refusal or contained failure. |
+| **2 — reentrant** | Reentrant or extension-owned callbacks | Commit local reliable state before the call and hand out only immutable values. | Ordering, replay, or retention defect. |
+| **3 — internal** | NamiSync-owned modules inside the trusted computing base | Treat as trusted but fallible; validate once at the boundary-owning module's public return or other named ownership transfer, then trust immutable base values. | Loud internal invariant failure, never a user refusal path. |
+| **4 — reflective/forged** | Reflective mutation and forged private internal exceptions or signals | Unsupported unless promoted to a named fault class under §2.2. | Programming or trusted-base defect outside the product fault model. |
+
+Loud failure need not block unrelated authoritative delivery. A desktop
+progress-comparison invariant failure is confined to presentation: record a
+bounded internal diagnostic, visibly mark inconsistent progress, and discard
+its estimates/comparisons while continuing reliable and terminal delivery.
+This is not a user refusal or repaired producer truth. Malformed values,
+identity/byte-bound failures and terminal-record contradictions remain strict;
+history and domain validation are unchanged. BRIDGE owns this narrow mechanism.
+
+Capacity and freshness are independent of this ladder. Trusted code can
+truthfully produce an excessive population, and the filesystem can change
+after valid evidence was created. Population admission therefore remains at
+every applicable rung. `RootAuthority` consumers admit under their own policies
+and either retain per-access admission or hold a local root with directory
+access and no delete sharing after full admission inside the acquired hold and
+native corroboration that its normalized DOS final path matches the logical
+root exactly, allowing drive-letter case alone. Failed or
+unavailable corroboration releases the hold and selects per-access admission,
+including aliases and unavailable final paths. A confirmed
+hold prevents rename/deletion but permits in-place attribute changes. Before
+each access that reuses admission, consumers query current held-handle attributes
+and refuse reparse or placeholder state; query failure cannot authorize access.
+The existing quiescence assumption applies between this check and use, just as
+it does for per-access pathname checks. The hold ends on pause, return, failure or
+cancellation. UNC, mapped network and unholdable roots retain the fallback;
+descendant and per-item guards remain. Root or ancestor rename/deletion and
+Safely Remove may fail with "in use" during the hold. Volume mount remapping and
+mount-point removal require administrator rights and remain outside the
+supported model. Exception-graph retirement is likewise a lifetime
+obligation, not a trust defense.
+
+Serialization belongs at a real process, browser, persistence, or filesystem
+boundary. Inside one process, a typed domain value that has crossed its owning
+constructor or named transfer is not converted to a wire form merely so the
+next trusted module can certify it again. A mutable value crossing ownership is
+detached by construction; detachment is not a new authority or adoption
+framework.
+
+Private exception or signal type identity is not provenance by itself. A plan
+or inventory review-limit signal may carry same-run freshness/correlation so a
+workflow cannot mistake stale work for its current admission. That role is not
+a defense against forged first-party values: reflective construction or token
+extraction remains unsupported rung 4. A tokenless or different-run exact same-
+domain signal continues to fail loudly because the token enforces freshness,
+not resistance to forged first-party values.
+
+The production document channel's atomic current-document send relies on the
+pinned WebView2 `PostWebMessageAsJson` call not synchronously re-entering a
+NamiSync acknowledgment, reload, or close callback before it returns. The host
+holds the channel gate across that native call so document replacement cannot
+win between the final epoch check and the send. Any observed synchronous
+re-entry reopens this premise and the document-custody model; a timeout is not
+treated as proof that the call returned.
+
+Package metadata declares only a Python 3.13 lower bound. It imposes no upper-
+version, implementation, build, GIL, allocator, or architecture admission, and
+does not by itself prove that every future interpreter satisfies the desktop
+dependencies or supported baseline. Exact runtime profiles recorded with
+benchmarks qualify those runs only. Any future representation-dependent
+production premise must land atomically with its owning model, constants,
+fixture, validator, and acceptance evidence rather than precede them as launch
+policy.
+
+The desktop host requires a standard medium-integrity Windows process token.
+It refuses launch before singleton activation and command exposure unless
+Windows confirms both medium integrity and a non-elevated token. Live
+application databases and browser state are supported only on local,
+non-cloud-synchronized storage.
+
+The authorized user establishes a root anchor through an interface path-
+admission flow — currently an explicit CLI path or native picker — and reviews
+the resulting mapping. Volume identity and filesystem type detect ordinary
+substitution; they do not resist deliberate spoofing by a higher-authority
+actor. Exact dependency pins establish tested behavior, not security-patch
+freshness, so release maintenance must separately require a security-supported
+runtime and dependency set.
+
+The following are untrusted inputs even when no adversary exists:
+
+- filenames, file bytes, metadata, directory shape, reparse state, and changes
+  observed between filesystem calls;
+- persisted database, settings, UI-state, and history values;
+- command-line arguments, bridge envelopes, opaque identifiers, and all values
+  rendered by the desktop; and
+- timing, cancellation, OS notifications, exceptions, and partial native-call
+  outcomes.
+
+`RootAuthority`, plan fingerprints, selection commitments, receipts, hashes,
+and opaque identifiers are consistency and anti-confusion evidence. They are
+not secret bearer tokens and do not authenticate against compromised
+same-principal code.
+
+### 2.2 Threat and fault classes
+
+- **Content author — adversarial at interpretation boundaries.** Anyone who
+  can hand the user a file — a download, archive, clone or attachment — authors
+  its names, bytes and metadata without local access. Wherever such values are
+  displayed or cross into bridge, URL, command, executable or filesystem
+  authority, treat them as adversarial and neutralize them structurally at that
+  boundary (hard wall 7, §4). On the filesystem side, names are ordinary input:
+  representability, length and case collisions are handled at observation.
+- **Structure author — ordinary input, not an adversary.** Links, reparse points,
+  placeholders, ACLs, directory shape and placement inside managed roots are
+  usually made by the user, their tools or sync clients, often unknowingly.
+  They must not produce link traversal out of a root, absence inferred from an
+  unreadable entry, or effects on a root or volume other than the reviewed one.
+  A preplaced structure needs no race, so timing never excuses it. Structures
+  crafted to evade those checks, and managed roots writable by another
+  principal or shared with other writers, are outside the supported baseline;
+  there NamiSync keeps only its catastrophe backstops (§2.5.2).
+- **Ordinary user and ambient faults — in scope for safe handling.** Mistakes,
+  stale gestures, access denial, sharing violations, disk exhaustion,
+  disconnects, process crashes, malformed state, and ordinary filesystem drift
+  must produce a bounded result described by the tolerance policy.
+- **Concurrent external writer — conditionally supported.** NamiSync detects
+  and refuses drift where its checks observe it. The full data-preservation
+  guarantee, however, requires managed roots to remain quiescent from
+  non-NamiSync mutation while execution is touching them. A writer that wins
+  after the final pathname or held-handle attribute guard is outside that full
+  guarantee.
+  Database admission distinguishes unowned artifact validation from live SQLite
+  ownership: cold probes preserve source bytes and refuse observed drift;
+  runtime-owned databases permit ordinary SQLite reads and recording while
+  checking identity, journal absence and the SQL contract at admission. Mutable
+  SHM read marks and legitimate WAL commits are not database corruption.
+  [DATABASE](DATABASE.md#runtime-reader-ownership-and-admission-diagnostics)
+  owns that connection lifetime; external schema mutation can still cause refusal.
+- **Same-principal hostile code — outside the security guarantee.** A process
+  or injected code already running with the user's authority can alter the same
+  files, databases, installed assets, process messages, or mutex namespace.
+  NamiSync does not claim to isolate secrets or data from it, but must not
+  amplify it into elevation, another user's authority, off-origin bridge
+  authority, or broader filesystem reach.
+- **Higher-authority compromise — outside the security guarantee.** An
+  administrator, compromised kernel or driver, lying filesystem, deliberately
+  violated atomic primitive, tampered runtime, or deliberate cryptographic or
+  non-cryptographic hash collision is outside the M1 model.
+
+Reflective mutation of first-party immutable values and extraction, copying, or
+mutation of opaque private admission tokens are not fault classes in this
+model. Promoting one requires a named entry in this section with a supported
+consequence bound and an explicit test tier. Without that entry there is no
+defense to implement; a test that writes through `object.__setattr__` or obtains
+an active private token exercises an unsupported programming/TCB fault. A
+tokenless private exact signal raised through an ordinary first-party module
+seam instead witnesses the supported rung-3 provenance failure above.
+
+XXH3-128 is accidental-corruption and consistency evidence, not adversarial
+authenticity. Unkeyed SHA-256 plan and history digests bind structure and detect
+ordinary drift; they do not authenticate records against same-principal code.
+
+### 2.3 User authorization boundary
+
+Before an accurate and complete review is explicitly committed, operator
+mistakes are in scope. The product owns safe defaults, exact display, selection
+integrity, stale-action refusal, and confirmation that cannot silently change
+meaning.
+
+After the trusted interface accurately presents the complete material effect
+and the user commits that exact plan and selection, a harmful choice is
+authorized intent rather than an attack. NamiSync must still provide the
+recoverability it promised, but it cannot infer regret or distinguish a poor
+choice from a deliberate one.
+
+### 2.4 Capability and safety tests
+
+The original capability test remains useful:
+
+> Does a proposed defense raise the capability required to cause the harm, or
+> does the actor already have a strictly easier path to the same harm?
+
+It prevents expensive security theater against an already compromised
+same-principal trusted base. It is not, by itself, a safety acceptance test.
+Every finding is decided with five questions:
+
+1. **Supported-assumption test.** Did it occur in the supported environment and
+   mode, including the applicable quiescence and filesystem preconditions?
+2. **Hard-wall test.** Did it cross any invariant in §1.2?
+3. **Amplification test.** Did NamiSync grant greater authority, reach,
+   persistence, or ambiguity than the actor already possessed?
+4. **Degradation test.** Is the maximum outcome bounded, visible, and
+   recoverable, or availability-only?
+5. **Proportionality test.** Is the trigger demonstrably plausible, and is the
+   remedy's scale proportional to its plausibility and damage (§2.5)?
+
+A supported-use hard-wall failure requires a fix even when the same user could
+cause similar harm by another route. The capability test decides the security
+ceiling; the other tests preserve product safety beneath it.
+
+### 2.5 Proportional defense
+
+A built defense must answer a **demonstrably plausible** trigger in supported
+use: a named way the harm actually arises, such as an ordinary mistake, a
+common tool or platform behavior, a field report, or a witness reproduced under
+supported assumptions. "It could happen", added confidence, theoretical
+completeness and symmetry with another guard are not triggers.
+
+The defense's scale — runtime cost, code, test and evidence burden,
+maintenance and user friction — must be proportional to the trigger's
+plausibility and the damage it can do. A rare but catastrophic trigger may
+justify a check that costs O(1) per run, reads an observation already taken, or
+adds one cheap query at a mutating effect. Heavier per-item or per-access work
+needs a probable trigger or a supported hard wall that no cheaper mechanism
+meets. Prefer the lowest sufficient rung of §5.4.
+
+NamiSync does not try to outsmart its users. The backend executes what the
+user reviewed and committed, including choices the user may later regret
+(§2.3, T4). It never judges whether a reviewed effect is wise, guesses intent,
+or applies heuristics about what the user "really" wants, and it builds no
+safety system around a setup the user chose. Helping users choose well —
+warnings, previews, defaults and confirmation — belongs to the interface
+layers as disclosure, not to backend refusal.
+
+This principle decides the supported baseline and the mechanism, never whether
+a supported-use hard-wall crossing needs a fix (§2.4). Existing defenses are
+not grandfathered: one that fails this test is retired or frozen by recording
+that decision here, which is a scope decision for the user.
+
+#### 2.5.1 Plan fidelity bound
+
+"Execution matches the review" is bounded by the plan, not by the world:
+
+1. **Reviewed facts only.** Compare only recorded facts the planner used to
+   choose that item's action: typically kind, existence, size, mtime and file
+   identity where the profile provides it, plus action-specific facts such as
+   managed attributes for a metadata update or link count for move detection.
+   Observed facts the planner did not use are not fidelity facts.
+2. **Once per effect.** One comparison immediately before each mutating effect,
+   whose observation serves everything that effect needs. Non-mutating steps
+   and repeated accesses within one effect do not re-prove it. An item may
+   contain several effects; later effects take their own observation. This
+   fidelity bound does not remove held-attribute checks before admission reuse
+   or per-access root admission where the approved hold cannot be reused.
+3. **Detection, not climbing.** A mismatch refuses or fails the item. Fidelity
+   alone never justifies handle-bound or handle-relative machinery.
+
+Any accurate refusal reason is acceptable. When several apply, NamiSync need
+not preserve which one wins; repeated work kept only to preserve refusal-reason
+precedence is not a defense.
+This relaxes refusal selection, not facts about publication, recovery artifacts,
+or recording, nor their settlement meaning.
+
+#### 2.5.2 Catastrophe backstops
+
+A backstop refuses only when carrying out the reviewed plan would produce
+effects other than the reviewed ones: effects outside the reviewed roots or on
+a different root, volume or object; effects that rely on an observation that
+could not be made; hidden effects the plan does not show; or a plan whose own
+effects would change its inputs. It never refuses a faithfully executable plan
+because the plan looks unwise.
+
+Backstops are a closed list. An entry must also be irreversible and broad
+(root or volume scale, or outside the reviewed roots), have a
+demonstrably plausible trigger, refuse rather than adapt, and cost no more
+than §2.5 allows a rare catastrophe. Adding one is a scope decision.
+
+| Backstop | How the effect would differ from the review | Plausible trigger |
+| --- | --- | --- |
+| Overlapping source and target roots | The plan's own effects change its inputs | Selecting a folder inside the other root |
+| Wrong root or volume | Effects land on a root or volume other than the reviewed one | A different drive takes the reviewed letter; cloned disks share a serial |
+| Root moved, deleted or converted during an invocation | Effects follow the root elsewhere or through a link | User or tool reorganizes folders mid-run |
+| Link traversal out of a root | Effects land outside the reviewed root | Profile compatibility junctions, pnpm, `mklink` relocations, old backups linking into `C:` |
+| Unreadable or incomplete observation treated as absent | Effects rely on an observation that was never made | Foreign-machine ACLs, access denial, enumeration errors |
+
+Cloud propagation is not a catastrophe merely because it happens remotely.
+Users explicitly choosing cloud-synchronized source or target folders may
+reasonably expect their provider's ordinary behavior; NamiSync does not second-
+guess that choice. Source reads may download content, and target additions,
+replacements and deletions may propagate through the provider. Hydration can be
+reversed by freeing local space; provider propagation of approved local changes
+does not make those changes unreviewed. This does not authorize effects outside
+the reviewed local scope or weaken root, link and observation guards.
+
+Plan review shows the actual local writes, replacements and deletions using the
+ordinary destructive-operation treatment. Cloud behavior is advisory, not
+special authorization for network activity. Recall information describes
+potential execution cost and availability; it cannot promise a transfer amount
+or that unmarked files are local. NamiSync completion means its local filesystem
+work succeeded, subject to the existing integrity and recording result axes; it
+does not certify upload completion or a verified remote copy. Provider-wide
+recall detection and a universal no-hydration scan guarantee remain M2 work.
+
+#### 2.5.3 Guard-family dispositions
+
+This table applies §2.5 to existing guard families. It sets target posture;
+[M1_PLAN](M1_PLAN.md) owns scheduling and delivery of any change.
+
+| Guard family | Owners | Disposition |
+| --- | --- | --- |
+| Overlap, wrong root/volume, link, unreadable-as-unknown | preflight, scanner, planner, root authority, executor, verifier | **Keep** as §2.5.2 backstops at observation and at the mutating effect. |
+| Exposed placeholder/reparse classification | scanner, root authority, preflight, executor, verifier | **Retain current refusals** as the implementation's supported-entry boundary, not a cloud-propagation catastrophe backstop. Hidden cloud markers can evade that classification; recall advisories do not broaden admitted entry types. |
+| Root identity during an invocation | root authority, executor, verifier, preflight | **Keep** the hold; **consolidate** duplicate admission within an effect where the hold permits reuse, retaining per-access held-attribute checks and fallback admission. |
+| Name representability and collisions | pathing core, scanner, planner | **Keep** at observation; **consolidate** repeated full-spelling revalidation of already-validated descendants. |
+| Hard links and duplicate identity | scanner, planner | **Keep** as warnings and move-detection eligibility; elsewhere link count is not a fidelity fact under §2.5.1. |
+| Review-to-execution drift | preflight, executor | **Keep once** per mutating effect under §2.5.1. |
+| Owned-trash destination | preflight, executor | **Keep** as the promised recovery path; check once per run plus the final move. |
+| Durability barriers before recording | executor | **Keep**; hard wall 5. |
+| Verifier evidence subject (pre-open walk, final path, opened volume, handle reparse) | verifier | **Consolidate** duplicate classification. Retain the pre-open walk for component/placeholder refusal and the post-open final path for redirection. The reviewed leaf-check move saves no query and changes refusal classes; the user chose equivalent classifier cleanup (M1_PLAN, 2026-09-29). |
+| Live external-writer and race-proofing work | executor, §6 EW-1..4 | **Freeze**; no further climbing without a plausible supported trigger. Retire checks justified only by a racer. |
+| Refusal-reason precedence | executor, verifier | **Relax** under §2.5.1. |
+| Internal re-certification between first-party modules | workflows, core | Governed by §2.1 rung 3; not yet audited against this section. |
+| Interface ingress and rendering | bridge, interfaces | **Keep**; content author boundary under §2.2 and §4. A separate audit may apply §2.5 to per-layer re-validation. |
+
+### 2.6 Reopen triggers
+
+This model must be reviewed before introducing:
+
+- an elevated desktop host, privileged helper, service account, or any split-
+  integrity design;
+- RPC or another command surface reachable by a different Windows user;
+- a network peer, remotely authorized API, browser-hosted frontend, or remote
+  asset authority;
+- automatic or unattended destructive execution;
+- supported network-share coordination or filesystem semantics not covered by
+  the current local-volume contract;
+- executable plugins, third-party scripts, or package update authority; or
+- a guarantee that external writers may safely mutate managed roots during the
+  same operation.
+
+Elevation is not an M1 mitigation. Adding a new principal or authority channel
+is an architecture review, not an implementation detail.
+
+---
+
+## 3. Tolerance policy
+
+Severity in `BUGS.md` describes the worst supported consequence. The following
+classes separately decide what disposition is allowed.
+
+| Class | Meaning | Required product behavior | Representative outcomes |
+| --- | --- | --- | --- |
+| **T0 — hard invariant** | No tolerance under supported assumptions | Prevent or refuse before effect; if a native effect may already have committed, settle conservatively and expose uncertainty | unreviewed or out-of-root mutation, silent permanent byte loss, partial live publication, false durable truth, duplicate mutation, executable-data injection, unbounded valid-scale work |
+| **T1 — safe degradation** | Bounded failure is acceptable | Keep independent safe work isolated, report the affected axis and actionable recovery, and preserve exact owned artifacts | refusal, bounded retry, stale-plan re-review, per-item failure, partial run, degraded recording/audit, explicit progress gap, renderer restart, exact temp/trash retention |
+| **T2 — disclosed capability limit** | The platform or selected mode cannot supply a promised semantic | Refuse, warn before commitment, or require explicit opt-in; never imply preservation or verification that was not delivered | unsupported reparse/network behavior, unavailable metadata semantics, unproved power-loss durability, over-scale request |
+| **T3 — equal/higher-authority actor outside model** | Prevention is not promised against an already compromised or stronger authority | Do not amplify authority; keep the exclusion explicit and reopen the model if the architecture adds a boundary | same-user code compromise, administrator/kernel/driver compromise, tampered trusted assets, post-final-guard external race outside the quiescent baseline |
+| **T4 — informed user authorization** | The trusted UI accurately showed the exact consequence and the user approved it | Preserve commitment integrity, safe defaults, promised recovery, and truthful outcome; do not reinterpret informed intent | knowingly replacing or trashing reviewed files, explicit rebaseline, choosing a lossy but accurately disclosed option |
+
+### 3.1 Probable failures and allowed outcomes
+
+| Trigger | Minimum response | Maximum tolerable consequence |
+| --- | --- | --- |
+| Access denial, sharing violation, full disk, disconnect | Bounded retry where defined, then refusal or per-item failure | No mutation, or a truthful partial result with exact owned recovery artifacts |
+| Stale plan, root, volume, selection, or UI revision | Refuse and return to review | Delay and repeated user review |
+| Incomplete or hostile enumeration | Preserve typed uncertainty and continue only independent safe work | Skipped/incomplete scope; never absence-dependent destruction |
+| Process cancellation or crash | Settle confirmed effects, preserve atomic live names, and rescan/replan after restart | Partial operation set, exact temp/trash artifacts, process-local task loss |
+| Power loss | Claim durability only for barriers known to have succeeded | Explicitly unknown durability; never an invented power-loss guarantee |
+| Recorder, history, or audit failure | Keep filesystem truth separate and visibly degrade the failed axis | Bounded ledger lag or audit loss under its owning retention contract |
+| Renderer replacement or reload | Retire page authority without replaying or prematurely releasing admitted work; use normal close and fresh review after reopening | Process-local task presentation loss; no new or duplicate effect |
+| Renderer communication failure, timeout, or uncertain response | Preserve effects and original-outcome receipts; use bounded observation recovery where available, otherwise report unavailability | Delayed feedback or explicit unavailable outcome; never invented success or duplicate effect |
+| Malformed or oversized interface value | Reject before handler/domain authority or large presentation construction | Request/item refusal only |
+| Unsupported filesystem semantics | Refuse or disclose before commitment | Loss of the unsupported feature only when the user explicitly accepted it |
+| External mutation observed before the final effect | Refuse, retry where safe, or fail the item | Availability loss or truthful partial completion |
+| External mutation after the final path guard | Apply conservative settlement when detectable; document the exact residual | T3 when the writer violated the explicit quiescent-root precondition; without that precondition, an open defect |
+
+### 3.2 "Best effort" is not a complete policy
+
+Every active guarantee described as "best effort" must state, directly or by a
+clear reference to its owning mechanism:
+
+1. what action is attempted;
+2. what failure is allowed;
+3. the maximum data consequence;
+4. the user-visible signal; and
+5. the recovery or next action.
+
+Without all five, "best effort" is an unresolved requirement, not an accepted
+tolerance.
+
+---
+
+## 4. Desktop and WebView boundary
+
+The packaged NamiSync document is trusted code. Everything it displays,
+receives, or sends is validated as untrusted data. Remote and off-origin
+content receives no NamiSync bridge authority.
+
+The desktop trusted computing base includes the packaged HTML, CSS, and
+JavaScript, the Python host and dependencies, pythonnet, WebView2, and Windows.
+Origin validation proves which origin is currently committed; it does not prove
+that a human clicked a genuine control or saw an accurate plan. Any JavaScript
+executing in the allowed packaged origin can invoke every allowlisted command.
+Opaque ids, commitments, revisions, and request ids prevent confusion and stale
+execution; they are not authentication secrets or proof of user gesture.
+The desktop readiness challenge has the same non-authority status. It is an
+ephemeral, unlogged current-generation liveness nonce proving only that the
+trusted host-to-page message path and page-to-host dispatch path both completed.
+It never substitutes for committed-origin trust, command validation, handler
+admission, or backend task/session authority.
+
+Consequently, arbitrary same-origin script execution is a trusted-base
+compromise and is outside M1. If a hostile renderer ever becomes in scope,
+irreversible approval must move to an OS-native surface or separately trusted
+broker that displays the backend-bound immutable summary. Origin checking alone
+cannot provide that property.
+
+The current containment obligations are still strict:
+
+- off-origin or non-package content never receives dispatch authority;
+- filesystem and persisted text remains inert text and cannot select markup,
+  script, URL, class, style, command, or path authority;
+- the complete inbound command envelope is bounded and exactly validated before
+  domain dispatch;
+- ordinary command availability remains composition-gated on the current
+  document's bilateral readiness exchange, independently of bridge trust and
+  handler reservation;
+- commands are allowlisted and future mutations remain subject to backend plan,
+  commitment, revision, and receipt rules;
+- navigation, frames, popups, downloads, and runtime fallback fail closed under
+  their owning bridge contract; and
+- renderer failure, malformed requests, expired slots, saturation, and teardown
+  may degrade only through bounded T1 outcomes.
+
+An exact opaque native-response or asynchronous-completion acknowledgment is
+cleanup, not dispatch authority. It may release matching existing browser
+custody after document trust is lost or ordinary admission is saturated, but
+it invokes no handler and exposes no response content. Async admission and
+completion are separate delivery phases within the existing exchange bound;
+neither acknowledgment can reap an exchange before all its actual workers
+exit and both delivery phases are acknowledged or retired. Command dispatch
+still rechecks committed-origin trust after reserving its handler position.
+
+Desktop transport does not become backend lifecycle authority. The application
+lifecycle is the sole owner of domain-effect receipts, task/session association,
+admission compensation, and logical settlement. Dispatcher independently owns
+session admission, custody, concurrency, control, and close; the current
+service observer independently owns stream, callback, thread, and subscription
+lifetime. Every admitted session, including a direct CLI session without a
+desktop task, has an exact application association.
+
+The adapter may replay a retained successful `start_plan` response before its
+original opaque location slots are available. That cache contains only command
+id, wire intent, in-flight/result delivery state, and `TaskStartView`; it cannot
+contain resolved roots, task/session association, compensation, observer
+resources, or cleanup authority. A fresh resolution refusal with no retained
+response creates none of those backend objects and is not cached as a refusal
+replay.
+
+Adapter shutdown may mark delivery closed, invalidate delivery generations,
+supersede drains, and wake blocked offers. Those are transport-local actions,
+not observer or session teardown. The web drain has a structural no-path rule
+to service, dispatcher, and the private lifecycle aggregate, so it cannot reach
+observer release, dispatcher/session close, detail retirement, plan drop, or
+compensation directly or indirectly. Adapter-bound teardown consumes the
+adapter's delivery fact, advances application settlement, confirms observer
+release, closes dispatcher custody, retires the exact detail, then optionally
+retires the plan/task. The application retains the exact association, terminal
+digest, settlement target, and coarse single-flight claims, not physical-step
+acknowledgements or cursors. Fixed cleanup owners are independently idempotent
+or monotone: after failure or interruption, the whole cleanup call sequence may
+repeat from current owner truth, while every completed observable effect remains
+unique. Dispatcher close itself stays strict; only a sealed exact application
+settlement may interpret `SessionNotFound` as its already-absent postcondition.
+Dispatcher `_AdmissionCleanup` remains unchanged, and this contract
+makes no recovery claim across the inherited gap from `Dispatcher.submit`
+return to application start publication.
+
+Appearance enhancement and publication are T1-degradable after the window's
+opaque base surface is known safe. Configuration, observation, read, or
+host-to-page appearance-publication failure does not create command authority
+and does not by itself refuse startup. If enhancement may have made the native
+surface transparent and an opaque rollback cannot be confirmed, readable UI
+cannot be claimed; that surface-safety failure is a hard startup refusal.
+
+Filesystem-derived review labels have an additional layout-integrity wall at
+their final DOM sink. The sink replaces U+0000-U+001F, U+007F-U+009F,
+U+00AD, U+061C, U+200B, U+200E-U+200F, U+2028-U+202E,
+U+2060-U+206F, U+FEFF, and input U+27E6-U+27E7 with the visible uppercase
+four-hex marker `⟦U+XXXX⟧`. Escaping both marker delimiters makes the mapping
+injective: an input spelling such as `⟦U+202E⟧` cannot be mistaken for the
+marker produced from an input U+202E. The marker delimiters that the sink
+itself emits are syntax; none of the listed active layout controls survives in
+the rendered or accessibility label. Each label is also a CSS bidi isolate so
+ordinary strong-direction text cannot reorder adjacent UI.
+
+This is a presentation boundary, not sanitization or authority rewriting.
+Filename display stays raw valid Unicode in workflow nodes, visible sequences,
+bridge views, and literal case-folded search. Separately, callbacks receive the
+raw opaque node ids supplied by the authoritative view. Marker spelling is not
+decoder or query syntax, and the sink adds no filename byte/character cap or
+truncation. Generic trusted interface copy continues through the ordinary
+inert `textContent` sink; only filesystem-derived labels use the layout-control
+projection.
+
+The wall deliberately preserves ZWNJ/ZWJ, variation selectors, supplementary
+tag characters, and the legitimate direction of Arabic and Hebrew text. It
+does not claim universal spoof protection or defeat homoglyphs, ordinary
+confusables, Unicode normalization differences, or grapheme ambiguity. These
+remain outside this narrow transform and retain their Unicode rendering
+semantics; no freedom from their visual ambiguity is claimed. Expanding the
+escaped set, changing marker spelling, decoding markers in search, or using a
+filesystem display value in any non-text sink reopens this boundary.
+
+A browser timeout does not cancel an admitted Python handler. Receipts and
+server-owned idempotency therefore remain mandatory for every retryable or
+mutating command. The native host also does not presently supply an independent
+deny policy for every browser permission or a complete native subresource
+allowlist; the CSP, packaged-asset discipline, and trusted-renderer assumption
+are the current boundary. Adding a browser capability or admitting new resource
+classes reopens this review.
+
+The 64-handler admission ceiling bounds work after NamiSync admission; pinned
+pywebview creates an exposed-call thread before that gate. It therefore does
+not prove a bound on raw WebMessage thread creation. These remain availability
+and scale boundaries, not authority claims; active request and population walls
+apply independently of any future whole-runtime resource measurement.
+
+The loopback asset origin is not a claim that no listener exists. It is a local
+asset and dependency parser surface with no externally authorized NamiSync
+domain API. Same-origin authority applies to the origin, not proof of one exact
+page path. The document policy and native navigation guards prevent untrusted
+data or remote pages from acquiring that authority; installed assets and their
+serving/runtime dependencies remain trusted.
+
+---
+
+## 5. Operational floor — TOCTOU and filesystem races
+
+The threat ceiling says which actors are not defeated. The operational floor
+says when a remaining race has enough containment and truth to stop consuming
+engineering work.
+
+### 5.1 Detection is general; prevention follows consequence
+
+Point-of-touch revalidation, conditional primitives, atomic publication, and
+conservative settlement often detect a lost race rather than excluding every
+writer. Detection plus honest settlement is sufficient only when the maximum
+result stays within T1. Prevention or stronger binding is required when a
+supported-use loss can cross T0.
+
+Final guards are especially important around replace, delete, trash, rename,
+and evidence publication, but destruction is not the only reason to prevent a
+race. Out-of-root effects, unreviewed mutation, false evidence, executable-data
+injection, and unbounded work also require prevention or refusal.
+
+### 5.2 Preplaced traps and live racers
+
+Timing does not establish safety. A preplaced trap requires no race and can
+wait indefinitely; a live substitution requires a concurrent writer. Neither
+is acceptable merely because an observed interval is short. Scheduling can
+stretch any path-based guard-to-use interval, and quantitative timing or
+likelihood claims must satisfy the measurement authority in §7.
+
+Preplaceable content and structures are in scope as §2.2 scopes their authors:
+content adversarially at interpretation boundaries, structure as ordinary input
+under plan fidelity and the backstops (§2.5).
+Live post-final-guard substitution is classified by the supported preconditions
+and maximum consequence, not by a "microsecond window" argument.
+
+### 5.3 Stopping rule
+
+A residual is closed only when all of the following hold:
+
+1. its trigger, required capability, supported preconditions, and maximum
+   consequence are explicit;
+2. it crosses no hard wall under supported assumptions;
+3. its allowed result is bounded, visible, and recoverable or availability-
+   only;
+4. NamiSync does not amplify the triggering actor's authority;
+5. the next mitigation rung is named; and
+6. the residual register assigns an explicit disposition and revisit trigger.
+
+A real-time racer is not automatically acceptable. Convergence is acceptable
+only if no irreversible loss or false evidence has already occurred.
+
+### 5.4 Windows mitigation ladder
+
+Bottom to top, each rung closes more of the path-to-use gap at rising cost:
+
+1. **Lexical validation and no-follow admission.** Reject escapes and reparse
+   components before physical resolution. Executor resolution may skip repeated
+   physical root/candidate resolution only for an exact confirmed invocation
+   hold, after checking current held attributes and the lexical descendant walk.
+   Preflight may likewise use validated logical root/candidate spelling after
+   fresh held attributes, including the first confirmed access, and descendant
+   admission. Its held representation limit uses that spelling for present and
+   missing subjects; unconfirmed paths retain physical resolution. Planning and
+   execution preflight accept the observation-time distinction when a concurrent
+   writer replaces descendants after admission: the omitted candidate resolution
+   may have supplied an additional escape refusal, including after a missing
+   intermediate ended the walk. This does not authorize mutating effects or
+   change their independent final guards.
+   The held subject walk admits intermediate components and obtains leaf
+   metadata once at its final no-follow stat; a leaf appearing after the walk
+   can therefore be observed where fallback's earlier absence would end the
+   observation. Placeholder/reparse classification remains at that final stat.
+   *Implemented baseline.*
+2. **Re-stat or revalidate at point of touch.** Recheck root, parent, leaf,
+   identity, and relevant metadata immediately before the operation.
+   *Implemented where the current operation has evidence to compare.*
+3. **Atomic conditional primitives.** Prefer operations such as `CREATE_NEW`,
+   non-replacing rename, or `RemoveDirectory` emptiness whose condition is
+   enforced by the same syscall that applies the effect. *Implemented where the
+   operation has a matching Windows primitive.*
+4. **Handle-bound operations.** Open once, verify identity on the handle, and
+   mutate through it where Windows supplies an appropriate supported primitive.
+   *Partially implemented:* the executor and verifier climb this rung
+   selectively.
+5. **Handle-relative traversal.** Use root/parent-handle-relative opens for the
+   complete walk when path-based revalidation cannot meet a supported hard
+   wall. This is the terminal path-race rung and carries architectural cost.
+   *Not adopted as the general traversal model.*
+
+Rungs 1–3 are the default. Rungs 4–5 are justified per operation by a supported
+hard-wall requirement or demonstrated field consequence, not by a generic wish
+to eliminate all races.
+
+### 5.5 When to climb
+
+Climb when a supported path can cross T0, when a supposedly T1 result is not
+actually bounded/visible/recoverable, or when field evidence shows that a
+probable supported failure makes the feature unusable. Do not climb solely to
+exclude an already compromised same-principal trusted base when the mitigation
+adds no boundary and prevents no authority amplification. Plan fidelity and
+catastrophe backstops (§2.5) never justify climbing on their own, and every
+climb condition above still needs a plausible trigger under §2.5.
+
+When the remaining result is genuinely T1 or T2, record it and stop. When it is
+T3, state the precondition that places it outside the model. Never convert an
+open T0 defect into an accepted residual through documentation alone.
+
+---
+
+## 6. Residual-risk register and triage
+
+Every residual entry records:
+
+- stable id and owning operation/component;
+- supported precondition and triggering capability;
+- maximum consequence and affected hard wall, if any;
+- visible signal and recovery path;
+- current mitigation rung and next closing rung;
+- disposition: `accepted-safe-degradation`, `disclosed-capability-limit`,
+  `out-of-supported-model`, or `open-defect`; and
+- owner plus the architecture, feature, field-evidence, or principal change
+  that reopens it.
+
+Current external-writer classes are decided as follows:
+
+| ID | Residual | Disposition |
+| --- | --- | --- |
+| **EW-1** | A live source-leaf substitution is moved to a still-verified owned-trash destination; the substituted item remains recoverable and the result is truthful | `accepted-safe-degradation` only for the bounded recoverable outcome; handle-bound rename is the closing rung |
+| **EW-2** | Destination-parent substitution after the final path guard can relocate bytes outside owned trash and invalidate location/recovery truth | `out-of-supported-model` because the writer violated the explicit quiescent-root precondition; without that precondition, `open-defect`; handle-relative traversal is the closing rung |
+| **EW-3** | A live target is replaced after the final guard and an update or internal mirror delete destroys the replacement | `out-of-supported-model` because the writer violated the explicit quiescent-root precondition; without that precondition, `open-defect`; a suitable handle-bound conditional mutation is the closing rung |
+| **EW-4** | Identity-weak substitution or same-object mutation defeats path/stat evidence before content attestation | `out-of-supported-model` because the writer violated the quiescent-root precondition; without that precondition, `open-defect`; handle-bound content verification/publication or byte reread is the closing rung |
+
+Future findings use this triage:
+
+1. **Preplaceable or live?** Preplaceable content and structure are in scope
+   as §2.2 scopes them; a live race proceeds to the supported-assumption test.
+   Either way, the trigger must be plausible under §2.5.
+2. **Which hard wall and consequence?** A supported T0 path is a defect.
+3. **Which tolerance class?** T1/T2 require the exact signal and recovery;
+   T3 requires the excluding precondition; T4 requires accurate commitment.
+4. **Which rung closes it?** Record the next real mitigation rather than an
+   unspecified promise to harden later.
+
+A residual sentence in `BUGS.md`, `FEATURES.md`, or a component document is
+technical context, not acceptance. Only a disposition here closes the policy
+decision.
+
+---
+
+## 7. Quantitative evidence and measurement authority
+
+Quantitative evidence supports a product consequence or release decision; it
+does not choose that consequence. This section is the normative authority for
+classifying quantitative claims, selecting an evidence tier, and deciding what
+may close a gate.
+
+- Classify every quantitative claim before building its evidence. First decide
+  from the consequence model above whether the number is a hard invariant, a
+  release SLO, a soft drift guard, or a diagnostic. Evidence strength cannot
+  promote a diagnostic or soft guard into acceptance evidence. A guard may
+  still fail closed pending explicit adjudication under its owning consequence
+  and release policy.
+- Before selecting a tier, decide whether production can enforce the proposed
+  bound. An enforceable containment bound must first become production policy
+  derived entirely from enforced maxima over the complete admitted domain,
+  with every assumption checked. That analytical or source-derived bound may
+  close outside the empirical tiers; empirical characterization may guard its
+  implementation but cannot substitute for containment. Any irreducible term
+  sampled from an allocator, runtime, or environment remains a separately
+  classified empirical claim.
+- Then distinguish deterministic quantities from noisy ones. An exact
+  measurement function proven free of variable terms produces one deterministic
+  value from frozen source, corpus, runtime, dependencies, and representation.
+  Protected authority for that value uses an independently authored oracle or
+  expected result and a protected baseline or contract. Repeat runs are
+  required only when stability or nondeterminism is itself part of the claim;
+  byte-identical fresh children add provenance and drift confidence, not
+  statistical samples, and do not justify calibration, holdout, headroom, or a
+  sampled ceiling.
+- Separate a scaling claim from a value claim. A statement that cost is
+  linear, that a quadratic term is removed, or that a per-item scan no longer
+  repeats is a complexity claim. Close it with an analytical or source-derived
+  bound over the named domain. Counted structural witnesses at named sizes —
+  operations, lookups, or attribute accesses observed from frozen source — test
+  that derivation and are the preferred regression evidence, but finite counts
+  alone state only what happened at those sizes. Elapsed time never establishes
+  complexity because constant factors, allocator behavior, and garbage
+  collection can dominate the term under test. Execution timing stays noisy
+  even for a fixed in-memory workload. A timing claim used beyond diagnosis
+  therefore predeclares its statistic and comparison, uses repeated
+  fresh-process observations, and reports process count, dispersion, and
+  uncertainty beside the figure they qualify; one observation is diagnostic
+  only and cannot close a gate. The owning component records the criterion;
+  `PERFORMANCE.md` records the method and exact fixture.
+- Evidence tiers describe how a quantitative claim is used. **Tier 0** is a
+  reasoned target and never closes a gate. **Tier 1** is a current-source live
+  drift guard against an already accepted contract or claim and is not
+  acceptance evidence. **Tier 2** is named-reference acceptance for an
+  independently predeclared budget: exact fixture and profile; expected result
+  plus evaluation count for a deterministic quantity, or statistic plus run
+  count for a noisy one; committed raw evidence; and a separate validator.
+  **Tier 3** is protected authority with the empirical and deterministic forms
+  below.
+- The recorded M1-7/M1-8 Plan and execution-UI latency and empirical
+  representation-memory budgets are now advisory comparison points. A selected
+  `tools/performance` observation is useful for diagnosis, but missing, slow or
+  noisy samples do not automatically block an ordinary change. Wrong fixture,
+  failed action or incomplete child is invalid evidence. This demotion does not
+  change runtime admission/population bounds, counted-work witnesses, the
+  SH-G-8 custody authority, history release criteria, SH-G-15, or executor
+  settlement. New acceptance claims still follow the tier rules here.
+- SH-G-15 is scoped release acceptance for cold-start resource budgets and
+  repeated/long-workload leak and growth checks on declared supported profiles.
+  It is not a hard whole-runtime memory guarantee. Existing runtime-enforced
+  request and population walls remain independent obligations; new application-
+  owned populations and requests need finite admission bounds at their owners,
+  not a complete Python/CLR/WebView object-graph certificate. Passing sampled
+  resource checks neither proves universal containment nor waives those bounds.
+  Independently predeclared profile budgets use Tier 2; covering a complete
+  desktop workflow does not alone escalate this scoped SLO to Tier 3. Tier 3
+  still applies if calibration derives the ceiling or acceptance authority
+  fails/is invalidated. Record source/runtime provenance and rerun affected
+  profile checks after relevant changes; unchanged budgets need not be
+  recalibrated merely because a runtime version changed. Evidence applies only
+  to its recorded profile and does not silently certify an untested version.
+- Empirical Tier 3 is required, after the consequence and enforceability
+  decisions above, when calibration derives a release ceiling, release-gating
+  acceptance authority failed or was invalidated, an empirical number outside the scoped SH-G-15 exception above, without
+  an analytical bound, closes a cross-slice user-operation gate, or an
+  unversioned runtime-dependent result would otherwise become a release limit.
+  Use the lowest sufficient tier for every other number; compatible Tier 2
+  measurements may share one vertical-slice harness.
+- Empirical Tier 3 requires disjoint calibration and holdout data, derivation,
+  rounding, headroom, and fresh-process count committed before holdout;
+  verdict-free raw artifacts; exact source, instrument, fixture, runtime, and
+  dependency authority plus immutable validator/contract blob identity; and
+  fail-closed unknown-input handling. Calibration never validates its own
+  limit, and a frozen limit is never retuned after holdout. Accepted contracts,
+  validators, and artifacts are append/version-only rather than edited in
+  place.
+- Deterministic protected Tier 3 uses the oracle/expected-result form above
+  rather than empirical calibration and holdout. The executor settlement
+  oracle additionally declares repeated identical normalized runs because
+  stability is part of that gate's claim.
+- Every acceptance quantity names its roots, scaling axes, aggregation/retention
+  policy, tier, artifacts, and rerun/version trigger in `PERFORMANCE.md`, linked
+  to its owning component criterion. Optional diagnostics identify their
+  fixture, source and raw samples without implying acceptance. For a new
+  retained-memory acceptance claim, its corpus must classify every retained
+  dataclass field and reachable mapping
+  family/key as populated at its declared envelope or intentionally absent/non-
+  retained. An unclassified representation change invalidates that acceptance
+  evidence.
+
+---
+
+## 8. Documentation ownership
+
+- `DEFENSE.md` owns supported assumptions, trusted boundaries, hard walls,
+  tolerance classes, quantitative-evidence authority, residual dispositions,
+  and model-reopen triggers.
+- `ARCHITECTURE.md` owns the durable contracts and layering that enforce them.
+- `FEATURES.md` owns implemented and planned user-visible behavior and links
+  any limitation to its defense disposition.
+- `BUGS.md` owns concrete defect incidents, fixes, severity, and only the
+  residual detail necessary to identify the technical boundary.
+- Module documents own operation-specific mechanisms, limits, and extension
+  policy. `BRIDGE.md` owns exact desktop envelopes, commands, limits, and
+  acceptance gates beneath the trusted-base decision in §4.
+- `PERFORMANCE.md` owns measurement methods, fixture/profile and scaling
+  descriptions, aggregation, provenance and results. It does not classify
+  consequence or change an acceptance gate by reporting an observation.
+- `CHANGELOG.md` records dated adoption or revision of this policy;
+  `HANDOFF.md` carries only immediate operational context.
+
+When behavior, an authority boundary, a supported precondition, or a residual
+disposition changes, update this document and the owning behavior/mechanism
+document together. A new principal or hard-wall exception requires explicit
+architecture review before implementation.

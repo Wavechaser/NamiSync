@@ -1,0 +1,1914 @@
+"""Installed-wheel child that captures the production Setup surface."""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import json
+import sys
+import traceback
+from pathlib import Path
+from threading import Lock
+from typing import Any
+
+from _headed_evidence import EvidencePaths, EvidencePublisher
+from _plan_again_trace import (
+    PlanAgainHostTrace,
+    trace_registry_plan_again,
+    traced_plan_again_commands,
+    validate_trace_snapshot,
+)
+from _startup_test_support import headed_command_extension
+
+
+_COMPLETE_TEXT = "Setup headed gate complete"
+
+
+class _Recorder:
+    def __init__(self, paths: EvidencePaths) -> None:
+        self._publisher = EvidencePublisher(paths)
+        self._lock = Lock()
+        self._finished = False
+        self._diagnostics: dict[str, str] = {}
+        self._plan_again_trace: dict[str, object] = {}
+
+    def observe(self, name: str, value: object) -> None:
+        with self._lock:
+            self._diagnostics[name] = repr(value)[:2048]
+
+    def ready(self, payload: dict[str, object]) -> None:
+        with self._lock:
+            self._publisher.publish_ready({**payload, **self._plan_again_trace})
+
+    def plan_again_trace(self, browser: object, host: object) -> None:
+        validate_trace_snapshot(browser, {"setup"})
+        validate_trace_snapshot(host, {"setup"}, allow_empty=True)
+        with self._lock:
+            self._plan_again_trace = {
+                "plan_again_browser_trace": browser,
+                "plan_again_host_trace": host,
+            }
+
+    def failure(self, stage: str, error: BaseException) -> None:
+        with self._lock:
+            if self._finished:
+                return
+            self._publisher.publish_failure({
+                "stage": stage,
+                "type": type(error).__name__,
+                "detail": str(error)[:1024],
+                "diagnostics": dict(self._diagnostics),
+                **self._plan_again_trace,
+            })
+
+    def finish(self, exit_code: int) -> None:
+        with self._lock:
+            if self._finished:
+                return
+            self._finished = True
+            self._publisher.publish_final({"host_returned": True, "exit_code": exit_code})
+
+
+_EDITABLE_SCRIPT = r"""
+(async () => {
+  const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  async function until(predicate, label) {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const value = predicate();
+      if (value) return value;
+      await sleep(25);
+    }
+    throw new Error(`timed out waiting for ${label}`);
+  }
+  const hasFocusRing = (element) => {
+    const style = getComputedStyle(element);
+    return style.boxShadow !== "none" ||
+      (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0);
+  };
+  const hasFocusedBottomStrip = (element, idleImage) => {
+    const style = getComputedStyle(element);
+    return style.backgroundImage !== "none" && style.backgroundImage !== idleImage;
+  };
+  await until(() => document.querySelector("#host-status")?.textContent === "Ready", "host readiness");
+  const source = await until(() => {
+    const selected = document.querySelector('.nami-task-rail__row .nami-task-card[aria-current="page"]');
+    const input = document.querySelector("#setup-source-path");
+    const recent = document.querySelector("#setup-source-recent-trigger");
+    return selected?.dataset.taskLabel === "Task 1"
+      && document.querySelector(".nami-work-panel")?.ariaLabel === "Work area — Task 1"
+      && input instanceof HTMLInputElement && !input.disabled
+      && recent instanceof HTMLButtonElement && !recent.disabled
+      && document.querySelectorAll('#setup-source-recent-popup [role="option"]').length === 2
+      ? input : null;
+  }, "startup task and seeded recent folders");
+  const setup = source.closest(".nami-setup");
+  const target = document.querySelector("#setup-target-path");
+  const options = document.querySelector(".nami-setup__options");
+  if (!(source instanceof HTMLInputElement) || !(target instanceof HTMLInputElement) ||
+      !(setup instanceof HTMLDivElement) || !(options instanceof HTMLDivElement) || source.disabled || target.disabled) {
+    throw new Error("editable Setup controls are unavailable");
+  }
+  const cards = document.querySelectorAll(".nami-setup > .nami-setup__card.nami-card");
+  const mode = document.querySelector('.nami-setup__mode[role="radiogroup"]');
+  const syncMode = mode?.querySelector('[role="radio"][data-value="sync-plan"]');
+  const inventoryMode = mode?.querySelector('[role="radio"][data-value="inventory"]');
+  const more = document.querySelector(".nami-setup__more-summary");
+  const advanced = document.querySelector("#setup-advanced-options.nami-setup__advanced-options");
+  const verifyToggle = document.querySelector('[data-option="verify_after_execute"]');
+  const additiveToggle = document.querySelector('[data-option="deletion_policy"]');
+  const adsToggle = document.querySelector('[data-option="preserve_ads"]');
+  const sourceLabel = document.querySelector('[for="setup-source-path"]');
+  const pathControl = document.querySelector('[data-purpose="source"] .nami-setup__path-control');
+  const recentTrigger = document.querySelector("#setup-source-recent-trigger");
+  const clearSource = document.querySelector('[data-purpose="source"] .nami-setup__clear');
+  const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
+  const targetStatus = document.querySelector("#setup-target-status");
+  const inventoryAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((item) => item.textContent === "Create inventory");
+  const planAgainAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((item) => item.textContent === "Plan again");
+  const missingControls = [];
+  if (cards.length !== 2) missingControls.push("cards");
+  if (!(syncMode instanceof HTMLButtonElement)) missingControls.push("sync-mode");
+  if (!(inventoryMode instanceof HTMLButtonElement)) missingControls.push("inventory-mode");
+  if (!(more instanceof HTMLButtonElement)) missingControls.push("more-button");
+  else if (more.getAttribute("aria-controls") !== "setup-advanced-options") missingControls.push("more-controls");
+  if (!(advanced instanceof HTMLDivElement)) missingControls.push("advanced-panel");
+  if (!(sourceLabel instanceof HTMLLabelElement)) missingControls.push("source-label");
+  if (!(pathControl instanceof HTMLDivElement)) missingControls.push("path-control");
+  if (!(recentTrigger instanceof HTMLButtonElement)) missingControls.push("recent-trigger");
+  if (!(picker instanceof HTMLButtonElement)) missingControls.push("picker");
+  if (!(verifyToggle instanceof HTMLInputElement)) missingControls.push("verify-toggle");
+  if (!(additiveToggle instanceof HTMLInputElement)) missingControls.push("additive-toggle");
+  if (!(clearSource instanceof HTMLButtonElement)) missingControls.push("source-clear");
+  if (!(adsToggle instanceof HTMLInputElement) || !adsToggle.disabled) missingControls.push("ads-toggle");
+  if (!(inventoryAction instanceof HTMLButtonElement)) missingControls.push("inventory-action");
+  if (!(planAgainAction instanceof HTMLButtonElement)) missingControls.push("plan-again-action");
+  if (!(targetStatus instanceof HTMLParagraphElement)) missingControls.push("target-status");
+  if (missingControls.length > 0) throw new Error(`Setup layout controls are unavailable: ${missingControls.join(", ")}`);
+  const emptyPathHintHidden = targetStatus.textContent === "" && targetStatus.hidden && !targetStatus.checkVisibility();
+  const moreIdleTransparent = getComputedStyle(more).backgroundColor === "rgba(0, 0, 0, 0)";
+  const clearSharedVariant = clearSource.classList.contains("nami-button--clear") &&
+    getComputedStyle(clearSource).backgroundColor === "rgba(0, 0, 0, 0)" &&
+    getComputedStyle(clearSource).borderColor === "rgba(0, 0, 0, 0)";
+  const refreshControl = document.querySelector(".nami-setup__refresh-recents");
+  const refreshIdleTransparent = getComputedStyle(refreshControl).backgroundColor === "rgba(0, 0, 0, 0)" &&
+    refreshControl.textContent === "" && refreshControl.querySelector(".nami-icon--arrow-clockwise") !== null;
+  const refreshSquare = Math.abs(refreshControl.getBoundingClientRect().width - refreshControl.getBoundingClientRect().height) <= 1;
+  recentTrigger.click();
+  const pointerOpenedPopup = await until(() => {
+    const popup = document.querySelector("#setup-source-recent-popup");
+    return popup?.checkVisibility() ? popup : null;
+  }, "pointer-open recent popup");
+  const pointerOpenNeutral = Array.from(pointerOpenedPopup.querySelectorAll("[role=option]"))
+    .every((option) => !option.hasAttribute("data-active"));
+  const visibleRecentChevron = recentTrigger.querySelector(".nami-setup__caret--up");
+  const recentChevronBounds = visibleRecentChevron?.getBoundingClientRect();
+  const recentTriggerBounds = recentTrigger.getBoundingClientRect();
+  const recentChevronGeometry = visibleRecentChevron instanceof HTMLElement &&
+    visibleRecentChevron.classList.contains("nami-icon--chevron-up") &&
+    Math.abs(recentChevronBounds.width - 16) <= 0.5 && Math.abs(recentChevronBounds.height - 16) <= 0.5 &&
+    Math.abs((recentChevronBounds.left + recentChevronBounds.right) / 2 -
+      (recentTriggerBounds.left + recentTriggerBounds.right) / 2) <= 0.5 &&
+    Math.abs((recentChevronBounds.top + recentChevronBounds.bottom) / 2 -
+      (recentTriggerBounds.top + recentTriggerBounds.bottom) / 2) <= 0.5;
+  recentTrigger.click();
+  const idlePathStyle = getComputedStyle(source);
+  const idlePathImage = idlePathStyle.backgroundImage;
+  const idlePathAppearance = [idlePathStyle.backgroundColor, idlePathImage, idlePathStyle.borderColor, idlePathStyle.borderRadius, idlePathStyle.boxShadow];
+  syncMode.focus();
+  syncMode.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowRight", bubbles: true}));
+  await until(() => inventoryMode.getAttribute("aria-checked") === "true" && document.activeElement === inventoryMode, "keyboard inventory segment");
+  inventoryMode.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowLeft", bubbles: true}));
+  await until(() => syncMode.getAttribute("aria-checked") === "true" && document.activeElement === syncMode, "keyboard sync segment");
+  const closedPrimaryBounds = [verifyToggle.closest("label"), additiveToggle.closest("label"), more]
+    .map((item) => item.getBoundingClientRect());
+  const advancedClosed = more.getAttribute("aria-expanded") === "false" && advanced.hidden && !advanced.checkVisibility();
+  more.click();
+  await until(() => more.getAttribute("aria-expanded") === "true" && advanced.checkVisibility(), "More options disclosure");
+  const visibleMoreChevron = more.querySelector(".nami-setup__more-caret--up");
+  const moreChevronGeometry = visibleMoreChevron instanceof HTMLElement && visibleMoreChevron.checkVisibility() &&
+    visibleMoreChevron.classList.contains("nami-icon--chevron-up") &&
+    Math.abs(visibleMoreChevron.getBoundingClientRect().width - 16) <= 0.5 &&
+    Math.abs(visibleMoreChevron.getBoundingClientRect().height - 16) <= 0.5 &&
+    Math.abs((visibleMoreChevron.getBoundingClientRect().top + visibleMoreChevron.getBoundingClientRect().bottom) / 2 -
+      (more.getBoundingClientRect().top + more.getBoundingClientRect().bottom) / 2) <= 0.5;
+  const setupBounds = document.querySelector(".nami-setup").getBoundingClientRect();
+  const workBounds = document.querySelector(".nami-work-panel__body").getBoundingClientRect();
+  const primaryBounds = [verifyToggle.closest("label"), additiveToggle.closest("label"), more]
+    .map((item) => item.getBoundingClientRect());
+  const optionsBounds = options.getBoundingClientRect();
+  const advancedBounds = advanced.getBoundingClientRect();
+  const expandedOptionsGap = advancedBounds.top - Math.max(...primaryBounds.map((rect) => rect.bottom));
+  const expandedRows = Array.from(advanced.querySelector(".nami-setup__options-list").children)
+    .map((item) => item.getBoundingClientRect());
+  const expandedRowGaps = expandedRows.slice(1).map((rect, index) =>
+    rect.top - expandedRows[index].bottom);
+  const standardFilter = document.querySelector("#setup-filter");
+  if (!(standardFilter instanceof HTMLInputElement)) throw new Error("Setup standard filter input is unavailable");
+  const filterIdleStyle = getComputedStyle(standardFilter);
+  const filterIdleImage = filterIdleStyle.backgroundImage;
+  const filterIdleAppearance = [filterIdleStyle.backgroundColor, filterIdleImage, filterIdleStyle.borderColor, filterIdleStyle.borderRadius, filterIdleStyle.boxShadow];
+  const pathBounds = source.getBoundingClientRect();
+  const pathControlBounds = pathControl.getBoundingClientRect();
+  const caretBounds = recentTrigger.getBoundingClientRect();
+  const pathFillsRoundedControl = Math.abs(pathBounds.left - pathControlBounds.left) <= 1 &&
+    Math.abs(pathBounds.right - pathControlBounds.right) <= 1 &&
+    parseFloat(getComputedStyle(source).borderRadius) > 0;
+  const caretInsidePath = caretBounds.left > pathBounds.left && caretBounds.right < pathBounds.right &&
+    caretBounds.top > pathBounds.top && caretBounds.bottom < pathBounds.bottom &&
+    parseFloat(getComputedStyle(source).paddingRight) >= caretBounds.width;
+  const browseSquare = Math.abs(picker.getBoundingClientRect().width - picker.getBoundingClientRect().height) <= 1;
+  const compositionActions = document.querySelector(".nami-setup__actions");
+  const actionBounds = compositionActions.getBoundingClientRect();
+  const primaryAction = compositionActions.querySelector(".nami-setup__primary-action:not([hidden])");
+  const pairActions = Array.from(compositionActions.querySelectorAll(".nami-setup__pair-action:not([hidden])"));
+  const pairActionsRightAligned = primaryAction instanceof HTMLButtonElement && pairActions.length === 1 &&
+    pairActions[0].getBoundingClientRect().right < primaryAction.getBoundingClientRect().left &&
+    primaryAction.getBoundingClientRect().left - pairActions[0].getBoundingClientRect().right <= 9 &&
+    Math.abs(primaryAction.getBoundingClientRect().right - actionBounds.right) <= 1;
+  const advancedLabelsFollowToggles = Array.from(advanced.querySelectorAll(".nami-setup__option")).every((label) => {
+    const control = label.children[0];
+    const caption = label.children[1];
+    if (label.children.length !== 2 || !(control instanceof HTMLInputElement) ||
+        control.getAttribute("role") !== "switch" || !(caption instanceof HTMLSpanElement)) return false;
+    const controlBounds = control.getBoundingClientRect();
+    const captionBounds = caption.getBoundingClientRect();
+    const sharedGap = parseFloat(getComputedStyle(label).columnGap);
+    return captionBounds.left >= controlBounds.right &&
+      Math.abs((captionBounds.left - controlBounds.right) - sharedGap) <= 1 &&
+      captionBounds.top < controlBounds.bottom && captionBounds.bottom > controlBounds.top;
+  });
+  const filterControls = document.querySelector(".nami-setup__filter-controls");
+  const addFilter = filterControls?.querySelector("button");
+  const filterBounds = standardFilter.getBoundingClientRect();
+  const addFilterBounds = addFilter?.getBoundingClientRect();
+  const addFilterInline = addFilter instanceof HTMLButtonElement && addFilterBounds.left > filterBounds.right &&
+    addFilterBounds.top < filterBounds.bottom && addFilterBounds.bottom > filterBounds.top;
+  const inlineRects = [sourceLabel, source, recentTrigger, picker].map((item) => item.getBoundingClientRect());
+  const inlineControls = inlineRects.every((rect) => rect.top < inlineRects[0].bottom && rect.bottom > inlineRects[0].top);
+  const browseOutsidePathControl = picker.getBoundingClientRect().left > pathControl.getBoundingClientRect().right;
+  const availabilityRows = await until(() => {
+    const values = Array.from(document.querySelectorAll(".nami-setup__recent-pair"));
+    return values.length === 2 && values.some((row) =>
+      row.dataset.sourceAvailability === "online" && row.dataset.targetAvailability === "online") &&
+      values.some((row) => row.dataset.sourceAvailability !== row.dataset.targetAvailability) ? values : null;
+  }, "online and mixed recent-pair probes");
+  const onlinePair = availabilityRows.find((row) => row.dataset.sourceAvailability === "online" && row.dataset.targetAvailability === "online");
+  const offlinePair = availabilityRows.find((row) => row.dataset.sourceAvailability !== row.dataset.targetAvailability);
+  const offlinePaths = offlinePair.querySelectorAll(".nami-setup__pair-path");
+  const recentHeaders = Array.from(document.querySelectorAll(".nami-setup__recent-pair-table th"));
+  const offlinePathValues = Array.from(offlinePair.querySelectorAll(".nami-setup__pair-path-value"));
+  const pathValueStyle = getComputedStyle(offlinePathValues[0]);
+  const pairedPathsAlign = () => Array.from(offlinePaths).every((item) => {
+    const label = item.querySelector(".nami-setup__pair-path-label").getBoundingClientRect();
+    const value = item.querySelector(".nami-setup__pair-path-value").getBoundingClientRect();
+    const expectedTrack = 3.5 * parseFloat(getComputedStyle(item).fontSize);
+    return Math.abs(label.width - expectedTrack) <= 1 && Math.abs(value.left - label.right - 4) <= 1;
+  }) && Math.abs(offlinePathValues[0].getBoundingClientRect().left - offlinePathValues[1].getBoundingClientRect().left) <= 1;
+  const defaultPairedPathsAlign = pairedPathsAlign();
+  const mixedStatuses = Array.from(offlinePair.querySelectorAll(".nami-setup__availability"));
+  const onlineStatuses = Array.from(onlinePair.querySelectorAll(".nami-setup__availability"));
+  const neutralColor = getComputedStyle(document.querySelector(".nami-setup__recent-pair-table th")).color;
+  const onlineDot = mixedStatuses.find((item) => item.dataset.availability === "online")?.querySelector(".nami-setup__availability-dot");
+  const offlineDot = mixedStatuses.find((item) => item.dataset.availability === "offline")?.querySelector(".nami-setup__availability-dot");
+  const availabilityDotsShifted = [onlineDot, offlineDot].every((dot) => getComputedStyle(dot).transform === "matrix(1, 0, 0, 1, 0, 1)");
+  const onlineSelect = onlinePair.querySelector(".nami-setup__pair-select");
+  const offlineSelect = offlinePair.querySelector(".nami-setup__pair-select");
+  const recentPathButtonFillsColumn = [onlineSelect, offlineSelect].every((button) => {
+    const cell = button?.closest("td");
+    return button instanceof HTMLButtonElement && cell instanceof HTMLTableCellElement &&
+      button.getBoundingClientRect().width > 0 &&
+      Math.abs(button.getBoundingClientRect().width - cell.getBoundingClientRect().width) <= 0.5;
+  });
+  const mixedStatusBounds = mixedStatuses.map((item) => item.getBoundingClientRect());
+  const mixedPathBounds = Array.from(offlinePaths).map((item) => item.getBoundingClientRect());
+  const recentTable = document.querySelector(".nami-setup__recent-pair-table");
+  const recentViewport = recentTable.closest(".nami-setup__pair-viewport");
+  const recentHead = recentTable.querySelector("thead");
+  const recentBody = recentTable.querySelector("tbody");
+  const recentHeaderRow = recentHead.querySelector("tr");
+  const tableStyle = getComputedStyle(recentTable);
+  const viewportStyle = getComputedStyle(recentViewport);
+  const headStyle = getComputedStyle(recentHead);
+  const bodyStyle = getComputedStyle(recentBody);
+  const recentPlaceholders = Array.from(recentTable.querySelectorAll(".nami-setup__pair-placeholder"));
+  const pairRows = Array.from(recentBody.children);
+  const firstPairRow = pairRows[0];
+  const columnLefts = (row) => Array.from(row.children).map((cell) =>
+    Number(cell.getBoundingClientRect().left.toFixed(3)));
+  const defaultHeaderLefts = columnLefts(recentHeaderRow);
+  const defaultBodyLefts = columnLefts(firstPairRow);
+  const defaultBodyWidth = recentBody.clientWidth;
+  const priorHidden = pairRows.map((row) => row.hidden);
+  pairRows.forEach((row) => { row.hidden = true; });
+  const emptyBodyWidth = recentBody.clientWidth;
+  pairRows.forEach((row, index) => { row.hidden = priorHidden[index]; });
+  firstPairRow.style.setProperty("block-size", "24rem");
+  const headerTopBeforeBodyScroll = recentHead.getBoundingClientRect().top;
+  recentBody.scrollTop = 40;
+  const headerFixedDuringBodyScroll = Math.abs(
+    recentHead.getBoundingClientRect().top - headerTopBeforeBodyScroll,
+  ) <= 0.5;
+  recentBody.scrollTop = 0;
+  const overflowingBodyWidth = recentBody.clientWidth;
+  const bodyOverflows = recentBody.scrollHeight > recentBody.clientHeight;
+  firstPairRow.style.removeProperty("block-size");
+  recentViewport.style.setProperty("inline-size", "24rem");
+  const narrowHorizontal = recentViewport.scrollWidth > recentViewport.clientWidth;
+  const narrowPairedPathsAlign = pairedPathsAlign();
+  const narrowHeaderLefts = columnLefts(recentHeaderRow);
+  const narrowBodyLefts = columnLefts(firstPairRow);
+  const narrowViewportHeight = recentViewport.getBoundingClientRect().height;
+  const narrowTableHeight = recentTable.getBoundingClientRect().height;
+  const narrowBodyHeight = recentBody.getBoundingClientRect().height;
+  recentViewport.style.removeProperty("inline-size");
+  const tableGeometry = {
+    viewport_x: viewportStyle.overflowX,
+    viewport_y: viewportStyle.overflowY,
+    header_y: headStyle.overflowY,
+    body_y: bodyStyle.overflowY,
+    header_gutter: headStyle.scrollbarGutter,
+    body_gutter: bodyStyle.scrollbarGutter,
+    viewport_height: recentViewport.getBoundingClientRect().height,
+    header_height: recentHead.getBoundingClientRect().height,
+    body_height: recentBody.getBoundingClientRect().height,
+    body_starts_below_header: recentBody.getBoundingClientRect().top >= recentHead.getBoundingClientRect().bottom - 0.5,
+    default_columns_align: defaultHeaderLefts.every((left, index) => Math.abs(left - defaultBodyLefts[index]) <= 0.5),
+    narrow_columns_align: narrowHeaderLefts.every((left, index) => Math.abs(left - narrowBodyLefts[index]) <= 0.5),
+    narrow_horizontal: narrowHorizontal,
+    narrow_viewport_height: narrowViewportHeight,
+    narrow_table_height: narrowTableHeight,
+    narrow_body_height: narrowBodyHeight,
+    empty_width: emptyBodyWidth,
+    default_width: defaultBodyWidth,
+    overflow_width: overflowingBodyWidth,
+    body_overflows: bodyOverflows,
+    header_fixed_during_body_scroll: headerFixedDuringBodyScroll,
+  };
+  const tokenWitness = document.createElement("span");
+  tokenWitness.style.cssText = `border-radius: var(--radius-medium); font-size: var(--font-size-caption);
+    line-height: var(--line-height-caption); background: var(--color-neutral-surface-selected);`;
+  document.body.append(tokenWitness);
+  const tokenStyle = getComputedStyle(tokenWitness);
+  const expectedRadius = tokenStyle.borderRadius;
+  const expectedFontSize = tokenStyle.fontSize;
+  const expectedLineHeight = tokenStyle.lineHeight;
+  const expectedHeaderFill = tokenStyle.backgroundColor;
+  tokenWitness.style.background = "var(--color-neutral-surface)";
+  const expectedDefaultFill = getComputedStyle(tokenWitness).backgroundColor;
+  tokenWitness.style.background = "var(--color-neutral-surface-subtle)";
+  const expectedSubtleFill = getComputedStyle(tokenWitness).backgroundColor;
+  tokenWitness.remove();
+  const tableGalleryStyle = viewportStyle.borderRadius === expectedRadius && parseFloat(tableStyle.borderWidth) === 0 &&
+    viewportStyle.overflowX === "auto" && viewportStyle.overflowY === "hidden" && bodyStyle.overflowY === "auto" &&
+    tableStyle.fontSize === expectedFontSize &&
+    tableStyle.lineHeight === expectedLineHeight && getComputedStyle(recentHead).backgroundColor === expectedHeaderFill &&
+    recentHeaders.every((header) => getComputedStyle(header).fontSize === expectedFontSize &&
+      getComputedStyle(header).lineHeight === expectedLineHeight) &&
+    availabilityRows.every((row, index) => getComputedStyle(row).backgroundColor ===
+      (index % 2 === 0 ? expectedDefaultFill : expectedSubtleFill));
+  if (!(onlineSelect instanceof HTMLButtonElement) || !(offlineSelect instanceof HTMLButtonElement) ||
+      offlinePair.getAttribute("aria-disabled") !== "true" || !offlineSelect.disabled ||
+      onlinePair.getAttribute("aria-disabled") !== "false" || onlineSelect.disabled) {
+    throw new Error("recent-pair availability interaction state is incorrect");
+  }
+  const pathsBeforeRefusal = [source, target].map((input) => input.getBoundingClientRect());
+  const actionBeforeRefusal = primaryAction.getBoundingClientRect();
+  source.focus();
+  source.value = "not a native folder";
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  source.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => source.dataset.state !== "unresolved", "typed location refusal");
+  const refusedState = source.dataset.state;
+  const refusalHint = document.querySelector("#setup-source-status");
+  const refusalHintVisible = refusalHint.checkVisibility() && refusalHint.textContent.length > 0;
+  const feedback = document.querySelector(".nami-setup__action-status");
+  const feedbackBounds = feedback.getBoundingClientRect();
+  const feedbackLeftOfActions = feedback.parentElement === compositionActions &&
+    feedbackBounds.right <= pairActions[0].getBoundingClientRect().left &&
+    feedback.contains(refusalHint) && refusalHint.textContent.startsWith("Source: ") &&
+    source.getAttribute("aria-describedby") === refusalHint.id;
+  const pathsStableDuringRefusal = [source, target].every((input, index) => {
+    const current = input.getBoundingClientRect();
+    return Math.abs(current.top - pathsBeforeRefusal[index].top) <= 1 &&
+      Math.abs(current.height - pathsBeforeRefusal[index].height) <= 1;
+  }) && Math.abs(primaryAction.getBoundingClientRect().top - actionBeforeRefusal.top) <= 1;
+  source.focus();
+  source.value = __SOURCE__;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  source.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => source.dataset.state === "resolved", "corrected typed location admission");
+  const populatedPathBounds = source.getBoundingClientRect();
+  const populatedCaretBounds = recentTrigger.getBoundingClientRect();
+  const clearBounds = clearSource.getBoundingClientRect();
+  const clearImmediatelyBeforeCaret = clearBounds.right <= populatedCaretBounds.left &&
+    populatedCaretBounds.left - clearBounds.right <= 4.1 && clearBounds.top > populatedPathBounds.top &&
+    clearBounds.bottom < populatedPathBounds.bottom;
+  clearSource.click();
+  await until(() => source.value === "" && source.dataset.state === "unresolved", "clear invalidates admitted source");
+  const clearInvalidatesImmediately = source.value === "" && clearSource.hidden && document.activeElement === source;
+  source.value = __SOURCE__;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  source.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => source.dataset.state === "resolved", "readmitted source after clear");
+  const routineReadyHintHidden = Array.from(document.querySelectorAll(".nami-setup__location-status"))
+    .every((item) => item.textContent !== "Folder is ready." || !item.checkVisibility());
+  picker.focus({focusVisible: false});
+  source.dispatchEvent(new PointerEvent("pointerdown", {bubbles: true}));
+  source.focus({focusVisible: true});
+  await until(() => source.dataset.namiFocusOrigin === "pointer" &&
+    hasFocusedBottomStrip(source, idlePathImage) && !hasFocusRing(source), "pointer focus strip without outer ring");
+  const pathPointerFocusHasNoOuterRing = source.dataset.namiFocusOrigin === "pointer" && !hasFocusRing(source);
+  picker.focus({focusVisible: false});
+  await until(() => !source.hasAttribute("data-nami-focus-origin"), "pointer focus marker cleanup");
+  source.focus({focusVisible: true});
+  await until(() => hasFocusRing(source) && hasFocusedBottomStrip(source, idlePathImage), "path focus boundary");
+  await Promise.all(source.getAnimations().map((animation) => animation.finished));
+  const pathFocusShadow = getComputedStyle(source).boxShadow;
+  const pathFocusBottom = getComputedStyle(source).backgroundImage;
+  const pathUsesStandardIdleStyle = idlePathAppearance.every((value, index) => value === filterIdleAppearance[index]);
+  const pathHasStandardFocusRing = hasFocusRing(source) && !hasFocusRing(pathControl);
+  standardFilter.focus({focusVisible: true});
+  await until(() => hasFocusRing(standardFilter) && hasFocusedBottomStrip(standardFilter, filterIdleImage), "filter focus boundary");
+  await Promise.all(standardFilter.getAnimations().map((animation) => animation.finished));
+  const standardFilterStyle = getComputedStyle(standardFilter);
+  const pathMatchesStandardFocus = standardFilterStyle.boxShadow === pathFocusShadow &&
+    standardFilterStyle.backgroundImage === pathFocusBottom;
+  recentTrigger.focus();
+  recentTrigger.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+  const recentOption = await until(() => document.querySelector("#setup-source-recent-popup [role=option]:focus"), "keyboard recent option");
+  const recentPopup = document.querySelector("#setup-source-recent-popup");
+  await until(() => hasFocusRing(recentOption), "recent option keyboard focus ring");
+  const popupOptions = Array.from(recentPopup.querySelectorAll("[role=option]"));
+  const popupOptionsBorderless = popupOptions.every((item) => parseFloat(getComputedStyle(item).borderWidth) === 0);
+  const popupFocusIsExclusive = hasFocusRing(recentOption) && popupOptions
+    .filter((item) => item !== recentOption).every((item) => !hasFocusRing(item));
+  const pointerHandoffOption = popupOptions.at(-1);
+  pointerHandoffOption.dispatchEvent(new PointerEvent("pointerenter"));
+  const pointerHandoffNeutral = popupOptions.every((item) => !item.hasAttribute("data-active"));
+  recentOption.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+  const resumedOption = popupOptions[1] ?? popupOptions[0];
+  const keyboardResumesFromFocus = document.activeElement === resumedOption && resumedOption.hasAttribute("data-active");
+  resumedOption.dispatchEvent(new KeyboardEvent("keydown", {key: "Home", bubbles: true}));
+  const dropdownAnchored = recentPopup.parentElement === pathControl &&
+    recentPopup.getBoundingClientRect().left >= pathControl.getBoundingClientRect().left &&
+    recentPopup.getBoundingClientRect().right <= pathControl.getBoundingClientRect().right;
+  document.querySelector(".nami-setup__refresh-recents").click();
+  await until(() => onlinePair.dataset.sourceAvailability === "online" && onlinePair.dataset.targetAvailability === "online", "availability refresh completion");
+  if (recentTrigger.getAttribute("aria-expanded") !== "true" || document.activeElement !== recentOption) {
+    throw new Error("unrelated availability refresh replaced recent-folder focus");
+  }
+  recentOption.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+  await until(() => recentTrigger.getAttribute("aria-expanded") === "false" && document.activeElement === recentTrigger, "recent Escape return");
+  const recentKeyboard = document.activeElement === recentTrigger;
+  const filter = standardFilter;
+  if (!(filter instanceof HTMLInputElement)) throw new Error("Setup filter is unavailable");
+  const hostile = "<img src=x onerror=alert(1)>";
+  filter.value = hostile;
+  filter.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", bubbles: true}));
+  await until(() => Array.from(document.querySelectorAll(".nami-setup__filter-list span"))
+    .some((item) => item.textContent === hostile), "inert hostile filter");
+  await until(() => onlinePair.dataset.sourceAvailability === "online" && onlinePair.dataset.targetAvailability === "online" && !onlineSelect.disabled, "refreshed online pair");
+  onlineSelect.focus({focusVisible: false});
+  await sleep(100);
+  const pointerFocusStyle = getComputedStyle(onlineSelect);
+  const pointerFocusHidden = pointerFocusStyle.boxShadow === "none" &&
+    (pointerFocusStyle.outlineStyle === "none" || parseFloat(pointerFocusStyle.outlineWidth) === 0) &&
+    getComputedStyle(onlinePair).boxShadow === "none";
+  onlineSelect.blur();
+  onlineSelect.focus({focusVisible: true});
+  await until(() => getComputedStyle(onlinePair).boxShadow !== "none",
+  "recent pair keyboard focus ring");
+  const keyboardFocusStyle = getComputedStyle(onlineSelect);
+  const focusedRowStyle = getComputedStyle(onlinePair);
+  const keyboardFocusVisible = focusedRowStyle.boxShadow !== "none" && keyboardFocusStyle.boxShadow === "none";
+  const pairRowFocusWhole = focusedRowStyle.boxShadow !== "none" &&
+    Array.from(onlinePair.children).every((cell) => getComputedStyle(cell).backgroundColor === "rgba(0, 0, 0, 0)") &&
+    getComputedStyle(onlineSelect).backgroundColor === "rgba(0, 0, 0, 0)";
+  return {
+    editable: true,
+    typed_refusal: refusedState,
+    typed_retry_resolved: source.dataset.state === "resolved",
+    routine_ready_hint_hidden: routineReadyHintHidden,
+    host_ready_hidden: document.querySelector("#host-status")?.textContent === "Ready" &&
+      !document.querySelector("#host-status").checkVisibility(),
+    empty_path_hint_hidden: emptyPathHintHidden,
+    refusal_hint_visible: refusalHintVisible,
+    feedback_left_of_actions: feedbackLeftOfActions,
+    paths_stable_during_refusal: pathsStableDuringRefusal,
+    hostile_filter_inert: document.querySelector("img") === null,
+    options_visible: options.checkVisibility(),
+    two_setup_cards: cards.length === 2,
+    card_heading_hierarchy: setup.querySelector(':scope > .nami-setup__card > h2')?.textContent === "Setup" &&
+      setup.querySelector('.nami-setup__recent-header > h2')?.textContent === "Recent pairs" &&
+      document.querySelector(".nami-work-panel > h2") === null,
+    segmented_keyboard: syncMode.getAttribute("aria-checked") === "true",
+    recent_dropdown_keyboard: recentKeyboard,
+    disclosure_open: more.getAttribute("aria-expanded") === "true" && !advanced.hidden,
+    disclosure_closed_initially: advancedClosed,
+    setup_aligned_top: Math.abs(setupBounds.top - workBounds.top) <= 2,
+    primary_options_one_line: primaryBounds.every((rect) => rect.top < primaryBounds[0].bottom && rect.bottom > primaryBounds[0].top) &&
+      primaryBounds[0].left < primaryBounds[1].left && primaryBounds[1].right < primaryBounds[2].left,
+    primary_options_gap: primaryBounds[1].left - primaryBounds[0].right,
+    primary_options_stable_open: primaryBounds.every((rect, index) =>
+      Math.abs(rect.left - closedPrimaryBounds[index].left) <= 1 &&
+      Math.abs(rect.top - closedPrimaryBounds[index].top) <= 1 &&
+      Math.abs(rect.width - closedPrimaryBounds[index].width) <= 1),
+    primary_options_bounds: {closed: closedPrimaryBounds.map((rect) => rect.toJSON()),
+      expanded: primaryBounds.map((rect) => rect.toJSON())},
+    advanced_below_full_width: advancedBounds.top >= Math.max(...primaryBounds.map((rect) => rect.bottom)) &&
+      Math.abs(advancedBounds.left - optionsBounds.left) <= 1 && Math.abs(advancedBounds.right - optionsBounds.right) <= 1,
+    expanded_options_padding: expandedOptionsGap >= 8,
+    expanded_option_row_gaps: expandedRowGaps,
+    more_idle_transparent: moreIdleTransparent,
+    clear_shared_variant: clearSharedVariant,
+    refresh_icon_transparent: refreshIdleTransparent,
+    refresh_square: refreshSquare,
+    recent_row_height: onlinePair.getBoundingClientRect().height,
+    recent_viewport_height: recentViewport.getBoundingClientRect().height,
+    recent_header_height: recentHead.getBoundingClientRect().height,
+    recent_header_fixed: tableGeometry.header_fixed_during_body_scroll,
+    recent_slots_bounded: recentPlaceholders.length === 3 && recentPlaceholders.every((row) =>
+      row.ariaHidden === "true" && !row.classList.contains("nami-setup__recent-pair") &&
+      !row.classList.contains("nami-setup__batch-row")),
+    recent_folder_inset: parseFloat(getComputedStyle(onlineSelect).paddingInlineStart) ===
+      parseFloat(getComputedStyle(recentHeaders[0]).paddingInlineStart)
+      ? parseFloat(getComputedStyle(onlineSelect).paddingInlineStart) : -1,
+    advanced_filters_visible: document.querySelector(".nami-setup__filters").checkVisibility(),
+    advanced_labels_follow_toggles: advancedLabelsFollowToggles,
+    add_filter_inline: addFilterInline,
+    path_uses_standard_idle_style: pathUsesStandardIdleStyle,
+    path_matches_standard_focus: pathMatchesStandardFocus,
+    path_has_standard_focus_ring: pathHasStandardFocusRing,
+    path_pointer_focus_has_no_outer_ring: pathPointerFocusHasNoOuterRing,
+    path_fills_rounded_control: pathFillsRoundedControl,
+    caret_inside_path_with_text_space: caretInsidePath,
+    clear_immediately_before_caret: clearImmediatelyBeforeCaret,
+    clear_invalidates_immediately: clearInvalidatesImmediately,
+    browse_square: browseSquare,
+    pair_actions_right_aligned: pairActionsRightAligned,
+    inline_location_controls: inlineControls,
+    path_left_edges: [source, target].map((field) => field.getBoundingClientRect().left),
+    browse_outside_path_control: browseOutsidePathControl,
+    dropdown_anchored: dropdownAnchored,
+    dropdown_rerender_focus_restored: recentKeyboard,
+    popup_options_borderless: popupOptionsBorderless,
+    popup_focus_is_exclusive: popupFocusIsExclusive,
+    picker_icon_only: picker.textContent === "" && picker.getAttribute("aria-label") === "Browse for source folder",
+    advanced_switches: advanced.querySelectorAll('input[role="switch"]').length === 5,
+    primary_options_visible: verifyToggle.checkVisibility() && additiveToggle.checkVisibility() &&
+      verifyToggle.closest("label").nextElementSibling === additiveToggle.closest("label") &&
+      verifyToggle.closest("label").textContent === "Verify execution" && additiveToggle.closest("label").textContent === "Additive sync",
+    sync_inapplicable_actions_hidden: !inventoryAction.checkVisibility() && !planAgainAction.checkVisibility(),
+    recent_pair_online_offline: onlineStatuses.every((item) => item.dataset.availability === "online"),
+    mixed_pair_endpoint_truths: mixedStatuses.map((item) => [item.dataset.endpoint, item.dataset.availability, item.textContent]),
+    recent_pair_two_columns: recentHeaders.map((item) => item.textContent).join("|") === "Folders|Availability",
+    recent_path_button_fills_column: recentPathButtonFillsColumn,
+    table_gallery_style: tableGalleryStyle,
+    table_geometry: tableGeometry,
+    endpoint_statuses_align_with_paths: mixedStatusBounds.length === 2 && mixedPathBounds.length === 2 &&
+      mixedStatusBounds.every((rect, index) => Math.abs(rect.top - mixedPathBounds[index].top) <= 2),
+    offline_pair_disabled: offlinePair.getAttribute("aria-disabled") === "true",
+    pair_two_line_paths: offlinePaths.length === 2 && offlinePaths[0].getBoundingClientRect().top < offlinePaths[1].getBoundingClientRect().top,
+    pair_paths_aligned: defaultPairedPathsAlign && narrowPairedPathsAlign,
+    pair_paths_truncated: pathValueStyle.textOverflow === "ellipsis" && pathValueStyle.overflow === "hidden" &&
+      offlinePathValues.every((value, index) => value.scrollWidth > value.clientWidth &&
+        offlinePaths[index].title === value.textContent),
+    availability_dots_distinct: getComputedStyle(onlineDot).backgroundColor !== getComputedStyle(offlineDot).backgroundColor,
+    availability_dots_shifted: availabilityDotsShifted,
+    availability_text_neutral: [...mixedStatuses, ...onlineStatuses].every((item) => getComputedStyle(item).color === neutralColor),
+    pointer_open_neutral: pointerOpenNeutral,
+    pointer_handoff_neutral: pointerHandoffNeutral,
+    keyboard_resumes_after_pointer: keyboardResumesFromFocus,
+    recent_chevron_geometry: recentChevronGeometry,
+    more_chevron_geometry: moreChevronGeometry,
+    pointer_focus_hidden: pointerFocusHidden,
+    keyboard_focus_visible: keyboardFocusVisible,
+    pair_row_focus_whole: pairRowFocusWhole,
+    pair_button_focused: document.activeElement === onlineSelect,
+    source_node_id: source.id,
+  };
+})()
+"""
+
+
+_POINTER_PREPARE_SCRIPT = r"""
+(() => {
+  const source = document.querySelector("#setup-source-path");
+  const clear = document.querySelector(".nami-setup__clear");
+  const online = document.querySelector('.nami-setup__recent-pair[aria-disabled="false"]');
+  const disabled = document.querySelector('.nami-setup__recent-pair[aria-disabled="true"]');
+  const onlineStatus = online?.querySelector(".nami-setup__availability")?.closest("td");
+  const disabledStatus = disabled?.querySelector(".nami-setup__availability")?.closest("td");
+  if (!(source instanceof HTMLInputElement) || !(clear instanceof HTMLButtonElement) ||
+      !(online instanceof HTMLTableRowElement) || !(disabled instanceof HTMLTableRowElement) ||
+      !(onlineStatus instanceof HTMLTableCellElement) || !(disabledStatus instanceof HTMLTableCellElement)) {
+    throw new Error("native pointer targets are unavailable");
+  }
+  const api = window.pywebview?.api;
+  if (api === undefined || typeof api.dispatch !== "function") throw new Error("native dispatch is unavailable");
+  const dispatch = api.dispatch;
+  const center = (element) => {
+    const rect = element.getBoundingClientRect();
+    return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+  };
+  const resolveColor = (token) => {
+    const witness = document.createElement("span");
+    witness.style.backgroundColor = `var(${token})`;
+    document.body.append(witness);
+    const color = getComputedStyle(witness).backgroundColor;
+    witness.remove();
+    return color;
+  };
+  source.scrollIntoView({block: "center"});
+  source.focus();
+  window.__setupPointerProbe = {
+    api, dispatch, admits: 0,
+    online, disabled,
+    onlineBase: getComputedStyle(online).backgroundColor,
+    disabledBase: getComputedStyle(disabled).backgroundColor,
+    hoverExpected: resolveColor("--color-neutral-surface-hover"),
+    pressedExpected: resolveColor("--color-neutral-surface-pressed"),
+  };
+  api.dispatch = function(request) {
+    try {
+      if (typeof request === "string" && JSON.parse(request).command === "admit_location") {
+        window.__setupPointerProbe.admits += 1;
+      }
+    } catch (_error) {}
+    return dispatch.apply(api, arguments);
+  };
+  return {clear: center(clear)};
+})()
+"""
+
+
+_POINTER_ONLINE_POINT_SCRIPT = r"""
+(() => {
+  const cell = window.__setupPointerProbe.online.querySelector(".nami-setup__availability").closest("td");
+  cell.scrollIntoView({block: "center"});
+  const rect = cell.getBoundingClientRect();
+  return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+})()
+"""
+
+
+_POINTER_DISABLED_POINT_SCRIPT = r"""
+(() => {
+  const cell = window.__setupPointerProbe.disabled.querySelector(".nami-setup__availability").closest("td");
+  cell.scrollIntoView({block: "center"});
+  const rect = cell.getBoundingClientRect();
+  return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+})()
+"""
+
+
+_POINTER_CLEAR_RESULT_SCRIPT = r"""
+(async () => {
+  const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  const probe = window.__setupPointerProbe;
+  const source = document.querySelector("#setup-source-path");
+  const local = source instanceof HTMLInputElement && source.value === "" &&
+    source.dataset.state === "unresolved" && document.activeElement === source && probe.admits === 0;
+  probe.api.dispatch = probe.dispatch;
+  source.value = __SOURCE__;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  source.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", bubbles: true}));
+  for (let attempt = 0; attempt < 400 && source.dataset.state !== "resolved"; attempt += 1) await sleep(25);
+  if (source.dataset.state !== "resolved") throw new Error("source admission was not restored after clear pointer probe");
+  return {ok: local};
+})()
+"""
+
+
+_POINTER_HOVER_RESULT_SCRIPT = r"""
+(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const probe = window.__setupPointerProbe;
+  const row = probe.online;
+  const style = getComputedStyle(row);
+  const transparent = "rgba(0, 0, 0, 0)";
+  probe.hover = style.backgroundColor;
+  probe.hoverOk = probe.hover === probe.hoverExpected && probe.hover !== probe.onlineBase &&
+    Array.from(row.children).every((cell) => getComputedStyle(cell).backgroundColor === transparent) &&
+    getComputedStyle(row.querySelector(".nami-setup__pair-select")).backgroundColor === transparent;
+  return {ok: probe.hoverOk};
+})()
+"""
+
+
+_POINTER_PRESSED_RESULT_SCRIPT = r"""
+(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const probe = window.__setupPointerProbe;
+  probe.pressedOk = getComputedStyle(probe.online).backgroundColor === probe.pressedExpected &&
+    probe.pressedExpected !== probe.hover;
+  return {ok: probe.pressedOk};
+})()
+"""
+
+
+_POINTER_DISABLED_RESULT_SCRIPT = r"""
+(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const probe = window.__setupPointerProbe;
+  const style = getComputedStyle(probe.disabled);
+  const disabledOk = style.backgroundColor === probe.disabledBase && style.boxShadow === "none" &&
+    Array.from(probe.disabled.children).every((cell) => getComputedStyle(cell).backgroundColor === "rgba(0, 0, 0, 0)") &&
+    getComputedStyle(probe.disabled.querySelector(".nami-setup__pair-select")).backgroundColor === "rgba(0, 0, 0, 0)";
+  const result = Boolean(probe.hoverOk && probe.pressedOk && disabledOk);
+  return {ok: result};
+})()
+"""
+
+
+_FROZEN_SCRIPT = r"""
+(async () => {
+  const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  async function until(predicate, label) {
+    for (let attempt = 0; attempt < 400; attempt += 1) {
+      const value = predicate();
+      if (value) return value;
+      await sleep(25);
+    }
+    throw new Error(`timed out waiting for ${label}`);
+  }
+  async function planAgainTraceControl(action, value = null) {
+    if (globalThis.__namiPlanAgainTrace === undefined) return;
+    const requestId = "f".repeat(32);
+    const native = await window.pywebview.api.dispatch(JSON.stringify({
+      schema_version: 1, request_id: requestId, command: "setup_plan_again_trace",
+      payload: {action, value},
+    }));
+    const response = JSON.parse(JSON.stringify(native.response));
+    if (native.response_token !== null) {
+      await window.pywebview.api.dispatch(`ack:${native.response_token}`);
+    }
+    if (response?.request_id !== requestId || response.ok !== true ||
+        response.result?.accepted !== true) throw new Error("Plan-again trace publication failed");
+  }
+  const source = document.querySelector("#setup-source-path");
+  const target = document.querySelector("#setup-target-path");
+  const button = document.querySelector(".nami-setup__actions .nami-button--primary");
+  if (!(source instanceof HTMLInputElement) || !(target instanceof HTMLInputElement) ||
+      !(button instanceof HTMLButtonElement)) throw new Error("plan action is unavailable");
+  const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
+  if (!(picker instanceof HTMLButtonElement)) throw new Error("source picker is unavailable");
+  picker.focus();
+  picker.click();
+  await until(() => source.dataset.state === "resolved" && source.value === __PICKED_SOURCE__, "resolved picker choice");
+  target.value = __TARGET__;
+  target.dispatchEvent(new Event("input", {bubbles: true}));
+  const bridge = await import("./bridge.js");
+  const originalTasks = (await bridge.listTasks()).tasks;
+  if (originalTasks.length !== 1) throw new Error("original Setup task identity is ambiguous");
+  const originalTaskId = originalTasks[0].task_id;
+  const checked = (key) => document.querySelector(`[data-option="${key}"]`).checked;
+  const expectedOptions = {
+    filters: Array.from(document.querySelectorAll(".nami-setup__filter-list span"), (item) => item.textContent),
+    deletion_policy: checked("deletion_policy") ? "additive" : "trash",
+    trash_on_update: checked("trash_on_update"),
+    preservation: {preserve_ads: checked("preserve_ads"), preserve_created: checked("preserve_created"),
+      preserve_acl: checked("preserve_acl")},
+    propagate_source_casing: checked("propagate_source_casing"), verify_after_execute: checked("verify_after_execute"),
+  };
+  const pickerResolved = source.dataset.state === "resolved";
+  // Keep blur and activation in one turn so the native admission cannot finish
+  // between them. This is the formerly swallowed first-click ordering.
+  target.dispatchEvent(new Event("blur", {bubbles: true}));
+  const startEnabledDuringAdmission = !button.disabled;
+  if (!startEnabledDuringAdmission) throw new Error("blur admission disabled Create plan");
+  button.click();
+  let planAgain;
+  try {
+    await until(() => document.querySelector(".nami-plan-review")?.checkVisibility(), "production Plan review");
+    planAgain = await until(() => {
+      const candidate = document.querySelector('.nami-plan-review [data-action="plan-again"]');
+      return candidate instanceof HTMLButtonElement && !candidate.hidden
+        && candidate.checkVisibility() && !candidate.disabled
+        ? candidate : null;
+    }, "fresh Plan-again readiness");
+  } catch (error) {
+    const detail = {
+      host: document.querySelector("#host-status")?.textContent ?? null,
+      guidance: document.querySelector(".nami-setup > p")?.textContent ?? null,
+      action: document.querySelector(".nami-setup__action-status")?.textContent ?? null,
+      task_status: document.querySelector('[aria-current="page"] .nami-task-card__status')?.textContent ?? null,
+      review_visible: document.querySelector(".nami-plan-review")?.checkVisibility() ?? false,
+    };
+    throw new Error(`${error.message}; dom=${JSON.stringify(detail)}`);
+  }
+  const frozen = (await bridge.readSetup(originalTaskId)).snapshot;
+  const frozenReadback = {
+    source: document.querySelector(".nami-plan-review__path--source .nami-labeled-path__value")?.textContent,
+    target: document.querySelector(".nami-plan-review__path--target .nami-labeled-path__value")?.textContent,
+    settings: Array.from(document.querySelectorAll(".nami-plan-review__settings > span"), (item) => item.textContent),
+    visible: Array.from(document.querySelectorAll(".nami-plan-review__path, .nami-plan-review__settings > span"))
+      .every((item) => item.checkVisibility()),
+    controls_absent: document.querySelector(".nami-setup") === null &&
+      document.querySelector(".nami-plan-review__plan input") === null,
+  };
+  const before = document.querySelectorAll(".nami-task-rail__row").length;
+  await planAgainTraceControl("begin");
+  globalThis.__namiPlanAgainTrace?.begin("setup");
+  let routeError = null;
+  const planAgainVisible = !planAgain.hidden && planAgain.checkVisibility();
+  try {
+    planAgain.click();
+    await until(() => document.querySelectorAll(".nami-task-rail__row").length === before + 1, "Plan-again task identity");
+  } catch (error) {
+    routeError = error;
+  }
+  try {
+    const trace = globalThis.__namiPlanAgainTrace?.snapshot();
+    if (trace !== undefined) {
+      if (!globalThis.__namiPlanAgainTrace.end("setup")) {
+        throw new Error("Plan-again trace phase did not end");
+      }
+      await planAgainTraceControl("record", trace);
+    }
+  } catch (error) {
+    if (routeError === null) routeError = error;
+  }
+  if (routeError !== null) throw routeError;
+  const newTasks = (await bridge.listTasks()).tasks.filter((task) => task.task_id !== originalTaskId);
+  if (newTasks.length !== 1) throw new Error("Plan-again task identity is ambiguous");
+  return {
+    frozen: frozen.setup_state === "frozen" && frozen.task_kind === "sync-plan",
+    frozen_snapshot: frozen,
+    frozen_readback: frozenReadback,
+    expected_options: expectedOptions,
+    original_after_replan: (await bridge.readSetup(originalTaskId)).snapshot,
+    replanned_snapshot: (await bridge.readSetup(newTasks[0].task_id)).snapshot,
+    plan_again_visible: planAgainVisible,
+    plan_again_new_task: true,
+    picker_resolved: pickerResolved,
+    start_enabled_during_admission: startEnabledDuringAdmission,
+  };
+})()
+"""
+
+
+_INDEPENDENT_SCRIPT = r"""
+(async () => {
+  const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  async function until(predicate, label) {
+    for (let attempt = 0; attempt < 400; attempt += 1) {
+      const value = predicate();
+      if (value) return value;
+      await sleep(25);
+    }
+    throw new Error(`timed out waiting for ${label}`);
+  }
+  function newTask() {
+    document.querySelector(".nami-task-rail__header .nami-button")?.click();
+  }
+  async function editable() {
+    return await until(() => {
+      const source = document.querySelector("#setup-source-path");
+      const target = document.querySelector("#setup-target-path");
+      return source instanceof HTMLInputElement && target instanceof HTMLInputElement && !source.disabled ? {source, target} : null;
+    }, "new editable Setup task");
+  }
+
+  newTask();
+  let {source, target} = await editable();
+  const recentPair = await until(() => {
+    const value = document.querySelector('.nami-setup__recent-pair[data-source-availability="online"][data-target-availability="online"]');
+    const button = value?.querySelector(".nami-setup__pair-select");
+    return button instanceof HTMLButtonElement && !button.disabled ? button : null;
+  }, "online recent pair");
+  recentPair.focus();
+  recentPair.click();
+  await until(() => source.dataset.state === "resolved" && target.dataset.state === "resolved", "recent pair admission");
+  const pairActivated = source.value.length > 0 && target.value.length > 0;
+  const mode = document.querySelector('.nami-setup__mode [role="radio"][data-value="inventory"]');
+  if (!(mode instanceof HTMLButtonElement)) throw new Error("task type selector is unavailable");
+  mode.click();
+  await until(() => document.querySelector('[for="setup-source-path"]')?.textContent === "Root", "inventory mode");
+  const recentTrigger = await until(() => document.querySelector("#setup-source-recent-trigger"), "recent source trigger");
+  recentTrigger.click();
+  const recent = await until(() => Array.from(document.querySelectorAll('#setup-source-recent-popup [role="option"]'))
+    .find((item) => item.textContent === __SOURCE__), "known online recent source");
+  recent.click();
+  await until(() => source.dataset.state === "resolved", "recent admission");
+  const inventory = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((button) => button.textContent === "Create inventory");
+  if (!(inventory instanceof HTMLButtonElement)) throw new Error("inventory action is unavailable");
+  const inventoryPlan = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((button) => button.textContent === "Create plan");
+  const inventoryActionVisibility = inventory.checkVisibility() && !inventoryPlan.checkVisibility();
+  inventory.click();
+  await until(() => document.querySelector(".nami-inventory-review")?.checkVisibility() &&
+    document.querySelector(".nami-inventory-review .nami-labeled-path__value")?.textContent === __SOURCE__ &&
+    document.querySelector('[data-action="inventory-refresh"]')?.checkVisibility() &&
+    document.querySelector('[data-action="inventory-refresh"]').disabled === false,
+    "frozen inventory readback");
+  const bridge = await import("./bridge.js");
+  const inventoryTasks = (await bridge.listTasks()).tasks.filter((task) => task.task_kind === "inventory");
+  if (inventoryTasks.length !== 1) throw new Error("inventory task identity is ambiguous");
+  const inventorySnapshot = (await bridge.readSetup(inventoryTasks[0].task_id)).snapshot;
+  const inventoryWithoutPair = inventorySnapshot.setup_state === "frozen" &&
+    inventorySnapshot.task_kind === "inventory" && inventorySnapshot.root?.display === __SOURCE__ &&
+    inventorySnapshot.source === null && inventorySnapshot.target === null && inventorySnapshot.options === null;
+  const inventoryInapplicableHidden = document.querySelector(".nami-setup") === null &&
+    document.querySelector(".nami-inventory-review .nami-plan-review__paths input") === null &&
+    document.querySelectorAll(".nami-inventory-review .nami-labeled-path__value").length === 1;
+
+  newTask();
+  ({source, target} = await editable());
+  source.value = __SOURCE__;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  const add = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((button) => button.textContent === "Add pair");
+  if (!(add instanceof HTMLButtonElement)) throw new Error("pair action is unavailable");
+  add.click();
+  target.value = __TARGET__;
+  target.dispatchEvent(new Event("input", {bubbles: true}));
+  add.click();
+  add.click();
+  add.click();
+  add.click();
+  add.click();
+  add.click();
+  const queuedRows = Array.from(document.querySelectorAll(".nami-setup__batch-row"));
+  const batchViewport = document.querySelector(".nami-setup__batch-viewport");
+  const batchHeader = batchViewport?.querySelector("thead");
+  const batchBody = batchViewport?.querySelector("tbody");
+  const queuedPathsVisible = queuedRows.length === 7 && queuedRows.every((row) => {
+    const paths = Array.from(row.querySelectorAll(".nami-setup__batch-path"));
+    return paths.length === 2 && paths.every((path, index) =>
+      path.querySelector(".nami-setup__batch-path-label")?.textContent === (index === 0 ? "Source: " : "Target: ") &&
+      path.querySelector(".nami-setup__batch-path-value")?.textContent === path.title);
+  });
+  const batchPathsAlign = () => queuedRows.every((row) => {
+    const paths = Array.from(row.querySelectorAll(".nami-setup__batch-path"));
+    const values = paths.map((path) => path.querySelector(".nami-setup__batch-path-value"));
+    return values.every((value, index) => {
+      const label = paths[index].querySelector(".nami-setup__batch-path-label").getBoundingClientRect();
+      const bounds = value.getBoundingClientRect();
+      const style = getComputedStyle(value);
+      const expectedTrack = 3.5 * parseFloat(getComputedStyle(paths[index]).fontSize);
+      return Math.abs(label.width - expectedTrack) <= 1 && Math.abs(bounds.left - label.right - 4) <= 1 &&
+        style.textOverflow === "ellipsis" && style.overflow === "hidden";
+    }) && Math.abs(values[0].getBoundingClientRect().left - values[1].getBoundingClientRect().left) <= 1;
+  });
+  const fullBatchPathsAlign = batchPathsAlign();
+  const batchCells = queuedRows[0]?.children;
+  const batchTable = batchViewport?.querySelector(".nami-setup__batch-table");
+  const fitsViewport = () => batchViewport.scrollWidth === batchViewport.clientWidth &&
+    batchTable.getBoundingClientRect().right <= batchViewport.getBoundingClientRect().right + 1;
+  const queuedFullWidthFits = fitsViewport();
+  batchViewport.style.inlineSize = "32rem";
+  const queuedNarrowFits = fitsViewport();
+  const narrowBatchPathsAlign = batchPathsAlign();
+  batchViewport.style.removeProperty("inline-size");
+  const batchHeaderTop = batchHeader?.getBoundingClientRect().top;
+  if (batchBody instanceof HTMLTableSectionElement) batchBody.scrollTop = 56;
+  const batchHeaderFixed = batchHeader instanceof HTMLTableSectionElement &&
+    Math.abs(batchHeader.getBoundingClientRect().top - batchHeaderTop) <= 0.5;
+  if (batchBody instanceof HTMLTableSectionElement) batchBody.scrollTop = 0;
+  const batchSlotsBounded = batchViewport instanceof HTMLElement && batchHeader instanceof HTMLTableSectionElement &&
+    batchBody instanceof HTMLTableSectionElement &&
+    Math.abs(batchViewport.getBoundingClientRect().height - 308) <= 1 &&
+    Math.abs(batchHeader.getBoundingClientRect().height - 28) <= 1 && batchHeaderFixed &&
+    batchBody.scrollHeight > batchBody.clientHeight && batchViewport.scrollWidth === batchViewport.clientWidth;
+  const batchColumnWidths = batchCells?.length === 4 &&
+    batchCells[0].getBoundingClientRect().width > batchCells[1].getBoundingClientRect().width &&
+    Math.abs(batchCells[3].getBoundingClientRect().width - 48) <= 1 &&
+    parseFloat(getComputedStyle(batchCells[0]).paddingInlineStart) ===
+      parseFloat(getComputedStyle(batchHeader.querySelector("th")).paddingInlineStart);
+  const createPlan = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((button) => button.textContent === "Create plan");
+  const batchFooter = document.querySelector(".nami-setup__batch-actions");
+  const batchActionGap = batchFooter instanceof HTMLElement && batchViewport instanceof HTMLElement
+    ? batchFooter.getBoundingClientRect().top - batchViewport.getBoundingClientRect().bottom : -1;
+  const batchActionPlacement = createPlan instanceof HTMLButtonElement && createPlan.checkVisibility() && createPlan.disabled &&
+    batchFooter instanceof HTMLElement && batchFooter.checkVisibility() && Math.abs(batchActionGap - 8) <= 1;
+  const queuedClear = batchFooter.querySelector(".nami-setup__clear-batch");
+  const queuedFooterActionsRetained = queuedClear instanceof HTMLButtonElement && queuedClear.checkVisibility() && queuedClear.disabled;
+  const removable = queuedRows.at(-1)?.querySelector(".nami-setup__batch-remove");
+  if (!(removable instanceof HTMLButtonElement) || removable.disabled) throw new Error("queued batch removal is unavailable");
+  if (!removable.querySelector(".nami-icon--dismiss") || removable.ariaLabel !== "Remove queued pair" ||
+      getComputedStyle(removable).backgroundColor !== "rgba(0, 0, 0, 0)") {
+    throw new Error("queued batch removal is not a transparent dismiss control");
+  }
+  removable.click();
+  await until(() => document.querySelectorAll(".nami-setup__batch-row").length === 6 &&
+    document.querySelectorAll(".nami-setup__batch-viewport .nami-setup__pair-placeholder").length === 0, "queued batch removal");
+  const batch = Array.from(document.querySelectorAll(".nami-setup__batch-actions button"))
+    .find((button) => button.textContent === "Create batch");
+  if (!(batch instanceof HTMLButtonElement)) throw new Error("batch action is unavailable");
+  const createBatchRight = Math.abs(batch.getBoundingClientRect().right - batchFooter.getBoundingClientRect().right) <= 1;
+  batch.click();
+  await until(() => {
+    const states = Array.from(document.querySelectorAll(".nami-setup__batch-row")).map((item) => item.dataset.state);
+    return states.length === 6 && states.includes("refused") && states.includes("created") &&
+      states.every((state) => ["refused", "created"].includes(state)) ? states : null;
+  }, "mixed serial batch");
+  const settledFullWidthFits = fitsViewport();
+  batchViewport.style.inlineSize = "32rem";
+  const settledNarrowFits = fitsViewport();
+  batchViewport.style.removeProperty("inline-size");
+  const clearBatch = Array.from(document.querySelectorAll(".nami-setup__batch-actions button"))
+    .find((button) => button.textContent === "Clear results");
+  if (!(clearBatch instanceof HTMLButtonElement) || !clearBatch.checkVisibility()) throw new Error("batch clear action is unavailable");
+  const clearLeftCreateRight = Math.abs(clearBatch.getBoundingClientRect().left - batchFooter.getBoundingClientRect().left) <= 1 &&
+    createBatchRight && batch.checkVisibility() && batch.disabled && !clearBatch.disabled;
+  clearBatch.click();
+  await until(() => !document.querySelector(".nami-setup__batch").checkVisibility(), "cleared settled batch");
+  const original = Array.from(document.querySelectorAll(".nami-task-card"))
+    .find((button) => button.dataset.taskLabel === "Task 1");
+  if (!(original instanceof HTMLButtonElement)) throw new Error("original completed task is unavailable");
+  original.click();
+  await until(() => {
+    const review = document.querySelector(".nami-plan-review");
+    const table = review?.querySelector(".nami-plan-review__table-card");
+    return original.ariaCurrent === "page"
+      && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
+      && review instanceof HTMLElement && review.checkVisibility()
+      && table instanceof HTMLElement && table.checkVisibility();
+  }, "original completed Plan review navigation");
+  return {
+    recent_activated: true,
+    recent_pair_activated: pairActivated,
+    recent_pair_native_button: recentPair.tagName === "BUTTON",
+    inventory_without_pair: inventoryWithoutPair,
+    inventory_action_visibility: inventoryActionVisibility,
+    inventory_inapplicable_hidden: inventoryInapplicableHidden,
+    mixed_batch: true,
+    batch_paths_visible: queuedPathsVisible,
+    batch_paths_aligned: fullBatchPathsAlign && narrowBatchPathsAlign,
+    batch_slots_bounded: batchSlotsBounded,
+    batch_column_widths: batchColumnWidths,
+    batch_no_horizontal_overflow: queuedFullWidthFits && queuedNarrowFits && settledFullWidthFits && settledNarrowFits,
+    batch_action_placement: batchActionPlacement,
+    batch_clear_left_create_right: clearLeftCreateRight,
+    batch_footer_actions_retained: queuedFooterActionsRetained,
+    batch_clear_hides_settled: true,
+    queued_batch_removable: true,
+    navigation_retains_completed_plan: true,
+  };
+})()
+"""
+
+
+_AMBIGUITY_SCRIPT = r"""
+(async () => {
+  const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  async function until(predicate, label) {
+    for (let attempt = 0; attempt < 400; attempt += 1) {
+      const value = predicate();
+      if (value) return value;
+      await sleep(25);
+    }
+    throw new Error(`timed out waiting for ${label}`);
+  }
+  document.querySelector(".nami-task-rail__header .nami-button")?.click();
+  const source = await until(() => {
+    const value = document.querySelector("#setup-source-path");
+    return value instanceof HTMLInputElement && !value.disabled ? value : null;
+  }, "ambiguity Setup source");
+  const target = document.querySelector("#setup-target-path");
+  const start = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((button) => button.textContent === "Create plan");
+  if (!(target instanceof HTMLInputElement) || !(start instanceof HTMLButtonElement)) {
+    throw new Error("ambiguity Setup actions are unavailable");
+  }
+  target.value = __TARGET__;
+  target.dispatchEvent(new Event("input", {bubbles: true}));
+  target.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => target.dataset.state === "resolved", "ambiguity target admission");
+  const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
+  if (!(picker instanceof HTMLButtonElement)) throw new Error("ambiguity picker is unavailable");
+  picker.focus();
+  picker.click();
+  const mounts = await until(() => {
+    const values = Array.from(document.querySelectorAll('[data-purpose="source"] .nami-setup__mount'));
+    return source.dataset.state === "ambiguous" && values.length === 2 ? values : null;
+  }, "picker ambiguity continuation");
+  const refusedBeforeChoice = start.disabled;
+  const chosenIndex = Number(mounts[1].dataset.mountIndex);
+  mounts[1].click();
+  await until(() => source.dataset.state === "resolved" && !start.disabled, "continued picker choice");
+  const completedTask = Array.from(document.querySelectorAll(".nami-task-card"))
+    .find((button) => button.dataset.taskLabel === "Task 1");
+  if (!(completedTask instanceof HTMLButtonElement)) throw new Error("completed task is unavailable before revisit");
+  completedTask.click();
+  await until(() => {
+    const review = document.querySelector(".nami-plan-review");
+    const table = review?.querySelector(".nami-plan-review__table-card");
+    return completedTask.ariaCurrent === "page"
+      && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
+      && review instanceof HTMLElement && review.checkVisibility()
+      && table instanceof HTMLElement && table.checkVisibility();
+  }, "completed Plan review before screenshot and revisit");
+  return {
+    picker_ambiguous: true,
+    picker_mount_index: chosenIndex,
+    picker_continued: source.dataset.state === "resolved",
+    start_refused_before_choice: refusedBeforeChoice,
+    plan_review_before_capture: true,
+    task_count_before_revisit: document.querySelectorAll(".nami-task-rail__row").length,
+  };
+})()
+"""
+
+
+_REVISITED_SCRIPT = r"""
+(async () => {
+  const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  async function until(predicate, label) {
+    for (let attempt = 0; attempt < 400; attempt += 1) {
+      const value = predicate();
+      if (value) return value;
+      await sleep(25);
+    }
+    throw new Error(`timed out waiting for ${label}`);
+  }
+  await until(() => document.querySelector("#host-status")?.textContent === "Ready", "host readiness");
+  await until(() => document.querySelectorAll(".nami-task-rail__row").length === __TASK_COUNT__, "retained task identities");
+  const settings = document.querySelector(".nami-task-rail__settings");
+  if (!(settings instanceof HTMLButtonElement)) throw new Error("Settings navigation is unavailable");
+  settings.click();
+  await until(() => document.querySelector("#settings-view")?.checkVisibility(), "Settings navigation");
+  const cards = Array.from(document.querySelectorAll(".nami-task-rail__items .nami-task-card"));
+  const original = cards.find((card) =>
+    card.dataset.taskLabel === "Task 1");
+  if (!(original instanceof HTMLButtonElement)) throw new Error("completed task is unavailable after navigation");
+  original.click();
+  await until(() => {
+    const review = document.querySelector(".nami-plan-review");
+    const table = review?.querySelector(".nami-plan-review__table-card");
+    return original.ariaCurrent === "page"
+      && document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === "Work area — Task 1"
+      && review instanceof HTMLElement && review.checkVisibility()
+      && table instanceof HTMLElement && table.checkVisibility();
+  }, "revisited completed Plan review");
+  const marker = document.createElement("p");
+  marker.textContent = "Setup headed gate complete";
+  document.body.append(marker);
+  return {
+    revisit_task_count: cards.length,
+    revisit_plan_review_visible: true,
+    revisit_selected_task: "Task 1",
+  };
+})()
+"""
+
+
+def _runtime_value(task: object) -> dict[str, object]:
+    if task.IsFaulted or task.IsCanceled:
+        raise RuntimeError("native CDP evaluation failed")
+    envelope = json.loads(str(task.Result))
+    exception = envelope.get("exceptionDetails") if type(envelope) is dict else None
+    if type(exception) is dict:
+        thrown = exception.get("exception")
+        detail = thrown.get("description") if type(thrown) is dict else exception.get("text")
+        raise RuntimeError(str(detail)[:1024])
+    value = envelope.get("result", {}).get("value") if type(envelope) is dict else None
+    if type(value) is not dict:
+        raise RuntimeError("page Setup probe did not return an object")
+    return value
+
+
+def _table_accessibility_evidence(task: object) -> dict[str, int]:
+    if task.IsFaulted or task.IsCanceled:
+        raise RuntimeError("native Setup accessibility probe failed")
+    envelope = json.loads(str(task.Result))
+    nodes = envelope.get("nodes") if type(envelope) is dict else None
+    if type(nodes) is not list:
+        raise RuntimeError("native Setup accessibility tree is invalid")
+    counts = {name: 0 for name in ("table", "rowgroup", "row", "columnheader", "cell")}
+    for node in nodes:
+        if type(node) is not dict or node.get("ignored") is True:
+            continue
+        role = node.get("role")
+        name = role.get("value") if type(role) is dict else None
+        if name in counts:
+            counts[name] += 1
+    return counts
+
+
+def _capture(
+    core: object,
+    path: Path,
+    retained: list[object],
+    continuation: object,
+    on_failure: object,
+) -> None:
+    from System import Action
+
+    task = core.CallDevToolsProtocolMethodAsync("Page.captureScreenshot", "{\"format\":\"png\"}")
+
+    def completed() -> None:
+        try:
+            if task.IsFaulted or task.IsCanceled:
+                raise RuntimeError("native screenshot capture failed")
+            envelope = json.loads(str(task.Result))
+            data = envelope.get("data") if type(envelope) is dict else None
+            if type(data) is not str:
+                raise RuntimeError("native screenshot payload is invalid")
+            path.write_bytes(base64.b64decode(data, validate=True))
+            continuation()
+        except BaseException as error:
+            on_failure(error)
+
+    action = Action(completed)
+    retained.append(action)
+    task.GetAwaiter().OnCompleted(action)
+
+
+def _devtools(
+    core: object,
+    method: str,
+    parameters: dict[str, object],
+    retained: list[object],
+    continuation: object,
+    on_failure: object,
+) -> None:
+    from System import Action
+
+    task = core.CallDevToolsProtocolMethodAsync(method, json.dumps(parameters))
+
+    def completed() -> None:
+        try:
+            if task.IsFaulted or task.IsCanceled:
+                raise RuntimeError(f"native {method} call failed")
+            continuation(task)
+        except BaseException as error:
+            on_failure(error)
+
+    action = Action(completed)
+    retained.append(action)
+    task.GetAwaiter().OnCompleted(action)
+
+
+def _pointer_checks(
+    core: object,
+    source: Path,
+    retained: list[object],
+    continuation: object,
+    on_failure: object,
+) -> None:
+    evaluate = lambda expression, callback: _devtools(
+        core,
+        "Runtime.evaluate",
+        {"expression": expression, "awaitPromise": True, "returnByValue": True},
+        retained,
+        callback,
+        on_failure,
+    )
+
+    def mouse(event_type: str, point: dict[str, object], callback: object, *, pressed: bool = False) -> None:
+        parameters: dict[str, object] = {
+            "type": event_type,
+            "x": point["x"],
+            "y": point["y"],
+            "button": "left" if event_type != "mouseMoved" else "none",
+            "buttons": 1 if pressed else 0,
+        }
+        if event_type != "mouseMoved":
+            parameters["clickCount"] = 1
+        _devtools(core, "Input.dispatchMouseEvent", parameters, retained, callback, on_failure)
+
+    prepare = _POINTER_PREPARE_SCRIPT
+
+    def result_ok(task: object) -> bool:
+        result = _runtime_value(task)
+        return type(result) is dict and result.get("ok") is True
+
+    def check_disabled_cells(done: object) -> None:
+        observations: list[bool] = []
+
+        def locate(path_cell: bool) -> None:
+            script = _POINTER_DISABLED_POINT_SCRIPT
+            if path_cell:
+                script = script.replace('.querySelector(".nami-setup__availability").closest("td")',
+                                        '.querySelector(".nami-setup__pair-select")')
+
+            def located(task: object) -> None:
+                point = _runtime_value(task)
+
+                def inspected(result: object) -> None:
+                    observations.append(result_ok(result))
+                    if not path_cell:
+                        locate(True)
+                    else:
+                        mouse("mousePressed", point, lambda _task: evaluate(
+                            _POINTER_DISABLED_RESULT_SCRIPT, pressed_checked), pressed=True)
+
+                def pressed_checked(result: object) -> None:
+                    observations.append(result_ok(result))
+                    mouse("mouseReleased", point, lambda _task: evaluate(
+                        'delete window.__setupPointerProbe; ({ok: true});',
+                        lambda _result: done(all(observations))))
+
+                mouse("mouseMoved", point, lambda _task: evaluate(
+                    _POINTER_DISABLED_RESULT_SCRIPT, inspected))
+
+            evaluate(script, located)
+
+        locate(False)
+
+    def prepared(task: object) -> None:
+        points = _runtime_value(task)
+        if type(points) is not dict or type(points.get("clear")) is not dict:
+            raise RuntimeError("native pointer coordinates are invalid")
+
+        def clear_released(_task: object) -> None:
+            clear_script = _POINTER_CLEAR_RESULT_SCRIPT.replace("__SOURCE__", json.dumps(str(source)))
+
+            def clear_checked(clear_task: object) -> None:
+                clear_local = result_ok(clear_task)
+
+                def online_located(online_task: object) -> None:
+                    online = _runtime_value(online_task)
+                    if type(online) is not dict:
+                        raise RuntimeError("native online-row coordinate is invalid")
+
+                    def online_moved(_task: object) -> None:
+                        def hover_checked(hover_task: object) -> None:
+                            hover_ok = result_ok(hover_task)
+
+                            def online_pressed(_task: object) -> None:
+                                def pressed_checked(pressed_task: object) -> None:
+                                    pressed_ok = result_ok(pressed_task)
+
+                                    def online_released(_task: object) -> None:
+                                        check_disabled_cells(lambda pair_states: continuation({
+                                            "clear_pointer_local": clear_local,
+                                            "pair_pointer_states": bool(hover_ok and pressed_ok and pair_states),
+                                            "pair_pointer_detail": {
+                                                "hover": _runtime_value(hover_task),
+                                                "pressed": _runtime_value(pressed_task),
+                                                "disabled": pair_states,
+                                            },
+                                        }))
+
+                                    mouse("mouseReleased", online, online_released)
+
+                                evaluate(_POINTER_PRESSED_RESULT_SCRIPT, pressed_checked)
+
+                            mouse("mousePressed", online, online_pressed, pressed=True)
+
+                        evaluate(_POINTER_HOVER_RESULT_SCRIPT, hover_checked)
+
+                    mouse("mouseMoved", online, online_moved)
+
+                evaluate(_POINTER_ONLINE_POINT_SCRIPT, online_located)
+
+            evaluate(clear_script, clear_checked)
+
+        def clear_pressed(_task: object) -> None:
+            mouse("mouseReleased", points["clear"], clear_released)
+
+        def clear_moved(_task: object) -> None:
+            mouse("mousePressed", points["clear"], clear_pressed, pressed=True)
+
+        mouse("mouseMoved", points["clear"], clear_moved)
+
+    evaluate(prepare, prepared)
+
+
+def _begin(
+    window: object,
+    recorder: _Recorder,
+    screenshot_dir: Path,
+    source: Path,
+    target: Path,
+    retained: list[object],
+    state: dict[str, object],
+) -> None:
+    from System import Action
+
+    core = window.native.browser.webview.CoreWebView2
+    picked_source = source.parent / "picked-source"
+    editable_script = _EDITABLE_SCRIPT.replace("__SOURCE__", json.dumps(str(source)))
+    editable_settings = json.dumps({"expression": editable_script, "awaitPromise": True, "returnByValue": True})
+    editable_task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", editable_settings)
+
+    def editable_done() -> None:
+        try:
+            editable = _runtime_value(editable_task)
+            def begin_frozen() -> None:
+                picked_source = source.parent / "picked-source"
+                script = _FROZEN_SCRIPT.replace("__PICKED_SOURCE__", json.dumps(str(picked_source))).replace("__TARGET__", json.dumps(str(target)))
+                frozen_settings = json.dumps({"expression": script, "awaitPromise": True, "returnByValue": True})
+                frozen_task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", frozen_settings)
+
+                def frozen_done() -> None:
+                    try:
+                        frozen = _runtime_value(frozen_task)
+                        independent_script = _INDEPENDENT_SCRIPT.replace("__SOURCE__", json.dumps(str(source))).replace("__TARGET__", json.dumps(str(target)))
+                        independent_settings = json.dumps({"expression": independent_script, "awaitPromise": True, "returnByValue": True})
+                        independent_task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", independent_settings)
+
+                        def independent_done() -> None:
+                            try:
+                                independent = _runtime_value(independent_task)
+                                ambiguity_script = _AMBIGUITY_SCRIPT.replace("__TARGET__", json.dumps(str(target)))
+                                ambiguity_settings = json.dumps({"expression": ambiguity_script, "awaitPromise": True, "returnByValue": True})
+                                ambiguity_task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", ambiguity_settings)
+
+                                def ambiguity_done() -> None:
+                                    try:
+                                        ambiguity = _runtime_value(ambiguity_task)
+                                        report = {
+                                            **editable,
+                                            **frozen,
+                                            **independent,
+                                            **ambiguity,
+                                        }
+
+                                        def revisit_plan_review() -> None:
+                                            state["report"] = report
+                                            _begin_revisited(window, recorder, retained, state)
+
+                                        _capture(
+                                            core, screenshot_dir / "plan-review.png", retained,
+                                            revisit_plan_review,
+                                            lambda error: recorder.failure("plan-review-screenshot", error),
+                                        )
+                                    except BaseException as error:
+                                        recorder.failure("ambiguity", error)
+
+                                ambiguity_action = Action(ambiguity_done)
+                                retained.append(ambiguity_action)
+                                ambiguity_task.GetAwaiter().OnCompleted(ambiguity_action)
+                            except BaseException as error:
+                                recorder.failure("independent", error)
+
+                        independent_action = Action(independent_done)
+                        retained.append(independent_action)
+                        independent_task.GetAwaiter().OnCompleted(independent_action)
+                    except BaseException as error:
+                        recorder.failure("frozen", error)
+
+                action = Action(frozen_done)
+                retained.append(action)
+                frozen_task.GetAwaiter().OnCompleted(action)
+
+            def pointer_done(pointer: dict[str, bool]) -> None:
+                editable.update(pointer)
+                _capture(
+                    core, screenshot_dir / "editable-expanded.png", retained,
+                    lambda: _collapse_and_capture_editable(
+                        core, screenshot_dir, retained, begin_frozen,
+                        lambda error: recorder.failure("editable-screenshot", error),
+                    ),
+                    lambda error: recorder.failure("editable-expanded-screenshot", error),
+                )
+
+            ax_task = core.CallDevToolsProtocolMethodAsync(
+                "Accessibility.getFullAXTree", "{}"
+            )
+
+            def accessibility_done() -> None:
+                try:
+                    editable["table_accessibility"] = _table_accessibility_evidence(ax_task)
+                    _pointer_checks(
+                        core,
+                        source,
+                        retained,
+                        pointer_done,
+                        lambda error: recorder.failure("editable-pointer", error),
+                    )
+                except BaseException as error:
+                    recorder.failure("accessibility", error)
+
+            accessibility_action = Action(accessibility_done)
+            retained.append(accessibility_action)
+            ax_task.GetAwaiter().OnCompleted(accessibility_action)
+        except BaseException as error:
+            recorder.failure("editable", error)
+
+    action = Action(editable_done)
+    retained.append(action)
+    editable_task.GetAwaiter().OnCompleted(action)
+
+
+def _begin_revisited(window: object, recorder: _Recorder, retained: list[object], state: dict[str, object]) -> None:
+    from System import Action
+
+    report = state.get("report")
+    if type(report) is not dict or type(report.get("task_count_before_revisit")) is not int:
+        recorder.failure("revisit", RuntimeError("revisit report is unavailable"))
+        return
+    script = _REVISITED_SCRIPT.replace("__TASK_COUNT__", str(report["task_count_before_revisit"]))
+    settings = json.dumps({"expression": script, "awaitPromise": True, "returnByValue": True})
+    core = window.native.browser.webview.CoreWebView2
+    task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", settings)
+
+    def revisited_done() -> None:
+        try:
+            revisited = _runtime_value(task)
+            state["stage"] = "complete"
+            recorder.ready({**report, **revisited, "screenshots": ["editable", "editable-expanded", "plan-review"]})
+        except BaseException as error:
+            recorder.failure("revisit", error)
+
+    action = Action(revisited_done)
+    retained.append(action)
+    task.GetAwaiter().OnCompleted(action)
+
+
+def _collapse_and_capture_editable(
+    core: object,
+    screenshot_dir: Path,
+    retained: list[object],
+    continuation: object,
+    on_failure: object,
+) -> None:
+    from System import Action
+
+    settings = json.dumps({
+        "expression": 'if (document.querySelector(".nami-setup__more-summary").getAttribute("aria-expanded") === "true") document.querySelector(".nami-setup__more-summary").click();',
+        "awaitPromise": False,
+        "returnByValue": True,
+    })
+    task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", settings)
+
+    def collapsed() -> None:
+        try:
+            if task.IsFaulted or task.IsCanceled:
+                raise RuntimeError("collapsing editable Setup failed")
+            _capture(core, screenshot_dir / "editable.png", retained, continuation, on_failure)
+        except BaseException as error:
+            on_failure(error)
+
+    action = Action(collapsed)
+    retained.append(action)
+    task.GetAwaiter().OnCompleted(action)
+
+
+def _configure_probe(window: object, recorder: _Recorder, screenshot_dir: Path, source: Path, target: Path, retained: list[object], original: object, *args: object, **kwargs: object) -> object:
+    controller = original(window, *args, **kwargs)
+    state: dict[str, object] = {"stage": "initial", "report": None}
+
+    def loaded() -> None:
+        from System import Action
+
+        stage = state["stage"]
+        if stage == "initial":
+            state["stage"] = "running"
+            callback = lambda: _begin(window, recorder, screenshot_dir, source, target, retained, state)
+        else:
+            return
+        action = Action(callback)
+        retained.append(action)
+        window.native.BeginInvoke(action)
+
+    retained.append(loaded)
+    window.events.loaded += loaded
+    return controller
+
+
+def _arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--mutex", required=True)
+    parser.add_argument("--title", required=True)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
+    parser.add_argument("--screenshot-dir", required=True, type=Path)
+    parser.add_argument("--source", required=True, type=Path)
+    parser.add_argument("--target", required=True, type=Path)
+    parser.add_argument("--plan-again-trace", action="store_true")
+    return parser.parse_args()
+
+
+class _AmbiguousRegistry:
+    def __init__(self, inner: object, candidate_path: Path, mounts: tuple[Path, Path], recorder: _Recorder) -> None:
+        self._inner = inner
+        self._candidate_path = str(candidate_path)
+        self._mounts = tuple(str(mount) for mount in mounts)
+        self._recorder = recorder
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._inner, name)
+
+    def bind_response_codec(self, response_codec: object) -> None:
+        self._inner.bind_response_codec(response_codec)
+
+    def list_tasks(self) -> object:
+        result = self._inner.list_tasks()
+        self._recorder.observe("list_tasks", result)
+        return result
+
+    def read_task_setup(self, task_id: str) -> object:
+        try:
+            result = self._inner.read_task_setup(task_id)
+        except BaseException as error:
+            self._recorder.observe("read_task_setup_error", error)
+            raise
+        self._recorder.observe("read_task_setup", result)
+        return result
+
+    def start_setup_plan(self, *args: object, **kwargs: object) -> object:
+        try:
+            result = self._inner.start_setup_plan(*args, **kwargs)
+        except BaseException as error:
+            self._recorder.observe("start_setup_plan_error", error)
+            raise
+        self._recorder.observe("start_setup_plan", result)
+        return result
+
+    def start_plan_again(self, *args: object, **kwargs: object) -> object:
+        try:
+            result = self._inner.start_plan_again(*args, **kwargs)
+        except BaseException as error:
+            self._recorder.observe("start_plan_again_error", type(error).__name__)
+            raise
+        self._recorder.observe("start_plan_again_result", "started")
+        return result
+
+    def admit_location_candidate(self, candidate: object) -> object:
+        from namisync.core.models import VolumeId
+        from namisync.workflows import (
+            LocationBinding,
+            LocationCandidate,
+            LocationCandidateResult,
+            LocationCandidateState,
+            VolumeResolution,
+            VolumeResolutionState,
+        )
+
+        if type(candidate) is not LocationCandidate or candidate.path != self._candidate_path:
+            return self._inner.admit_location_candidate(candidate)
+        volume_id = VolumeId("setup-headed-clone", "NTFS")
+        if candidate.selected_mount is None:
+            binding = LocationBinding(
+                volume_id, "", self._mounts[0], self._mounts, False
+            )
+            resolution = VolumeResolution(
+                VolumeResolutionState.AMBIGUOUS,
+                binding,
+                candidates=self._mounts,
+                detail="choose one mounted clone before submission",
+            )
+            return LocationCandidateResult(
+                candidate,
+                LocationCandidateState.AMBIGUOUS,
+                binding=binding,
+                candidates=self._mounts,
+                detail=resolution.detail,
+                resolution=resolution,
+            )
+        binding = LocationBinding(
+            volume_id,
+            "",
+            candidate.selected_mount,
+            self._mounts,
+            True,
+        )
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.RESOLVED,
+            binding=binding,
+            root_path=candidate.selected_mount,
+            candidates=self._mounts,
+        )
+
+
+def _seed_recent_pair(paths: object, source: Path, target: Path, *, token: str) -> None:
+    from namisync.core.evidence import RecordingStatus
+    from namisync.core.models import VolumeEvidence
+    from namisync.core.planning import selection_digest
+    from namisync.core.recording import (
+        FinishRunCommand,
+        HostCommand,
+        LocationCommand,
+        MappingCommand,
+        SyncRunCommand,
+        VolumeCommand,
+    )
+    from namisync.core.session import RunContext, SessionState
+    from namisync.db.recorder import LedgerRecorder
+    from namisync.workflows import LocationCandidate, LocationCandidateState
+    from namisync.workflows.runtime import LocalWorkflowRuntime
+
+    paths.ensure_directories()
+    runtime = LocalWorkflowRuntime(paths.ledger, paths.history)
+    try:
+        clock = runtime.clock
+        runtime.initialize_database_contracts()
+        admitted = tuple(
+            runtime.admit_location_candidate(LocationCandidate.literal(str(path.resolve())))
+            for path in (source, target)
+        )
+        if any(value.state is not LocationCandidateState.RESOLVED for value in admitted):
+            raise RuntimeError("headed recent roots were not natively admitted")
+        source_value, target_value = admitted
+        assert source_value.binding is not None and source_value.root_path is not None
+        assert target_value.binding is not None and target_value.root_path is not None
+        request = runtime.create_plan_request(
+            token * 32,
+            source_value.root_path,
+            target_value.root_path,
+            source_binding=source_value.binding,
+            target_binding=target_value.binding,
+        )
+        result = runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+        if result.status is not SessionState.COMPLETED:
+            raise RuntimeError("headed recent seed plan did not complete")
+        plan = runtime.get_plan(request.request_id).plan
+        if plan.operations:
+            raise RuntimeError("headed recent seed requires empty roots and a no-op plan")
+        source_binding = source_value.binding
+        target_binding = target_value.binding
+    finally:
+        runtime.close()
+
+    if (
+        not isinstance(plan.source_volume_evidence, VolumeEvidence) or
+        not isinstance(plan.target_volume_evidence, VolumeEvidence)
+    ):
+        raise RuntimeError("headed recent seed lacks native volume evidence")
+    now = clock.now()
+    run_token = token * 32
+    with LedgerRecorder(paths.ledger, clock=clock) as recorder:
+        host_id = recorder.ensure_host(HostCommand("setup-headed", "Setup headed", now))
+        source_volume = recorder.observe_volume(VolumeCommand(
+            plan.source_volume_id, plan.source_volume_evidence, now,
+        ))
+        target_volume = recorder.observe_volume(VolumeCommand(
+            plan.target_volume_id, plan.target_volume_evidence, now,
+        ))
+        source_id = recorder.ensure_location(LocationCommand(
+            source_volume, source_binding.volume_relative_path, now,
+        ))
+        target_id = recorder.ensure_location(LocationCommand(
+            target_volume, target_binding.volume_relative_path, now,
+        ))
+        mapping_id = recorder.ensure_mapping(MappingCommand(source_id, target_id, now))
+        selection = frozenset()
+        run = recorder.begin_sync_run(SyncRunCommand(
+            run_token,
+            host_id,
+            mapping_id,
+            source_id,
+            target_id,
+            plan,
+            selection,
+            selection_digest(selection),
+            now,
+        ))
+        run.finish(FinishRunCommand(
+            run_token, SessionState.COMPLETED, RecordingStatus.OK, now,
+        ))
+
+
+def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
+    from contextlib import ExitStack
+    from unittest.mock import patch
+
+    from namisync.interfaces.web import host
+    from namisync.interfaces.web.host import DesktopInstanceIdentity
+    from namisync.interfaces.web.paths import AppPaths
+
+    retained: list[object] = []
+    original = host._configure_window_appearance
+    original_commands = host._production_commands
+    plan_again_trace = PlanAgainHostTrace() if arguments.plan_again_trace else None
+    registry_traced = False
+    ambiguous = arguments.source.parent / "ambiguous-picker"
+    picked_source = arguments.source.parent / "picked-source"
+    offline_source = arguments.source.parent / ("offline-source-" + "s" * 72)
+    offline_target = arguments.source.parent / ("offline-target-" + "t" * 72)
+    ambiguous.mkdir(parents=True, exist_ok=True)
+    picked_source.mkdir(parents=True, exist_ok=True)
+    offline_source.mkdir(parents=True, exist_ok=True)
+    offline_target.mkdir(parents=True, exist_ok=True)
+    paths = AppPaths.from_root(arguments.data_dir)
+    _seed_recent_pair(paths, arguments.source, arguments.target, token="e")
+    _seed_recent_pair(paths, offline_source, offline_target, token="d")
+    offline_source.rmdir()
+    picker_calls = 0
+
+    def picker() -> list[str]:
+        nonlocal picker_calls
+        picker_calls += 1
+        selected = picked_source if picker_calls == 1 else ambiguous
+        return [str(selected.resolve())]
+
+    def commands(**kwargs: object) -> object:
+        nonlocal registry_traced
+        if plan_again_trace is not None and not registry_traced:
+            trace_registry_plan_again(kwargs["registry"], plan_again_trace)
+            registry_traced = True
+        service = kwargs["registry"]._lifecycle
+        original_start_setup_plan = service.start_task_setup_plan
+
+        def trace_start_setup_plan(*args: object, **start_kwargs: object) -> object:
+            try:
+                return original_start_setup_plan(*args, **start_kwargs)
+            except BaseException as error:
+                try:
+                    task_id = args[0] if args else None
+                    lifecycle = service._lifecycle
+                    with lifecycle._condition:
+                        task = lifecycle._tasks.get(task_id)
+                        task_state = None if task is None else {
+                            "session_id": task.session_id,
+                            "admission_identity": task.admission_identity,
+                            "start_failed": task.start_failed,
+                        }
+                    frames = traceback.extract_tb(error.__traceback__)[-8:]
+                    cause = error.__cause__
+                    recorder.observe("start_setup_plan_original", {
+                        "task_id": task_id,
+                        "command_id": start_kwargs.get("command_id"),
+                        "type": type(error).__name__,
+                        "message": str(error)[:240],
+                        "cause": None if cause is None else (type(cause).__name__, str(cause)[:240]),
+                        "frames": [(Path(frame.filename).name, frame.lineno, frame.name) for frame in frames],
+                        "lifecycle": task_state,
+                    })
+                except BaseException:
+                    pass
+                raise
+
+        stack.enter_context(patch.object(service, "start_task_setup_plan", trace_start_setup_plan))
+        registry = _AmbiguousRegistry(
+            kwargs["registry"],
+            ambiguous.resolve(),
+            (arguments.source.resolve(), arguments.target.resolve()),
+            recorder,
+        )
+        from namisync.interfaces.web.commands import _TaskResponseCodecBinder
+        if not isinstance(registry, _TaskResponseCodecBinder):
+            raise RuntimeError("headed registry wrapper does not preserve response-codec binding")
+        result = original_commands(**{**kwargs, "picker": picker, "registry": registry})
+        return result if plan_again_trace is None else traced_plan_again_commands(
+            result, plan_again_trace,
+        )
+
+    def trace_extension(_document: object, _registry: object) -> dict[str, object]:
+        if plan_again_trace is None:
+            return {}
+
+        def record_trace(payload: object) -> object:
+            if type(payload) is not dict or set(payload) != {"action", "value"}:
+                raise ValueError("setup Plan-again trace payload is invalid")
+            if payload["action"] == "begin" and payload["value"] is None:
+                plan_again_trace.begin("setup")
+                return {"accepted": True}
+            if payload["action"] != "record":
+                raise ValueError("setup Plan-again trace action is invalid")
+            host_trace = plan_again_trace.snapshot()
+            plan_again_trace.end("setup")
+            recorder.plan_again_trace(payload["value"], host_trace)
+            return {"accepted": True}
+
+        return {"setup_plan_again_trace": _trace_spec(record_trace)}
+
+    with ExitStack() as stack:
+        stack.enter_context(patch.object(host, "_production_commands", commands))
+        if plan_again_trace is not None:
+            stack.enter_context(headed_command_extension(host, trace_extension))
+        stack.enter_context(patch.object(
+            host,
+            "_configure_window_appearance",
+            lambda window, *args, **kwargs: _configure_probe(window, recorder, arguments.screenshot_dir.resolve(), arguments.source.resolve(), arguments.target.resolve(), retained, original, *args, **kwargs),
+        ))
+        exit_code = host.run_desktop(
+            paths,
+            DesktopInstanceIdentity(arguments.mutex, arguments.title),
+            startup_error=lambda _error: None,
+        )
+    recorder.finish(exit_code)
+    return exit_code
+
+
+def _trace_spec(handler: object) -> object:
+    from namisync.interfaces.web.commands import (
+        CommandAccess, CommandRetry, CommandSpec, CommandResponsePolicy, FieldRequirement,
+    )
+
+    return CommandSpec(
+        validate_payload=lambda payload: payload,
+        handler=handler,
+        access=CommandAccess.READ_ONLY,
+        command_id=FieldRequirement.FORBIDDEN,
+        revision=FieldRequirement.FORBIDDEN,
+        response_policy=CommandResponsePolicy.LOCAL_5_SECONDS,
+        retry=CommandRetry.NONE,
+    )
+
+
+def main() -> int:
+    arguments = _arguments()
+    recorder = _Recorder(EvidencePaths(arguments.evidence_dir.resolve()))
+    try:
+        return _run(arguments, recorder)
+    except BaseException as error:
+        recorder.failure("child", error)
+        recorder.finish(1)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

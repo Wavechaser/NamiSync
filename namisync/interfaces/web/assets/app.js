@@ -1,0 +1,4654 @@
+import {
+  acknowledgeShellReady,
+  acknowledgeInventory,
+  admitLocation,
+  BridgeTransportError,
+  closeTask,
+  controlIntegrity,
+  controlExecution,
+  createTask,
+  echoReadiness,
+  getExecutionDetail,
+  getInventoryDetail,
+  getInventoryItemAnchor,
+  getInventoryWindow,
+  getPlanAnchor,
+  getPlanDetail,
+  getPlanOperationAnchor,
+  getPlanWindow,
+  listTasks,
+  markBridgeOperational,
+  mutatePlanSelection,
+  mutatePlanScope,
+  mutatePlanHighlight,
+  mutatePlanHighlightedSelection,
+  OutcomeUnavailableError,
+  openPlanView,
+  openInventoryView,
+  pickFolder,
+  planAgain,
+  prepareSetup,
+  probeRecentPairs,
+  readSetup,
+  refreshInventory,
+  restoreInventory,
+  revealPlanMove,
+  StartPlanUncertainError,
+  startInventory,
+  startInventoryIntegrity,
+  startExecution,
+  startPlan,
+  startTaskDrain,
+  setInventorySelection,
+  setInventoryHighlightedSelection,
+  mutateInventoryHighlight,
+  TaskCreateUncertainError,
+  TaskCloseUncertainError,
+  TerminalPresentationError,
+  TerminalSessionReleaseError,
+  whenBridgeApiReady,
+  updatePlanView,
+  updateInventoryView,
+} from "./bridge.js";
+import { installReadinessReceiver } from "./readiness.js";
+import { installAppearanceReceiver } from "./appearance.js";
+import { installThemeCombobox, installThemeSelector } from "./theme.js";
+import { installSetupDefaults } from "./settings.js";
+import { installAboutNotices } from "./about.js";
+import { createExecutionConfirmation } from "./execution_confirmation.js";
+import { createWorkPanel } from "./panels.js";
+import { createTaskRail } from "./rail.js";
+import { planReviewRefusal } from "./task_status.js";
+import { renderText } from "./render.js";
+
+const app = document.querySelector("#app");
+const status = document.querySelector("#host-status");
+const themeSelector = document.querySelector("#theme-mode");
+const themeOutcomeStatus = document.querySelector("#theme-outcome-status");
+const themeRefresh = document.querySelector("#theme-refresh");
+const settingsView = document.querySelector("#settings-view");
+const themeOptions = document.querySelector("#theme-options");
+const UNKNOWN_OUTCOME_GUIDANCE = "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.";
+const PLAN_UNAVAILABLE = "Plan unavailable. Select the task to retry.";
+
+function taskStartFailureMessage(error, fallback) {
+  return error?.code === "maintenance_pending"
+    ? error.message : fallback;
+}
+if (
+  !(app instanceof HTMLElement)
+  || !(status instanceof HTMLElement)
+  || !(themeSelector instanceof HTMLElement)
+  || !(themeOutcomeStatus instanceof HTMLElement)
+  || !(themeRefresh instanceof HTMLElement)
+  || !(settingsView instanceof HTMLElement)
+  || !(themeOptions instanceof HTMLElement)
+) {
+  throw new TypeError("NamiSync shell elements are unavailable");
+}
+
+document.addEventListener?.("pointerdown", (event) => {
+  if (
+    event.target?.matches?.(".nami-input, .nami-select")
+    && !event.target.disabled
+  ) {
+    event.target.dataset.namiFocusOrigin = "pointer";
+  }
+}, true);
+document.addEventListener?.("focusout", (event) => {
+  if (event.target?.matches?.(".nami-input, .nami-select")) {
+    delete event.target.dataset.namiFocusOrigin;
+  }
+}, true);
+
+function renderHostStatus(message) {
+  renderText(status, message);
+  status.hidden = message === "Ready";
+}
+
+const readiness = installReadinessReceiver(window.chrome.webview);
+const themeCombobox = installThemeCombobox(themeSelector);
+const theme = installThemeSelector(themeCombobox, {
+  onOutcomeStatus(message, refreshAvailable) {
+    renderText(themeOutcomeStatus, message ?? "");
+    themeOutcomeStatus.hidden = message === null;
+    themeRefresh.hidden = !refreshAvailable;
+  },
+});
+themeRefresh.addEventListener("click", () => { void theme.refresh(); });
+const setupDefaults = installSetupDefaults(settingsView);
+let appliedPresentationRevision = null;
+installAppearanceReceiver(
+  window.chrome.webview,
+  document.documentElement,
+  (revision) => {
+    appliedPresentationRevision = revision;
+    void theme.refresh(revision);
+  },
+);
+
+const tasks = new Map();
+let selectedTaskId = null;
+let settingsVisible = false;
+let navigationRevision = 0;
+let taskMutationRevision = 0;
+let createAttempt = null;
+let nextTaskNumber = 1;
+let defaultSetup = null;
+let defaultSetupRevision = 0;
+let recentPairAvailability = Object.create(null);
+let recentPairProbeRevision = 0;
+let recentPairProbeRunning = false;
+let recentPairProbePending = false;
+let pageBatch = null;
+let pickerPending = false;
+
+const ACTIVE_EXECUTION_CONTROL_STATES = new Set([
+  "pending",
+  "running",
+  "pausing",
+  "paused",
+  "canceling",
+]);
+const STOPPED_TASK_UPDATES_MESSAGE =
+  "Task updates stopped. Select Retry updates on this task to restore execution controls.";
+const TASK_RECOVERY_MESSAGES = new Set([
+  STOPPED_TASK_UPDATES_MESSAGE,
+  "Task updates stopped. Close can be retried.",
+  "Task recovery paused. Select Retry updates on this task.",
+  "Reconnecting task updates…",
+  "Task updates are still unavailable. Select Retry updates to try again.",
+]);
+
+function clearTaskRecoveryError(task) {
+  if (TASK_RECOVERY_MESSAGES.has(task.error)) task.error = null;
+}
+
+function setTaskRecoveryError(task, message) {
+  if (task.error === null || TASK_RECOVERY_MESSAGES.has(task.error)) {
+    task.error = message;
+  }
+}
+
+const PREFLIGHT_REFUSAL_MESSAGES = Object.freeze({
+  incomplete_source_scan: "The source scan is incomplete. Check source access.",
+  incomplete_target_scan: "The target scan is incomplete. Check target access.",
+  root_unavailable: "A reviewed folder is unavailable. Reconnect its drive and check access.",
+  root_changed: "A reviewed folder changed. Check the source and target folders.",
+  roots_overlap: "The source and target overlap. Choose separate folders.",
+  volume_clone_ambiguous: "A drive identity is ambiguous. Disconnect the duplicate drive.",
+  selection_not_closed: "The selection is missing required operations. Review its dependencies.",
+  operation_blocked: "A selected operation is blocked. Inspect the plan notices.",
+  blocked_correspondence: "A source or target item is blocked. Inspect the plan notices.",
+  dependency_unavailable: "A required operation is unavailable. Inspect the plan notices.",
+  observation_unavailable: "An item could not be checked. Check folder access and file locks.",
+  source_drift: "A source item changed after review.",
+  target_drift: "A target item changed after review.",
+  destination_appeared: "An item appeared at a planned destination after review.",
+  type_changed: "An item changed between a file and a folder after review.",
+  identity_changed: "An item was replaced after review.",
+  size_changed: "An item's size changed after review.",
+  mtime_changed: "An item's modification time changed after review.",
+  metadata_changed: "An item's metadata changed after review.",
+  insufficient_space: "The target has insufficient free space. Free space on its drive.",
+  trash_unavailable: "The recovery folder is unavailable. Check target access.",
+  trash_escape: "The recovery folder resolves outside the target. Check its location.",
+  trash_off_volume: "The recovery folder is on a different drive. Check its location.",
+  trash_not_writable: "The recovery folder is not writable. Check its permissions.",
+  trash_reparse: "The recovery folder uses an unsupported link. Check its location.",
+  path_escape: "An item resolves outside its reviewed folder. Check links in the folders.",
+  path_unrepresentable: "An item path cannot be used on Windows. Check its name and path length.",
+});
+
+function executionRefusalMessage(refusal) {
+  if (refusal?.origin === "preflight") {
+    return `Execution preflight refused. ${refusal.codes.map((code) => PREFLIGHT_REFUSAL_MESSAGES[code]).join(" ")} Resolve these issues, then restart task with Plan Again.`;
+  }
+  if (refusal?.origin === "commitment") {
+    return "Execution commitment is invalid. Restart task with Plan Again.";
+  }
+  return "Execution did not start. Restart task with Plan Again.";
+}
+
+function executionControlMessage(state) {
+  switch (state) {
+    case "pending": return "Execution waiting.";
+    case "running": return "Execution running.";
+    case "pausing": return "Pausing execution…";
+    case "paused": return "Execution paused. Resume available.";
+    case "canceling": return "Canceling execution…";
+    default: return "Follow live execution status.";
+  }
+}
+
+const panel = createWorkPanel({
+  onEdit: editLocation,
+  onValidate: validateLocation,
+  onPick: pickLocation,
+  onRecent: chooseRecentLocation,
+  onRecentPair: chooseRecentPair,
+  onRefreshRecents: refreshRecentPairs,
+  onMode: editMode,
+  onOption: editOption,
+  onAddFilter: addFilter,
+  onRemoveFilter: removeFilter,
+  onMount: chooseMount,
+  onPlanAgainMount: choosePlanAgainMount,
+  onStartPlan: () => { void startCurrentPlan(); },
+  onStartInventory: () => { void startCurrentInventory(); },
+  onAddPair: addCurrentPair,
+  onRemoveBatchRow: removeBatchRow,
+  onClearBatchResults: clearBatchResults,
+  onStartBatch: () => { void startPairBatch(); },
+  onPlanAgain: () => { void startPlanAgain(); },
+}, {
+  onViewChange: (review, patch) => { void changePlanView(review, patch); },
+  onWindow: (review, offset, overlapsViewport, settled) => { void loadPlanWindow(review, offset, overlapsViewport, settled); },
+  onSelect: (review, row, selected) => {
+    void changePlanSelection(review, row, selected);
+  },
+  onScopeSelect: (review, selected) => {
+    void changePlanSelection(review, null, selected);
+  },
+  onHighlight: (review, gesture, nodeId) => {
+    queuePlanHighlight(review, gesture, nodeId);
+  },
+  onNavigationInterrupt: interruptPlanHighlight,
+  onHighlightedSelect: (review, selected) => {
+    void changePlanSelection(review, null, selected, true);
+  },
+  onExecute: (review, returnFocus) => {
+    void executeReviewedPlan(review, returnFocus);
+  },
+  onControl: (review, action) => {
+    void controlReviewedExecution(review, action);
+  },
+  onRetryOutcome: (review) => { void retryReviewOutcome(review); },
+  onPlanAgain: (review) => { void planAgainFromReview(review); },
+  onExecutionDetail: (review, row) => { void readExecutionDetail(review, row); },
+  onFollowOverride: disableReviewFollow,
+  onNavigateCurrent: (review, enableFollow) => { queuePlanFollow(review, enableFollow, true); },
+  onRevealMove: (review, nodeId) => { void revealPlanMoveDestination(review, nodeId); },
+  onPaneChange: switchTaskPane,
+}, settingsView, {
+  onViewChange: (review, patch) => { void changeInventoryView(review, patch); },
+  onWindow: loadInventoryWindow,
+  onWindowCancelled: cancelInventoryWindow,
+  onDetail: (review, nodeId) => { void readInventoryDetail(review, nodeId); },
+  onReload: (task) => {
+    void loadInventoryReview(task, true);
+  },
+  onRefresh: (review, nodeId) => { void runInventoryAction(review, "refresh", nodeId); },
+  onVisibility: (review, action, nodeId) => { void runInventoryAction(review, action, nodeId); },
+  onSelect: (review, nodeId, selected) => { void changeInventorySelection(review, nodeId, selected); },
+  onHighlightedSelect: (review, selected) => { void changeInventorySelection(review, null, selected, true); },
+  onHighlight: (review, gesture, nodeId) => { void queueRowHighlight(review, gesture, nodeId, true); },
+  onInterrupt: interruptPlanHighlight,
+  onStart: (review, mode, returnFocus) => { void startInventoryIntegrityAction(review, mode, returnFocus); },
+  onCopiedStart: (review) => { void startInventoryIntegrityAction(review, "verify", null, "copied"); },
+  onControl: (review, action) => { void controlInventoryIntegrity(review, action); },
+  onFollowOverride: disableReviewFollow,
+  onNavigateCurrent: (review, enableFollow) => { queueReviewFollow(review, INVENTORY_FOLLOW, enableFollow, true); },
+  onCheckOutcome: (task) => { void checkInventoryOutcome(task); },
+  onPaneChange: switchTaskPane,
+});
+const rail = createTaskRail({
+  onCreate: () => { void createBlankTask(); },
+  onSelect: selectTask,
+  onClose: (taskId) => { void closeRetainedTask(taskId); },
+  onRetryUpdates: retryTaskUpdates,
+  onSettings: showSettings,
+});
+app.append(rail.element, panel.element);
+const executionConfirmation = createExecutionConfirmation([app, themeOptions]);
+document.body.append(executionConfirmation.element);
+const rebaselineConfirmation = createExecutionConfirmation([app, themeOptions], {
+  id: "rebaseline-confirmation",
+  heading: "Confirm Rebaseline",
+  consequence: "Rebaseline replaces or creates stored evidence for every selected file, including files hidden by filters or search.",
+  confirm: "Confirm Rebaseline",
+  count: (value, detail) => `${value} selected file${value === 1 ? "" : "s"}`
+    + (detail === null ? "" : ` · ${detail}`),
+});
+document.body.append(rebaselineConfirmation.element);
+const aboutNotices = installAboutNotices(settingsView, [app, themeOptions]);
+document.body.append(aboutNotices.element);
+
+function taskArray() {
+  return Array.from(tasks.values()).reverse();
+}
+
+function fixedOutcome(recovery) {
+  return recovery?.state === "fixed-unknown";
+}
+
+function checkableOutcome(recovery) {
+  return recovery?.canCheck === true;
+}
+
+function ownedAttemptRecovery(attempt, stillOwned, present = null) {
+  return (recovery) => {
+    if (!stillOwned()) return;
+    attempt.recovery = recovery;
+    present?.(recovery);
+    renderTasks();
+  };
+}
+
+function canCancelAfterFixedReviewOutcome(task, review) {
+  const attempt = task.executionControlAttempt;
+  return review !== null && review.pending === "outcome"
+    && fixedOutcome(review.recovery)
+    && review.outcomeAction !== "cancel"
+    && task.executionStarted && task.sessionState === "active"
+    && task.sessionId !== null && task.reviewSessionId === task.sessionId
+    && !task.drainUnavailable && !task.closePending && !checkableOutcome(task.closeRecovery)
+    && !fixedOutcome(task.closeRecovery) && !fixedOutcome(task.startRecovery)
+    && !fixedOutcome(task.releaseRecovery) && task.executionAttempt === null
+    && task.executionControlState !== "canceling"
+    && (attempt === null || (!attempt.pending && !checkableOutcome(attempt.recovery)
+      && !(attempt.independent && (fixedOutcome(attempt.recovery) || attempt.accepted))));
+}
+
+function taskCloseBlockReason(task) {
+  if (task.closePending && !task.closeManualReady) {
+    return task.closeRecovery?.message ?? task.closeMessage ?? "Wait for this Close request to finish.";
+  }
+  if (fixedOutcome(task.closeRecovery) || fixedOutcome(task.startRecovery)
+      || fixedOutcome(task.releaseRecovery)
+      || task.executionAttempt?.state === "uncertain") return UNKNOWN_OUTCOME_GUIDANCE;
+  if (task.executionAttempt !== null) return "Resolve the in-flight execution request before closing.";
+  if (task.inventoryAction?.pending || task.inventoryAction?.accepted) return fixedOutcome(task.inventoryAction.recovery)
+    ? UNKNOWN_OUTCOME_GUIDANCE
+    : checkableOutcome(task.inventoryAction.recovery)
+      ? "Check the original inventory outcome before closing this task."
+      : "Wait for the current inventory action before closing this task.";
+  if (task.executionControlAttempt?.independent) {
+    if (fixedOutcome(task.executionControlAttempt.recovery)) return UNKNOWN_OUTCOME_GUIDANCE;
+    if (task.executionControlAttempt.pending) return checkableOutcome(task.executionControlAttempt.recovery)
+      ? "Check the original Cancel outcome before closing this task."
+      : "Wait for the current Cancel request before closing this task.";
+  }
+  if (!checkableOutcome(task.closeRecovery) && !task.closeManualReady
+      && task.review !== null && task.review.pending !== null
+      && task.review.pending !== "view"
+      && !(fixedOutcome(task.review.recovery) && task.sessionId !== null
+        && task.reviewSessionId === task.sessionId)) {
+    return checkableOutcome(task.review.recovery)
+      || checkableOutcome(task.executionControlAttempt?.recovery)
+      ? "Check the original review outcome before closing this task."
+      : "Wait for the current review action before closing this task.";
+  }
+  return batchTaskBlockReason(task.taskId);
+}
+
+function renderTasks() {
+  for (const task of tasks.values()) {
+    if (task.form !== null) {
+      task.form.startRecovery = task.startRecovery;
+      task.form.recentPairAvailability = recentPairAvailability;
+      task.form.batchRunning = pageBatch !== null && pageBatch.running !== null;
+      const syncBatchOwner = task.form.editable && task.form.mode === "sync-plan";
+      const batchBlockReason = batchTaskBlockReason(task.taskId);
+      task.form.batch = syncBatchOwner && pageBatch !== null
+        ? pageBatch.rows.filter((row) => row.originTaskId === task.taskId)
+        : [];
+      task.form.batchCount = syncBatchOwner ? pageBatch?.rows.length ?? 0 : 0;
+      task.form.batchPending = syncBatchOwner && (pageBatch?.rows.some((row) => row.originTaskId === task.taskId
+        && ["queued", "submitting", "unknown"].includes(row.state)) ?? false);
+      task.form.batchPending ||= batchBlockReason !== null;
+      task.form.batchMessage = syncBatchOwner ? batchTaskStartMessage(task.taskId)
+        : batchBlockReason === null ? null
+          : batchTaskStartMessage(task.taskId)
+            ?? "Return to Sync to resolve its in-flight batch request before starting Inventory.";
+      task.form.closePending = task.closePending || checkableOutcome(task.closeRecovery)
+        || fixedOutcome(task.closeRecovery) || fixedOutcome(task.startRecovery);
+    }
+    task.canCancelAfterFixedReviewOutcome = canCancelAfterFixedReviewOutcome(task, task.review);
+    task.closeBlockReason = taskCloseBlockReason(task);
+    task.canPlanAgain = canStartPlanAgain(task);
+  }
+  rail.render(
+    taskArray(),
+    selectedTaskId,
+    createAttempt,
+    settingsVisible,
+  );
+  if (settingsVisible) panel.renderSettings();
+  else panel.render(selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null);
+}
+
+function originalExecution(task) {
+  const fact = task.originalExecutionFact;
+  const execution = fact != null && fact.planRequestId === task.planRequestId ? fact.execution : null;
+  return execution !== null && task.executionSessionId !== null
+    && execution.session_id === task.executionSessionId ? execution : null;
+}
+
+function setOriginalExecutionSession(task, sessionId) {
+  if (task.executionSessionId === sessionId) return;
+  task.executionSessionId = sessionId;
+  task.originalExecutionFact = null;
+  task.executionPresentation = null;
+  task.linkedVerificationStarted = false;
+}
+
+function observeOriginalExecution(task, planRequestId, execution) {
+  if (tasks.get(task.taskId) !== task || task.planRequestId !== planRequestId
+      || execution?.session_id == null
+      || (task.executionSessionId !== null && task.executionSessionId !== execution.session_id)) return;
+  setOriginalExecutionSession(task, execution.session_id);
+  const previous = originalExecution(task);
+  if (previous !== null && previous.execution_revision >= execution.execution_revision) return;
+  task.originalExecutionFact = { planRequestId, execution };
+}
+
+function verifyPaneAvailable(task) {
+  return task.taskKind === "sync-plan" && task.executionStarted
+    && task.executionSessionId !== null
+    && (task.sessionKind !== "sync-execution" || task.sessionReleased || task.linkedVerificationStarted);
+}
+
+function executionPaneVisible(task) {
+  return task.workPane !== "verify" || (task.sessionKind === "sync-execution" && !task.sessionReleased);
+}
+
+function observeLinkedVerification(task, snapshot, update) {
+  const phaseChanged = update?.event?.body_type === "PhaseChanged" && update.event.body.phase === "verify";
+  const verifiedPhase = snapshot?.terminal_result?.phases?.find(phase => phase.phase === "verify");
+  if (task.sessionKind !== "sync-execution" || task.linkedVerificationStarted
+      || (snapshot?.phase !== "verify" && !phaseChanged && snapshot?.last_settled_integrity_item_id == null
+        && !(verifiedPhase?.items_done > 0))) return;
+  task.linkedVerificationStarted = true;
+  if (task.review !== null) interruptPlanNavigation(task.review);
+  task.workPane = "verify";
+  task.paneRevision += 1;
+}
+
+function switchTaskPane(task, paneName) {
+  if (task === null || task === undefined || tasks.get(task.taskId) !== task
+      || currentTask() !== task || settingsVisible || !["plan", "verify"].includes(paneName)
+      || task.workPane === paneName || (paneName === "verify" && !verifyPaneAvailable(task))) return;
+  cancelAutomaticReview(task);
+  navigationRevision += 1;
+  task.paneRevision += 1;
+  if (paneName === "verify") {
+    if (task.review !== null) interruptPlanNavigation(task.review);
+    task.workPane = "verify";
+    if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
+    if (executionPaneVisible(task)) {
+      paintAutomaticReview(task);
+      return;
+    }
+    renderTasks();
+    void loadInventoryReview(task);
+    paintAutomaticReview(task);
+    return;
+  }
+  if (task.inventoryReview !== null) {
+    interruptPlanHighlight(task.inventoryReview);
+    cancelInventoryWindow(task.inventoryReview);
+    if (task.inventoryReview.detail?.state === "loading") retireInventoryDetail(task.inventoryReview);
+  }
+  task.workPane = "plan";
+  if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
+  if (task.sessionKind === "sync-execution") paintAutomaticReview(task);
+  else {
+    renderTasks();
+    if (task.executionWindowDirty) void refreshExecutionWindow(task);
+  }
+}
+
+function showSettings() {
+  if (settingsVisible) return;
+  const task = currentTask();
+  if (task !== null) cancelAutomaticReview(task);
+  if (task?.review != null) {
+    interruptPlanNavigation(task.review);
+    retireExecutionDetail(task.review);
+    retirePlanDetail(task.review);
+  }
+  if (task?.inventoryReview != null) {
+    interruptPlanHighlight(task.inventoryReview);
+    cancelInventoryWindow(task.inventoryReview);
+    retireInventoryDetail(task.inventoryReview);
+  }
+  navigationRevision += 1;
+  settingsVisible = true;
+  renderTasks();
+  void setupDefaults.open();
+}
+
+function followEligible(review) {
+  return review.summary.search_query === ""
+    && review.summary.filters.length === 0
+    && review.summary.sort_column === "path"
+    && review.summary.sort_direction === "ascending";
+}
+
+function disableReviewFollow(review, first = null, last = null) {
+  if (review?.follow == null || review.follow.programmatic === true) return;
+  const target = review.follow.anchorIndex;
+  if (first !== null && Number.isSafeInteger(target) && target >= first && target <= last) return;
+  review.follow.enabled = false;
+  review.follow.generation += 1;
+  renderTasks();
+}
+
+function createTableReadOwner(onIdle) {
+  let running = null;
+  let pending = null;
+  let epoch = 0;
+  let foreground = 0;
+  const busy = () => running !== null || pending !== null || foreground > 0;
+  const idle = () => { if (!busy()) onIdle(); };
+  function beginForeground() {
+    epoch += 1;
+    foreground += 1;
+    return () => { foreground -= 1; idle(); };
+  }
+  async function drain() {
+    if (running !== null) return;
+    while (pending !== null) {
+      const job = pending;
+      pending = null;
+      running = job;
+      const current = () => !job.retired && job.current();
+      try {
+        const value = current() ? await job.read(current) : null;
+        job.resolve(current() ? value : null);
+      } catch (error) {
+        if (current()) job.reject(error);
+        else job.resolve(null);
+      } finally {
+        running = null;
+      }
+    }
+    idle();
+  }
+  return Object.freeze({
+    get busy() { return busy(); },
+    get foregroundReaders() { return foreground; },
+    beginForeground,
+    request(current, read) {
+      const admission = ++epoch;
+      if (pending !== null) { pending.retired = true; pending.resolve(null); }
+      const job = {current, read, retired: false};
+      const promise = new Promise((resolve, reject) => { job.resolve = resolve; job.reject = reject; });
+      pending = job;
+      void drain();
+      return Object.freeze({promise, get latest() { return !job.retired && admission === epoch; }, cancel() {
+        if (job.retired) return;
+        epoch += 1;
+        job.retired = true;
+        if (pending === job) { pending = null; job.resolve(null); idle(); }
+      }});
+    },
+    captureRefresh(demandRevision) { return {epoch, busy: busy(), demandRevision}; },
+    refreshDisposition(ticket, owned, compatible, demandRevision) {
+      if (!owned) return "retired";
+      return ticket.busy || busy() || ticket.epoch !== epoch
+        || ticket.demandRevision !== demandRevision || !compatible ? "reread" : "current";
+    },
+  });
+}
+
+function tableReadOwner(task, inventory = false) {
+  const key = inventory ? "inventoryReads" : "planReads";
+  task[key] ??= createTableReadOwner(() => {
+    if (tasks.get(task.taskId) !== task) return;
+    if (inventory) retryInventoryOverlay(task);
+    else if (task.executionWindowDirty) void refreshExecutionWindow(task);
+  });
+  return task[key];
+}
+
+function inventoryFollowTarget(task, explicit = false) {
+  if (!["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+      || (explicit && (task.snapshot?.session_state ?? task.sessionState) !== "active")) return null;
+  const presentation = task.progressPresentation;
+  const item = presentation?.activeItem;
+  if (item !== null && item !== undefined) return item.item_type === "integrity" ? item.item_id : null;
+  return presentation?.lastSettledIntegrityItemId ?? null;
+}
+
+function planFollowTarget(task) {
+  const presentation = task.executionPresentation;
+  const active = presentation?.activeItem?.item_id ?? null;
+  if (task.workPane === "verify") return task.sessionKind === "sync-execution"
+    && task.sessionState === "active"
+    ? (presentation?.phase === "verify" && presentation.activeItem?.item_type === "operation" ? active : null)
+      ?? presentation?.lastSettledIntegrityItemId ?? null : null;
+  return (presentation?.phase !== "verify" ? active : null)
+    ?? presentation?.lastSettledOperationId ?? null;
+}
+
+function inventoryFollow(task, review) {
+  if (review.follow?.sessionId !== task.sessionId) {
+    review.follow = {sessionId: task.sessionId,
+      enabled: ["baseline", "verify", "rebaseline"].includes(task.sessionKind) && followEligible(review),
+      eligible: followEligible(review), hasTarget: false, generation: 0,
+      anchorKey: null, anchorIndex: null, scrollOffset: null, message: null};
+  }
+  review.follow.eligible = followEligible(review);
+  review.follow.hasTarget = inventoryFollowTarget(task, true) !== null;
+  if (!review.follow.hasTarget && review.followRead?.explicit) cancelReviewFollow(review);
+  if (inventoryFollowTarget(task) === null) cancelReviewFollow(review);
+  return review.follow;
+}
+
+function followInventory(task) {
+  if (task.inventoryReview === null) return;
+  const review = task.inventoryReview;
+  const follow = inventoryFollow(task, review);
+  if (!follow.hasTarget && review.followRead?.explicit) cancelReviewFollow(review);
+  if (inventoryFollowTarget(task) === null) cancelReviewFollow(review);
+  else if (follow.enabled && follow.eligible) queueReviewFollow(review, INVENTORY_FOLLOW);
+}
+
+function cancelReviewFollow(review) {
+  review.followRead?.job.cancel();
+  review.followRead = null;
+}
+
+const PLAN_FOLLOW = Object.freeze({
+  inventory: false, subject: "operation", owner: currentReviewTask,
+  loading: task => task.reviewLoading,
+  session: task => task.executionSessionId,
+  target: planFollowTarget,
+  anchor: getPlanOperationAnchor, window: getPlanWindow,
+  adopt(review, window) {
+    if (window.highlight_revision !== review.summary.highlight_revision) return false;
+    adoptExecutionWindow(review, window);
+    return true;
+  },
+});
+const INVENTORY_FOLLOW = Object.freeze({
+  inventory: true, subject: "item", owner: currentInventoryTask,
+  loading: task => task.inventoryLoading,
+  session: task => task.sessionId, target: inventoryFollowTarget,
+  anchor: getInventoryItemAnchor, window: readInventoryWindow,
+  adopt(review, window) {
+    const summary = inventoryWindowSummary(review, window, review.summary.view_revision);
+    if (summary === null) return false;
+    review.summary = summary;
+    review.window = window;
+    review.passiveRevealWindow = window;
+    return true;
+  },
+});
+
+function queuePlanFollow(review, enableFollow = false, explicit = false) {
+  queueReviewFollow(review, PLAN_FOLLOW, enableFollow, explicit);
+}
+
+function navigationWindowOffset(index) { return Math.max(0, index - 4); }
+
+function loadedFollowTarget(task, review, adapter, itemId) {
+  if (review.window.view_revision !== review.summary.view_revision
+      || review.window.highlight_revision !== review.summary.highlight_revision) return null;
+  if (adapter.inventory) {
+    return task.inventoryReviewSessionId === task.sessionId && !task.inventoryViewUnconfirmed
+      ? review.window.rows.find(row => !row.is_container && row.warning === null && row.row_id !== null
+        && `${review.summary.location_id}:${row.row_id}` === itemId) : null;
+  }
+  return review.window.execution.session_id === task.executionSessionId
+    ? review.window.rows.find(row => row.operation_id === itemId) : null;
+}
+
+function cachedFollowTarget(task, review, adapter, itemId) {
+  return review.follow.anchorKey === `${adapter.session(task)}:${review.summary.view_revision}:${itemId}`
+    && Number.isSafeInteger(review.follow.anchorIndex)
+    && review.follow.anchorIndex >= review.window.offset
+    && review.follow.anchorIndex < review.window.offset + review.window.rows.length;
+}
+
+function automaticFollowIsLocal(task) {
+  const inventory = ["baseline", "verify", "rebaseline"].includes(task.sessionKind);
+  const review = inventory ? task.inventoryReview : task.review;
+  const adapter = inventory ? INVENTORY_FOLLOW : PLAN_FOLLOW;
+  const target = adapter.target(task);
+  return review == null || !review.follow?.enabled || !followEligible(review) || target === null
+    || loadedFollowTarget(task, review, adapter, target) != null
+    || cachedFollowTarget(task, review, adapter, target);
+}
+
+function cancelAutomaticReview(task) {
+  if (task.automaticReviewTimer != null) window.clearTimeout(task.automaticReviewTimer);
+  task.automaticReviewTimer = null;
+}
+
+function scheduleAutomaticReview(task, follow = false) {
+  if (tasks.get(task.taskId) !== task || task.closePending || task.drainUnavailable
+      || task.sessionState !== "active" || settingsVisible) return;
+  task.automaticFollowPending ||= follow;
+  task.automaticPaintPending ||= follow;
+  const now = performance.now();
+  task.automaticReviewAt ??= now;
+  task.automaticReadAt ??= now;
+  const due = task.automaticPaintPending
+    ? Math.min(task.automaticReviewAt + 250, task.automaticReadAt + 500)
+    : task.automaticReadAt + 500;
+  if (task.automaticReviewTimer != null && task.automaticReviewDue <= due) return;
+  cancelAutomaticReview(task);
+  task.automaticReviewDue = due;
+  const sessionId = task.sessionId;
+  task.automaticReviewTimer = window.setTimeout(() => {
+    task.automaticReviewTimer = null;
+    if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId || task.closePending
+        || task.sessionState !== "active" || task.drainUnavailable || settingsVisible) return;
+    if (performance.now() < task.automaticReadAt + 500
+        && (!task.automaticPaintPending || performance.now() < task.automaticReviewAt + 250)) {
+      scheduleAutomaticReview(task);
+      return;
+    }
+    paintAutomaticReview(task, task.automaticFollowPending, performance.now() >= task.automaticReadAt + 500,
+      task.automaticPaintPending);
+  }, Math.max(0, due - now));
+}
+
+function paintAutomaticReview(task, follow = true, read = true, paint = true) {
+  cancelAutomaticReview(task);
+  const review = task.sessionKind === "sync-execution" ? task.review : task.inventoryReview;
+  const previousOffset = review?.follow?.scrollOffset;
+  const previousTarget = review?.follow?.hasTarget;
+  const previousEligible = review?.follow?.eligible;
+  const previousMessage = review?.message;
+  const land = read || automaticFollowIsLocal(task);
+  if (land) task.automaticFollowPending = false;
+  task.automaticPaintPending = false;
+  task.automaticReviewAt = performance.now();
+  if (read) task.automaticReadAt = task.automaticReviewAt;
+  task.automaticReviewRunning = true;
+  try {
+    if (task.sessionKind === "sync-execution") {
+      if (task.review?.follow != null) {
+        task.review.follow.hasTarget = planFollowTarget(task) !== null;
+        if (!task.review.follow.hasTarget) cancelReviewFollow(task.review);
+        else if (follow && land && task.review.follow.enabled && task.review.follow.eligible) queuePlanFollow(task.review);
+      }
+    } else {
+      if (follow && land) followInventory(task);
+    }
+    if (paint || previousOffset !== review?.follow?.scrollOffset
+        || previousTarget !== review?.follow?.hasTarget || previousEligible !== review?.follow?.eligible
+        || previousMessage !== review?.message) renderTasks();
+    if (read && task.sessionKind === "sync-execution" && task.executionWindowDirty) void refreshExecutionWindow(task);
+    else if (read && task.sessionKind !== "sync-execution" && task.inventoryOverlayDirty) {
+      void refreshInventoryOverlay(task, task.sessionId, false);
+    }
+  } finally {
+    task.automaticReviewRunning = false;
+  }
+  if (!read && (task.automaticFollowPending || task.executionWindowDirty || task.inventoryOverlayDirty)) {
+    scheduleAutomaticReview(task);
+  }
+}
+
+function queueReviewFollow(review, adapter, enableFollow = false, explicit = false) {
+  const task = adapter.owner(review);
+  if (task === null || settingsVisible || task.closePending || adapter.loading(task) || review.pending !== null
+      || adapter.session(task) === null || review.follow == null) return;
+  if (!explicit && task.sessionState === "active" && !task.automaticReviewRunning) {
+    scheduleAutomaticReview(task, true);
+    return;
+  }
+  review.follow.eligible = followEligible(review);
+  const operationId = adapter.target(task, explicit);
+  review.follow.hasTarget = adapter.target(task, true) !== null;
+  if (operationId === null) {
+    cancelReviewFollow(review);
+    review.follow.message = `No ${adapter.subject} is active.`;
+    review.message = review.follow.message;
+    renderTasks();
+    return;
+  }
+  if (enableFollow) review.follow.enabled = review.follow.eligible;
+  if (!explicit && review.followRead?.generation === review.follow.generation) return;
+  const sessionId = adapter.session(task);
+  const viewRevision = review.summary.view_revision;
+  const actionRevision = review.actionRevision;
+  const followGeneration = review.follow.generation;
+  const navigation = navigationRevision;
+  const paneRevision = task.paneRevision;
+  const anchorKey = `${sessionId}:${viewRevision}:${operationId}`;
+  const loadedTarget = adapter.inventory && explicit ? null : loadedFollowTarget(task, review, adapter, operationId);
+  if (loadedTarget != null) {
+    if (explicit || review.follow.anchorKey !== anchorKey) {
+      cancelReviewFollow(review);
+      if (explicit || review.viewportRead != null) {
+        if (adapter.inventory) cancelInventoryWindow(review);
+        else cancelPlanViewport(review);
+      }
+      review.follow.anchorKey = anchorKey;
+      review.follow.anchorIndex = loadedTarget.visible_index;
+      review.follow.scrollOffset = Math.max(review.window.offset, navigationWindowOffset(loadedTarget.visible_index));
+      review.follow.message = null;
+      if ([`No ${adapter.subject} is active.`, `The current ${adapter.subject} is excluded from this view.`,
+        `Current ${adapter.subject} navigation is unavailable. Try again.`].includes(review.message)) review.message = null;
+      if (!task.automaticReviewRunning) renderTasks();
+    }
+    return;
+  }
+  if (cachedFollowTarget(task, review, adapter, operationId)
+      && (!explicit || navigationWindowOffset(review.follow.anchorIndex) >= review.window.offset)) {
+    if (explicit) {
+      cancelReviewFollow(review);
+      if (adapter.inventory) cancelInventoryWindow(review);
+      else cancelPlanViewport(review);
+      review.follow.scrollOffset = navigationWindowOffset(review.follow.anchorIndex);
+      renderTasks();
+    }
+    return;
+  }
+  if (review.followRead?.key === anchorKey && review.followRead.generation === followGeneration
+      && review.followRead.explicit) return;
+  review.followRead?.job.cancel();
+  const owner = tableReadOwner(task, adapter.inventory);
+  const release = owner.beginForeground();
+  const current = () => adapter.owner(review) === task
+    && !settingsVisible && !task.closePending && !adapter.loading(task) && review.pending === null
+    && navigationRevision === navigation
+    && task.paneRevision === paneRevision
+    && adapter.session(task) === sessionId && review.summary.view_revision === viewRevision
+    && review.actionRevision === actionRevision && review.follow.generation === followGeneration
+    && (explicit || (review.follow.enabled && review.follow.eligible && adapter.target(task) !== null));
+  const job = owner.request(current, async (stillCurrent) => {
+    const anchor = review.follow.anchorKey === anchorKey && Number.isSafeInteger(review.follow.anchorIndex)
+      ? {disposition: "current", index: review.follow.anchorIndex}
+      : await adapter.anchor(task.taskId, sessionId, viewRevision, operationId);
+    if (!stillCurrent()) return null;
+    if (anchor.disposition !== "current" || anchor.index === null) return {anchor, window: null};
+    const demand = adapter.inventory ? task.inventoryOverlayRevision : task.executionWindowDirtyRevision;
+    if (!explicit) task.automaticReadAt = performance.now();
+    const window = await adapter.window(task.taskId, viewRevision, navigationWindowOffset(anchor.index), 256);
+    return {anchor, window, demand};
+  });
+  const request = {key: anchorKey, generation: followGeneration, explicit, job};
+  review.followRead = request;
+  void job.promise.then((result) => {
+    if (result === null || review.followRead !== request || !current()) return;
+    const {anchor, window, demand} = result;
+    if (window === null) {
+      if (!explicit && adapter.target(task) !== operationId) return;
+      review.follow.message = `The current ${adapter.subject} is excluded from this view.`;
+      review.message = review.follow.message;
+    } else {
+      if (window.disposition !== "current" || window.view_revision !== viewRevision
+          || !adapter.adopt(review, window)) return;
+      if (!adapter.inventory && task.executionWindowDirtyRevision === demand) task.executionWindowDirty = false;
+      review.follow.anchorKey = anchorKey;
+      review.follow.anchorIndex = anchor.index;
+      review.follow.scrollOffset = navigationWindowOffset(anchor.index);
+      review.follow.message = null;
+      if ([`No ${adapter.subject} is active.`, `The current ${adapter.subject} is excluded from this view.`,
+        `Current ${adapter.subject} navigation is unavailable. Try again.`].includes(review.message)) review.message = null;
+    }
+    renderTasks();
+  }).catch(() => {
+    if (review.followRead === request && current() && (explicit || adapter.target(task) === operationId)) {
+      review.follow.message = `Current ${adapter.subject} navigation is unavailable. Try again.`;
+      review.message = review.follow.message;
+      renderTasks();
+    }
+  }).finally(() => {
+    const owned = review.followRead === request;
+    if (owned) review.followRead = null;
+    // A changed target joins the next cadence cycle instead of chaining reads.
+    const next = adapter.target(task);
+    if (owned && current() && review.follow.enabled && review.follow.eligible
+        && next !== null && next !== operationId) {
+      if (task.sessionState === "active") scheduleAutomaticReview(task, true);
+      else queueReviewFollow(review, adapter);
+    }
+    release();
+  });
+}
+
+function selectTask(taskId) {
+  const task = tasks.get(taskId);
+  if (task === undefined) {
+    return;
+  }
+  navigationRevision += 1;
+  const previous = selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null;
+  if (previous !== null) cancelAutomaticReview(previous);
+  if (previous?.review != null) {
+    interruptPlanNavigation(previous.review);
+    retireExecutionDetail(previous.review);
+    retirePlanDetail(previous.review);
+  }
+  if (previous?.inventoryReview != null) {
+    interruptPlanHighlight(previous.inventoryReview);
+    cancelInventoryWindow(previous.inventoryReview);
+    retireInventoryDetail(previous.inventoryReview);
+  }
+  selectedTaskId = taskId;
+  settingsVisible = false;
+  renderTasks();
+  if (task.review !== null && task.reviewSessionId === task.executionSessionId
+      && task.review.summary.highlight_focus_node_id !== null) {
+    void readPlanDetail(task.review, { node_id: task.review.summary.highlight_focus_node_id });
+  }
+  void loadTaskSetup(task);
+  if (
+    task.taskKind === "sync-plan"
+    && (task.sessionReleased || task.sessionState === "active")
+  ) {
+    void loadPlanReview(task);
+  }
+  if (task.executionWindowDirty) void refreshExecutionWindow(task);
+  if (task.taskKind === "inventory" || task.executionStarted) void loadInventoryReview(task);
+  if (["sync-execution", "baseline", "verify", "rebaseline"].includes(task.sessionKind)) paintAutomaticReview(task);
+  else followInventory(task);
+}
+
+function adoptTask(summary) {
+  let task = tasks.get(summary.task_id);
+  if (task === undefined) {
+    task = {
+      taskId: summary.task_id,
+      sessionId: summary.session_id,
+      sessionState: summary.session_state,
+      sessionReleased: summary.session_released,
+      taskKind: summary.task_kind,
+      requestId: summary.request_id,
+      planRequestId: summary.plan_request_id,
+      sessionKind: summary.session_kind,
+      executionSessionId: summary.session_kind === "sync-execution" ? summary.session_id : null,
+      originalExecutionFact: null,
+      executionSessionState: null,
+      executionSnapshot: null,
+      executionPresentation: null,
+      linkedVerificationStarted: false,
+      closePending: false,
+      closeRecovery: null,
+      closeAwaitingTerminal: false,
+      closeTerminalSeen: false,
+      closeAutoConsumed: false,
+      closeManualReady: false,
+      startRecovery: null,
+      releaseRecovery: null,
+      closeFailed: false,
+      closeMessage: null,
+      recoveryRetry: null,
+      recoverySessionId: null,
+      recoveryRunning: false,
+      error: null,
+      label: `Task ${nextTaskNumber}`,
+      stopDrain: null,
+      drainUnavailable: false,
+      form: null,
+      setupRevision: 0,
+      review: null,
+      reviewLoading: false,
+      reviewRevision: 0,
+      reviewSessionId: null,
+      inventoryReview: null,
+      inventoryReviewSessionId: null,
+      inventoryLoading: false,
+      inventoryInvalidationRevision: 0,
+      inventoryRevision: 0,
+      inventoryOverlayRevision: 0,
+      inventoryOverlayRunning: false,
+      inventoryOverlayDirty: false,
+      inventoryError: null,
+      inventoryReloadAvailable: false,
+      inventoryAction: null,
+      inventoryViewUnconfirmed: false,
+      workPane: "plan",
+      paneRevision: 0,
+      executionStarted: false,
+      executionAttempt: null,
+      executionControlState: "running",
+      executionControlRevision: 0,
+      executionControlAttempt: null,
+      executionWindowDirty: false,
+      executionWindowDirtyRevision: 0,
+      executionWindowRefreshRunning: false,
+      progressPresentation: null,
+      snapshot: null,
+    };
+    nextTaskNumber += 1;
+    tasks.set(task.taskId, task);
+  } else {
+    if (task.sessionId !== summary.session_id) {
+      cancelAutomaticReview(task);
+      task.automaticReviewAt = null;
+      task.automaticReadAt = null;
+      task.automaticPaintPending = false;
+      task.automaticFollowPending = false;
+      task.stopDrain?.();
+      task.stopDrain = null;
+      if (task.inventoryReview !== null) {
+        interruptPlanHighlight(task.inventoryReview);
+        cancelInventoryWindow(task.inventoryReview);
+        retireInventoryDetail(task.inventoryReview);
+      }
+      task.inventoryRevision += 1;
+      task.inventoryOverlayRevision += 1;
+      task.inventoryLoading = false;
+      invalidateInventoryReview(task);
+      task.recoveryRetry = null;
+      task.recoverySessionId = null;
+      task.recoveryRunning = false;
+      task.releaseRecovery = null;
+      task.closeFailed = false;
+      task.snapshot = null;
+      task.progressPresentation = null;
+      task.executionControlState = "running";
+      task.executionControlRevision += 1;
+    }
+    if (task.sessionId !== summary.session_id || summary.session_state !== "active") {
+      const controlAttempt = task.executionControlAttempt;
+      task.executionControlAttempt = null;
+      if (task.review !== null && controlAttempt !== null
+          && task.review.pending === controlAttempt.actionName) task.review.pending = null;
+    }
+    if (
+      task.sessionId !== null
+      && summary.session_id !== null
+      && task.sessionId !== summary.session_id
+      && summary.task_kind === "sync-plan"
+      && task.planRequestId === summary.plan_request_id
+      && task.review !== null
+    ) {
+      if (summary.session_kind === "sync-execution") {
+        task.executionStarted = true;
+        setOriginalExecutionSession(task, summary.session_id);
+        task.executionWindowDirty = true;
+        task.executionWindowDirtyRevision += 1;
+        task.workPane = "plan";
+      }
+    }
+    if (task.sessionKind === "sync-execution" && summary.session_kind !== "sync-execution") {
+      task.executionSessionState = task.sessionState;
+    }
+    task.sessionId = summary.session_id;
+    task.sessionState = summary.session_state;
+    task.sessionReleased = summary.session_released;
+    task.taskKind = summary.task_kind;
+    task.requestId = summary.request_id;
+    task.planRequestId = summary.plan_request_id;
+    task.sessionKind = summary.session_kind;
+    if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
+    if (summary.session_kind === "sync-execution") setOriginalExecutionSession(task, summary.session_id);
+  }
+  if (task.form !== null) task.form.sessionState = task.sessionState;
+  if (
+    task.sessionId !== null &&
+    task.stopDrain === null
+  ) {
+    attachTaskDrain(task);
+  }
+  if (
+    task.taskKind === "sync-plan"
+    && (task.sessionReleased || task.sessionState === "active")
+  ) {
+    void loadPlanReview(task);
+  }
+  if (task.sessionReleased && (task.taskKind === "inventory" || task.executionStarted)) void loadInventoryReview(task);
+  return task;
+}
+
+function adoptTaskStart(result, sessionKind, taskKind = sessionKind) {
+  taskMutationRevision += 1;
+  const observed = tasks.get(result.task_id);
+  if (observed?.sessionId === result.session_id) return observed;
+  const retainedPlanRequestId = observed?.taskKind === "sync-plan" ? observed.planRequestId : null;
+  return adoptTask({
+    task_id: result.task_id,
+    request_id: result.request_id,
+    plan_request_id: retainedPlanRequestId ?? (taskKind === "sync-plan" ? result.request_id : null),
+    session_id: result.session_id,
+    session_kind: sessionKind,
+    session_state: "active",
+    session_released: false,
+    task_kind: retainedPlanRequestId === null ? taskKind : "sync-plan",
+  });
+}
+
+function attachTaskDrain(task) {
+  const sessionId = task.sessionId;
+  task.stopDrain = startTaskDrain(
+    task.taskId,
+    sessionId,
+    (update, snapshot) => acceptTaskUpdate(task, sessionId, update, snapshot),
+    (error, retry) => acceptTaskRefusal(task, sessionId, error, retry),
+    {
+      terminal: task.sessionState !== "active",
+      sessionReleased: task.sessionReleased,
+    },
+    (_taskId, sessionId) => acceptTaskRelease(task, sessionId),
+    (_taskId, sessionId) => acceptTaskRecovery(task, sessionId),
+    (_taskId, sessionId, feedback) => acceptTaskReleaseDelay(task, sessionId, feedback),
+  );
+  task.drainUnavailable = false;
+}
+
+function acceptTaskUpdate(task, sessionId, update, snapshot = null) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
+    return;
+  }
+  const execution = task.sessionKind === "sync-execution";
+  const integrity = ["baseline", "verify", "rebaseline"].includes(task.sessionKind);
+  const rawGap = update?.event?.body_type === "Gap";
+  const newGap = snapshot?.gap_first_missed_seq != null
+    && snapshot.gap_first_missed_seq !== task.snapshot?.gap_first_missed_seq;
+  if (rawGap || newGap) {
+    task.progressPresentation = null;
+    if (execution) task.executionPresentation = null;
+    const review = execution ? task.review : task.inventoryReview;
+    if (review?.follow != null) {
+      cancelReviewFollow(review);
+      review.follow.hasTarget = false;
+      review.follow.anchorKey = null;
+      review.follow.anchorIndex = null;
+      review.follow.scrollOffset = null;
+    }
+  }
+  if (execution) {
+    task.executionWindowDirty = true;
+    task.executionWindowDirtyRevision += 1;
+  }
+  if ((execution || integrity) && snapshot === null) {
+    if (execution) observeLinkedVerification(task, null, update);
+    if (rawGap) {
+      if (integrity) {
+        task.inventoryOverlayRevision += 1;
+        task.inventoryOverlayDirty = true;
+      }
+      scheduleAutomaticReview(task, true);
+    }
+    return;
+  }
+  const immediate = task.snapshot === null || task.executionControlState !== snapshot?.control_state
+    || task.snapshot?.session_state !== snapshot?.session_state
+    || task.snapshot?.phase !== snapshot?.phase
+    || update?.update_type === "record" || update?.event?.body_type === "Gap"
+    || task.snapshot?.gap_first_missed_seq !== snapshot?.gap_first_missed_seq;
+  if (snapshot !== null) {
+    if (newGap) invalidateInventoryReview(task);
+    observeLinkedVerification(task, snapshot, update);
+    task.snapshot = snapshot;
+    if (planReviewRefusal(task) !== null) {
+      // An earlier read can still be waiting when the terminal fact arrives.
+      task.reviewRevision += 1;
+      task.reviewLoading = false;
+      if (task.error === PLAN_UNAVAILABLE) task.error = null;
+    }
+    task.progressPresentation = {
+      phase: snapshot.phase,
+      activeItem: snapshot.active_item,
+      itemPercent: snapshot.presentation.item_percent,
+      lastSettledOperationId: snapshot.last_settled_operation_id,
+      lastSettledIntegrityItemId: snapshot.last_settled_integrity_item_id,
+    };
+    if (task.sessionKind === "sync-execution") {
+      task.executionSnapshot = snapshot;
+      task.executionPresentation = task.progressPresentation;
+      task.executionSessionState = snapshot.session_state;
+    }
+    if (task.executionControlState !== snapshot.control_state) {
+      task.executionControlRevision += 1;
+      task.executionControlState = snapshot.control_state;
+      if (task.executionControlAttempt?.sessionId === sessionId) {
+        if (task.executionControlAttempt.pending) {
+          task.executionControlAttempt.message = executionControlMessage(snapshot.control_state);
+        } else if (!checkableOutcome(task.executionControlAttempt.recovery)
+            && !fixedOutcome(task.executionControlAttempt.recovery)
+            && !(task.executionControlAttempt.independent
+              && task.executionControlAttempt.accepted)) {
+          task.executionControlAttempt = null;
+        }
+      }
+      if (task.inventoryAction?.kind === "integrity-control"
+          && task.inventoryAction.sessionId === sessionId) {
+        task.inventoryAction = null;
+      }
+      if (task.sessionKind === "sync-execution" && task.review !== null && !fixedOutcome(task.review.recovery)) {
+        task.review.message = executionControlMessage(snapshot.control_state);
+      }
+    }
+    if (task.review?.follow != null && task.sessionKind === "sync-execution") {
+      task.review.follow.hasTarget = planFollowTarget(task) !== null;
+    }
+    if (integrity) {
+      if (task.inventoryReview !== null) inventoryFollow(task, task.inventoryReview);
+      task.inventoryOverlayRevision += 1;
+      task.inventoryOverlayDirty = true;
+    }
+  }
+  if (execution || integrity) {
+    if (!immediate) {
+      scheduleAutomaticReview(task, true);
+      return;
+    }
+    cancelAutomaticReview(task);
+  }
+  if (update?.update_type === "record") {
+    task.recoveryRetry = null;
+    task.recoverySessionId = null;
+    task.recoveryRunning = false;
+    task.drainUnavailable = false;
+    clearTaskRecoveryError(task);
+    taskMutationRevision += 1;
+    const controlAttempt = task.executionControlAttempt;
+    task.executionControlAttempt = null;
+    if (task.review !== null && controlAttempt !== null
+        && task.review.pending === controlAttempt.actionName) task.review.pending = null;
+    task.sessionState = snapshot.session_state;
+    if (["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+        && task.inventoryAction?.kind === "integrity-control") task.inventoryAction = null;
+    if (task.form !== null) task.form.sessionState = task.sessionState;
+    if (task.sessionKind === "sync-execution" && task.review !== null) {
+      task.review.message = task.sessionState === "completed" ? null : `Execution ${task.sessionState}.`;
+    }
+    if (task.closePending && ["completed", "failed", "canceled", "refused"].includes(task.sessionState)) {
+      task.closeTerminalSeen = true;
+      continuePendingClose(task);
+    }
+    renderTasks();
+    if (["completed", "failed", "canceled", "refused"].includes(task.sessionState)) {
+      void loadTaskSetup(task);
+    }
+  } else if (!execution && !integrity) {
+    renderTasks();
+  }
+  if (execution || integrity) paintAutomaticReview(task);
+}
+
+function acceptTaskRefusal(task, sessionId, error, retry = null) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) {
+    return;
+  }
+  const drainStopped = task.sessionState === "active"
+    && !(error instanceof TerminalPresentationError)
+    && !(error instanceof TerminalSessionReleaseError);
+  if (drainStopped) {
+    cancelAutomaticReview(task);
+    task.drainUnavailable = true;
+    invalidateInventoryReview(task);
+  }
+  if (error instanceof TerminalSessionReleaseError && error.checkable) {
+    task.releaseRecovery = null;
+  }
+  task.recoveryRetry = retry ?? (typeof error?.retry === "function" ? error.retry : null);
+  task.recoverySessionId = sessionId;
+  task.recoveryRunning = false;
+  if (error instanceof TerminalSessionReleaseError && !error.checkable) {
+    renderTasks();
+    return;
+  }
+  if (drainStopped && task.sessionKind === "sync-execution") {
+    setTaskRecoveryError(task, STOPPED_TASK_UPDATES_MESSAGE);
+    if (task.review !== null) task.review.message = STOPPED_TASK_UPDATES_MESSAGE;
+  } else {
+    setTaskRecoveryError(task, task.recoveryRetry === null
+      ? "Task updates stopped. Close can be retried."
+      : "Task recovery paused. Select Retry updates on this task.");
+  }
+  renderTasks();
+}
+
+function acceptTaskRecovery(task, sessionId) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
+  task.recoveryRetry = null;
+  task.recoverySessionId = null;
+  task.recoveryRunning = false;
+  task.drainUnavailable = false;
+  if (!checkableOutcome(task.releaseRecovery)) clearTaskRecoveryError(task);
+  if (task.review?.message === STOPPED_TASK_UPDATES_MESSAGE) {
+    task.review.message = task.executionControlAttempt?.sessionId === sessionId
+      ? task.executionControlAttempt.message : executionControlMessage(task.executionControlState);
+  }
+  renderTasks();
+  if (task.executionWindowDirty || task.inventoryOverlayDirty) scheduleAutomaticReview(task, true);
+}
+
+function retryTaskUpdates(taskId) {
+  const task = tasks.get(taskId);
+  if (task !== undefined && checkableOutcome(task.releaseRecovery)
+      && !task.releaseRecovery.checking) {
+    void task.releaseRecovery.check();
+    return;
+  }
+  if (
+    task === undefined || task.recoveryRunning || checkableOutcome(task.closeRecovery) ||
+    task.recoverySessionId !== task.sessionId ||
+    typeof task.recoveryRetry !== "function"
+  ) return;
+  task.recoveryRunning = true;
+  setTaskRecoveryError(task, "Reconnecting task updates…");
+  renderTasks();
+  try {
+    if (task.recoveryRetry() === false) {
+      task.recoveryRunning = false;
+      setTaskRecoveryError(task, "Task updates are still unavailable. Select Retry updates to try again.");
+      renderTasks();
+    }
+  } catch (_error) {
+    task.recoveryRunning = false;
+    setTaskRecoveryError(task, "Task updates are still unavailable. Select Retry updates to try again.");
+    renderTasks();
+  }
+}
+
+async function refreshTasks() {
+  const mutationBaseline = taskMutationRevision;
+  const result = await listTasks();
+  if (mutationBaseline !== taskMutationRevision) {
+    void refreshTasks();
+    return;
+  }
+  const retainedIds = new Set();
+  for (const summary of result.tasks) {
+    retainedIds.add(summary.task_id);
+    adoptTask(summary);
+  }
+  for (const [taskId, task] of tasks) {
+    if (!retainedIds.has(taskId)) {
+      cancelAutomaticReview(task);
+      task.stopDrain?.();
+      tasks.delete(taskId);
+    }
+  }
+  if (selectedTaskId !== null && !tasks.has(selectedTaskId)) {
+    selectedTaskId = null;
+  }
+  if (selectedTaskId === null && tasks.size > 0) {
+    selectedTaskId = taskArray()[0].taskId;
+  }
+  renderTasks();
+  if (selectedTaskId !== null) void loadTaskSetup(tasks.get(selectedTaskId));
+  if (selectedTaskId !== null) void loadInventoryReview(tasks.get(selectedTaskId));
+}
+
+async function createBlankTask() {
+  if (createAttempt?.running) {
+    if (checkableOutcome(createAttempt.recovery)) await createAttempt.recovery.check();
+    return;
+  }
+  if (fixedOutcome(createAttempt?.recovery)) return;
+  const selectionBaseline = navigationRevision;
+  const attempt = {
+    running: true,
+    recovery: null,
+  };
+  createAttempt = attempt;
+  renderTasks();
+  try {
+    const result = await createTask((recovery) => {
+      if (createAttempt === attempt) {
+        attempt.recovery = recovery;
+        if (recovery.message !== null) renderHostStatus(recovery.message);
+        renderTasks();
+      }
+    });
+    taskMutationRevision += 1;
+    const task = adoptTask({
+      task_id: result.task_id,
+      session_id: null,
+      session_state: null,
+      session_released: false,
+      task_kind: null,
+      request_id: null,
+    });
+    if (navigationRevision === selectionBaseline) {
+      selectedTaskId = task.taskId;
+      settingsVisible = false;
+    }
+    void loadTaskSetup(task);
+    if (createAttempt === attempt) createAttempt = null;
+  } catch (error) {
+    if (createAttempt !== attempt) return;
+    if (error instanceof TaskCreateUncertainError) {
+      attempt.running = false;
+      renderHostStatus(attempt.recovery?.message ?? UNKNOWN_OUTCOME_GUIDANCE);
+      return;
+    }
+    createAttempt = null;
+    renderHostStatus(
+      "A task could not be created. Close an unused task or wait, then try again.",
+    );
+  } finally {
+    if (createAttempt === attempt && !fixedOutcome(attempt.recovery)) createAttempt = null;
+    renderTasks();
+  }
+}
+
+function continuePendingClose(task) {
+  if (!task.closePending || !task.closeAwaitingTerminal
+      || !task.closeTerminalSeen || task.closeAutoConsumed) return;
+  task.closeAutoConsumed = true;
+  task.closePending = false;
+  if (task.review?.pending === "close") task.review.pending = null;
+  void closeRetainedTask(task.taskId);
+}
+
+async function closeRetainedTask(taskId) {
+  const task = tasks.get(taskId);
+  if (task?.closePending && checkableOutcome(task.closeRecovery)) {
+    await task.closeRecovery.check();
+    return;
+  }
+  if (task === undefined || taskCloseBlockReason(task) !== null) return;
+  const pendingFolderRow = pageBatch?.running?.originTaskId === taskId
+    && pageBatch.running.row?.stage?.startsWith("admitting-")
+    ? pageBatch.running.row : null;
+  if (pendingFolderRow !== null) {
+    pageBatch.rows = pageBatch.rows.filter((row) => row !== pendingFolderRow);
+    pageBatch.generation += 1;
+    pendingFolderRow.abandonAdmission?.();
+  }
+  if (!task.closeAwaitingTerminal) {
+    task.closeTerminalSeen = task.sessionState !== null && task.sessionState !== "active";
+    task.closeAutoConsumed = false;
+  }
+  task.closeAwaitingTerminal = false;
+  task.closeManualReady = false;
+  task.closePending = true;
+  cancelAutomaticReview(task);
+  task.closeRecovery = null;
+  task.closeFailed = false;
+  task.closeMessage = null;
+  task.error = null;
+  task.inventoryRevision += 1;
+  task.inventoryLoading = false;
+  if (task.inventoryReview !== null) {
+    interruptPlanHighlight(task.inventoryReview);
+    cancelInventoryWindow(task.inventoryReview);
+    task.inventoryReview.actionRevision += 1;
+    task.inventoryReview.pending = "close";
+    retireInventoryDetail(task.inventoryReview);
+  }
+  if (task.review !== null) {
+    task.review.actionRevision += 1;
+    task.review.pending = "close";
+  }
+  renderTasks();
+  let remainsPending = false;
+  try {
+    const result = await closeTask(task.taskId, task.sessionId, (recovery) => {
+        if (tasks.get(taskId) === task) {
+          task.closeRecovery = recovery;
+          renderTasks();
+        }
+      });
+    task.closeRecovery = null;
+    task.closeFailed = false;
+    task.closeMessage = null;
+    if (result.disposition === "closed") {
+      taskMutationRevision += 1;
+    }
+    if (tasks.get(taskId) !== task) {
+      return;
+    }
+    if (result.disposition === "closed") {
+      if (pageBatch !== null) {
+        pageBatch.rows = pageBatch.rows.filter((row) => row.originTaskId !== taskId);
+      }
+      task.stopDrain?.();
+      tasks.delete(taskId);
+      if (selectedTaskId === taskId) {
+        selectedTaskId = tasks.size === 0 ? null : taskArray()[0].taskId;
+        navigationRevision += 1;
+      }
+    } else {
+      remainsPending = true;
+      task.closeAwaitingTerminal = true;
+      if (task.closeTerminalSeen && !task.closeAutoConsumed) {
+        continuePendingClose(task);
+      } else if (task.closeAutoConsumed) {
+        task.closeManualReady = true;
+        task.closeFailed = true;
+        task.closeMessage = "Close is still pending. Select Retry close to check whether cleanup finished.";
+      }
+    }
+  } catch (error) {
+    if (tasks.get(taskId) === task) {
+      if (!(error instanceof TaskCloseUncertainError)) task.closeRecovery = null;
+      task.closeFailed = true;
+      task.closeMessage = null;
+      task.error = error instanceof TaskCloseUncertainError
+        ? null : "Close was refused. Retry close.";
+      if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
+          && task.review?.pending === "close") task.review.pending = null;
+      if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
+          && task.inventoryReview?.pending === "close") task.inventoryReview.pending = null;
+    }
+  } finally {
+    if (
+      !remainsPending &&
+      tasks.get(taskId) === task
+    ) {
+      task.closePending = false;
+      if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
+          && task.review?.pending === "close") task.review.pending = null;
+      if (!checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery)
+          && task.inventoryReview?.pending === "close") task.inventoryReview.pending = null;
+    }
+    renderTasks();
+  }
+}
+
+function cloneOptions(options) {
+  return {
+    filters: [...options.filters],
+    deletion_policy: options.deletion_policy,
+    trash_on_update: options.trash_on_update,
+    preservation: { ...options.preservation },
+    propagate_source_casing: options.propagate_source_casing,
+    verify_after_execute: options.verify_after_execute,
+  };
+}
+
+function cloneCandidate(candidate) {
+  return candidate === null ? null : { ...candidate };
+}
+
+function cloneLocation(location) {
+  return location === null ? null : {
+    ...location,
+    candidates: [...location.candidates],
+  };
+}
+
+function snapshotLocationRow(row) {
+  return {
+    text: row.text,
+    location: cloneLocation(row.location),
+    candidate: cloneCandidate(row.candidate),
+    continuationId: row.continuationId,
+    mountIndex: row.mountIndex,
+    revision: row.revision,
+    admissionRevision: row.admissionRevision,
+    pending: false,
+    admissionPromise: null,
+  };
+}
+
+function createForm(snapshot, recents) {
+  const root = (value) => ({
+    text: value?.display ?? "",
+    location: value === null ? null : {
+      purpose: null,
+      state: "resolved",
+      choice_id: null,
+      continuation_id: null,
+      detail: null,
+    },
+    candidate: value?.location_id === null || value === null ? null : {
+      kind: "remembered_location", location_id: value.location_id, selected_mount: null,
+    },
+    continuationId: null,
+    mountIndex: null,
+    revision: 0,
+    admissionRevision: 0,
+    pending: false,
+    admissionPromise: null,
+  });
+  const inventory = snapshot.task_kind === "inventory";
+  return {
+    setup: { ...snapshot, recents },
+    options: snapshot.options === null ? null : cloneOptions(snapshot.options),
+    source: root(inventory ? snapshot.root : snapshot.source),
+    target: root(snapshot.target),
+    batch: [],
+    batchCount: 0,
+    batchPending: false,
+    batchMessage: null,
+    closePending: false,
+    batchRunning: false,
+    editable: snapshot.setup_state === "default" && snapshot.task_kind === null,
+    mode: inventory ? "inventory" : "sync-plan",
+    revision: 0,
+    attempt: null,
+    actionMessage: null,
+    artifactReady: snapshot.setup_state === "frozen" && snapshot.task_kind === "sync-plan"
+      && snapshot.plan_again !== null,
+    canPlanAgain: snapshot.plan_again !== null,
+    planAgainMounts: { source: null, target: null },
+    sessionState: null,
+  };
+}
+
+async function loadTaskSetup(task) {
+  if (task === undefined || tasks.get(task.taskId) !== task) return;
+  const revision = ++task.setupRevision;
+  try {
+    const result = await readSetup(task.taskId);
+    if (tasks.get(task.taskId) !== task || task.setupRevision !== revision) return;
+    const retained = task.form;
+    if (
+      retained !== null && retained.editable &&
+      result.snapshot.setup_state === "default" && result.snapshot.task_kind === null
+    ) {
+      retained.setup = { ...result.snapshot, recents: retained.setup.recents };
+      retained.canPlanAgain = result.snapshot.plan_again !== null;
+      task.form = retained;
+    } else {
+      task.form = createForm(
+        result.snapshot,
+        defaultSetup?.recents ?? { sources: [], targets: [], pairs: [] },
+      );
+    }
+    task.form.sessionState = task.sessionState;
+    renderTasks();
+  } catch (_error) {
+    if (tasks.get(task.taskId) === task && task.setupRevision === revision) {
+      task.error = "Task setup could not be read. Select the task to retry.";
+      renderTasks();
+    }
+  }
+}
+
+async function loadDefaultSetup() {
+  const revision = ++defaultSetupRevision;
+  try {
+    const result = await readSetup();
+    if (revision !== defaultSetupRevision) return;
+    defaultSetup = result;
+    for (const task of tasks.values()) {
+      if (task.form === null && task.taskKind === null) {
+        void loadTaskSetup(task);
+      } else if (task.form?.editable) {
+        task.form.setup = { ...task.form.setup, recents: defaultSetup.recents };
+      }
+    }
+    refreshRecentPairs();
+  } catch (_error) {
+    // Task-specific reads retain the existing action-guiding error path.
+  }
+}
+
+function refreshRecentPairs() {
+  recentPairProbeRevision += 1;
+  recentPairAvailability = Object.create(null);
+  for (const pair of defaultSetup?.recents.pairs ?? []) {
+    recentPairAvailability[pair.mapping_id] = { source: "checking", target: "checking" };
+  }
+  renderTasks();
+  recentPairProbePending = true;
+  void runRecentPairProbe();
+}
+
+async function runRecentPairProbe() {
+  if (recentPairProbeRunning || !recentPairProbePending) return;
+  recentPairProbePending = false;
+  const recents = defaultSetup?.recents;
+  if (recents === undefined || recents.pairs.length === 0) return;
+  recentPairProbeRunning = true;
+  const revision = recentPairProbeRevision;
+  const current = () => revision === recentPairProbeRevision
+    && defaultSetup?.recents === recents;
+  try {
+    const result = await probeRecentPairs();
+    if (!current()) return;
+    for (const pair of recents.pairs) {
+      const observed = result.pairs.find((item) => item.mapping_id === pair.mapping_id
+        && item.source_id === pair.source.location_id && item.target_id === pair.target.location_id);
+      const endpointState = (state) => state === "resolved" ? "online"
+        : state === "offline" || state === "missing" ? "offline"
+          : state === undefined ? "unknown" : "unavailable";
+      recentPairAvailability[pair.mapping_id] = {
+        source: endpointState(observed?.source_state),
+        target: endpointState(observed?.target_state),
+      };
+    }
+  } catch (_error) {
+    if (current()) {
+      for (const pair of recents.pairs) {
+        recentPairAvailability[pair.mapping_id] = { source: "unknown", target: "unknown" };
+      }
+    }
+  } finally {
+    recentPairProbeRunning = false;
+    if (current()) renderTasks();
+    if (recentPairProbePending) void runRecentPairProbe();
+  }
+}
+
+function currentTask() {
+  return selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null;
+}
+
+function currentForm() {
+  return currentTask()?.form ?? null;
+}
+
+function formIsEditable(form) {
+  return form !== null && form.editable && form.attempt === null;
+}
+
+function originHasPendingBatch(taskId) {
+  return pageBatch?.rows.some((row) => row.originTaskId === taskId
+    && ["queued", "submitting", "unknown"].includes(row.state)) ?? false;
+}
+
+function batchTaskBlockReason(taskId) {
+  const pendingFolderRow = pageBatch?.running?.originTaskId === taskId
+    && pageBatch.running.row?.stage?.startsWith("admitting-")
+    ? pageBatch.running.row : null;
+  if (pageBatch?.running?.originTaskId === taskId && pendingFolderRow === null) {
+    return "Wait for this task's active batch submission before closing.";
+  }
+  const retained = pageBatch?.rows.find((row) => ["submitting", "unknown"].includes(row.state)
+    && row !== pendingFolderRow && (row.originTaskId === taskId || row.taskId === taskId));
+  return retained === undefined
+    ? null
+    : "Resolve this task's submitting or unknown batch pair before closing.";
+}
+
+function batchTaskStartMessage(taskId) {
+  const row = pageBatch?.rows.find((value) => ["submitting", "unknown"].includes(value.state)
+    && value.taskId === taskId && value.originTaskId !== taskId);
+  if (row !== undefined) {
+    const origin = tasks.get(row.originTaskId);
+    return `Resolve the batch request in ${origin?.label ?? "its originating task"} before starting this task separately.`;
+  }
+  return null;
+}
+
+function locationPurpose(form, rowName) {
+  return rowName === "source" && form.mode === "inventory" ? "inventory" : rowName;
+}
+
+function clearLocationChoice(row) {
+  row.location = null;
+  row.continuationId = null;
+  row.mountIndex = null;
+  row.admissionRevision += 1;
+  row.pending = false;
+  row.admissionPromise = null;
+}
+
+function editMode(mode) {
+  const form = currentForm();
+  if (!formIsEditable(form) || !["sync-plan", "inventory"].includes(mode) || form.mode === mode) return;
+  form.mode = mode;
+  form.revision += 1;
+  form.source.revision += 1;
+  clearLocationChoice(form.source);
+  form.actionMessage = null;
+  renderTasks();
+}
+
+function acceptTaskRelease(task, sessionId) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
+  task.releaseRecovery = null;
+  task.recoveryRetry = null;
+  task.recoverySessionId = null;
+  task.recoveryRunning = false;
+  clearTaskRecoveryError(task);
+  task.sessionReleased = true;
+  if (task.sessionKind === "sync-execution") {
+    task.executionSessionState = task.sessionState;
+    if (task.review?.follow != null) task.review.follow.hasTarget = planFollowTarget(task) !== null;
+    task.executionWindowDirty = true;
+    task.executionWindowDirtyRevision += 1;
+  } else if (task.taskKind === "sync-plan" && task.executionStarted
+      && ["inventory", "baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+    if (task.review !== null) retireExecutionDetail(task.review);
+    markExecutionWindowDirty(task);
+  }
+  renderTasks();
+  if (task.taskKind === "sync-plan" && ["sync-plan", "sync-execution"].includes(task.sessionKind)) {
+    void loadPlanReview(task, true);
+  }
+  if (task.taskKind === "inventory" || task.executionStarted) void loadInventoryReview(task, true);
+}
+
+function acceptTaskReleaseDelay(task, sessionId, recovery) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId) return;
+  task.releaseRecovery = recovery;
+  task.recoverySessionId = sessionId;
+  renderTasks();
+}
+
+function retireExecutionDetail(review) {
+  if (review === null || review === undefined) return;
+  review.detailRevision = (review.detailRevision ?? 0) + 1;
+  review.executionDetail = null;
+}
+
+function retirePlanDetail(review) {
+  review.planDetailRevision = (review.planDetailRevision ?? 0) + 1;
+  review.planDetail = null;
+}
+
+function retireInventoryDetail(review) {
+  review.detailRevision += 1;
+  review.detail = null;
+}
+
+function inventoryCommandId() {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+function inventoryResultMessage(result) {
+  const label = result.action === "acknowledge" ? "Acknowledge missing" : "Restore visibility";
+  return `${label}: ${result.applied} applied, ${result.noop} already set, `
+    + `${result.stale} stale, ${result.conflict} conflicted, `
+    + `${result.unresolved_count} unresolved of ${result.total} missing items.`;
+}
+
+async function replaceInventoryPublication(task, review, summary, action, sessionId, publication, navigation) {
+  const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryReview === review
+    && review.actionRevision === action && task.sessionId === sessionId
+    && review.summary.request_id === publication && navigationRevision === navigation;
+  const authoritative = summary.disposition === "conflict"
+    ? await openInventoryView(task.taskId) : summary;
+  if (!stillOwned()) return false;
+  const window = await readInventoryWindow(task.taskId, authoritative.view_revision, review.window.offset, 256);
+  if (!stillOwned() || window.disposition !== "current"
+      || window.view_revision !== authoritative.view_revision) return false;
+  review.summary = authoritative;
+  review.window = window;
+  review.refreshAvailable = false;
+  return true;
+}
+
+async function changeInventorySelection(review, nodeId, selected, highlightedScope = false) {
+  const clickedViewRevision = review.summary.view_revision;
+  const clickedHighlightRevision = review.summary.highlight_revision;
+  interruptPlanHighlight(review);
+  cancelInventoryWindow(review);
+  await (review.highlightQueue ?? Promise.resolve()).catch(() => {});
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryLoading || task.inventoryAction?.pending
+      || task.inventoryAction?.accepted
+      || review.pending !== null || !task.sessionReleased || task.sessionState === "active"
+      || task.inventoryViewUnconfirmed || review.summary.request_id !== task.requestId
+      || typeof selected !== "boolean" || review.summary.view_revision !== clickedViewRevision) return;
+  const action = ++review.actionRevision;
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const revision = review.summary.view_revision;
+  const navigation = navigationRevision;
+  review.pending = "selection";
+  const invalidation = invalidateInventoryReview(task);
+  review.inventoryForeground = {sessionId, navigation, invalidation};
+  review.message = "Updating selected files…";
+  renderTasks();
+  const releaseForeground = tableReadOwner(task, true).beginForeground();
+  try {
+    const summary = highlightedScope
+      ? await setInventoryHighlightedSelection(task.taskId, publication, revision, clickedHighlightRevision, selected)
+      : await setInventorySelection(task.taskId, publication, revision, nodeId, selected);
+    if (currentInventoryTask(review) !== task || review.actionRevision !== action
+        || task.sessionId !== sessionId || review.summary.request_id !== publication) return;
+    const replaced = await replaceInventoryPublication(task, review, summary, action, sessionId, publication, navigation);
+    if (replaced) {
+      task.inventoryViewUnconfirmed = task.inventoryInvalidationRevision !== invalidation;
+      review.message = summary.disposition === "conflict"
+      ? highlightedScope ? "Highlight changed. Review the current highlight, then select again."
+        : "Selection changed elsewhere. Current selection shown." : null;
+    }
+    else {
+      review.refreshAvailable = true;
+      review.message = "Selection changed. Reload the inventory view to continue.";
+    }
+  } catch (_error) {
+    if (currentInventoryTask(review) === task && review.actionRevision === action) {
+      try {
+        const replaced = await replaceInventoryPublication(task, review, {disposition: "conflict"},
+          action, sessionId, publication, navigation);
+        if (replaced) task.inventoryViewUnconfirmed = task.inventoryInvalidationRevision !== invalidation;
+        review.message = replaced
+          ? "Selection response unavailable. Current authoritative selection shown."
+          : "Selection response unavailable. Reload the inventory view to continue.";
+        review.refreshAvailable = !replaced;
+      } catch (_reloadError) {
+        review.refreshAvailable = true;
+        review.message = "Selection response unavailable. Reload the inventory view to continue.";
+      }
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.sessionId === sessionId
+        && (navigationRevision !== navigation || task.inventoryReview !== review || review.actionRevision !== action)) {
+      invalidateInventoryReview(task);
+      void loadInventoryReview(task);
+    }
+    if (tasks.get(task.taskId) === task && task.inventoryReview === review
+        && review.actionRevision === action) {
+      review.pending = null;
+      renderTasks();
+    }
+    releaseForeground();
+  }
+}
+
+function inventoryIntegrityEligible(task, review, mode, allowedAttempt = null, scope = "selected") {
+  return currentInventoryTask(review) === task && !task.inventoryLoading
+    && (task.inventoryAction === null || task.inventoryAction === allowedAttempt
+      || (!task.inventoryAction.pending && !task.inventoryAction.accepted))
+    && review.pending === null
+    && (task.taskKind === "inventory" || task.taskKind === "sync-plan")
+    && (scope !== "copied" || (task.taskKind === "sync-plan" && task.executionStarted
+      && originalExecution(task)?.has_successful_copied_files !== false))
+    && task.sessionReleased && task.sessionState !== "active" && !task.inventoryViewUnconfirmed
+    && review.summary.request_id === task.requestId
+    && (scope === "copied" || review.summary.selected_file_count > 0);
+}
+
+function cancelInventoryIntegrityStart(task, attempt) {
+  if (task.inventoryAction !== attempt || attempt.kind !== "integrity-start") return;
+  task.inventoryAction = null;
+  if (task.inventoryReview === attempt.review) attempt.review.message = null;
+  renderTasks();
+}
+
+async function startInventoryIntegrityAction(review, mode, returnFocus, scope = "selected") {
+  const task = currentInventoryTask(review);
+  if (task === null || !inventoryIntegrityEligible(task, review, mode, null, scope)
+      || !["baseline", "verify", "rebaseline"].includes(mode)) return;
+  const attempt = {
+    kind: "integrity-start", mode, scope, review, taskId: task.taskId,
+    requestId: review.summary.request_id, revision: review.summary.view_revision,
+    selectedCount: review.summary.selected_file_count, commandId: inventoryCommandId(),
+    hiddenSelectedCount: review.summary.hidden_selected_file_count,
+    pending: true, recovery: null, submissionStarted: false,
+    message: mode === "rebaseline" ? "Confirm Rebaseline in the dialog."
+      : `Starting ${mode === "verify" ? "verification" : "baseline"}…`,
+  };
+  task.inventoryAction = attempt;
+  review.message = attempt.message;
+  renderTasks();
+  if (mode !== "rebaseline") {
+    await submitInventoryIntegrity(task, attempt);
+    return;
+  }
+  try {
+    rebaselineConfirmation.show({
+      destructiveOperationCount: attempt.selectedCount,
+      countDetail: `${attempt.hiddenSelectedCount} hidden by filters or search`,
+      returnFocus,
+      onCancel: () => cancelInventoryIntegrityStart(task, attempt),
+      onConfirm: () => { void submitInventoryIntegrity(task, attempt); },
+    });
+  } catch (_error) {
+    cancelInventoryIntegrityStart(task, attempt);
+    if (task.inventoryReview === review) {
+      review.message = "Rebaseline confirmation unavailable. Selection was not changed.";
+      renderTasks();
+    }
+  }
+}
+
+async function submitInventoryIntegrity(task, attempt) {
+  if (task.inventoryAction !== attempt || attempt.submissionStarted) return;
+  const review = task.inventoryReview;
+  if (review !== attempt.review || !inventoryIntegrityEligible(task, review, attempt.mode, attempt, attempt.scope)
+      || review.summary.request_id !== attempt.requestId
+      || review.summary.view_revision !== attempt.revision
+      || (attempt.scope === "selected" && (review.summary.selected_file_count !== attempt.selectedCount
+        || review.summary.hidden_selected_file_count !== attempt.hiddenSelectedCount))) {
+    task.inventoryAction = null;
+    if (review !== null) {
+      review.message = "Selection changed before confirmation. Reloading the current selection…";
+      renderTasks();
+      void loadInventoryReview(task, true);
+    }
+    return;
+  }
+  attempt.submissionStarted = true;
+  attempt.message = `Starting ${attempt.mode === "verify" ? "verification" : attempt.mode}…`;
+  review.message = attempt.message;
+  renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt;
+  try {
+    const result = await startInventoryIntegrity(task.taskId, attempt.requestId, attempt.commandId,
+      attempt.revision, attempt.mode, attempt.mode === "rebaseline",
+      ownedAttemptRecovery(attempt, stillOwned, (recovery) => {
+        attempt.message = recovery.message;
+      }), attempt.scope);
+    if (!stillOwned()) return;
+    task.inventoryAction = null;
+    adoptTaskStart(result, attempt.mode, task.taskKind);
+    review.message = null;
+    renderTasks();
+    try { await refreshTasks(); } catch (_error) {
+      // The admitted session and attached drain already own current status.
+    }
+  } catch (error) {
+    if (!stillOwned()) return;
+    if (error instanceof StartPlanUncertainError || error instanceof OutcomeUnavailableError) {
+      attempt.message = attempt.recovery?.message ?? "Waiting for the original integrity outcome…";
+      review.message = attempt.message;
+    } else {
+      attempt.pending = false;
+      attempt.recovery = null;
+      attempt.message = taskStartFailureMessage(error, attempt.scope === "copied"
+        ? "Verification did not start. This action needs successful copied files and an available target. You can select files and use Verify selected."
+        : "Integrity work did not start. Try again when you are ready.");
+      review.message = attempt.message;
+      task.inventoryAction = null;
+    }
+    renderTasks();
+  }
+}
+
+async function controlInventoryIntegrity(review, actionName) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryAction?.pending || task.inventoryAction?.accepted
+      || review.pending !== null
+      || task.sessionState !== "active" || task.sessionId === null
+      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)
+      || !["pause", "resume", "cancel"].includes(actionName)) return;
+  const attempt = { kind: "integrity-control", sessionId: task.sessionId, actionName,
+    pending: true, recovery: null, message: `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…` };
+  task.inventoryAction = attempt;
+  review.message = attempt.message;
+  renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task && task.sessionId === attempt.sessionId
+    && task.inventoryAction === attempt;
+  try {
+    const result = await controlIntegrity(task.taskId, attempt.sessionId, actionName,
+      ownedAttemptRecovery(attempt, stillOwned, (recovery) => {
+        attempt.message = recovery.message;
+      }));
+    if (!stillOwned()) return;
+    attempt.pending = false;
+    attempt.accepted = result.accepted;
+    attempt.message = result.accepted ? executionControlMessage(result.after)
+      : result.detail || `The ${actionName} request was not accepted.`;
+    review.message = attempt.message;
+  } catch (error) {
+    if (!stillOwned()) return;
+    attempt.pending = error instanceof OutcomeUnavailableError;
+    attempt.message = attempt.pending && attempt.recovery?.message
+      ? attempt.recovery.message : `${actionName[0].toUpperCase()}${actionName.slice(1)} refused. Follow live status.`;
+    review.message = attempt.message;
+  } finally {
+    if (stillOwned()) renderTasks();
+  }
+}
+
+async function checkInventoryOutcome(task) {
+  const attempt = task.inventoryAction;
+  if (tasks.get(task.taskId) !== task || !attempt?.pending
+      || !checkableOutcome(attempt.recovery) || attempt.recovery.checking) return;
+  attempt.message = "Checking the original inventory outcome…";
+  renderTasks();
+  try {
+    await attempt.recovery.check();
+  } catch (_error) {
+    if (task.inventoryAction === attempt) attempt.message = attempt.recovery.message;
+  } finally {
+    if (task.inventoryAction === attempt) renderTasks();
+  }
+}
+
+function inventoryActionEligible(task, review, kind, nodeId) {
+  if (task === null || currentInventoryTask(review) !== task || task.inventoryLoading
+      || task.inventoryAction?.pending || task.inventoryAction?.accepted
+      || (kind !== "refresh" && task.inventoryViewUnconfirmed) || review.pending !== null
+      || !task.sessionReleased || task.sessionState === "active"
+      || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)) return false;
+  if (nodeId !== null) {
+    const row = review.window.rows.find((value) => value.node_id === nodeId)
+      ?? (review.detail?.row?.node_id === nodeId ? review.detail.row : null)
+      ?? (kind === "refresh" && review.activeRefreshTarget?.node_id === nodeId
+        && review.activeRefreshTarget.viewRevision === review.summary.view_revision
+        && review.activeRefreshTarget.publication === review.summary.request_id ? review.activeRefreshTarget : null);
+    if (row === null || row.warning !== null) return false;
+  }
+  return kind === "refresh" || review.summary.request_id === task.requestId;
+}
+
+async function runInventoryAction(review, kind, nodeId) {
+  const task = currentInventoryTask(review);
+  if (!inventoryActionEligible(task, review, kind, nodeId)) return;
+  const attempt = {
+    kind, requestId: task.requestId, revision: review.summary.view_revision,
+    nodeId, commandId: inventoryCommandId(), review,
+    pending: true, recovery: null,
+    message: kind === "refresh" ? "Starting inventory scan…" : "Updating missing-item visibility…",
+  };
+  task.inventoryAction = attempt;
+  const { requestId, revision } = attempt;
+  cancelInventoryWindow(review);
+  retireInventoryDetail(review);
+  renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task && task.inventoryAction === attempt;
+  const attachRecovery = ownedAttemptRecovery(attempt, stillOwned, () => {
+    attempt.message = attempt.recovery?.message ?? "Waiting for the original inventory outcome…";
+  });
+  const onDelayed = (recovery) => attachRecovery(
+    typeof recovery?.check === "function" ? recovery : attempt.recovery,
+  );
+  try {
+    const result = kind === "refresh"
+      ? await refreshInventory(task.taskId, requestId, attempt.commandId, revision, nodeId, onDelayed)
+      : await (kind === "acknowledge" ? acknowledgeInventory : restoreInventory)(
+        task.taskId, requestId, attempt.commandId, revision, nodeId, onDelayed);
+    if (!stillOwned()) return;
+    attempt.pending = false;
+    attempt.recovery = null;
+    if (kind === "refresh") {
+      adoptTaskStart(result, "inventory");
+      attempt.message = null;
+      renderTasks();
+      try { await refreshTasks(); } catch (_error) {
+        // The admitted identity and its live drain already own current task status.
+      }
+    } else {
+      attempt.message = inventoryResultMessage(result);
+      invalidateInventoryReview(task);
+      if (selectedTaskId === task.taskId && !settingsVisible && task.requestId === requestId) {
+        await loadInventoryReview(task, true);
+        if (stillOwned() && task.inventoryViewUnconfirmed) {
+          attempt.message += " Reload inventory view to confirm current visibility before another action.";
+        }
+      }
+    }
+  } catch (error) {
+    if (!stillOwned()) return;
+    if (error instanceof StartPlanUncertainError || error instanceof OutcomeUnavailableError) {
+      attempt.pending = true;
+      attempt.message = attempt.recovery?.message ?? UNKNOWN_OUTCOME_GUIDANCE;
+    } else {
+      attempt.pending = false;
+      attempt.recovery = null;
+      attempt.message = taskStartFailureMessage(error, error?.code === "inventory_capacity"
+        ? "Inventory command capacity is full. Close a task before trying again."
+        : kind === "refresh"
+          ? "Inventory refresh was refused. Review this task and try again."
+          : "Visibility change was refused. Reload inventory view before trying again.");
+    }
+  } finally {
+    if (stillOwned()) renderTasks();
+  }
+}
+
+function currentInventoryTask(review) {
+  const task = currentTask();
+  return task !== null && !settingsVisible && !task.closePending
+    && task.inventoryReview === review
+    && (task.taskKind === "inventory" || task.workPane === "verify") ? task : null;
+}
+
+async function refreshInventoryOverlay(task, sessionId = task.sessionId, dirty = true) {
+  if (tasks.get(task.taskId) !== task || task.sessionId !== sessionId
+      || !["baseline", "verify", "rebaseline"].includes(task.sessionKind)) return;
+  if (dirty) {
+    task.inventoryOverlayRevision += 1;
+    task.inventoryOverlayDirty = true;
+  }
+  if (task.sessionState === "active" && !task.automaticReviewRunning) {
+    scheduleAutomaticReview(task);
+    return;
+  }
+  const reads = tableReadOwner(task, true);
+  if (task.inventoryOverlayRunning || reads.busy) return;
+  task.inventoryOverlayRunning = true;
+  let attemptedRevision = task.inventoryOverlayRevision;
+  try {
+    while (tasks.get(task.taskId) === task && task.sessionId === sessionId) {
+      if (task.sessionState === "active" && !task.automaticReviewRunning) break;
+      const request = task.inventoryOverlayRevision;
+      attemptedRevision = request;
+      const review = task.inventoryReview;
+      if (review === null || selectedTaskId !== task.taskId || settingsVisible || task.closePending
+          || (task.taskKind === "sync-plan" && task.workPane !== "verify")) break;
+      if (reads.busy) break;
+      task.inventoryOverlayDirty = false;
+      const action = review.actionRevision;
+      const navigation = navigationRevision;
+      const publication = review.summary.request_id;
+      const revision = review.summary.view_revision;
+      const highlightRevision = review.summary.highlight_revision;
+      const offset = review.window.offset;
+      const ticket = reads.captureRefresh(request);
+      const highlightGeneration = review.highlightGeneration;
+      const windowRequest = review.windowRequestRevision;
+      const detail = review.detail?.state === "current" ? review.detail : null;
+      task.automaticReadAt = performance.now();
+      const [windowRead, detailRead] = await Promise.allSettled([
+        readInventoryWindow(task.taskId, revision, offset, 256),
+        detail === null ? Promise.resolve(null)
+          : getInventoryDetail(task.taskId, revision, detail.row.node_id),
+      ]);
+      const window = windowRead.status === "fulfilled" && detailRead.status === "fulfilled"
+        ? windowRead.value : null;
+      const detailResponse = detailRead.status === "fulfilled" ? detailRead.value : null;
+      const stillCurrent = tasks.get(task.taskId) === task && task.sessionId === sessionId
+        && task.inventoryReview === review
+        && review.summary.request_id === publication && selectedTaskId === task.taskId
+        && navigationRevision === navigation && !settingsVisible && !task.closePending
+        && (task.taskKind === "inventory" || task.workPane === "verify");
+      const disposition = reads.refreshDisposition(ticket, stillCurrent,
+        review.actionRevision === action && review.summary.view_revision === revision
+        && review.highlightGeneration === highlightGeneration && review.windowRequestRevision === windowRequest
+        && review.window.offset === offset && review.summary.highlight_revision === highlightRevision,
+        task.inventoryOverlayRevision);
+      const highlightSummary = window === null ? null : inventoryWindowSummary(review, window, revision);
+      if (disposition === "current" && window?.disposition === "current" && window.view_revision === revision
+          && highlightSummary !== null
+          && review.summary.highlight_revision === highlightRevision) {
+        review.summary = highlightSummary;
+        review.window = window;
+        if (detailResponse !== null && detailResponse.disposition === "current"
+            && detailResponse.view_revision === revision && review.detail === detail) {
+          detail.response = detailResponse;
+        }
+        renderTasks();
+      } else if (disposition === "reread") {
+        // Independent foreground invalidation retains demand even when a read failed.
+        task.inventoryOverlayDirty = true;
+        if (reads.busy) break;
+        if (task.inventoryOverlayRevision === request) task.inventoryOverlayRevision += 1;
+      }
+      if (disposition === "retired" || task.inventoryOverlayRevision === request) break;
+    }
+  } catch (_error) {
+    // Live progress remains available from the task drain; the next update or release rereads the overlay.
+  } finally {
+    task.inventoryOverlayRunning = false;
+    if (tasks.get(task.taskId) === task && task.inventoryOverlayRevision !== attemptedRevision
+        && ["baseline", "verify", "rebaseline"].includes(task.sessionKind)) {
+      void refreshInventoryOverlay(task, task.sessionId, false);
+    }
+  }
+}
+
+function invalidateInventoryReview(task) {
+  task.inventoryViewUnconfirmed = true;
+  return ++task.inventoryInvalidationRevision;
+}
+
+async function loadInventoryReview(task, force = false) {
+  if (task === undefined || tasks.get(task.taskId) !== task) return;
+  if (force) invalidateInventoryReview(task);
+  const liveIntegrity = task !== undefined && task.sessionState === "active"
+    && ["baseline", "verify", "rebaseline"].includes(task.sessionKind);
+  const review = task.inventoryReview;
+  if (!force && review !== null && review.inventoryForeground?.sessionId === task.sessionId
+      && (review.pending !== null || review.highlightPending)
+      && review.inventoryForeground?.navigation === navigationRevision
+      && review.inventoryForeground?.invalidation === task.inventoryInvalidationRevision) return;
+  if (task === undefined || tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId
+      || settingsVisible || task.closePending
+      || (task.taskKind !== "inventory" && !task.executionStarted)
+      || (task.taskKind === "sync-plan" && task.workPane !== "verify")
+      || (!task.sessionReleased && !liveIntegrity) || task.sessionId === null
+      || task.inventoryLoading
+      || (!force && task.inventoryReview !== null && !task.inventoryViewUnconfirmed
+        && task.inventoryReviewSessionId === task.sessionId
+        && task.inventoryError === null && !task.inventoryReview.refreshAvailable
+        && !task.inventoryReview.highlightPending)) return;
+  const request = ++task.inventoryRevision;
+  const invalidation = task.inventoryInvalidationRevision;
+  const sessionId = task.sessionId;
+  const navigation = navigationRevision;
+  const paneRevision = task.paneRevision;
+  const previousReview = task.inventoryReview;
+  const viewport = previousReview?.viewport;
+  const previousTop = previousReview?.scrollTop ?? 0;
+  const retainedFollow = task.inventoryReview?.follow?.sessionId === sessionId ? task.inventoryReview.follow : null;
+  if (task.inventoryReview !== null) {
+    interruptPlanHighlight(task.inventoryReview);
+    cancelInventoryWindow(task.inventoryReview);
+    task.inventoryReview.actionRevision += 1;
+    task.inventoryReview.pending = null;
+    task.inventoryReview.queuedSearchQuery = null;
+    retireInventoryDetail(task.inventoryReview);
+  }
+  task.inventoryLoading = true;
+  task.inventoryViewUnconfirmed = true;
+  task.inventoryError = null;
+  task.inventoryReloadAvailable = false;
+  renderTasks();
+  const stillCurrent = () => tasks.get(task.taskId) === task && task.inventoryRevision === request
+    && task.sessionId === sessionId && selectedTaskId === task.taskId
+    && navigationRevision === navigation && task.paneRevision === paneRevision
+    && (task.taskKind === "inventory" || task.workPane === "verify")
+    && !settingsVisible && !task.closePending;
+  try {
+    const summary = await openInventoryView(task.taskId);
+    if (!stillCurrent()) return;
+    const rowHeight = viewport?.rowHeight;
+    const maximumTop = viewport === undefined ? 0
+      : Math.max(0, summary.visible_row_count * rowHeight - viewport.height);
+    let scrollTop = Math.min(previousTop, maximumTop);
+    if (viewport?.nodeId != null) {
+      const anchor = await getInventoryWindow(task.taskId, summary.view_revision,
+        Math.floor(scrollTop / rowHeight), 1, viewport.nodeId);
+      if (!stillCurrent()) return;
+      if (anchor.disposition !== "current" || anchor.view_revision !== summary.view_revision) {
+        task.inventoryError = "Inventory changed. Reload the inventory view to continue.";
+        task.inventoryReloadAvailable = true;
+        return;
+      }
+      if (Number.isSafeInteger(anchor.anchor_visible_index)) {
+        scrollTop = Math.max(0, Math.min(anchor.anchor_visible_index * rowHeight + viewport.delta, maximumTop));
+      }
+    }
+    const offset = viewport === undefined ? 0 : Math.floor(scrollTop / rowHeight);
+    const window = await readInventoryWindow(task.taskId, summary.view_revision, offset, 256);
+    if (!stillCurrent()) return;
+    if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
+      task.inventoryError = "Inventory changed. Reload the inventory view to continue.";
+      task.inventoryReloadAvailable = true;
+      return;
+    }
+    const retainedTarget = task.inventoryReview?.activeRefreshTarget;
+    const retainActive = retainedTarget?.node_id === window.anchor_node_id
+      && Number.isSafeInteger(window.anchor_visible_index);
+    task.inventoryReview = {
+      summary, window, pending: null, message: null, queuedSearchQuery: null, refreshAvailable: false,
+      actionRevision: 0, windowRequestRevision: 0, detailRevision: 0, detail: null, scrollTop,
+      passiveRevealWindow: previousReview === null ? null : window,
+      highlightQueue: Promise.resolve(),
+      follow: retainedFollow,
+      activeNodeId: retainActive ? retainedTarget.node_id : null,
+      activeRefreshTarget: retainActive ? {...retainedTarget,
+        viewRevision:summary.view_revision, publication:summary.request_id} : null,
+    };
+    inventoryFollow(task, task.inventoryReview);
+    task.inventoryReviewSessionId = sessionId;
+    task.inventoryViewUnconfirmed = task.inventoryInvalidationRevision !== invalidation;
+  } catch (error) {
+    if (stillCurrent()) {
+      const refusedScan = error?.code === "task_unavailable"
+        && task.sessionState === "refused" && task.inventoryReview !== null
+        && task.inventoryReview.summary.request_id !== task.requestId;
+      task.inventoryReloadAvailable = !refusedScan;
+      task.inventoryError = refusedScan
+        ? "Inventory unavailable for the refused scan. Check the location, reconnect its drive if needed, then click Refresh."
+        : "Inventory unavailable. Reload the inventory view to retry.";
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.inventoryRevision === request) {
+      task.inventoryLoading = false;
+      renderTasks();
+      if (stillCurrent() && task.inventoryReview !== previousReview) syncInventoryDetail(task.inventoryReview);
+      followInventory(task);
+      if (selectedTaskId === task.taskId && !settingsVisible
+          && (task.taskKind === "inventory" || task.workPane === "verify")
+          && (task.inventoryInvalidationRevision !== invalidation
+            || navigationRevision !== navigation || task.paneRevision !== paneRevision)) {
+        void loadInventoryReview(task);
+      }
+    }
+  }
+}
+
+async function changeInventoryView(review, patch) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryLoading) return;
+  if (review.pending !== null) {
+    if (review.pending === "view" && Object.keys(patch).length === 1
+        && typeof patch.searchQuery === "string") review.queuedSearchQuery = patch.searchQuery;
+    return;
+  }
+  interruptPlanHighlight(review);
+  if (["searchQuery", "filters", "sortColumn", "sortDirection"]
+      .some(key => Object.prototype.hasOwnProperty.call(patch, key))) {
+    disableReviewFollow(review);
+  }
+  const action = ++review.actionRevision;
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const navigation = navigationRevision;
+  const gesture = {
+    searchQuery: patch.searchQuery ?? review.summary.search_query,
+    filters: [...(patch.filters ?? review.summary.filters)],
+    sortColumn: patch.sortColumn ?? review.summary.sort_column,
+    sortDirection: (patch.sortColumn ?? review.summary.sort_column) === "path"
+      ? "ascending" : patch.sortDirection ?? review.summary.sort_direction,
+    collapseNodeId: patch.collapseNodeId ?? null,
+    collapsed: patch.collapseNodeId === undefined ? null : patch.collapsed,
+  };
+  cancelInventoryWindow(review);
+  retireInventoryDetail(review);
+  review.pending = "view";
+  const invalidation = invalidateInventoryReview(task);
+  review.inventoryForeground = {sessionId, navigation, invalidation};
+  review.message = "Updating inventory view…";
+  renderTasks();
+  const stillCurrent = () => currentInventoryTask(review) === task && review.actionRevision === action
+    && task.sessionId === sessionId && review.summary.request_id === publication
+    && navigationRevision === navigation;
+  const releaseForeground = tableReadOwner(task, true).beginForeground();
+  try {
+    const summary = await updateInventoryView(task.taskId, review.summary.view_revision, gesture, () => {
+      if (stillCurrent()) {
+        review.refreshAvailable = true;
+        review.message = "View response delayed. Reload the inventory view to read its current state.";
+        renderTasks();
+      }
+    });
+    if (!stillCurrent()) return;
+    const window = await readInventoryWindow(task.taskId, summary.view_revision, 0, 256);
+    if (!stillCurrent()) return;
+    if (window.disposition !== "current" || window.view_revision !== summary.view_revision) {
+      review.refreshAvailable = true;
+      review.message = "Inventory changed. Reload the inventory view to continue.";
+      return;
+    }
+    review.summary = summary;
+    review.window = window;
+    task.inventoryViewUnconfirmed = task.inventoryInvalidationRevision !== invalidation;
+    review.scrollTop = 0;
+    review.refreshAvailable = false;
+    review.message = summary.disposition === "conflict" ? "View changed. Current inventory view shown." : null;
+  } catch (_error) {
+    if (stillCurrent()) {
+      review.refreshAvailable = true;
+      review.message = "View response unavailable. Reload the inventory view to retry.";
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.sessionId === sessionId
+        && (navigationRevision !== navigation || task.inventoryReview !== review || review.actionRevision !== action)) {
+      invalidateInventoryReview(task);
+      void loadInventoryReview(task);
+    }
+    if (tasks.get(task.taskId) === task && task.inventoryReview === review && review.actionRevision === action) {
+      review.pending = null;
+      renderTasks();
+      const queued = review.queuedSearchQuery;
+      review.queuedSearchQuery = null;
+      if (currentInventoryTask(review) === task && queued !== null
+          && queued !== review.summary.search_query) void changeInventoryView(review, { searchQuery: queued });
+    }
+    releaseForeground();
+  }
+}
+
+function cancelInventoryWindow(review) {
+  review.windowRequestRevision += 1;
+  review.viewportRead?.cancel();
+  review.viewportRead = null;
+}
+
+function inventoryWindowReady(task, review) {
+  return task !== null && currentInventoryTask(review) === task
+    && !task.inventoryLoading && !task.inventoryAction?.pending && !task.inventoryAction?.accepted
+    && review.pending === null
+    && !checkableOutcome(task.closeRecovery) && !fixedOutcome(task.closeRecovery);
+}
+
+function inventoryWindowSummary(review, window, revision) {
+  const receipt = review.highlightReceipt;
+  return window.highlight_revision === review.summary.highlight_revision ? review.summary
+    : receipt?.request_id === review.summary.request_id && receipt.view_revision === revision
+      && receipt.highlight_revision === window.highlight_revision ? receipt : null;
+}
+
+function readInventoryWindow(taskId, revision, offset, limit) {
+  return getInventoryWindow(taskId, revision, offset, limit,
+    tasks.get(taskId)?.inventoryReview?.activeNodeId ?? null);
+}
+
+async function loadInventoryWindow(review, offset) {
+  const task = currentInventoryTask(review);
+  if (!inventoryWindowReady(task, review)) return null;
+  cancelInventoryWindow(review);
+  const request = review.windowRequestRevision;
+  const action = review.actionRevision;
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const revision = review.summary.view_revision;
+  const navigation = navigationRevision;
+  const invalidation = task.inventoryInvalidationRevision;
+  const current = () => inventoryWindowReady(task, review)
+    && review.windowRequestRevision === request && review.actionRevision === action
+    && task.sessionId === sessionId && review.summary.request_id === publication
+    && review.summary.view_revision === revision && navigationRevision === navigation;
+  const releaseForeground = tableReadOwner(task, true).beginForeground();
+  const job = tableReadOwner(task, true).request(current,
+    () => readInventoryWindow(task.taskId, revision, offset, 256));
+  review.viewportRead = job;
+  try {
+    const window = await job.promise;
+    if (window === null || !current()) return null;
+    const summary = inventoryWindowSummary(review, window, revision);
+    if (window.disposition === "current" && summary !== null) {
+      review.summary = summary;
+      if (!review.highlightPending && task.inventoryInvalidationRevision === invalidation) {
+        task.inventoryReviewSessionId = sessionId;
+      }
+      const recovering = review.refreshAvailable === true;
+      review.refreshAvailable = false;
+      if (review.windowRecoveryMessage !== undefined && review.message === review.windowRecoveryMessage) {
+        review.message = null;
+      }
+      delete review.windowRecoveryMessage;
+      if (recovering) renderTasks();
+      return window;
+    }
+    review.refreshAvailable = true;
+    review.message = "Inventory changed. Reload the inventory view to continue.";
+    review.windowRecoveryMessage = review.message;
+    renderTasks();
+  } catch (_error) {
+    if (current()) {
+      review.refreshAvailable = true;
+      review.message = "Inventory rows unavailable. Reload the inventory view to retry.";
+      review.windowRecoveryMessage = review.message;
+      renderTasks();
+    }
+  } finally {
+    if (review.viewportRead === job) review.viewportRead = null;
+    releaseForeground();
+  }
+  return null;
+}
+
+function syncInventoryDetail(review) {
+  const nodeId = review?.summary.highlight_focus_node_id;
+  if (nodeId == null || review.summary.highlight_focus_visible_index === null) {
+    if (review?.detail != null) retireInventoryDetail(review);
+  } else if (review.detail?.row.node_id !== nodeId) {
+    retireInventoryDetail(review);
+    void readInventoryDetail(review, nodeId);
+  }
+}
+
+async function readInventoryDetail(review, nodeId) {
+  const task = currentInventoryTask(review);
+  if (task === null || task.inventoryLoading || review.pending !== null) return;
+  let row = review.window.rows.find((value) => value.node_id === nodeId);
+  const focusIndex = review.summary.highlight_focus_node_id === nodeId
+    ? review.summary.highlight_focus_visible_index : null;
+  if (row === undefined && !Number.isSafeInteger(focusIndex)) return;
+  const request = ++review.detailRevision;
+  const action = review.actionRevision;
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const revision = review.summary.view_revision;
+  const navigation = navigationRevision;
+  let detail = row === undefined ? null : { row, state: "loading", response: null };
+  review.detail = detail;
+  renderTasks();
+  const stillCurrent = () => currentInventoryTask(review) === task && review.detailRevision === request
+    && review.detail === detail && review.actionRevision === action && task.sessionId === sessionId
+    && review.summary.request_id === publication && review.summary.view_revision === revision
+    && navigationRevision === navigation;
+  try {
+    if (row === undefined) {
+      const window = await getInventoryWindow(task.taskId, revision, focusIndex, 1);
+      if (!stillCurrent()) return;
+      row = window.rows.find(value => value.node_id === nodeId);
+      if (window.disposition !== "current" || window.view_revision !== revision || row === undefined) {
+        throw new Error("Focused inventory row is unavailable");
+      }
+      detail = {row, state: "loading", response: null};
+      review.detail = detail;
+      renderTasks();
+    }
+    const response = await getInventoryDetail(task.taskId, revision, nodeId);
+    if (!stillCurrent()) return;
+    if (response.disposition === "conflict") {
+      retireInventoryDetail(review);
+      review.refreshAvailable = true;
+      review.message = "Inventory changed. Reload the inventory view to read current details.";
+    } else {
+      detail.state = response.disposition;
+      detail.response = response;
+    }
+  } catch (_error) {
+    if (stillCurrent()) {
+      if (detail !== null) detail.state = "error";
+      else review.message = "Details unavailable. Select the item again to retry.";
+    }
+  } finally {
+    if (currentInventoryTask(review) === task && review.detailRevision === request
+        && navigationRevision === navigation) renderTasks();
+  }
+}
+
+function adoptExecutionWindow(review, window) {
+  const task = retainedReviewTask(review);
+  if (task !== null) observeOriginalExecution(task, review.summary.request_id, window.execution);
+  if (review.window?.execution?.execution_revision
+      !== window.execution.execution_revision) retireExecutionDetail(review);
+  review.window = window;
+  const focusNodeId = review.summary.highlight_focus_node_id;
+  const focusedRow = window.rows.find((row) => row.node_id === focusNodeId) ?? null;
+  if (focusNodeId === null || (review.planDetail != null
+      && (review.planDetail.nodeId !== focusNodeId
+        || review.planDetail.viewRevision !== window.view_revision))) retirePlanDetail(review);
+  if (focusedRow !== null && (review.planDetail?.nodeId !== focusNodeId
+      || review.planDetail?.actionRevision !== review.actionRevision)) {
+    void readPlanDetail(review, focusedRow);
+  }
+  if (focusNodeId === null || (review.executionDetail !== null
+      && review.executionDetail.focusNodeId !== focusNodeId)) {
+    retireExecutionDetail(review);
+  }
+  if (focusedRow?.operation_id != null && window.execution.session_id !== null
+      && (review.executionDetail?.operationId !== focusedRow.operation_id
+        || review.executionDetail?.executionRevision !== window.execution.execution_revision)) {
+    void readExecutionDetail(review, focusedRow);
+  }
+}
+
+function retryInventoryOverlay(task) {
+  if (tasks.get(task.taskId) === task && task.inventoryOverlayDirty && !task.inventoryOverlayRunning
+      && !tableReadOwner(task, true).busy && task.inventoryReview !== null
+      && currentInventoryTask(task.inventoryReview) === task) void refreshInventoryOverlay(task, task.sessionId, false);
+}
+
+function markExecutionWindowDirty(task) {
+  task.executionWindowDirty = true;
+  task.executionWindowDirtyRevision += 1;
+  if (selectedTaskId === task.taskId && !settingsVisible && task.review !== null
+      && !task.reviewLoading) {
+    void refreshExecutionWindow(task);
+  }
+}
+
+async function refreshExecutionWindow(task) {
+  if (
+    tasks.get(task.taskId) !== task || selectedTaskId !== task.taskId || settingsVisible
+    || !executionPaneVisible(task)
+    || task.review === null || task.reviewLoading || task.executionWindowRefreshRunning
+    || tableReadOwner(task).busy
+  ) return;
+  if (task.sessionKind === "sync-execution" && task.sessionState === "active" && !task.automaticReviewRunning) {
+    scheduleAutomaticReview(task);
+    return;
+  }
+  task.executionWindowRefreshRunning = true;
+  try {
+    while (task.executionWindowDirty) {
+      if (task.sessionKind === "sync-execution" && task.sessionState === "active" && !task.automaticReviewRunning) return;
+      task.executionWindowDirty = false;
+      const review = task.review;
+      const reads = tableReadOwner(task);
+      const ticket = reads.captureRefresh(task.executionWindowDirtyRevision);
+      const reviewRevision = task.reviewRevision;
+      const paneRevision = task.paneRevision;
+      const sessionId = task.executionSessionId;
+      const requestId = review.summary.request_id;
+      const planRequestId = task.planRequestId;
+      const action = review.actionRevision;
+      const viewRevision = review.summary.view_revision;
+      const offset = review.window.offset;
+      const refreshDisposition = () => reads.refreshDisposition(ticket,
+        tasks.get(task.taskId) === task && task.review === review
+        && task.executionSessionId === sessionId && task.planRequestId === planRequestId,
+        selectedTaskId === task.taskId && !settingsVisible
+        && executionPaneVisible(task) && task.paneRevision === paneRevision
+        && !task.reviewLoading && task.reviewRevision === reviewRevision
+        && review.summary.request_id === requestId && review.actionRevision === action
+        && review.summary.view_revision === viewRevision && review.window.offset === offset,
+        task.executionWindowDirtyRevision);
+      try {
+        task.automaticReadAt = performance.now();
+        const window = await getPlanWindow(task.taskId, viewRevision, offset, 256);
+        if (tasks.get(task.taskId) === task && task.review === review
+            && task.executionSessionId === sessionId && task.planRequestId === requestId
+            && window.disposition === "current") {
+          observeOriginalExecution(task, requestId, window.execution);
+        }
+        const disposition = refreshDisposition();
+        if (disposition !== "current") {
+          if (disposition === "reread") task.executionWindowDirty = true;
+          return;
+        }
+        if (
+          window.disposition !== "current" || window.view_revision !== viewRevision
+          || window.highlight_revision !== review.summary.highlight_revision
+        ) {
+          task.executionWindowDirty = false;
+          void loadPlanReview(task, true);
+          return;
+        }
+        adoptExecutionWindow(review, window);
+        renderTasks();
+      } catch (_error) {
+        const disposition = refreshDisposition();
+        if (disposition !== "current") {
+          if (disposition === "reread") task.executionWindowDirty = true;
+          return;
+        }
+        if (
+          tasks.get(task.taskId) === task && selectedTaskId === task.taskId
+          && task.review === review && task.executionSessionId === sessionId
+        ) {
+          review.message ||= "Execution status refresh delayed.";
+          renderTasks();
+        }
+        return;
+      }
+    }
+  } finally {
+    task.executionWindowRefreshRunning = false;
+    if (task.executionWindowDirty && selectedTaskId === task.taskId && !settingsVisible) {
+      void refreshExecutionWindow(task);
+    }
+  }
+}
+
+async function readPlanDetail(review, row) {
+  const task = currentReviewTask(review);
+  if (task === null || settingsVisible || task.closePending) return;
+  const request = (review.planDetailRevision ?? 0) + 1;
+  review.planDetailRevision = request;
+  if (row === null) {
+    review.planDetail = null;
+    renderTasks();
+    return;
+  }
+  const viewRevision = review.summary.view_revision;
+  const sessionId = task.sessionId;
+  const requestId = review.summary.request_id;
+  const action = review.actionRevision;
+  const navigation = navigationRevision;
+  const detail = { nodeId: row.node_id, viewRevision, actionRevision: action,
+    state: "loading", response: null, message: null };
+  review.planDetail = detail;
+  const stillCurrent = () => currentReviewTask(review) === task
+    && review.planDetailRevision === request && review.planDetail === detail
+    && task.sessionId === sessionId && review.summary.request_id === requestId
+    && review.actionRevision === action && review.summary.view_revision === viewRevision
+    && review.summary.highlight_focus_node_id === row.node_id
+    && navigationRevision === navigation && !settingsVisible && !task.closePending;
+  renderTasks();
+  try {
+    const response = await getPlanDetail(task.taskId, viewRevision, row.node_id);
+    if (!stillCurrent()) return;
+    if (response.disposition === "current" && response.view_revision === viewRevision) {
+      detail.state = "current";
+      detail.response = response;
+    } else {
+      detail.state = "error";
+      detail.message = "Plan changed. Select Refresh review to read current details.";
+      review.refreshAvailable = true;
+    }
+  } catch (_error) {
+    if (stillCurrent()) {
+      detail.state = "error";
+      detail.message = "Highlight the item again to retry planned details.";
+    }
+  } finally {
+    if (stillCurrent()) renderTasks();
+  }
+}
+
+async function readExecutionDetail(review, row) {
+  if (settingsVisible) return;
+  const task = currentReviewTask(review);
+  if (task === null) return;
+  const request = ++review.detailRevision;
+  if (row === null) {
+    review.executionDetail = null;
+    renderTasks();
+    return;
+  }
+  const operationId = row.operation_id;
+  const executionRevision = review.window.execution.execution_revision;
+  const sessionId = task.sessionId;
+  const requestId = review.summary.request_id;
+  const action = review.actionRevision;
+  const navigation = navigationRevision;
+  const detail = { operationId, executionRevision, focusNodeId: row.node_id ?? null,
+    state: "loading", response: null, message: null };
+  review.executionDetail = detail;
+  renderTasks();
+  try {
+    const response = await getExecutionDetail(task.taskId, operationId, executionRevision);
+    if (
+      currentReviewTask(review) !== task || review.detailRevision !== request
+      || review.executionDetail !== detail || task.sessionId !== sessionId
+      || review.summary.request_id !== requestId || review.actionRevision !== action
+      || review.window.execution.execution_revision !== executionRevision
+      || navigationRevision !== navigation || settingsVisible
+    ) return;
+    if (response.disposition === "current") {
+      detail.state = "current";
+      detail.response = response;
+    } else if (response.disposition === "not-retained") {
+      detail.state = "not-retained";
+    } else {
+      retireExecutionDetail(review);
+      markExecutionWindowDirty(task);
+    }
+  } catch (_error) {
+    if (currentReviewTask(review) === task && review.detailRevision === request
+        && review.executionDetail === detail && navigationRevision === navigation
+        && !settingsVisible) {
+      detail.state = "error";
+      detail.message = "Highlight the item again to retry operation detail.";
+    }
+  } finally {
+    if (currentReviewTask(review) === task && review.detailRevision === request
+        && navigationRevision === navigation && !settingsVisible) renderTasks();
+  }
+}
+
+function currentReviewTask(review) {
+  const task = currentTask();
+  return task !== null && executionPaneVisible(task) && task.review === review ? task : null;
+}
+
+function retainedReviewTask(review) {
+  const taskId = review?.summary?.task_id;
+  const task = typeof taskId === "string" ? tasks.get(taskId) ?? null : null;
+  return task !== null && task.review === review ? task : null;
+}
+
+async function loadPlanReview(task, force = false) {
+  if (
+    task === undefined || tasks.get(task.taskId) !== task
+    || (selectedTaskId === task.taskId && !executionPaneVisible(task))
+    || task.taskKind !== "sync-plan" || task.planRequestId === null
+    || planReviewRefusal(task) !== null
+    || task.reviewLoading
+    || task.review?.pending === "selection"
+    || (!force && task.review !== null && task.reviewSessionId === task.executionSessionId)
+  ) return;
+  const request = ++task.reviewRevision;
+  const dirtyRevision = task.executionWindowDirtyRevision;
+  let sessionId = task.executionSessionId;
+  const planRequestId = task.planRequestId;
+  const paneRevision = task.paneRevision;
+  const reviewOwner = task.review;
+  const reads = tableReadOwner(task);
+  const ticket = reads.captureRefresh(dirtyRevision);
+  task.reviewLoading = true;
+  renderTasks();
+  try {
+    const summary = await openPlanView(task.taskId);
+    if (tasks.get(task.taskId) !== task || task.reviewRevision !== request
+        || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId) return;
+    observeOriginalExecution(task, summary.request_id, summary.execution);
+    sessionId = task.executionSessionId;
+    const window = await getPlanWindow(task.taskId, summary.view_revision, 0, 256);
+    if (tasks.get(task.taskId) === task && task.reviewRevision === request
+        && task.executionSessionId === sessionId && task.planRequestId === summary.request_id
+        && window.disposition === "current") {
+      observeOriginalExecution(task, planRequestId, window.execution);
+    }
+    if (
+      tasks.get(task.taskId) !== task || task.reviewRevision !== request
+      || task.executionSessionId !== sessionId || task.planRequestId !== planRequestId
+      || (selectedTaskId === task.taskId && (!executionPaneVisible(task) || task.paneRevision !== paneRevision))
+    ) return;
+    const foregroundInvalidated = reviewOwner !== null && reads.refreshDisposition(
+      ticket, true, task.review === reviewOwner, task.executionWindowDirtyRevision) === "reread";
+    if (
+      window.disposition !== "current" || window.view_revision !== summary.view_revision
+      || window.highlight_revision !== summary.highlight_revision
+    ) {
+      if (foregroundInvalidated) {
+        task.executionWindowDirty = true;
+        return;
+      }
+      task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
+      if (task.review !== null) task.review.message = "Execution status refresh delayed. Select the task to retry.";
+      else if (task.sessionState !== "active"
+          && ["sync-plan", "sync-execution"].includes(task.sessionKind)) {
+        task.error = PLAN_UNAVAILABLE;
+      }
+      return;
+    }
+    task.executionStarted ||= summary.selection_state === "committed";
+    if (task.executionSessionState === null && summary.execution.result !== null) {
+      const originalResult = summary.execution.result;
+      task.executionSessionState = originalResult.disposition === "unrun" ? "refused"
+        : originalResult.canceled ? "canceled"
+          : ["failed", "partial", "mismatch", "refused"].includes(originalResult.headline)
+            ? "failed" : "completed";
+    }
+    if (foregroundInvalidated) {
+      if (task.review === reviewOwner && reviewOwner.summary.request_id === summary.request_id) {
+        const current = reviewOwner.summary;
+        reviewOwner.summary = summary.view_revision > current.view_revision
+          || (summary.view_revision === current.view_revision
+            && summary.selection_revision >= current.selection_revision
+            && summary.highlight_revision >= current.highlight_revision)
+          ? summary
+          : {
+            ...current,
+            selection_state: summary.selection_state === "committed"
+              ? "committed" : current.selection_state,
+            execution: summary.execution,
+          };
+        task.reviewSessionId = task.executionSessionId;
+      }
+      task.executionWindowDirty = true;
+      return;
+    }
+    const message = task.executionStarted
+      ? task.sessionKind === "sync-execution" && task.sessionState === "active"
+        ? executionControlMessage(task.executionControlState)
+        : task.executionSessionState === "completed" ? null
+          : summary.execution.refusal !== null
+            ? executionRefusalMessage(summary.execution.refusal)
+            : `Execution ${task.executionSessionState}.`
+      : summary.preflight_ready
+        ? null
+        : "Plan failed review. Inspect notices and create a fresh plan.";
+    const controlAttempt = task.executionControlAttempt?.sessionId === sessionId
+      ? task.executionControlAttempt : null;
+    const retainedRecovery = task.reviewSessionId === sessionId
+      ? task.review?.recovery ?? null : null;
+    const retainedOutcomeAction = task.reviewSessionId === sessionId
+      ? task.review?.outcomeAction ?? null : null;
+    const retainedFollow = task.reviewSessionId === sessionId ? task.review?.follow ?? null : null;
+    const eligibleFollow = summary.search_query === "" && summary.filters.length === 0
+      && summary.sort_column === "path" && summary.sort_direction === "ascending";
+    task.review = {
+      summary,
+      window,
+      pending: task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+        ? "close"
+        : checkableOutcome(retainedRecovery) || fixedOutcome(retainedRecovery) ? "outcome"
+        : controlAttempt?.pending ? controlAttempt.actionName : null,
+      recovery: retainedRecovery,
+      outcomeAction: retainedOutcomeAction,
+      refreshAvailable: false,
+      queuedSearchQuery: null,
+      highlightQueue: Promise.resolve(),
+      message: task.drainUnavailable && task.sessionKind === "sync-execution" && task.sessionState === "active"
+        ? STOPPED_TASK_UPDATES_MESSAGE
+        : controlAttempt?.message ?? message,
+      actionRevision: 0,
+      windowRequestRevision: 0,
+      executionDetail: null,
+      detailRevision: 0,
+      planDetail: null,
+      planDetailRevision: 0,
+      follow: {
+        enabled: retainedFollow === null ? task.executionStarted && eligibleFollow : retainedFollow.enabled,
+        eligible: eligibleFollow,
+        hasTarget: planFollowTarget(task) !== null,
+        message: null,
+        anchorKey: retainedFollow?.anchorKey ?? null,
+        anchorIndex: retainedFollow?.anchorIndex ?? null,
+        scrollOffset: null,
+        generation: retainedFollow?.generation ?? 0,
+      },
+    };
+    task.reviewSessionId = task.executionSessionId;
+    adoptExecutionWindow(task.review, window);
+    task.executionWindowDirty = task.executionWindowDirtyRevision !== dirtyRevision;
+    if (["sync-plan", "sync-execution"].includes(task.sessionKind)) {
+      task.error = task.drainUnavailable
+        ? task.sessionKind === "sync-execution" && task.sessionState === "active"
+          ? STOPPED_TASK_UPDATES_MESSAGE : "Task updates stopped. Close can be retried."
+        : null;
+    }
+  } catch (_error) {
+    const disposition = reads.refreshDisposition(ticket, tasks.get(task.taskId) === task
+        && task.reviewRevision === request && task.executionSessionId === sessionId
+        && task.planRequestId === planRequestId
+        && selectedTaskId === task.taskId && !settingsVisible && executionPaneVisible(task)
+        && task.paneRevision === paneRevision, task.review === reviewOwner,
+        task.executionWindowDirtyRevision);
+    if (disposition !== "current") {
+      if (disposition === "reread") task.executionWindowDirty = true;
+      return;
+    }
+    if (
+      tasks.get(task.taskId) === task && task.reviewRevision === request
+      && task.executionSessionId === sessionId && task.planRequestId === planRequestId
+      && (task.sessionState !== "active"
+        || !["sync-plan", "sync-execution"].includes(task.sessionKind))
+    ) {
+      if (["sync-plan", "sync-execution"].includes(task.sessionKind)) {
+        task.error = PLAN_UNAVAILABLE;
+      } else if (task.review !== null) {
+        task.review.message = PLAN_UNAVAILABLE;
+      }
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.reviewRevision === request) {
+      task.reviewLoading = false;
+      renderTasks();
+      if (task.paneRevision !== paneRevision && executionPaneVisible(task)) void loadPlanReview(task);
+      if (task.executionWindowDirty) void refreshExecutionWindow(task);
+      if (task.review?.follow?.enabled && task.review.follow.eligible
+          && planFollowTarget(task) !== null) queuePlanFollow(task.review);
+    }
+  }
+}
+
+async function readPlanWindowAtAnchor(task, review, summary, anchorNodeId, fallbackOffset) {
+  let offset = fallbackOffset;
+  if (anchorNodeId !== null) {
+    try {
+      const anchor = await getPlanAnchor(
+        task.taskId,
+        summary.view_revision,
+        anchorNodeId,
+      );
+      if (anchor.disposition === "current" && anchor.index !== null) {
+        offset = anchor.index;
+      }
+    } catch (_error) {
+      offset = 0;
+    }
+  }
+  return getPlanWindow(task.taskId, summary.view_revision, offset, 256);
+}
+
+async function revealPlanMoveDestination(review, nodeId) {
+  const task = currentReviewTask(review);
+  if (task === null || settingsVisible || task.closePending || review.pending !== null) return;
+  const action = ++review.actionRevision;
+  const sessionId = task.sessionId;
+  const requestId = review.summary.request_id;
+  const navigation = navigationRevision;
+  review.follow.enabled = false;
+  review.follow.generation += 1;
+  review.pending = "view";
+  review.message = "Opening move destination…";
+  const releaseForeground = tableReadOwner(task).beginForeground();
+  renderTasks();
+  const stillCurrent = () => currentReviewTask(review) === task && !settingsVisible
+    && !task.closePending && task.sessionId === sessionId
+    && review.summary.request_id === requestId && review.actionRevision === action
+    && navigationRevision === navigation;
+  try {
+    const result = await revealPlanMove(task.taskId, review.summary.view_revision, nodeId, () => {
+      if (stillCurrent()) {
+        review.refreshAvailable = true;
+        review.message = "Destination response delayed. Refresh to read the current review.";
+        renderTasks();
+      }
+    });
+    if (!stillCurrent()) return;
+    const window = await getPlanWindow(task.taskId, result.summary.view_revision,
+      navigationWindowOffset(result.index ?? 0), 256);
+    if (!stillCurrent()) return;
+    if (window.disposition !== "current"
+        || window.view_revision !== result.summary.view_revision
+        || window.highlight_revision !== result.summary.highlight_revision) {
+      review.refreshAvailable = true;
+      review.message = "Review changed before the destination could be shown. Refresh to read the current review.";
+      return;
+    }
+    review.summary = result.summary;
+    adoptExecutionWindow(review, window);
+    review.refreshAvailable = false;
+    review.follow.eligible = followEligible(review);
+    review.moveScrollOffset = result.index === null ? window.offset : navigationWindowOffset(result.index);
+    review.message = result.summary.disposition === "conflict"
+      ? "View changed. Click the move destination again." : null;
+  } catch (_error) {
+    if (stillCurrent()) {
+      review.refreshAvailable = true;
+      review.message = "Destination response unavailable. Refresh to read the current review.";
+    }
+  } finally {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      if (review.pending === "view") review.pending = null;
+      renderTasks();
+      const queued = review.queuedSearchQuery;
+      review.queuedSearchQuery = null;
+      if (stillCurrent() && queued !== null && queued !== review.summary.search_query) {
+        void changePlanView(review, { searchQuery: queued });
+      }
+    }
+    releaseForeground();
+  }
+}
+
+async function changePlanView(review, patch, queued = false) {
+  interruptPlanNavigation(review);
+  const task = queued ? retainedReviewTask(review) : currentReviewTask(review);
+  if (task === null) return;
+  if (review.follow !== null && ["searchQuery", "filters", "sortColumn", "sortDirection"]
+      .some((key) => Object.prototype.hasOwnProperty.call(patch, key))) {
+    review.follow.enabled = false;
+    review.follow.generation += 1;
+  }
+  if (review.pending !== null) {
+    if (review.pending === "view" && Object.keys(patch).length === 1
+        && typeof patch.searchQuery === "string") {
+      review.queuedSearchQuery = patch.searchQuery;
+    }
+    return;
+  }
+  const action = ++review.actionRevision;
+  const anchorNodeId = review.window.rows[0]?.node_id ?? null;
+  const sortColumn = patch.sortColumn ?? review.summary.sort_column;
+  const gesture = {
+    searchQuery: patch.searchQuery ?? review.summary.search_query,
+    filters: [...(patch.filters ?? review.summary.filters)],
+    sortColumn,
+    sortDirection: sortColumn === "path"
+      ? "ascending"
+      : patch.sortDirection ?? review.summary.sort_direction,
+    collapseNodeId: patch.collapseNodeId ?? null,
+    collapsed: patch.collapseNodeId === undefined ? null : patch.collapsed,
+  };
+  review.pending = "view";
+  review.message = "Updating view…";
+  const releaseForeground = tableReadOwner(task).beginForeground();
+  renderTasks();
+  try {
+    const summary = await updatePlanView(
+      task.taskId,
+      review.summary.view_revision,
+      gesture,
+      (_feedback) => {
+        if (retainedReviewTask(review) === task && review.actionRevision === action) {
+          review.refreshAvailable = true;
+          review.message = "View update is still pending. Refresh to read the current review.";
+          renderTasks();
+        }
+      },
+    );
+    if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
+    const window = await readPlanWindowAtAnchor(
+      task,
+      review,
+      summary,
+      anchorNodeId,
+      0,
+    );
+    if (
+      retainedReviewTask(review) !== task || review.actionRevision !== action
+      || window.disposition !== "current"
+      || window.view_revision !== summary.view_revision
+      || window.highlight_revision !== summary.highlight_revision
+    ) return;
+    review.summary = summary;
+    adoptExecutionWindow(review, window);
+    review.refreshAvailable = false;
+    review.message = summary.disposition === "conflict"
+      ? "View changed. Current view restored."
+      : null;
+  } catch (_error) {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      review.queuedSearchQuery = null;
+      review.refreshAvailable = true;
+      review.message = "View response unavailable. Refresh to read the current review.";
+      void loadPlanReview(task, true);
+    }
+  } finally {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      if (review.pending === "view") review.pending = null;
+      renderTasks();
+      const queuedSearchQuery = review.queuedSearchQuery;
+      review.queuedSearchQuery = null;
+      if (review.pending === null && queuedSearchQuery !== null
+          && queuedSearchQuery !== review.summary.search_query) {
+        void changePlanView(review, { searchQuery: queuedSearchQuery }, true);
+      }
+    }
+    releaseForeground();
+  }
+}
+
+function retainReviewOutcome(review, error, actionName = review.outcomeAction ?? null) {
+  if (!(error instanceof OutcomeUnavailableError)) return false;
+  review.outcomeAction = actionName;
+  review.pending = "outcome";
+  renderTasks();
+  return true;
+}
+
+async function retryReviewOutcome(review) {
+  const task = retainedReviewTask(review);
+  const cancelAttempt = task?.executionControlAttempt;
+  if (task !== null && fixedOutcome(review.recovery)
+      && cancelAttempt?.independent && checkableOutcome(cancelAttempt.recovery)) {
+    await retryIndependentCancelOutcome(task, cancelAttempt);
+    return;
+  }
+  if (task !== null && cancelAttempt !== null && !cancelAttempt.independent
+      && cancelAttempt.sessionId === task.sessionId
+      && checkableOutcome(cancelAttempt.recovery)) {
+    await cancelAttempt.recovery.check();
+    return;
+  }
+  if (task === null || review.recovery?.checking) return;
+  if (review.refreshAvailable) {
+    review.refreshAvailable = false;
+    review.actionRevision += 1;
+    await loadPlanReview(task, true);
+    if (task.review === review) {
+      review.refreshAvailable = true;
+      review.message = "Current review unavailable. Select Refresh review to try again.";
+      renderTasks();
+    }
+    return;
+  }
+  if (checkableOutcome(review.recovery)) await review.recovery.check();
+}
+
+async function loadPlanWindow(review, offset, overlapsViewport, settled) {
+  const task = currentReviewTask(review);
+  if (task === null || settingsVisible) { settled?.("retired"); return; }
+  if (offset !== null && review.pending !== null) { settled?.(); return; }
+  if (offset !== null && review.viewportRead?.update?.(offset, overlapsViewport, settled)) return;
+  review.viewportRead?.cancel();
+  review.viewportRead = null;
+  const request = ++review.windowRequestRevision;
+  if (offset === null) {
+    const release = tableReadOwner(task).beginForeground();
+    release();
+    return;
+  }
+  const sessionId = task.sessionId;
+  const publication = review.summary.request_id;
+  const navigation = navigationRevision;
+  const action = review.actionRevision;
+  const viewRevision = review.summary.view_revision;
+  const current = () => currentReviewTask(review) === task && !settingsVisible
+    && review.windowRequestRevision === request && task.sessionId === sessionId
+    && review.summary.request_id === publication && navigationRevision === navigation
+    && review.actionRevision === action && review.summary.view_revision === viewRevision;
+  const releaseForeground = tableReadOwner(task).beginForeground();
+  const job = tableReadOwner(task).request(current,
+    () => getPlanWindow(task.taskId, viewRevision, offset, 256));
+  // A moving viewport may still use this read; only its latest overlap matters.
+  const intent = {offset, overlapsViewport, settled, cancel() {
+    job.cancel();
+    intent.settled?.("retired");
+    intent.settled = null;
+  }, update(nextOffset, overlaps, complete) {
+    if (!current() || !job.latest) return false;
+    intent.settled?.("retired");
+    intent.offset = nextOffset;
+    intent.overlapsViewport = overlaps;
+    intent.settled = complete;
+    return true;
+  }};
+  review.viewportRead = intent;
+  let settlement;
+  let retry = false;
+  try {
+    const window = await job.promise;
+    if (window === null || !current()) { settlement = "retired"; return; }
+    const receipt = review.highlightReceipt;
+    const summary = window.highlight_revision === review.summary.highlight_revision ? review.summary
+      : receipt?.request_id === publication && receipt.view_revision === viewRevision
+        && receipt.highlight_revision === window.highlight_revision ? receipt : null;
+    if (window.disposition !== "current" || window.view_revision !== viewRevision || summary === null) return;
+    if (!intent.overlapsViewport(window)) { retry = intent.offset !== offset; return; }
+    review.summary = summary;
+    adoptExecutionWindow(review, window);
+    review.message = "";
+    renderTasks();
+  } catch (_error) {
+    if (!current()) settlement = "retired";
+    else if (intent.offset !== offset) retry = true;
+    else { review.message = "More rows unavailable. Scroll to retry."; renderTasks(); }
+  } finally {
+    if (review.viewportRead === intent) review.viewportRead = null;
+    if (retry && current() && job.latest) void loadPlanWindow(review, intent.offset, intent.overlapsViewport, intent.settled);
+    else intent.settled?.(settlement === "retired" && !settingsVisible && currentReviewTask(review) === task
+      ? "changed" : settlement);
+    releaseForeground();
+  }
+}
+
+async function readPlanNavigationWindow(review, current, ...args) {
+  const task = retainedReviewTask(review);
+  if (task === null || !current()) return null;
+  return tableReadOwner(task).request(current, () => getPlanWindow(...args)).promise;
+}
+
+async function readInventoryNavigationWindow(review, current, taskId, revision, offset, limit) {
+  const task = tasks.get(taskId);
+  if (task?.inventoryReview !== review || !current()) return null;
+  const window = await tableReadOwner(task, true).request(current,
+    () => readInventoryWindow(taskId, revision, offset, limit)).promise;
+  if (window === null || !current()) return null;
+  const summary = inventoryWindowSummary(review, window, revision);
+  if (window.disposition !== "current" || summary === null) return null;
+  review.summary = summary;
+  return window;
+}
+
+function interruptPlanHighlight(review) {
+  review.highlightGeneration = (review.highlightGeneration ?? 0) + 1;
+  review.highlightNavigation = null;
+  cancelReviewFollow(review);
+  review.keyboardRevealWindow = null;
+  if (review.highlightPump != null) review.highlightPump.next = null;
+}
+
+function cancelPlanViewport(review) {
+  review.windowRequestRevision += 1;
+  review.viewportRead?.cancel();
+  review.viewportRead = null;
+}
+
+function interruptPlanNavigation(review) {
+  interruptPlanHighlight(review);
+  cancelPlanViewport(review);
+}
+
+function queuePlanHighlight(review, gesture, nodeId) {
+  return queueRowHighlight(review, gesture, nodeId);
+}
+
+function queueRowHighlight(review, gesture, nodeId, inventory = false) {
+  const currentOwner = inventory ? currentInventoryTask : currentReviewTask;
+  const retainedOwner = inventory ? (value) => {
+    const owner = tasks.get(value.summary.task_id);
+    return owner?.inventoryReview === value ? owner : null;
+  } : retainedReviewTask;
+  const readWindow = inventory ? readInventoryNavigationWindow : readPlanNavigationWindow;
+  review.highlightQueue ??= Promise.resolve();
+  const boundary = gesture === "first" || gesture === "last";
+  const moving = gesture.startsWith("move_") || boundary;
+  const extending = gesture.endsWith("_extend");
+  const previous = review.highlightNavigation;
+  if (moving && !boundary && previous?.extending === extending && previous.current()) {
+    previous.target = Math.max(0, Math.min(review.window.total - 1,
+      previous.target + (gesture.startsWith("move_down") ? 1 : -1)));
+    previous.version += 1;
+    return review.highlightQueue;
+  }
+  if (inventory) {
+    interruptPlanHighlight(review);
+    cancelInventoryWindow(review);
+  } else interruptPlanNavigation(review);
+  const generation = review.highlightGeneration;
+  const task = currentOwner(review);
+  const viewRevision = review.summary.view_revision;
+  const action = review.actionRevision;
+  const navigation = navigationRevision;
+  const publication = review.summary.request_id;
+  const session = task?.sessionId;
+  const owned = () => currentOwner(review) === task && task !== null
+    && (!inventory || inventoryWindowReady(task, review))
+    && task.sessionId === session && !settingsVisible && navigationRevision === navigation
+    && review.summary.request_id === publication && review.summary.view_revision === viewRevision
+    && review.actionRevision === action;
+  const current = () => owned() && review.highlightGeneration === generation;
+  const captured = review.summary;
+  const focus = captured.highlight_focus_visible_index;
+  const down = gesture.startsWith("move_down");
+  const intent = { current, extending, version: 0,
+    target: Math.max(0, Math.min(review.window.total - 1,
+      boundary ? gesture === "first" ? 0 : review.window.total - 1
+        : Number.isSafeInteger(focus) ? focus + (down ? 1 : -1) : down ? 0 : review.window.total - 1)) };
+  if (moving) review.highlightNavigation = intent;
+  const run = async () => {
+    if (!(moving ? current() : owned()) || review.pending !== null || (!inventory && task.executionAttempt !== null)) return;
+    const releaseForeground = tableReadOwner(task, inventory).beginForeground();
+    let summary = captured;
+    let first = true;
+    let inventoryMutation = false;
+    let inventoryAdopted = false;
+    const invalidation = task.inventoryInvalidationRevision;
+    try {
+      do {
+        const version = moving && first && !boundary ? 0 : intent.version;
+        const target = intent.target;
+        const latest = () => current() && (!moving || intent.version === version);
+        let command = gesture;
+        let endpoint = nodeId;
+        if (moving && (!first || boundary)) {
+          let row = review.window.rows.find((value) => value.visible_index === target);
+          if (row === undefined) {
+            const lookup = await readWindow(review, latest,
+              task.taskId, viewRevision, Math.max(0, target - 32), 256);
+            if (!current()) return;
+            if (!latest()) continue;
+            if (lookup === null || lookup.disposition !== "current" || lookup.view_revision !== viewRevision) return;
+            row = lookup.rows.find((value) => value.visible_index === target);
+          }
+          if (row === undefined) return;
+          command = extending ? "extend" : "replace";
+          endpoint = row.node_id;
+        }
+        // Only unconditional replacement/clear may follow a retired mutation's receipt.
+        const receipt = review.highlightReceipt;
+        const revision = (!moving || boundary) && ["replace", "clear"].includes(command)
+          && receipt?.request_id === publication && receipt.view_revision === viewRevision
+          ? receipt.highlight_revision : summary.highlight_revision;
+        if (inventory) {
+          inventoryMutation = true;
+          review.highlightPending = true;
+          review.inventoryForeground = {sessionId:session, navigation, invalidation};
+        }
+        summary = await (inventory ? mutateInventoryHighlight : mutatePlanHighlight)(task.taskId, viewRevision, revision, command, endpoint, () => {
+          if (latest()) {
+            review.refreshAvailable = true;
+            review.message = inventory
+              ? "Highlight is still pending. Reload the inventory view to read the current highlight."
+              : "Highlight is still pending. Select Refresh review to read the current highlight.";
+            renderTasks();
+          }
+        });
+        // A retired reply retains mutation custody but has no presentation authority.
+        if (retainedOwner(review) === task && task.sessionId === session
+            && review.summary.request_id === publication && review.summary.view_revision === viewRevision) {
+          review.highlightReceipt = summary;
+        }
+        first = false;
+        if (!current()) return;
+        if (!latest() && summary.disposition !== "conflict") continue;
+        const focusIndex = summary.highlight_focus_visible_index;
+        const outside = moving && Number.isSafeInteger(focusIndex)
+          && (focusIndex < review.window.offset || focusIndex >= review.window.offset + review.window.rows.length);
+        const window = await readWindow(review, latest, task.taskId, summary.view_revision,
+          outside ? Math.max(0, focusIndex - 32) : review.window.offset, 256);
+        if (!current()) return;
+        if (!latest()) continue;
+        if (window === null || window.disposition !== "current" || window.view_revision !== summary.view_revision
+            || window.highlight_revision !== summary.highlight_revision) return;
+        review.summary = summary;
+        review.keyboardRevealWindow = moving && summary.disposition !== "conflict" ? window : null;
+        if (inventory) {
+          review.window = window;
+          inventoryAdopted = true;
+          if (task.inventoryInvalidationRevision === invalidation) task.inventoryReviewSessionId = session;
+        }
+        else adoptExecutionWindow(review, window);
+        review.refreshAvailable = false;
+        review.message = summary.disposition === "conflict"
+          ? "Highlight changed while navigation finished. Review the current highlight, then try again." : null;
+        const focusedRow = window.rows.find((row) => row.node_id === summary.highlight_focus_node_id);
+        if (inventory) syncInventoryDetail(review);
+        if (!inventory && focusedRow !== undefined && review.planDetail?.state === "error") void readPlanDetail(review, focusedRow);
+        if (!inventory && focusedRow?.operation_id === review.executionDetail?.operationId
+            && review.executionDetail?.state === "error") void readExecutionDetail(review, focusedRow);
+        renderTasks();
+        return;
+      } while (current());
+    } catch (_error) {
+      if (current()) {
+        review.refreshAvailable = true;
+        review.message = inventory
+          ? "Highlight response unavailable. Reload the inventory view to read the current highlight."
+          : "Highlight response unavailable. Select Refresh review to read the current highlight.";
+        renderTasks();
+      }
+    } finally {
+      if (inventoryMutation) review.highlightPending = false;
+      if (inventoryMutation && !inventoryAdopted && tasks.get(task.taskId) === task
+          && task.sessionId === session) {
+        task.inventoryReviewSessionId = null;
+        task.inventoryInvalidationRevision += 1;
+      }
+      if (inventoryMutation && tasks.get(task.taskId) === task && task.sessionId === session
+          && (navigationRevision !== navigation || task.inventoryReview !== review)) {
+        invalidateInventoryReview(task);
+        void loadInventoryReview(task);
+      }
+      if (review.highlightNavigation === intent) review.highlightNavigation = null;
+      releaseForeground();
+    }
+  };
+  if (moving || gesture === "replace") {
+    if (review.highlightPump != null) review.highlightPump.next = run;
+    else {
+      const pump = { next: run };
+      review.highlightPump = pump;
+      review.highlightQueue = review.highlightQueue.catch(() => {}).then(async () => {
+        try {
+          while (pump.next !== null) {
+            const next = pump.next;
+            pump.next = null;
+            await next();
+          }
+        } finally { if (review.highlightPump === pump) review.highlightPump = null; }
+      });
+    }
+  } else {
+    // A later navigation pump must stay behind this individual gesture.
+    review.highlightPump = null;
+    review.highlightQueue = review.highlightQueue.catch(() => {}).then(run);
+  }
+  return review.highlightQueue;
+}
+
+async function changePlanSelection(review, row, selected, highlightedScope = false) {
+  if (currentReviewTask(review) === null || review.pending !== null) return;
+  const clickedViewRevision = review.summary.view_revision;
+  const clickedHighlightRevision = review.summary.highlight_revision;
+  const clickedSelectionRevision = review.summary.selection_revision;
+  interruptPlanNavigation(review);
+  await review.highlightQueue.catch(() => {});
+  const task = currentReviewTask(review);
+  if (
+    task === null || review.pending !== null
+    || review.summary.view_revision !== clickedViewRevision
+    || review.summary.selection_state !== "reviewing"
+    || task.executionAttempt !== null
+  ) return;
+  if (!highlightedScope && row !== null
+      && review.summary.highlight_anchor_node_id !== null) {
+    await queuePlanHighlight(review, "clear", null).catch(() => {});
+    if (currentReviewTask(review) !== task) return;
+  }
+  const action = ++review.actionRevision;
+  const anchorNodeId = review.window.rows[0]?.node_id ?? null;
+  review.pending = "selection";
+  review.message = "Updating selection…";
+  const releaseForeground = tableReadOwner(task).beginForeground();
+  renderTasks();
+  const onDelayed = (recovery) => {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      review.recovery = recovery;
+      renderTasks();
+    }
+  };
+  try {
+    const summary = highlightedScope
+      ? await mutatePlanHighlightedSelection(
+        task.taskId, review.summary.view_revision,
+        clickedHighlightRevision, clickedSelectionRevision, selected,
+        onDelayed,
+      )
+      : row === null
+      ? await mutatePlanScope(
+        task.taskId, review.summary.view_revision,
+        review.summary.selection_revision, selected, onDelayed,
+      )
+      : await mutatePlanSelection(
+        task.taskId, review.summary.view_revision,
+        review.summary.selection_revision, row.node_id, selected, onDelayed,
+      );
+    if (retainedReviewTask(review) !== task || review.actionRevision !== action) return;
+    const window = await readPlanWindowAtAnchor(
+      task,
+      review,
+      summary,
+      anchorNodeId,
+      review.window.offset,
+    );
+    if (
+      retainedReviewTask(review) !== task || review.actionRevision !== action
+      || window.disposition !== "current"
+    ) return;
+    review.summary = summary;
+    adoptExecutionWindow(review, window);
+    review.recovery = null;
+    review.message = summary.disposition === "applied"
+      ? null
+      : summary.disposition === "conflict"
+        ? highlightedScope ? "Highlight changed while navigation finished. Review the current highlight, then select again."
+          : "Selection changed elsewhere. Current selection shown."
+        : summary.disposition === "frozen" || summary.disposition === "in-flight"
+          ? "Selection is already committed to execution."
+          : null;
+  } catch (error) {
+    if (retainedReviewTask(review) === task && review.actionRevision === action) {
+      if (!retainReviewOutcome(review, error)) {
+        review.message = "Selection response was refused. Reloading review…";
+        review.pending = null;
+        void loadPlanReview(task, true);
+      }
+      return;
+    }
+  } finally {
+    if (
+      retainedReviewTask(review) === task && review.actionRevision === action
+      && review.pending === "selection" && !fixedOutcome(review.recovery)
+    ) {
+      review.recovery = null;
+      review.pending = null;
+      renderTasks();
+    }
+    releaseForeground();
+  }
+}
+
+async function executeReviewedPlan(review, returnFocus) {
+  const task = currentReviewTask(review);
+  if (task !== null && task.executionAttempt?.state === "submitting") {
+    const attempt = task.executionAttempt;
+    if (checkableOutcome(attempt.recovery)) await attempt.recovery.check();
+    return;
+  }
+  if (
+    task === null || task.closePending || checkableOutcome(task.closeRecovery)
+    || fixedOutcome(task.closeRecovery) || review.pending !== null
+    || review.summary.selection_state !== "reviewing"
+    || task.executionAttempt !== null
+  ) return;
+  const attempt = {
+    review,
+    taskId: task.taskId,
+    requestId: review.summary.request_id,
+    selectionRevision: review.summary.selection_revision,
+    destructiveAcknowledged: review.summary.requires_destructive_confirmation,
+    destructiveOperationCount: review.summary.destructive_operation_count,
+    recovery: null,
+    submissionStarted: false,
+    state: review.summary.requires_destructive_confirmation ? "confirming" : "submitting",
+  };
+  task.executionAttempt = attempt;
+  review.pending = attempt.state === "confirming" ? "confirmation" : "execute";
+  review.message = attempt.state === "confirming"
+    ? "Confirm destructive changes in the dialog."
+    : "Starting execution…";
+  renderTasks();
+  if (attempt.state === "confirming") {
+    try {
+      executionConfirmation.show({
+        destructiveOperationCount: attempt.destructiveOperationCount,
+        returnFocus,
+        onCancel: () => cancelReviewedExecution(task, attempt),
+        onConfirm: () => { void submitReviewedExecution(task, attempt); },
+      });
+    } catch (_error) {
+      task.executionAttempt = null;
+      review.pending = null;
+      review.message = "Confirmation unavailable. Selection remains editable.";
+      renderTasks();
+    }
+    return;
+  }
+  await submitReviewedExecution(task, attempt);
+}
+
+function cancelReviewedExecution(task, attempt) {
+  if (task.executionAttempt !== attempt || attempt.state !== "confirming") return;
+  task.executionAttempt = null;
+  if (task.review === attempt.review) {
+    attempt.review.pending = null;
+    attempt.review.message = null;
+  }
+  renderTasks();
+}
+
+async function submitReviewedExecution(task, attempt) {
+  if (
+    task.executionAttempt !== attempt
+    || !["confirming", "submitting"].includes(attempt.state)
+  ) return;
+  if (attempt.submissionStarted) return;
+  const submit = () => startExecution(
+    attempt.taskId,
+    attempt.requestId,
+    attempt.selectionRevision,
+    attempt.destructiveAcknowledged,
+    ownedAttemptRecovery(attempt, () => tasks.get(task.taskId) === task
+      && task.executionAttempt === attempt && task.review !== null),
+  );
+  attempt.submissionStarted = true;
+  attempt.state = "submitting";
+  if (task.review !== null) {
+    task.review.pending = "execute";
+    task.review.message = attempt.destructiveAcknowledged
+      ? "Starting confirmed execution…"
+      : "Starting execution…";
+  }
+  renderTasks();
+  try {
+    const result = await submit();
+    if (tasks.get(task.taskId) !== task || task.executionAttempt !== attempt) return;
+    task.executionAttempt = null;
+    if (typeof result.task_id === "string") {
+      taskMutationRevision += 1;
+      task.requestId = result.request_id;
+      task.sessionId = result.session_id;
+      task.sessionKind = "sync-execution";
+      setOriginalExecutionSession(task, result.session_id);
+      task.sessionState = "active";
+      task.executionSessionState = "active";
+      task.sessionReleased = false;
+      task.snapshot = null;
+      task.progressPresentation = null;
+      task.executionSnapshot = null;
+      task.executionPresentation = null;
+      task.executionStarted = true;
+      task.executionWindowDirty = true;
+      task.executionWindowDirtyRevision += 1;
+      task.executionControlRevision += 1;
+      task.executionControlState = "running";
+      task.reviewSessionId = result.session_id;
+      if (attempt.review.follow !== null) {
+        attempt.review.follow.eligible = followEligible(attempt.review);
+        attempt.review.follow.enabled = attempt.review.follow.eligible;
+        attempt.review.follow.generation += 1;
+        attempt.review.follow.anchorKey = null;
+        attempt.review.follow.anchorIndex = null;
+      }
+      attachTaskDrain(task);
+      if (task.review === attempt.review) {
+        attempt.review.message = executionControlMessage(task.executionControlState);
+        attempt.review.pending = null;
+      }
+      renderTasks();
+      await loadPlanReview(task, true);
+      return;
+    }
+    const currentReview = task.review;
+    if (currentReview === null) return;
+    if (result.disposition === "preflight-refused") {
+      currentReview.message = executionRefusalMessage(result.refusal);
+      currentReview.pending = null;
+      renderTasks();
+      return;
+    }
+    currentReview.message = result.disposition === "confirmation-required"
+      ? "Confirmation no longer matches. Review selection again."
+      : result.disposition === "conflict"
+        ? "Selection changed. Review it before executing."
+        : "Execution admission is already in progress.";
+    currentReview.pending = null;
+    renderTasks();
+    await loadPlanReview(task, true);
+  } catch (error) {
+    if (tasks.get(task.taskId) !== task || task.executionAttempt !== attempt) return;
+    const currentReview = task.review;
+    if (error instanceof StartPlanUncertainError) {
+      attempt.state = "uncertain";
+      if (currentReview !== null) {
+        currentReview.pending = "outcome";
+        currentReview.message = null;
+      }
+    } else {
+      task.executionAttempt = null;
+      if (currentReview !== null) {
+        currentReview.pending = null;
+        currentReview.message = taskStartFailureMessage(error, currentReview.summary.preflight_ready
+          ? "Execution did not start. Selection remains editable."
+          : "Plan refused. Create a fresh plan.");
+      }
+    }
+    renderTasks();
+  } finally {
+    if (
+      tasks.get(task.taskId) === task && task.executionAttempt === attempt
+      && attempt.state !== "uncertain"
+    ) {
+      task.executionAttempt = null;
+      if (task.review === attempt.review) attempt.review.pending = null;
+      renderTasks();
+    }
+  }
+}
+
+function recordExecutionControlResult(task, attempt, result) {
+  if (result.accepted) attempt.accepted = true;
+  if (task.executionControlRevision !== attempt.controlRevision
+      && task.executionControlState !== attempt.controlState) return;
+  if (result.accepted && ACTIVE_EXECUTION_CONTROL_STATES.has(result.after)) {
+    attempt.message = executionControlMessage(result.after);
+  } else {
+    attempt.message = result.detail || `The ${attempt.actionName} request was not accepted.`;
+  }
+  if (!attempt.independent && task.review !== null) task.review.message = attempt.message;
+}
+
+async function retryIndependentCancelOutcome(task, attempt) {
+  if (task.executionControlAttempt !== attempt || fixedOutcome(attempt.recovery)
+      || task.sessionId !== attempt.sessionId || task.sessionState !== "active") return;
+  if (checkableOutcome(attempt.recovery)) await attempt.recovery.check();
+}
+
+async function controlReviewedExecution(review, actionName) {
+  const task = currentReviewTask(review);
+  const independentCancel = task !== null && actionName === "cancel"
+    && canCancelAfterFixedReviewOutcome(task, review);
+  if (
+    task === null || task.closePending || checkableOutcome(task.closeRecovery)
+    || fixedOutcome(task.closeRecovery) || (review.pending !== null && !independentCancel)
+    || !task.executionStarted
+    || task.sessionState !== "active" || task.sessionId === null
+    || task.reviewSessionId !== task.sessionId
+    || task.drainUnavailable || task.executionControlAttempt?.pending
+    || (fixedOutcome(task.executionControlAttempt?.recovery) && !independentCancel)
+  ) return;
+  review.actionRevision += 1;
+  const sessionId = task.sessionId;
+  const controlRevision = task.executionControlRevision;
+  const controlState = task.executionControlState;
+  const attempt = {
+    sessionId,
+    actionName,
+    pending: true,
+    message: `${actionName[0].toUpperCase()}${actionName.slice(1)} requested…`,
+    recovery: null,
+    independent: independentCancel,
+    accepted: false,
+    controlRevision,
+    controlState,
+  };
+  task.executionControlAttempt = attempt;
+  if (!independentCancel) {
+    review.pending = actionName;
+    review.message = attempt.message;
+  }
+  renderTasks();
+  const stillOwned = () => tasks.get(task.taskId) === task
+    && task.sessionId === sessionId && task.executionControlAttempt === attempt;
+  try {
+    const result = await controlExecution(task.taskId, sessionId, actionName,
+      ownedAttemptRecovery(attempt, () => stillOwned() && task.review !== null, (recovery) => {
+        if (!independentCancel) task.review.recovery = recovery;
+      }));
+    if (!stillOwned() || task.sessionState !== "active" || task.drainUnavailable) return;
+    recordExecutionControlResult(task, attempt, result);
+  } catch (error) {
+    if (
+      stillOwned() && task.sessionState === "active" && !task.drainUnavailable
+      && (independentCancel || error instanceof OutcomeUnavailableError || (
+        task.executionControlRevision === controlRevision
+        || task.executionControlState === controlState
+      ))
+    ) {
+      if (independentCancel && error instanceof OutcomeUnavailableError) {
+        attempt.message = null;
+      } else if (!independentCancel && task.review !== null
+          && retainReviewOutcome(task.review, error, actionName)) {
+        attempt.message = null;
+      } else {
+        attempt.message = `${actionName[0].toUpperCase()}${actionName.slice(1)} refused. Follow live status.`;
+      }
+      if (!independentCancel && task.review !== null) task.review.message = attempt.message;
+    }
+  } finally {
+    if (stillOwned()) {
+      if (independentCancel) {
+        attempt.pending = false;
+      } else {
+        attempt.pending = false;
+        if (task.review?.pending === actionName) task.review.pending = null;
+      }
+      renderTasks();
+    }
+  }
+}
+
+async function planAgainFromReview(review) {
+  const task = currentReviewTask(review);
+  if (task !== null && review.pending === "plan-again"
+      && checkableOutcome(task.form?.attempt?.recovery)) {
+    await retryFormAttempt(task, task.form, "plan-again");
+    return;
+  }
+  if (task === null || review.pending !== null) return;
+  if (!canStartPlanAgain(task)) {
+    review.message = "Wait for the current action, then try Plan again.";
+    renderTasks();
+    return;
+  }
+  const action = ++review.actionRevision;
+  review.pending = "plan-again";
+  review.message = "Creating plan…";
+  renderTasks();
+  const dispatched = await startPlanAgain(task);
+  if (retainedReviewTask(review) === task && review.actionRevision === action) {
+    review.pending = null;
+    review.message = dispatched
+      ? task.form?.actionMessage ?? null
+      : "Wait for the current action, then try Plan again.";
+    renderTasks();
+  }
+}
+
+function editLocation(purpose, text) {
+  const form = currentForm();
+  if (!formIsEditable(form)) return;
+  const row = form[purpose];
+  row.text = text;
+  clearLocationChoice(row);
+  row.candidate = text ? { kind: "literal_path", path: text, selected_mount: null } : null;
+  row.revision += 1;
+  form.revision += 1;
+  form.actionMessage = null;
+  renderTasks();
+}
+
+function acceptLocation(row, result) {
+  row.location = result;
+  row.continuationId = result.continuation_id;
+  row.mountIndex = null;
+  if (result.display !== null) row.text = result.display;
+}
+
+function resolvedChoice(row, purpose) {
+  return row.location?.purpose === purpose && typeof row.location.choice_id === "string"
+    ? row.location
+    : null;
+}
+
+function admitRow(task, form, rowName, purpose = rowName) {
+  const row = form[rowName];
+  if (row.admissionPromise !== null) return row.admissionPromise;
+  if (!row.text || row.candidate === null || row.pending) return null;
+  const revision = row.revision;
+  const candidate = row.candidate;
+  const admissionRevision = ++row.admissionRevision;
+  row.pending = true;
+  row.admissionPromise = (async () => {
+    let result;
+    try {
+      result = await Promise.resolve().then(() => admitLocation(purpose, candidate, () => {
+        if (tasks.get(task.taskId) === task && task.form === form
+            && row.revision === revision && row.admissionRevision === admissionRevision) {
+          form.actionMessage = "Folder choice is still pending. Wait, or edit this folder to choose again.";
+          renderTasks();
+        }
+      }));
+    } catch (error) {
+      if (tasks.get(task.taskId) === task && task.form === form
+          && row.revision === revision && row.admissionRevision === admissionRevision) {
+        form.actionMessage = "Folder choice could not be confirmed. Review or choose this folder again.";
+        renderTasks();
+      }
+      throw error;
+    } finally {
+      if (tasks.get(task.taskId) === task && task.form === form
+          && row.revision === revision && row.admissionRevision === admissionRevision) {
+        row.pending = false;
+        row.admissionPromise = null;
+        renderTasks();
+      }
+    }
+    if (tasks.get(task.taskId) !== task || task.form !== form || row.revision !== revision || row.admissionRevision !== admissionRevision) return null;
+    acceptLocation(row, result);
+    renderTasks();
+    return result;
+  })();
+  renderTasks();
+  return row.admissionPromise;
+}
+
+async function validateLocation(purpose) {
+  const task = currentTask();
+  const form = task?.form;
+  if (task === null || !formIsEditable(form)) return;
+  try {
+    await admitRow(task, form, purpose, locationPurpose(form, purpose));
+  } catch (_error) {
+    if (tasks.get(task.taskId) === task && task.form === form) renderTasks();
+  }
+}
+
+async function pickLocation(purpose) {
+  const task = currentTask();
+  const form = task?.form;
+  if (task === null || !formIsEditable(form) || pickerPending) return;
+  pickerPending = true;
+  const row = form[purpose];
+  const admissionPurpose = locationPurpose(form, purpose);
+  const prior = {
+    location: row.location,
+    candidate: row.candidate,
+    continuationId: row.continuationId,
+    mountIndex: row.mountIndex,
+  };
+  const revision = ++row.revision;
+  const formRevision = ++form.revision;
+  const admissionRevision = ++row.admissionRevision;
+  row.pending = true;
+  row.admissionPromise = null;
+  row.location = null;
+  row.candidate = null;
+  row.continuationId = null;
+  row.mountIndex = null;
+  renderTasks();
+  const restore = () => {
+    if (
+      tasks.get(task.taskId) !== task || task.form !== form ||
+      form.revision !== formRevision || row.revision !== revision
+    ) return;
+    row.location = prior.location;
+    row.candidate = prior.candidate;
+    row.continuationId = prior.continuationId;
+    row.mountIndex = prior.mountIndex;
+    renderTasks();
+  };
+  try {
+    const result = await pickFolder(admissionPurpose);
+    if (result === null) {
+      restore();
+      return;
+    }
+    if (
+      tasks.get(task.taskId) !== task || task.form !== form ||
+      form.revision !== formRevision || row.revision !== revision
+    ) return;
+    row.candidate = null;
+    acceptLocation(row, result);
+    row.text = result.display ?? "";
+    renderTasks();
+  } catch (_error) {
+    restore();
+    if (tasks.get(task.taskId) === task && task.form === form
+        && row.revision === revision) {
+      form.actionMessage = "Folder choice could not be confirmed. Choose it again.";
+      renderTasks();
+    }
+  } finally {
+    pickerPending = false;
+    if (tasks.get(task.taskId) === task && task.form === form
+        && form[purpose] === row && row.revision === revision
+        && row.admissionRevision === admissionRevision) {
+      row.pending = false;
+      renderTasks();
+    }
+  }
+}
+
+async function chooseRecentLocation(purpose, recent) {
+  const task = currentTask();
+  const form = task?.form;
+  if (task === null || !formIsEditable(form)) return;
+  const row = form[purpose];
+  row.text = recent.display;
+  clearLocationChoice(row);
+  row.candidate = { kind: "remembered_location", location_id: recent.location_id, selected_mount: null };
+  row.revision += 1;
+  form.revision += 1;
+  renderTasks();
+  try {
+    await admitRow(task, form, purpose, locationPurpose(form, purpose));
+  } catch (_error) {
+    if (tasks.get(task.taskId) === task && task.form === form) renderTasks();
+  }
+}
+
+async function chooseRecentPair(pair) {
+  const task = currentTask();
+  const form = task?.form;
+  if (task === null || !formIsEditable(form) || form.mode !== "sync-plan") return;
+  const availability = recentPairAvailability[pair.mapping_id];
+  if (form.batchRunning || availability?.source !== "online" || availability?.target !== "online"
+    || !form.setup.recents.pairs.some((item) => item.mapping_id === pair.mapping_id
+      && item.source.location_id === pair.source.location_id
+      && item.target.location_id === pair.target.location_id)) return;
+  for (const [rowName, recent] of [["source", pair.source], ["target", pair.target]]) {
+    const row = form[rowName];
+    row.text = recent.display;
+    clearLocationChoice(row);
+    row.candidate = { kind: "remembered_location", location_id: recent.location_id, selected_mount: null };
+    row.revision += 1;
+  }
+  form.revision += 1;
+  renderTasks();
+  await Promise.allSettled([
+    admitRow(task, form, "source", "source"),
+    admitRow(task, form, "target", "target"),
+  ]);
+}
+
+function editOption(key, value) {
+  const form = currentForm();
+  if (!formIsEditable(form) || form.options === null) return;
+  if (key in form.options) form.options[key] = value;
+  else if (key in form.options.preservation) form.options.preservation[key] = value;
+  form.revision += 1;
+  renderTasks();
+}
+
+function addFilter(value) {
+  const form = currentForm();
+  if (!formIsEditable(form) || form.options === null || value.length === 0) return;
+  form.options.filters.push(value);
+  form.revision += 1;
+  renderTasks();
+}
+
+function removeFilter(index) {
+  const form = currentForm();
+  if (!formIsEditable(form) || form.options === null) return;
+  form.options.filters.splice(index, 1);
+  form.revision += 1;
+  renderTasks();
+}
+
+async function chooseMount(rowName, mountIndex) {
+  const task = currentTask();
+  const form = task?.form;
+  if (task === null || !formIsEditable(form)) return;
+  const row = form[rowName];
+  const purpose = locationPurpose(form, rowName);
+  if (
+    row.location?.state !== "ambiguous" ||
+    !Number.isSafeInteger(mountIndex) ||
+    mountIndex < 0 ||
+    mountIndex >= row.location.candidates.length
+  ) return;
+  const continuationId = row.continuationId;
+  const candidate = row.candidate;
+  if (typeof continuationId !== "string" && candidate === null) return;
+  const selection = typeof continuationId === "string"
+    ? { continuation_id: continuationId, mount_index: mountIndex }
+    : { ...candidate, selected_mount: row.location.candidates[mountIndex] };
+  const revision = ++row.revision;
+  const formRevision = ++form.revision;
+  const admissionRevision = ++row.admissionRevision;
+  row.mountIndex = mountIndex;
+  row.pending = true;
+  row.admissionPromise = null;
+  renderTasks();
+  try {
+    const result = await admitLocation(purpose, selection, () => {
+      if (tasks.get(task.taskId) === task && task.form === form
+          && row.revision === revision) {
+        form.actionMessage = "Mount choice is still pending. Wait, or choose another mount.";
+        renderTasks();
+      }
+    });
+    if (
+      tasks.get(task.taskId) !== task ||
+      task.form !== form ||
+      form.revision !== formRevision ||
+      row.revision !== revision ||
+      row.admissionRevision !== admissionRevision ||
+      row.continuationId !== continuationId ||
+      row.mountIndex !== mountIndex
+    ) return;
+    acceptLocation(row, result);
+    renderTasks();
+  } catch (_error) {
+    if (
+      tasks.get(task.taskId) === task &&
+      task.form === form &&
+      row.revision === revision &&
+      row.admissionRevision === admissionRevision
+    ) {
+      row.mountIndex = null;
+      row.pending = false;
+      form.actionMessage = "Folder choice could not be confirmed. Choose a mount again.";
+      renderTasks();
+    }
+  } finally {
+    if (tasks.get(task.taskId) === task && task.form === form
+        && row.revision === revision && row.admissionRevision === admissionRevision) {
+      row.pending = false;
+      renderTasks();
+    }
+  }
+}
+
+function beginFormAttempt(task, form, kind) {
+  if (
+    tasks.get(task.taskId) !== task || task.form !== form || form.attempt !== null ||
+    fixedOutcome(task.closeRecovery) || fixedOutcome(task.startRecovery) ||
+    (pageBatch !== null && pageBatch.running !== null)
+  ) return null;
+  const attempt = {
+    kind,
+    running: true,
+    dispatched: false,
+    recovery: null,
+  };
+  form.attempt = attempt;
+  form.actionMessage = null;
+  renderTasks();
+  return attempt;
+}
+
+function currentFormAttempt(task, form, attempt) {
+  return tasks.get(task.taskId) === task && task.form === form && form.attempt === attempt;
+}
+
+function freshFormAttempt(task, form, attempt, revision) {
+  return currentFormAttempt(task, form, attempt)
+    && !attempt.dispatched
+    && form.revision === revision;
+}
+
+async function dispatchFormAttempt(task, form, attempt, submit) {
+  const navigation = navigationRevision;
+  let startedTask = null;
+  attempt.dispatched = true;
+  renderTasks();
+  try {
+    const result = await submit();
+    startedTask = adoptTaskStart(result, attempt.kind === "inventory" ? "inventory" : "sync-plan");
+  } catch (error) {
+    if (!currentFormAttempt(task, form, attempt)) return;
+    if (error instanceof StartPlanUncertainError) {
+      attempt.running = false;
+      renderTasks();
+      return;
+    }
+    form.attempt = null;
+    task.startRecovery = null;
+    form.actionMessage = taskStartFailureMessage(error,
+      "That task could not be started. Review the setup and try again.");
+    renderTasks();
+    if (error?.code !== "maintenance_pending") void loadTaskSetup(task);
+    return;
+  }
+  if (currentFormAttempt(task, form, attempt)) {
+    form.attempt = null;
+    task.startRecovery = null;
+  }
+  if (attempt.kind === "plan-again" && navigationRevision === navigation
+      && selectedTaskId === task.taskId && !settingsVisible) {
+    selectTask(startedTask.taskId);
+  }
+  renderTasks();
+  try { await refreshTasks(); } catch (_error) {
+    // The admitted identity and its live drain already own current task status.
+  }
+}
+
+async function retryFormAttempt(task, form, kind) {
+  const attempt = form.attempt;
+  if (
+    attempt === null || attempt.kind !== kind || !attempt.running ||
+    !checkableOutcome(attempt.recovery) || attempt.recovery.checking
+  ) return false;
+  await attempt.recovery.check();
+  return true;
+}
+
+async function choicesForStart(task, form, attempt, revision, optionsInput) {
+  const targetAdmission = form.target.admissionPromise;
+  const source = await (form.source.admissionPromise ?? resolvedChoice(form.source, "source") ?? admitRow(task, form, "source", "source"));
+  if (!freshFormAttempt(task, form, attempt, revision)) return null;
+  const target = await (targetAdmission ?? resolvedChoice(form.target, "target") ?? admitRow(task, form, "target", "target"));
+  if (!freshFormAttempt(task, form, attempt, revision)) return null;
+  if (typeof source?.choice_id !== "string" || typeof target?.choice_id !== "string") return null;
+  const options = await prepareSetup(optionsInput);
+  if (!freshFormAttempt(task, form, attempt, revision)) return null;
+  return { sourceId: source.choice_id, targetId: target.choice_id, options };
+}
+
+function abandonFreshAttempt(task, form, attempt) {
+  if (currentFormAttempt(task, form, attempt) && !attempt.dispatched) {
+    form.attempt = null;
+    renderTasks();
+  }
+}
+
+function refuseFreshAttempt(task, form, attempt) {
+  if (!currentFormAttempt(task, form, attempt) || attempt.dispatched) return;
+  form.attempt = null;
+  form.actionMessage = "That task could not be started. Review the setup and try again.";
+  renderTasks();
+  void loadTaskSetup(task);
+}
+
+async function startCurrentPlan() {
+  const task = currentTask();
+  const form = task?.form;
+  if (
+    task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+    || fixedOutcome(task.startRecovery) || form === null || !form.editable || form.mode !== "sync-plan" ||
+    (originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null) ||
+    (pageBatch !== null && pageBatch.running !== null)
+  ) return;
+  if (form.attempt !== null) {
+    await retryFormAttempt(task, form, "sync-plan");
+    return;
+  }
+  if (!form.source.text || !form.target.text || form.options === null
+      || (form.source.pending && form.source.admissionPromise === null)
+      || (form.target.pending && form.target.admissionPromise === null)) return;
+  const revision = form.revision;
+  const optionsInput = cloneOptions(form.options);
+  const attempt = beginFormAttempt(task, form, "sync-plan");
+  if (attempt === null) return;
+  try {
+    const ready = await choicesForStart(task, form, attempt, revision, optionsInput);
+    if (ready === null) {
+      abandonFreshAttempt(task, form, attempt);
+      return;
+    }
+    form.options = cloneOptions(ready.options);
+    await dispatchFormAttempt(
+      task, form, attempt,
+      () => startPlan(task.taskId, ready.sourceId, ready.targetId, ready.options, (recovery) => {
+        if (currentFormAttempt(task, form, attempt)) {
+          attempt.recovery = recovery;
+          task.startRecovery = recovery;
+          renderTasks();
+        }
+      }),
+    );
+  } catch (_error) {
+    refuseFreshAttempt(task, form, attempt);
+  }
+}
+
+async function startCurrentInventory() {
+  const task = currentTask();
+  const form = task?.form;
+  if (
+    task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+    || fixedOutcome(task.startRecovery) || form === null || !form.editable || form.mode !== "inventory" ||
+    batchTaskBlockReason(task.taskId) !== null ||
+    (pageBatch !== null && pageBatch.running !== null)
+  ) return;
+  if (form.attempt !== null) {
+    await retryFormAttempt(task, form, "inventory");
+    return;
+  }
+  if (!form.source.text || (form.source.pending && form.source.admissionPromise === null)) return;
+  const revision = form.revision;
+  const attempt = beginFormAttempt(task, form, "inventory");
+  if (attempt === null) return;
+  try {
+    const root = await (form.source.admissionPromise ?? resolvedChoice(form.source, "inventory")
+      ?? admitRow(task, form, "source", "inventory"));
+    if (!freshFormAttempt(task, form, attempt, revision) || typeof root?.choice_id !== "string") {
+      abandonFreshAttempt(task, form, attempt);
+      return;
+    }
+    await dispatchFormAttempt(task, form, attempt, () => startInventory(
+      task.taskId, root.choice_id, (recovery) => {
+        if (currentFormAttempt(task, form, attempt)) {
+          attempt.recovery = recovery;
+          task.startRecovery = recovery;
+          renderTasks();
+        }
+      },
+    ));
+  } catch (_error) {
+    refuseFreshAttempt(task, form, attempt);
+  }
+}
+
+function addCurrentPair() {
+  const task = currentTask();
+  const form = currentForm();
+  if (
+    task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+    || fixedOutcome(task.startRecovery) || !formIsEditable(form) || form.mode !== "sync-plan" ||
+    (form.source.pending && form.source.admissionPromise === null)
+    || (form.target.pending && form.target.admissionPromise === null) ||
+    (pageBatch !== null && pageBatch.running !== null)
+  ) return;
+  if (pageBatch?.rows.some((row) => row.originTaskId === task.taskId
+      && row.state === "unknown")) return;
+  if (form.options === null) return;
+  if (pageBatch === null) pageBatch = { rows: [], generation: 0, running: null };
+  if (pageBatch.rows.length >= 48) return;
+  pageBatch.rows.push({
+    originTaskId: task.taskId,
+    source: snapshotLocationRow(form.source),
+    target: snapshotLocationRow(form.target),
+    state: "queued",
+    stage: null,
+    recovery: null,
+    taskId: null,
+    sourceId: null,
+    targetId: null,
+    options: cloneOptions(form.options),
+    snapshot: null,
+    recents: null,
+    message: "Ready to create.",
+  });
+  renderTasks();
+}
+
+function removeBatchRow(row) {
+  if (pageBatch === null || (row?.state !== "queued"
+      && !(row?.state === "submitting" && row.stage?.startsWith("admitting-")))) return;
+  const index = pageBatch.rows.indexOf(row);
+  if (index < 0 || row.originTaskId !== selectedTaskId) return;
+  pageBatch.rows.splice(index, 1);
+  row.abandonAdmission?.();
+  renderTasks();
+}
+
+function clearBatchResults() {
+  if (pageBatch === null || selectedTaskId === null) return;
+  pageBatch.rows = pageBatch.rows.filter((row) => row.originTaskId !== selectedTaskId
+    || !["created", "refused", "stopped"].includes(row.state));
+  renderTasks();
+}
+
+function currentBatchRun(batch, owner, generation) {
+  return pageBatch === batch && batch.running === owner && batch.generation === generation;
+}
+
+function retainBatchUnknown(row, stage) {
+  row.state = "unknown";
+  row.stage = stage;
+  row.message = null;
+}
+
+function adoptBatchShell(shell, row) {
+  const task = adoptTask({
+    task_id: shell.task_id,
+    session_id: null,
+    session_state: null,
+    session_released: false,
+    task_kind: null,
+    request_id: null,
+  });
+  row.taskId = task.taskId;
+  task.form = createForm(row.snapshot, row.recents);
+  task.form.source = snapshotLocationRow(row.source);
+  task.form.target = snapshotLocationRow(row.target);
+  task.form.options = cloneOptions(row.options);
+  return task;
+}
+
+async function startBatchRow(row, context) {
+  try {
+    let task = row.taskId === null ? null : tasks.get(row.taskId) ?? null;
+      const options = await prepareSetup(cloneOptions(row.options));
+      if (!context.contains(row) || row.state !== "queued" || !context.canSubmit()) return;
+      row.options = cloneOptions(options);
+      row.state = "submitting";
+      row.message = "Checking folders…";
+      renderTasks();
+      row.stage = "admitting-source";
+      const source = await admitBatchRow(row.source, "source", row);
+      if (!context.contains(row) || !context.canSubmit()) return;
+      row.stage = "admitting-target";
+      const target = await admitBatchRow(row.target, "target", row);
+      if (!context.contains(row) || !context.canSubmit()) return;
+      if (typeof source?.choice_id !== "string" || typeof target?.choice_id !== "string") {
+        throw new BridgeTransportError();
+      }
+      row.sourceId = source.choice_id;
+      row.targetId = target.choice_id;
+      row.snapshot = context.snapshot;
+      row.recents = context.recents;
+      if (!context.canSubmit()) {
+        row.state = "stopped";
+        row.message = "Not submitted because the batch changed.";
+        return;
+      }
+      row.stage = "creating";
+      row.message = "Creating task…";
+      renderTasks();
+      const shell = await createTask((recovery) => {
+        if (row.state === "submitting") {
+          row.recovery = recovery;
+          renderTasks();
+        }
+      });
+      row.recovery = null;
+      task = adoptBatchShell(shell, row);
+    if (!context.canSubmit()) {
+      row.state = "stopped";
+      row.message = "The blank task was retained; its plan was not submitted because the batch changed.";
+      void refreshTasks();
+      return;
+    }
+    row.stage = "starting";
+    row.message = "Creating plan…";
+    renderTasks();
+    const result = await startPlan(task.taskId, row.sourceId, row.targetId, row.options, (recovery) => {
+      if (row.state === "submitting") {
+        row.recovery = recovery;
+        renderTasks();
+      }
+    });
+    adoptTaskStart(result, "sync-plan");
+    row.recovery = null;
+    row.state = "created";
+    row.message = "Plan task created.";
+  } catch (error) {
+    if (error instanceof TaskCreateUncertainError) {
+      retainBatchUnknown(row, "creating");
+    } else if (error instanceof StartPlanUncertainError) {
+      retainBatchUnknown(row, "starting");
+    } else {
+      row.state = "refused";
+      row.recovery = null;
+      row.message = taskStartFailureMessage(error,
+        "That pair could not be created. Review its folders and settings, then try again.");
+    }
+  }
+}
+
+async function startPairBatch() {
+  const task = currentTask();
+  const form = currentForm();
+  const batch = pageBatch;
+  if (batch?.running?.originTaskId === task?.taskId) {
+    const row = batch.running.row;
+    if (checkableOutcome(row?.recovery) && !row.recovery.checking) {
+      await row.recovery.check();
+    }
+    return;
+  }
+  if (
+    task === null || task.closePending || checkableOutcome(task.closeRecovery) || fixedOutcome(task.closeRecovery)
+    || fixedOutcome(task.startRecovery) || !formIsEditable(form) || form.mode !== "sync-plan" || form.attempt !== null
+    || batch === null || batch.running !== null
+  ) return;
+  if (batch.rows.some((row) => row.originTaskId === task.taskId
+      && row.state === "unknown")) return;
+  const rows = batch.rows.filter((row) => row.originTaskId === task.taskId
+    && row.state === "queued");
+  if (rows.length === 0) return;
+  const queued = rows.filter((row) => row.state === "queued");
+  if (queued.some((row) => row.options === null)) return;
+  const owner = { originTaskId: task.taskId };
+  const generation = batch.generation;
+  const context = {
+    snapshot: form.setup,
+    recents: defaultSetup?.recents ?? form.setup.recents,
+    contains: (row) => batch.rows.includes(row),
+    canSubmit: () => currentBatchRun(batch, owner, generation)
+      && tasks.get(task.taskId) === task && !task.closePending && !checkableOutcome(task.closeRecovery)
+      && !fixedOutcome(task.closeRecovery) && !fixedOutcome(task.startRecovery),
+  };
+  batch.running = owner;
+  renderTasks();
+  try {
+    for (const row of rows) {
+      if (!currentBatchRun(batch, owner, generation)) break;
+      if (!batch.rows.includes(row)) continue;
+      if (row.state !== "queued") continue;
+      owner.row = row;
+      await startBatchRow(row, context);
+      renderTasks();
+    }
+  } finally {
+    if (batch.running === owner) batch.running = null;
+    renderTasks();
+  }
+  try { await refreshTasks(); } catch (_error) {
+    // Each admitted child already retains its identity and current task drain.
+  }
+}
+
+async function admitBatchRow(row, purpose, batchRow) {
+  const accepted = resolvedChoice(row, purpose);
+  if (accepted !== null) return accepted;
+  if (!row.text || row.candidate === null) return null;
+  const revision = row.revision;
+  const abandoned = new Promise((resolve) => {
+    batchRow.abandonAdmission = () => resolve(null);
+  });
+  const admission = admitLocation(purpose, row.candidate, () => {
+    if (batchRow.state === "submitting") {
+      batchRow.message = "Folder response delayed. Wait, or remove this pair and add it again after reviewing the folders.";
+      renderTasks();
+    }
+  });
+  let result;
+  try { result = await Promise.race([admission, abandoned]); }
+  finally { batchRow.abandonAdmission = null; }
+  if (result === null) return null;
+  if (row.revision !== revision) return null;
+  acceptLocation(row, result);
+  return result;
+}
+
+function choosePlanAgainMount(purpose, mount) {
+  const form = currentForm();
+  if (form === null || !form.canPlanAgain || form.attempt !== null) return;
+  form.planAgainMounts[purpose] = mount;
+  form.revision += 1;
+  renderTasks();
+}
+
+function canStartPlanAgain(task) {
+  const form = task?.form;
+  if (
+    task === null || currentTask() !== task || task.closePending || checkableOutcome(task.closeRecovery)
+    || fixedOutcome(task.closeRecovery) || fixedOutcome(task.startRecovery) ||
+    form?.canPlanAgain !== true ||
+    originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null ||
+    (pageBatch !== null && pageBatch.running !== null)
+  ) return false;
+  return form.attempt === null || (
+    form.attempt.kind === "plan-again" && form.attempt.running &&
+    checkableOutcome(form.attempt.recovery) && !form.attempt.recovery.checking
+  );
+}
+
+async function startPlanAgain(task = currentTask()) {
+  const form = task?.form;
+  if (!canStartPlanAgain(task)) return false;
+  if (form.attempt !== null) {
+    return retryFormAttempt(task, form, "plan-again");
+  }
+  const revision = form.revision;
+  const sourceMount = form.planAgainMounts.source;
+  const targetMount = form.planAgainMounts.target;
+  const attempt = beginFormAttempt(task, form, "plan-again");
+  if (attempt === null || !freshFormAttempt(task, form, attempt, revision)) return false;
+  await dispatchFormAttempt(
+    task, form, attempt,
+    () => planAgain(task.taskId, sourceMount, targetMount, (recovery) => {
+      if (currentFormAttempt(task, form, attempt)) {
+        attempt.recovery = recovery;
+        task.startRecovery = recovery;
+        renderTasks();
+      }
+    }),
+  );
+  return true;
+}
+
+async function finishStartup() {
+  const readinessBaseline = readiness.revision();
+  await whenBridgeApiReady();
+  try {
+    await acknowledgeShellReady();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) {
+      throw error;
+    }
+  }
+  const challenge = await readiness.whenReceivedAfter(readinessBaseline);
+  let acknowledged = false;
+  for (let attempt = 0; attempt < 2 && !acknowledged; attempt += 1) {
+    try {
+      const result = await echoReadiness(challenge);
+      acknowledged = result.acknowledged;
+    } catch (error) {
+      if (!(error instanceof BridgeTransportError) || attempt > 0) {
+        throw error;
+      }
+    }
+  }
+  if (!acknowledged) {
+    throw new BridgeTransportError(
+      "The desktop readiness echo could not be confirmed.",
+    );
+  }
+  markBridgeOperational();
+  const startupMutationBaseline = taskMutationRevision;
+  await refreshTasks();
+  if (taskMutationRevision === startupMutationBaseline
+      && tasks.size === 0 && createAttempt === null) {
+    void createBlankTask();
+  }
+  void loadDefaultSetup();
+  void theme.open(appliedPresentationRevision);
+  if (status.textContent === "Starting...") {
+    renderHostStatus("Ready");
+  }
+}
+
+void finishStartup().catch(() => {
+  // Native startup refusal owns the action-guiding terminal diagnostic.
+});

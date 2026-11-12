@@ -1,0 +1,3571 @@
+"""Bounded adapter-owned task identity and event-drain custody."""
+
+from __future__ import annotations
+
+import re
+import logging
+from collections import OrderedDict, deque
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import asdict, dataclass, field
+from itertools import chain, islice
+from math import isfinite
+from threading import Condition, Lock, get_ident
+from time import monotonic
+from types import MappingProxyType
+from typing import Never
+
+from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
+from namisync.interfaces.task_port import (
+    _validate_task_observation,
+    TaskCloseRequestView,
+    TaskCloseView,
+    TaskDeliveryFactory,
+    TaskDeliveryUpdate,
+    TaskDrainView,
+    TaskEventUpdateView,
+    TaskIntentConflictError,
+    TaskLifecyclePort,
+    TaskListView,
+    TaskRecordUpdateView,
+    TaskSessionReleaseView,
+    TaskShellView,
+    TaskStartView,
+    TaskStartOutcome,
+    TaskSetupSnapshotView,
+    TaskSummaryView,
+    TaskTerminalDelivery,
+    TaskUnavailableError,
+    TaskMaintenancePendingError,
+    TaskUpdateView,
+)
+from namisync.workflows.views import (
+    SemanticSettingsPatchView,
+    IntegrityOutcomeView,
+    OperationItemView,
+    SessionEventView,
+    SessionRecordView,
+    result_item_view,
+    SetupOptionsView,
+    validate_session_record_view,
+)
+from namisync.workflows.inventory import LocationCandidate, RememberedLocations
+from namisync.workflows import (
+    CopiedSubjectScope,
+    ExecutionEvidenceResult,
+    ExecutionEvidenceWindow,
+    PlanSortColumn,
+    RetainedExecutionItemWindow,
+    RetainedExecutionSummary,
+    RetainedIntegrityItemWindow,
+    SortDirection,
+)
+
+from ._exception_graph import retire_exception_graph as _retire_exception_graph
+from .plan_review import PlanReviewState
+from .inventory_review import InventoryReviewState, inventory_scan_scope
+from .task_snapshot import TaskPresentationState, TaskSnapshotStage
+
+
+_CAPACITY = 64
+_START_RESPONSE_CAPACITY = 48
+_CLOSE_RECEIPT_CAPACITY = 48
+_DRAIN_WAIT_SECONDS = 25.0
+_PROGRESS_LINGER_SECONDS = 0.150
+_RESULT_LINGER_SECONDS = 0.025
+_OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
+_TASK_ID = re.compile(r"task-[0-9a-f]{32}")
+_LOG = logging.getLogger(__name__)
+
+
+class DrainBusyError(RuntimeError):
+    """A superseded event request has released the task drain claim."""
+
+
+class ObservationConflictError(RuntimeError):
+    """A task observation is already changing generation."""
+
+
+class InventoryCommandCapacityError(RuntimeError):
+    """Inventory Refresh has no retained original-result capacity."""
+
+
+_START_FAILURE_OBSERVATION_CONFLICT = "observation_conflict"
+_START_FAILURE_TASK_UNAVAILABLE = "task_unavailable"
+_START_FAILURE_MAINTENANCE_PENDING = "maintenance_pending"
+_START_FAILURE_INTERRUPTED = "interrupted"
+_START_FAILURE_GENERIC = "start_failed"
+_START_FAILURES = MappingProxyType(
+    {
+        _START_FAILURE_OBSERVATION_CONFLICT: (
+            ObservationConflictError,
+            "task start observation conflicted",
+        ),
+        _START_FAILURE_TASK_UNAVAILABLE: (
+            TaskUnavailableError,
+            "task became unavailable during start",
+        ),
+        _START_FAILURE_MAINTENANCE_PENDING: (
+            TaskMaintenancePendingError,
+            "idle maintenance is pending",
+        ),
+        _START_FAILURE_INTERRUPTED: (
+            KeyboardInterrupt,
+            "task start was interrupted",
+        ),
+        _START_FAILURE_GENERIC: (RuntimeError, "task start failed"),
+    }
+)
+
+_RECOVERY_FAILURE_OBSERVATION_CONFLICT = "observation_conflict"
+_RECOVERY_FAILURE_TASK_UNAVAILABLE = "task_unavailable"
+_RECOVERY_FAILURE_INTERRUPTED = "interrupted"
+_RECOVERY_FAILURE_GENERIC = "recovery_failed"
+_RECOVERY_FAILURES = MappingProxyType(
+    {
+        _RECOVERY_FAILURE_OBSERVATION_CONFLICT: (
+            ObservationConflictError,
+            "task observation recovery conflicted",
+        ),
+        _RECOVERY_FAILURE_TASK_UNAVAILABLE: (
+            TaskUnavailableError,
+            "task became unavailable during observation recovery",
+        ),
+        _RECOVERY_FAILURE_INTERRUPTED: (
+            KeyboardInterrupt,
+            "task observation recovery was interrupted",
+        ),
+        _RECOVERY_FAILURE_GENERIC: (
+            RuntimeError,
+            "task observation recovery failed",
+        ),
+    }
+)
+
+
+def _classify_start_failure(error: BaseException) -> str:
+    if isinstance(error, TaskMaintenancePendingError):
+        return _START_FAILURE_MAINTENANCE_PENDING
+    if isinstance(error, ObservationConflictError):
+        return _START_FAILURE_OBSERVATION_CONFLICT
+    if isinstance(error, TaskUnavailableError):
+        return _START_FAILURE_TASK_UNAVAILABLE
+    if not isinstance(error, Exception):
+        return _START_FAILURE_INTERRUPTED
+    return _START_FAILURE_GENERIC
+
+
+def _raise_start_failure(failure_code: str) -> Never:
+    try:
+        failure_type, message = _START_FAILURES[failure_code]
+    except KeyError:
+        raise RuntimeError("task start failure code is invalid") from None
+    raise failure_type(message) from None
+
+
+def _classify_recovery_failure(error: BaseException) -> str:
+    if isinstance(error, ObservationConflictError):
+        return _RECOVERY_FAILURE_OBSERVATION_CONFLICT
+    if isinstance(error, TaskUnavailableError):
+        return _RECOVERY_FAILURE_TASK_UNAVAILABLE
+    if not isinstance(error, Exception):
+        return _RECOVERY_FAILURE_INTERRUPTED
+    return _RECOVERY_FAILURE_GENERIC
+
+
+def _raise_recovery_failure(failure_code: str) -> Never:
+    try:
+        failure_type, message = _RECOVERY_FAILURES[failure_code]
+    except KeyError:
+        raise RuntimeError("task recovery failure code is invalid") from None
+    raise failure_type(message) from None
+
+
+def _is_progress_update(update: TaskDeliveryUpdate) -> bool:
+    return type(update) is SessionEventView and update.body_type == "Progress"
+
+
+def _is_collectable_result(
+    update: TaskDeliveryUpdate, session_kind: str | None
+) -> bool:
+    if type(update) is not SessionEventView:
+        return False
+    body = update.body
+    if update.body_type == "ItemOutcome":
+        return (
+            session_kind == "sync-execution"
+            and body["phase"] == "execute"
+            and body["kind"] == "copy"
+            and body["result"] == "succeeded"
+            and body["reason"] is None
+            and body["recording"] == "ok"
+            and body["detail_omitted_count"] == 0
+            and not body["detail"]
+        )
+    if update.body_type != "IntegrityOutcome":
+        return False
+    phase, result = body["phase"], body["result"]
+    if session_kind == "sync-execution":
+        success = phase == "verify" and result == "verified"
+    elif session_kind == "verify":
+        success = phase == session_kind and result in {"baselined", "verified"}
+    else:
+        success = (
+            session_kind in {"baseline", "rebaseline"}
+            and phase == session_kind
+            and result == "baselined"
+        )
+    return (
+        success
+        and body["row_id"] is not None
+        and body["location_id"] is not None
+        and body["reason"] is None
+        and body["detail"] is None
+        and body["recording"] == "ok"
+        and body["record_disposition"] in {"applied", "noop"}
+        and body["detail_omitted_count"] == 0
+    )
+
+
+@dataclass(slots=True)
+class _DrainClaim:
+    drain_id: str
+    superseded: bool = False
+
+
+@dataclass(slots=True)
+class _InventoryIntegrityState:
+    mode: str
+    location_id: int
+    membership: frozenset[str]
+    request_id: str | None = None
+    session_id: str | None = None
+    revision: int = 0
+    complete: bool = False
+    gap: bool = False
+    items: dict[str, dict[str, object]] = field(default_factory=dict)
+    copied_scope: CopiedSubjectScope | None = None
+    path_rows: dict[str, str] = field(default_factory=dict)
+    row_paths: dict[str, str] = field(default_factory=dict)
+
+    def offer(self, update: TaskDeliveryUpdate) -> None:
+        if self.complete or type(update) is not SessionEventView:
+            return
+        if update.body_type == "Gap":
+            self.gap = True
+            self.revision += 1
+        elif update.body_type == "IntegrityOutcome":
+            self.add(update.body)
+
+    def add(self, body: Mapping[str, object]) -> None:
+        row_id = str(body["row_id"])
+        if (str(body["location_id"]) != str(self.location_id)
+                or body["phase"] != self.mode):
+            raise ObservationConflictError("ordinary integrity result changed its selected subject")
+        if self.copied_scope is None:
+            if row_id not in self.membership:
+                raise ObservationConflictError("ordinary integrity result changed its selected subject")
+        else:
+            path = self.copied_scope.admit(body["path"], row_id, self.path_rows, self.row_paths)
+            if path is None:
+                raise ObservationConflictError("ordinary integrity result changed its copied subject")
+        fact = {key: body[key] for key in ("result", "reason", "recording", "record_disposition", "detail_omitted_count")}
+        previous = self.items.get(row_id)
+        if previous is not None and previous != fact:
+            raise ObservationConflictError("ordinary integrity result changed its outcome")
+        if previous is None:
+            if self.copied_scope is not None:
+                self.path_rows[path] = row_id
+                self.row_paths[row_id] = path
+            self.items[row_id] = fact
+            self.revision += 1
+
+    def wire(self, row_ids: Iterable[str] = ()) -> dict[str, object]:
+        return {"request_id": self.request_id, "session_id": self.session_id,
+                "mode": self.mode, "location_id": str(self.location_id),
+                "revision": self.revision, "complete": self.complete, "gap": self.gap,
+                "items": [{"row_id": row_id, **self.items[row_id]}
+                          for row_id in row_ids if row_id in self.items]}
+
+
+@dataclass(frozen=True, slots=True)
+class _TaskDeliverySnapshot:
+    queue: tuple[TaskDeliveryUpdate, ...]
+    progress_available_at: float | None
+    terminal_record: SessionRecordView | None
+    terminal_pending: bool
+    delivered_terminal_event: SessionEventView | None
+    delivered_terminal_record: SessionRecordView | None
+    session_released: bool
+    closing: bool
+    execution_revision: int
+    execution_session_id: str | None
+    execution_summary: RetainedExecutionSummary | None
+    execution_operation_results: dict[str, dict[str, object]]
+    execution_integrity_results: dict[str, dict[str, object]]
+    execution_gap_minimum: int | None
+    execution_gap_maximum: int | None
+    execution_membership: Mapping[str, str] | None
+    presentation_state: TaskPresentationState | None
+    progress_sample_at: float | None
+    session_kind: str | None
+
+
+@dataclass(slots=True)
+class _TaskState:
+    task_id: str
+    command_id: str
+    clock: Callable[[], float]
+    condition: Condition = field(default_factory=Condition)
+    session_id: str | None = None
+    generation: int = 0
+    queue: deque[TaskDeliveryUpdate] = field(default_factory=deque)
+    progress_available_at: float | None = None
+    progress_sample_at: float | None = None
+    terminal_record: SessionRecordView | None = None
+    terminal_pending: bool = False
+    delivered_terminal_event: SessionEventView | None = None
+    delivered_terminal_record: SessionRecordView | None = None
+    session_released: bool = False
+    active_drain: _DrainClaim | None = None
+    transition: bool = False
+    closing: bool = False
+    retiring: bool = False
+    recovery_caller: int | None = None
+    response_capture_caller: int | None = None
+    start_command_id: str | None = None
+    task_kind: str | None = None
+    request_id: str | None = None
+    plan_request_id: str | None = None
+    session_kind: str | None = None
+    setup: TaskSetupSnapshotView | None = None
+    start_response_ids: set[str] = field(default_factory=set)
+    prior_session_id: str | None = None
+    prior_delivery: _TaskDeliverySnapshot | None = None
+    execution_revision: int = 0
+    execution_session_id: str | None = None
+    execution_terminal_record: SessionRecordView | None = None
+    execution_summary: RetainedExecutionSummary | None = None
+    execution_operation_results: dict[str, dict[str, object]] = field(
+        default_factory=dict
+    )
+    execution_integrity_results: dict[str, dict[str, object]] = field(
+        default_factory=dict
+    )
+    execution_gap_minimum: int | None = None
+    execution_gap_maximum: int | None = None
+    execution_membership: Mapping[str, str] | None = None
+    presentation_state: TaskPresentationState | None = None
+    ordinary_integrity: _InventoryIntegrityState | None = None
+    inventory_view_loading: bool = False
+    inventory_visibility_pending: bool = False
+    inventory_view_dirty: bool = False
+
+    def sink(self, generation: int) -> Callable[[TaskDeliveryUpdate], None]:
+        def accept(update: TaskDeliveryUpdate) -> None:
+            self._offer(generation, update)
+
+        return accept
+
+    def require_no_response_capture_reentry(self) -> None:
+        if self.response_capture_caller == get_ident():
+            raise ObservationConflictError(
+                "task operation reentered response capture"
+            )
+
+    def _offer(self, generation: int, update: TaskDeliveryUpdate) -> None:
+        if type(update) not in {SessionEventView, SessionRecordView}:
+            raise TypeError("task updates must be exact service view types")
+        update_session = update.session_id
+        with self.condition:
+            if self.closing or generation != self.generation:
+                return
+            self.require_no_response_capture_reentry()
+            expected_session_id = self.session_id
+            if (
+                expected_session_id is not None
+                and update_session != expected_session_id
+            ):
+                raise ObservationConflictError(
+                    "task observation delivered a mismatched session"
+                )
+            _validate_task_observation(
+                update,
+                expected_session_id=expected_session_id,
+            )
+            if self.session_kind == "sync-execution" and self.execution_session_id in (None, update_session):
+                self._offer_execution_fact(update)
+            if self.ordinary_integrity is not None and (self.ordinary_integrity.session_id in (None, update_session)):
+                self.ordinary_integrity.offer(update)
+            if type(update) is SessionRecordView:
+                self.terminal_record = update
+                self.terminal_pending = False
+            if _is_progress_update(update):
+                replacing_progress = any(
+                    _is_progress_update(item) for item in self.queue
+                )
+                self.queue = deque(
+                    item
+                    for item in self.queue
+                    if not _is_progress_update(item)
+                )
+                if len(self.queue) >= _CAPACITY:
+                    self.progress_available_at = None
+                    self.progress_sample_at = None
+                    return
+                sample_at = self.clock()
+                if self.queue:
+                    self.progress_available_at = None
+                elif not replacing_progress or self.progress_available_at is None:
+                    self.progress_available_at = sample_at
+                self.queue.append(update)
+                self.progress_sample_at = sample_at
+                self.condition.notify_all()
+                return
+
+            if len(self.queue) >= _CAPACITY:
+                self.queue = deque(
+                    item
+                    for item in self.queue
+                    if not _is_progress_update(item)
+                )
+                self.progress_available_at = None
+                self.progress_sample_at = None
+            while (
+                len(self.queue) >= _CAPACITY
+                and not self.closing
+                and generation == self.generation
+            ):
+                if self.recovery_caller == get_ident():
+                    raise ObservationConflictError(
+                        "recovery delivered reliable updates synchronously"
+                    )
+                self.condition.wait()
+            if self.closing or generation != self.generation:
+                return
+            self.queue.append(update)
+            self.progress_available_at = None
+            self.condition.notify_all()
+
+    def _offer_execution_fact(self, update: TaskDeliveryUpdate) -> None:
+        membership = self.execution_membership
+        if type(update) is not SessionEventView or membership is None:
+            return
+        body_type = update.body_type
+        body = update.body
+        if body_type == "Gap":
+            first_missed = body["first_missed_seq"]
+            minimum = self.execution_gap_minimum
+            maximum = self.execution_gap_maximum
+            next_minimum = (
+                first_missed if minimum is None else min(minimum, first_missed)
+            )
+            next_maximum = (
+                first_missed if maximum is None else max(maximum, first_missed)
+            )
+            changed = minimum != next_minimum or maximum != next_maximum
+            if changed:
+                next_revision = _next_execution_revision(self.execution_revision)
+                self.execution_gap_minimum = next_minimum
+                self.execution_gap_maximum = next_maximum
+                self.execution_revision = next_revision
+            return
+        if body_type == "ItemOutcome":
+            if body["phase"] != "execute":
+                raise ObservationConflictError(
+                    "execution operation result changed its phase"
+                )
+            target = self.execution_operation_results
+            fact = {
+                "result": body["result"],
+                "reason": body["reason"],
+                "recording": body["recording"],
+                "recording_reason": body["recording_reason"],
+                "detail_omitted_count": body["detail_omitted_count"],
+            }
+        elif body_type == "IntegrityOutcome":
+            if body["phase"] != "verify":
+                raise ObservationConflictError(
+                    "automatic execution verification changed its phase"
+                )
+            target = self.execution_integrity_results
+            fact = {
+                "result": body["result"],
+                "reason": body["reason"],
+                "recording": body["recording"],
+                "record_disposition": body["record_disposition"],
+                "detail_omitted_count": body["detail_omitted_count"],
+            }
+        else:
+            return
+        operation_id = body["item_id"]
+        if operation_id not in membership:
+            raise ObservationConflictError(
+                "execution result is outside the retained Plan"
+            )
+        previous = target.get(operation_id)
+        if previous is not None:
+            if previous != fact:
+                raise ObservationConflictError(
+                    "execution result replay changed its compact fact"
+                )
+            return
+        next_revision = _next_execution_revision(self.execution_revision)
+        target[operation_id] = fact
+        self.execution_revision = next_revision
+
+
+@dataclass(slots=True)
+class _StartResponse:
+    command_id: str
+    wire_intent: tuple[object, ...] | None
+    participants: int = 0
+    complete: bool = False
+    delivery_retiring: bool = False
+    result: TaskStartView | dict[str, object] | None = None
+    failure_code: str | None = None
+    retain_failure: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _TaskDrainResponseCodec:
+    """Narrow bridge-response capability supplied by the web composition root."""
+
+    response_too_large_error: type[Exception]
+    admit: Callable[
+        [str, str, str, Iterable[TaskUpdateView], TaskSnapshotStage],
+        object,
+    ]
+    peek: Callable[[object], TaskDrainView]
+    consume: Callable[[object], TaskDrainView]
+
+    def __post_init__(self) -> None:
+        error_type = self.response_too_large_error
+        if (
+            not isinstance(error_type, type)
+            or not issubclass(error_type, Exception)
+        ):
+            raise TypeError("task drain response error must be an exception type")
+        if not all(
+            callable(value)
+            for value in (self.admit, self.peek, self.consume)
+        ):
+            raise TypeError("task drain response codec members must be callable")
+
+
+class TaskRegistry:
+    """Own adapter delivery generations, response replay, and bounded drains."""
+
+    def __init__(
+        self,
+        lifecycle: TaskLifecyclePort,
+        *,
+        response_codec: _TaskDrainResponseCodec | None = None,
+        clock: Callable[[], float] = monotonic,
+        drain_wait: float = _DRAIN_WAIT_SECONDS,
+        progress_linger: float = _PROGRESS_LINGER_SECONDS,
+    ) -> None:
+        if not callable(clock):
+            raise TypeError("task clock must be callable")
+        if response_codec is not None:
+            if type(response_codec) is not _TaskDrainResponseCodec:
+                raise TypeError("task drain response codec must be exact")
+            response_codec.__post_init__()
+        if drain_wait <= 0:
+            raise ValueError("task drain wait must be positive")
+        if isinstance(progress_linger, bool) or not isinstance(
+            progress_linger, (int, float)
+        ):
+            raise TypeError("task progress linger must be a number")
+        try:
+            normalized_progress_linger = float(progress_linger)
+        except OverflowError:
+            normalized_progress_linger = float("inf")
+        if (
+            not isfinite(normalized_progress_linger)
+            or normalized_progress_linger <= 0
+        ):
+            raise ValueError("task progress linger must be positive and finite")
+        self._lifecycle = lifecycle
+        self._response_codec = response_codec
+        self._clock = clock
+        self._drain_wait = drain_wait
+        self._progress_linger = normalized_progress_linger
+        self._condition = Condition(Lock())
+        self._tasks: dict[str, _TaskState] = {}
+        self._plan_views: dict[str, PlanReviewState] = {}
+        self._inventory_views: dict[str, InventoryReviewState] = {}
+        self._provisional: dict[str, _TaskState] = {}
+        self._start_responses: OrderedDict[str, _StartResponse] = OrderedDict()
+        self._close_receipts: OrderedDict[
+            tuple[str, str | None], TaskCloseView | TaskShellView
+        ] = OrderedDict()
+        self._closing = False
+
+    def bind_response_codec(
+        self,
+        response_codec: _TaskDrainResponseCodec,
+    ) -> None:
+        """Install the one adapter response policy before bridge dispatch."""
+
+        if type(response_codec) is not _TaskDrainResponseCodec:
+            raise TypeError("task drain response codec must be exact")
+        response_codec.__post_init__()
+        with self._condition:
+            current = self._response_codec
+            if current is None:
+                self._response_codec = response_codec
+                return
+            if not (
+                current.response_too_large_error
+                is response_codec.response_too_large_error
+                and current.admit is response_codec.admit
+                and current.peek is response_codec.peek
+                and current.consume is response_codec.consume
+            ):
+                raise RuntimeError("task drain response codec is already bound")
+
+    def _require_response_codec(self) -> _TaskDrainResponseCodec:
+        with self._condition:
+            response_codec = self._response_codec
+        if response_codec is None:
+            raise RuntimeError("task drain response codec is not bound")
+        return response_codec
+
+    def create_task_shell(self, command_id: str) -> TaskShellView:
+        """Publish one lifecycle-owned task without a session or domain result."""
+
+        _require_opaque_id(command_id, "task command id")
+        registered: _TaskState | None = None
+
+        def delivery_factory(task_id: str) -> None:
+            nonlocal registered
+            if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+                raise RuntimeError("application task id is invalid")
+            with self._condition:
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                while task_id in self._provisional and not self._closing:
+                    self._condition.wait()
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                existing = self._tasks.get(task_id)
+                if existing is not None:
+                    if existing.command_id != command_id or existing.session_id is not None:
+                        raise RuntimeError("application reused an adapter task id")
+                    return
+                task = _TaskState(task_id, command_id, self._clock)
+                self._provisional[task_id] = task
+                registered = task
+                self._condition.notify_all()
+
+        try:
+            result = self._lifecycle.create_task_shell(command_id, delivery_factory)
+            if type(result) is not TaskShellView:
+                raise RuntimeError("task lifecycle returned invalid shell data")
+            result.__post_init__()
+            with self._condition:
+                if registered is not None:
+                    if self._provisional.get(result.task_id) is not registered:
+                        raise RuntimeError("task shell publication is unavailable")
+                    self._provisional.pop(result.task_id, None)
+                    self._tasks[result.task_id] = registered
+                    self._condition.notify_all()
+                task = self._tasks.get(result.task_id)
+                if (
+                    task is None
+                    or task.command_id != command_id
+                    or task.session_id is not None
+                ):
+                    raise RuntimeError("task shell publication is unavailable")
+            return result
+        except BaseException:
+            if registered is not None:
+                with self._condition:
+                    if self._provisional.get(registered.task_id) is registered:
+                        self._provisional.pop(registered.task_id, None)
+                    self._condition.notify_all()
+            raise
+
+    def list_tasks(self) -> TaskListView:
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            tasks = tuple(self._task_summary(task) for task in self._tasks.values())
+        return TaskListView(tasks)
+
+    @staticmethod
+    def _task_summary(task: _TaskState) -> TaskSummaryView:
+        with task.condition:
+            session_id = (
+                task.prior_session_id
+                if task.transition and task.prior_session_id is not None
+                else task.session_id
+            )
+            prior_record = (
+                task.prior_delivery.delivered_terminal_record
+                if task.transition and task.prior_delivery is not None
+                else None
+            )
+            if session_id is None:
+                session_state = None
+            elif prior_record is not None:
+                session_state = prior_record.state
+            elif task.delivered_terminal_record is not None:
+                session_state = task.delivered_terminal_record.state
+            else:
+                session_state = "active"
+            return TaskSummaryView(
+                task.task_id,
+                session_id,
+                session_state,
+                (
+                    bool(task.prior_delivery.session_released)
+                    if task.transition and task.prior_delivery is not None
+                    else task.session_released
+                ),
+                task.task_kind,
+                task.request_id,
+                task.plan_request_id,
+                (task.prior_delivery.session_kind if task.transition and task.prior_delivery is not None
+                 else task.session_kind),
+            )
+
+    @staticmethod
+    def _execution_summary_locked(task: _TaskState) -> dict[str, object]:
+        retained = task.execution_summary
+        record = task.execution_terminal_record
+        matching_record = (
+            retained is not None
+            and record is not None
+            and record.kind == "sync-execution"
+            and record.session_id == task.execution_session_id
+        )
+        gap = None
+        if task.execution_gap_minimum is not None:
+            gap = {
+                "minimum_first_missed_seq": task.execution_gap_minimum,
+                "maximum_first_missed_seq": task.execution_gap_maximum,
+            }
+        return {
+            "execution_revision": task.execution_revision,
+            "session_id": task.execution_session_id,
+            "result": None if retained is None else retained.result,
+            "started_at": record.started_at if matching_record else None,
+            "ended_at": record.ended_at if matching_record else None,
+            "failed_operation_count": (
+                None if retained is None else retained.failed_operation_count
+            ),
+            "disk_capacity_failure_count": (
+                None if retained is None else retained.disk_capacity_failure_count
+            ),
+            "has_successful_copied_files": (
+                None if retained is None else retained.has_successful_copied_files
+            ),
+            "gap": gap,
+            "trash_location": None if retained is None else retained.trash_location,
+            "refusal": None if retained is None or retained.refusal is None else {
+                "origin": retained.refusal.origin,
+                "codes": list(retained.refusal.codes),
+            },
+        }
+
+    @classmethod
+    def _decorate_plan_summary_locked(
+        cls,
+        task: _TaskState,
+        summary: dict[str, object],
+    ) -> dict[str, object]:
+        return {
+            **summary,
+            "execution": cls._execution_summary_locked(task),
+        }
+
+    def start_plan(
+        self,
+        source: str,
+        target: str,
+        *,
+        deletion_policy: str | None,
+        command_id: str,
+        wire_intent: tuple[str, str, str | None] | None = None,
+    ) -> TaskStartView:
+        """Bind application-owned admission to adapter-local delivery state."""
+
+        _require_opaque_id(command_id, "task command id")
+        retained: _StartResponse | None
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            retained = self._start_responses.get(command_id)
+            if retained is not None and retained.wire_intent == wire_intent:
+                retained.participants += 1
+            elif retained is not None and _wire_policy_conflicts(
+                retained.wire_intent,
+                wire_intent,
+            ):
+                raise TaskIntentConflictError("task command intent conflicts")
+
+        if retained is not None and retained.wire_intent == wire_intent:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+
+        response: _StartResponse | None = None
+        provisional: _TaskState | None = None
+
+        def delivery_factory(task_id: str) -> Callable[[TaskDeliveryUpdate], None]:
+            nonlocal provisional, response
+            if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+                raise RuntimeError("application task id is invalid")
+            with self._condition:
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                if task_id in self._tasks or task_id in self._provisional:
+                    raise RuntimeError("application reused an adapter task id")
+                if command_id in self._start_responses:
+                    raise RuntimeError("application repeated a task delivery factory")
+                while (
+                    len(self._start_responses) >= _START_RESPONSE_CAPACITY
+                    and not self._closing
+                ):
+                    if not any(
+                        entry.delivery_retiring
+                        for entry in self._start_responses.values()
+                    ):
+                        raise RuntimeError(
+                            "application exceeded adapter response capacity"
+                        )
+                    self._condition.wait()
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                response = _StartResponse(
+                    command_id,
+                    wire_intent,
+                    participants=1,
+                )
+                provisional = _TaskState(task_id, command_id, self._clock)
+                self._start_responses[command_id] = response
+                self._provisional[task_id] = provisional
+                self._condition.notify_all()
+                return provisional.sink(provisional.generation)
+
+        failure_code: str | None = None
+        result: TaskStartView | None = None
+        candidate: object | None = None
+        try:
+            candidate = self._lifecycle.start_task_plan(
+                source,
+                target,
+                deletion_policy=deletion_policy,
+                command_id=command_id,
+                delivery_factory=delivery_factory,
+            )
+            result = self._validate_and_publish_start(
+                command_id,
+                candidate,
+                provisional,
+            )
+        except BaseException as error:
+            if response is None:
+                raise
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            candidate = None
+            if provisional is not None:
+                self._discard_provisional(provisional)
+
+        if response is None:
+            assert result is not None
+            return result
+
+        with self._condition:
+            response.result = result
+            response.failure_code = failure_code
+            response.complete = True
+            self._condition.notify_all()
+        try:
+            if result is not None:
+                return result
+            assert failure_code is not None
+            _raise_start_failure(failure_code)
+        finally:
+            self._leave_start_response(response)
+
+    def replay_start(
+        self,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> TaskStartView | None:
+        """Return an exact retained wire replay before volatile slots resolve."""
+
+        _require_opaque_id(command_id, "task command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            entry = self._start_responses.get(command_id)
+            if entry is None:
+                return None
+            if entry.wire_intent != wire_intent:
+                if _wire_policy_conflicts(entry.wire_intent, wire_intent):
+                    raise TaskIntentConflictError("task command intent conflicts")
+                return None
+            entry.participants += 1
+            self._start_responses.move_to_end(command_id)
+        try:
+            return self._await_start_response(entry)
+        finally:
+            self._leave_start_response(entry)
+
+    def read_setup_options(self) -> SetupOptionsView:
+        return self._lifecycle.read_setup_options()
+
+    def commit_setup_defaults(self, patch: SemanticSettingsPatchView) -> SetupOptionsView:
+        return self._lifecycle.commit_setup_defaults(patch)
+
+    def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView:
+        return self._lifecycle.prepare_setup_options(value)
+
+    def remembered_locations(self) -> RememberedLocations:
+        return self._lifecycle.remembered_locations()
+
+    def admit_location_candidate(self, candidate: LocationCandidate):
+        return self._lifecycle.admit_location_candidate(candidate)
+
+    def read_task_setup(self, task_id: str) -> TaskSetupSnapshotView:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            snapshot = task.setup
+            request_id = task.plan_request_id if task.task_kind == "sync-plan" else task.request_id
+            kind = task.task_kind
+        if snapshot is None:
+            return TaskSetupSnapshotView(
+                "default",
+                None,
+                None,
+                None,
+                None,
+                self._lifecycle.read_setup_options(),
+            )
+        if kind == "sync-plan" and request_id is not None:
+            try:
+                return self._lifecycle.read_plan_setup(request_id)
+            except KeyError:
+                pass
+        return snapshot
+
+    def start_setup_plan(
+        self,
+        task_id: str,
+        source: LocationCandidate,
+        target: LocationCandidate,
+        options: SetupOptionsView,
+        *,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        return self._start_existing_task(
+            task_id,
+            command_id,
+            wire_intent,
+            lambda factory: self._lifecycle.start_task_setup_plan(
+                task_id,
+                source,
+                target,
+                options,
+                command_id=command_id,
+                signature=wire_intent,
+                delivery_factory=factory,
+            ),
+        )
+
+    def start_setup_inventory(
+        self,
+        task_id: str,
+        root: LocationCandidate,
+        *,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        return self._start_existing_task(
+            task_id,
+            command_id,
+            wire_intent,
+            lambda factory: self._lifecycle.start_task_setup_inventory(
+                task_id,
+                root,
+                command_id=command_id,
+                signature=wire_intent,
+                delivery_factory=factory,
+            ),
+        )
+
+    def start_plan_again(
+        self,
+        old_task_id: str,
+        *,
+        source_mount: str | None,
+        target_mount: str | None,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        replay = self.replay_start(command_id, wire_intent)
+        if replay is not None:
+            return replay
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            old = self._tasks.get(old_task_id)
+        if old is None:
+            raise TaskUnavailableError("task is unavailable")
+        with old.condition:
+            if (
+                old.task_kind != "sync-plan"
+                or old.plan_request_id is None
+                or old.retiring
+                or old.transition
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            request_id = old.plan_request_id
+            old.transition = True
+            old.condition.notify_all()
+        try:
+            return self._start_new_task(
+                command_id,
+                wire_intent,
+                lambda factory: self._lifecycle.start_task_plan_again(
+                    old_task_id,
+                    request_id,
+                    source_mount=source_mount,
+                    target_mount=target_mount,
+                    command_id=command_id,
+                    signature=wire_intent,
+                    delivery_factory=factory,
+                ),
+            )
+        finally:
+            with old.condition:
+                old.transition = False
+                old.condition.notify_all()
+
+    def _require_inventory_task_locked(self, task: _TaskState) -> None:
+        if (self._closing or task.task_kind not in {"inventory", "sync-plan"} or task.request_id is None
+                or task.session_id is None or (task.transition and not task.inventory_visibility_pending)
+                or task.retiring or (task.task_kind == "sync-plan" and task.execution_session_id is None)):
+            raise TaskUnavailableError("inventory task is unavailable")
+
+    def _require_inventory_read_task_locked(self, task: _TaskState) -> None:
+        if task.task_kind == "inventory":
+            self._require_inventory_task_locked(task)
+            return
+        if (self._closing or task.task_kind != "sync-plan" or task.plan_request_id is None
+                or task.session_id is None or task.execution_session_id is None
+                or task.execution_terminal_record is None
+                or task.transition or task.retiring):
+            raise TaskUnavailableError("execution inventory is unavailable")
+
+    def open_inventory_view(self, task_id: str) -> dict[str, object]:
+        with self._condition:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise TaskUnavailableError("inventory task is unavailable")
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if task.inventory_visibility_pending:
+                return self._inventory_views[task_id].summary()
+            while task.inventory_view_loading:
+                task.condition.wait()
+                self._require_inventory_read_task_locked(task)
+            existing = self._inventory_views.get(task_id)
+            if existing is not None and existing.request_id == task.request_id and not task.inventory_view_dirty:
+                return existing.summary()
+            if not task.session_released or task.delivered_terminal_record is None:
+                if existing is not None:
+                    return existing.summary()
+                raise TaskUnavailableError("inventory terminal session is not released")
+            identity = (task.session_id, task.request_id, task.generation)
+            scan_activity = task.session_kind == "inventory"
+            prior_revision = None if existing is None else existing.view_revision
+            task.inventory_view_loading = True
+        try:
+            if task.task_kind == "sync-plan":
+                publication = self._lifecycle.get_task_execution_inventory(task_id, task.plan_request_id, task.execution_session_id)
+                projection, root_path, details = publication.projection, publication.root_path, publication.scan_details
+            else:
+                projection, details = self._lifecycle.get_task_inventory_projection(task_id, identity[1])
+                root_path = details.resolution.root_path
+            make_view = InventoryReviewState if existing is None else existing.replacement
+            args = (task_id, identity[1]) if existing is None else (identity[1],)
+            selection = {}
+            if (existing is None and scan_activity and details is not None
+                    and details.request_id == identity[1]):
+                selection["selected_row_ids"] = frozenset(
+                    node.row.row_id for node in projection.nodes
+                    if node.row is not None and node.row.entry_kind is not None
+                    and node.row.entry_kind.value == "file")
+            view = make_view(*args,
+                projection, root_path,
+                None if details is None else details.complete,
+                None if details is None else details.observed_count,
+                None if details is None else details.missing_count,
+                scan_scope=None if details is None else inventory_scan_scope(details),
+                scan_request_id=None if details is None else details.request_id,
+                recall=None if details is None else details.recall,
+                **selection,
+            )
+        except BaseException:
+            with task.condition:
+                task.inventory_view_loading = False
+                task.condition.notify_all()
+            raise
+        with self._condition:
+            with task.condition:
+                task.inventory_view_loading = False
+                task.condition.notify_all()
+                if self._closing or self._tasks.get(task_id) is not task:
+                    raise TaskUnavailableError("inventory task is unavailable")
+                self._require_inventory_read_task_locked(task)
+                if identity != (task.session_id, task.request_id, task.generation):
+                    raise TaskUnavailableError("inventory task changed")
+                if existing is not None and existing.view_revision != prior_revision:
+                    return existing.summary(disposition="conflict")
+                self._inventory_views[task_id] = view
+                task.inventory_view_dirty = False
+                return view.summary(disposition="opened")
+
+    def _require_inventory_view(self, task_id: str) -> tuple[_TaskState, InventoryReviewState]:
+        with self._condition:
+            task = self._tasks.get(task_id)
+            if task is None:
+                raise TaskUnavailableError("inventory task is unavailable")
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            view = self._inventory_views.get(task_id)
+            if view is None:
+                raise TaskUnavailableError("inventory view is unavailable")
+        return task, view
+
+    def get_inventory_anchor(self, task_id: str, *, session_id: str,
+                             expected_revision: int, item_id: str) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if self._inventory_views.get(task_id) is not view:
+                raise TaskUnavailableError("inventory view is unavailable")
+            ordinary = task.ordinary_integrity
+            if (task.session_id != session_id or expected_revision != view.view_revision
+                    or ordinary is None or ordinary.session_id != session_id
+                    or ordinary.request_id != task.request_id
+                    or task.session_kind != ordinary.mode
+                    or ordinary.location_id != view.projection.location_id):
+                return {"disposition": "conflict", "view_revision": view.view_revision,
+                        "node_id": None, "index": None}
+            prefix = f"{ordinary.location_id}:"
+            if not item_id.startswith(prefix) or not (row_id := item_id[len(prefix):]):
+                raise ValueError("inventory anchor item is outside the ordinary location")
+            if ordinary.copied_scope is None:
+                if row_id not in ordinary.membership:
+                    raise ValueError("inventory anchor item is outside the selected scope")
+            elif row_id in view.projection.node_id_by_row_id:
+                row = view.projection.row_for_id(row_id)
+                if ordinary.copied_scope.admit(row.rel_path, row_id, ordinary.path_rows, ordinary.row_paths) is None:
+                    raise ValueError("inventory anchor item is outside the copied scope")
+            return view.row_anchor(expected_revision=expected_revision, row_id=row_id)
+
+    def update_inventory_view(self, task_id: str, **gesture) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if self._inventory_views.get(task_id) is not view:
+                raise TaskUnavailableError("inventory view is unavailable")
+            return view.update(**gesture)
+
+    def set_inventory_selection(self, task_id: str, request_id: str, *,
+                                expected_revision: int, node_id: str | None,
+                                selected: bool, expected_highlight_revision: int | None = None) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if (self._inventory_views.get(task_id) is not view or task.transition
+                    or task.inventory_view_dirty or task.inventory_view_loading
+                    or not task.session_released or task.delivered_terminal_record is None
+                    or task.request_id != view.request_id):
+                raise TaskUnavailableError("inventory selection requires the current released view")
+            if expected_highlight_revision is not None:
+                return view.set_highlighted_selection(request_id=request_id, expected_revision=expected_revision,
+                    expected_highlight_revision=expected_highlight_revision, selected=selected)
+            return view.set_selection(request_id=request_id, expected_revision=expected_revision,
+                                      node_id=node_id, selected=selected)
+
+    def mutate_inventory_highlight(self, task_id: str, *, expected_view_revision: int,
+                                   expected_highlight_revision: int, gesture: str,
+                                   node_id: str | None) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if self._inventory_views.get(task_id) is not view:
+                raise TaskUnavailableError("inventory view is unavailable")
+            return view.mutate_highlight(expected_view_revision=expected_view_revision,
+                expected_highlight_revision=expected_highlight_revision, gesture=gesture, node_id=node_id)
+
+    def set_inventory_highlighted_selection(self, task_id: str, request_id: str, *,
+                                            expected_revision: int, expected_highlight_revision: int,
+                                            selected: bool) -> dict[str, object]:
+        return self.set_inventory_selection(task_id, request_id, expected_revision=expected_revision,
+            expected_highlight_revision=expected_highlight_revision, node_id=None, selected=selected)
+
+    def refresh_inventory(
+        self, task_id: str, request_id: str, *, expected_revision: int,
+        node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        return self._start_inventory_activity(task_id, request_id, expected_revision=expected_revision,
+            node_id=node_id, command_id=command_id, wire_intent=wire_intent)
+
+    def start_inventory_integrity(
+        self, task_id: str, request_id: str, *, expected_revision: int,
+        mode: str, accept_current_evidence: bool, command_id: str, wire_intent: tuple[object, ...],
+        scope: str = "selected",
+    ) -> TaskStartView:
+        if mode not in {"baseline", "verify", "rebaseline"}:
+            raise ValueError("ordinary integrity mode is invalid")
+        if scope not in {"selected", "copied"} or (scope == "copied" and mode != "verify"):
+            raise ValueError("ordinary integrity scope is invalid")
+        if type(accept_current_evidence) is not bool or (mode == "rebaseline" and not accept_current_evidence):
+            raise ValueError("rebaseline requires explicit acceptance of current evidence")
+        return self._start_inventory_activity(task_id, request_id, expected_revision=expected_revision,
+            node_id=None, command_id=command_id, wire_intent=wire_intent,
+            mode=mode, accept_current_evidence=accept_current_evidence, scope=scope)
+
+    def _start_inventory_activity(
+        self, task_id: str, request_id: str, *, expected_revision: int,
+        node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
+        mode: str | None = None, accept_current_evidence: bool = False, scope: str = "selected",
+    ) -> TaskStartView:
+        _require_opaque_id(command_id, "task command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("inventory task is unavailable")
+            retained = self._start_responses.get(command_id)
+            if retained is not None:
+                if retained.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                retained.participants += 1
+            else:
+                task = self._tasks.get(task_id)
+                view = self._inventory_views.get(task_id)
+                if task is None or view is None:
+                    raise TaskUnavailableError("inventory view is unavailable")
+                with task.condition:
+                    self._require_inventory_task_locked(task)
+                    if (request_id != task.request_id
+                            or expected_revision != view.view_revision or not task.session_released
+                            or task.delivered_terminal_record is None or task.inventory_view_loading
+                            or task.transition or (mode is not None and (
+                                task.inventory_view_dirty or view.request_id != request_id))):
+                        raise TaskUnavailableError("inventory activity requires the current released view")
+                    node = view.projection.nodes[0] if node_id is None else view.projection.node_for_id(node_id)
+                    if node.warning is not None:
+                        raise ValueError("inventory warnings cannot refresh")
+                    selected_paths = () if node.is_container else (node.rel_path,)
+                    subtree_roots = (node.rel_path,) if node.is_container and node.position != 0 else ()
+                    membership = None
+                    copied_scope = None
+                    if mode is not None:
+                        if scope == "copied":
+                            if task.task_kind != "sync-plan" or task.execution_terminal_record is None:
+                                raise TaskUnavailableError("copied-file scope requires a released execution")
+                            selected_paths = self._lifecycle.read_task_copied_paths(task_id)
+                            membership = {}
+                            copied_scope = CopiedSubjectScope(selected_paths)
+                        else:
+                            membership = {row_id: view.projection.row_for_id(row_id).rel_path
+                                          for row_id in sorted(view.selected_row_ids)}
+                            selected_paths = tuple(membership.values())
+                        if not selected_paths:
+                            raise ValueError("ordinary integrity requires selected files")
+                    if len(self._start_responses) >= _START_RESPONSE_CAPACITY:
+                        raise InventoryCommandCapacityError("Inventory command capacity is full; close a task before refreshing")
+                    # Reserve retained original-result capacity before lifecycle claim or effect.
+                    response = _StartResponse(
+                        command_id, wire_intent, participants=1, retain_failure=True,
+                    )
+                    self._start_responses[command_id] = response
+                    task.start_response_ids.add(command_id)
+                    prior_request, prior_start = task.request_id, task.start_command_id
+                    prior_integrity = task.ordinary_integrity
+                    task.transition = True
+                    task.condition.notify_all()
+        if retained is not None:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+
+        def delivery_factory(delivered_task_id: str):
+            if delivered_task_id != task_id:
+                raise ObservationConflictError("inventory lifecycle changed its task")
+            with task.condition:
+                if self._closing or task.retiring or not task.transition:
+                    raise TaskUnavailableError("inventory task is unavailable")
+                task.prior_session_id = task.session_id
+                task.prior_delivery = self._capture_delivery(
+                    task,
+                    execution_operation_results=dict(task.execution_operation_results),
+                    execution_integrity_results=dict(task.execution_integrity_results),
+                )
+                task.generation += 1
+                task.session_id = None
+                task.queue.clear()
+                task.progress_available_at = task.progress_sample_at = None
+                task.terminal_record = task.delivered_terminal_record = None
+                task.delivered_terminal_event = None
+                task.terminal_pending = task.session_released = task.closing = False
+                task.active_drain = None
+                task.presentation_state = None
+                task.session_kind = "inventory" if mode is None else mode
+                if mode is not None:
+                    task.ordinary_integrity = _InventoryIntegrityState(mode, view.projection.location_id,
+                        frozenset(membership), copied_scope=copied_scope)
+                return task.sink(task.generation)
+
+        result = None
+        failure_code = None
+        try:
+            start = (self._lifecycle.start_task_inventory_refresh if mode is None
+                     else self._lifecycle.start_task_inventory_integrity)
+            options = ({"subtree_roots": subtree_roots} if mode is None
+                       else {"mode": mode, "accept_current_evidence": accept_current_evidence})
+            candidate = start(task_id, request_id, location_id=view.projection.location_id,
+                selected_paths=selected_paths, command_id=command_id, signature=wire_intent,
+                delivery_factory=delivery_factory, **options)
+            if type(candidate) is not TaskStartView or candidate.task_id != task_id:
+                raise RuntimeError("inventory lifecycle returned invalid start data")
+            candidate.__post_init__()
+            with task.condition:
+                if any(update.session_id != candidate.session_id for update in task.queue):
+                    raise ObservationConflictError("inventory observation names another session")
+                task.session_id, task.request_id = candidate.session_id, candidate.request_id
+                task.session_kind = "inventory" if mode is None else mode
+                if mode is not None:
+                    task.ordinary_integrity.request_id = candidate.request_id
+                    task.ordinary_integrity.session_id = candidate.session_id
+                task.start_command_id = command_id
+                task.prior_session_id = task.prior_delivery = None
+                task.transition = False
+                task.condition.notify_all()
+            result = candidate
+        except BaseException as error:
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            self._restore_plan_delivery(task)
+            with task.condition:
+                task.request_id, task.start_command_id = prior_request, prior_start
+                task.ordinary_integrity = prior_integrity
+                task.transition = False
+                task.condition.notify_all()
+        with self._condition:
+            response.result, response.failure_code, response.complete = result, failure_code, True
+            self._condition.notify_all()
+        try:
+            return self._await_start_response(response)
+        finally:
+            self._leave_start_response(response)
+
+    def change_inventory_visibility(
+        self, task_id: str, request_id: str, *, action: str, expected_revision: int,
+        node_id: str | None, command_id: str, wire_intent: tuple[object, ...],
+    ) -> dict[str, object]:
+        _require_opaque_id(command_id, "inventory command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("inventory task is unavailable")
+            response = self._start_responses.get(command_id)
+            retained = response is not None
+            if retained:
+                if response.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("inventory command intent conflicts")
+                response.participants += 1
+            else:
+                task = self._tasks.get(task_id)
+                view = self._inventory_views.get(task_id)
+                if task is None or view is None:
+                    raise TaskUnavailableError("inventory view is unavailable")
+                with task.condition:
+                    self._require_inventory_task_locked(task)
+                    if (task.transition or request_id != task.request_id or view.request_id != request_id
+                            or expected_revision != view.view_revision or not task.session_released
+                            or task.delivered_terminal_record is None or task.inventory_view_loading
+                            or task.inventory_view_dirty):
+                        raise TaskUnavailableError("inventory visibility requires the current released publication")
+                    node = view.projection.nodes[0] if node_id is None else view.projection.node_for_id(node_id)
+                    if node.warning is not None:
+                        raise ValueError("inventory warnings cannot change visibility")
+                    row_ids = tuple(row_id for row_id in view.projection.domain_row_ids(node.node_id)
+                        if view.projection.node_for_id(view.projection.node_id_by_row_id[row_id]).row.presence.value == "missing")
+                    if len(self._start_responses) >= _START_RESPONSE_CAPACITY:
+                        raise InventoryCommandCapacityError("Inventory command capacity is full; close a task")
+                    response = _StartResponse(command_id, wire_intent, participants=1, retain_failure=True)
+                    self._start_responses[command_id] = response
+                    task.start_response_ids.add(command_id)
+                    task.transition = task.inventory_visibility_pending = True
+        if not retained:
+            try:
+                result = self._lifecycle.change_task_inventory_visibility(
+                    task_id, request_id, action=action, location_id=view.projection.location_id,
+                    row_ids=row_ids, expected_revision=expected_revision, command_id=command_id,
+                    signature=wire_intent,
+                )
+                with self._condition:
+                    # Retain the original outcome before any rebuild or delivery can fail.
+                    response.result = dict(result)
+                with task.condition:
+                    task.inventory_view_dirty = True
+            except BaseException as error:
+                failure_code = _classify_start_failure(error)
+                _retire_exception_graph(error)
+                with self._condition:
+                    response.failure_code = failure_code
+            finally:
+                with task.condition:
+                    task.transition = task.inventory_visibility_pending = False
+                    task.condition.notify_all()
+            if response.result is not None:
+                try:
+                    self.open_inventory_view(task_id)
+                except BaseException as error:
+                    # A failed complete replacement preserves the prior readable publication.
+                    _retire_exception_graph(error)
+            with self._condition:
+                response.complete = True
+                self._condition.notify_all()
+        try:
+            result = self._await_start_response(response)
+            if type(result) is not dict:
+                raise RuntimeError("inventory visibility returned an invalid result")
+            return dict(result)
+        finally:
+            self._leave_start_response(response)
+
+    def get_inventory_window(self, task_id: str, *, expected_revision: int, offset: int, limit: int,
+                             anchor_node_id: str | None = None) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if self._inventory_views.get(task_id) is not view:
+                raise TaskUnavailableError("inventory view is unavailable")
+            result = view.window(expected_revision=expected_revision, offset=offset, limit=limit,
+                                 anchor_node_id=anchor_node_id)
+            if task.ordinary_integrity is not None:
+                result["integrity"] = task.ordinary_integrity.wire(
+                    row["row_id"] for row in result["rows"] if row["row_id"] is not None)
+            return result
+
+    def get_inventory_detail(self, task_id: str, *, expected_revision: int, node_id: str) -> dict[str, object]:
+        task, view = self._require_inventory_view(task_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if self._inventory_views.get(task_id) is not view:
+                raise TaskUnavailableError("inventory view is unavailable")
+            if expected_revision != view.view_revision:
+                return {"disposition": "conflict", "view_revision": view.view_revision, "node_id": node_id, "snapshot": None, "detail": None}
+            node = view.projection.node_for_id(node_id)
+            if node.position == 0:
+                raise ValueError("synthetic inventory root has no public detail")
+            snapshot = {"path": node.warning.rel_path if node.warning is not None else node.rel_path,
+                        "warning": None if node.warning is None else {
+                            "code": node.warning.code.value, "detail": node.warning.detail}}
+            if node.warning is not None or node.row is None:
+                return {"disposition": "current", "view_revision": view.view_revision,
+                        "node_id": node_id, "snapshot": snapshot, "detail": None}
+            identity = (task.session_id, task.request_id, task.generation, view.view_revision)
+            location_id, row_id, path_key = view.projection.location_id, node.row.row_id, node.row.rel_path_key
+        detail = self._lifecycle.read_inventory_detail(location_id, row_id)
+        with task.condition:
+            self._require_inventory_read_task_locked(task)
+            if (self._inventory_views.get(task_id) is not view
+                    or identity != (task.session_id, task.request_id, task.generation, view.view_revision)):
+                return {"disposition": "conflict", "view_revision": view.view_revision, "node_id": node_id, "snapshot": None, "detail": None}
+            # A renamed/replaced row cannot attest the path in the earlier view.
+            if detail is None or detail["row"]["path_key"] != path_key:
+                return {"disposition": "unavailable", "view_revision": view.view_revision, "node_id": node_id, "snapshot": None, "detail": None}
+            result = {"disposition": "current", "view_revision": view.view_revision, "node_id": node_id, "snapshot": snapshot, "detail": detail}
+            if task.ordinary_integrity is not None:
+                result["integrity"] = task.ordinary_integrity.wire((row_id,))
+            return result
+
+    def open_plan_view(self, task_id: str) -> dict[str, object]:
+        with self._condition:
+            existing = self._plan_views.get(task_id)
+            retained_task = self._tasks.get(task_id)
+            if existing is not None and retained_task is not None:
+                with retained_task.condition:
+                    if (
+                        retained_task.plan_request_id == existing.request_id
+                        and retained_task.session_id is not None
+                        and not retained_task.transition
+                        and not retained_task.retiring
+                        and self._plan_review_ready(retained_task)
+                    ):
+                        return self._decorate_plan_summary_locked(
+                            retained_task,
+                            existing.summary(),
+                        )
+        task, request_id = self._require_plan_review_task(task_id)
+        with task.condition:
+            generation = task.generation
+            session_id = task.session_id
+        projection, selection, source_path, target_path = (
+            self._lifecycle.get_plan_projection(request_id)
+        )
+        view = PlanReviewState(
+            task_id=task_id,
+            request_id=request_id,
+            projection=projection,
+            selection_revision=selection.revision,
+            selection_state=selection.state,
+            source_path=source_path,
+            target_path=target_path,
+            requires_destructive_confirmation=(
+                selection.requires_destructive_confirmation
+            ),
+            irreversible_update_count=selection.irreversible_update_count,
+            destructive_operation_count=selection.destructive_operation_count,
+            irreversible_operation_count=selection.irreversible_operation_count,
+            destructive_operation_counts=selection.destructive_operation_counts,
+            required_bytes=selection.required_bytes,
+            collapsed_node_ids=frozenset(
+                node.node_id for node in projection.nodes
+                if node.row_kind == "prior-group"
+            ),
+        )
+        with self._condition:
+            if self._closing or self._tasks.get(task_id) is not task:
+                raise TaskUnavailableError("task is unavailable")
+            with task.condition:
+                if (
+                    task.generation != generation
+                    or task.session_id != session_id
+                    or task.plan_request_id != request_id
+                    or task.transition
+                    or task.retiring
+                    or not self._plan_review_ready(task)
+                ):
+                    raise TaskUnavailableError("task is unavailable")
+                existing = self._plan_views.get(task_id)
+                if existing is not None:
+                    return self._decorate_plan_summary_locked(
+                        task,
+                        existing.summary(),
+                    )
+                self._plan_views[task_id] = view
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="opened"),
+                )
+
+    def update_plan_view(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        search_query: str,
+        filters: frozenset[str],
+        sort_column: PlanSortColumn,
+        sort_direction: SortDirection,
+        collapse_node_id: str | None,
+        collapsed: bool | None,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return self._decorate_plan_summary_locked(
+                task,
+                view.update(
+                    expected_revision=expected_revision,
+                    search_query=search_query,
+                    filters=filters,
+                    sort_column=sort_column,
+                    sort_direction=sort_direction,
+                    collapse_node_id=collapse_node_id,
+                    collapsed=collapsed,
+                ),
+            )
+
+    def get_plan_window(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        offset: int,
+        limit: int,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            window = view.window(
+                expected_revision=expected_revision,
+                offset=offset,
+                limit=limit,
+            )
+            execution_revision = task.execution_revision
+            if window["disposition"] == "conflict":
+                return {
+                    **window,
+                    "execution": self._execution_summary_locked(task),
+                }
+            operation_ids = tuple(
+                dict.fromkeys(
+                    row["operation_id"]
+                    for row in window["rows"]
+                    if row["operation_id"] is not None
+                )
+            )
+            if task.execution_summary is None:
+                return _decorate_execution_window(
+                    window,
+                    self._execution_summary_locked(task),
+                    task.execution_operation_results,
+                    task.execution_integrity_results,
+                    {},
+                )
+            expected_run_id = task.execution_summary.run_id
+            snapshot = (
+                task.session_id,
+                task.generation,
+                task.request_id,
+                view.view_revision,
+                execution_revision,
+            )
+
+        operation_window = self._lifecycle.read_task_execution_items(
+            task_id,
+            operation_ids,
+        )
+        integrity_window = self._lifecycle.read_task_integrity_items(
+            task_id,
+            operation_ids,
+        )
+        evidence_window = self._lifecycle.read_task_execution_evidence(
+            task_id,
+            operation_ids,
+        )
+        operations, integrity, evidence = _retained_execution_maps(
+            task_id,
+            expected_run_id,
+            operation_ids,
+            operation_window,
+            integrity_window,
+            evidence_window,
+        )
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            if (
+                snapshot
+                != (
+                    task.session_id,
+                    task.generation,
+                    task.request_id,
+                    view.view_revision,
+                    task.execution_revision,
+                )
+                or task.execution_summary is None
+            ):
+                conflict = view.window(
+                    expected_revision=-1,
+                    offset=offset,
+                    limit=limit,
+                )
+                return {
+                    **conflict,
+                    "execution": self._execution_summary_locked(task),
+                }
+            return _decorate_execution_window(
+                window,
+                self._execution_summary_locked(task),
+                operations,
+                integrity,
+                evidence,
+            )
+
+    def get_plan_detail(
+        self, task_id: str, *, expected_revision: int, node_id: str,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return view.detail(expected_revision=expected_revision, node_id=node_id)
+
+    def get_execution_detail(
+        self,
+        task_id: str,
+        operation_id: str,
+        *,
+        expected_execution_revision: int,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            if operation_id not in view.projection.operation_node_id_by_id:
+                raise ValueError("execution detail operation is outside the Plan")
+            if expected_execution_revision != task.execution_revision:
+                return _execution_detail_empty(
+                    "conflict",
+                    task.execution_revision,
+                    operation_id,
+                )
+            if task.execution_summary is None:
+                return _execution_detail_empty(
+                    "not-retained",
+                    task.execution_revision,
+                    operation_id,
+                )
+            expected_run_id = task.execution_summary.run_id
+            snapshot = (
+                task.session_id,
+                task.generation,
+                task.request_id,
+                view.view_revision,
+                task.execution_revision,
+            )
+
+        operation_window = self._lifecycle.read_task_execution_items(
+            task_id,
+            (operation_id,),
+        )
+        integrity_window = self._lifecycle.read_task_integrity_items(
+            task_id,
+            (operation_id,),
+        )
+        evidence_window = self._lifecycle.read_task_execution_evidence(
+            task_id,
+            (operation_id,),
+        )
+        operations, integrity, evidence = _retained_execution_maps(
+            task_id,
+            expected_run_id,
+            (operation_id,),
+            operation_window,
+            integrity_window,
+            evidence_window,
+            compact=False,
+        )
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            if (
+                snapshot
+                != (
+                    task.session_id,
+                    task.generation,
+                    task.request_id,
+                    view.view_revision,
+                    task.execution_revision,
+                )
+                or task.execution_summary is None
+            ):
+                return _execution_detail_empty(
+                    "conflict",
+                    task.execution_revision,
+                    operation_id,
+                )
+            return {
+                "disposition": "current",
+                "execution_revision": task.execution_revision,
+                "operation_id": operation_id,
+                "operation": operations.get(operation_id),
+                "automatic_verification": integrity.get(operation_id),
+                "evidence": evidence.get(operation_id),
+            }
+
+    def reveal_plan_move(
+        self, task_id: str, *, expected_revision: int, node_id: str,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            result = view.reveal_move(expected_revision=expected_revision, node_id=node_id)
+            result["summary"] = self._decorate_plan_summary_locked(task, result["summary"])
+            return result
+
+    def get_plan_anchor(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        node_id: str,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return view.anchor(
+                expected_revision=expected_revision,
+                node_id=node_id,
+            )
+
+    def get_plan_operation_anchor(
+        self,
+        task_id: str,
+        *,
+        session_id: str,
+        expected_revision: int,
+        operation_id: str,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            if task.execution_session_id != session_id:
+                return {
+                    "disposition": "conflict", "view_revision": view.view_revision,
+                    "node_id": None, "index": None,
+                }
+            return view.operation_anchor(
+                expected_revision=expected_revision, operation_id=operation_id,
+            )
+
+    def mutate_plan_selection(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        expected_view_revision: int,
+        node_id: str,
+        selected: bool,
+        command_id: str,
+    ) -> dict[str, object]:
+        return self._mutate_plan_scope(
+            task_id,
+            expected_revision=expected_revision,
+            expected_view_revision=expected_view_revision,
+            node_id=node_id,
+            selected=selected,
+            command_id=command_id,
+        )
+
+    def mutate_plan_highlight(
+        self,
+        task_id: str,
+        *,
+        expected_view_revision: int,
+        expected_highlight_revision: int,
+        gesture: str,
+        node_id: str | None,
+    ) -> dict[str, object]:
+        task, view = self._require_plan_view(task_id)
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+            return self._decorate_plan_summary_locked(
+                task,
+                view.mutate_highlight(
+                    expected_view_revision=expected_view_revision,
+                    expected_highlight_revision=expected_highlight_revision,
+                    gesture=gesture,
+                    node_id=node_id,
+                ),
+            )
+
+    def mutate_plan_highlighted_selection(
+        self,
+        task_id: str,
+        *,
+        expected_view_revision: int,
+        expected_highlight_revision: int,
+        expected_selection_revision: int,
+        selected: bool,
+        command_id: str,
+    ) -> dict[str, object]:
+        task, request_id = self._require_released_plan_task(task_id)
+        view_task, view = self._require_plan_view(task_id)
+        if view_task is not task:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.plan_request_id != request_id
+                or task.session_id is None
+                or not task.session_released
+                or task.transition
+                or task.retiring
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            selection_ids = view.highlighted_selection_scope(
+                expected_view_revision=expected_view_revision,
+                expected_highlight_revision=expected_highlight_revision,
+                expected_selection_revision=expected_selection_revision,
+            )
+            if selection_ids is None:
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="conflict"),
+                )
+            if not selection_ids:
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="noop"),
+                )
+            mutation = self._lifecycle.mutate_selection(
+                request_id,
+                expected_selection_revision,
+                deselect=() if selected else selection_ids,
+                reselect=selection_ids if selected else (),
+                command_id=command_id,
+                intent_scope_revision=expected_view_revision,
+                intent_highlight_revision=expected_highlight_revision,
+            )
+            preview = mutation.preview
+            selected_operation_ids = self._lifecycle.get_plan_selection_membership(
+                request_id, preview.revision
+            )
+            view.replace_selection(
+                selected_operation_ids=selected_operation_ids,
+                exclusion_reasons={
+                    operation.operation_id: operation.reason
+                    for operation in preview.operations
+                },
+                selection_revision=preview.revision,
+                selection_state=preview.state,
+                requires_destructive_confirmation=(
+                    preview.requires_destructive_confirmation
+                ),
+                irreversible_update_count=preview.irreversible_update_count,
+                destructive_operation_count=preview.destructive_operation_count,
+                irreversible_operation_count=preview.irreversible_operation_count,
+                destructive_operation_counts=preview.destructive_operation_counts,
+                required_bytes=preview.required_bytes,
+            )
+            return self._decorate_plan_summary_locked(
+                task,
+                view.summary(disposition=mutation.disposition),
+            )
+
+    def mutate_plan_scope(
+        self,
+        task_id: str,
+        *,
+        expected_selection_revision: int,
+        expected_view_revision: int,
+        selected: bool,
+        command_id: str,
+    ) -> dict[str, object]:
+        return self._mutate_plan_scope(
+            task_id,
+            expected_revision=expected_selection_revision,
+            expected_view_revision=expected_view_revision,
+            node_id=None,
+            selected=selected,
+            command_id=command_id,
+        )
+
+    def _mutate_plan_scope(
+        self,
+        task_id: str,
+        *,
+        expected_revision: int,
+        expected_view_revision: int,
+        node_id: str | None,
+        selected: bool,
+        command_id: str,
+    ) -> dict[str, object]:
+        task, request_id = self._require_released_plan_task(task_id)
+        view_task, view = self._require_plan_view(task_id)
+        if view_task is not task:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.plan_request_id != request_id
+                or task.session_id is None
+                or not task.session_released
+                or task.transition
+                or task.retiring
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            selection_ids = view.selection_scope(
+                expected_view_revision=expected_view_revision,
+                expected_selection_revision=expected_revision,
+                node_id=node_id,
+            )
+            if selection_ids is None:
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="conflict"),
+                )
+            if not selection_ids:
+                return self._decorate_plan_summary_locked(
+                    task,
+                    view.summary(disposition="noop"),
+                )
+            mutation = self._lifecycle.mutate_selection(
+                request_id,
+                expected_revision,
+                deselect=() if selected else selection_ids,
+                reselect=selection_ids if selected else (),
+                command_id=command_id,
+                intent_scope_revision=expected_view_revision,
+            )
+            preview = mutation.preview
+            selected_operation_ids = (
+                self._lifecycle.get_plan_selection_membership(
+                    request_id,
+                    preview.revision,
+                )
+            )
+            view.replace_selection(
+                selected_operation_ids=selected_operation_ids,
+                exclusion_reasons={
+                    operation.operation_id: operation.reason
+                    for operation in preview.operations
+                },
+                selection_revision=preview.revision,
+                selection_state=preview.state,
+                requires_destructive_confirmation=(
+                    preview.requires_destructive_confirmation
+                ),
+                irreversible_update_count=preview.irreversible_update_count,
+                destructive_operation_count=preview.destructive_operation_count,
+                irreversible_operation_count=preview.irreversible_operation_count,
+                destructive_operation_counts=preview.destructive_operation_counts,
+                required_bytes=preview.required_bytes,
+            )
+            return self._decorate_plan_summary_locked(
+                task,
+                view.summary(disposition=mutation.disposition),
+            )
+
+    def _require_released_plan_task(
+        self,
+        task_id: str,
+    ) -> tuple[_TaskState, str]:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.task_kind != "sync-plan"
+                or task.plan_request_id is None
+                or task.session_id is None
+                or task.delivered_terminal_record is None
+                or not task.session_released
+                or task.transition
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            return task, task.plan_request_id
+
+    def _require_plan_review_task(
+        self,
+        task_id: str,
+    ) -> tuple[_TaskState, str]:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if (
+                task.task_kind != "sync-plan"
+                or task.plan_request_id is None
+                or task.session_id is None
+                or task.transition
+                or task.retiring
+                or not self._plan_review_ready(task)
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            return task, task.plan_request_id
+
+    @staticmethod
+    def _plan_review_ready(task: _TaskState) -> bool:
+        return (
+            (task.session_kind == "sync-plan" and task.delivered_terminal_record is not None
+             and task.session_released)
+            or task.execution_session_id is not None
+        )
+
+    def _require_plan_view(
+        self,
+        task_id: str,
+    ) -> tuple[_TaskState, PlanReviewState]:
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            view = self._plan_views.get(task_id)
+            task = self._tasks.get(task_id)
+        if view is None or task is None or task.plan_request_id != view.request_id:
+            raise TaskUnavailableError("plan view is unavailable")
+        with task.condition:
+            self._require_plan_view_locked(task, view)
+        return task, view
+
+    @staticmethod
+    def _require_plan_view_locked(
+        task: _TaskState,
+        view: PlanReviewState,
+    ) -> None:
+        if (
+            task.retiring
+            or task.transition
+            or task.plan_request_id != view.request_id
+        ):
+            raise TaskUnavailableError("plan view is unavailable")
+
+    def start_execution(
+        self,
+        task_id: str,
+        *,
+        request_id: str,
+        expected_revision: int,
+        destructive_acknowledged: bool,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> object:
+        """Attach the one M1 execution follow-up to its reviewed plan task."""
+
+        _require_opaque_id(request_id, "plan request id")
+        _require_opaque_id(command_id, "task command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            retained = self._start_responses.get(command_id)
+            if retained is not None:
+                if retained.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                retained.participants += 1
+            task = self._tasks.get(task_id)
+        if retained is not None:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            plan_view_missing = self._plan_views.get(task_id) is None
+        if plan_view_missing:
+            self.open_plan_view(task_id)
+        with task.condition:
+            plan_view = self._plan_views.get(task_id)
+            if (
+                task.task_kind != "sync-plan"
+                or task.plan_request_id != request_id
+                or task.session_kind != "sync-plan"
+                or task.execution_session_id is not None
+                or task.session_id is None
+                or task.delivered_terminal_record is None
+                or not task.session_released
+                or task.transition
+                or task.retiring
+                or plan_view is None
+                or plan_view.request_id != request_id
+            ):
+                raise TaskUnavailableError("task is unavailable")
+            execution_membership = plan_view.projection.operation_node_id_by_id
+            task.transition = True
+            task.condition.notify_all()
+
+        response: _StartResponse | None = None
+
+        def delivery_factory(delivered_task_id: str):
+            nonlocal response
+            if delivered_task_id != task_id:
+                raise ObservationConflictError("task lifecycle changed its task")
+            with self._condition:
+                if self._closing or self._tasks.get(task_id) is not task:
+                    raise TaskUnavailableError("task is unavailable")
+                if command_id in self._start_responses:
+                    raise RuntimeError("application repeated a task delivery factory")
+                response = _StartResponse(command_id, wire_intent, participants=1)
+                self._start_responses[command_id] = response
+                self._condition.notify_all()
+            with task.condition:
+                if (
+                    task.task_kind != "sync-plan"
+                    or task.plan_request_id != request_id
+                    or task.session_kind != "sync-plan"
+                    or task.execution_session_id is not None
+                    or task.session_id is None
+                    or task.delivered_terminal_record is None
+                    or not task.session_released
+                    or not task.transition
+                    or task.retiring
+                ):
+                    raise TaskUnavailableError("task is unavailable")
+                next_execution_revision = _next_execution_revision(
+                    task.execution_revision
+                )
+                task.prior_session_id = task.session_id
+                task.prior_delivery = self._capture_delivery(
+                    task,
+                    execution_operation_results={
+                        key: dict(value)
+                        for key, value in task.execution_operation_results.items()
+                    },
+                    execution_integrity_results={
+                        key: dict(value)
+                        for key, value in task.execution_integrity_results.items()
+                    },
+                )
+                task.generation += 1
+                task.session_id = None
+                task.queue.clear()
+                task.progress_available_at = None
+                task.progress_sample_at = None
+                task.terminal_record = None
+                task.terminal_pending = False
+                task.delivered_terminal_event = None
+                task.delivered_terminal_record = None
+                task.session_released = False
+                task.active_drain = None
+                task.closing = False
+                task.execution_revision = next_execution_revision
+                task.execution_session_id = None
+                task.execution_summary = None
+                task.execution_operation_results.clear()
+                task.execution_integrity_results.clear()
+                task.execution_gap_minimum = None
+                task.execution_gap_maximum = None
+                task.execution_membership = execution_membership
+                task.presentation_state = None
+                task.session_kind = "sync-execution"
+                return task.sink(task.generation)
+
+        result: object | None = None
+        failure_code: str | None = None
+        try:
+            candidate = self._lifecycle.start_task_execution(
+                task_id,
+                request_id,
+                expected_revision=expected_revision,
+                destructive_acknowledged=destructive_acknowledged,
+                command_id=command_id,
+                delivery_factory=delivery_factory,
+            )
+            if type(candidate) is TaskStartView:
+                candidate.__post_init__()
+                self._publish_execution_start(
+                    task,
+                    task_id,
+                    command_id,
+                    candidate,
+                )
+                plan_view = self._plan_views.get(task_id)
+                if plan_view is not None:
+                    plan_view.mark_selection_committed()
+                result = candidate
+            else:
+                result = candidate
+        except BaseException as error:
+            if response is None:
+                self._abandon_execution_transition(task)
+                raise
+            _retire_exception_graph(error)
+            recovered = self._lifecycle.recover_task_execution(
+                task_id,
+                request_id,
+                expected_revision=expected_revision,
+                destructive_acknowledged=destructive_acknowledged,
+                command_id=command_id,
+            )
+            if recovered is None:
+                failure_code = _classify_start_failure(error)
+                self._restore_plan_delivery(task)
+            else:
+                recovered.__post_init__()
+                self._publish_execution_start(
+                    task,
+                    task_id,
+                    command_id,
+                    recovered,
+                )
+                plan_view = self._plan_views.get(task_id)
+                if plan_view is not None:
+                    plan_view.mark_selection_committed()
+                result = recovered
+
+        if response is None:
+            self._abandon_execution_transition(task)
+
+        if response is None:
+            return result
+        with self._condition:
+            response.result = result if type(result) is TaskStartView else None
+            response.failure_code = failure_code
+            response.complete = True
+            self._condition.notify_all()
+        try:
+            if result is not None:
+                return result
+            assert failure_code is not None
+            _raise_start_failure(failure_code)
+        finally:
+            self._leave_start_response(response)
+
+    def control_integrity(self, task_id: str, session_id: str, action: str) -> object:
+        task = self._require_task(task_id, session_id)
+        with task.condition:
+            if (task.task_kind not in {"inventory", "sync-plan"} or task.ordinary_integrity is None
+                    or task.ordinary_integrity.session_id != session_id):
+                raise TaskUnavailableError("ordinary integrity session is unavailable")
+        if action not in {"pause", "resume", "cancel"}:
+            raise ValueError("integrity control action is invalid")
+        return {"pause": self._lifecycle.pause_task_session,
+                "resume": self._lifecycle.resume_task_session,
+                "cancel": self._lifecycle.cancel_task_session}[action](task_id, session_id)
+
+    def control_execution(
+        self,
+        task_id: str,
+        session_id: str,
+        action: str,
+    ) -> object:
+        task = self._require_task(task_id, session_id)
+        with task.condition:
+            if (task.task_kind != "sync-plan" or task.session_kind != "sync-execution"
+                    or task.execution_session_id != session_id):
+                raise TaskUnavailableError("task is unavailable")
+        if action == "pause":
+            result = self._lifecycle.pause_task_session(task_id, session_id)
+        elif action == "resume":
+            result = self._lifecycle.resume_task_session(task_id, session_id)
+        elif action == "cancel":
+            result = self._lifecycle.cancel_task_session(task_id, session_id)
+        else:
+            raise ValueError("execution control action is invalid")
+        return result
+
+    @staticmethod
+    def _abandon_execution_transition(task: _TaskState) -> None:
+        with task.condition:
+            if task.transition and task.prior_delivery is None:
+                task.transition = False
+                task.condition.notify_all()
+
+    @staticmethod
+    def _capture_delivery(
+        task: _TaskState, *,
+        execution_operation_results: dict[str, dict[str, object]],
+        execution_integrity_results: dict[str, dict[str, object]],
+    ) -> _TaskDeliverySnapshot:
+        return _TaskDeliverySnapshot(
+            queue=tuple(task.queue),
+            progress_available_at=task.progress_available_at,
+            terminal_record=task.terminal_record,
+            terminal_pending=task.terminal_pending,
+            delivered_terminal_event=task.delivered_terminal_event,
+            delivered_terminal_record=task.delivered_terminal_record,
+            session_released=task.session_released,
+            closing=task.closing,
+            execution_revision=task.execution_revision,
+            execution_session_id=task.execution_session_id,
+            execution_summary=task.execution_summary,
+            execution_operation_results=execution_operation_results,
+            execution_integrity_results=execution_integrity_results,
+            execution_gap_minimum=task.execution_gap_minimum,
+            execution_gap_maximum=task.execution_gap_maximum,
+            execution_membership=task.execution_membership,
+            presentation_state=task.presentation_state,
+            progress_sample_at=task.progress_sample_at,
+            session_kind=task.session_kind,
+        )
+
+    @staticmethod
+    def _restore_plan_delivery(task: _TaskState) -> None:
+        with task.condition:
+            prior = task.prior_delivery
+            if not task.transition or prior is None:
+                return
+            task.generation += 1
+            task.session_id = task.prior_session_id
+            task.queue = deque(prior.queue)
+            task.progress_available_at = prior.progress_available_at
+            task.terminal_record = prior.terminal_record
+            task.terminal_pending = prior.terminal_pending
+            task.delivered_terminal_event = prior.delivered_terminal_event
+            task.delivered_terminal_record = prior.delivered_terminal_record
+            task.session_released = prior.session_released
+            task.closing = prior.closing
+            task.execution_revision = prior.execution_revision
+            task.execution_session_id = prior.execution_session_id
+            task.execution_summary = prior.execution_summary
+            task.execution_operation_results = {
+                key: dict(value) for key, value in prior.execution_operation_results.items()
+            }
+            task.execution_integrity_results = {
+                key: dict(value) for key, value in prior.execution_integrity_results.items()
+            }
+            task.execution_gap_minimum = prior.execution_gap_minimum
+            task.execution_gap_maximum = prior.execution_gap_maximum
+            task.execution_membership = prior.execution_membership
+            task.presentation_state = prior.presentation_state
+            task.progress_sample_at = prior.progress_sample_at
+            task.session_kind = prior.session_kind
+            task.prior_session_id = None
+            task.prior_delivery = None
+            task.transition = False
+            task.condition.notify_all()
+
+    @staticmethod
+    def _publish_execution_start(
+        task: _TaskState,
+        task_id: str,
+        command_id: str,
+        candidate: TaskStartView,
+    ) -> None:
+        with task.condition:
+            if not task.transition:
+                return
+            if candidate.task_id != task_id:
+                raise ObservationConflictError("task lifecycle changed its task")
+            if any(
+                update.session_id != candidate.session_id
+                for update in task.queue
+            ):
+                raise ObservationConflictError(
+                    "task observation does not match execution"
+                )
+            task.session_id = candidate.session_id
+            task.request_id = candidate.request_id
+            task.execution_session_id = candidate.session_id
+            task.session_kind = "sync-execution"
+            task.start_command_id = command_id
+            task.start_response_ids.add(command_id)
+            task.prior_session_id = None
+            task.prior_delivery = None
+            task.transition = False
+            task.condition.notify_all()
+
+    def _start_existing_task(
+        self,
+        task_id: str,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+        starter: Callable[[TaskDeliveryFactory], object],
+    ) -> TaskStartView:
+        _require_opaque_id(command_id, "task command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            retained = self._start_responses.get(command_id)
+            if retained is not None:
+                if retained.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                retained.participants += 1
+        if retained is not None:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+        response: _StartResponse | None = None
+        with self._condition:
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+
+        def delivery_factory(delivered_task_id: str):
+            nonlocal response
+            if delivered_task_id != task_id:
+                raise ObservationConflictError("task lifecycle changed its task")
+            with self._condition:
+                if self._closing or self._tasks.get(task_id) is not task:
+                    raise TaskUnavailableError("task is unavailable")
+                if command_id in self._start_responses:
+                    raise RuntimeError("application repeated a task delivery factory")
+                response = _StartResponse(command_id, wire_intent, participants=1)
+                self._start_responses[command_id] = response
+                self._condition.notify_all()
+            with task.condition:
+                if task.session_id is not None or task.closing:
+                    raise TaskUnavailableError("task is unavailable")
+                task.transition = True
+                task.start_command_id = command_id
+                return task.sink(task.generation)
+
+        candidate: object | None = None
+        result: TaskStartView | None = None
+        failure_code: str | None = None
+        try:
+            candidate = starter(delivery_factory)
+            result = self._publish_setup_start(command_id, candidate, task)
+        except BaseException as error:
+            if response is None:
+                raise
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            with task.condition:
+                task.transition = False
+                task.start_command_id = None
+                task.condition.notify_all()
+        if response is None:
+            if type(candidate) is TaskStartView:
+                return self._validate_and_publish_start(
+                    command_id,
+                    candidate,
+                    None,
+                )
+            assert result is not None
+            return result
+        with self._condition:
+            response.result = result
+            response.failure_code = failure_code
+            response.complete = True
+            self._condition.notify_all()
+        try:
+            if result is not None:
+                return result
+            assert failure_code is not None
+            _raise_start_failure(failure_code)
+        finally:
+            self._leave_start_response(response)
+
+    def _start_new_task(
+        self,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+        starter: Callable[[TaskDeliveryFactory], object],
+    ) -> TaskStartView:
+        retained = self.replay_start(command_id, wire_intent)
+        if retained is not None:
+            return retained
+        response: _StartResponse | None = None
+        provisional: _TaskState | None = None
+
+        def delivery_factory(task_id: str):
+            nonlocal response, provisional
+            with self._condition:
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                response = _StartResponse(command_id, wire_intent, participants=1)
+                provisional = _TaskState(task_id, command_id, self._clock)
+                provisional.start_command_id = command_id
+                self._start_responses[command_id] = response
+                self._provisional[task_id] = provisional
+                self._condition.notify_all()
+                return provisional.sink(provisional.generation)
+
+        result: TaskStartView | None = None
+        failure_code: str | None = None
+        try:
+            candidate = starter(delivery_factory)
+            if type(candidate) is TaskStartOutcome:
+                assert provisional is not None
+                provisional.setup = candidate.snapshot
+                provisional.task_kind = candidate.snapshot.task_kind
+                provisional.request_id = candidate.start.request_id
+                candidate = candidate.start
+            result = self._validate_and_publish_start(
+                command_id,
+                candidate,
+                provisional,
+            )
+        except BaseException as error:
+            if response is None:
+                raise
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            if provisional is not None:
+                self._discard_provisional(provisional)
+        if response is None:
+            assert result is not None
+            return result
+        with self._condition:
+            response.result = result
+            response.failure_code = failure_code
+            response.complete = True
+            self._condition.notify_all()
+        try:
+            if result is not None:
+                return result
+            assert failure_code is not None
+            _raise_start_failure(failure_code)
+        finally:
+            self._leave_start_response(response)
+
+    def _publish_setup_start(
+        self,
+        command_id: str,
+        candidate: object,
+        task: _TaskState,
+    ) -> TaskStartView:
+        if type(candidate) is not TaskStartOutcome:
+            if type(candidate) is TaskStartView:
+                return self._validate_and_publish_start(command_id, candidate, None)
+            raise RuntimeError("task lifecycle returned invalid Setup data")
+        candidate.__post_init__()
+        result = candidate.start
+        if result.task_id != task.task_id:
+            raise ObservationConflictError("task lifecycle changed its task")
+        with task.condition:
+            if task.closing:
+                raise TaskUnavailableError("task is unavailable")
+            for update in task.queue:
+                if update.session_id != result.session_id:
+                    raise ObservationConflictError(
+                        "task observation does not match admitted session"
+                    )
+            task.session_id = result.session_id
+            task.task_kind = candidate.snapshot.task_kind
+            task.request_id = result.request_id
+            task.plan_request_id = result.request_id if task.task_kind == "sync-plan" else None
+            task.session_kind = "sync-plan" if task.task_kind == "sync-plan" else "inventory"
+            task.setup = candidate.snapshot
+            task.start_response_ids.add(command_id)
+            task.transition = False
+            task.condition.notify_all()
+        return result
+
+    def _await_start_response(self, entry: _StartResponse) -> TaskStartView | dict[str, object]:
+        with self._condition:
+            while not entry.complete:
+                self._condition.wait()
+            if entry.result is not None:
+                return entry.result
+            assert entry.failure_code is not None
+            _raise_start_failure(entry.failure_code)
+
+    def _leave_start_response(self, entry: _StartResponse) -> None:
+        with self._condition:
+            entry.participants -= 1
+            if (
+                entry.complete
+                and entry.participants == 0
+                and ((entry.result is None and not entry.retain_failure) or self._closing)
+            ):
+                if self._start_responses.get(entry.command_id) is entry:
+                    self._start_responses.pop(entry.command_id, None)
+            self._condition.notify_all()
+
+    def _validate_and_publish_start(
+        self,
+        command_id: str,
+        candidate: object,
+        provisional: _TaskState | None,
+    ) -> TaskStartView:
+        if type(candidate) is not TaskStartView:
+            raise RuntimeError("planning lifecycle returned invalid task data")
+        candidate.__post_init__()
+        if provisional is None:
+            pending: _StartResponse | None = None
+            with self._condition:
+                task = self._tasks.get(candidate.task_id)
+                if task is None:
+                    pending = self._start_responses.get(command_id)
+                    if pending is not None:
+                        pending.participants += 1
+            if pending is not None:
+                try:
+                    replay = self._await_start_response(pending)
+                finally:
+                    self._leave_start_response(pending)
+                if replay != candidate:
+                    raise RuntimeError("task lifecycle replay changed its result")
+                with self._condition:
+                    task = self._tasks.get(candidate.task_id)
+            if (
+                task is None
+                or task.command_id != command_id
+                or task.session_id != candidate.session_id
+            ):
+                raise RuntimeError("task lifecycle replay has no delivery state")
+            return candidate
+
+        if provisional.task_id != candidate.task_id:
+            raise ObservationConflictError(
+                "planning lifecycle returned a different task"
+            )
+        with provisional.condition:
+            if provisional.closing:
+                raise TaskUnavailableError("task registry closed during start")
+            for update in provisional.queue:
+                if update.session_id != candidate.session_id:
+                    raise ObservationConflictError(
+                        "task observation does not match admitted session"
+                    )
+            if (
+                provisional.terminal_record is not None
+                and provisional.terminal_record.session_id
+                != candidate.session_id
+            ):
+                raise ObservationConflictError(
+                    "task terminal record does not match admitted session"
+                )
+            provisional.session_id = candidate.session_id
+            if provisional.task_kind is None:
+                provisional.task_kind = "sync-plan"
+            provisional.request_id = candidate.request_id
+            provisional.plan_request_id = candidate.request_id
+            provisional.session_kind = "sync-plan"
+            provisional.start_response_ids.add(command_id)
+            provisional.condition.notify_all()
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry closed during start")
+            if self._provisional.get(provisional.task_id) is not provisional:
+                raise RuntimeError("provisional task delivery is unavailable")
+            if provisional.task_id in self._tasks:
+                raise RuntimeError("task delivery publication was repeated")
+            self._provisional.pop(provisional.task_id, None)
+            self._tasks[provisional.task_id] = provisional
+            self._condition.notify_all()
+        return candidate
+
+    def _discard_provisional(self, task: _TaskState) -> None:
+        with task.condition:
+            task.closing = True
+            task.generation += 1
+            if task.active_drain is not None:
+                task.active_drain.superseded = True
+            task.condition.notify_all()
+        with self._condition:
+            if self._provisional.get(task.task_id) is task:
+                self._provisional.pop(task.task_id, None)
+            self._condition.notify_all()
+
+    def drain(
+        self,
+        task_id: str,
+        session_id: str,
+        drain_id: str,
+        *,
+        replay_from: int | None,
+    ) -> TaskDrainView:
+        response_codec = self._require_response_codec()
+        return response_codec.consume(
+            self._drain_admitted(
+                task_id,
+                session_id,
+                drain_id,
+                replay_from=replay_from,
+                response_codec=response_codec,
+            )
+        )
+
+    def drain_for_bridge(
+        self,
+        task_id: str,
+        session_id: str,
+        drain_id: str,
+        *,
+        replay_from: int | None,
+    ) -> object:
+        """Transfer one byte-admitted drain to the bridge without recopying it."""
+
+        response_codec = self._require_response_codec()
+        return self._drain_admitted(
+            task_id,
+            session_id,
+            drain_id,
+            replay_from=replay_from,
+            response_codec=response_codec,
+        )
+
+    def _drain_admitted(
+        self,
+        task_id: str,
+        session_id: str,
+        drain_id: str,
+        *,
+        replay_from: int | None,
+        response_codec: _TaskDrainResponseCodec,
+    ) -> object:
+        _require_opaque_id(drain_id, "task drain id")
+        task = self._require_task(task_id, session_id)
+        deadline = self._clock() + self._drain_wait
+        claim = _DrainClaim(drain_id)
+        with task.condition:
+            task.require_no_response_capture_reentry()
+            self._require_live_locked(task, session_id)
+            if task.transition:
+                raise ObservationConflictError("task observation is changing")
+            incumbent = task.active_drain
+            if incumbent is not None:
+                incumbent.superseded = True
+                task.condition.notify_all()
+                while task.active_drain is incumbent:
+                    remaining = deadline - self._clock()
+                    if remaining <= 0:
+                        break
+                    task.condition.wait(remaining)
+                raise DrainBusyError("task already has an event request")
+            task.active_drain = claim
+
+        try:
+            if replay_from is not None:
+                self._recover(task, session_id, replay_from)
+            report_inconsistent = False
+            with task.condition:
+                result_deadline = None
+                while not claim.superseded and not task.closing:
+                    if replay_from is not None or task.terminal_pending:
+                        break
+                    reliable = tuple(
+                        update for update in task.queue
+                        if not _is_progress_update(update)
+                    )
+                    if reliable and (
+                        len(task.queue) >= _CAPACITY
+                        or not all(
+                            _is_collectable_result(update, task.session_kind)
+                            for update in reliable
+                        )
+                    ):
+                        break
+                    now = self._clock()
+                    if reliable:
+                        if result_deadline is None:
+                            result_deadline = now + _RESULT_LINGER_SECONDS
+                        wake_deadline = min(deadline, result_deadline)
+                    elif task.queue:
+                        if task.progress_available_at is None:
+                            task.progress_available_at = now
+                        wake_deadline = min(
+                            deadline,
+                            task.progress_available_at + self._progress_linger,
+                        )
+                    else:
+                        task.progress_available_at = None
+                        wake_deadline = deadline
+                    remaining = wake_deadline - now
+                    if remaining <= 0:
+                        break
+                    task.condition.wait(remaining)
+                if task.closing:
+                    raise TaskUnavailableError("task is closing")
+                queued = (
+                    ()
+                    if claim.superseded
+                    else tuple(islice(task.queue, _CAPACITY))
+                )
+                terminal = (
+                    task.terminal_record
+                    if (
+                        not claim.superseded
+                        and len(queued) < _CAPACITY
+                        and task.terminal_pending
+                    )
+                    else None
+                )
+                source = iter(queued)
+                if terminal is not None:
+                    source = chain(source, (terminal,))
+                stage = TaskSnapshotStage(
+                    task.presentation_state
+                    if task.presentation_state is not None
+                    else TaskPresentationState(task_id, session_id),
+                    task.progress_sample_at,
+                    replay_from,
+                )
+                task.response_capture_caller = get_ident()
+                try:
+                    admitted = response_codec.admit(
+                        task_id,
+                        session_id,
+                        drain_id,
+                        (_tag_update(update) for update in source),
+                        stage,
+                    )
+                except response_codec.response_too_large_error as error:
+                    _retire_exception_graph(error)
+                    raise RuntimeError(
+                        "one task update exceeds the bridge response ceiling"
+                    ) from None
+                finally:
+                    if task.response_capture_caller == get_ident():
+                        task.response_capture_caller = None
+                result = response_codec.peek(admitted)
+                count = min(len(result.updates), len(queued))
+                include_terminal = (
+                    not claim.superseded
+                    and terminal is not None
+                    and len(result.updates) > count
+                )
+                if not claim.superseded:
+                    for _ in range(count):
+                        task.queue.popleft()
+                    if include_terminal:
+                        task.terminal_pending = False
+                    if not any(
+                        _is_progress_update(update) for update in task.queue
+                    ):
+                        task.progress_available_at = None
+                        task.progress_sample_at = None
+                    for update in result.updates:
+                        if (
+                            type(update) is TaskEventUpdateView
+                            and update.event.body_type == "Terminal"
+                        ):
+                            task.delivered_terminal_event = update.event
+                        elif type(update) is TaskRecordUpdateView:
+                            task.delivered_terminal_record = update.record
+                    report_inconsistent = (
+                        stage.state.progress_inconsistent
+                        and not (
+                            task.presentation_state is not None
+                            and task.presentation_state.progress_inconsistent
+                        )
+                    )
+                    task.presentation_state = stage.state
+                    task.condition.notify_all()
+            if report_inconsistent:
+                _LOG.error("task progress presentation became inconsistent")
+        finally:
+            with task.condition:
+                if task.active_drain is claim:
+                    task.active_drain = None
+                task.condition.notify_all()
+
+        return admitted
+
+    def _recover(
+        self,
+        task: _TaskState,
+        session_id: str,
+        replay_from: int,
+    ) -> None:
+        if isinstance(replay_from, bool) or not isinstance(replay_from, int) or replay_from < 1:
+            raise ValueError("replay_from must be a positive integer")
+        with task.condition:
+            self._require_live_locked(task, session_id)
+            if task.transition:
+                raise ObservationConflictError("task observation is changing")
+            task.transition = True
+            task.generation += 1
+            generation = task.generation
+            task.recovery_caller = get_ident()
+            task.queue.clear()
+            task.progress_available_at = None
+            task.progress_sample_at = None
+            task.terminal_record = None
+            task.terminal_pending = False
+            task.condition.notify_all()
+
+        terminal: SessionRecordView | None = None
+        failure_code: str | None = None
+        current: object | None = None
+        try:
+            current = self._lifecycle.reobserve_task(
+                task.task_id,
+                session_id,
+                task.sink(generation),
+                replay_from,
+            )
+            if type(current) is not SessionRecordView:
+                raise RuntimeError("reobserve returned invalid task data")
+            if current.session_id != session_id:
+                raise ObservationConflictError(
+                    "reobserve returned a mismatched session"
+                )
+            validate_session_record_view(current, expected_session_id=session_id)
+            if current.result is not None:
+                _validate_task_observation(current, expected_session_id=session_id)
+                terminal = current
+        except BaseException as error:
+            failure_code = _classify_recovery_failure(error)
+            _retire_exception_graph(error)
+        finally:
+            current = None
+
+        stale = False
+        with task.condition:
+            stale = task.closing or task.generation != generation
+            if task.recovery_caller == get_ident():
+                task.recovery_caller = None
+            if not stale and failure_code is not None:
+                task.generation += 1
+                task.transition = False
+                task.queue.clear()
+                task.progress_available_at = None
+                task.progress_sample_at = None
+                task.terminal_record = None
+                task.terminal_pending = False
+            if not stale and failure_code is None and terminal is not None:
+                task.terminal_record = terminal
+                task.progress_available_at = None
+                if len(task.queue) < _CAPACITY:
+                    task.queue.append(terminal)
+                    task.terminal_pending = False
+                else:
+                    task.terminal_pending = True
+            if not stale and task.generation == generation:
+                task.transition = False
+            task.condition.notify_all()
+        if stale:
+            with task.condition:
+                if task.generation == generation or task.closing:
+                    task.transition = False
+                task.condition.notify_all()
+            if failure_code is None:
+                failure_code = _RECOVERY_FAILURE_TASK_UNAVAILABLE
+        if failure_code is not None:
+            terminal = None
+            _raise_recovery_failure(failure_code)
+
+    def begin_close(self) -> None:
+        """Reject tasks and withdraw adapter-local delivery state."""
+
+        with self._condition:
+            self._closing = True
+            self._plan_views.clear()
+            self._inventory_views.clear()
+            tasks = tuple(self._tasks.values()) + tuple(self._provisional.values())
+            for command_id, response in tuple(self._start_responses.items()):
+                if (
+                    response.complete
+                    and response.participants == 0
+                    and not response.delivery_retiring
+                ):
+                    self._start_responses.pop(command_id, None)
+            self._condition.notify_all()
+        for task in tasks:
+            with task.condition:
+                task.closing = True
+                task.generation += 1
+                if task.active_drain is not None:
+                    task.active_drain.superseded = True
+                task.condition.notify_all()
+
+    def release_terminal_session(
+        self,
+        task_id: str,
+        session_id: str,
+    ) -> TaskSessionReleaseView:
+        """Release terminal stream authority while retaining the task and plan."""
+
+        self._require_task_identity(task_id, session_id)
+        receipt_key = (task_id, session_id)
+        with self._condition:
+            close_receipt = self._close_receipts.get(receipt_key)
+            if close_receipt is not None:
+                self._close_receipts.move_to_end(receipt_key)
+                return TaskSessionReleaseView(task_id, session_id)
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+
+        with task.condition:
+            task.require_no_response_capture_reentry()
+            if task.session_id != session_id:
+                raise TaskUnavailableError("task is unavailable")
+            execution_release = task.execution_session_id == session_id
+            ordinary = task.ordinary_integrity
+            ordinary_release = ordinary is not None and ordinary.session_id == session_id
+            delivery = self._terminal_delivery_locked(task)
+            task.closing = True
+            task.generation += 1
+            release_generation = task.generation
+            if task.active_drain is not None:
+                task.active_drain.superseded = True
+            task.condition.notify_all()
+            while task.transition:
+                task.condition.wait()
+            if task.session_id != session_id:
+                raise TaskUnavailableError("task is unavailable")
+
+        while True:
+            try:
+                result = self._lifecycle.release_task_session(
+                    task_id,
+                    session_id,
+                    delivery,
+                )
+            except TaskUnavailableError as error:
+                _retire_exception_graph(error)
+                waited_for_close = False
+                with self._condition:
+                    while True:
+                        close_receipt = self._close_receipts.get(receipt_key)
+                        if close_receipt is not None:
+                            self._close_receipts.move_to_end(receipt_key)
+                            return TaskSessionReleaseView(task_id, session_id)
+                        response = self._start_responses.get(
+                            task.start_command_id or task.command_id
+                        )
+                        if (
+                            self._closing
+                            or response is None
+                            or not response.delivery_retiring
+                        ):
+                            break
+                        waited_for_close = True
+                        self._condition.wait()
+                if waited_for_close and not self._closing:
+                    continue
+                raise
+            except BaseException as error:
+                _retire_exception_graph(error)
+                raise
+            break
+        if (
+            type(result) is not TaskSessionReleaseView
+            or result.task_id != task_id
+            or result.session_id != session_id
+        ):
+            raise RuntimeError("task lifecycle returned invalid release data")
+        result.__post_init__()
+        retained_summary = None
+        if execution_release:
+            retained_summary = self._lifecycle.read_task_execution_summary(task_id)
+            if (
+                type(retained_summary) is not RetainedExecutionSummary
+                or retained_summary.task_id != task_id
+            ):
+                raise RuntimeError(
+                    "task lifecycle returned invalid retained execution summary"
+                )
+        retained_ordinary = self._lifecycle.read_task_inventory_integrity(task_id) if ordinary_release else None
+        with task.condition:
+            stale = (
+                task.session_id != session_id
+                or task.generation != release_generation
+                or (execution_release and task.execution_session_id != session_id)
+            )
+            if stale and task.retiring and task.session_id == session_id:
+                return result
+            if stale:
+                raise TaskUnavailableError("task is unavailable")
+            if retained_summary is not None and task.execution_summary != retained_summary:
+                next_revision = _next_execution_revision(task.execution_revision)
+                task.execution_summary = retained_summary
+                task.execution_revision = next_revision
+            if execution_release:
+                task.execution_terminal_record = task.delivered_terminal_record
+            if retained_ordinary is not None:
+                if (retained_ordinary.task_id != task_id or retained_ordinary.session_id != session_id
+                        or retained_ordinary.request_id != ordinary.request_id
+                        or retained_ordinary.location_id != ordinary.location_id or retained_ordinary.mode != ordinary.mode):
+                    raise ObservationConflictError("ordinary terminal result changed identity")
+                # Replace the live subset, including the empty terminal population.
+                replacement = _InventoryIntegrityState(ordinary.mode, ordinary.location_id,
+                    ordinary.membership, ordinary.request_id, ordinary.session_id, ordinary.revision + 1,
+                    copied_scope=ordinary.copied_scope,
+                    path_rows=dict(ordinary.path_rows), row_paths=dict(ordinary.row_paths))
+                for item in retained_ordinary.items:
+                    replacement.add(asdict(item))
+                replacement.complete = True
+                task.ordinary_integrity = replacement
+            task.session_released = True
+            if task.task_kind == "sync-plan":
+                task.inventory_view_dirty = True
+            task.condition.notify_all()
+        return result
+
+    def request_task_close(
+        self,
+        task_id: str,
+        session_id: str | None,
+    ) -> TaskCloseRequestView:
+        """Cancel a busy session or close one exact task when it is ready."""
+
+        if session_id is None:
+            return self._close_task_shell(task_id)
+        self._require_task_identity(task_id, session_id)
+        receipt_key = (task_id, session_id)
+        with self._condition:
+            receipt = self._close_receipts.get(receipt_key)
+            if receipt is not None:
+                if type(receipt) is not TaskCloseView:
+                    raise RuntimeError("task close receipt has invalid ownership")
+                self._close_receipts.move_to_end(receipt_key)
+                return TaskCloseRequestView(task_id, session_id, "closed")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            task.require_no_response_capture_reentry()
+            if task.session_id != session_id:
+                raise TaskUnavailableError("task is unavailable")
+            terminal_delivered = task.delivered_terminal_record is not None
+        if not terminal_delivered:
+            try:
+                self._lifecycle.cancel_task_session(task_id, session_id)
+            except TaskUnavailableError:
+                with task.condition:
+                    terminal_delivered = task.delivered_terminal_record is not None
+                if not terminal_delivered:
+                    raise
+            else:
+                return TaskCloseRequestView(task_id, session_id, "pending")
+        result = self.close_task(task_id, session_id)
+        return TaskCloseRequestView(result.task_id, result.session_id, "closed")
+
+    def _close_task_shell(self, task_id: str) -> TaskCloseRequestView:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        receipt_key = (task_id, None)
+        with self._condition:
+            receipt = self._close_receipts.get(receipt_key)
+            if receipt is not None:
+                if type(receipt) is not TaskShellView:
+                    raise RuntimeError("task shell close receipt has invalid ownership")
+                self._close_receipts.move_to_end(receipt_key)
+                return TaskCloseRequestView(task_id, None, "closed")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if task.session_id is not None:
+                raise TaskUnavailableError("task is unavailable")
+            task.closing = True
+            task.generation += 1
+            task.condition.notify_all()
+        try:
+            result = self._lifecycle.close_task_shell(task_id)
+            if type(result) is not TaskShellView or result.task_id != task_id:
+                raise RuntimeError("task lifecycle returned invalid shell close data")
+            result.__post_init__()
+        except BaseException:
+            with task.condition:
+                task.closing = False
+                task.condition.notify_all()
+            raise
+        with self._condition:
+            if self._tasks.get(task_id) is task:
+                self._tasks.pop(task_id, None)
+            self._plan_views.pop(task_id, None)
+            self._inventory_views.pop(task_id, None)
+            self._close_receipts[receipt_key] = result
+            self._close_receipts.move_to_end(receipt_key)
+            while len(self._close_receipts) > _CLOSE_RECEIPT_CAPACITY:
+                self._close_receipts.popitem(last=False)
+            self._condition.notify_all()
+        return TaskCloseRequestView(task_id, None, "closed")
+
+    def close_task(self, task_id: str, session_id: str) -> TaskCloseView:
+        """Explicitly release one terminal task and its retained plan."""
+
+        self._require_task_identity(task_id, session_id)
+        receipt_key = (task_id, session_id)
+        with self._condition:
+            receipt = self._close_receipts.get(receipt_key)
+            if receipt is not None:
+                if type(receipt) is not TaskCloseView:
+                    raise RuntimeError("task close receipt has invalid ownership")
+                self._close_receipts.move_to_end(receipt_key)
+                return receipt
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            task.require_no_response_capture_reentry()
+            while task.transition:
+                task.condition.wait()
+            if task.session_id != session_id:
+                raise TaskUnavailableError("task is unavailable")
+            delivery = self._terminal_delivery_locked(task)
+            task.retiring = True
+            task.closing = True
+            task.generation += 1
+            if task.active_drain is not None:
+                task.active_drain.superseded = True
+            task.condition.notify_all()
+
+        response: _StartResponse | None = None
+        with self._condition:
+            while True:
+                receipt = self._close_receipts.get(receipt_key)
+                if receipt is not None:
+                    if type(receipt) is not TaskCloseView:
+                        raise RuntimeError("task close receipt has invalid ownership")
+                    self._close_receipts.move_to_end(receipt_key)
+                    return receipt
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                response_key = task.start_command_id or task.command_id
+                response = self._start_responses.get(response_key)
+                if response is None:
+                    raise RuntimeError("task start response is unavailable")
+                if not response.delivery_retiring:
+                    response.delivery_retiring = True
+                    self._condition.notify_all()
+                    break
+                self._condition.wait()
+
+        try:
+            result = self._lifecycle.close_task(
+                task_id,
+                session_id,
+                delivery,
+            )
+            if (
+                type(result) is not TaskCloseView
+                or result.task_id != task_id
+                or result.session_id != session_id
+            ):
+                raise RuntimeError("task lifecycle returned invalid close data")
+            result.__post_init__()
+        except BaseException as error:
+            _retire_exception_graph(error)
+            with self._condition:
+                response.delivery_retiring = False
+                if (
+                    self._closing
+                    and self._start_responses.get(response_key) is response
+                ):
+                    self._start_responses.pop(response_key, None)
+                self._condition.notify_all()
+            raise
+        with self._condition:
+            self._close_receipts[receipt_key] = result
+            self._close_receipts.move_to_end(receipt_key)
+            while len(self._close_receipts) > _CLOSE_RECEIPT_CAPACITY:
+                self._close_receipts.popitem(last=False)
+            if self._tasks.get(task_id) is task:
+                self._tasks.pop(task_id, None)
+            self._plan_views.pop(task_id, None)
+            self._inventory_views.pop(task_id, None)
+            response.delivery_retiring = False
+            for command_id in task.start_response_ids:
+                self._start_responses.pop(command_id, None)
+            if self._start_responses.get(response_key) is response:
+                self._start_responses.pop(response_key, None)
+            self._condition.notify_all()
+        return result
+
+    @staticmethod
+    def _terminal_delivery_locked(task: _TaskState) -> TaskTerminalDelivery:
+        record = task.delivered_terminal_record
+        if record is None:
+            raise TaskUnavailableError("task terminal record was not drained")
+        return TaskTerminalDelivery(
+            record,
+            task.delivered_terminal_event,
+        )
+
+    def _require_task(self, task_id: str, session_id: str) -> _TaskState:
+        self._require_task_identity(task_id, session_id)
+        with self._condition:
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            self._require_live_locked(task, session_id)
+        return task
+
+    @staticmethod
+    def _require_live_locked(task: _TaskState, session_id: str) -> None:
+        if task.closing or task.session_id != session_id:
+            raise TaskUnavailableError("task is unavailable")
+
+    @staticmethod
+    def _require_task_identity(task_id: str, session_id: str) -> None:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+
+
+def _next_execution_revision(current: int) -> int:
+    if current >= MAX_JAVASCRIPT_SAFE_INTEGER:
+        raise OverflowError("execution revision is exhausted")
+    return current + 1
+
+
+def _execution_evidence_wire(value: ExecutionEvidenceResult) -> dict[str, object]:
+    if type(value) is not ExecutionEvidenceResult:
+        raise RuntimeError("retained execution evidence has invalid data")
+    content = value.content
+    return {
+        "state": value.state.value,
+        "content": None if content is None else {
+            "algorithm": content.algorithm,
+            "digest": content.digest.hex(),
+            "size": str(content.size),
+            "provenance": content.provenance.value,
+            "observed_at": content.observed_at.isoformat(),
+        },
+    }
+
+
+def _retained_execution_maps(
+    task_id: str,
+    run_id: str,
+    expected_operation_ids: tuple[str, ...],
+    operation_window: object,
+    integrity_window: object,
+    evidence_window: object,
+    *,
+    compact: bool = True,
+) -> tuple[
+    dict[str, object],
+    dict[str, object],
+    dict[str, dict[str, object]],
+]:
+    if (
+        type(operation_window) is not RetainedExecutionItemWindow
+        or type(integrity_window) is not RetainedIntegrityItemWindow
+        or type(evidence_window) is not ExecutionEvidenceWindow
+        or operation_window.task_id != task_id
+        or integrity_window.task_id != task_id
+        or operation_window.run_id != run_id
+        or operation_window.run_id != integrity_window.run_id
+        or evidence_window.run_token != operation_window.run_id
+    ):
+        raise RuntimeError("retained execution read changed its task binding")
+    expected = frozenset(expected_operation_ids)
+    operations: dict[str, object] = {}
+    for item in operation_window.items:
+        if compact:
+            try:
+                item_id = item.item_id
+                if item.phase != "execute" or type(item_id) is not str:
+                    raise TypeError
+                value: object = {
+                    "result": item.outcome.value,
+                    "reason": item.reason,
+                    "recording": item.recording.value,
+                    "recording_reason": (
+                        None
+                        if item.recording_reason is None
+                        else item.recording_reason.value
+                    ),
+                    "detail_omitted_count": item.detail_omitted_count,
+                }
+            except (AttributeError, TypeError) as error:
+                raise RuntimeError(
+                    "retained operation item has invalid data"
+                ) from error
+        else:
+            view = result_item_view(item)
+            if type(view) is not OperationItemView:
+                raise RuntimeError("retained operation item has invalid data")
+            item_id = view.item_id
+            value = view
+        if item_id not in expected or item_id in operations:
+            raise RuntimeError("retained operation item has invalid data")
+        operations[item_id] = value
+    integrity: dict[str, object] = {}
+    for item in integrity_window.items:
+        if compact:
+            try:
+                item_id = item.item_id
+                if item.phase != "verify" or type(item_id) is not str:
+                    raise TypeError
+                value = {
+                    "result": item.result.value,
+                    "reason": None if item.reason is None else item.reason.value,
+                    "recording": item.recording.value,
+                    "record_disposition": (
+                        None
+                        if item.record_disposition is None
+                        else item.record_disposition.value
+                    ),
+                    "detail_omitted_count": item.detail_omitted_count,
+                }
+            except (AttributeError, TypeError) as error:
+                raise RuntimeError(
+                    "retained integrity item has invalid data"
+                ) from error
+        else:
+            view = result_item_view(item)
+            if type(view) is not IntegrityOutcomeView:
+                raise RuntimeError("retained integrity item has invalid data")
+            item_id = view.item_id
+            value = view
+        if item_id not in expected or item_id in integrity:
+            raise RuntimeError("retained integrity item has invalid data")
+        integrity[item_id] = value
+    evidence: dict[str, dict[str, object]] = {}
+    for result in evidence_window.results:
+        if type(result) is not ExecutionEvidenceResult:
+            raise RuntimeError("retained execution evidence has invalid data")
+        if result.operation_id not in expected or result.operation_id in evidence:
+            raise RuntimeError("retained execution evidence is duplicated")
+        evidence[result.operation_id] = _execution_evidence_wire(result)
+    return operations, integrity, evidence
+
+
+def _decorate_execution_window(
+    window: dict[str, object],
+    execution: dict[str, object],
+    operations: Mapping[str, object],
+    integrity: Mapping[str, object],
+    evidence: Mapping[str, dict[str, object]],
+) -> dict[str, object]:
+    rows = []
+    for row in window["rows"]:
+        operation_id = row["operation_id"]
+        overlay = None
+        if operation_id is not None:
+            operation = operations.get(operation_id)
+            automatic = integrity.get(operation_id)
+            current_evidence = evidence.get(operation_id)
+            overlay = {
+                "operation": (
+                    None if operation is None else dict(operation)
+                ),
+                "automatic_verification": (
+                    None if automatic is None else dict(automatic)
+                ),
+                "evidence": (
+                    None
+                    if current_evidence is None
+                    else {
+                        **current_evidence,
+                        "content": (
+                            None
+                            if current_evidence["content"] is None
+                            else dict(current_evidence["content"])
+                        ),
+                    }
+                ),
+            }
+        rows.append({**row, "execution": overlay})
+    return {
+        **window,
+        "execution": execution,
+        "rows": rows,
+    }
+
+
+def _execution_detail_empty(
+    disposition: str,
+    execution_revision: int,
+    operation_id: str,
+) -> dict[str, object]:
+    return {
+        "disposition": disposition,
+        "execution_revision": execution_revision,
+        "operation_id": operation_id,
+        "operation": None,
+        "automatic_verification": None,
+        "evidence": None,
+    }
+
+
+def _tag_update(update: TaskDeliveryUpdate) -> TaskUpdateView:
+    if type(update) is SessionEventView:
+        return TaskEventUpdateView("event", update)
+    if type(update) is SessionRecordView:
+        return TaskRecordUpdateView("record", update)
+    raise TypeError("task updates must be exact service view types")
+
+
+def _wire_policy_conflicts(
+    first: tuple[object, ...] | None,
+    second: tuple[object, ...] | None,
+) -> bool:
+    if first is None or second is None:
+        return False
+    if len(first) == len(second) == 3:
+        return first[2] != second[2]
+    return first != second
+
+
+def _require_opaque_id(value: object, label: str) -> None:
+    if type(value) is not str or _OPAQUE_ID.fullmatch(value) is None:
+        raise RuntimeError(f"{label} is invalid")
+
+
+__all__ = [
+    "DrainBusyError",
+    "ObservationConflictError",
+    "TaskRegistry",
+]

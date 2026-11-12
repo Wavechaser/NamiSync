@@ -1,0 +1,1921 @@
+"""Ordinary contract checks for the opt-in installed-wheel event benchmark."""
+
+from __future__ import annotations
+
+import copy
+import importlib.util
+import json
+import os
+import sys
+import zipfile
+from collections import deque
+from contextlib import nullcontext
+from datetime import datetime, timezone
+from pathlib import Path
+from threading import Condition, Lock
+from types import SimpleNamespace
+
+import pytest
+
+from _headed_evidence import EvidencePaths, EvidencePublisher, EvidenceReader
+from _frontend_test_support import _node_executable, run_node_probe
+from namisync.interfaces.web.commands import production_command_specs
+from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
+
+
+ROOT = Path(__file__).parents[2]
+FAMILY = ROOT.parent / "tools" / "performance" / "bridge_event"
+PARENT = FAMILY / "__init__.py"
+CHILD = FAMILY / "child.py"
+RETAINED = Path(__file__).with_name("_bridge_retained_memory.py")
+ASSETS = FAMILY / "assets"
+_OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
+
+
+def _benchmark_module():
+    specification = importlib.util.spec_from_file_location(
+        "bridge_event_benchmark_contract",
+        PARENT,
+    )
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+def _child_module():
+    specification = importlib.util.spec_from_file_location(
+        "bridge_event_benchmark_child_contract",
+        CHILD,
+    )
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+def _retained_module():
+    specification = importlib.util.spec_from_file_location(
+        "bridge_retained_memory_contract",
+        RETAINED,
+    )
+    assert specification is not None and specification.loader is not None
+    module = importlib.util.module_from_spec(specification)
+    sys.modules[specification.name] = module
+    specification.loader.exec_module(module)
+    return module
+
+
+def test_bridge_event_benchmark_keeps_structured_incomplete_evidence(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(benchmark, "_benchmark_root", lambda *_args: nullcontext(tmp_path))
+    monkeypatch.setattr(
+        benchmark,
+        "_build_archived_wheel",
+        lambda _root: (tmp_path / "wheel.whl", "a" * 40, (" M driver",)),
+    )
+    def fail_install(*_args):
+        raise RuntimeError("install failed")
+
+    monkeypatch.setattr(benchmark, "_install_wheel", fail_install)
+
+    result = benchmark.run_case("installed", output=tmp_path / "report.json")
+
+    assert result["status"] == "incomplete"
+    assert result["failure"] == {
+        "exception_type": "RuntimeError",
+        "message": "install failed",
+    }
+    assert result["tested_commit"] == "a" * 40
+    assert result["worktree_status"] == [" M driver"]
+    assert result["product_source"] == {
+        "kind": "git-archive-head", "revision": "a" * 40,
+    }
+    assert result["driver_source"]["kind"] == "working-tree"
+    assert result["memory"]["job_private_memory"] == {}
+    assert result["partial_evidence"] == {}
+
+
+def test_bridge_event_benchmark_parent_keeps_first_browser_failure_and_partial_stream(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    benchmark = _benchmark_module()
+    child = _child_module()
+    monkeypatch.setattr(benchmark, "_benchmark_root", lambda *_args: nullcontext(tmp_path))
+    monkeypatch.setattr(
+        benchmark, "_build_archived_wheel",
+        lambda _root: (tmp_path / "wheel.whl", "a" * 40, ()),
+    )
+    monkeypatch.setattr(benchmark, "_install_wheel", lambda *_args: tmp_path / "python.exe")
+    monkeypatch.setattr(benchmark, "_stage_page", lambda *_args: tmp_path / "index.html")
+    monkeypatch.setattr(benchmark, "scenario_deadline", lambda _seconds: object())
+    monkeypatch.setattr(benchmark, "wait_for_window", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(benchmark, "close_window", lambda _window: None)
+    monkeypatch.setattr(
+        benchmark, "wait_for_process",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+    )
+
+    class Process:
+        def poll(self):
+            return 0
+
+        def close_job(self):
+            pass
+
+    monkeypatch.setattr(benchmark, "_start_direct_job_process", lambda *_args, **_kwargs: Process())
+
+    class Sampler:
+        def __init__(self, _process):
+            pass
+
+        def wait_until_ready(self, *_args):
+            pass
+
+        def take_idle_baseline(self, _deadline):
+            pass
+
+        def run_until_browser_report(self, *_args):
+            recorder = child._Recorder(tmp_path / "child-evidence.json")
+            recorder.append_samples([{"sample": 1}])
+            recorder.set("browser", {
+                "failure": "BridgeCommandError",
+                "failure_source": "report:samples",
+                "failure_message": "The desktop action contains invalid data",
+            })
+            EvidencePublisher(EvidencePaths((tmp_path / "child-evidence").resolve())).publish_failure(
+                recorder.snapshot()
+            )
+            return False
+
+        def result(self):
+            return {}
+
+    monkeypatch.setattr(benchmark, "_JobPrivateMemorySampler", Sampler)
+    result = benchmark.run_case("installed", output=tmp_path / "report.json")
+    assert result["status"] == "incomplete"
+    assert result["failure"] == {
+        "exception_type": "BridgeCommandError",
+        "message": "report:samples: The desktop action contains invalid data",
+    }
+    assert result["parent_failure"]["message"] == (
+        "benchmark child did not publish final evidence"
+    )
+    assert result["partial_evidence"]["samples"] == [{"sample": 1}]
+
+
+def test_bridge_event_benchmark_normal_incomplete_exit_retains_unfinished_raw_streams(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    benchmark = _benchmark_module()
+    child = _child_module()
+    monkeypatch.setattr(benchmark, "REPOSITORY_ROOT", tmp_path / "checkout")
+    monkeypatch.setattr(
+        benchmark, "_build_archived_wheel",
+        lambda _root: (tmp_path / "wheel.whl", "a" * 40, ()),
+    )
+    monkeypatch.setattr(benchmark, "_install_wheel", lambda *_args: tmp_path / "python.exe")
+    monkeypatch.setattr(benchmark, "_stage_page", lambda *_args: tmp_path / "index.html")
+    monkeypatch.setattr(benchmark, "scenario_deadline", lambda _seconds: object())
+    monkeypatch.setattr(benchmark, "wait_for_window", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(benchmark, "close_window", lambda _window: None)
+    monkeypatch.setattr(
+        benchmark, "wait_for_process",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0),
+    )
+    monkeypatch.setattr(
+        benchmark, "_machine",
+        lambda _root: {"reference_profile_match": False},
+    )
+
+    class Process:
+        def __init__(self, root: Path) -> None:
+            self.root = root
+
+        def poll(self):
+            return 0
+
+        def close_job(self):
+            pass
+
+    monkeypatch.setattr(
+        benchmark, "_start_direct_job_process",
+        lambda *_args, cwd, **_kwargs: Process(cwd),
+    )
+
+    class Sampler:
+        def __init__(self, process: Process) -> None:
+            self.root = process.root
+
+        def wait_until_ready(self, *_args):
+            pass
+
+        def take_idle_baseline(self, _deadline):
+            pass
+
+        def run_until_browser_report(self, *_args):
+            recorder = child._Recorder(self.root / "child-evidence.json")
+            recorder.append_samples([{"sample": 1}])
+            recorder.set("browser", {
+                "failure": "BridgeCommandError",
+                "failure_source": "report:samples",
+                "failure_message": "The desktop action contains invalid data",
+            })
+            publisher = EvidencePublisher(EvidencePaths(self.root / "child-evidence"))
+            publisher.publish_failure(recorder.snapshot())
+            recorder.set("complete", True)
+            recorder.set("exit_code", 0)
+            publisher.publish_final(recorder.snapshot())
+            (self.root / "data").mkdir()
+            (self.root / "data" / "benchmark.failure").write_bytes(b"")
+            (self.root / "child-evidence.json.producer-0.timings.jsonl").write_bytes(
+                b'{"progress":[0.04],"reliable":[]}\n'
+            )
+            return False
+
+        def result(self):
+            return {}
+
+    monkeypatch.setattr(benchmark, "_JobPrivateMemorySampler", Sampler)
+    output = tmp_path / "report.json"
+    result = benchmark.run_case("installed", output=output)
+
+    assert result["status"] == "incomplete"
+    assert result["failure"] == {
+        "exception_type": "BridgeCommandError",
+        "message": "report:samples: The desktop action contains invalid data",
+    }
+    assert "parent_failure" not in result
+    raw = Path(result["raw_evidence"]["path"])
+    assert raw == tmp_path / "report.json.raw-incomplete"
+    assert (raw / "child-evidence" / "failure.json").is_file()
+    assert (raw / "child-evidence" / "final.json").is_file()
+    assert (raw / "child-evidence.json.samples.jsonl").is_file()
+    assert (raw / "child-evidence.json.producer-0.timings.jsonl").read_bytes() == (
+        b'{"progress":[0.04],"reliable":[]}\n'
+    )
+    assert (raw / "data" / "benchmark.failure").is_file()
+    assert not list(tmp_path.glob(".namisync-bridge-benchmark-*"))
+
+
+def test_bridge_event_benchmark_cli_publishes_incomplete_observation(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from tools import __main__ as tool_cli
+    from tools.performance import bridge_event
+
+    monkeypatch.setattr(bridge_event, "_benchmark_root", lambda *_args: nullcontext(tmp_path))
+    monkeypatch.setattr(
+        bridge_event,
+        "_build_archived_wheel",
+        lambda _root: (tmp_path / "wheel.whl", "b" * 40, (" M driver",)),
+    )
+
+    def fail_install(*_args):
+        raise RuntimeError("install failed")
+
+    monkeypatch.setattr(bridge_event, "_install_wheel", fail_install)
+    output = tmp_path / "report.json"
+    args = SimpleNamespace(
+        list_cases=False, family="bridge-event", case="installed",
+        json=output, installed_root=None,
+    )
+
+    assert tool_cli._run_performance_command(args) == 2
+    report = json.loads(output.read_text(encoding="utf-8"))
+    assert report["status"] == "incomplete"
+    assert report["observation"]["tested_commit"] == "b" * 40
+    assert report["observation"]["worktree_status"] == [" M driver"]
+    assert report["observation"]["failure"]["message"] == "install failed"
+
+
+def test_bridge_event_benchmark_preserves_raw_child_failure_without_overwrite(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(benchmark, "REPOSITORY_ROOT", tmp_path / "repository")
+    output = tmp_path / "report.json"
+    raw_artifacts: dict[str, str] = {}
+
+    with pytest.raises(RuntimeError, match="child stopped"):
+        with benchmark._benchmark_root(output, raw_artifacts) as root:
+            milestones = root / "child-evidence"
+            milestones.mkdir()
+            (milestones / "failure.json").write_bytes(b'{"failure":true}')
+            (root / "child-evidence.json.samples.jsonl").write_bytes(b'{"sample":1}\n')
+            raise RuntimeError("child stopped")
+
+    preserved = Path(raw_artifacts["path"])
+    assert preserved == tmp_path / "report.json.raw-incomplete"
+    assert not root.exists()
+    assert (preserved / "child-evidence" / "failure.json").read_bytes() == b'{"failure":true}'
+    assert (preserved / "child-evidence.json.samples.jsonl").read_bytes() == b'{"sample":1}\n'
+    scratch = tmp_path / "scratch" / "child-evidence"
+    scratch.mkdir(parents=True)
+    (scratch / "failure.json").write_bytes(b"later")
+    with pytest.raises(FileExistsError):
+        benchmark._preserve_failure_evidence(output, scratch.parent)
+
+
+def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -> None:
+    parent = PARENT.read_text(encoding="utf-8")
+    child = CHILD.read_text(encoding="utf-8")
+    retained = RETAINED.read_text(encoding="utf-8")
+    browser = (ASSETS / "benchmark.js").read_text(encoding="utf-8")
+    bootstrap = (ROOT / "assets" / "bootstrap_test_bridge.js").read_text(
+        encoding="utf-8"
+    )
+
+    compile(parent, str(PARENT), "exec")
+    compile(child, str(CHILD), "exec")
+    compile(retained, str(RETAINED), "exec")
+    assert '"archive", "--format=zip"' in parent
+    assert "pip\",\n            \"wheel" in parent
+    assert "WorkflowRegistration" in child
+    assert "TaskRegistry" not in browser
+    assert 'from "./bridge.js"' in browser
+    assert 'from "./bootstrap_test_bridge.js"' in browser
+    assert 'from "./render.js"' in browser
+    assert "headed_command_extension(" in child
+    assert "installTestBridgeReadiness();" in browser
+    assert "await bootstrapTestBridge();" in browser
+    assert "installAppearanceReceiver(" not in browser
+    assert "appearance" not in bootstrap.casefold()
+    assert "attempt < 2" in bootstrap
+    assert 'id="host-status"' in (ASSETS / "index.html").read_text(
+        encoding="utf-8"
+    )
+    assert "evaluate_js" not in parent
+    assert "evaluate_js" not in child
+    assert "evaluate_js" not in browser
+    assert "SAMPLE_REPORT_BATCH_SIZE = 100" in browser
+    assert "MAX_PENDING_ORDINARY_SAMPLE_REPORTS = 4" in browser
+    assert "MAX_PENDING_SAMPLE_REPORTS = 16" in browser
+    assert 'sampleClass === "terminal_event"' in browser
+    assert "failure_source:" in browser
+    assert "report_completed:" in browser
+    assert "retainedBytes" not in browser
+    assert "PrivateUsage" in parent
+    assert "_QueueMemorySampler" not in child
+    assert "append_producer_timings" in child
+    assert "items_done=reliable_emissions" in child
+    assert "items_total=150" in child
+    assert "? fixtureBytes(event.body.bytes_done)" in browser
+    assert "const completed = fixtureBytes(event.body.bytes_done);" in browser
+    assert "publisher.publish_final(recorder.snapshot())" in child
+    assert "publisher.publish_failure(recorder.snapshot())" in child
+    assert ".replace(" not in child
+    assert "latest_evidence" not in parent
+    assert "start_headed_process" not in parent
+    assert '"--admission-gate"' in parent
+    assert 'kind: "ready"' in browser
+    assert 'void enqueueReport("presented", null).catch' in browser
+    assert "wait_for_accessible_text" not in parent
+    complete = browser.index('await enqueueReport("complete"')
+    rendered = browser.index('renderText(status, "Benchmark complete', complete)
+    presented = browser.index('void enqueueReport("presented"', rendered)
+    assert complete < rendered < presented
+    terminal_preflush = browser.index(
+        'sampleClass === "terminal_event" || sampleClass === "terminal_record"'
+    )
+    assert terminal_preflush < browser.index("samples.push(sample)")
+    assert browser.count("flushSamples(true)") == 1
+    assert 'sampleClass === "terminal_event" || sampleClass === "terminal_record",' in browser
+
+
+def test_bridge_event_benchmark_page_decodes_v5_and_retains_first_report_failure() -> None:
+    node = _node_executable()
+    assert node is not None
+    completed = run_node_probe(
+        [
+            str(node),
+            str(ROOT / "assets" / "bridge_event_page_probe.mjs"),
+            str(ASSETS / "benchmark.js"),
+        ],
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert json.loads(completed.stdout) == {"first_failure": "report:samples"}
+
+
+def test_bridge_event_benchmark_terminal_checks_are_item_free() -> None:
+    benchmark = _benchmark_module()
+    core = {
+        "status": "completed", "recording": "ok", "audit": "ok",
+        "disposition": "ran", "canceled": False, "phase_count": 0,
+        "bytes_done": 1_500, "bytes_total": 1_500, "error": None,
+    }
+    record = {
+        **core, "headline": "success", "filesystem": "completed",
+        "integrity": "not-run",
+    }
+    record.pop("status")
+    assert benchmark._successful_core_result(core)
+    assert benchmark._successful_result_view(record)
+    assert not benchmark._successful_core_result({**core, "items": []})
+    assert not benchmark._successful_result_view({**record, "items": []})
+    assert not benchmark._successful_core_result({**core, "bytes_done": True})
+
+
+def test_bridge_event_benchmark_current_product_wire_has_string_bytes_and_no_items() -> None:
+    from dataclasses import asdict
+
+    from namisync.core.events import (
+        CORE_EVENT_SCHEMA_VERSION, Envelope, Progress, Terminal,
+        TerminalSummary, envelope_to_dict,
+    )
+    from namisync.core.session import OperationResult, SessionState
+    from namisync.workflows.views import operation_result_view
+
+    result = OperationResult(
+        SessionState.COMPLETED, bytes_done=1_500, bytes_total=1_500,
+    )
+    stamp = datetime.now(timezone.utc)
+    progress = envelope_to_dict(Envelope(
+        session_id="f" * 32, seq=1, at=stamp,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
+        body=Progress(
+            "execute", items_done=150, items_total=150,
+            bytes_done=1_500, bytes_total=1_500, current_path=None,
+        ),
+    ))
+    terminal = envelope_to_dict(Envelope(
+        session_id="f" * 32, seq=2, at=stamp,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
+        body=Terminal(TerminalSummary.from_result(result)),
+    ))
+    record = asdict(operation_result_view(result))
+    assert progress["body"]["bytes_done"] == "1500"
+    assert terminal["body"]["result"]["bytes_done"] == "1500"
+    assert "items" not in terminal["body"]["result"]
+    assert record["bytes_done"] == "1500"
+    assert "items" not in record
+
+
+def test_bridge_event_benchmark_synthetic_producer_checks_cancel(tmp_path: Path) -> None:
+    child = _child_module()
+
+    class Canceled(Exception):
+        pass
+
+    class Context:
+        def __init__(self) -> None:
+            self.checks = 0
+            self.events = []
+
+        def checkpoint(self) -> None:
+            self.checks += 1
+            if self.checks == 4:
+                raise Canceled
+
+        def emit(self, event) -> None:
+            self.events.append(event)
+
+    context = Context()
+    invocation = child._BenchmarkInvocation(
+        0,
+        SimpleNamespace(wait=lambda _timeout: None),
+        SimpleNamespace(started_at=child.perf_counter),
+        child._Recorder(tmp_path / "producer.json"),
+    )
+    with pytest.raises(Canceled):
+        invocation.run(context)
+    assert context.checks == 4
+    assert len(context.events) == 1
+    assert not list(tmp_path.glob("producer.json.producer-*"))
+
+
+@pytest.mark.parametrize("task_index", range(4))
+def test_bridge_event_benchmark_v4_attempt_schedule_is_coherent(
+    task_index: int,
+) -> None:
+    child = _child_module()
+    benchmark = _benchmark_module()
+    from namisync.core.events import Progress
+
+    reliable_emissions = 0
+    attempts: dict[str, list[object]] = {}
+    settlement_offsets = []
+    for tick in range(1_500):
+        attempt = child._attempt_sample(task_index, tick, reliable_emissions)
+        snapshot = Progress(
+            "execute",
+            items_done=reliable_emissions,
+            items_total=150,
+            bytes_done=tick + 1,
+            bytes_total=1_500,
+            current_path=f"progress-{tick + 1}",
+            item_id=attempt.item_id,
+            item_type="operation",
+            item_attempt_id=attempt.attempt_id,
+            item_bytes_done=attempt.bytes_done,
+            item_bytes_total=attempt.bytes_total,
+        )
+        attempts.setdefault(snapshot.item_id, []).append(snapshot)
+        if attempt.settles:
+            settlement_offsets.append(tick * 0.04)
+            reliable_emissions += 1
+
+    assert reliable_emissions == 150
+    assert len(attempts) == 150
+    assert tuple(attempts) == tuple(
+        f"task-{task_index}-item-{ordinal:03d}" for ordinal in range(150)
+    )
+    assert list(attempts) == benchmark._expected_reliable_ids(task_index)
+    assert settlement_offsets == benchmark._expected_reliable_offsets(task_index)
+    assert len({events[0].item_attempt_id for events in attempts.values()}) == 150
+    for events in attempts.values():
+        assert {event.item_attempt_id for event in events} == {
+            events[0].item_attempt_id
+        }
+        assert [event.item_bytes_done for event in events] == list(
+            range(1, events[0].item_bytes_total + 1)
+        )
+    assert attempts[f"task-{task_index}-item-149"][-1].bytes_done == 1_500
+
+
+def test_bridge_event_benchmark_assigns_actual_child_before_admission(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    benchmark = _benchmark_module()
+
+    class Kernel:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def CreateEventW(self, *_args):
+            self.calls.append("create-event")
+            return 10
+
+        def CreateJobObjectW(self, *_args):
+            self.calls.append("create-job")
+            return 20
+
+        def SetInformationJobObject(self, *_args):
+            self.calls.append("configure-job")
+            return True
+
+        def AssignProcessToJobObject(self, *_args):
+            self.calls.append("assign")
+            return True
+
+        def SetEvent(self, *_args):
+            self.calls.append("signal")
+            return True
+
+        def CloseHandle(self, handle):
+            self.calls.append(("close", handle))
+            return True
+
+    class Process:
+        pid = 123
+        _handle = 30
+
+        def poll(self):
+            return None
+
+    kernel = Kernel()
+    process = Process()
+    launched = {}
+
+    def popen(command, **options):
+        launched["command"] = command
+        launched["options"] = options
+        return process
+
+    monkeypatch.setattr(benchmark, "_kernel32", lambda: kernel)
+    monkeypatch.setattr(benchmark.subprocess, "Popen", popen)
+    headed = benchmark._start_direct_job_process(
+        ["python.exe", "child.py"],
+        cwd=tmp_path,
+        environment={"PYTHONUTF8": "1"},
+        deadline=SimpleNamespace(remaining=lambda: 30.0),
+    )
+
+    assert headed.process is process
+    assert launched["command"][:2] == ("python.exe", "child.py")
+    assert "--admission-gate" in launched["command"]
+    assert kernel.calls.index("assign") < kernel.calls.index("signal")
+    assert launched["options"]["cwd"] == tmp_path
+
+
+def test_bridge_event_benchmark_checks_deadline_before_allocating_handles(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    benchmark = _benchmark_module()
+    kernel_requested = False
+
+    def kernel32():
+        nonlocal kernel_requested
+        kernel_requested = True
+        raise AssertionError("kernel APIs must not be reached")
+
+    def expired():
+        raise AssertionError("deadline expired")
+
+    monkeypatch.setattr(benchmark, "_kernel32", kernel32)
+
+    with pytest.raises(AssertionError, match="deadline expired"):
+        benchmark._start_direct_job_process(
+            ["python.exe", "child.py"],
+            cwd=tmp_path,
+            environment={},
+            deadline=SimpleNamespace(remaining=expired),
+        )
+
+    assert kernel_requested is False
+
+
+@pytest.mark.parametrize("failure", ["early-exit", "assignment"])
+def test_bridge_event_benchmark_direct_admission_cleans_up_failures(
+    monkeypatch,
+    tmp_path: Path,
+    failure: str,
+) -> None:
+    benchmark = _benchmark_module()
+
+    class Kernel:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def CreateEventW(self, *_args):
+            return 10
+
+        def CreateJobObjectW(self, *_args):
+            return 20
+
+        def SetInformationJobObject(self, *_args):
+            return True
+
+        def AssignProcessToJobObject(self, *_args):
+            self.calls.append("assign")
+            return failure != "assignment"
+
+        def SetEvent(self, *_args):
+            self.calls.append("signal")
+            return True
+
+        def CloseHandle(self, handle):
+            self.calls.append(("close", handle))
+            return True
+
+    class Process:
+        pid = 123
+        _handle = 30
+
+        def __init__(self) -> None:
+            self.killed = False
+            self.communicated = False
+
+        def poll(self):
+            if failure == "early-exit":
+                return 9
+            return -9 if self.killed else None
+
+        def kill(self):
+            self.killed = True
+
+        def communicate(self, *, timeout):
+            assert timeout == 5.0
+            self.communicated = True
+            return "", ""
+
+    kernel = Kernel()
+    process = Process()
+    monkeypatch.setattr(benchmark, "_kernel32", lambda: kernel)
+    monkeypatch.setattr(
+        benchmark.subprocess,
+        "Popen",
+        lambda *_args, **_kwargs: process,
+    )
+
+    expected = RuntimeError if failure == "early-exit" else OSError
+    with pytest.raises(expected):
+        benchmark._start_direct_job_process(
+            ["python.exe", "child.py"],
+            cwd=tmp_path,
+            environment={},
+            deadline=SimpleNamespace(remaining=lambda: 30.0),
+        )
+
+    assert process.communicated is True
+    assert process.killed is (failure == "assignment")
+    assert ("close", 10) in kernel.calls
+    assert ("close", 20) in kernel.calls
+    assert "signal" not in kernel.calls
+
+
+def test_retained_state_sizer_separates_terminal_results_and_queue_roots() -> None:
+    from namisync.core.events import (
+        CORE_EVENT_SCHEMA_VERSION,
+        Envelope,
+        ItemOutcome,
+        Terminal,
+        TerminalSummary,
+    )
+    from namisync.core.evidence import Outcome
+    from namisync.core.session import FailureDetail, OperationResult, SessionState
+    from namisync.workflows.views import (
+        SessionEventView,
+        SessionRecordView,
+        operation_result_view,
+        session_event_view,
+    )
+
+    retained = _retained_module()
+
+    def measure(shared_text: str, terminal_text: str):
+        session_id = "d" * 32
+        item_id = "e" * 32
+        result = OperationResult(
+            SessionState.COMPLETED,
+            error=FailureDetail("SyntheticFailure", terminal_text),
+            items=(
+                ItemOutcome(
+                    item_id=item_id,
+                    kind="copy",
+                    path="terminal/path.bin",
+                    outcome=Outcome.SUCCEEDED,
+                    detail={"message": terminal_text},
+                ),
+            ),
+        )
+        terminal_summary = TerminalSummary.from_result(result)
+        terminal_envelope = Envelope(
+            session_id=session_id,
+            seq=2,
+            at=datetime.now(timezone.utc),
+            schema_version=CORE_EVENT_SCHEMA_VERSION,
+            body=Terminal(terminal_summary),
+        )
+        nonterminal = SessionEventView(
+            session_id,
+            1,
+            "2026-08-14T00:00:00+00:00",
+            CORE_EVENT_SCHEMA_VERSION,
+            "Progress",
+            {
+                "phase": "execute",
+                "items_done": 1,
+                "items_total": 2,
+                "bytes_done": "1",
+                "bytes_total": "2",
+                "current_path": shared_text,
+                "item_id": item_id,
+                "item_type": "operation",
+                "item_attempt_id": "a" * 32,
+                "item_bytes_done": "1",
+                "item_bytes_total": "2",
+            },
+        )
+        terminal_event = session_event_view(terminal_envelope)
+        record = SessionRecordView(
+            session_id,
+            "sync-plan",
+            "completed",
+            False,
+            "2026-08-14T00:00:00+00:00",
+            "2026-08-14T00:00:00+00:00",
+            "2026-08-14T00:00:01+00:00",
+            operation_result_view(result),
+        )
+        task = SimpleNamespace(
+            condition=Condition(),
+            queue=deque((nonterminal, terminal_event, record)),
+            terminal_record=record,
+        )
+        stream = SimpleNamespace(
+            _condition=Condition(),
+            _items=deque((terminal_envelope,)),
+        )
+        hub = SimpleNamespace(
+            _lock=Lock(),
+            _replay=deque((terminal_envelope,)),
+            _subscribers=[stream],
+        )
+        registry = SimpleNamespace(
+            _condition=Condition(),
+            _tasks={"task": task},
+        )
+        dispatcher = SimpleNamespace(
+            _condition=Condition(),
+            _hubs={session_id: hub},
+            _records={session_id: SimpleNamespace(result=result)},
+        )
+        return retained.measure_retained_bridge_state(dispatcher, registry)
+
+    small = measure("shared-session", "terminal")
+    large_terminal = measure("shared-session", "terminal" * 100)
+    shared_long = measure("shared-session" * 300, "terminal")
+
+    assert large_terminal["transport_custody_bytes"] == small[
+        "transport_custody_bytes"
+    ]
+    assert large_terminal["terminal_artifact_bytes"] > small[
+        "terminal_artifact_bytes"
+    ]
+    assert shared_long["transport_custody_bytes"] > small[
+        "transport_custody_bytes"
+    ]
+    assert shared_long["terminal_artifact_bytes"] == small[
+        "terminal_artifact_bytes"
+    ]
+    assert small["transport_custody_bytes"] < sum(
+        small[name]
+        for name in (
+            "adapter_queue_bytes",
+            "replay_queue_bytes",
+            "subscriber_queue_bytes",
+        )
+    )
+    assert all(
+        small[name] > 0
+        for name in (
+            "adapter_queue_bytes",
+            "replay_queue_bytes",
+            "subscriber_queue_bytes",
+            "terminal_artifact_bytes",
+            "transport_custody_bytes",
+        )
+    )
+
+
+def test_retained_state_sizer_refuses_unknown_graph_types() -> None:
+    retained = _retained_module()
+
+    class Unsupported:
+        pass
+
+    task = SimpleNamespace(
+        condition=Condition(),
+        queue=deque((Unsupported(),)),
+        terminal_record=None,
+    )
+    registry = SimpleNamespace(
+        _condition=Condition(),
+        _tasks={"task": task},
+    )
+    dispatcher = SimpleNamespace(
+        _condition=Condition(),
+        _hubs={},
+    )
+
+    with pytest.raises(TypeError, match=r"\.Unsupported$"):
+        retained.measure_retained_bridge_state(dispatcher, registry)
+
+    class RetainedText(str):
+        pass
+
+    task.queue = deque((RetainedText("scalar subclass with hidden state"),))
+    with pytest.raises(TypeError, match=r"\.RetainedText$"):
+        retained.measure_retained_bridge_state(dispatcher, registry)
+
+
+def test_retained_state_sizer_requires_a_quiescent_fixture() -> None:
+    retained = _retained_module()
+    queue = deque(("first",))
+
+    class MutatingCondition:
+        def __init__(self) -> None:
+            self.exits = 0
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            self.exits += 1
+            if self.exits == 1:
+                queue.append("second")
+
+    task = SimpleNamespace(
+        condition=MutatingCondition(),
+        queue=queue,
+        terminal_record=None,
+    )
+    registry = SimpleNamespace(
+        _condition=Condition(),
+        _tasks={"task": task},
+    )
+    dispatcher = SimpleNamespace(
+        _condition=Condition(),
+        _hubs={},
+    )
+
+    with pytest.raises(RuntimeError, match="not quiescent: adapter queues"):
+        retained.measure_retained_bridge_state(dispatcher, registry)
+
+
+def test_bridge_event_benchmark_uses_immutable_handshake_markers(
+    tmp_path: Path,
+) -> None:
+    child = _child_module()
+    output = tmp_path / "evidence.json"
+    recorder = child._Recorder(output)
+    begin = tmp_path / "benchmark.begin"
+    ready = tmp_path / "benchmark.ready"
+    report = tmp_path / "benchmark.report"
+    failure = tmp_path / "benchmark.failure"
+    presented = tmp_path / "benchmark.presented"
+    evidence_root = (tmp_path / "milestones").resolve()
+    evidence_root.mkdir()
+    publisher = EvidencePublisher(EvidencePaths(evidence_root))
+    begin.write_bytes(b"")
+    spec = child._benchmark_specs(
+        object(),
+        (),
+        recorder,
+        begin,
+        ready,
+        report,
+        failure,
+        presented,
+        publisher,
+    )["benchmark_report"]
+
+    sample = {
+        "class": "progress",
+        "event_id": "Progress",
+        "event_result": None,
+        "latency_ms": 1,
+        "observed_offset_ms": 1,
+        "position": 1,
+        "record_state": None,
+        "session_id": "f" * 32,
+        "sequence": 1,
+    }
+    with pytest.raises(ValueError, match="benchmark report payload is invalid"):
+        spec.validate_payload({"kind": "samples", "value": []})
+    with pytest.raises(ValueError, match="benchmark report payload is invalid"):
+        spec.validate_payload({"kind": "samples", "value": [sample] * 101})
+
+    assert spec.invoke(
+        {"kind": "ready", "value": None},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    assert spec.invoke(
+        {"kind": "complete", "value": {}},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    assert spec.invoke(
+        {"kind": "presented", "value": None},
+        context=_OPEN_CONTEXT,
+    ) == {
+        "accepted": True
+    }
+
+    assert ready.is_file()
+    assert report.is_file()
+    assert presented.is_file()
+    assert not failure.exists()
+    assert not output.exists()
+
+    failed_report = tmp_path / "failed.report"
+    failed_marker = tmp_path / "failed.failure"
+    failed_spec = child._benchmark_specs(
+        object(),
+        (),
+        child._Recorder(tmp_path / "failed-evidence.json"),
+        begin,
+        tmp_path / "failed.ready",
+        failed_report,
+        failed_marker,
+        tmp_path / "failed.presented",
+        EvidencePublisher(EvidencePaths(evidence_root)),
+    )["benchmark_report"]
+    assert failed_spec.invoke(
+        {"kind": "complete", "value": {"failure": "BridgeTransportError"}},
+        context=_OPEN_CONTEXT,
+    ) == {"accepted": True}
+    assert failed_marker.is_file()
+    assert not failed_report.exists()
+    assert EvidenceReader(EvidencePaths(evidence_root)).read_failure()["browser"] == {
+        "failure": "BridgeTransportError"
+    }
+
+
+def test_bridge_event_benchmark_publishes_pre_host_setup_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    child = _child_module()
+    evidence_root = (tmp_path / "evidence").resolve()
+    evidence_root.mkdir()
+    paths = EvidencePaths(evidence_root)
+    arguments = SimpleNamespace(
+        admission_gate="unused",
+        admission_timeout_ms=1,
+        evidence_dir=evidence_root,
+        output=tmp_path / "child-evidence.json",
+    )
+    monkeypatch.setattr(child, "_arguments", lambda: arguments)
+    monkeypatch.setattr(child, "_wait_for_named_gate", lambda *_args, **_kwargs: True)
+
+    def fail_version(_name: str) -> str:
+        raise RuntimeError("pre-host setup fault")
+
+    monkeypatch.setattr(child.importlib.metadata, "version", fail_version)
+
+    with pytest.raises(RuntimeError, match="pre-host setup fault"):
+        child.main()
+
+    reader = EvidenceReader(paths)
+    failure = reader.read_failure()
+    assert failure is not None
+    assert failure["child_failure"] == {
+        "type": "RuntimeError",
+        "message": "pre-host setup fault",
+    }
+    assert failure["exit_code"] == 1
+    assert failure["complete"] is False
+    assert reader.read_final() is None
+    reader.assert_consistent(require_final=False)
+
+
+def test_bridge_event_benchmark_streams_and_authenticates_live_evidence(
+    tmp_path: Path,
+) -> None:
+    child = _child_module()
+    benchmark = _benchmark_module()
+    output = tmp_path / "evidence.json"
+    recorder = child._Recorder(output)
+    first = {"sample": 1}
+    second = {"sample": 2}
+
+    recorder.append_samples([first, second])
+    for task_index in range(4):
+        recorder.append_producer_timings(
+            task_index,
+            progress=[task_index + 0.1],
+            reliable=[task_index + 0.2],
+        )
+        recorder.write_producer(task_index, {"task_index": task_index})
+    recorder.set("complete", True)
+    manifest = recorder.snapshot()
+
+    assert "samples" not in manifest
+    assert not output.exists()
+    assert not any(name.startswith("producer_task_") for name in manifest)
+    attached = benchmark._attach_streamed_evidence(manifest, output)
+    assert attached["samples"] == [first, second]
+    assert [attached[f"producer_task_{index}"]["task_index"] for index in range(4)] == [
+        0,
+        1,
+        2,
+        3,
+    ]
+    assert attached["producer_task_3"]["progress_emission_offsets_seconds"] == [
+        3.1
+    ]
+    assert attached["producer_task_3"]["reliable_emission_offsets_seconds"] == [
+        3.2
+    ]
+    partial_manifest = dict(manifest)
+    partial_manifest["producer_streams"] = {"0": manifest["producer_streams"]["0"]}
+    partial = benchmark._attach_streamed_evidence(
+        partial_manifest, output, require_complete=False,
+    )
+    assert partial["producer_task_0"]["task_index"] == 0
+    assert "producer_task_1" not in partial
+    with pytest.raises(RuntimeError, match="producer-stream manifest"):
+        benchmark._attach_streamed_evidence(partial_manifest, output)
+
+    sample_stream = output.with_suffix(output.suffix + ".samples.jsonl")
+    sample_stream.write_bytes(sample_stream.read_bytes() + b"{}")
+    with pytest.raises(RuntimeError, match="partial batch"):
+        benchmark._attach_streamed_evidence(manifest, output)
+    with pytest.raises(ValueError, match="1..100"):
+        recorder.append_samples([])
+
+
+def test_bridge_event_benchmark_worst_case_report_batches_fit_ingress() -> None:
+    ordinary_samples = [
+        {
+            "class": "progress",
+            "event_id": "Progress",
+            "event_result": None,
+            "latency_ms": 1_999.999,
+            "observed_offset_ms": 59_999.999,
+            "position": 1_500,
+            "record_state": None,
+            "session_id": "f" * 32,
+            "sequence": 2_000,
+        }
+        for _ in range(100)
+    ]
+    terminal_result = {
+        "headline": "completed",
+        "filesystem": "succeeded",
+        "integrity": "not-run",
+        "recording": "succeeded",
+        "audit": "not-run",
+        "disposition": "completed",
+        "canceled": False,
+        "phase_count": 0,
+        "bytes_done": 1_500,
+        "bytes_total": 1_500,
+        "error": None,
+    }
+    terminal_sample = {
+        "class": "terminal_record",
+        "event_id": "record",
+        "event_result": terminal_result,
+        "latency_ms": 249.999,
+        "observed_offset_ms": 59_999.999,
+        "position": None,
+        "record_state": "completed",
+        "session_id": "f" * 32,
+        "sequence": None,
+    }
+
+    def encoded(samples):
+        request = {
+            "schema_version": 1,
+            "request_id": "f" * 32,
+            "command": "benchmark_report",
+            "payload": {"kind": "samples", "value": samples},
+        }
+        return json.dumps(
+            request,
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+
+    assert len(encoded(ordinary_samples)) <= 65_536
+    assert len(encoded([terminal_sample])) <= 65_536
+    assert len(encoded([*ordinary_samples, terminal_sample])) <= 65_536
+    legacy_residue = [ordinary_samples[0]] * 350
+    assert len(encoded([*legacy_residue, *([terminal_sample] * 8)])) > 65_536
+
+
+def test_bridge_event_benchmark_reads_current_process_resource_evidence() -> None:
+    benchmark = _benchmark_module()
+    process_id = os.getpid()
+
+    private_bytes = benchmark._process_private_bytes(process_id)
+    metadata = benchmark._process_metadata(
+        process_id,
+        root_process_id=process_id,
+    )
+    resources = benchmark._process_resource_snapshot((process_id,))
+
+    assert type(private_bytes) is int
+    assert private_bytes > 0
+    assert metadata is not None
+    assert metadata["command_role"] == "python-host"
+    assert metadata["creation_time_100ns"] > 0
+    assert resources is not None
+    assert resources[process_id]["handle_count"] > 0
+    assert resources[process_id]["thread_count"] > 0
+    assert benchmark._classify_process_role(
+        process_id + 1,
+        root_process_id=process_id,
+        image_path=r"C:\WebView2\msedgewebview2.exe",
+        command_line="msedgewebview2.exe --type=renderer",
+    ) == "webview2-renderer"
+    assert benchmark._classify_process_role(
+        process_id + 1,
+        root_process_id=process_id,
+        image_path=r"C:\WebView2\msedgewebview2.exe",
+        command_line=None,
+    ) == "unknown:webview2-command-line-unavailable"
+    assert benchmark._classify_process_role(
+        process_id + 1,
+        root_process_id=process_id,
+        image_path=r"C:\WebView2\msedgewebview2.exe",
+        command_line="msedgewebview2.exe",
+    ) == "webview2-browser"
+
+
+def test_bridge_event_benchmark_sampler_contains_diagnostic_api_failures() -> None:
+    benchmark = _benchmark_module()
+
+    class Process:
+        pid = 123
+
+        @staticmethod
+        def process_ids():
+            raise OSError("job query unavailable")
+
+    sampler = benchmark._JobPrivateMemorySampler(Process())
+
+    sampler.sample("baseline")
+    sampler.sample("fixture")
+    result = sampler.result()
+
+    assert result["all_samples_complete"] is False
+    assert result["diagnostic_errors"] == [
+        {
+            "elapsed_seconds": result["samples"][0]["elapsed_seconds"],
+            "error": "OSError: job query unavailable",
+            "phase": "baseline",
+        }
+    ]
+    assert result["samples"][1]["diagnostic_error"] is None
+
+
+def test_bridge_event_benchmark_resource_failure_retries_at_one_hz(
+    monkeypatch,
+) -> None:
+    benchmark = _benchmark_module()
+    calls = 0
+
+    class Process:
+        pid = 123
+
+        @staticmethod
+        def process_ids():
+            return {123}
+
+    def resources(_process_ids):
+        nonlocal calls
+        calls += 1
+        return None
+
+    monkeypatch.setattr(benchmark, "_process_private_bytes", lambda _pid: 100)
+    monkeypatch.setattr(
+        benchmark,
+        "_process_metadata",
+        lambda _pid, *, root_process_id: {
+            "command_role": "python-host",
+            "creation_time_100ns": 1,
+            "image_name": "python.exe",
+            "process_id": root_process_id,
+        },
+    )
+    monkeypatch.setattr(benchmark, "_process_resource_snapshot", resources)
+    sampler = benchmark._JobPrivateMemorySampler(Process())
+
+    sampler.sample("baseline")
+    sampler.sample("baseline")
+
+    assert calls == 1
+
+
+def test_bridge_event_benchmark_sanitizes_every_python_child_environment(
+    monkeypatch,
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setenv("PYTHONPATH", "host-contamination")
+    monkeypatch.setenv("PYTHONHOME", "host-contamination")
+
+    environment = benchmark._clean_python_environment()
+
+    assert "PYTHONPATH" not in environment
+    assert "PYTHONHOME" not in environment
+    assert environment["PYTHONNOUSERSITE"] == "1"
+
+
+def test_bridge_event_benchmark_builds_the_named_archive_with_clean_python_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    benchmark = _benchmark_module()
+    commands = []
+
+    def run(command, *, cwd, timeout, environment=None):
+        commands.append((tuple(command), Path(cwd), timeout, environment))
+        if command[:3] == ["git", "rev-parse", "HEAD"]:
+            return "a" * 40
+        if command[:3] == ["git", "status", "--porcelain=v1"]:
+            return "?? M1_SHELL.md\n?? S0-S3_REALIGNMENT.md"
+        if command[:2] == ["git", "archive"]:
+            output_argument = next(
+                argument for argument in command if argument.startswith("--output=")
+            )
+            with zipfile.ZipFile(output_argument.removeprefix("--output="), "w") as archive:
+                archive.writestr("pyproject.toml", "[build-system]\n")
+            return ""
+        if command[1:4] == ["-m", "pip", "wheel"]:
+            wheel_directory = Path(command[command.index("--wheel-dir") + 1])
+            (wheel_directory / "namisync-0.1-py3-none-any.whl").write_bytes(b"wheel")
+            return ""
+        raise AssertionError(command)
+
+    monkeypatch.setattr(benchmark, "_run", run)
+    monkeypatch.setenv("PYTHONPATH", "host-contamination")
+    monkeypatch.setenv("PYTHONHOME", "host-contamination")
+
+    wheel, commit, status = benchmark._build_archived_wheel(tmp_path)
+
+    assert wheel.name == "namisync-0.1-py3-none-any.whl"
+    assert commit == "a" * 40
+    assert status == ("?? M1_SHELL.md", "?? S0-S3_REALIGNMENT.md")
+    archive_command = commands[2][0]
+    assert archive_command[-1] == commit
+    build_environment = commands[-1][3]
+    assert build_environment is not None
+    assert "PYTHONPATH" not in build_environment
+    assert "PYTHONHOME" not in build_environment
+    assert build_environment["PYTHONNOUSERSITE"] == "1"
+
+
+def test_bridge_event_benchmark_installs_with_clean_python_env(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    benchmark = _benchmark_module()
+    wheel = tmp_path / "namisync-0.1-py3-none-any.whl"
+    wheel.write_bytes(b"wheel")
+    install_root = tmp_path / "install"
+    install_root.mkdir()
+    calls = []
+
+    def run(command, *, cwd, timeout, environment=None):
+        calls.append((tuple(command), Path(cwd), timeout, environment))
+        if command[1:4] == ["-m", "venv", "--clear"]:
+            python = Path(command[-1]) / "Scripts" / "python.exe"
+            python.parent.mkdir(parents=True)
+            python.touch()
+        return ""
+
+    monkeypatch.setattr(benchmark, "_run", run)
+    monkeypatch.setenv("PYTHONPATH", "host-contamination")
+    monkeypatch.setenv("PYTHONHOME", "host-contamination")
+
+    python = benchmark._install_wheel(install_root, wheel)
+
+    assert python == tmp_path / "install" / "venv" / "Scripts" / "python.exe"
+    assert len(calls) == 3
+    for _command, _cwd, _timeout, environment in calls:
+        assert environment is not None
+        assert "PYTHONPATH" not in environment
+        assert "PYTHONHOME" not in environment
+        assert environment["PYTHONNOUSERSITE"] == "1"
+
+
+def _passing_evidence(benchmark):
+    production = production_command_specs(
+        picker=lambda: None,
+        slots=object(),
+        registry=object(),
+        cosmetics=object(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+    samples = []
+    session_ids = [f"{index + 1:032x}" for index in range(4)]
+    terminal_event_latencies = []
+    terminal_record_latencies = []
+    for task_index, session_id in enumerate(session_ids):
+        sequence = 1
+        for state in ("pending", "running"):
+            samples.append(
+                {
+                    "class": "reliable",
+                    "event_id": "StateChanged",
+                    "event_result": {"state": state},
+                    "latency_ms": 10,
+                    "observed_offset_ms": 0 if state == "pending" else 1,
+                    "position": None,
+                    "record_state": None,
+                    "session_id": session_id,
+                    "sequence": sequence,
+                }
+            )
+            sequence += 1
+        reliable_ids = []
+        reliable_ordinal = 0
+        pattern = (3, 3, 2, 2)
+        for tick in range(1_500):
+            progress_sequence = sequence
+            sequence += 1
+            position = tick + 1
+            if position % 50 == 0:
+                samples.append(
+                    {
+                        "class": "progress",
+                        "event_id": "Progress",
+                        "event_result": None,
+                        "latency_ms": 30,
+                        "observed_offset_ms": tick * 40,
+                        "position": position,
+                        "record_state": None,
+                        "session_id": session_id,
+                        "sequence": progress_sequence,
+                    }
+                )
+            second, within_second = divmod(tick, 25)
+            reliable_count = pattern[(task_index + second) % 4]
+            reliable_ticks = sorted(
+                ((item_index + 1) * 25) // reliable_count - 1
+                for item_index in range(reliable_count)
+            )
+            if within_second in reliable_ticks:
+                event_id = f"task-{task_index}-item-{reliable_ordinal:03d}"
+                reliable_ids.append(event_id)
+                reliable_ordinal += 1
+                samples.append(
+                    {
+                        "class": "reliable",
+                        "event_id": event_id,
+                        "event_result": "succeeded",
+                        "latency_ms": 10,
+                        "observed_offset_ms": tick * 40 + 1,
+                        "position": None,
+                        "record_state": None,
+                        "session_id": session_id,
+                        "sequence": sequence,
+                    }
+                )
+                sequence += 1
+        assert reliable_ids == benchmark._expected_reliable_ids(task_index)
+        samples.append(
+            {
+                "class": "reliable",
+                "event_id": "StateChanged",
+                "event_result": {"state": "completed"},
+                "latency_ms": 10,
+                "observed_offset_ms": 59_970,
+                "position": None,
+                "record_state": None,
+                "session_id": session_id,
+                "sequence": sequence,
+            }
+        )
+        sequence += 1
+        samples.append(
+            {
+                "class": "terminal_event",
+                "event_id": "Terminal",
+                "event_result": {
+                    "status": "completed",
+                    "recording": "ok",
+                    "audit": "ok",
+                    "disposition": "ran",
+                    "canceled": False,
+                    "phase_count": 0,
+                    "bytes_done": 1_500,
+                    "bytes_total": 1_500,
+                    "error": None,
+                },
+                "latency_ms": 20,
+                "observed_offset_ms": 59_980,
+                "position": None,
+                "record_state": None,
+                "session_id": session_id,
+                "sequence": sequence,
+            }
+        )
+        terminal_event_latencies.append(20)
+        samples.append(
+            {
+                "class": "terminal_record",
+                "event_id": "record",
+                "event_result": {
+                    "headline": "success",
+                    "filesystem": "completed",
+                    "integrity": "not-run",
+                    "recording": "ok",
+                    "audit": "ok",
+                    "disposition": "ran",
+                    "canceled": False,
+                    "phase_count": 0,
+                    "bytes_done": 1_500,
+                    "bytes_total": 1_500,
+                    "error": None,
+                },
+                "latency_ms": 20,
+                "observed_offset_ms": 59_990,
+                "position": None,
+                "record_state": "completed",
+                "session_id": session_id,
+                "sequence": None,
+            }
+        )
+        terminal_record_latencies.append(20)
+    producers = []
+    for task_index in range(4):
+        producers.append(
+            {
+                "elapsed_seconds": 59.97,
+                "first_emission_offset_seconds": 0.01,
+                "last_emission_offset_seconds": 59.96,
+                "progress_emissions": 1_500,
+                "progress_emission_offsets_seconds": [
+                    tick * 0.04 for tick in range(1_500)
+                ],
+                "reliable_by_second": [
+                    (3, 3, 2, 2)[(task_index + second) % 4]
+                    for second in range(60)
+                ],
+                "reliable_emissions": 150,
+                "reliable_emission_offsets_seconds": (
+                    benchmark._expected_reliable_offsets(task_index)
+                ),
+            }
+        )
+    evidence = {
+        "browser_presented": True,
+        "complete": True,
+        "samples": samples,
+        "browser": {
+            "gap_events": [],
+            "progress_monotonic": True,
+            "session_ids": session_ids,
+            "task_count": 4,
+            "terminal_event_latencies_ms": terminal_event_latencies,
+            "terminal_record_latencies_ms": terminal_record_latencies,
+            "terminal_record_count": 4,
+        },
+        "producer_task_0": producers[0],
+        "producer_task_1": producers[1],
+        "producer_task_2": producers[2],
+        "producer_task_3": producers[3],
+        "runtime": {
+            "python": "3.15.2 (test)",
+            "sqlite": "3.53.4",
+            "packages": {
+                "bottle": "0.13.4",
+                "namisync": "0.1.0",
+                "pywebview": "6.2.1",
+                "pythonnet": "3.2.1",
+            },
+        },
+        "clr_runtime": "Runtime: .NET Framework",
+        "webview2": "test",
+        "startup_errors": [],
+        "exit_code": 0,
+        "production_command_names": sorted(production),
+        "combined_command_names": sorted([
+            *production, "benchmark_report", "benchmark_start",
+        ]),
+    }
+    raw_memory = [
+        {
+            "diagnostic_error": None,
+            "elapsed_seconds": index * 0.02,
+            "missing_process_ids": [],
+            "phase": "baseline" if index < 50 else "fixture",
+            "private_bytes": 100_000 if index < 50 else 104_000,
+            "private_bytes_by_process": {
+                "123": 100_000 if index < 50 else 104_000,
+            },
+            "process_ids": [123],
+        }
+        for index in range(3_050)
+    ]
+    job_memory = benchmark._job_memory_result(
+        raw_memory,
+        fixture_ended_at_seconds=60.99,
+        processes={
+            "123": {
+                "command_role": "python-host",
+                "creation_time_100ns": 1,
+                "image_name": "python.exe",
+                "process_id": 123,
+            },
+        },
+        resource_samples=[
+            {
+                "elapsed_seconds": index * 0.02,
+                "phase": "baseline" if index < 50 else "fixture",
+                "processes": {
+                    "123": {"handle_count": 10, "thread_count": 2},
+                },
+            }
+            for index in range(0, 3_050, 50)
+        ],
+        root_process_id=123,
+        topology_transitions=[
+            {
+                "elapsed_seconds": 0.0,
+                "exited_process_ids": [],
+                "joined_process_ids": [123],
+            },
+        ],
+    )
+    return evidence, job_memory
+
+
+def test_bridge_event_benchmark_requires_resource_cadence_across_fixture() -> None:
+    benchmark = _benchmark_module()
+    _evidence, complete = _passing_evidence(benchmark)
+    sparse = benchmark._job_memory_result(
+        complete["samples"],
+        fixture_ended_at_seconds=complete["fixture_ended_at_seconds"],
+        processes=complete["processes"],
+        resource_samples=[
+            complete["resource_samples"][0],
+            complete["resource_samples"][-1],
+        ],
+        root_process_id=complete["root_process_id"],
+        topology_transitions=complete["topology_transitions"],
+    )
+
+    assert complete["all_samples_complete"] is True
+    assert sparse["all_samples_complete"] is False
+
+
+def test_bridge_event_benchmark_summary_enforces_event_contract(
+    monkeypatch,
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(
+        benchmark,
+        "_machine",
+        lambda _root: {"machine": "test", "reference_profile_match": True},
+    )
+    evidence, job_memory = _passing_evidence(benchmark)
+
+    result = benchmark._summarize(
+        evidence,
+        benchmark_root=ROOT,
+        commit="a" * 40,
+        status=(),
+        job_memory=job_memory,
+    )
+
+    assert result["passed"] is True
+    assert result["event_passed"] is True
+    assert result["measurement_valid"] is True
+    assert result["gate"] == (
+        "SH-G-8 event limb / BR-G-42 bridge event envelope"
+    )
+    assert result["sh_g_8_acceptance"] == "incomplete-without-custody"
+    assert result["memory"]["whole_runtime_diagnostics_complete"] is True
+    assert result["memory"]["whole_runtime_acceptance"] == "not-defined"
+    assert result["fixture"] == {
+        "seed": 0,
+        "wall_seconds": 60,
+        "task_count": 4,
+        "progress_emissions": 6_000,
+        "reliable_emissions": 600,
+    }
+    assert (
+        result["memory"]["job_private_memory"]
+        ["incremental_peak_private_bytes"]
+        == 4_000
+    )
+
+    refused_evidence = copy.deepcopy(evidence)
+    refused_evidence["browser"]["gap_events"] = [
+        {"session_id": "1" * 32, "first_missed_seq": 1}
+    ]
+    refused = benchmark._summarize(
+        refused_evidence,
+        benchmark_root=ROOT,
+        commit="a" * 40,
+        status=(),
+        job_memory=job_memory,
+    )
+    assert refused["passed"] is False
+
+    boolean_exit = copy.deepcopy(evidence)
+    boolean_exit["exit_code"] = False
+    refused = benchmark._summarize(
+        boolean_exit,
+        benchmark_root=ROOT,
+        commit="a" * 40,
+        status=(),
+        job_memory=job_memory,
+    )
+    assert refused["event_passed"] is False
+
+
+@pytest.mark.parametrize("field", ("production_command_names", "combined_command_names"))
+@pytest.mark.parametrize("corruption", ("missing", "extra", "duplicate"))
+def test_bridge_event_benchmark_rejects_command_catalog_drift(
+    monkeypatch, field: str, corruption: str,
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(
+        benchmark, "_machine", lambda _root: {"reference_profile_match": True},
+    )
+    evidence, job_memory = _passing_evidence(benchmark)
+    if corruption == "missing":
+        evidence[field].remove("acknowledge_inventory")
+    else:
+        evidence[field].append(
+            "unexpected_command" if corruption == "extra" else "acknowledge_inventory"
+        )
+        evidence[field].sort()
+
+    result = benchmark._summarize(
+        evidence, benchmark_root=ROOT, commit="a" * 40,
+        status=(), job_memory=job_memory,
+    )
+
+    assert result["measurement_valid"] is False
+    assert result["event_passed"] is False
+
+
+def test_bridge_event_benchmark_reports_runtime_diagnostic_refusal_separately(
+    monkeypatch,
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(
+        benchmark,
+        "_machine",
+        lambda _root: {"machine": "test", "reference_profile_match": True},
+    )
+    evidence, job_memory = _passing_evidence(benchmark)
+    diagnostic_refusals = []
+
+    incomplete = dict(job_memory, all_samples_complete=False)
+    diagnostic_refusals.append(incomplete)
+    blind = dict(job_memory, max_sample_interval_seconds=0.5)
+    diagnostic_refusals.append(blind)
+    per_process_mismatch = copy.deepcopy(job_memory)
+    per_process_mismatch["samples"][0]["private_bytes_by_process"]["123"] += 1
+    diagnostic_refusals.append(per_process_mismatch)
+    missing_role = copy.deepcopy(job_memory)
+    missing_role["processes"]["123"].pop("command_role")
+    diagnostic_refusals.append(missing_role)
+    missing_resource = copy.deepcopy(job_memory)
+    missing_resource["resource_samples"] = []
+    diagnostic_refusals.append(missing_resource)
+    wrong_topology = copy.deepcopy(job_memory)
+    wrong_topology["topology_transitions"][0]["joined_process_ids"] = []
+    diagnostic_refusals.append(wrong_topology)
+
+    for refused_memory in diagnostic_refusals:
+        result = benchmark._summarize(
+            evidence,
+            benchmark_root=ROOT,
+            commit="a" * 40,
+            status=(),
+            job_memory=refused_memory,
+        )
+        assert result["passed"] is True
+        assert result["event_passed"] is True
+        assert result["memory"]["whole_runtime_diagnostics_complete"] is False
+        assert result["memory"]["whole_runtime_acceptance"] == "not-defined"
+
+    large = copy.deepcopy(job_memory)
+    large_private_bytes = 100_000 + 64 * 1024 * 1024
+    for sample in large["samples"]:
+        if sample["phase"] == "fixture":
+            sample["private_bytes"] = large_private_bytes
+            sample["private_bytes_by_process"]["123"] = large_private_bytes
+    large = benchmark._job_memory_result(
+        large["samples"],
+        fixture_ended_at_seconds=large["fixture_ended_at_seconds"],
+        processes=large["processes"],
+        resource_samples=large["resource_samples"],
+        root_process_id=123,
+        topology_transitions=large["topology_transitions"],
+    )
+    result = benchmark._summarize(
+        evidence,
+        benchmark_root=ROOT,
+        commit="a" * 40,
+        status=(),
+        job_memory=large,
+    )
+    assert result["passed"] is True
+    assert result["memory"]["whole_runtime_diagnostics_complete"] is True
+    assert large["incremental_peak_private_bytes"] == 64 * 1024 * 1024
+
+
+def test_bridge_event_benchmark_rejects_incomplete_or_untrusted_evidence(
+    monkeypatch,
+) -> None:
+    benchmark = _benchmark_module()
+    monkeypatch.setattr(
+        benchmark,
+        "_machine",
+        lambda _root: {"machine": "test", "reference_profile_match": True},
+    )
+    evidence, job_memory = _passing_evidence(benchmark)
+
+    corruptions = []
+    negative = copy.deepcopy(evidence)
+    negative["samples"][0]["latency_ms"] = -1
+    corruptions.append((negative, job_memory))
+    malformed = copy.deepcopy(evidence)
+    malformed["samples"][0].pop("session_id")
+    corruptions.append((malformed, job_memory))
+    one_session = copy.deepcopy(evidence)
+    one_session["browser"]["session_ids"] = ["1" * 32] * 4
+    corruptions.append((one_session, job_memory))
+    unhashable_sessions = copy.deepcopy(evidence)
+    unhashable_sessions["browser"]["session_ids"][0] = []
+    corruptions.append((unhashable_sessions, job_memory))
+    browser_failure = copy.deepcopy(evidence)
+    browser_failure["browser"]["failure"] = "BridgeTransportError"
+    corruptions.append((browser_failure, job_memory))
+    startup_failure = copy.deepcopy(evidence)
+    startup_failure["startup_errors"] = ["failed"]
+    corruptions.append((startup_failure, job_memory))
+    unpresented = copy.deepcopy(evidence)
+    unpresented["browser_presented"] = False
+    corruptions.append((unpresented, job_memory))
+    failed_terminal = copy.deepcopy(evidence)
+    terminal = next(
+        sample
+        for sample in failed_terminal["samples"]
+        if sample["class"] == "terminal_record"
+    )
+    terminal["record_state"] = "failed"
+    terminal["event_result"]["filesystem"] = "failed"
+    terminal["event_result"]["headline"] = "failed"
+    corruptions.append((failed_terminal, job_memory))
+    bunched_reliable = copy.deepcopy(evidence)
+    bunched_reliable["producer_task_0"]["reliable_by_second"] = [150, *([0] * 59)]
+    corruptions.append((bunched_reliable, job_memory))
+    wrong_runtime = copy.deepcopy(evidence)
+    wrong_runtime["runtime"]["packages"]["pywebview"] = "6.2.2"
+    corruptions.append((wrong_runtime, job_memory))
+    missing_server = copy.deepcopy(evidence)
+    missing_server["runtime"]["packages"]["bottle"] = ""
+    corruptions.append((missing_server, job_memory))
+    slow_reliable = copy.deepcopy(evidence)
+    reliable_sample = next(
+        sample
+        for sample in slow_reliable["samples"]
+        if sample["class"] == "reliable"
+    )
+    reliable_sample["latency_ms"] = 251
+    corruptions.append((slow_reliable, job_memory))
+    slow_progress = copy.deepcopy(evidence)
+    progress_sample = next(
+        sample
+        for sample in slow_progress["samples"]
+        if sample["class"] == "progress"
+    )
+    progress_sample["latency_ms"] = 2_001
+    corruptions.append((slow_progress, job_memory))
+    slow_reliable_p95 = copy.deepcopy(evidence)
+    reliable_samples = [
+        sample
+        for sample in slow_reliable_p95["samples"]
+        if sample["class"]
+        in {"reliable", "terminal_event", "terminal_record"}
+    ]
+    for sample in reliable_samples[: max(1, len(reliable_samples) // 10)]:
+        sample["latency_ms"] = 101
+    corruptions.append((slow_reliable_p95, job_memory))
+    slow_progress_p95 = copy.deepcopy(evidence)
+    progress_samples = [
+        sample
+        for sample in slow_progress_p95["samples"]
+        if sample["class"] == "progress"
+    ]
+    for sample in progress_samples[: max(1, len(progress_samples) // 10)]:
+        sample["latency_ms"] = 1_001
+    corruptions.append((slow_progress_p95, job_memory))
+    late_completion = copy.deepcopy(evidence)
+    completed_index = next(
+        index
+        for index, sample in enumerate(late_completion["samples"])
+        if sample["event_id"] == "StateChanged"
+        and sample["event_result"] == {"state": "completed"}
+    )
+    completed = late_completion["samples"].pop(completed_index)
+    progress_index = max(
+        index
+        for index, sample in enumerate(late_completion["samples"])
+        if sample["session_id"] == completed["session_id"]
+        and sample["class"] == "progress"
+    )
+    late_completion["samples"].insert(progress_index, completed)
+    session_samples = [
+        sample
+        for sample in late_completion["samples"]
+        if sample["session_id"] == completed["session_id"]
+    ]
+    next_event = session_samples[session_samples.index(completed) + 1]
+    completed["observed_offset_ms"] = next_event["observed_offset_ms"] - 1
+    next_sequence = 1
+    for sample in session_samples:
+        if sample["class"] != "terminal_record":
+            sample["sequence"] = next_sequence
+            next_sequence += 1
+    corruptions.append((late_completion, job_memory))
+
+    for corrupted_evidence, corrupted_memory in corruptions:
+        result = benchmark._summarize(
+            corrupted_evidence,
+            benchmark_root=ROOT,
+            commit="a" * 40,
+            status=(),
+            job_memory=corrupted_memory,
+        )
+        assert result["passed"] is False
+
+
+def test_bridge_event_thread_counts_read_process_records_for_named_processes() -> None:
+    import threading
+
+    benchmark = _benchmark_module()
+    release = threading.Event()
+    workers = [threading.Thread(target=release.wait) for _ in range(3)]
+    for worker in workers:
+        worker.start()
+    try:
+        own = os.getpid()
+        absent = 4_000_000_000
+        counts = benchmark._thread_counts((own, absent))
+        assert counts is not None
+        assert counts[absent] == 0
+        assert counts[own] >= threading.active_count()
+    finally:
+        release.set()
+        for worker in workers:
+            worker.join()

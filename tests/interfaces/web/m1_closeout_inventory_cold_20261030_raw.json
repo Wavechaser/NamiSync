@@ -1,0 +1,706 @@
+{
+  "schema": "namisync-m1-9-inventory-cold-raw-v1",
+  "started_at": "20261029T165303Z",
+  "revision": "cbf73a4f734d7fb7892dbb303365a6d2882520e4",
+  "dirty": "",
+  "source_hashes": {
+    "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+    "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+    "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+    "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+    "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+    "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+    "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+    "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+    "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+    "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+    "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+  },
+  "runtime": {
+    "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+    "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+    "sqlite": "3.50.4",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "machine": "AMD64",
+    "gc_enabled": true,
+    "gc_thresholds": [
+      2000,
+      10,
+      10
+    ]
+  },
+  "profile": {
+    "captured_at": "2026-10-29T16:52:39.3164603Z",
+    "os_name": "Microsoft Windows 11 Pro",
+    "os_build": "26200",
+    "cpu": "13th Gen Intel(R) Core(TM) i7-13700K",
+    "physical_cores": 16,
+    "logical_processors": 24,
+    "memory_gib": 63.7,
+    "repository_device": "WD_BLACK SN850X 4000GB",
+    "repository_bus": "NVMe",
+    "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+    "sqlite": "3.50.4",
+    "ac_power": true,
+    "no_unrelated_sustained_workload": true,
+    "workload_basis": "User confirmed 2026-10-30 Asia/Shanghai that machine is idle until further notice. Measurement announced; task tests paused. Fresh hardware, AC and declared Python 3.13.17 profile reviewed.",
+    "reference_profile_confirmed": true
+  },
+  "profile_file_sha256": "7836908c29fd30ab6a88d67becfeba8e0f7e83a01de9085f712f34f852503c6f",
+  "fixture_seed": 1312902473,
+  "statistic": "maximum",
+  "thresholds_seconds": {
+    "base": 3,
+    "information-heavy": 6
+  },
+  "collector_process_id": 44824,
+  "child_launches": [
+    {
+      "case": "base",
+      "child_index": 1,
+      "invocation_id": "60228a42d4664cd7a3fdf10ac39c27c0",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "base",
+        "--timed",
+        "--invocation-id",
+        "60228a42d4664cd7a3fdf10ac39c27c0"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 51496
+    },
+    {
+      "case": "base",
+      "child_index": 2,
+      "invocation_id": "fd2b72b24d214371a8d83c4ff29d77bc",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "base",
+        "--timed",
+        "--invocation-id",
+        "fd2b72b24d214371a8d83c4ff29d77bc"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 95100
+    },
+    {
+      "case": "base",
+      "child_index": 3,
+      "invocation_id": "93c9783b4bfc4c7da6c5c261a9f1de0d",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "base",
+        "--timed",
+        "--invocation-id",
+        "93c9783b4bfc4c7da6c5c261a9f1de0d"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 99980
+    },
+    {
+      "case": "base",
+      "child_index": 4,
+      "invocation_id": "4654e2403df94864a324eeae835f5571",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "base",
+        "--timed",
+        "--invocation-id",
+        "4654e2403df94864a324eeae835f5571"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 79996
+    },
+    {
+      "case": "base",
+      "child_index": 5,
+      "invocation_id": "e223c47a023c4250a8ebbeb0df77a2ee",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "base",
+        "--timed",
+        "--invocation-id",
+        "e223c47a023c4250a8ebbeb0df77a2ee"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 156392
+    },
+    {
+      "case": "information-heavy",
+      "child_index": 1,
+      "invocation_id": "10b33747beaa429c8b98162c52396668",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "information-heavy",
+        "--timed",
+        "--invocation-id",
+        "10b33747beaa429c8b98162c52396668"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 108492
+    },
+    {
+      "case": "information-heavy",
+      "child_index": 2,
+      "invocation_id": "ed6ae816f80949e7a6070cf814f65314",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "information-heavy",
+        "--timed",
+        "--invocation-id",
+        "ed6ae816f80949e7a6070cf814f65314"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 120600
+    },
+    {
+      "case": "information-heavy",
+      "child_index": 3,
+      "invocation_id": "77489d4bacda43829f532b0dca3a349a",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "information-heavy",
+        "--timed",
+        "--invocation-id",
+        "77489d4bacda43829f532b0dca3a349a"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 55316
+    },
+    {
+      "case": "information-heavy",
+      "child_index": 4,
+      "invocation_id": "85495c02c34d4cd6a6b91b3bb94548a2",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "information-heavy",
+        "--timed",
+        "--invocation-id",
+        "85495c02c34d4cd6a6b91b3bb94548a2"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 33860
+    },
+    {
+      "case": "information-heavy",
+      "child_index": 5,
+      "invocation_id": "7135275a4d5b492fbea03ebd241a3a61",
+      "command": [
+        "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "-m",
+        "tools.performance.inventory",
+        "--child",
+        "information-heavy",
+        "--timed",
+        "--invocation-id",
+        "7135275a4d5b492fbea03ebd241a3a61"
+      ],
+      "cwd": "F:\\GitHubRepositories\\NamiSync",
+      "returncode": 0,
+      "launched_process_id": 167896
+    }
+  ],
+  "samples": [
+    {
+      "case": "base",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 120000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 0,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 1616232000,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "60228a42d4664cd7a3fdf10ac39c27c0",
+      "process_id": 121048,
+      "parent_process_id": 51496,
+      "child_index": 1
+    },
+    {
+      "case": "base",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 120000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 0,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 1628997300,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "fd2b72b24d214371a8d83c4ff29d77bc",
+      "process_id": 148300,
+      "parent_process_id": 95100,
+      "child_index": 2
+    },
+    {
+      "case": "base",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 120000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 0,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 1648712200,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "93c9783b4bfc4c7da6c5c261a9f1de0d",
+      "process_id": 31680,
+      "parent_process_id": 99980,
+      "child_index": 3
+    },
+    {
+      "case": "base",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 120000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 0,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 1623880000,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "4654e2403df94864a324eeae835f5571",
+      "process_id": 93584,
+      "parent_process_id": 79996,
+      "child_index": 4
+    },
+    {
+      "case": "base",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 120000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 0,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 1625217400,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "e223c47a023c4250a8ebbeb0df77a2ee",
+      "process_id": 83752,
+      "parent_process_id": 156392,
+      "child_index": 5
+    },
+    {
+      "case": "information-heavy",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 240000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 120000,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 2282188600,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "10b33747beaa429c8b98162c52396668",
+      "process_id": 5820,
+      "parent_process_id": 108492,
+      "child_index": 1
+    },
+    {
+      "case": "information-heavy",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 240000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 120000,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 2274393100,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "ed6ae816f80949e7a6070cf814f65314",
+      "process_id": 92868,
+      "parent_process_id": 120600,
+      "child_index": 2
+    },
+    {
+      "case": "information-heavy",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 240000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 120000,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 2273245000,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "77489d4bacda43829f532b0dca3a349a",
+      "process_id": 74244,
+      "parent_process_id": 55316,
+      "child_index": 3
+    },
+    {
+      "case": "information-heavy",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 240000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 120000,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 2270314300,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "85495c02c34d4cd6a6b91b3bb94548a2",
+      "process_id": 80620,
+      "parent_process_id": 33860,
+      "child_index": 4
+    },
+    {
+      "case": "information-heavy",
+      "fixture_seed": 1312902473,
+      "correctness": {
+        "public_rows": 240000,
+        "domain_rows": 100000,
+        "synthetic_folders": 20000,
+        "warning_rows": 120000,
+        "evidence_rows": 20000,
+        "known_bytes": 700000,
+        "warning_domain_exclusion": true,
+        "raw_evidence_retained": true
+      },
+      "elapsed_ns": 2289311500,
+      "source_hashes": {
+        "tools/performance/inventory.py": "7615e7efa15de6ab407d190ca6e55e5e26d2af0097e0263878017b1b87ab28c5",
+        "tools/performance/validate_inventory.py": "2ffee49c33a0c918503269c8b239ad35c1e438cbfa952df87129446fa5036d3a",
+        "namisync/workflows/inventory_projection.py": "2f2dff45422a10c6a3bce88f92735c5be56be46725c2e89d7a6fabf45d587757",
+        "namisync/workflows/node_tree.py": "bc2dbb66a382d8e21a519e69c82852dd9981ef3add0a7fd766845bb37e742be8",
+        "namisync/core/models.py": "79aca029874c43f986527c3dccd53f01c6e5d2d9792228022d7c2ac90e176152",
+        "namisync/core/evidence.py": "16464f191ceddcbca0d16420e9c27007b2d0ec6793f09aad30c484382d949c2c",
+        "namisync/core/integrity.py": "8f2439cbbe3505441389351c66ff5c3fd9c0e9083964f44496966ef9e33076cf",
+        "namisync/core/pathing.py": "1f9ea679132d037a0b22d8113c29fe4e979dabd8ecab964da48d84b695451a85",
+        "namisync/core/scalars.py": "54674d306093ff6f06d3c4e448dc7471a2c9f5ec7e29e68968c2460edd9df2cc",
+        "namisync/core/review.py": "65dacc06b7a1e55ee91d753ec62fa0a25a2ab12837d982ea6629595bbda2a8dd",
+        "namisync/db/repositories.py": "7039e3a42d4d4aca4e7be017a32b07fd90aedff70a2d4a4418454f5e81c8d818"
+      },
+      "runtime": {
+        "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+        "executable": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+        "sqlite": "3.50.4",
+        "platform": "Windows-11-10.0.26200-SP0",
+        "machine": "AMD64",
+        "gc_enabled": true,
+        "gc_thresholds": [
+          2000,
+          10,
+          10
+        ]
+      },
+      "invocation_id": "7135275a4d5b492fbea03ebd241a3a61",
+      "process_id": 119276,
+      "parent_process_id": 167896,
+      "child_index": 5
+    }
+  ],
+  "collection_complete": true,
+  "maximum_seconds": {
+    "base": 1.6487122,
+    "information-heavy": 2.2893115
+  },
+  "dispersion_seconds": {
+    "base": {
+      "minimum": 1.616232,
+      "maximum": 1.6487122
+    },
+    "information-heavy": {
+      "minimum": 2.2703143,
+      "maximum": 2.2893115
+    }
+  }
+}

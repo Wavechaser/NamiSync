@@ -1,0 +1,1904 @@
+"""Native filesystem primitives used by the executor component."""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field, replace
+import ctypes
+from ctypes import wintypes
+import os
+from pathlib import Path, PureWindowsPath
+import shutil
+import stat as stat_module
+from typing import BinaryIO, cast
+
+from namisync.core.execution import DirectWriteFallback, RunId
+from namisync.core.file_identity import (
+    file_identity_from_stat,
+    file_identity_from_windows_handle,
+)
+from namisync.core.models import (
+    EntryKind,
+    FileIdentity,
+    FileStat,
+    MANAGED_FILE_ATTRIBUTE_MASK,
+    MetadataSnapshot,
+    VolumeEvidence,
+    VolumeId,
+    owned_temp_run_id,
+)
+from namisync.core.pathing import (
+    PathValidationError,
+    from_extended_length_path,
+    is_path_below,
+    lexical_absolute_path,
+    lexical_path_chain,
+    logical_error_text,
+    normalize_relative_path,
+    to_extended_length_path,
+    validate_relative_path,
+)
+from namisync.core.planning import OpId
+from namisync.core.root_authority import (
+    NativeVolumeInfo,
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    RootHold,
+    admit_root,
+    admit_root_chain,
+    hold_root,
+)
+from namisync.core.scalars import require_utf16_path
+
+
+_READONLY = 0x00000001
+_REPARSE_POINT = 0x00000400
+_GENERIC_READ = 0x80000000
+_GENERIC_WRITE = 0x40000000
+_DELETE = 0x00010000
+_FILE_READ_ATTRIBUTES = 0x0080
+_FILE_WRITE_ATTRIBUTES = 0x0100
+_FILE_SHARE_READ = 0x00000001
+_FILE_SHARE_WRITE = 0x00000002
+_FILE_SHARE_DELETE = 0x00000004
+_OPEN_EXISTING = 3
+_CREATE_NEW = 1
+_FILE_ATTRIBUTE_NORMAL = 0x00000080
+_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+_FILE_FLAG_NO_BUFFERING = 0x20000000
+_DRIVE_REMOTE = 4
+_FILE_BASIC_INFO_CLASS = 0
+_FILE_STANDARD_INFO_CLASS = 1
+_FILE_RENAME_INFO_CLASS = 3
+_FILE_ALLOCATION_INFO_CLASS = 5
+_FILE_END_OF_FILE_INFO_CLASS = 6
+_FILE_STORAGE_INFO_CLASS = 16
+_DIRECT_WRITE_THRESHOLD = 8 * 1024 * 1024
+_WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
+_INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+_ALLOCATION_UNSUPPORTED_ERRORS = frozenset({1, 50, 120})
+
+
+class _FileBasicInfo(ctypes.Structure):
+    _fields_ = [
+        ("CreationTime", ctypes.c_longlong),
+        ("LastAccessTime", ctypes.c_longlong),
+        ("LastWriteTime", ctypes.c_longlong),
+        ("ChangeTime", ctypes.c_longlong),
+        ("FileAttributes", wintypes.DWORD),
+    ]
+
+
+class _FileStandardInfo(ctypes.Structure):
+    _fields_ = [
+        ("AllocationSize", ctypes.c_longlong),
+        ("EndOfFile", ctypes.c_longlong),
+        ("NumberOfLinks", wintypes.DWORD),
+        ("DeletePending", ctypes.c_ubyte),
+        ("Directory", ctypes.c_ubyte),
+    ]
+
+
+class _FileAllocationInfo(ctypes.Structure):
+    _fields_ = [("AllocationSize", ctypes.c_longlong)]
+
+
+class _FileEndOfFileInfo(ctypes.Structure):
+    _fields_ = [("EndOfFile", ctypes.c_longlong)]
+
+
+class _FileStorageInfo(ctypes.Structure):
+    _fields_ = [
+        ("LogicalBytesPerSector", wintypes.DWORD),
+        ("PhysicalBytesPerSectorForAtomicity", wintypes.DWORD),
+        ("PhysicalBytesPerSectorForPerformance", wintypes.DWORD),
+        ("FileSystemEffectivePhysicalBytesPerSectorForAtomicity", wintypes.DWORD),
+        ("Flags", wintypes.DWORD),
+        ("ByteOffsetForSectorAlignment", wintypes.DWORD),
+        ("ByteOffsetForPartitionAlignment", wintypes.DWORD),
+    ]
+
+
+class _FileRenameInfo(ctypes.Structure):
+    _fields_ = [
+        ("ReplaceIfExists", wintypes.BOOL),
+        ("RootDirectory", wintypes.HANDLE),
+        ("FileNameLength", wintypes.DWORD),
+        ("FileName", wintypes.WCHAR * 1),
+    ]
+
+
+class _WindowsBindings:
+    """Process-lifetime Win32 bindings used by the native executor."""
+
+    def __init__(self) -> None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+
+        self.create_file = kernel32.CreateFileW
+        self.create_file.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            wintypes.DWORD,
+            wintypes.HANDLE,
+        ]
+        self.create_file.restype = wintypes.HANDLE
+
+        self.close_handle = kernel32.CloseHandle
+        self.close_handle.argtypes = [wintypes.HANDLE]
+        self.close_handle.restype = wintypes.BOOL
+
+        self.flush_file_buffers = kernel32.FlushFileBuffers
+        self.flush_file_buffers.argtypes = [wintypes.HANDLE]
+        self.flush_file_buffers.restype = wintypes.BOOL
+
+        self.write_file = kernel32.WriteFile
+        self.write_file.argtypes = [
+            wintypes.HANDLE,
+            wintypes.LPCVOID,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPVOID,
+        ]
+        self.write_file.restype = wintypes.BOOL
+
+        self.get_file_information_ex = kernel32.GetFileInformationByHandleEx
+        self.get_file_information_ex.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+        ]
+        self.get_file_information_ex.restype = wintypes.BOOL
+
+        self.set_file_information = kernel32.SetFileInformationByHandle
+        self.set_file_information.argtypes = [
+            wintypes.HANDLE,
+            ctypes.c_int,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+        ]
+        self.set_file_information.restype = wintypes.BOOL
+
+        self.get_attributes = kernel32.GetFileAttributesW
+        self.get_attributes.argtypes = [wintypes.LPCWSTR]
+        self.get_attributes.restype = wintypes.DWORD
+
+        self.set_attributes = kernel32.SetFileAttributesW
+        self.set_attributes.argtypes = [wintypes.LPCWSTR, wintypes.DWORD]
+        self.set_attributes.restype = wintypes.BOOL
+
+        self.set_file_time = kernel32.SetFileTime
+        self.set_file_time.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+        ]
+        self.set_file_time.restype = wintypes.BOOL
+
+        self.get_volume_path = kernel32.GetVolumePathNameW
+        self.get_volume_path.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+        ]
+        self.get_volume_path.restype = wintypes.BOOL
+
+        self.get_drive_type = kernel32.GetDriveTypeW
+        self.get_drive_type.argtypes = [wintypes.LPCWSTR]
+        self.get_drive_type.restype = wintypes.UINT
+
+        self.get_volume_information = kernel32.GetVolumeInformationW
+        self.get_volume_information.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.POINTER(wintypes.DWORD),
+            ctypes.POINTER(wintypes.DWORD),
+            wintypes.LPWSTR,
+            wintypes.DWORD,
+        ]
+        self.get_volume_information.restype = wintypes.BOOL
+
+        self.get_security = advapi32.GetFileSecurityW
+        self.get_security.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+            wintypes.DWORD,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        self.get_security.restype = wintypes.BOOL
+
+        self.set_security = advapi32.SetFileSecurityW
+        self.set_security.argtypes = [
+            wintypes.LPCWSTR,
+            wintypes.DWORD,
+            wintypes.LPVOID,
+        ]
+        self.set_security.restype = wintypes.BOOL
+
+
+_WINDOWS = _WindowsBindings() if os.name == "nt" else None
+
+
+class UnsafeExecutionPath(OSError):
+    """A planned path cannot be resolved safely beneath its reviewed root."""
+
+
+class _SecurityCopyFailure(OSError):
+    """A preserved security descriptor could not be applied to the temp."""
+
+
+class _UpdateBackupDrift(OSError):
+    """An open live-target handle no longer matches its reviewed version."""
+
+
+class _UpdateBackupBeforeCopyDrift(_UpdateBackupDrift):
+    """The opened live target differed before backup copying started."""
+
+
+class _UpdateBackupDuringCopyDrift(_UpdateBackupDrift):
+    """The opened live target changed while its backup was copied."""
+
+
+class _RootChainNotDirectory(OSError):
+    """A root component failed the executor's second directory observation."""
+
+
+class _ExecutorRootStat:
+    """No-follow root facts limited to the executor's established policy."""
+
+    def __init__(self, observed: os.stat_result) -> None:
+        # The legacy chain guard treated its second ``Path.is_dir`` result as
+        # authoritative if the entry changed after the preceding lstat.
+        self.st_mode = stat_module.S_IFDIR
+        self.st_file_attributes = int(
+            getattr(observed, "st_file_attributes", 0)
+        )
+        # The legacy executor rejected symlink mode and the reparse attribute,
+        # but did not independently interpret a tag-only synthetic observation.
+        self.st_reparse_tag = 0
+
+
+@dataclass(frozen=True, slots=True)
+class RootAdmissionDiagnostic:
+    """One invocation-local root decision, separate from execution results."""
+
+    role: str
+    logical_root: str
+    held: bool
+    fallback_reason: str | None
+
+
+@dataclass(slots=True)
+class _InvocationRoot:
+    role: str
+    authority: RootAuthority | None
+    construction_error: Exception | None = None
+    hold: RootHold | None = None
+    volume: NativeVolumeInfo | None = None
+    chain_authority: RootAuthority | None = None
+    reported: bool = False
+    native_prefix: str | None = None
+
+    def require_authority(self) -> RootAuthority:
+        if self.construction_error is not None:
+            raise self.construction_error.with_traceback(None)
+        assert self.authority is not None
+        return self.authority
+
+    @property
+    def held(self) -> bool:
+        # confirm() is cached only while the invocation-owned handle is live.
+        return (
+            self.volume is not None
+            and self.hold is not None
+            and self.hold.confirm()
+        )
+
+
+@dataclass(slots=True)
+class _CopiedFile:
+    descriptor: int
+    handle: int
+
+
+class _TempWriterView:
+    """Close a content view without retiring its invocation-owned descriptor."""
+
+    copy_alignment = 1
+
+    def __init__(self, stream: BinaryIO, fallback_reason: DirectWriteFallback | None) -> None:
+        self._stream = stream
+        self.copy_fallback_reason = fallback_reason
+
+    def __enter__(self) -> _TempWriterView:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._stream, name)
+
+    def write(self, data: bytes | memoryview) -> int:
+        return self._stream.write(data)
+
+    def close(self) -> None:
+        self._stream.close()
+
+
+class _DirectTempWriter(_TempWriterView):
+    """Aligned writes with sector staging for ordinary BinaryIO inputs."""
+
+    def __init__(self, stream: BinaryIO, handle: int, sector: int, alignment: int) -> None:
+        super().__init__(stream, None)
+        self._handle = handle
+        self._sector = sector
+        self.copy_alignment = alignment
+        self._tail_backing = bytearray(sector + self.copy_alignment - 1)
+        address = ctypes.addressof(ctypes.c_char.from_buffer(self._tail_backing))
+        offset = -address % self.copy_alignment
+        self._tail = memoryview(self._tail_backing)[offset:offset + sector]
+        self._tail_size = 0
+        self._logical_size = 0
+
+    def write(self, data: bytes | memoryview) -> int:
+        view = memoryview(data).cast("B")
+        size = len(view)
+        while view:
+            if self._tail_size:
+                taken = min(self._sector - self._tail_size, len(view))
+                self._tail[self._tail_size:self._tail_size + taken] = view[:taken]
+                self._tail_size += taken
+                view = view[taken:]
+                if self._tail_size == self._sector:
+                    self._write_aligned(self._tail)
+                    self._tail_size = 0
+                continue
+            whole = len(view) // self._sector * self._sector
+            if whole:
+                direct = view[:whole]
+                try:
+                    address = ctypes.addressof(ctypes.c_char.from_buffer(direct))
+                except (TypeError, BufferError):
+                    address = 0
+                if address and address % self.copy_alignment == 0:
+                    self._write_aligned(direct)
+                    view = view[whole:]
+                    continue
+            taken = min(self._sector, len(view))
+            self._tail[:taken] = view[:taken]
+            self._tail_size = taken
+            view = view[taken:]
+        self._logical_size += size
+        return size
+
+    def _write_aligned(self, view: memoryview) -> None:
+        assert _WINDOWS is not None
+        offset = 0
+        while offset < len(view):
+            address = ctypes.addressof(ctypes.c_char.from_buffer(view, offset))
+            written = wintypes.DWORD()
+            count = min(len(view) - offset, 0xFFFFFFFF // self._sector * self._sector)
+            if not _WINDOWS.write_file(
+                self._handle, ctypes.c_void_p(address), count,
+                ctypes.byref(written), None,
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+            if written.value != count:
+                raise OSError("direct write did not complete its aligned request")
+            offset += written.value
+
+    def __exit__(self, exc_type: object, *_exc: object) -> None:
+        try:
+            if exc_type is None:
+                if self._tail_size:
+                    self._tail[self._tail_size:] = b"\0" * (self._sector - self._tail_size)
+                    self._write_aligned(self._tail)
+                assert _WINDOWS is not None
+                end = _FileEndOfFileInfo(self._logical_size)
+                if not _WINDOWS.set_file_information(
+                    self._handle, _FILE_END_OF_FILE_INFO_CLASS,
+                    ctypes.byref(end), ctypes.sizeof(end),
+                ):
+                    raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            self.close()
+
+
+@dataclass(slots=True)
+class _RootInvocation:
+    key: object
+    roots: tuple[_InvocationRoot, ...]
+    diagnostics: list[RootAdmissionDiagnostic] | None
+    native_owner: object | None = None
+    active: bool = True
+    copied_files: dict[Path, _CopiedFile] = field(default_factory=dict)
+
+
+_ROOT_INVOCATION: ContextVar[_RootInvocation | None] = ContextVar(
+    "executor_root_invocation", default=None
+)
+
+
+def _release_copied_files() -> None:
+    """Retire this serial operation's descriptors, or the invocation leftovers."""
+    invocation = _ROOT_INVOCATION.get()
+    if invocation is None:
+        return
+    while invocation.copied_files:
+        _, copied = invocation.copied_files.popitem()
+        os.close(copied.descriptor)
+
+
+def _invocation_root(key: object, role: str) -> _InvocationRoot | None:
+    invocation = _ROOT_INVOCATION.get()
+    if invocation is None or invocation.key is not key:
+        return None
+    return next(root for root in invocation.roots if root.role == role)
+
+
+@contextmanager
+def _root_invocation_scope(
+    fs: object,
+    key: object,
+    roots: tuple[_InvocationRoot, ...],
+    diagnostics: list[RootAdmissionDiagnostic] | None,
+) -> Iterator[None]:
+    invocation = _RootInvocation(key, roots, diagnostics)
+    token = _ROOT_INVOCATION.set(invocation)
+    try:
+        with ExitStack() as stack:
+            try:
+                activate = getattr(fs, "root_scope", None)
+                if activate is not None:
+                    stack.enter_context(activate(invocation))
+                yield
+            finally:
+                invocation.active = False
+                for root in invocation.roots:
+                    root.native_prefix = None
+    finally:
+        _ROOT_INVOCATION.reset(token)
+
+
+def _strict_root_prefix(path: str, root: str) -> bool:
+    """Select held facts without folding directory-name case."""
+    return path[:1].upper() == root[:1].upper() and (
+        path[1:] == root[1:]
+        or path[1:].startswith(root[1:].rstrip("\\/") + os.sep)
+    )
+
+
+class NativeFileSystem:
+    """Native local-filesystem primitives retained by the executor machine."""
+
+    @contextmanager
+    def root_scope(self, invocation: _RootInvocation) -> Iterator[None]:
+        """Activate holds for this concrete adapter, preserving caller dispatch."""
+        invocation.native_owner = self
+        with ExitStack() as stack:
+            for root in invocation.roots:
+                if root.authority is not None:
+                    root.chain_authority = RootAuthority(root.authority.logical_root)
+                    root.hold = stack.enter_context(hold_root(root.authority))
+            try:
+                yield
+            finally:
+                _release_copied_files()
+
+    def _copied_files(self) -> dict[Path, _CopiedFile] | None:
+        invocation = _ROOT_INVOCATION.get()
+        if (
+            invocation is None or not invocation.active
+            or invocation.native_owner is not self
+        ):
+            return None
+        return invocation.copied_files
+
+    def _release_copied_file(self, path: Path) -> None:
+        files = self._copied_files()
+        copied = None if files is None else files.pop(path, None)
+        if copied is not None:
+            os.close(copied.descriptor)
+
+    def _scoped_root(
+        self, logical: Path, *, descendants: bool = False
+    ) -> _InvocationRoot | None:
+        invocation = _ROOT_INVOCATION.get()
+        if invocation is None or invocation.native_owner is not self:
+            return None
+        for root in invocation.roots:
+            authority = root.authority
+            if authority is None:
+                continue
+            matches = (
+                _strict_root_prefix(str(logical), authority.logical_root)
+                if descendants
+                else str(logical) == authority.logical_root
+            )
+            if matches:
+                return root
+        return None
+
+    def _report_root(self, root: _InvocationRoot) -> None:
+        invocation = _ROOT_INVOCATION.get()
+        assert invocation is not None
+        if root.reported:
+            return
+        root.reported = True
+        if invocation.diagnostics is not None:
+            invocation.diagnostics.append(
+                RootAdmissionDiagnostic(
+                    root.role,
+                    root.require_authority().logical_root,
+                    root.held,
+                    None if root.hold is None else root.hold.fallback_reason,
+                )
+            )
+
+    def _require_held_root(self, root: _InvocationRoot) -> bool:
+        if not root.held:
+            return False
+        assert root.hold is not None
+        try:
+            root.hold.require_ordinary()
+        except RootAuthorityError as error:
+            self._raise_root_authority_error(error)
+        return True
+
+    def revalidate_root(
+        self,
+        root: Path,
+        *,
+        trusted_anchor: Path | None = None,
+        expected_volume: VolumeId | None = None,
+    ) -> None:
+        invocation = _ROOT_INVOCATION.get()
+        scoped = (
+            self._scoped_root(root)
+            if invocation is not None and invocation.active else None
+        )
+        known_spelling = scoped is not None and scoped.native_prefix is not None
+        # The confirmed invocation already validated these exact spellings.
+        # Reuse strings only; current held attributes are still checked below.
+        logical = root if known_spelling else _lexical_logical_path(root)
+        try:
+            if not known_spelling:
+                scoped = self._scoped_root(logical)
+            reviewed = None if scoped is None else scoped.authority
+            matching = reviewed is not None and (
+                expected_volume is None or expected_volume == reviewed.expected_volume_id
+            ) and (
+                trusted_anchor is None
+                or (known_spelling and str(trusted_anchor) == reviewed.reviewed_anchor)
+                or str(_lexical_logical_path(trusted_anchor)) == reviewed.reviewed_anchor
+            )
+            if matching and scoped is not None and self._require_held_root(scoped):
+                return
+            authority = None
+            if matching:
+                if expected_volume is not None:
+                    authority = reviewed
+                elif scoped is not None and trusted_anchor is None:
+                    authority = scoped.chain_authority
+            if authority is None:
+                authority = RootAuthority(
+                    str(logical),
+                    (
+                        None
+                        if trusted_anchor is None
+                        else str(_lexical_logical_path(trusted_anchor))
+                    ),
+                    expected_volume,
+                )
+            if expected_volume is None:
+                admit_root_chain(
+                    authority,
+                    lstat=self._observe_root_component,
+                    anchor_probe=self._observe_root_anchor,
+                )
+            else:
+                volume = self._admit_reviewed_root(authority)
+                if matching and scoped is not None and scoped.volume is None:
+                    scoped.volume = volume
+                    assert scoped.hold is not None
+                    if scoped.hold.confirm():
+                        scoped.native_prefix = to_extended_length_path(
+                            scoped.require_authority().logical_root
+                        )
+                    self._report_root(scoped)
+        except PathValidationError as error:
+            raise UnsafeExecutionPath(
+                "reviewed root volume anchor changed before filesystem access"
+            ) from error
+        except RootAuthorityError as error:
+            self._raise_root_authority_error(error)
+
+    def _admit_reviewed_root(self, authority: RootAuthority) -> NativeVolumeInfo:
+        volume_probe = self._observe_root_volume
+        observed_anchor: str | None = None
+
+        def anchor_probe(path: str) -> str:
+            nonlocal observed_anchor
+            observed_anchor = self._observe_root_anchor(path)
+            return observed_anchor
+
+        def anchored_volume(_path: str) -> NativeVolumeInfo:
+            assert observed_anchor is not None
+            return self._observe_root_volume_at_anchor(observed_anchor)
+
+        return admit_root(
+            authority,
+            lstat=self._observe_root_component,
+            anchor_probe=anchor_probe,
+            volume_probe=anchored_volume if os.name == "nt" else volume_probe,
+        )
+
+    def _observe_root_anchor(self, path: str) -> str:
+        logical = _lexical_logical_path(path)
+        if os.name != "nt":
+            anchor = logical.anchor
+            if not anchor:
+                raise PathValidationError("absolute path lacks a volume anchor")
+            return str(_lexical_logical_path(anchor))
+
+        assert _WINDOWS is not None
+        volume_path = ctypes.create_unicode_buffer(32768)
+        if not _WINDOWS.get_volume_path(
+            _win32_path(logical), volume_path, len(volume_path)
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        anchor = _lexical_logical_path(
+            from_extended_length_path(volume_path.value)
+        )
+        if not is_path_below(str(logical), str(anchor)):
+            raise PathValidationError(
+                "native volume root is outside the configured lexical path"
+            )
+        return str(anchor)
+
+    def _observe_root_component(self, path: str) -> os.stat_result:
+        current = Path(path)
+        observed = self._reject_reparse(current)
+        if not Path(_win32_path(current)).is_dir():
+            raise _RootChainNotDirectory(str(current))
+        return cast(os.stat_result, _ExecutorRootStat(observed))
+
+    def _raise_root_authority_error(self, error: RootAuthorityError) -> None:
+        cause = error.__cause__
+        if error.issue is RootAuthorityIssue.ANCHOR_CHANGED:
+            raise UnsafeExecutionPath(
+                "reviewed root volume anchor changed before filesystem access"
+            ) from error
+        if error.issue is RootAuthorityIssue.VOLUME_CHANGED:
+            raise UnsafeExecutionPath(
+                "reviewed root volume changed before filesystem access"
+            ) from error
+        if error.issue in {
+            RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+            RootAuthorityIssue.REPARSE_COMPONENT,
+        }:
+            raise UnsafeExecutionPath(
+                f"reparse points are not executable: {error.logical_path}"
+            ) from error
+        if error.issue is RootAuthorityIssue.NON_DIRECTORY_COMPONENT or isinstance(
+            cause, _RootChainNotDirectory
+        ):
+            raise UnsafeExecutionPath(
+                "reviewed root chain contains a nondirectory: "
+                f"{error.logical_path}"
+            ) from error
+        if error.issue is RootAuthorityIssue.ANCHOR_UNAVAILABLE:
+            raise UnsafeExecutionPath(str(error)) from error
+        if cause is not None:
+            raise cause
+        raise UnsafeExecutionPath(str(error)) from error
+
+    def resolve(self, root: Path, relative_path: str, *, must_exist: bool) -> Path:
+        canonical = validate_relative_path(relative_path)
+        root_path = _lexical_logical_path(root)
+        self.revalidate_root(root_path)
+        scoped = self._scoped_root(root_path)
+        held_root = scoped is not None and scoped.held
+        resolved_root = (
+            None
+            if held_root
+            else _resolved_logical_path(root_path, strict=True)
+        )
+        candidate = root_path.joinpath(*PureWindowsPath(canonical).parts)
+        self._validate_existing_chain(root_path, candidate)
+        if must_exist and not os.path.lexists(_win32_path(candidate)):
+            raise FileNotFoundError(candidate)
+        if held_root:
+            return candidate
+        resolved = _resolved_logical_path(candidate, strict=must_exist)
+        assert resolved_root is not None
+        try:
+            common = os.path.commonpath((str(resolved_root), str(resolved)))
+            if os.path.normcase(common) != os.path.normcase(
+                str(resolved_root)
+            ):
+                raise UnsafeExecutionPath(f"path escapes reviewed root: {relative_path}")
+        except ValueError as error:
+            raise UnsafeExecutionPath(
+                f"path is not on the reviewed root volume: {relative_path}"
+            ) from error
+        return candidate
+
+    def stat(self, root: Path, relative_path: str) -> FileStat | None:
+        path = self.resolve(root, relative_path, must_exist=False)
+        return self.stat_path(path)
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        return self._stat_path(path)
+
+    def _stat_path(self, path: Path) -> FileStat | None:
+        try:
+            info = self._reject_reparse(path)
+        except UnsafeExecutionPath:
+            raise
+        except OSError:
+            return None
+        if stat_module.S_ISREG(info.st_mode):
+            kind = EntryKind.FILE
+            size = info.st_size
+        elif stat_module.S_ISDIR(info.st_mode):
+            kind = EntryKind.DIRECTORY
+            size = 0
+        else:
+            raise UnsafeExecutionPath(f"unsupported filesystem entry: {path}")
+        volume = None
+        volume_probe = self._volume_id
+        if os.name == "nt":
+            scoped = self._scoped_root(path, descendants=True)
+            device = getattr(info, "st_dev", None)
+            if (
+                scoped is not None and scoped.volume is not None
+                and type(device) is int and device >= 0
+                and f"{device & 0xFFFFFFFF:08X}" == scoped.volume.volume_id.serial
+                and self._require_held_root(scoped)
+            ):
+                volume = scoped.volume.volume_id
+        if volume is None:
+            volume = volume_probe(path)
+        return FileStat(
+            kind=kind,
+            size=size,
+            mtime_ns=info.st_mtime_ns,
+            file_identity=file_identity_from_stat(
+                volume.serial,
+                volume.fs_type,
+                getattr(info, "st_ino", None),
+            ),
+            nlink=info.st_nlink,
+            metadata=MetadataSnapshot(
+                attributes=int(getattr(info, "st_file_attributes", 0)),
+                created_ns=self._created_ns(info),
+            ),
+        )
+
+    def owned_temp(self, target: Path, run_id: RunId, op_id: OpId) -> Path:
+        run_text = str(run_id)
+        op_text = str(op_id)
+        if len(run_text) != 32 or len(op_text) != 32:
+            raise ValueError("owned temp ids must be fixed-format")
+        if any(character not in "0123456789abcdef" for character in run_text + op_text):
+            raise ValueError("owned temp ids must be lowercase hexadecimal")
+        return target.with_name(f"{target.name}.synctmp-{run_text}-{op_text}")
+
+    def remove_owned_temp(self, path: Path) -> None:
+        self._release_copied_file(path)
+        self._reject_reparse_chain(path.parent)
+        try:
+            self._reject_reparse(path)
+            Path(_win32_path(path)).unlink()
+        except FileNotFoundError:
+            return
+
+    def remove_orphaned_temps(
+        self,
+        target_root: Path,
+        parent_paths: frozenset[str],
+        current_run_id: RunId,
+    ) -> None:
+        """Remove exact prior-run temps from preflight's touched parents."""
+
+        current = str(current_run_id)
+        target_root = _lexical_logical_path(target_root)
+        self._reject_reparse_chain(target_root)
+        target_volume = self._volume_serial(target_root)
+        for relative in sorted(
+            parent_paths,
+            key=lambda value: (
+                normalize_relative_path(value, allow_root=True),
+                value,
+            ),
+        ):
+            key = normalize_relative_path(relative, allow_root=True)
+            if key == ".SYNCTRASH" or key.startswith(".SYNCTRASH\\"):
+                continue
+            if relative:
+                parent = self.resolve(target_root, relative, must_exist=False)
+                if not os.path.lexists(_win32_path(parent)):
+                    continue
+                self._reject_reparse(parent)
+                if not Path(_win32_path(parent)).is_dir():
+                    continue
+            else:
+                parent = target_root
+                self._reject_reparse(parent)
+            if self._volume_serial(parent) != target_volume:
+                continue
+            with os.scandir(_win32_path(parent)) as entries:
+                for entry in entries:
+                    owner = owned_temp_run_id(entry.name)
+                    if (
+                        owner is not None
+                        and owner != current
+                        and entry.is_file(follow_symlinks=False)
+                    ):
+                        self.remove_owned_temp(
+                            Path(from_extended_length_path(entry.path))
+                        )
+
+    def open_source(self, path: Path) -> BinaryIO:
+        flags = os.O_RDONLY
+        if os.name == "nt":
+            flags |= os.O_BINARY | os.O_SEQUENTIAL
+        descriptor = os.open(_win32_path(path), flags)
+        try:
+            return cast(BinaryIO, os.fdopen(descriptor, "rb", buffering=0))
+        except BaseException:
+            os.close(descriptor)
+            raise
+
+    def _direct_geometry(
+        self, path: Path
+    ) -> tuple[tuple[int, int] | None, DirectWriteFallback | None]:
+        """Return logical I/O sector and physical buffer alignment for a local parent."""
+
+        assert _WINDOWS is not None
+        if str(path).startswith("\\\\"):
+            return None, "remote"
+        volume = ctypes.create_unicode_buffer(32768)
+        if not _WINDOWS.get_volume_path(
+            _win32_path(path.parent), volume, len(volume)
+        ):
+            return None, "unknown_geometry"
+        drive_type = _WINDOWS.get_drive_type(volume.value)
+        if drive_type == _DRIVE_REMOTE:
+            return None, "remote"
+        if drive_type in (0, 1):
+            return None, "unknown_geometry"
+        parent_handle = _WINDOWS.create_file(
+            _win32_path(path.parent), _FILE_READ_ATTRIBUTES,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            None, _OPEN_EXISTING, _FILE_FLAG_BACKUP_SEMANTICS, None,
+        )
+        if parent_handle == _INVALID_HANDLE_VALUE:
+            return None, "unknown_geometry"
+        try:
+            storage = _FileStorageInfo()
+            if not _WINDOWS.get_file_information_ex(
+                parent_handle, _FILE_STORAGE_INFO_CLASS,
+                ctypes.byref(storage), ctypes.sizeof(storage),
+            ):
+                return None, "unknown_geometry"
+        finally:
+            self._close_handle(parent_handle)
+        logical = storage.LogicalBytesPerSector
+        physical = max(
+            storage.PhysicalBytesPerSectorForAtomicity,
+            storage.PhysicalBytesPerSectorForPerformance,
+            storage.FileSystemEffectivePhysicalBytesPerSectorForAtomicity,
+        )
+        if (
+            logical < 512 or physical < logical or physical > 65536
+            or logical & (logical - 1) or physical & (physical - 1)
+        ):
+            return None, "unknown_geometry"
+        return (logical, physical), None
+
+    def create_temp(
+        self, path: Path, *, allocation_size: int | None
+    ) -> BinaryIO:
+        if allocation_size is not None and allocation_size < 0:
+            raise ValueError("allocation size cannot be negative")
+        flags = os.O_CREAT | os.O_EXCL | os.O_RDWR
+        files = self._copied_files() if os.name == "nt" else None
+        geometry: tuple[int, int] | None = None
+        fallback_reason: DirectWriteFallback | None = None
+        if os.name == "nt":
+            flags |= os.O_BINARY
+        if files is None:
+            descriptor = os.open(_win32_path(path), flags, 0o666)
+        else:
+            import msvcrt
+
+            assert _WINDOWS is not None
+            if allocation_size is not None and allocation_size >= _DIRECT_WRITE_THRESHOLD:
+                geometry, fallback_reason = self._direct_geometry(path)
+            handle = _WINDOWS.create_file(
+                _win32_path(path),
+                _GENERIC_READ | _GENERIC_WRITE | _FILE_READ_ATTRIBUTES
+                | _FILE_WRITE_ATTRIBUTES | _DELETE,
+                _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+                None,
+                _CREATE_NEW,
+                _FILE_ATTRIBUTE_NORMAL | (
+                    _FILE_FLAG_NO_BUFFERING if geometry is not None else 0
+                ),
+                None,
+            )
+            if handle == _INVALID_HANDLE_VALUE and geometry is not None:
+                error = ctypes.get_last_error()
+                if error in (80, 183):
+                    raise FileExistsError(path)
+                geometry = None
+                fallback_reason = "open_error"
+                handle = _WINDOWS.create_file(
+                    _win32_path(path),
+                    _GENERIC_READ | _GENERIC_WRITE | _FILE_READ_ATTRIBUTES
+                    | _FILE_WRITE_ATTRIBUTES | _DELETE,
+                    _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+                    None, _CREATE_NEW, _FILE_ATTRIBUTE_NORMAL, None,
+                )
+            if handle == _INVALID_HANDLE_VALUE:
+                error = ctypes.get_last_error()
+                if error in (80, 183):
+                    raise FileExistsError(path)
+                raise ctypes.WinError(error)
+            try:
+                descriptor = msvcrt.open_osfhandle(handle, os.O_RDWR | os.O_BINARY)
+            except BaseException:
+                self._close_handle(handle)
+                raise
+        try:
+            stream = cast(
+                BinaryIO,
+                open(descriptor, "w+b", buffering=0, closefd=files is None),
+            )
+        except BaseException:
+            os.close(descriptor)
+            raise
+        if files is not None:
+            files[path] = _CopiedFile(descriptor, handle)
+        if geometry is not None:
+            result: BinaryIO = cast(BinaryIO, _DirectTempWriter(
+                stream, handle, geometry[0], geometry[1]
+            ))
+        elif fallback_reason is not None:
+            result = cast(BinaryIO, _TempWriterView(stream, fallback_reason))
+        else:
+            result = stream
+        if os.name != "nt" or not allocation_size:
+            return result
+
+        import msvcrt
+
+        assert _WINDOWS is not None
+        handle = msvcrt.get_osfhandle(stream.fileno())
+        allocation = _FileAllocationInfo(allocation_size)
+        if not _WINDOWS.set_file_information(
+            handle,
+            _FILE_ALLOCATION_INFO_CLASS,
+            ctypes.byref(allocation),
+            ctypes.sizeof(allocation),
+        ):
+            error = ctypes.get_last_error()
+            if error not in _ALLOCATION_UNSUPPORTED_ERRORS:
+                result.close()
+                self._release_copied_file(path)
+                raise ctypes.WinError(error)
+        return result
+
+    def flush_path(self, path: Path) -> None:
+        with Path(_win32_path(path)).open("r+b", buffering=0) as stream:
+            os.fsync(stream.fileno())
+
+    def apply_metadata(
+        self,
+        path: Path,
+        stat: FileStat,
+        *,
+        preserve_created: bool,
+        apply_readonly: bool,
+    ) -> None:
+        # Reparse points are rejected at resolution, so the Windows build does
+        # not need (and does not support) ``follow_symlinks=False`` here.
+        # Last-access time is deliberately outside executor metadata policy.
+        if os.name == "nt":
+            self._set_windows_file_times(
+                path,
+                created_ns=(
+                    stat.metadata.created_ns
+                    if preserve_created
+                    else None
+                ),
+                modified_ns=stat.mtime_ns,
+            )
+        else:
+            observed_access_ns = Path(_win32_path(path)).stat(
+                follow_symlinks=False
+            ).st_atime_ns
+            os.utime(
+                _win32_path(path),
+                ns=(observed_access_ns, stat.mtime_ns),
+            )
+        desired = stat.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        if not apply_readonly:
+            desired &= ~_READONLY
+        self._set_standard_attributes(path, desired)
+
+    def copy_security(self, source: Path, target: Path) -> None:
+        if os.name != "nt":
+            shutil.copystat(
+                _win32_path(source),
+                _win32_path(target),
+                follow_symlinks=False,
+            )
+            return
+        assert _WINDOWS is not None
+        security_information = 0x1 | 0x2 | 0x4
+        needed = wintypes.DWORD()
+        _WINDOWS.get_security(
+            _win32_path(source),
+            security_information,
+            None,
+            0,
+            ctypes.byref(needed),
+        )
+        if needed.value == 0:
+            raise ctypes.WinError(ctypes.get_last_error())
+        buffer = ctypes.create_string_buffer(needed.value)
+        if not _WINDOWS.get_security(
+            _win32_path(source),
+            security_information,
+            buffer,
+            needed,
+            ctypes.byref(needed),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not _WINDOWS.set_security(
+            _win32_path(target), security_information, buffer
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    def finalize_temp(
+        self,
+        path: Path,
+        intended: FileStat,
+        *,
+        preserve_created: bool,
+        acl_source: Path | None,
+    ) -> FileStat:
+        """Apply final temp metadata and issue its sole durability flush."""
+
+        if os.name != "nt":
+            with Path(_win32_path(path)).open("r+b", buffering=0) as held:
+                if acl_source is not None:
+                    try:
+                        self.copy_security(acl_source, path)
+                    except Exception as error:
+                        raise _SecurityCopyFailure(
+                            logical_error_text(error)
+                        ) from error
+                self.apply_metadata(
+                    path,
+                    intended,
+                    preserve_created=preserve_created,
+                    apply_readonly=False,
+                )
+                os.fsync(held.fileno())
+            result = self.stat_path(path)
+            if result is None:
+                raise FileNotFoundError(path)
+            return result
+
+        files = self._copied_files()
+        copied = None if files is None else files.get(path)
+        handle = self._open_metadata_handle(path) if copied is None else copied.handle
+        try:
+            if acl_source is not None:
+                try:
+                    self.copy_security(acl_source, path)
+                except Exception as error:
+                    raise _SecurityCopyFailure(
+                        logical_error_text(error)
+                    ) from error
+            current = self._basic_info(handle)
+            desired_attributes = (
+                current.FileAttributes & ~MANAGED_FILE_ATTRIBUTE_MASK
+            ) | (
+                intended.metadata.attributes
+                & (MANAGED_FILE_ATTRIBUTE_MASK & ~_READONLY)
+            )
+            creation = current.CreationTime
+            if preserve_created and intended.metadata.created_ns is not None:
+                creation = _windows_ticks(intended.metadata.created_ns)
+            modified = _windows_ticks(intended.mtime_ns)
+            self._set_basic_info(
+                handle,
+                _FileBasicInfo(
+                    creation,
+                    0,
+                    modified,
+                    0,
+                    desired_attributes,
+                ),
+            )
+            normalized = self._basic_info(handle)
+            self._flush_handle(handle)
+            result = self._stat_handle(handle, normalized)
+        except BaseException:
+            if copied is None:
+                try:
+                    self._close_handle(handle)
+                except Exception:
+                    pass
+            raise
+        else:
+            if copied is None:
+                self._close_handle(handle)
+            return result
+
+    def ensure_published_metadata(
+        self,
+        path: Path,
+        finalized_temp: FileStat,
+        intended: FileStat,
+        *,
+        preserve_created: bool,
+        apply_readonly: bool,
+    ) -> FileStat:
+        """Observe once and repair only publication-damaged managed fields."""
+
+        files = self._copied_files()
+        copied = None if files is None else files.get(path)
+        observed = (
+            self._stat_path(path)
+            if copied is None
+            else self._stat_handle(copied.handle)
+        )
+        if observed is None:
+            raise FileNotFoundError(path)
+        repair_mtime = observed.mtime_ns != finalized_temp.mtime_ns
+        repair_created = (
+            preserve_created
+            and intended.metadata.created_ns is not None
+            and observed.metadata.created_ns != finalized_temp.metadata.created_ns
+        )
+        desired_managed = (
+            intended.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        )
+        if not apply_readonly:
+            desired_managed &= ~_READONLY
+        repair_attributes = (
+            observed.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        ) != desired_managed
+        if not (repair_mtime or repair_created or repair_attributes):
+            self._release_copied_file(path)
+            return observed
+
+        if os.name != "nt":
+            self.apply_metadata(
+                path,
+                replace(
+                    finalized_temp,
+                    metadata=replace(
+                        finalized_temp.metadata,
+                        attributes=(
+                            finalized_temp.metadata.attributes
+                            & ~MANAGED_FILE_ATTRIBUTE_MASK
+                        )
+                        | desired_managed,
+                    ),
+                ),
+                preserve_created=repair_created,
+                apply_readonly=apply_readonly,
+            )
+            self.flush_path(path)
+            repaired = self.stat_path(path)
+            if repaired is None:
+                raise FileNotFoundError(path)
+            return repaired
+
+        handle = self._open_metadata_handle(path) if copied is None else copied.handle
+        try:
+            current = self._basic_info(handle)
+            creation = (
+                _windows_ticks(finalized_temp.metadata.created_ns)
+                if repair_created
+                and finalized_temp.metadata.created_ns is not None
+                else current.CreationTime
+            )
+            last_write = (
+                _windows_ticks(finalized_temp.mtime_ns)
+                if repair_mtime
+                else current.LastWriteTime
+            )
+            attributes = (
+                (current.FileAttributes & ~MANAGED_FILE_ATTRIBUTE_MASK)
+                | desired_managed
+                if repair_attributes
+                else current.FileAttributes
+            )
+            self._set_basic_info(
+                handle,
+                _FileBasicInfo(
+                    creation,
+                    0,
+                    last_write,
+                    0,
+                    attributes,
+                ),
+            )
+            final_basic = self._basic_info(handle)
+            self._flush_handle(handle)
+            result = self._stat_handle(handle, final_basic)
+        except BaseException:
+            if copied is None:
+                try:
+                    self._close_handle(handle)
+                except Exception:
+                    pass
+            raise
+        else:
+            if copied is None:
+                self._close_handle(handle)
+            else:
+                self._release_copied_file(path)
+            return result
+
+    def publish_new(self, temp: Path, target: Path) -> None:
+        self._publish_copy(temp, target, replace_existing=False)
+
+    def replace(self, temp: Path, target: Path) -> None:
+        self._publish_copy(temp, target, replace_existing=True)
+
+    def _publish_copy(
+        self, temp: Path, target: Path, *, replace_existing: bool
+    ) -> None:
+        files = self._copied_files()
+        copied = None if files is None else files.get(temp)
+        if copied is None:
+            rename = os.replace if replace_existing else os.rename
+            rename(_win32_path(temp), _win32_path(target))
+            return
+        assert _WINDOWS is not None and files is not None
+        name = _win32_path(target).encode("utf-16-le")
+        offset = _FileRenameInfo.FileName.offset
+        buffer = ctypes.create_string_buffer(
+            max(ctypes.sizeof(_FileRenameInfo), offset + len(name) + 2)
+        )
+        rename_info = _FileRenameInfo.from_buffer(buffer)
+        rename_info.ReplaceIfExists = replace_existing
+        rename_info.FileNameLength = len(name)
+        ctypes.memmove(ctypes.addressof(buffer) + offset, name, len(name))
+        if not _WINDOWS.set_file_information(
+            copied.handle, _FILE_RENAME_INFO_CLASS, buffer, len(buffer)
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        files[target] = files.pop(temp)
+
+    def hardlink(self, source: Path, target: Path) -> None:
+        os.link(_win32_path(source), _win32_path(target))
+
+    def copy_backup(
+        self,
+        source: Path,
+        temp: Path,
+        target: Path,
+        source_expected: FileStat,
+        checkpoint: Callable[[], None],
+        validate_destination: Callable[[], None],
+    ) -> None:
+        published = False
+        try:
+            with self.open_source(source) as reader:
+                source_before = self._stat_open_file(reader)
+                if not _matches_backup_source(source_before, source_expected):
+                    raise _UpdateBackupBeforeCopyDrift()
+                validate_destination()
+                copied_size = 0
+                with self.create_temp(temp, allocation_size=None) as writer:
+                    while True:
+                        checkpoint()
+                        chunk = reader.read(4 * 1024 * 1024)
+                        if not chunk:
+                            break
+                        _write_all(writer, chunk, "backup copy")
+                        copied_size += len(chunk)
+                validate_destination()
+                source_after = self._stat_open_file(reader)
+                if not _matches_copied_backup_source(
+                    source_before,
+                    source_after,
+                    copied_size,
+                ):
+                    raise _UpdateBackupDuringCopyDrift()
+            validate_destination()
+            self.finalize_temp(
+                temp,
+                source_before,
+                preserve_created=True,
+                acl_source=None,
+            )
+            validate_destination()
+            self.publish_new(temp, target)
+            published = True
+            self._release_copied_file(target)
+        except BaseException as error:
+            if not published:
+                try:
+                    validate_destination()
+                    self.remove_owned_temp(temp)
+                except Exception as cleanup_error:
+                    error.add_note(
+                        "backup temp cleanup failed: "
+                        f"{type(cleanup_error).__name__}: "
+                        f"{logical_error_text(cleanup_error)}"
+                    )
+            raise
+
+    def _stat_open_file(self, stream: BinaryIO) -> FileStat:
+        if os.name == "nt":
+            import msvcrt
+
+            return self._stat_handle(msvcrt.get_osfhandle(stream.fileno()))
+        info = os.fstat(stream.fileno())
+        if not stat_module.S_ISREG(info.st_mode):
+            raise UnsafeExecutionPath("backup source is not a regular file")
+        return FileStat(
+            kind=EntryKind.FILE,
+            size=info.st_size,
+            mtime_ns=info.st_mtime_ns,
+            file_identity=FileIdentity(f"{info.st_dev:x}", int(info.st_ino)),
+            nlink=info.st_nlink,
+            metadata=MetadataSnapshot(
+                attributes=int(getattr(info, "st_file_attributes", 0)),
+                created_ns=self._created_ns(info),
+            ),
+        )
+
+    def clear_readonly(self, path: Path) -> None:
+        current = self._get_attributes(path)
+        self._set_attributes(path, current & ~_READONLY)
+
+    def rename_new(self, source: Path, target: Path) -> None:
+        os.rename(_win32_path(source), _win32_path(target))
+
+    def mkdir_new(self, path: Path) -> None:
+        os.mkdir(_win32_path(path))
+
+    def remove_file(self, path: Path) -> None:
+        os.unlink(_win32_path(path))
+
+    def remove_directory(self, path: Path) -> None:
+        os.rmdir(_win32_path(path))
+
+    def trash_destination(
+        self, target_root: Path, run_id: RunId, relative_path: str
+    ) -> Path:
+        canonical = validate_relative_path(relative_path)
+        root = _lexical_logical_path(target_root)
+        self._reject_reparse_chain(root)
+        current = root
+        for part in (".synctrash", str(run_id), *PureWindowsPath(canonical).parts[:-1]):
+            current = current / part
+            try:
+                os.mkdir(_win32_path(current))
+            except FileExistsError:
+                if not Path(_win32_path(current)).is_dir():
+                    raise UnsafeExecutionPath(f"trash parent is not a directory: {current}")
+            self._reject_reparse(current)
+            if (
+                Path(_win32_path(current)).stat().st_dev
+                != Path(_win32_path(root)).stat().st_dev
+            ):
+                raise UnsafeExecutionPath("trash path leaves the target volume")
+        destination = current / PureWindowsPath(canonical).name
+        self._validate_existing_chain(root, destination)
+        return destination
+
+    def revalidate_trash_destination(
+        self,
+        target_root: Path,
+        run_id: RunId,
+        relative_path: str,
+        destination: Path,
+    ) -> None:
+        canonical = validate_relative_path(relative_path)
+        root = _lexical_logical_path(target_root)
+        self._reject_reparse_chain(root)
+        expected = root.joinpath(
+            ".synctrash",
+            str(run_id),
+            *PureWindowsPath(canonical).parts,
+        )
+        if destination != expected:
+            raise UnsafeExecutionPath(
+                "trash destination does not match the owned run path"
+            )
+        root_volume = self._volume_serial(root)
+        current = root
+        for part in PureWindowsPath(
+            str(expected.parent.relative_to(root))
+        ).parts:
+            current = current / part
+            if not os.path.lexists(_win32_path(current)):
+                raise UnsafeExecutionPath(
+                    f"trash parent disappeared before mutation: {current}"
+                )
+            self._reject_reparse(current)
+            if not Path(_win32_path(current)).is_dir():
+                raise UnsafeExecutionPath(
+                    f"trash parent is not a directory: {current}"
+                )
+            if self._volume_serial(current) != root_volume:
+                raise UnsafeExecutionPath("trash path leaves the target volume")
+        self._validate_existing_chain(root, destination)
+
+    def flush_directory(self, path: Path) -> bool:
+        if os.name != "nt":
+            try:
+                descriptor = os.open(_win32_path(path), os.O_RDONLY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+                return True
+            except OSError:
+                return False
+        assert _WINDOWS is not None
+        handle = _WINDOWS.create_file(
+            _win32_path(path),
+            _GENERIC_WRITE,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            None,
+            _OPEN_EXISTING,
+            _FILE_FLAG_BACKUP_SEMANTICS,
+            None,
+        )
+        if handle == _INVALID_HANDLE_VALUE:
+            return False
+        try:
+            return bool(_WINDOWS.flush_file_buffers(handle))
+        finally:
+            _WINDOWS.close_handle(handle)
+
+    def _open_metadata_handle(self, path: Path) -> int:
+        assert _WINDOWS is not None
+        handle = _WINDOWS.create_file(
+            _win32_path(path),
+            _GENERIC_WRITE | _FILE_READ_ATTRIBUTES | _FILE_WRITE_ATTRIBUTES,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            None,
+            _OPEN_EXISTING,
+            _FILE_ATTRIBUTE_NORMAL,
+            None,
+        )
+        if handle == _INVALID_HANDLE_VALUE:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return handle
+
+    @staticmethod
+    def _close_handle(handle: int) -> None:
+        assert _WINDOWS is not None
+        if not _WINDOWS.close_handle(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    @staticmethod
+    def _basic_info(handle: int) -> _FileBasicInfo:
+        assert _WINDOWS is not None
+        basic = _FileBasicInfo()
+        if not _WINDOWS.get_file_information_ex(
+            handle,
+            _FILE_BASIC_INFO_CLASS,
+            ctypes.byref(basic),
+            ctypes.sizeof(basic),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return basic
+
+    @staticmethod
+    def _set_basic_info(handle: int, basic: _FileBasicInfo) -> None:
+        assert _WINDOWS is not None
+        if not _WINDOWS.set_file_information(
+            handle,
+            _FILE_BASIC_INFO_CLASS,
+            ctypes.byref(basic),
+            ctypes.sizeof(basic),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    @staticmethod
+    def _flush_handle(handle: int) -> None:
+        assert _WINDOWS is not None
+        if not _WINDOWS.flush_file_buffers(handle):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    @staticmethod
+    def _stat_handle(
+        handle: int, basic: _FileBasicInfo | None = None
+    ) -> FileStat:
+        assert _WINDOWS is not None
+        standard = _FileStandardInfo()
+        if not _WINDOWS.get_file_information_ex(
+            handle,
+            _FILE_STANDARD_INFO_CLASS,
+            ctypes.byref(standard),
+            ctypes.sizeof(standard),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        observed_basic = (
+            NativeFileSystem._basic_info(handle) if basic is None else basic
+        )
+        return FileStat(
+            kind=EntryKind.FILE,
+            size=standard.EndOfFile,
+            mtime_ns=_unix_ns(observed_basic.LastWriteTime),
+            file_identity=file_identity_from_windows_handle(
+                handle,
+                _WINDOWS.get_file_information_ex,
+            ),
+            nlink=standard.NumberOfLinks,
+            metadata=MetadataSnapshot(
+                attributes=observed_basic.FileAttributes,
+                created_ns=_unix_ns(observed_basic.CreationTime),
+            ),
+        )
+
+    def _validate_existing_chain(self, root: Path, candidate: Path) -> None:
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError as error:
+            raise UnsafeExecutionPath(f"path escapes reviewed root: {candidate}") from error
+        current = root
+        for part in relative.parts:
+            current = current / part
+            try:
+                if os.name == "nt":
+                    if self._get_attributes(current) & _REPARSE_POINT:
+                        raise UnsafeExecutionPath(
+                            f"reparse points are not executable: {current}"
+                        )
+                else:
+                    self._reject_reparse(current)
+            except UnsafeExecutionPath:
+                raise
+            except FileNotFoundError:
+                break
+
+    def _reject_reparse(self, path: Path) -> os.stat_result:
+        info = Path(_win32_path(path)).lstat()
+        attributes = int(getattr(info, "st_file_attributes", 0))
+        if stat_module.S_ISLNK(info.st_mode) or attributes & _REPARSE_POINT:
+            raise UnsafeExecutionPath(f"reparse points are not executable: {path}")
+        return info
+
+    def _reject_reparse_chain(
+        self,
+        path: Path,
+        *,
+        trusted_anchor: Path | None = None,
+    ) -> None:
+        logical = _lexical_logical_path(path)
+        try:
+            scoped = self._scoped_root(logical, descendants=True)
+            held_root = (
+                scoped.require_authority().logical_root
+                if scoped is not None and trusted_anchor is None
+                and self._require_held_root(scoped)
+                else None
+            )
+            anchor = (
+                held_root
+                if held_root is not None
+                else str(trusted_anchor)
+                if trusted_anchor is not None
+                else self._observe_root_anchor(str(logical))
+            )
+            chain = lexical_path_chain(
+                logical,
+                trusted_anchor=anchor,
+            )
+        except (OSError, ValueError) as error:
+            raise UnsafeExecutionPath(logical_error_text(error)) from error
+        for component in chain:
+            current = Path(component)
+            self._reject_reparse(current)
+            if not Path(_win32_path(current)).is_dir():
+                raise UnsafeExecutionPath(
+                    "reviewed root chain contains a nondirectory: "
+                    f"{current}"
+                )
+
+    def _get_attributes(self, path: Path) -> int:
+        if os.name != "nt":
+            return (
+                _READONLY if not os.access(_win32_path(path), os.W_OK) else 0
+            )
+        assert _WINDOWS is not None
+        value = _WINDOWS.get_attributes(_win32_path(path))
+        if value == 0xFFFFFFFF:
+            raise ctypes.WinError(ctypes.get_last_error())
+        return int(value)
+
+    def _set_attributes(self, path: Path, value: int) -> None:
+        if os.name != "nt":
+            native = Path(_win32_path(path))
+            mode = native.stat().st_mode
+            if value & _READONLY:
+                native.chmod(mode & ~stat_module.S_IWUSR)
+            else:
+                native.chmod(mode | stat_module.S_IWUSR)
+            return
+        assert _WINDOWS is not None
+        if not _WINDOWS.set_attributes(_win32_path(path), value):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+    def _set_standard_attributes(self, path: Path, desired: int) -> None:
+        current = self._get_attributes(path)
+        self._set_attributes(
+            path, (current & ~MANAGED_FILE_ATTRIBUTE_MASK) | desired
+        )
+
+    def _set_windows_file_times(
+        self,
+        path: Path,
+        *,
+        created_ns: int | None,
+        modified_ns: int | None,
+    ) -> None:
+        assert _WINDOWS is not None
+        handle = _WINDOWS.create_file(
+            _win32_path(path),
+            _FILE_WRITE_ATTRIBUTES,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            None,
+            _OPEN_EXISTING,
+            (
+                _FILE_FLAG_BACKUP_SEMANTICS
+                if Path(_win32_path(path)).is_dir()
+                else _FILE_ATTRIBUTE_NORMAL
+            ),
+            None,
+        )
+        if handle == _INVALID_HANDLE_VALUE:
+            raise ctypes.WinError(ctypes.get_last_error())
+        created = (
+            None
+            if created_ns is None
+            else _filetime(created_ns)
+        )
+        modified = (
+            None
+            if modified_ns is None
+            else _filetime(modified_ns)
+        )
+        try:
+            if not _WINDOWS.set_file_time(
+                handle,
+                None if created is None else ctypes.byref(created),
+                None,
+                None if modified is None else ctypes.byref(modified),
+            ):
+                raise ctypes.WinError(ctypes.get_last_error())
+        finally:
+            _WINDOWS.close_handle(handle)
+
+    def _observe_root_volume(self, path: str) -> NativeVolumeInfo:
+        logical = _lexical_logical_path(path)
+        if os.name != "nt":
+            observed = Path(_win32_path(logical)).stat(follow_symlinks=False)
+            return NativeVolumeInfo(
+                VolumeId(f"{observed.st_dev:x}", "UNKNOWN"),
+                VolumeEvidence(device_id=self._observe_root_anchor(str(logical))),
+                255,
+                0,
+            )
+        assert _WINDOWS is not None
+        volume_path = ctypes.create_unicode_buffer(32768)
+        if not _WINDOWS.get_volume_path(
+            _win32_path(logical), volume_path, len(volume_path)
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return self._observe_root_volume_at_anchor(
+            from_extended_length_path(volume_path.value)
+        )
+
+    def _observe_root_volume_at_anchor(self, anchor: str) -> NativeVolumeInfo:
+        assert _WINDOWS is not None
+        native_anchor = _win32_path(anchor).rstrip("\\/") + "\\"
+        serial = wintypes.DWORD()
+        max_component = wintypes.DWORD()
+        flags = wintypes.DWORD()
+        filesystem = ctypes.create_unicode_buffer(261)
+        if not _WINDOWS.get_volume_information(
+            native_anchor,
+            None,
+            0,
+            ctypes.byref(serial),
+            ctypes.byref(max_component),
+            ctypes.byref(flags),
+            filesystem,
+            len(filesystem),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return NativeVolumeInfo(
+            VolumeId(
+                f"{serial.value:08X}",
+                filesystem.value.upper() or "UNKNOWN",
+            ),
+            VolumeEvidence(
+                device_id=from_extended_length_path(native_anchor)
+            ),
+            int(max_component.value),
+            int(flags.value),
+        )
+
+    def _volume_id(self, path: Path) -> VolumeId:
+        scoped = self._scoped_root(path)
+        if scoped is not None and self._require_held_root(scoped):
+            assert scoped.volume is not None
+            return scoped.volume.volume_id
+        return self._observe_root_volume(str(path)).volume_id
+
+    def _volume_serial(self, path: Path) -> str:
+        return self._volume_id(path).serial
+
+    @staticmethod
+    def _created_ns(info: os.stat_result) -> int | None:
+        value = getattr(info, "st_birthtime_ns", None)
+        if value is None and os.name == "nt":
+            value = getattr(info, "st_ctime_ns", None)
+        return None if value is None else int(value)
+
+
+def _can_delegate_held_resolution(
+    fs: object, root: Path, authority: RootAuthority
+) -> bool:
+    """Delegate only to the concrete resolver that admits its own root."""
+    if type(fs) is not NativeFileSystem:
+        return False
+    invocation = _ROOT_INVOCATION.get()
+    if (
+        invocation is None or not invocation.active
+        or invocation.native_owner is not fs
+    ):
+        return False
+    scoped = NativeFileSystem._scoped_root(fs, root)
+    return scoped is not None and scoped.authority == authority and scoped.held
+
+
+def _write_all(target: BinaryIO, chunk: bytes, owner: str) -> None:
+    view = memoryview(chunk)
+    while view:
+        written = target.write(view)
+        if written is None or written <= 0:
+            raise OSError(f"{owner} made no forward write progress")
+        view = view[written:]
+
+
+def _matches_backup_source(actual: FileStat, expected: FileStat) -> bool:
+    """Match the full admitted live-target version against its opened handle."""
+
+    return (
+        actual.kind is expected.kind
+        and actual.size == expected.size
+        and actual.mtime_ns == expected.mtime_ns
+        and actual.nlink == expected.nlink
+        and actual.metadata == expected.metadata
+        and (
+            expected.file_identity is None
+            or actual.file_identity == expected.file_identity
+        )
+    )
+
+
+def _matches_copied_backup_source(
+    before: FileStat,
+    after: FileStat,
+    copied_size: int,
+) -> bool:
+    """Confirm one open source stayed stable through the complete copy."""
+
+    return copied_size == before.size and after == before
+
+
+def _held_native_path(raw: str) -> str | None:
+    """Compose a pure native spelling from an admitted invocation root."""
+    if not raw or not ("A" <= raw[0] <= "Z" or "a" <= raw[0] <= "z"):
+        return None
+    invocation = _ROOT_INVOCATION.get()
+    if os.name != "nt" or invocation is None or not invocation.active:
+        return None
+    if invocation.native_owner is None:
+        return None
+    for root in invocation.roots:
+        authority = root.authority
+        prefix = root.native_prefix
+        if authority is None or prefix is None:
+            continue
+        logical_root = authority.logical_root
+        if not _strict_root_prefix(raw, logical_root):
+            continue
+        # A confirmed local hold has an ordinary drive root; preserve the
+        # caller's drive-letter case in the native spelling.
+        prefix = prefix[:4] + raw[0] + prefix[5:]
+        if raw[1:] == logical_root[1:]:
+            return prefix
+        relative = raw[len(logical_root.rstrip("\\/")) + 1:]
+        if not relative or relative.endswith(("\\", "/")):
+            return None  # Let the full converter retain trailing-root spelling.
+        canonical = validate_relative_path(relative)
+        if any(character in '<>"|?*' for character in canonical):
+            raise PathValidationError("absolute path has an invalid Windows component")
+        try:
+            require_utf16_path(raw, "path")
+        except ValueError as error:
+            raise PathValidationError(str(error)) from error
+        return prefix.rstrip("\\") + "\\" + canonical
+    return None
+
+
+def _win32_path(path: Path | str) -> str:
+    raw = str(path)
+    return _held_native_path(raw) or to_extended_length_path(raw)
+
+
+def _resolved_logical_path(path: Path | str, *, strict: bool) -> Path:
+    resolved = Path(_win32_path(path)).resolve(strict=strict)
+    return Path(from_extended_length_path(str(resolved)))
+
+
+def _lexical_logical_path(path: Path | str) -> Path:
+    raw = str(path)
+    if _held_native_path(raw) is not None:
+        return Path(raw)
+    return Path(lexical_absolute_path(path))
+
+
+def _windows_ticks(unix_ns: int) -> int:
+    return unix_ns // 100 + _WINDOWS_EPOCH_TICKS
+
+
+def _filetime(unix_ns: int) -> wintypes.FILETIME:
+    intervals = _windows_ticks(unix_ns)
+    return wintypes.FILETIME(intervals & 0xFFFFFFFF, intervals >> 32)
+
+
+def _unix_ns(windows_ticks: int) -> int:
+    return (windows_ticks - _WINDOWS_EPOCH_TICKS) * 100

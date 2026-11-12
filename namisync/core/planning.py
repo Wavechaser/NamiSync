@@ -5,7 +5,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import json
-from dataclasses import asdict, dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import PureWindowsPath
 from typing import Mapping, NewType, Protocol, Sequence
@@ -16,16 +16,47 @@ from .models import (
     FileRecord,
     FileStat,
     MetadataSnapshot,
+    MANAGED_FILE_ATTRIBUTE_MASK,
     Root,
     ScanResult,
     VolumeEvidence,
     VolumeId,
+    capability_profile_projection,
+    file_stat_projection,
+    metadata_projection,
+    root_projection,
+    volume_evidence_projection,
+    volume_id_projection,
 )
-from .pathing import normalize_relative_path, validate_relative_path
+from .pathing import (
+    fold_validated_path,
+    normalize_relative_path,
+    validate_relative_path,
+)
+from .review import (
+    MAX_PLAN_DOMAIN_RETAINED_BYTES,
+    MAX_PLAN_REVIEW_ROWS,
+    PlanReviewProducerAdmission,
+    ReviewFactLimitExceeded,
+    _PlanReviewLimitSignal,
+)
+from .scalars import (
+    ScalarDomainError,
+    checked_add_signed_64,
+    require_signed_64,
+    require_utf8_text,
+)
 
 
 OpId = NewType("OpId", str)
 PlanFingerprint = NewType("PlanFingerprint", str)
+FILTER_PATTERN_LIMIT = 64
+FILTER_PATTERN_UTF8_LIMIT = 1_024
+FILTER_TOTAL_UTF8_LIMIT = 16_384
+ASSIGNMENT_ITEM_LIMIT = MAX_PLAN_REVIEW_ROWS
+# A one-way plan can name only its source and target volumes.
+PLAN_REQUIRED_VOLUME_LIMIT = 2
+ASSIGNMENT_TEXT_UTF8_LIMIT = MAX_PLAN_DOMAIN_RETAINED_BYTES
 
 
 class DeletionPolicy(StrEnum):
@@ -46,6 +77,35 @@ class OperationKind(StrEnum):
     NOOP = "noop"
 
 
+def planned_metadata_matches(
+    actual: FileStat, expected: FileStat, kind: OperationKind
+) -> bool:
+    """Compare managed attributes and move eligibility, not incidental metadata."""
+
+    return (
+        actual.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        == expected.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        and (
+            kind not in (OperationKind.MOVE, OperationKind.MOVE_UPDATE)
+            or actual.nlink == expected.nlink
+        )
+    )
+
+
+def same_file_version(actual: FileStat, expected: FileStat) -> bool:
+    """Recognize a file after an effect using version facts, not metadata churn."""
+
+    return (
+        actual.kind is expected.kind
+        and actual.size == expected.size
+        and actual.mtime_ns == expected.mtime_ns
+        and (
+            expected.file_identity is None
+            or actual.file_identity == expected.file_identity
+        )
+    )
+
+
 class OperationReason(StrEnum):
     SOURCE_ONLY = "source_only"
     METADATA_CHANGED = "metadata_changed"
@@ -53,7 +113,6 @@ class OperationReason(StrEnum):
     IDENTITY_RENAME = "identity_rename"
     IDENTITY_RENAME_CHANGED = "identity_rename_changed"
     REQUIRED_DIRECTORY = "required_directory"
-    EMPTY_DIRECTORY = "empty_directory"
     TARGET_ONLY = "target_only"
     DIRECTORY_CLEANUP = "directory_cleanup"
     UNSUPPORTED = "unsupported"
@@ -73,19 +132,33 @@ class BlockedReason(StrEnum):
     BLOCKED_DEPENDENCY = "blocked_dependency"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PreservationPolicy:
     preserve_ads: bool = False
     preserve_created: bool = True
     preserve_acl: bool = False
 
+    def __post_init__(self) -> None:
+        if any(
+            type(value) is not bool
+            for value in (
+                self.preserve_ads,
+                self.preserve_created,
+                self.preserve_acl,
+            )
+        ):
+            raise TypeError("preservation fields must be bools")
 
-@dataclass(frozen=True)
+
+@dataclass(frozen=True, slots=True)
 class FilterSet:
     patterns: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        canonical = tuple(sorted({pattern.replace("/", "\\") for pattern in self.patterns}))
+        _require_filter_patterns(self.patterns)
+        canonical = tuple(
+            sorted({pattern.replace("/", "\\") for pattern in self.patterns})
+        )
         if canonical != self.patterns:
             object.__setattr__(self, "patterns", canonical)
 
@@ -106,7 +179,7 @@ class FilterSet:
         return False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DestinationAssignment:
     source_rel_path: str
     source_rel_path_key: str
@@ -116,17 +189,131 @@ class DestinationAssignment:
     conflict: str | None = None
 
     def __post_init__(self) -> None:
-        if self.source_rel_path_key != normalize_relative_path(self.source_rel_path):
-            raise ValueError("source assignment key is not canonical")
-        if self.target_rel_path_key != normalize_relative_path(self.target_rel_path):
-            raise ValueError("target assignment key is not canonical")
+        _require_destination_assignment_fields(self)
 
 
-@dataclass(frozen=True)
+def _require_filter_patterns(patterns: object) -> None:
+    if type(patterns) is not tuple:
+        raise TypeError("filter patterns must be a tuple")
+    if len(patterns) > FILTER_PATTERN_LIMIT:
+        raise ValueError("filter patterns exceed the 64-pattern limit")
+    total_bytes = 0
+    for pattern in patterns:
+        require_utf8_text(
+            pattern,
+            "filter pattern",
+            minimum_bytes=1,
+            maximum_bytes=FILTER_PATTERN_UTF8_LIMIT,
+        )
+        # The individual guard makes this bounded temporary at most 1,024
+        # bytes. Charge the supplied spelling before slash normalization,
+        # duplicate removal, or sorting can change its shape.
+        total_bytes += len(pattern.encode("utf-8"))
+        if total_bytes > FILTER_TOTAL_UTF8_LIMIT:
+            raise ValueError("filter patterns exceed the UTF-8 total limit")
+
+
+def validate_filter_set(value: object) -> FilterSet:
+    """Re-admit one exact, canonical filter snapshot without copying it."""
+
+    if type(value) is not FilterSet:
+        raise TypeError("filter snapshot requires FilterSet")
+    _require_filter_patterns(value.patterns)
+    if tuple(
+        sorted({pattern.replace("/", "\\") for pattern in value.patterns})
+    ) != value.patterns:
+        raise ValueError("filter snapshot is not canonical")
+    return value
+
+
+def _require_assignment_text(
+    value: object,
+    field_name: str,
+    *,
+    allow_none: bool = False,
+    require_nonempty: bool = False,
+) -> str | None:
+    if value is None and allow_none:
+        return None
+    return require_utf8_text(
+        value,
+        field_name,
+        minimum_bytes=1 if require_nonempty else 0,
+        maximum_bytes=ASSIGNMENT_TEXT_UTF8_LIMIT,
+    )
+
+
+def _require_destination_assignment_fields(
+    value: DestinationAssignment,
+) -> None:
+    for field_name, path in (
+        ("source assignment path", value.source_rel_path),
+        ("source assignment key", value.source_rel_path_key),
+        ("target assignment path", value.target_rel_path),
+        ("target assignment key", value.target_rel_path_key),
+    ):
+        if type(path) is not str:
+            raise TypeError(f"{field_name} must be text")
+    _require_assignment_text(
+        value.group_id,
+        "assignment group id",
+        allow_none=True,
+    )
+    _require_assignment_text(
+        value.conflict,
+        "assignment conflict",
+        allow_none=True,
+    )
+    if value.source_rel_path_key != normalize_relative_path(
+        value.source_rel_path
+    ):
+        raise ValueError("source assignment key is not canonical")
+    if value.target_rel_path_key != normalize_relative_path(
+        value.target_rel_path
+    ):
+        raise ValueError("target assignment key is not canonical")
+
+
+@dataclass(frozen=True, slots=True)
 class Assignment:
     policy_name: str
     policy_version: str
     items: tuple[DestinationAssignment, ...]
+
+    def __post_init__(self) -> None:
+        _require_assignment_fields(self)
+
+
+def _require_assignment_fields(value: Assignment) -> None:
+    _require_assignment_text(
+        value.policy_name,
+        "assignment policy name",
+        require_nonempty=True,
+    )
+    _require_assignment_text(
+        value.policy_version,
+        "assignment policy version",
+        require_nonempty=True,
+    )
+    if type(value.items) is not tuple:
+        raise TypeError("assignment items must be a tuple")
+    if len(value.items) > ASSIGNMENT_ITEM_LIMIT:
+        raise ValueError("assignment items exceed the plan row limit")
+    for item in value.items:
+        if type(item) is not DestinationAssignment:
+            raise TypeError(
+                "assignment items must contain DestinationAssignment values"
+            )
+        _require_destination_assignment_fields(item)
+
+
+def validate_assignment(value: object) -> Assignment:
+    """Re-admit an exact assignment returned by a policy or codec."""
+
+    if type(value) is not Assignment:
+        raise TypeError("destination policy must return an Assignment")
+    _require_assignment_fields(value)
+    return value
 
 
 class DestinationPolicy(Protocol):
@@ -141,10 +328,22 @@ class DestinationPolicy(Protocol):
     ) -> Assignment: ...
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IdentityDestinationPolicy:
     name: str = "identity"
     version: str = "1"
+
+    def __post_init__(self) -> None:
+        _require_assignment_text(
+            self.name,
+            "destination policy name",
+            require_nonempty=True,
+        )
+        _require_assignment_text(
+            self.version,
+            "destination policy version",
+            require_nonempty=True,
+        )
 
     def assign(
         self,
@@ -153,37 +352,56 @@ class IdentityDestinationPolicy:
         target: ScanResult,
     ) -> Assignment:
         del meta, target
-        items = tuple(
-            DestinationAssignment(
-                record.rel_path,
-                record.rel_path_key,
-                validate_relative_path(record.rel_path),
-                normalize_relative_path(record.rel_path),
+        items: list[DestinationAssignment] = []
+        for record in sorted(
+            records,
+            key=lambda item: (item.rel_path_key, item.rel_path),
+        ):
+            canonical = validate_relative_path(record.rel_path)
+            items.append(
+                DestinationAssignment(
+                    record.rel_path,
+                    record.rel_path_key,
+                    canonical,
+                    fold_validated_path(canonical),
+                )
             )
-            for record in sorted(records, key=lambda item: (item.rel_path_key, item.rel_path))
-        )
-        return Assignment(self.name, self.version, items)
+        return Assignment(self.name, self.version, tuple(items))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SyncOptions:
     deletion_policy: DeletionPolicy = DeletionPolicy.TRASH
     preservation: PreservationPolicy = PreservationPolicy()
     filters: FilterSet = FilterSet()
     destination_policy: DestinationPolicy = IdentityDestinationPolicy()
-    worker_count: int = 1
     trash_on_update: bool = True
     propagate_source_casing: bool = False
     internal_mirror_authorized: bool = False
 
     def __post_init__(self) -> None:
-        if self.worker_count < 1:
-            raise ValueError("worker count must be positive")
+        if type(self.deletion_policy) is not DeletionPolicy:
+            raise TypeError("deletion policy has the wrong type")
+        if type(self.preservation) is not PreservationPolicy:
+            raise TypeError("preservation policy has the wrong type")
+        PreservationPolicy(
+            self.preservation.preserve_ads,
+            self.preservation.preserve_created,
+            self.preservation.preserve_acl,
+        )
+        validate_filter_set(self.filters)
+        for field_name, value in (
+            ("trash_on_update", self.trash_on_update),
+            ("propagate_source_casing", self.propagate_source_casing),
+            ("internal_mirror_authorized", self.internal_mirror_authorized),
+        ):
+            if type(value) is not bool:
+                raise TypeError(f"{field_name} must be a bool")
         if self.deletion_policy is DeletionPolicy.MIRROR and not self.internal_mirror_authorized:
             raise ValueError("mirror deletion requires explicit internal authorization")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MappingPair:
     source_rel_path_key: str
     target_rel_path: str
@@ -192,12 +410,12 @@ class MappingPair:
     target_identity: FileIdentity | None
 
     def __post_init__(self) -> None:
-        validate_relative_path(self.target_rel_path)
-        if self.target_rel_path_key != normalize_relative_path(self.target_rel_path):
+        canonical = validate_relative_path(self.target_rel_path)
+        if self.target_rel_path_key != fold_validated_path(canonical):
             raise ValueError("mapping target key is not canonical")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MappingSnapshot:
     source_volume_id: VolumeId | None = None
     target_volume_id: VolumeId | None = None
@@ -215,36 +433,7 @@ class MappingSnapshot:
         return cls(source_volume_id, target_volume_id)
 
 
-class ScopeKind(StrEnum):
-    EVERYTHING = "everything"
-    PATTERN = "pattern"
-    EXPLICIT = "explicit"
-    RECORDED_RUN = "recorded_run"
-
-
-@dataclass(frozen=True)
-class Scope:
-    kind: ScopeKind
-    value: str | tuple[str, ...] | None = None
-
-    @classmethod
-    def everything(cls) -> Scope:
-        return cls(ScopeKind.EVERYTHING)
-
-    @classmethod
-    def pattern(cls, pattern: str) -> Scope:
-        return cls(ScopeKind.PATTERN, pattern)
-
-    @classmethod
-    def explicit(cls, candidate_ids: Sequence[str]) -> Scope:
-        return cls(ScopeKind.EXPLICIT, tuple(sorted(set(candidate_ids))))
-
-    @classmethod
-    def from_run(cls, token: str) -> Scope:
-        return cls(ScopeKind.RECORDED_RUN, token)
-
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PlanOperation:
     op_id: OpId
     kind: OperationKind
@@ -269,8 +458,7 @@ class PlanOperation:
         validate_relative_path(self.target_rel_path)
         if self.prior_target_rel_path is not None:
             validate_relative_path(self.prior_target_rel_path)
-        if self.content_bytes < 0:
-            raise ValueError("operation content bytes cannot be negative")
+        require_signed_64(self.content_bytes, "operation content bytes")
         if len(set(self.dependencies)) != len(self.dependencies):
             raise ValueError("operation dependencies must be unique")
 
@@ -279,7 +467,7 @@ class PlanOperation:
         return self.blocked_reason is not None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Plan:
     source_root: Root
     target_root: Root
@@ -298,14 +486,20 @@ class Plan:
     deletion_policy: DeletionPolicy
     trash_on_update: bool
     policy_fingerprint: str
-    worker_count: int
     required_volumes: frozenset[VolumeId]
     required_bytes: int
     fingerprint: PlanFingerprint
 
     def __post_init__(self) -> None:
-        if self.worker_count < 1 or self.required_bytes < 0:
-            raise ValueError("invalid plan capacity snapshot")
+        require_signed_64(self.required_bytes, "plan required bytes")
+        if type(self.required_volumes) is not frozenset:
+            raise TypeError("plan required volumes must be a frozenset")
+        if len(self.required_volumes) > PLAN_REQUIRED_VOLUME_LIMIT:
+            raise ValueError("plan required volumes exceed the endpoint limit")
+        for volume in self.required_volumes:
+            if type(volume) is not VolumeId:
+                raise TypeError("plan required volumes must contain VolumeId values")
+            VolumeId(volume.serial, volume.fs_type)
         known_ids: set[OpId] = set()
         for operation in self.operations:
             if operation.op_id in known_ids:
@@ -319,34 +513,146 @@ def re_fullmatch_op_id(value: str) -> bool:
     return len(value) == 32 and all(character in "0123456789abcdef" for character in value)
 
 
-def _primitive(value: object) -> object:
-    if isinstance(value, StrEnum):
-        return value.value
-    if is_dataclass(value):
-        return {field.name: _primitive(getattr(value, field.name)) for field in fields(value)}
-    if isinstance(value, Mapping):
-        return {str(key): _primitive(item) for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
-    if isinstance(value, (tuple, list)):
-        return [_primitive(item) for item in value]
-    if isinstance(value, (set, frozenset)):
-        return sorted((_primitive(item) for item in value), key=lambda item: json.dumps(item, sort_keys=True))
-    return value
+def _require_json_tree(value: object) -> None:
+    if value is None or type(value) in (str, bool, int, float):
+        return
+    if type(value) is list:
+        for item in value:
+            _require_json_tree(item)
+        return
+    if type(value) is dict:
+        for key, item in value.items():
+            if type(key) is not str:
+                raise TypeError("canonical JSON keys must be plain strings")
+            _require_json_tree(item)
+        return
+    raise TypeError(f"unsupported canonical JSON value: {type(value).__name__}")
 
 
 def canonical_json_bytes(value: object) -> bytes:
-    """Return canonical JSON while preserving existing valid-Unicode bytes.
+    """Encode an explicitly projected, closed JSON tree without coercion.
 
-    ``backslashreplace`` affects only malformed surrogate code units, which
-    JSON can represent with a ``\\uXXXX`` escape. Valid Unicode retains the
-    established UTF-8 encoding and therefore its existing fingerprints.
+    Strings and keys must contain Unicode scalar values, not surrogate code
+    units. Strict UTF-8 preserves established bytes for every accepted string.
     """
 
+    _require_json_tree(value)
     return json.dumps(
-        _primitive(value),
+        value,
+        allow_nan=False,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8", errors="backslashreplace")
+    ).encode("utf-8", errors="strict")
+
+
+def preservation_policy_projection(value: PreservationPolicy) -> dict[str, object]:
+    if type(value) is not PreservationPolicy:
+        raise TypeError("preservation projection requires PreservationPolicy")
+    PreservationPolicy(
+        value.preserve_ads,
+        value.preserve_created,
+        value.preserve_acl,
+    )
+    return {
+        "preserve_ads": value.preserve_ads,
+        "preserve_created": value.preserve_created,
+        "preserve_acl": value.preserve_acl,
+    }
+
+
+def filter_set_projection(value: FilterSet) -> dict[str, object]:
+    validate_filter_set(value)
+    return {"patterns": list(value.patterns)}
+
+
+def destination_assignment_projection(value: DestinationAssignment) -> dict[str, object]:
+    if type(value) is not DestinationAssignment:
+        raise TypeError("destination projection requires DestinationAssignment")
+    _require_destination_assignment_fields(value)
+    return {
+        "source_rel_path": value.source_rel_path,
+        "source_rel_path_key": value.source_rel_path_key,
+        "target_rel_path": value.target_rel_path,
+        "target_rel_path_key": value.target_rel_path_key,
+        "group_id": value.group_id,
+        "conflict": value.conflict,
+    }
+
+
+def assignment_projection(value: Assignment) -> dict[str, object]:
+    validate_assignment(value)
+    return {
+        "policy_name": value.policy_name,
+        "policy_version": value.policy_version,
+        "items": [destination_assignment_projection(item) for item in value.items],
+    }
+
+
+def operation_projection(value: PlanOperation) -> dict[str, object]:
+    if type(value) is not PlanOperation:
+        raise TypeError("operation projection requires PlanOperation")
+    if (
+        type(value.kind) is not OperationKind
+        or type(value.reason) is not OperationReason
+        or (value.blocked_reason is not None and type(value.blocked_reason) is not BlockedReason)
+        or type(value.dependencies) is not tuple
+    ):
+        raise TypeError("operation projection requires typed reasons and tuple dependencies")
+    return {
+        "op_id": value.op_id,
+        "kind": value.kind.value,
+        "source_rel_path": value.source_rel_path,
+        "target_rel_path": value.target_rel_path,
+        "source_expected": file_stat_projection(value.source_expected),
+        "target_expected": file_stat_projection(value.target_expected),
+        "intended": file_stat_projection(value.intended),
+        "prior_target_rel_path": value.prior_target_rel_path,
+        "prior_target_expected": file_stat_projection(value.prior_target_expected),
+        "metadata": metadata_projection(value.metadata),
+        "content_bytes": value.content_bytes,
+        "dependencies": list(value.dependencies),
+        "reason": value.reason.value,
+        "blocked_reason": None if value.blocked_reason is None else value.blocked_reason.value,
+    }
+
+
+def plan_projection(value: Plan) -> dict[str, object]:
+    if type(value) is not Plan:
+        raise TypeError("plan projection requires Plan")
+    if (
+        type(value.deletion_policy) is not DeletionPolicy
+        or type(value.operations) is not tuple
+        or type(value.required_volumes) is not frozenset
+    ):
+        raise TypeError("plan projection requires typed policy, operations, and volumes")
+    if len(value.required_volumes) > PLAN_REQUIRED_VOLUME_LIMIT:
+        raise ValueError("plan required volumes exceed the endpoint limit")
+    volumes = [volume_id_projection(volume) for volume in value.required_volumes]
+    # Retain the existing JSON sort key, not VolumeId's dataclass ordering.
+    volumes.sort(key=lambda item: json.dumps(item, sort_keys=True))
+    return {
+        "source_root": root_projection(value.source_root),
+        "target_root": root_projection(value.target_root),
+        "source_volume_id": volume_id_projection(value.source_volume_id),
+        "target_volume_id": volume_id_projection(value.target_volume_id),
+        "source_volume_evidence": volume_evidence_projection(value.source_volume_evidence),
+        "target_volume_evidence": volume_evidence_projection(value.target_volume_evidence),
+        "source_profile": capability_profile_projection(value.source_profile),
+        "target_profile": capability_profile_projection(value.target_profile),
+        "source_complete": value.source_complete,
+        "target_complete": value.target_complete,
+        "operations": [operation_projection(operation) for operation in value.operations],
+        "assignment": assignment_projection(value.assignment),
+        "preservation": preservation_policy_projection(value.preservation),
+        "filter_snapshot": filter_set_projection(value.filter_snapshot),
+        "deletion_policy": value.deletion_policy.value,
+        "trash_on_update": value.trash_on_update,
+        "policy_fingerprint": value.policy_fingerprint,
+        "required_volumes": volumes,
+        "required_bytes": value.required_bytes,
+        "fingerprint": value.fingerprint,
+    }
 
 
 def deterministic_operation_id(
@@ -356,6 +662,8 @@ def deterministic_operation_id(
     prior_target_rel_path: str | None,
     reason: OperationReason,
 ) -> OpId:
+    if type(kind) is not OperationKind or type(reason) is not OperationReason:
+        raise TypeError("operation intent requires typed kind and reason")
     intent = {
         "kind": kind.value,
         "source": source_rel_path,
@@ -371,36 +679,78 @@ def calculate_required_bytes(
     *,
     target_profile: CapabilityProfile,
     trash_on_update: bool,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> int:
     """Return a conservative start-of-run free-space requirement."""
 
+    if (
+        review_admission is not None
+        and type(review_admission) is not PlanReviewProducerAdmission
+    ):
+        raise TypeError("plan review admission has the wrong type")
     required = 0
-    for operation in operations:
-        if operation.blocked:
-            continue
-        if operation.kind in {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}:
-            required += operation.content_bytes
-        if (
-            trash_on_update
-            and not target_profile.supports_hardlinks
-            and operation.kind in {OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
-        ):
-            displaced = operation.target_expected or operation.prior_target_expected
-            if displaced is not None:
-                required += displaced.size
+    try:
+        for operation in operations:
+            if operation.blocked:
+                continue
+            if operation.kind in {
+                OperationKind.COPY,
+                OperationKind.UPDATE,
+                OperationKind.MOVE_UPDATE,
+            }:
+                required = checked_add_signed_64(
+                    required,
+                    operation.content_bytes,
+                    "plan logical bytes",
+                )
+            if (
+                trash_on_update
+                and not target_profile.supports_hardlinks
+                and operation.kind
+                in {OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
+            ):
+                displaced = (
+                    operation.target_expected
+                    or operation.prior_target_expected
+                )
+                if displaced is not None:
+                    required = checked_add_signed_64(
+                        required,
+                        displaced.size,
+                        "plan logical bytes",
+                    )
+    except ScalarDomainError as error:
+        fact = ReviewFactLimitExceeded.plan_logical_bytes()
+        signal = (
+            _PlanReviewLimitSignal(fact)
+            if review_admission is None
+            else review_admission._limit_signal(fact)
+        )
+        raise signal from error
     return required
 
 
 def policy_fingerprint(options: SyncOptions) -> str:
+    if type(options) is not SyncOptions or type(options.deletion_policy) is not DeletionPolicy:
+        raise TypeError("policy fingerprint requires SyncOptions with DeletionPolicy")
+    policy_name = _require_assignment_text(
+        options.destination_policy.name,
+        "destination policy name",
+        require_nonempty=True,
+    )
+    policy_version = _require_assignment_text(
+        options.destination_policy.version,
+        "destination policy version",
+        require_nonempty=True,
+    )
     payload = {
         "deletion_policy": options.deletion_policy.value,
-        "preservation": options.preservation,
-        "filters": options.filters,
+        "preservation": preservation_policy_projection(options.preservation),
+        "filters": filter_set_projection(options.filters),
         "destination_policy": {
-            "name": options.destination_policy.name,
-            "version": options.destination_policy.version,
+            "name": policy_name,
+            "version": policy_version,
         },
-        "worker_count": options.worker_count,
         "trash_on_update": options.trash_on_update,
         "propagate_source_casing": options.propagate_source_casing,
     }
@@ -408,17 +758,13 @@ def policy_fingerprint(options: SyncOptions) -> str:
 
 
 def plan_fingerprint(plan: Plan) -> PlanFingerprint:
-    payload = asdict(plan)
-    payload.pop("fingerprint", None)
+    payload = plan_projection(plan)
+    del payload["fingerprint"]
     return PlanFingerprint(hashlib.sha256(canonical_json_bytes(payload)).hexdigest())
 
 
-def serialize_plan(plan: Plan) -> bytes:
-    return canonical_json_bytes(plan)
-
-
 def selection_digest(selection: Sequence[OpId] | frozenset[OpId]) -> bytes:
-    return hashlib.sha256(canonical_json_bytes(sorted(str(item) for item in selection))).digest()
+    return hashlib.sha256(canonical_json_bytes(sorted(selection))).digest()
 
 
 def quarantined_operation_ids(

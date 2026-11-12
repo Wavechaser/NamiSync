@@ -2,38 +2,57 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import os
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from xxhash import xxh3_128
 
-from namisync.core.evidence import RecordingStatus
+import namisync.modules.executor.native as executor_module
+from namisync.core.evidence import (
+    Attestation,
+    ContentEvidence,
+    Provenance,
+    RecordingStatus,
+)
 from namisync.core.integrity import (
     IntegrityReason,
     IntegrityResult,
     IntegritySelection,
     IntegritySelectionItem,
     InventoryState,
+    ReadStrategy,
     VerifierContext,
 )
 from namisync.core.models import (
     CapabilityProfile,
     FileRecord,
-    IgnoreSet,
     Root,
     ScanResult,
     ScanScope,
     VolumeEvidence,
     VolumeId,
 )
-from namisync.core.pathing import normalize_relative_path
+from namisync.core.pathing import (
+    from_extended_length_path,
+    normalize_relative_path,
+    to_extended_length_path,
+)
+from namisync.core.planning import OperationKind
 from namisync.core.recording import InventoryCommand
+from namisync.core.root_authority import (
+    RootAuthority,
+    current_volume_anchor,
+    observe_native_volume,
+)
 from namisync.core.session import RunContext
 from namisync.db.connections import connect_ledger_reader, connect_ledger_writer
+from namisync.modules.executor import NativeCopyBackend, NativeFileSystem
 from namisync.modules.verifier import WindowsUnbufferedReader, verify
 
-from _db_fixtures import NOW, plan, setup_recorder
+from _db_fixtures import NOW, operation, plan, setup_recorder
 
 
 class _Clock:
@@ -55,7 +74,6 @@ def _scan(
         directories=(),
         unsupported=(),
         warnings=(),
-        ignore_snapshot=IgnoreSet(),
         scope=ScanScope.full(),
         complete=True,
     )
@@ -69,6 +87,167 @@ def _row(path: Path, rel_path_key: str):
         ).fetchone()
     finally:
         connection.close()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows copy/verify integration")
+@pytest.mark.parametrize("direct", [False, True])
+def test_copy_record_then_unbuffered_verify_round_trips_one_factory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    direct: bool,
+) -> None:
+    source_root = tmp_path / "source"
+    target_root = tmp_path / "target"
+    source_root.mkdir()
+    target_root.mkdir()
+    relative_path = "payload.bin"
+    source_path = source_root / relative_path
+    target_path = target_root / relative_path
+    temp_path = target_root / "payload.bin.roundtrip.tmp"
+    payload = (
+        bytes(range(251)) * 33421 + b"verify-direct-tail"
+        if direct else b"NamiSync copy-to-verify XXH3 round trip"
+    )
+    source_path.write_bytes(payload)
+    source_open_flags: list[int] = []
+    source_open_paths: list[str] = []
+    real_open = executor_module.os.open
+
+    def recording_open(path_value, flags, *args):
+        if Path(from_extended_length_path(str(path_value))) == source_path:
+            source_open_flags.append(flags)
+            source_open_paths.append(str(path_value))
+        return real_open(path_value, flags, *args)
+
+    monkeypatch.setattr(executor_module.os, "open", recording_open)
+    filesystem = NativeFileSystem()
+    source_stat = filesystem.stat_path(source_path)
+    assert source_stat is not None
+    factory = xxh3_128
+    backend = NativeCopyBackend(hasher_factory=factory, collect_metrics=True)
+    scope = (
+        executor_module._root_invocation_scope(filesystem, object(), (), None)
+        if direct else nullcontext()
+    )
+    with scope:
+        with filesystem.open_source(source_path) as source, filesystem.create_temp(
+            temp_path, allocation_size=len(payload) if direct else None
+        ) as target:
+            copied = backend.copy(
+                source,
+                target,
+                chunk_size=4 * 1024 * 1024 if direct else 256 * 1024,
+                checkpoint=lambda: None,
+                on_chunk=lambda _size: None,
+            )
+        finalized = filesystem.finalize_temp(
+            temp_path,
+            source_stat,
+            preserve_created=True,
+            acl_source=None,
+        )
+        filesystem.publish_new(temp_path, target_path)
+        published = filesystem.ensure_published_metadata(
+            target_path,
+            finalized,
+            source_stat,
+            preserve_created=True,
+            apply_readonly=True,
+        )
+        filesystem.flush_directory(target_root)
+    assert backend.last_metrics is not None
+    assert backend.last_metrics.write_mode == ("direct" if direct else "buffered")
+    assert backend.last_metrics.fallback_reason is None
+    assert source_open_flags and source_open_flags[0] & os.O_SEQUENTIAL
+    assert source_open_paths == [to_extended_length_path(str(source_path))]
+
+    copy_operation = operation(
+        OperationKind.COPY,
+        source_path=relative_path,
+        target_path=relative_path,
+        source=source_stat,
+        target=None,
+        intended=published,
+    )
+    setup = setup_recorder(
+        tmp_path / "ledger.db", plan((copy_operation,))
+    )
+    copied_attestation = Attestation(
+        ContentEvidence(
+            "xxh3_128",
+            copied.digest,
+            copied.size,
+            Provenance.COPY_ATTESTED,
+            NOW,
+        ),
+        published,
+    )
+    try:
+        setup.run.record_copied(copy_operation.op_id, copied_attestation)
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            before = connection.execute(
+                """SELECT * FROM inventory
+                    WHERE location_id = ? AND rel_path_key = ?""",
+                (
+                    setup.target_location_id,
+                    normalize_relative_path(relative_path),
+                ),
+            ).fetchone()
+        finally:
+            connection.close()
+        assert bytes(before["content_digest"]) == copied.digest
+        assert before["last_verified_at"] is None
+
+        item = IntegritySelectionItem(
+            item_id="copy-roundtrip",
+            row_id=str(before["id"]),
+            location_id=str(setup.target_location_id),
+            root=target_root,
+            rel_path_key=normalize_relative_path(relative_path),
+            display_path=relative_path,
+            expected_state=InventoryState.PRESENT,
+            expected_stat=published,
+            baseline=copied_attestation,
+            scope_token=str(before["scope_token"]),
+        )
+        context = VerifierContext(
+            run=RunContext(lambda _event: None, lambda: None),
+            clock=_Clock(),
+            hasher_factory=factory,
+            root_authority=RootAuthority(
+                str(target_root),
+                current_volume_anchor(target_root),
+                observe_native_volume(target_root).volume_id,
+            ),
+        )
+        assert backend._hasher_factory is context.hasher_factory is factory
+
+        result = verify(
+            IntegritySelection((item,)),
+            context,
+            setup.recorder,
+            WindowsUnbufferedReader(),
+        )
+
+        assert result.outcomes[0].result is IntegrityResult.VERIFIED
+        assert (
+            result.outcomes[0].read_strategy
+            is ReadStrategy.WINDOWS_UNBUFFERED
+        )
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            after = connection.execute(
+                "SELECT * FROM inventory WHERE id = ?",
+                (before["id"],),
+            ).fetchone()
+        finally:
+            connection.close()
+        assert bytes(after["content_digest"]) == copied.digest
+        assert after["hash_provenance"] == Provenance.VERIFY_ATTESTED.value
+        assert after["last_verified_at"] == "2026-01-02T03:04:05.123456Z"
+    finally:
+        setup.recorder.close()
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows unbuffered verifier integration")
@@ -147,6 +326,12 @@ def test_reappeared_baseline_and_clear_are_atomic_across_recorder_rollback(
         context = VerifierContext(
             run=RunContext(emit=lambda event: None, checkpoint=lambda: None),
             clock=_Clock(),
+            hasher_factory=xxh3_128,
+            root_authority=RootAuthority(
+                str(managed_root),
+                current_volume_anchor(managed_root),
+                observe_native_volume(managed_root).volume_id,
+            ),
         )
 
         writer = connect_ledger_writer(setup.recorder.path)

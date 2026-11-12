@@ -2,28 +2,39 @@
 
 from __future__ import annotations
 
+import gc
 import random
 from dataclasses import dataclass, replace
+from weakref import ref
 
 import pytest
 
+import namisync.core.review as review_module
+from namisync.core.evidence import Outcome
 from namisync.core.models import (
     CapabilityProfile,
     DirRecord,
     EntryKind,
     FileIdentity,
     FileRecord,
-    IgnoreSet,
     MetadataSnapshot,
     Root,
     ScanResult,
     ScanScope,
+    ScanWarning,
+    ScanWarningCode,
     UnsupportedReason,
     UnsupportedRecord,
     VolumeEvidence,
     VolumeId,
 )
 from namisync.core.pathing import PathValidationError, normalize_relative_path
+from namisync.core.review import (
+    PlanReviewProducerAdmission,
+    ReviewFactLimitExceeded,
+    _PlanReviewLimitSignal,
+)
+from namisync.core.scalars import MAX_SIGNED_64
 from namisync.core.planning import (
     Assignment,
     BlockedReason,
@@ -37,19 +48,33 @@ from namisync.core.planning import (
     OperationReason,
     PlanOperation,
     PreservationPolicy,
-    Scope,
     SyncOptions,
     calculate_required_bytes,
+    canonical_json_bytes,
     deterministic_operation_id,
+    plan_projection,
     policy_fingerprint,
-    serialize_plan,
 )
-from namisync.modules.planner import plan
+from namisync.modules.planner import plan, snapshot_plan_options
+from namisync.workflows.selection import ExclusionReason, derive_execution_selection
 
 
 META = MetadataSnapshot(0, 100)
 SOURCE_VOLUME = VolumeId("SRC", "NTFS")
 TARGET_VOLUME = VolumeId("DST", "NTFS")
+
+
+class _PrivatePlannerFrameValue:
+    pass
+
+
+def _raise_with_private_planner_frame(
+    error: BaseException,
+    references: list[ref[_PrivatePlannerFrameValue]],
+) -> None:
+    private = _PrivatePlannerFrameValue()
+    references.append(ref(private))
+    raise error
 
 
 def _profile(*, hardlinks: bool = True, stable: bool = True, granularity: int = 100) -> CapabilityProfile:
@@ -100,7 +125,6 @@ def _scan(
         (_dir(""), *directories),
         unsupported,
         (),
-        IgnoreSet(),
         ScanScope.full(),
         complete,
     )
@@ -118,7 +142,6 @@ def _plan(
         target,
         correspondence or MappingSnapshot.empty(source.volume_id, target.volume_id),
         options or SyncOptions(),
-        Scope.everything(),
     )
 
 
@@ -135,7 +158,7 @@ def test_repeated_serialization_and_randomized_input_order_are_byte_identical() 
         randomizer.shuffle(files)
         source = _scan("source", SOURCE_VOLUME, files=tuple(files), directories=tuple(reversed(directories)))
         target = _scan("target", TARGET_VOLUME)
-        serialized = serialize_plan(_plan(source, target))
+        serialized = canonical_json_bytes(plan_projection(_plan(source, target)))
         baseline = serialized if baseline is None else baseline
         assert serialized == baseline
 
@@ -230,6 +253,7 @@ def test_persisted_paired_noop_evidence_enables_move_and_empty_correspondence_do
     [
         (_file("new.bin", identity=None), _profile(stable=False), _file("old.bin", identity=FileIdentity("DST", 2)), None),
         (_file("new.bin", identity=FileIdentity("SRC", 1), nlink=2), _profile(), _file("old.bin", identity=FileIdentity("DST", 2)), None),
+        (_file("new.bin", identity=FileIdentity("SRC", 1)), _profile(), _file("old.bin", identity=FileIdentity("DST", 2), nlink=2), None),
         (_file("new.bin", identity=FileIdentity("OTHER", 1)), _profile(), _file("old.bin", identity=FileIdentity("DST", 2)), None),
         (_file("new.bin", identity=FileIdentity("SRC", 1)), _profile(), _file("old.bin", identity=FileIdentity("DST", 2)), "cross"),
     ],
@@ -310,6 +334,139 @@ def test_case_type_and_unsupported_conflicts_are_blocked_while_independent_work_
     independent = next(operation for operation in result.operations if operation.target_rel_path == "independent.bin")
     assert independent.kind is OperationKind.COPY
     assert not independent.blocked
+
+
+@pytest.mark.parametrize(
+    ("deletion_policy", "removal_kind"),
+    [
+        (DeletionPolicy.TRASH, OperationKind.TRASH),
+        (DeletionPolicy.MIRROR, OperationKind.DELETE),
+    ],
+)
+def test_blocked_parent_type_collision_keeps_raw_removal_intent_but_defers_execution(
+    deletion_policy: DeletionPolicy,
+    removal_kind: OperationKind,
+) -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(_file(r"parent\child.bin"),),
+        directories=(_dir("parent"),),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file("parent"), _file("unrelated.bin")),
+    )
+    result = _plan(
+        source,
+        target,
+        options=SyncOptions(
+            deletion_policy=deletion_policy,
+            internal_mirror_authorized=deletion_policy is DeletionPolicy.MIRROR,
+        ),
+    )
+
+    blocked = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "parent" and operation.blocked
+    )
+    blocking_removal = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "parent" and operation.kind is removal_kind
+    )
+    unrelated_removal = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "unrelated.bin"
+        and operation.kind is removal_kind
+    )
+    decision = derive_execution_selection(result)
+    exclusions = {item.op_id: item for item in decision.exclusions}
+    child = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == r"parent\child.bin"
+    )
+
+    assert blocked.blocked_reason is BlockedReason.TYPE_COLLISION
+    assert child.kind is OperationKind.COPY
+    assert child.blocked_reason is BlockedReason.BLOCKED_DEPENDENCY
+    assert blocked.op_id in child.dependencies
+    assert child.op_id not in decision.selection
+    assert exclusions[child.op_id].outcome is Outcome.BLOCKED
+    assert exclusions[child.op_id].reason == BlockedReason.BLOCKED_DEPENDENCY.value
+    assert blocking_removal.op_id not in decision.selection
+    assert exclusions[blocking_removal.op_id].outcome is Outcome.DEFERRED
+    assert (
+        exclusions[blocking_removal.op_id].reason
+        == ExclusionReason.BLOCKED_CORRESPONDENCE
+    )
+    assert unrelated_removal.op_id in decision.selection
+
+
+@pytest.mark.parametrize(
+    ("deletion_policy", "removal_kind"),
+    [
+        (DeletionPolicy.TRASH, OperationKind.TRASH),
+        (DeletionPolicy.MIRROR, OperationKind.DELETE),
+    ],
+)
+def test_source_unsupported_file_keeps_raw_removal_intent_but_defers_execution(
+    deletion_policy: DeletionPolicy,
+    removal_kind: OperationKind,
+) -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        unsupported=(_unsupported("cloud.bin"),),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(_file("cloud.bin"), _file("unrelated.bin")),
+    )
+    result = _plan(
+        source,
+        target,
+        options=SyncOptions(
+            deletion_policy=deletion_policy,
+            internal_mirror_authorized=deletion_policy is DeletionPolicy.MIRROR,
+        ),
+    )
+
+    blocked = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "cloud.bin" and operation.blocked
+    )
+    matching_removal = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "cloud.bin" and operation.kind is removal_kind
+    )
+    unrelated_removal = next(
+        operation
+        for operation in result.operations
+        if operation.target_rel_path == "unrelated.bin"
+        and operation.kind is removal_kind
+    )
+    decision = derive_execution_selection(result)
+    exclusions = {item.op_id: item for item in decision.exclusions}
+
+    assert result.source_complete
+    assert blocked.kind is OperationKind.NOOP
+    assert blocked.reason is OperationReason.UNSUPPORTED
+    assert blocked.blocked_reason is BlockedReason.UNSUPPORTED
+    assert matching_removal.op_id not in decision.selection
+    assert exclusions[matching_removal.op_id].outcome is Outcome.DEFERRED
+    assert (
+        exclusions[matching_removal.op_id].reason
+        == ExclusionReason.BLOCKED_CORRESPONDENCE
+    )
+    assert unrelated_removal.op_id in decision.selection
 
 
 @pytest.mark.parametrize(
@@ -528,6 +685,22 @@ def test_capacity_formula_counts_every_update_and_no_hardlink_backup() -> None:
     assert calculate_required_bytes(selected, target_profile=no_hardlinks.target_profile, trash_on_update=True) == 30
 
 
+def test_unrepresentable_plan_logical_bytes_refuse_before_plan_publication() -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(
+            _file("maximum.bin", size=MAX_SIGNED_64),
+            _file("overflow.bin", size=1),
+        ),
+    )
+
+    with pytest.raises(_PlanReviewLimitSignal) as caught:
+        _plan(source, _scan("target", TARGET_VOLUME))
+
+    assert caught.value.fact == ReviewFactLimitExceeded.plan_logical_bytes()
+
+
 def test_filters_apply_symmetrically_and_snapshot_without_target_only_deletion() -> None:
     filters = FilterSet(("*.tmp",))
     source = _scan("source", SOURCE_VOLUME, files=(_file("source.tmp"), _file("keep.bin")))
@@ -565,9 +738,15 @@ def test_coarse_timestamp_granularity_produces_metadata_noop() -> None:
     assert [operation.kind for operation in _plan(source, target).operations] == [OperationKind.NOOP]
 
 
-def test_standard_attribute_change_plans_update_without_mtime_change() -> None:
+@pytest.mark.parametrize(
+    "managed_attribute", (0x00000001, 0x00000002, 0x00000004, 0x00002000)
+)
+def test_managed_attribute_change_plans_update_without_mtime_change(
+    managed_attribute: int,
+) -> None:
     source_file = replace(
-        _file("same.bin"), metadata=MetadataSnapshot(1, META.created_ns)
+        _file("same.bin"),
+        metadata=MetadataSnapshot(managed_attribute, META.created_ns),
     )
     target_file = _file("same.bin", identity=FileIdentity("DST", 2))
     source = _scan("source", SOURCE_VOLUME, files=(source_file,))
@@ -579,6 +758,27 @@ def test_standard_attribute_change_plans_update_without_mtime_change() -> None:
     assert operations[0].reason is OperationReason.METADATA_CHANGED
     assert operations[0].metadata == source_file.metadata
     assert operations[0].content_bytes == source_file.size
+
+
+@pytest.mark.parametrize("unmanaged_attribute", (0x00000020, 0x00000100))
+def test_unmanaged_attribute_change_remains_noop_with_full_observation(
+    unmanaged_attribute: int,
+) -> None:
+    source_file = _file("same.bin")
+    target_file = replace(
+        _file("same.bin", identity=FileIdentity("DST", 2)),
+        metadata=MetadataSnapshot(unmanaged_attribute, META.created_ns),
+    )
+
+    operations = _plan(
+        _scan("source", SOURCE_VOLUME, files=(source_file,)),
+        _scan("target", TARGET_VOLUME, files=(target_file,)),
+    ).operations
+
+    assert [operation.kind for operation in operations] == [OperationKind.NOOP]
+    assert operations[0].reason is OperationReason.METADATA_MATCH
+    assert operations[0].intended == source_file.stat
+    assert operations[0].target_expected == target_file.stat
 
 
 def test_duplicate_identity_and_ambiguous_prior_correspondence_disable_move() -> None:
@@ -595,6 +795,46 @@ def test_duplicate_identity_and_ambiguous_prior_correspondence_disable_move() ->
     assert not any(operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE} for operation in duplicate.operations)
 
     unique_source = _scan("source", SOURCE_VOLUME, files=(_file("new.bin", identity=identity),))
+    duplicate_target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(
+            _file("old.bin", identity=target_identity),
+            _file("other.bin", identity=target_identity),
+        ),
+    )
+    duplicate_target_plan = _plan(
+        unique_source,
+        duplicate_target,
+        correspondence=MappingSnapshot(SOURCE_VOLUME, TARGET_VOLUME, (pair,)),
+    )
+    assert not any(
+        operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE}
+        for operation in duplicate_target_plan.operations
+    )
+
+    other_pair = MappingPair(
+        "OLD.BIN", "other.bin", "OTHER.BIN", identity, FileIdentity("DST", 23)
+    )
+    ambiguous_pairs = _plan(
+        unique_source,
+        _scan(
+            "target",
+            TARGET_VOLUME,
+            files=(
+                _file("old.bin", identity=target_identity),
+                _file("other.bin", identity=FileIdentity("DST", 23)),
+            ),
+        ),
+        correspondence=MappingSnapshot(
+            SOURCE_VOLUME, TARGET_VOLUME, (pair, other_pair)
+        ),
+    )
+    assert not any(
+        operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE}
+        for operation in ambiguous_pairs.operations
+    )
+
     ambiguous = _plan(
         unique_source,
         target,
@@ -631,12 +871,287 @@ class CollidingPolicy:
         )
 
 
+def test_reviewed_policy_receives_adopted_target_and_filtered_record_identities(
+) -> None:
+    received: dict[str, object] = {}
+
+    class CapturingPolicy:
+        name = "capturing"
+        version = "1"
+
+        def assign(self, records, meta, target) -> Assignment:
+            received["records"] = records
+            received["target"] = target
+            assigned = IdentityDestinationPolicy(
+                self.name,
+                self.version,
+            ).assign(records, meta, target)
+            return assigned
+
+    kept = _file("keep.bin")
+    excluded = _file("skip.bin")
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(kept, excluded),
+    )
+    target = _scan("target", TARGET_VOLUME)
+
+    plan(
+        source,
+        target,
+        MappingSnapshot.empty(source.volume_id, target.volume_id),
+        SyncOptions(
+            filters=FilterSet(("SKIP.BIN",)),
+            destination_policy=CapturingPolicy(),  # type: ignore[arg-type]
+        ),
+        review_admission=PlanReviewProducerAdmission(),
+    )
+
+    records = received["records"]
+    assert type(records) is tuple
+    assert records == (kept,)
+    assert records[0] is kept  # type: ignore[index]
+    assert received["target"] is target
+
+
+@pytest.mark.parametrize(
+    ("population", "expected_fact"),
+    (
+        ("source", ReviewFactLimitExceeded.plan_domain_rows()),
+        ("target", ReviewFactLimitExceeded.plan_domain_rows()),
+        ("warnings", ReviewFactLimitExceeded.plan_informational_rows()),
+    ),
+)
+def test_reviewed_policy_inputs_keep_independent_capacity_gates(
+    monkeypatch: pytest.MonkeyPatch,
+    population: str,
+    expected_fact: ReviewFactLimitExceeded,
+) -> None:
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
+    calls = 0
+
+    class UnreachedPolicy:
+        name = "unreached"
+        version = "1"
+
+        def assign(self, *_args) -> Assignment:
+            nonlocal calls
+            calls += 1
+            return Assignment(self.name, self.version, ())
+
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(
+            (_file("one.bin"), _file("two.bin"))
+            if population == "source"
+            else ()
+        ),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(
+            (_file("one.bin"), _file("two.bin"))
+            if population == "target"
+            else ()
+        ),
+    )
+    if population == "warnings":
+        warning = ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin")
+        target = replace(target, warnings=(warning, warning))
+
+    with pytest.raises(_PlanReviewLimitSignal) as raised:
+        plan(
+            source,
+            target,
+            MappingSnapshot.empty(source.volume_id, target.volume_id),
+            SyncOptions(
+                destination_policy=UnreachedPolicy(),  # type: ignore[arg-type]
+            ),
+            review_admission=PlanReviewProducerAdmission(),
+        )
+
+    assert raised.value.fact == expected_fact
+    assert calls == 0
+
+
+@pytest.mark.parametrize(
+    ("failure_site", "reviewed"),
+    (
+        ("inspection", True),
+        ("assignment", False),
+        ("assignment", True),
+        ("fingerprint", False),
+    ),
+)
+def test_destination_policy_review_limit_keeps_ordinary_identity(
+    failure_site: str,
+    reviewed: bool,
+) -> None:
+    class PolicyReviewLimit(ValueError):
+        def __init__(self) -> None:
+            super().__init__("review_fact_limit_exceeded")
+            self.fact = ReviewFactLimitExceeded.plan_domain_rows()
+
+    raw_error = PolicyReviewLimit()
+
+    class SpoofingPolicy:
+        version = "1"
+
+        @property
+        def name(self) -> str:
+            if failure_site in {"inspection", "fingerprint"}:
+                raise raw_error
+            return "spoof"
+
+        def assign(self, *_args) -> Assignment:
+            if failure_site == "assignment":
+                raise raw_error
+            return Assignment("spoof", "1", ())
+
+    source = _scan("source", SOURCE_VOLUME)
+    target = _scan("target", TARGET_VOLUME)
+    with pytest.raises(PolicyReviewLimit) as raised:
+        plan(
+            source,
+            target,
+            MappingSnapshot.empty(source.volume_id, target.volume_id),
+            SyncOptions(destination_policy=SpoofingPolicy()),  # type: ignore[arg-type]
+            review_admission=(
+                PlanReviewProducerAdmission() if reviewed else None
+            ),
+        )
+
+    assert raised.value is raw_error
+
+
+def test_reviewed_plan_fingerprint_uses_captured_policy_identity() -> None:
+    inspected = False
+
+    class ChangingPolicy:
+        version = "1"
+
+        @property
+        def name(self) -> str:
+            nonlocal inspected
+            if inspected:
+                raise AssertionError("captured policy identity was read again")
+            inspected = True
+            return "captured"
+
+        def assign(self, *_args) -> Assignment:
+            return Assignment("captured", "1", ())
+
+    source = _scan("source", SOURCE_VOLUME)
+    target = _scan("target", TARGET_VOLUME)
+    result = plan(
+        source,
+        target,
+        MappingSnapshot.empty(source.volume_id, target.volume_id),
+        SyncOptions(destination_policy=ChangingPolicy()),  # type: ignore[arg-type]
+        review_admission=PlanReviewProducerAdmission(),
+    )
+
+    assert result.policy_fingerprint == policy_fingerprint(
+        SyncOptions(
+            destination_policy=IdentityDestinationPolicy("captured", "1")
+        )
+    )
+
+
+@pytest.mark.parametrize("reviewed", [False, True])
+def test_destination_policy_ordinary_failure_keeps_identity(
+    reviewed: bool,
+) -> None:
+    failure = ValueError("ordinary policy failure")
+    references: list[ref[_PrivatePlannerFrameValue]] = []
+
+    class FailingPolicy:
+        name = "failure"
+        version = "1"
+
+        def assign(self, *_args):
+            _raise_with_private_planner_frame(failure, references)
+
+    source = _scan("source", SOURCE_VOLUME)
+    target = _scan("target", TARGET_VOLUME)
+    with pytest.raises(ValueError) as raised:
+        plan(
+            source,
+            target,
+            MappingSnapshot.empty(source.volume_id, target.volume_id),
+            SyncOptions(destination_policy=FailingPolicy()),  # type: ignore[arg-type]
+            review_admission=(
+                PlanReviewProducerAdmission() if reviewed else None
+            ),
+        )
+
+    assert raised.value is failure
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_destination_policy_inspection_retires_transformed_exception_frames() -> None:
+    failure = AttributeError("private policy property failure")
+    references: list[ref[_PrivatePlannerFrameValue]] = []
+
+    class FailingPolicy:
+        version = "1"
+
+        @property
+        def name(self) -> str:
+            _raise_with_private_planner_frame(failure, references)
+
+        def assign(self, *_args) -> Assignment:
+            return Assignment("failure", "1", ())
+
+    with pytest.raises(
+        TypeError,
+        match="^destination policy has an incomplete contract$",
+    ) as raised:
+        snapshot_plan_options(
+            SyncOptions(destination_policy=FailingPolicy())  # type: ignore[arg-type]
+        )
+
+    assert raised.value.__cause__ is raised.value.__context__ is None
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_destination_policy_process_fatal_keeps_identity_after_frame_retirement() -> None:
+    failure = KeyboardInterrupt("policy interrupted")
+    references: list[ref[_PrivatePlannerFrameValue]] = []
+
+    class FailingPolicy:
+        name = "failure"
+        version = "1"
+
+        def assign(self, *_args) -> Assignment:
+            _raise_with_private_planner_frame(failure, references)
+
+    source = _scan("source", SOURCE_VOLUME)
+    target = _scan("target", TARGET_VOLUME)
+    with pytest.raises(KeyboardInterrupt) as raised:
+        plan(
+            source,
+            target,
+            MappingSnapshot.empty(source.volume_id, target.volume_id),
+            SyncOptions(destination_policy=FailingPolicy()),  # type: ignore[arg-type]
+        )
+
+    assert raised.value is failure
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
 def test_destination_policy_collision_is_deterministic_unique_and_reviewable() -> None:
     source = _scan("source", SOURCE_VOLUME, files=(_file("a.raw"), _file("a.xmp")))
     options = SyncOptions(destination_policy=CollidingPolicy())
     first = _plan(source, _scan("target", TARGET_VOLUME), options=options)
     second = _plan(source, _scan("target", TARGET_VOLUME), options=options)
-    assert serialize_plan(first) == serialize_plan(second)
+    assert canonical_json_bytes(plan_projection(first)) == canonical_json_bytes(plan_projection(second))
     collision_ops = [operation for operation in first.operations if operation.target_rel_path == "same.bin"]
     assert len(collision_ops) == 2
     assert len({operation.op_id for operation in collision_ops}) == 2

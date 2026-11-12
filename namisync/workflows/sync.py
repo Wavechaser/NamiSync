@@ -3,57 +3,278 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
-from namisync.core.events import ItemOutcome, PhaseChanged
-from namisync.core.evidence import RecordingStatus
+from namisync.core.exception_graph import (
+    retire_exception_graph,
+    retired_failure_detail,
+)
+from namisync.core.events import ItemOutcome, PhaseChanged, snapshot_item_outcome
+from namisync.core.evidence import Outcome, RecordingStatus, snapshot_attestation
 from namisync.core.execution import (
+    ExecutionReview,
     ExecutionSet,
+    ExecutionSetAuthority,
     ExecutorFileSystem,
+    ItemRecordingReason,
+    PublishedCopyEvidence,
     Recorder,
+    RecordingSpec,
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
+    audit_execution_set_authority,
+    revalidate_execution_set_authority,
+    snapshot_execution_set_authority,
+    validate_execution_set,
     validated_run_id,
 )
-from namisync.core.models import IgnoreSet, Root, ScanResult
+from namisync.core.integrity import (
+    IntegrityOutcome,
+    IntegrityRecorder,
+    IntegrityRunResult,
+    PostCopyCandidate,
+    PostCopyRecordIdentity,
+    PostCopySelection,
+    PostCopySelectionAuthority,
+    VerifierContext,
+    bind_verifier_context,
+    revalidate_post_copy_selection_authority,
+    snapshot_integrity_outcome,
+    snapshot_post_copy_selection_authority,
+    validate_integrity_run_result,
+)
+from namisync.core.models import (
+    IgnoreSet,
+    Root,
+    ScanResult,
+    ScanScopeKind,
+    snapshot_ignore_set,
+)
+from namisync.core.pathing import (
+    from_extended_length_path,
+    lexical_absolute_path,
+    logical_error_text,
+    to_extended_length_path,
+)
 from namisync.core.planning import (
     MappingSnapshot,
+    OperationKind,
     Plan,
-    Scope,
+    PlanOperation,
     SyncOptions,
     plan_fingerprint,
     selection_digest,
 )
-from namisync.core.preflight import ObservedWorld, Verdict
+from namisync.core.preflight import (
+    ObservedWorld,
+    Verdict,
+)
+from namisync.core.review import (
+    PlanReviewAdmission,
+    PlanReviewProducerAdmission,
+    ReviewFactLimitExceeded,
+    ReviewTreeKind,
+    ScanPopulationAdmission,
+    _PlanReviewLimitSignal,
+    admit_retained_plan_scan,
+    adopt_plan_scan_result,
+    snapshot_review_fact_limit,
+)
+from namisync.core.root_authority import (
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    admit_root_chain,
+    current_volume_anchor,
+)
+from namisync.core.scalars import (
+    bounded_utf8_text,
+    checked_add_signed_64,
+    require_safe_int,
+    require_signed_64,
+)
 from namisync.core.session import (
     Canceled,
     Disposition,
+    FailureDetail,
     OperationResult,
     PauseRequested,
+    PhaseResult,
+    PhaseStatus,
     RunContext,
     SessionState,
+    normalize_result_diagnostics,
+    snapshot_operation_result,
 )
 from namisync.modules.executor import ExecutorPolicies
-from namisync.modules.preflight import ObservationFileSystem, SettingsReader
+from namisync.modules.planner import (
+    admit_retained_plan_candidate,
+    adopt_plan_candidate,
+    snapshot_mapping_snapshot,
+    snapshot_plan_options,
+)
+from namisync.workflows.inventory import LocationBinding
+from namisync.modules.preflight import (
+    ObservationFileSystem,
+    adopt_plan_observed_world,
+    adopt_plan_verdict,
+    admit_retained_plan_observed_world,
+    admit_retained_plan_verdict,
+)
 
-from .models import ExecutionDetails, PlanArtifact, PlanRequest, RefusalView
-from .selection import ExecutionSelection, derive_execution_selection
+from .models import (
+    ExecuteContinuation,
+    ExecutionContinuation,
+    ExecutionDetails,
+    PlanArtifact,
+    PlanRequest,
+    RefusalView,
+    VerifyContinuation,
+    _exact_verify_continuation,
+)
+from .selection import (
+    ExecutionSelection,
+    derive_execution_selection,
+)
+
+
+class CompoundRecorder(Recorder, IntegrityRecorder, Protocol):
+    """One run-bound writer exposed through both narrow recorder protocols."""
 
 
 class RunRecording(Protocol):
-    recorder: Recorder
+    recorder: CompoundRecorder
 
     def finish(
         self, status: SessionState, recording: RecordingStatus
     ) -> None: ...
 
 
-Scanner = Callable[[Root, IgnoreSet, RunContext], ScanResult]
-Planner = Callable[[ScanResult, ScanResult, MappingSnapshot, SyncOptions, Scope], Plan]
-Observer = Callable[[ExecutionSet, ObservationFileSystem, SettingsReader], ObservedWorld]
-Preflight = Callable[[ExecutionSet, ObservedWorld], Verdict]
+@dataclass(frozen=True, slots=True)
+class _ClosedRecordingFailure:
+    detail: FailureDetail
+    issue_detail: str | None
+
+
+class _ContainedRecordingContext:
+    def __init__(
+        self,
+        context: AbstractContextManager[RunRecording],
+        boundary: "_RecordingBoundary",
+    ) -> None:
+        self._context = context
+        self._boundary = boundary
+
+    def __enter__(self) -> RunRecording:
+        try:
+            return self._context.__enter__()
+        except (PauseRequested, Canceled):
+            raise
+        except Exception as error:
+            self._boundary.enter_failure = _close_recording_failure(error)
+            raise
+
+    def __exit__(self, exc_type, exc, traceback) -> bool:
+        try:
+            revalidate = self._boundary.snapshot_exit_revalidator()
+        except Exception as error:
+            if self._boundary.integrity_failure is None:
+                self._boundary.integrity_failure = retired_failure_detail(error)
+            revalidate = lambda: None
+        try:
+            suppressed = self._context.__exit__(exc_type, exc, traceback)
+        except Exception as error:
+            self._boundary.exit_failure = _close_recording_failure(error)
+            suppressed = False
+        try:
+            revalidate()
+        except Exception as error:
+            if self._boundary.integrity_failure is None:
+                self._boundary.integrity_failure = retired_failure_detail(error)
+        is_suppressed = bool(suppressed)
+        if is_suppressed and isinstance(exc, BaseException):
+            retire_exception_graph(exc)
+        return is_suppressed
+
+
+class _RecordingBoundary:
+    def __init__(
+        self,
+        factory: Callable[
+            [RecordingSpec], AbstractContextManager[RunRecording]
+        ],
+        snapshot_exit_revalidator: (
+            Callable[[], Callable[[], None]] | None
+        ) = None,
+    ) -> None:
+        self._factory = factory
+        self.snapshot_exit_revalidator = (
+            snapshot_exit_revalidator or (lambda: lambda: None)
+        )
+        self.enter_failure: _ClosedRecordingFailure | None = None
+        self.exit_failure: _ClosedRecordingFailure | None = None
+        self.integrity_failure: FailureDetail | None = None
+
+    def open(self, spec: RecordingSpec) -> AbstractContextManager[RunRecording]:
+        try:
+            context = self._factory(spec)
+        except (PauseRequested, Canceled):
+            raise
+        except Exception as error:
+            self.enter_failure = _close_recording_failure(error)
+            raise
+        return _ContainedRecordingContext(context, self)
+
+
+class Scanner(Protocol):
+    def __call__(
+        self,
+        root: Root,
+        ignores: IgnoreSet,
+        ctx: RunContext,
+        *,
+        population_admission: ScanPopulationAdmission | None = None,
+    ) -> ScanResult: ...
+
+
+class Planner(Protocol):
+    def __call__(
+        self,
+        source: ScanResult,
+        target: ScanResult,
+        correspondence: MappingSnapshot,
+        options: SyncOptions,
+        *,
+        review_admission: PlanReviewProducerAdmission | None = None,
+    ) -> Plan: ...
+
+
+class Observer(Protocol):
+    def __call__(
+        self,
+        review: ExecutionReview,
+        fs: ObservationFileSystem,
+        *,
+        plan_review: bool = False,
+        review_admission: PlanReviewProducerAdmission | None = None,
+    ) -> ObservedWorld: ...
+
+
+class Preflight(Protocol):
+    def __call__(
+        self,
+        review: ExecutionReview,
+        world: ObservedWorld,
+        *,
+        plan_review: bool = False,
+        review_admission: PlanReviewProducerAdmission | None = None,
+    ) -> Verdict: ...
+
+
 Executor = Callable[
     [
         ExecutionSet,
@@ -64,6 +285,10 @@ Executor = Callable[
     ],
     OperationResult,
 ]
+PostCopyVerifier = Callable[
+    [PostCopySelection, VerifierContext, IntegrityRecorder],
+    IntegrityRunResult,
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,16 +297,265 @@ class SyncDependencies:
     planner: Planner
     correspondence: Callable[[ScanResult, ScanResult], MappingSnapshot]
     observation_fs: ObservationFileSystem
-    settings: Callable[[Plan], SettingsReader]
     observer: Observer
     preflight: Preflight
     executor: Executor
     executor_policies: ExecutorPolicies
     executor_fs: ExecutorFileSystem
-    open_recording: Callable[[ExecutionSet], AbstractContextManager[RunRecording]]
+    verifier: PostCopyVerifier
+    verifier_context: Callable[[RunContext], VerifierContext]
+    open_recording: Callable[[RecordingSpec], AbstractContextManager[RunRecording]]
     save_plan: Callable[[PlanArtifact], None]
     save_execution_details: Callable[[ExecutionDetails], None]
+    finish_existing_recording: Callable[
+        [RecordingSpec, SessionState, RecordingStatus], None
+    ]
     ignores: IgnoreSet = IgnoreSet()
+
+
+def _review_limit_refusal(
+    fact: ReviewFactLimitExceeded,
+) -> OperationResult:
+    return OperationResult(
+        status=SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+        review_fact_limit=fact,
+    )
+
+
+def _adopt_scanner_result(
+    value: ScanResult,
+    expected_root: Root,
+    admission: PlanReviewProducerAdmission,
+) -> ScanResult:
+    adopted = adopt_plan_scan_result(value, admission)
+    if adopted.root != expected_root:
+        raise ValueError("plan scanner returned a different root authority")
+    if adopted.scope.kind is not ScanScopeKind.FULL:
+        raise ValueError("plan scanner must return the requested full scope")
+    return adopted
+
+
+def _run_plan(
+    request: PlanRequest,
+    ctx: RunContext,
+    deps: SyncDependencies,
+) -> OperationResult:
+    """Scan, plan, observe, and preflight without persisting preview state."""
+
+    if type(request) is not PlanRequest:
+        raise TypeError("plan workflow requires an exact PlanRequest")
+    request_id = request.request_id
+    source_path = request.source_path
+    target_path = request.target_path
+    request_options = request.options
+    if any(
+        type(value) is not str
+        for value in (
+            request_id,
+            source_path,
+            target_path,
+        )
+    ):
+        raise TypeError("plan request text fields must be exact strings")
+    if type(request.verify_after_execute) is not bool:
+        raise TypeError("verify_after_execute must be a bool")
+    if (request.source_binding is None) != (request.target_binding is None):
+        raise ValueError("plan location bindings must be paired")
+    for binding in (request.source_binding, request.target_binding):
+        if binding is not None and type(binding) is not LocationBinding:
+            raise TypeError("plan location binding must be exact")
+    run_id = validated_run_id(request_id)
+    source_root, target_root = _validated_roots(
+        source_path,
+        target_path,
+    )
+    retained_admission = PlanReviewAdmission()
+    producer_admission = PlanReviewProducerAdmission(retained_admission)
+    review_limit_fact: ReviewFactLimitExceeded | None = None
+    invalid_review_limit = False
+    unadmitted_review_limit = False
+    try:
+        live_options, retained_options = snapshot_plan_options(request_options)
+        retained_request = PlanRequest(
+            request_id,
+            source_path,
+            target_path,
+            retained_options,
+            request.source_binding,
+            request.target_binding,
+            request.verify_after_execute,
+        )
+        del request, request_id, source_path, target_path, request_options
+
+        ctx.emit(PhaseChanged("scan-source"))
+        source_ignores = snapshot_ignore_set(deps.ignores)
+        source_scan = _adopt_scanner_result(
+            deps.scanner(
+                Root(source_root.path, source_root.root_id),
+                source_ignores,
+                ctx,
+                population_admission=producer_admission,
+            ),
+            source_root,
+            producer_admission,
+        )
+        del source_ignores
+        admit_retained_plan_scan(source_scan, retained_admission)
+
+        ctx.emit(PhaseChanged("scan-target"))
+        target_ignores = snapshot_ignore_set(deps.ignores)
+        target_scan = _adopt_scanner_result(
+            deps.scanner(
+                Root(target_root.path, target_root.root_id),
+                target_ignores,
+                ctx,
+                population_admission=producer_admission,
+            ),
+            target_root,
+            producer_admission,
+        )
+        del target_ignores, source_root, target_root
+        admit_retained_plan_scan(target_scan, retained_admission)
+        for scan, binding in (
+            (source_scan, retained_request.source_binding),
+            (target_scan, retained_request.target_binding),
+        ):
+            if binding is None:
+                continue
+            if type(binding) is not LocationBinding:
+                raise TypeError("plan location binding must be exact")
+            if scan.root.path != (
+                binding.selected_mount
+                if not binding.volume_relative_path
+                else os.path.join(
+                    binding.selected_mount,
+                    *binding.volume_relative_path.split("\\"),
+                )
+            ) or scan.volume_id != binding.volume_id:
+                raise ValueError("plan scan changed reviewed location identity")
+
+        ctx.emit(PhaseChanged("plan"))
+        raw_correspondence = deps.correspondence(
+            source_scan,
+            target_scan,
+        )
+        correspondence = snapshot_mapping_snapshot(
+            raw_correspondence,
+            review_admission=producer_admission,
+        )
+        del raw_correspondence
+
+        raw_plan = deps.planner(
+            source_scan,
+            target_scan,
+            correspondence,
+            live_options,
+            review_admission=producer_admission,
+        )
+        plan = adopt_plan_candidate(
+            raw_plan,
+            source_scan,
+            target_scan,
+            retained_options,
+            review_admission=producer_admission,
+        )
+        del (
+            raw_plan,
+            correspondence,
+            live_options,
+        )
+        admit_retained_plan_candidate(plan, retained_admission)
+
+        decision = derive_execution_selection(plan)
+        selection = decision.selection
+        del decision
+        review = ExecutionReview(plan, selection, run_id, {})
+
+        ctx.emit(PhaseChanged("review-preflight"))
+        raw_world = deps.observer(
+            review,
+            deps.observation_fs,
+            plan_review=True,
+            review_admission=producer_admission,
+        )
+        world = adopt_plan_observed_world(
+            raw_world,
+            review,
+            producer_admission,
+            plan_review=True,
+        )
+        del raw_world
+        admit_retained_plan_observed_world(world, retained_admission)
+
+        raw_verdict = deps.preflight(
+            review,
+            world,
+            plan_review=True,
+            review_admission=producer_admission,
+        )
+        verdict = adopt_plan_verdict(
+            raw_verdict,
+            world,
+            review,
+            producer_admission,
+            plan_review=True,
+        )
+        del (
+            raw_verdict,
+            review,
+            selection,
+            world,
+            retained_options,
+            run_id,
+        )
+        admit_retained_plan_verdict(verdict, retained_admission)
+        artifact = PlanArtifact(
+            retained_request,
+            source_scan,
+            target_scan,
+            plan,
+            verdict,
+        )
+    except _PlanReviewLimitSignal as error:
+        signal_token: object | None = None
+        try:
+            if type(error) is not _PlanReviewLimitSignal:
+                raise TypeError("plan review limit signal must be exact")
+            review_limit_fact = snapshot_review_fact_limit(error.fact)
+            if review_limit_fact.tree_kind is not ReviewTreeKind.PLAN:
+                raise ValueError("plan review limit fact has the wrong tree kind")
+            signal_token = error._admission_token
+        except (AttributeError, TypeError, ValueError) as fact_error:
+            retire_exception_graph(fact_error)
+            invalid_review_limit = True
+        if (
+            not invalid_review_limit
+            and signal_token is not retained_admission._admission_token
+        ):
+            unadmitted_review_limit = True
+        retire_exception_graph(error)
+
+    if invalid_review_limit:
+        raise RuntimeError("plan review limit failure is invalid") from None
+    if unadmitted_review_limit:
+        raise RuntimeError(
+            "unadmitted collaborator raised a review fact limit"
+        ) from None
+    if review_limit_fact is not None:
+        return _review_limit_refusal(review_limit_fact)
+
+    del (
+        retained_request,
+        source_scan,
+        target_scan,
+        plan,
+        verdict,
+        retained_admission,
+        producer_admission,
+    )
+    deps.save_plan(artifact)
+    return OperationResult(status=SessionState.COMPLETED)
 
 
 def run_plan(
@@ -89,119 +563,1588 @@ def run_plan(
     ctx: RunContext,
     deps: SyncDependencies,
 ) -> OperationResult:
-    """Scan, plan, observe, and preflight without persisting preview state."""
+    """Run planning after retiring rejected phase traceback links."""
 
-    run_id = validated_run_id(request.request_id)
-    source_root, target_root = _validated_roots(
-        request.source_path, request.target_path
+    try:
+        return _run_plan(request, ctx, deps)
+    except BaseException as error:
+        retire_exception_graph(error)
+        del request, ctx, deps
+        raise
+
+
+def _recording_integrity_failure_result(
+    result: OperationResult,
+    failure: FailureDetail,
+    authority: ExecutionSetAuthority,
+    *,
+    verification: bool,
+    filesystem_status: SessionState,
+) -> OperationResult:
+    """Project terminal truth captured before a hostile recording mutation."""
+
+    phase_name = VerifyContinuation.phase if verification else ExecuteContinuation.phase
+    phase_status = PhaseStatus.INCOMPLETE if verification else PhaseStatus.FAILED
+    phase_error = f"{failure.type_name}: {failure.message}"
+    phases = tuple(
+        replace(
+            phase,
+            status=phase_status,
+            error=phase_error,
+        )
+        if phase.phase == phase_name
+        else phase
+        for phase in result.phases
+    )
+    return replace(
+        result,
+        status=filesystem_status,
+        canceled=False,
+        phases=phases,
+        error=failure,
+        recording_issues=authority.recording_issues,
+        omitted_detail_count=authority.omitted_detail_count,
     )
 
-    ctx.emit(PhaseChanged("scan-source"))
-    source_scan = deps.scanner(source_root, deps.ignores, ctx)
-    ctx.emit(PhaseChanged("scan-target"))
-    target_scan = deps.scanner(target_root, deps.ignores, ctx)
 
-    ctx.emit(PhaseChanged("plan"))
-    correspondence = deps.correspondence(source_scan, target_scan)
-    plan = deps.planner(
-        source_scan,
-        target_scan,
-        correspondence,
-        request.options,
-        Scope.everything(),
-    )
-    decision = derive_execution_selection(plan)
-    preview = ExecutionSet(plan, decision.selection, run_id)
+def _run_execution_with_recording(
+    continuation: ExecutionContinuation | ExecutionSet,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+    resumed: bool = False,
+) -> OperationResult:
+    """Execute and optionally verify under one logical sync-run recording."""
 
-    ctx.emit(PhaseChanged("review-preflight"))
-    world = deps.observer(preview, deps.observation_fs, deps.settings(plan))
-    verdict = deps.preflight(preview, world)
-    deps.save_plan(
-        PlanArtifact(request, source_scan, target_scan, plan, verdict)
+    if isinstance(continuation, VerifyContinuation):
+        continuation = _exact_verify_continuation(continuation)
+    current: list[ExecutionContinuation] = [
+        ExecuteContinuation(continuation)
+        if isinstance(continuation, ExecutionSet)
+        else continuation
+    ]
+    if not isinstance(current[0], (ExecuteContinuation, VerifyContinuation)):
+        raise TypeError("execution workflow requires a typed continuation")
+    validate_execution_set(current[0].execution_set)
+    pre_exit_execution_authority: list[ExecutionSetAuthority | None] = [None]
+    downstream_sink = continuation_sink or (lambda value: None)
+
+    def capture(value: ExecutionContinuation) -> None:
+        current[0] = value
+        downstream_sink(value)
+
+    def snapshot_recording_exit_revalidator() -> Callable[[], None]:
+        active = current[0]
+        execution_authority = snapshot_execution_set_authority(
+            active.execution_set
+        )
+        if pre_exit_execution_authority[0] is None:
+            pre_exit_execution_authority[0] = execution_authority
+        candidate_authority = (
+            snapshot_post_copy_selection_authority(active.candidates)
+            if isinstance(active, VerifyContinuation)
+            else None
+        )
+
+        def revalidate() -> None:
+            revalidate_execution_set_authority(
+                active.execution_set,
+                execution_authority,
+                allow_progress=False,
+            )
+            if candidate_authority is not None:
+                revalidate_post_copy_selection_authority(
+                    active.candidates,
+                    candidate_authority,
+                    allow_progress=False,
+                )
+
+        return revalidate
+
+    recording_factory = getattr(deps, "open_recording", None)
+    if recording_factory is None:
+        result = _run_execution(
+            continuation,
+            ctx,
+            deps,
+            continuation_sink=capture,
+            resumed=resumed,
+        )
+        return _result_with_execution_recording(
+            result,
+            current[0].execution_set,
+        )
+    boundary = _RecordingBoundary(
+        recording_factory,
+        snapshot_recording_exit_revalidator,
     )
-    return OperationResult(status=SessionState.COMPLETED)
+
+    def capture_recording_integrity_failure(
+        failure: FailureDetail,
+        authority: ExecutionSetAuthority,
+    ) -> None:
+        if boundary.integrity_failure is None:
+            boundary.integrity_failure = failure
+        pre_exit_execution_authority[0] = authority
+
+    def preserve_exit_failure(error: BaseException) -> None:
+        if boundary.exit_failure is None:
+            return
+        retire_exception_graph(error)
+
+        active = current[0]
+        try:
+            _note_closed_recording_issue(
+                active.execution_set,
+                TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+                boundary.exit_failure,
+            )
+            if isinstance(active, VerifyContinuation):
+                if active.recording is RecordingStatus.OK:
+                    active = replace(active, recording=RecordingStatus.DEGRADED)
+            capture(active)
+        except Exception as continuation_error:
+            failure = _recording_failure_detail(continuation_error)
+            _try_add_exception_note(
+                error,
+                "recording degradation continuation capture also failed: "
+                f"{failure.type_name}: {failure.message}",
+            )
+        failure = boundary.exit_failure.detail
+        _try_add_exception_note(
+            error,
+            "recording context exit also failed: "
+            f"{failure.type_name}: {failure.message}",
+        )
+
+    try:
+        result = _run_execution(
+            continuation,
+            ctx,
+            deps,
+            continuation_sink=capture,
+            resumed=resumed,
+            open_recording=boundary.open,
+            recording_integrity_sink=capture_recording_integrity_failure,
+        )
+    except PauseRequested as error:
+        preserve_exit_failure(error)
+        if boundary.integrity_failure is not None:
+            failure = boundary.integrity_failure
+            retire_exception_graph(error)
+            raise RuntimeError(
+                f"recording boundary changed continuation truth: "
+                f"{failure.type_name}: {failure.message}"
+            ) from None
+        raise
+    except Canceled as error:
+        if boundary.integrity_failure is not None:
+            failure = boundary.integrity_failure
+            retire_exception_graph(error)
+            raise RuntimeError(
+                f"recording boundary changed continuation truth: "
+                f"{failure.type_name}: {failure.message}"
+            ) from None
+        retire_exception_graph(error)
+        result = _recording_entry_canceled_result(
+            current[0],
+            ctx,
+            deps,
+            continuation_sink=capture,
+        )
+        return _result_with_execution_recording(
+            result,
+            current[0].execution_set,
+        )
+    except BaseException as error:
+        preserve_exit_failure(error)
+        if boundary.integrity_failure is not None:
+            failure = boundary.integrity_failure
+            _try_add_exception_note(
+                error,
+                "recording boundary also changed continuation truth: "
+                f"{failure.type_name}: {failure.message}",
+            )
+        if boundary.enter_failure is None:
+            raise
+        retire_exception_graph(error)
+        current = (
+            ExecuteContinuation(continuation)
+            if isinstance(continuation, ExecutionSet)
+            else continuation
+        )
+        result = _recording_open_failure_result(
+            current,
+            ctx,
+            deps,
+            boundary.enter_failure,
+            continuation_sink=capture,
+        )
+        return _result_with_execution_recording(
+            result,
+            current.execution_set,
+        )
+    if boundary.integrity_failure is not None:
+        authority = pre_exit_execution_authority[0]
+        if authority is None:
+            failure = boundary.integrity_failure
+            raise RuntimeError(
+                f"recording boundary lost continuation truth: "
+                f"{failure.type_name}: {failure.message}"
+            )
+        active = current[0]
+        return _recording_integrity_failure_result(
+            result,
+            boundary.integrity_failure,
+            authority,
+            verification=isinstance(active, VerifyContinuation),
+            filesystem_status=(
+                active.filesystem_status
+                if isinstance(active, VerifyContinuation)
+                else SessionState.FAILED
+            ),
+        )
+    if boundary.exit_failure is None:
+        return _result_with_execution_recording(
+            result,
+            current[0].execution_set,
+        )
+    execution_set = (
+        continuation
+        if isinstance(continuation, ExecutionSet)
+        else continuation.execution_set
+    )
+    _note_closed_recording_issue(
+        execution_set,
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+        boundary.exit_failure,
+    )
+    result = replace(
+        result,
+        recording=RecordingStatus.DEGRADED,
+        error=(
+            result.error
+            if result.error is not None
+            else boundary.exit_failure.detail
+        ),
+    )
+    return _result_with_execution_recording(result, execution_set)
 
 
 def run_execution(
-    xset: ExecutionSet,
+    continuation: ExecutionContinuation | ExecutionSet,
     ctx: RunContext,
     deps: SyncDependencies,
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+    resumed: bool = False,
 ) -> OperationResult:
-    """Validate commitment, freshly preflight, then execute and record."""
+    """Execute while preserving identity after retiring phase traceback links."""
 
-    commitment_error = _commitment_error(xset)
-    if commitment_error is not None:
-        deps.save_execution_details(
-            ExecutionDetails(str(xset.run_id), commitment_error=commitment_error)
+    try:
+        return _run_execution_with_recording(
+            continuation,
+            ctx,
+            deps,
+            continuation_sink=continuation_sink,
+            resumed=resumed,
         )
-        return OperationResult(
-            status=SessionState.REFUSED,
-            disposition=Disposition.UNRUN,
-        )
+    except BaseException as error:
+        retire_exception_graph(error)
+        del continuation, ctx, deps, continuation_sink
+        raise
 
-    exclusion_items = _exclusion_items(
-        xset.plan,
-        derive_execution_selection(xset.plan),
-        xset.selection,
+
+def _run_execution(
+    continuation: ExecutionContinuation | ExecutionSet,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+    resumed: bool = False,
+    open_recording: (
+        Callable[[RecordingSpec], AbstractContextManager[RunRecording]] | None
+    ) = None,
+    recording_integrity_sink: (
+        Callable[[FailureDetail, ExecutionSetAuthority], None] | None
+    ) = None,
+) -> OperationResult:
+
+    current: ExecutionContinuation = (
+        ExecuteContinuation(continuation)
+        if isinstance(continuation, ExecutionSet)
+        else continuation
     )
-    ctx.emit(PhaseChanged("execution-preflight"))
-    world = deps.observer(xset, deps.observation_fs, deps.settings(xset.plan))
-    verdict = deps.preflight(xset, world)
-    refusals = refusal_views(verdict)
-    deps.save_execution_details(ExecutionDetails(str(xset.run_id), refusals))
-    if not verdict.ok:
-        _emit_items(ctx, exclusion_items)
-        return OperationResult(
-            status=SessionState.REFUSED,
-            disposition=Disposition.UNRUN,
-            operations=exclusion_items,
+    if not isinstance(current, (ExecuteContinuation, VerifyContinuation)):
+        raise TypeError("execution workflow requires a typed continuation")
+    if not isinstance(resumed, bool):
+        raise TypeError("resumed must be a bool")
+    retained_verification_authority: PostCopySelectionAuthority | None = None
+    retained_execution_authority: ExecutionSetAuthority | None = None
+    verification_handoff_error: BaseException | None = None
+    if isinstance(current, VerifyContinuation):
+        retained_verification_authority = (
+            snapshot_post_copy_selection_authority(current.candidates)
         )
-
-    with deps.open_recording(xset) as recording:
+    sink = continuation_sink or (lambda value: None)
+    xset = current.execution_set
+    try:
         try:
-            deps.executor_fs.remove_orphaned_temps(
-                Path(xset.plan.target_root.path),
-                verdict.observed.target_parent_paths,
-                xset.run_id,
+            decision = derive_execution_selection(
+                xset.plan,
+                user_deselected=xset.user_deselected,
             )
-            result = deps.executor(
-                xset,
-                ctx,
-                recording.recorder,
-                deps.executor_policies,
-                deps.executor_fs,
+        except (TypeError, ValueError) as error:
+            failure = retired_failure_detail(error)
+            commitment_error = (
+                "reviewed selection provenance is invalid: "
+                f"{failure.type_name}: {failure.message}"
+            )
+            exclusion_items = ()
+        else:
+            commitment_error = (
+                "carried selection does not match the authoritative derived selection"
+                if decision.selection != xset.selection
+                else _commitment_error(xset)
+            )
+            exclusion_items = _exclusion_items(xset.plan, decision)
+            if isinstance(current, ExecuteContinuation):
+                if current.reported_exclusion_count > len(exclusion_items):
+                    commitment_error = (
+                        "reported exclusion count exceeds the derived exclusions"
+                    )
+                elif not resumed and current.reported_exclusion_count:
+                    commitment_error = (
+                        "fresh execution cannot carry reported exclusions"
+                    )
+    except Exception as error:
+        failure = retired_failure_detail(error)
+        return _settle_prerun_failure(
+            current,
+            ctx,
+            deps,
+            failure,
+            (),
+            resumed=resumed,
+            sink=sink,
+        )
+    if commitment_error is not None:
+        commitment_detail_authority = snapshot_execution_set_authority(xset)
+        try:
+            deps.save_execution_details(
+                ExecutionDetails(
+                    str(xset.run_id),
+                    commitment_error=commitment_error,
+                )
             )
         except PauseRequested:
             raise
-        except Canceled:
-            _emit_items(ctx, exclusion_items)
-            _finish_best_effort(
-                recording,
-                SessionState.CANCELED,
-                RecordingStatus.OK,
+        except Canceled as error:
+            try:
+                revalidate_execution_set_authority(
+                    xset,
+                    commitment_detail_authority,
+                    allow_progress=False,
+                )
+            except Exception:
+                retire_exception_graph(error)
+                raise
+            retire_exception_graph(error)
+            if isinstance(current, VerifyContinuation) or resumed:
+                return _settle_canceled_execution_admitted(
+                    current,
+                    Disposition.RAN,
+                    deps,
+                )
+            return _settle_fresh_execute_boundary(
+                current,
+                ctx,
+                exclusion_items,
+                continuation_sink=sink,
+                status=SessionState.CANCELED,
             )
-            raise
-        except BaseException:
-            _emit_items(ctx, exclusion_items)
-            _finish_best_effort(
-                recording,
-                SessionState.FAILED,
-                RecordingStatus.OK,
+        except Exception as error:
+            failure = retired_failure_detail(error)
+            return _settle_prerun_failure(
+                current,
+                ctx,
+                deps,
+                failure,
+                exclusion_items,
+                resumed=resumed,
+                sink=sink,
             )
-            raise
+        failure = (
+            FailureDetail(
+                "VerificationContinuationInvalid",
+                commitment_error,
+            )
+            if isinstance(current, VerifyContinuation)
+            else FailureDetail(
+                "ExecutionResumeCommitmentInvalid",
+                commitment_error,
+            )
+        )
+        return _settle_prerun_failure(
+            current,
+            ctx,
+            deps,
+            failure,
+            exclusion_items,
+            resumed=resumed,
+            sink=sink,
+            fresh_status=SessionState.REFUSED,
+        )
 
-        _emit_items(ctx, exclusion_items)
-        result = replace(
-            result,
-            operations=_merge_operation_results(
-                xset.plan, result.operations, exclusion_items
+    try:
+        execution_authority = snapshot_execution_set_authority(xset)
+        retained_execution_authority = execution_authority
+        review = ExecutionReview(
+            xset.plan,
+            xset.selection,
+            xset.run_id,
+            xset.status,
+        )
+        producer_admission = PlanReviewProducerAdmission()
+
+        def revalidate_preflight_authority() -> None:
+            revalidate_execution_set_authority(
+                xset,
+                execution_authority,
+                allow_progress=False,
+            )
+            if retained_verification_authority is not None:
+                revalidate_post_copy_selection_authority(
+                    current.candidates,
+                    retained_verification_authority,
+                    allow_progress=False,
+                )
+
+        ctx.emit(PhaseChanged("execution-preflight"))
+        revalidate_preflight_authority()
+        raw_world = deps.observer(review, deps.observation_fs)
+        revalidate_preflight_authority()
+        world = adopt_plan_observed_world(
+            raw_world,
+            review,
+            producer_admission,
+        )
+        del raw_world
+        raw_verdict = deps.preflight(review, world)
+        revalidate_preflight_authority()
+        verdict = adopt_plan_verdict(
+            raw_verdict,
+            world,
+            review,
+            producer_admission,
+        )
+        del raw_verdict, review, producer_admission
+        refusals = refusal_views(verdict)
+        deps.save_execution_details(ExecutionDetails(str(xset.run_id), refusals))
+        revalidate_preflight_authority()
+    except PauseRequested:
+        raise
+    except Canceled as error:
+        try:
+            revalidate_preflight_authority()
+        except Exception:
+            retire_exception_graph(error)
+            raise
+        retire_exception_graph(error)
+        if isinstance(current, VerifyContinuation) or resumed:
+            return _settle_canceled_execution_admitted(
+                current,
+                Disposition.RAN,
+                deps,
+            )
+        return _settle_fresh_execute_boundary(
+            current,
+            ctx,
+            exclusion_items,
+            continuation_sink=sink,
+            status=SessionState.CANCELED,
+        )
+    except Exception as error:
+        failure = retired_failure_detail(error)
+        return _settle_prerun_failure(
+            current,
+            ctx,
+            deps,
+            failure,
+            exclusion_items,
+            resumed=resumed,
+            sink=sink,
+        )
+    if not verdict.ok:
+        if isinstance(current, VerifyContinuation):
+            detail = "; ".join(
+                f"{refusal.code}: {refusal.detail}" for refusal in refusals
+            ) or "verification preflight refused"
+            failure = FailureDetail("VerificationPreflightRefused", detail)
+        else:
+            detail = "; ".join(
+                f"{refusal.code}: {refusal.detail}" for refusal in refusals
+            ) or "execution resume preflight refused"
+            failure = FailureDetail("ExecutionResumePreflightRefused", detail)
+        return _settle_prerun_failure(
+            current,
+            ctx,
+            deps,
+            failure,
+            exclusion_items,
+            resumed=resumed,
+            sink=sink,
+            fresh_status=SessionState.REFUSED,
+            fresh_refusal_items=exclusion_items,
+        )
+
+    target_parent_paths = verdict.observed.target_parent_paths
+    del decision, refusals, verdict, world
+
+    recording_factory = open_recording or deps.open_recording
+    with recording_factory(_recording_spec(xset)) as recording:
+        revalidate_preflight_authority()
+        finished = False
+        finished_recording = xset.recording
+
+        def finish_once(
+            filesystem_status: SessionState,
+            recording_status: RecordingStatus,
+            *,
+            guard_candidates: bool = True,
+        ) -> RecordingStatus:
+            nonlocal finished, finished_recording
+            if finished:
+                return finished_recording
+            finished = True
+            finish_authority = snapshot_execution_set_authority(xset)
+            candidate_authority = (
+                snapshot_post_copy_selection_authority(current.candidates)
+                if guard_candidates
+                and isinstance(current, VerifyContinuation)
+                else None
+            )
+            try:
+                finished_recording = _finish_recording(
+                    recording,
+                    xset,
+                    filesystem_status,
+                    recording_status,
+                )
+                if candidate_authority is not None:
+                    revalidate_post_copy_selection_authority(
+                        current.candidates,
+                        candidate_authority,
+                        allow_progress=False,
+                    )
+            except Exception as error:
+                if recording_integrity_sink is None:
+                    raise
+                recording_integrity_sink(
+                    retired_failure_detail(error),
+                    finish_authority,
+                )
+            return finished_recording
+
+        if isinstance(current, ExecuteContinuation):
+            revalidate_preflight_authority()
+            execute_continuation = current
+            initially_settled = {
+                item_id: (
+                    outcome,
+                    execution_authority.recording_reasons.get(item_id),
+                )
+                for item_id, outcome in execution_authority.status.items()
+            }
+            pending_operation_by_id = {
+                str(operation.op_id): operation
+                for operation in xset.plan.operations
+                if operation.op_id in xset.selection
+                and operation.op_id not in execution_authority.status
+            }
+            operation_items_by_id: dict[str, ItemOutcome] = {}
+            operation_items_by_id.update(
+                (item.item_id, item)
+                for item in exclusion_items[
+                    : current.reported_exclusion_count
+                ]
+            )
+            confirmed_settlement_count = len(xset.status)
+            confirmed_recording_reason_count = len(xset.recording_reasons)
+            confirmed_evidence_count = len(xset.published_evidence)
+            pending_execution_item: ItemOutcome | None = None
+            last_full_reconciliation_error: BaseException | None = None
+            executor_invoked = False
+            executor_transfer_audited = False
+
+            def take_operation_results() -> tuple[ItemOutcome, ...]:
+                owned = tuple(
+                    _iter_ordered_operation_results(
+                        xset.plan,
+                        operation_items_by_id,
+                        initially_settled,
+                    )
+                )
+                operation_items_by_id.clear()
+                return owned
+
+            def observe_execution(body: object) -> None:
+                nonlocal pending_execution_item
+                if not isinstance(body, ItemOutcome):
+                    reconcile_execution_edge()
+                    ctx.emit(body)
+                    reconcile_execution_edge()
+                    return
+                reconcile_execution_edge()
+                snapshot = _canonical_operation_outcome(
+                    body,
+                    pending_operation_by_id,
+                    operation_items_by_id,
+                )
+                ctx.emit(
+                    snapshot_item_outcome(
+                        snapshot,
+                        item_id=snapshot.item_id,
+                        kind=snapshot.kind,
+                        path=snapshot.path,
+                    )
+                )
+                operation_items_by_id[snapshot.item_id] = snapshot
+                pending_execution_item = snapshot
+
+            def reconcile_execution_edge() -> None:
+                nonlocal confirmed_settlement_count
+                nonlocal confirmed_recording_reason_count
+                nonlocal confirmed_evidence_count
+                nonlocal pending_execution_item
+                item = pending_execution_item
+                if item is None:
+                    if (
+                        len(xset.status) != confirmed_settlement_count
+                        or len(xset.recording_reasons)
+                        != confirmed_recording_reason_count
+                        or len(xset.published_evidence)
+                        != confirmed_evidence_count
+                    ):
+                        raise ValueError(
+                            "executor settlement must match its accepted "
+                            "operation outcomes"
+                        )
+                    return
+
+                op_id = pending_operation_by_id[item.item_id].op_id
+                recording_reason = xset.recording_reasons.get(op_id)
+                has_evidence = op_id in xset.published_evidence
+                if (
+                    len(xset.status) != confirmed_settlement_count + 1
+                    or len(xset.recording_reasons)
+                    != confirmed_recording_reason_count
+                    + int(recording_reason is not None)
+                    or len(xset.published_evidence)
+                    != confirmed_evidence_count + int(has_evidence)
+                ):
+                    raise ValueError(
+                        "executor settlement must match its accepted "
+                        "operation outcomes"
+                    )
+                expected_recording = (
+                    RecordingStatus.DEGRADED
+                    if recording_reason is not None
+                    else RecordingStatus.OK
+                )
+                if (
+                    xset.status.get(op_id) is not item.outcome
+                    or item.recording is not expected_recording
+                    or item.recording_reason is not recording_reason
+                ):
+                    raise ValueError(
+                        "executor outcome disagrees with execution-set settlement"
+                    )
+                confirmed_settlement_count += 1
+                confirmed_recording_reason_count += int(
+                    recording_reason is not None
+                )
+                confirmed_evidence_count += int(has_evidence)
+                pending_execution_item = None
+
+            def reconcile_execution(*, complete: bool) -> None:
+                nonlocal last_full_reconciliation_error
+                nonlocal executor_transfer_audited
+                if executor_transfer_audited:
+                    return
+                executor_transfer_audited = True
+                try:
+                    audit_execution_set_authority(
+                        xset,
+                        execution_authority,
+                        allow_progress=True,
+                    )
+                    _reconcile_executor_outcomes(
+                        xset,
+                        execution_authority,
+                        pending_operation_by_id,
+                        operation_items_by_id,
+                        complete=complete,
+                    )
+                except BaseException as error:
+                    last_full_reconciliation_error = error
+                    raise
+                else:
+                    last_full_reconciliation_error = None
+
+            def reconcile_execution_exit(*, complete: bool) -> None:
+                if executor_invoked:
+                    reconcile_execution(complete=complete)
+                else:
+                    revalidate_preflight_authority()
+
+            def checkpoint_execution() -> None:
+                reconcile_execution_edge()
+                ctx.checkpoint()
+                reconcile_execution_edge()
+
+            verify_after_execute = current.verify_after_execute
+            exclusion_failure: FailureDetail | None = None
+            exclusion_execution_authority: ExecutionSetAuthority | None = None
+
+            def emit_exclusions(
+                *,
+                allow_control: bool,
+            ) -> FailureDetail | None:
+                nonlocal current, execute_continuation, exclusion_failure
+                nonlocal exclusion_execution_authority, exclusion_items
+                if exclusion_failure is not None:
+                    return exclusion_failure
+                if exclusion_execution_authority is None:
+                    exclusion_execution_authority = (
+                        snapshot_execution_set_authority(xset)
+                    )
+
+                def accept(item: ItemOutcome) -> None:
+                    operation_items_by_id[item.item_id] = item
+
+                def advance(value: ExecuteContinuation) -> None:
+                    nonlocal current, execute_continuation
+                    execute_continuation = value
+                    if isinstance(current, ExecuteContinuation):
+                        current = value
+
+                def revalidate_exclusion_authority() -> None:
+                    assert exclusion_execution_authority is not None
+                    revalidate_execution_set_authority(
+                        xset,
+                        exclusion_execution_authority,
+                        allow_progress=False,
+                    )
+
+                try:
+                    execute_continuation, _emitted = (
+                        _emit_execution_exclusion_suffix(
+                            execute_continuation,
+                            ctx,
+                            exclusion_items,
+                            sink,
+                            accept=accept,
+                            advance=advance,
+                            revalidate=revalidate_exclusion_authority,
+                            allow_control=allow_control,
+                        )
+                    )
+                    if isinstance(current, ExecuteContinuation):
+                        current = execute_continuation
+                except (PauseRequested, Canceled):
+                    raise
+                except Exception as error:
+                    # Retain closed first-failure truth without replaying
+                    # accepted siblings or re-offering this failure.
+                    exclusion_failure = _recording_failure_detail(error)
+                    return exclusion_failure
+                return None
+
+            def failed_execution_result(
+                failure: FailureDetail,
+            ) -> OperationResult:
+                emission_failure = emit_exclusions(allow_control=False)
+                if emission_failure is not None:
+                    failure = emission_failure
+                validate_execution_set(xset)
+                phase = _execute_continuation_phase(
+                    xset,
+                    PhaseStatus.FAILED,
+                    f"{failure.type_name}: {failure.message}",
+                )
+                terminal = OperationResult(
+                    status=SessionState.FAILED,
+                    recording=xset.recording,
+                    disposition=Disposition.RAN,
+                    items=take_operation_results(),
+                    phases=(phase,) if verify_after_execute else (),
+                    bytes_done=phase.bytes_done,
+                    bytes_total=phase.bytes_total or phase.bytes_done,
+                    error=failure,
+                )
+                recording_status = finish_once(
+                    SessionState.FAILED,
+                    terminal.recording,
+                )
+                return replace(terminal, recording=recording_status)
+
+            try:
+                deps.executor_fs.remove_orphaned_temps(
+                    Path(xset.plan.target_root.path),
+                    target_parent_paths,
+                    xset.run_id,
+                )
+                executor_invoked = True
+                returned_result = deps.executor(
+                    xset,
+                    RunContext(observe_execution, checkpoint_execution),
+                    recording.recorder,
+                    deps.executor_policies,
+                    deps.executor_fs,
+                )
+                try:
+                    result = snapshot_operation_result(
+                        returned_result,
+                        emitted_items=(),
+                    )
+                finally:
+                    del returned_result
+                reconcile_execution(complete=True)
+                _validate_executor_result(xset, result)
+                failure = emit_exclusions(
+                    allow_control=result.status is SessionState.COMPLETED,
+                )
+                if failure is not None:
+                    return failed_execution_result(failure)
+                execution_recording = xset.recording
+                result = replace(result, recording=execution_recording)
+                if not verify_after_execute:
+                    terminal = replace(
+                        result,
+                        items=take_operation_results(),
+                    )
+                    recording_status = finish_once(
+                        result.status,
+                        execution_recording,
+                    )
+                    return replace(
+                        terminal,
+                        recording=recording_status,
+                    )
+
+                result = _normalize_execute_result_diagnostics(xset, result)
+                execute_phase = _execute_result_phase(xset, result)
+                current = _verify_continuation(
+                    xset,
+                    result.status,
+                    execute_phase,
+                )
+                retained_execution_authority = (
+                    snapshot_execution_set_authority(xset)
+                )
+                if (
+                    not current.candidates.candidates
+                    and not current.missing_evidence_ids
+                ):
+                    terminal = replace(
+                        result,
+                        items=take_operation_results(),
+                        phases=(execute_phase,),
+                    )
+                    recording_status = finish_once(
+                        result.status,
+                        execution_recording,
+                    )
+                    return replace(
+                        terminal,
+                        recording=recording_status,
+                    )
+                del result
+                retained_verification_authority = (
+                    snapshot_post_copy_selection_authority(
+                        current.candidates
+                    )
+                )
+                sink(current)
+                revalidate_execution_set_authority(
+                    xset,
+                    retained_execution_authority,
+                    allow_progress=False,
+                )
+                try:
+                    revalidate_post_copy_selection_authority(
+                        current.candidates,
+                        retained_verification_authority,
+                        allow_progress=False,
+                    )
+                except Exception as error:
+                    verification_handoff_error = error
+                result_items = list(
+                    _iter_ordered_operation_results(
+                        xset.plan,
+                        operation_items_by_id,
+                        initially_settled,
+                    )
+                )
+            except PauseRequested as error:
+                if error is not last_full_reconciliation_error:
+                    try:
+                        reconcile_execution_exit(complete=False)
+                    except Exception:
+                        retire_exception_graph(error)
+                        raise
+                raise
+            except Canceled as error:
+                if error is not last_full_reconciliation_error:
+                    try:
+                        reconcile_execution_exit(complete=False)
+                    except Exception as reconciliation_error:
+                        retire_exception_graph(error)
+                        return failed_execution_result(
+                            _recording_failure_detail(reconciliation_error)
+                        )
+                retire_exception_graph(error)
+                failure = emit_exclusions(allow_control=False)
+                if failure is not None:
+                    return failed_execution_result(failure)
+                phase = _execute_continuation_phase(
+                    xset,
+                    PhaseStatus.CANCELED,
+                    "execution canceled",
+                )
+                terminal = OperationResult(
+                    status=SessionState.CANCELED,
+                    recording=xset.recording,
+                    disposition=Disposition.RAN,
+                    canceled=True,
+                    items=take_operation_results(),
+                    phases=(phase,) if verify_after_execute else (),
+                    bytes_done=phase.bytes_done,
+                    bytes_total=phase.bytes_total or phase.bytes_done,
+                )
+                recording_status = finish_once(
+                    SessionState.CANCELED,
+                    terminal.recording,
+                )
+                return replace(terminal, recording=recording_status)
+            except Exception as error:
+                if error is not last_full_reconciliation_error:
+                    try:
+                        reconcile_execution_exit(complete=False)
+                    except Exception as reconciliation_error:
+                        retire_exception_graph(error)
+                        error = reconciliation_error
+                return failed_execution_result(
+                    _recording_failure_detail(error)
+                )
+            del (
+                failed_execution_result,
+                emit_exclusions,
+                exclusion_items,
+                observe_execution,
+                operation_items_by_id,
+                initially_settled,
+                execution_authority,
+                pending_operation_by_id,
+                reconcile_execution_edge,
+                reconcile_execution,
+                take_operation_results,
+            )
+        else:
+            result_items: list[ItemOutcome | IntegrityOutcome] = []
+
+        def take_result_items() -> tuple[ItemOutcome | IntegrityOutcome, ...]:
+            owned = tuple(result_items)
+            result_items.clear()
+            return owned
+
+        verification_item_start = len(result_items)
+        observed_recording = current.recording
+        if retained_verification_authority is None:
+            raise RuntimeError("verification continuation snapshot is missing")
+        if retained_execution_authority is None:
+            raise RuntimeError("verification execution snapshot is missing")
+        initial_verification_authority = retained_verification_authority
+        initial_completed_verification = dict(
+            initial_verification_authority.completed_bytes
+        )
+        fixed_post_copy_selection = current.candidates
+        fixed_post_copy_candidates = current.candidates.candidates
+        fixed_completion_map = current.candidates._completed_bytes
+        fixed_execution_plan = xset.plan
+        fixed_execution_selection = xset.selection
+        fixed_execution_commitment = xset.commitment
+        fixed_user_deselection = xset.user_deselected
+        observed_verification_ids = set(initial_completed_verification)
+        observed_verification_count = len(observed_verification_ids)
+        verification_candidates = {
+            candidate.item_id: candidate
+            for candidate in initial_verification_authority.candidates
+            if candidate.item_id not in observed_verification_ids
+        }
+        confirmed_completion_count = len(initial_completed_verification)
+        confirmed_completion_by_id = dict(initial_completed_verification)
+        confirmed_completed_bytes = 0
+        for completed_bytes in initial_completed_verification.values():
+            confirmed_completed_bytes = checked_add_signed_64(
+                confirmed_completed_bytes,
+                completed_bytes,
+                "completed post-copy bytes",
+            )
+        confirmed_processed_bytes = (
+            initial_verification_authority.processed_bytes
+        )
+        pending_verification_item_id: str | None = None
+        last_verification_reconciliation_error: BaseException | None = None
+        verifier_invoked = False
+        verifier_transfer_audited = False
+
+        def reconcile_verification(*, complete: bool) -> None:
+            nonlocal last_verification_reconciliation_error
+            nonlocal verifier_transfer_audited
+            if verifier_transfer_audited:
+                return
+            verifier_transfer_audited = True
+            try:
+                reconcile_verification_edge(allow_pending=False)
+                audit_execution_set_authority(
+                    xset,
+                    retained_execution_authority,
+                    allow_progress=False,
+                )
+                _validate_post_copy_verifier_completion(
+                    current.candidates,
+                    initial_verification_authority,
+                    verification_candidates,
+                    complete=complete,
+                )
+                if (
+                    current.candidates._completed_bytes
+                    != confirmed_completion_by_id
+                ):
+                    raise ValueError(
+                        "post-copy completion changed after reconciliation"
+                    )
+            except BaseException as error:
+                last_verification_reconciliation_error = error
+                raise
+            else:
+                last_verification_reconciliation_error = None
+
+        def reconcile_verification_edge(*, allow_pending: bool) -> None:
+            nonlocal confirmed_completion_count
+            nonlocal confirmed_completed_bytes
+            nonlocal confirmed_processed_bytes
+            nonlocal pending_verification_item_id
+            if (
+                current.candidates is not fixed_post_copy_selection
+                or current.candidates.candidates is not fixed_post_copy_candidates
+            ):
+                raise ValueError(
+                    "post-copy candidates changed during collaboration"
+                )
+            if (
+                xset.plan is not fixed_execution_plan
+                or xset.selection is not fixed_execution_selection
+                or xset.commitment is not fixed_execution_commitment
+                or xset.user_deselected is not fixed_user_deselection
+            ):
+                raise ValueError(
+                    "verification changed fixed execution authority"
+                )
+            completed = current.candidates._completed_bytes
+            processed_bytes = current.candidates._processed_bytes
+            if type(completed) is not dict:
+                raise TypeError("post-copy completion state must be an exact dict")
+            if completed is not fixed_completion_map:
+                raise ValueError(
+                    "post-copy completion state changed during collaboration"
+                )
+            if type(processed_bytes) is not int:
+                raise TypeError("post-copy processed bytes have the wrong type")
+            require_signed_64(processed_bytes, "post-copy processed bytes")
+
+            pending_item_id = pending_verification_item_id
+            if pending_item_id is None:
+                if len(completed) != confirmed_completion_count:
+                    raise ValueError(
+                        "post-copy verifier completion must match its "
+                        "emitted outcomes"
+                    )
+            elif len(completed) == confirmed_completion_count:
+                if not allow_pending:
+                    raise ValueError(
+                        "post-copy verifier completion must match its "
+                        "emitted outcomes"
+                    )
+            elif (
+                len(completed) == confirmed_completion_count + 1
+                and pending_item_id in completed
+            ):
+                completed_bytes = completed[pending_item_id]
+                if type(completed_bytes) is not int:
+                    raise TypeError(
+                        "post-copy completion facts have the wrong type"
+                    )
+                require_signed_64(
+                    completed_bytes,
+                    "completed post-copy byte count",
+                )
+                confirmed_completed_bytes = checked_add_signed_64(
+                    confirmed_completed_bytes,
+                    completed_bytes,
+                    "completed post-copy bytes",
+                )
+                confirmed_completion_count += 1
+                confirmed_completion_by_id[pending_item_id] = completed_bytes
+                pending_verification_item_id = None
+            else:
+                raise ValueError(
+                    "post-copy verifier completion must match its emitted outcomes"
+                )
+            if processed_bytes < confirmed_completed_bytes:
+                raise ValueError(
+                    "post-copy processed bytes cannot trail completed bytes"
+                )
+            if processed_bytes < confirmed_processed_bytes:
+                raise ValueError("post-copy processed bytes regressed")
+            confirmed_processed_bytes = processed_bytes
+
+        def revalidate_verification_authority() -> None:
+            revalidate_execution_set_authority(
+                xset,
+                retained_execution_authority,
+                allow_progress=False,
+            )
+            revalidate_post_copy_selection_authority(
+                current.candidates,
+                initial_verification_authority,
+                allow_progress=True,
+            )
+
+        def revalidate_verifier_setup_authority() -> None:
+            reconcile_verification_edge(allow_pending=False)
+            revalidate_execution_set_authority(
+                xset,
+                retained_execution_authority,
+                allow_progress=False,
+            )
+            revalidate_post_copy_selection_authority(
+                current.candidates,
+                initial_verification_authority,
+                allow_progress=False,
+            )
+
+        def reconcile_verification_exit(*, complete: bool) -> None:
+            if verifier_invoked:
+                reconcile_verification(complete=complete)
+            else:
+                revalidate_verifier_setup_authority()
+
+        def checkpoint_verification() -> None:
+            reconcile_verification_edge(allow_pending=True)
+            ctx.checkpoint()
+            reconcile_verification_edge(allow_pending=True)
+
+        def observe_verification(body: object) -> None:
+            nonlocal observed_recording, observed_verification_count
+            nonlocal pending_verification_item_id
+            if not isinstance(body, IntegrityOutcome):
+                reconcile_verification_edge(allow_pending=True)
+                ctx.emit(body)
+                reconcile_verification_edge(allow_pending=True)
+                return
+            snapshot = _canonical_integrity_outcome(
+                body,
+                verification_candidates,
+                observed_verification_ids,
+            )
+            reconcile_verification_edge(allow_pending=False)
+            # A degraded recording snapshot can fail.  Publish it before the
+            # reliable item so a raised sink error cannot leave the reporter
+            # unable to tell whether downstream accepted that item.
+            if (
+                snapshot.recording is RecordingStatus.DEGRADED
+                and observed_recording is RecordingStatus.OK
+            ):
+                observed_recording = RecordingStatus.DEGRADED
+                sink(replace(current, recording=RecordingStatus.DEGRADED))
+                revalidate_verification_authority()
+            ctx.emit(
+                snapshot_integrity_outcome(
+                    snapshot,
+                    item_id=snapshot.item_id,
+                    row_id=snapshot.row_id,
+                    location_id=snapshot.location_id,
+                    path=snapshot.path,
+                    phase=snapshot.phase,
+                )
+            )
+            result_items.append(snapshot)
+            verification_candidates.pop(snapshot.item_id)
+            observed_verification_ids.add(snapshot.item_id)
+            observed_verification_count += 1
+            pending_verification_item_id = snapshot.item_id
+            reconcile_verification_edge(allow_pending=True)
+
+        def failed_verification_result(
+            error: BaseException,
+        ) -> OperationResult:
+            nonlocal current
+            verification_candidates.clear()
+            observed_verification_ids.clear()
+            failure = retired_failure_detail(error)
+            current_recording = _combined_recording(
+                current.recording,
+                observed_recording,
+            )
+            if current_recording is not current.recording:
+                current = replace(current, recording=current_recording)
+            validate_execution_set(xset)
+            verify_phase = _verify_phase(
+                current,
+                items_done_floor=observed_verification_count,
+                incomplete=True,
+                error=f"{failure.type_name}: {failure.message}",
+            )
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
+                items=take_result_items(),
+                recording=current_recording,
+                canceled=False,
+                error=failure,
+            )
+            recording_status = finish_once(
+                current.filesystem_status,
+                current_recording,
+                guard_candidates=False,
+            )
+            return replace(terminal, recording=recording_status)
+
+        if verification_handoff_error is not None:
+            return failed_verification_result(verification_handoff_error)
+
+        try:
+            progress_items_total, progress_bytes_total = (
+                _verify_progress_totals(current)
+            )
+            ctx.emit(PhaseChanged("verify"))
+            revalidate_execution_set_authority(
+                xset,
+                retained_execution_authority,
+                allow_progress=False,
+            )
+            revalidate_post_copy_selection_authority(
+                current.candidates,
+                initial_verification_authority,
+                allow_progress=False,
+            )
+            owned_run = RunContext(
+                observe_verification,
+                checkpoint_verification,
+            )
+            raw_verification_context = deps.verifier_context(owned_run)
+            target_evidence = xset.plan.target_volume_evidence
+            verification_context = bind_verifier_context(
+                raw_verification_context,
+                owned_run,
+                root_authority=RootAuthority(
+                    logical_root=xset.plan.target_root.path,
+                    reviewed_anchor=(
+                        target_evidence.device_id
+                        if target_evidence is not None
+                        else None
+                    ),
+                    expected_volume_id=xset.plan.target_volume_id,
+                ),
+                post_copy_items_total=progress_items_total,
+                post_copy_bytes_total=progress_bytes_total,
+            )
+            del raw_verification_context
+            verifier_invoked = True
+            returned_verification = deps.verifier(
+                current.candidates,
+                verification_context,
+                recording.recorder,
+            )
+            try:
+                verification_recording = validate_integrity_run_result(
+                    returned_verification,
+                    result_items,
+                    start=verification_item_start,
+                )
+                reconcile_verification(complete=True)
+            finally:
+                del returned_verification
+            verification_candidates.clear()
+            observed_verification_ids.clear()
+            current_recording = _combined_recording(
+                current.recording,
+                observed_recording,
+                verification_recording,
+            )
+            if current_recording is not current.recording:
+                current = replace(current, recording=current_recording)
+                sink(current)
+                revalidate_verification_authority()
+            verify_phase = _verify_phase(
+                current,
+                items_done_floor=observed_verification_count,
+                incomplete=bool(current.missing_evidence_ids),
+                error=_missing_evidence_error(current.missing_evidence_ids),
+            )
+            error = (
+                None
+                if verify_phase.error is None
+                else FailureDetail(
+                    "PublishedEvidenceInvariantError",
+                    verify_phase.error,
+                )
+            )
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
+                items=take_result_items(),
+                recording=current_recording,
+                canceled=False,
+                error=error,
+            )
+            recording_status = finish_once(
+                current.filesystem_status,
+                current_recording,
+            )
+            return replace(terminal, recording=recording_status)
+        except PauseRequested as error:
+            if error is not last_verification_reconciliation_error:
+                try:
+                    reconcile_verification_exit(complete=False)
+                except Exception as reconciliation_error:
+                    retire_exception_graph(error)
+                    return failed_verification_result(reconciliation_error)
+            verification_candidates.clear()
+            observed_verification_ids.clear()
+            raise
+        except Canceled as error:
+            if error is not last_verification_reconciliation_error:
+                try:
+                    reconcile_verification_exit(complete=False)
+                except Exception as reconciliation_error:
+                    retire_exception_graph(error)
+                    return failed_verification_result(reconciliation_error)
+            verification_candidates.clear()
+            observed_verification_ids.clear()
+            retire_exception_graph(error)
+            current_recording = _combined_recording(
+                current.recording,
+                observed_recording,
+            )
+            current = replace(current, recording=current_recording)
+            verify_phase = _verify_phase(
+                current,
+                items_done_floor=observed_verification_count,
+                canceled=True,
+                error="verification canceled",
+            )
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
+                items=take_result_items(),
+                recording=current_recording,
+                canceled=True,
+                error=None,
+            )
+            recording_status = finish_once(
+                current.filesystem_status,
+                current_recording,
+            )
+            return replace(terminal, recording=recording_status)
+        except Exception as error:
+            if error is not last_verification_reconciliation_error:
+                try:
+                    reconcile_verification_exit(complete=False)
+                except Exception as reconciliation_error:
+                    retire_exception_graph(error)
+                    error = reconciliation_error
+            return failed_verification_result(error)
+
+
+def settle_canceled_execution(
+    continuation: ExecutionContinuation,
+    disposition: Disposition,
+    deps: SyncDependencies,
+) -> OperationResult:
+    """Finish a previously started paused execution without doing domain work."""
+
+    if disposition is not Disposition.RAN:
+        raise ValueError("started execution cancellation must retain RAN disposition")
+    if not isinstance(continuation, (ExecuteContinuation, VerifyContinuation)):
+        raise TypeError("canceled settlement requires a typed continuation")
+    if isinstance(continuation, VerifyContinuation):
+        continuation = _exact_verify_continuation(continuation)
+
+    xset = continuation.execution_set
+    validate_execution_set(xset)
+    return _settle_canceled_execution_admitted(
+        continuation,
+        disposition,
+        deps,
+    )
+
+
+def _settle_canceled_execution_admitted(
+    continuation: ExecutionContinuation,
+    disposition: Disposition,
+    deps: SyncDependencies,
+) -> OperationResult:
+    """Settle cancellation for a continuation admitted by the caller."""
+
+    xset = continuation.execution_set
+    if isinstance(continuation, ExecuteContinuation):
+        phase = _execute_continuation_phase(
+            xset,
+            PhaseStatus.CANCELED,
+            "execution canceled while paused or pending resume",
+        )
+        phases = (phase,) if continuation.verify_after_execute else ()
+        filesystem_status = SessionState.CANCELED
+        recording_status = xset.recording
+    else:
+        phase = _verify_phase(
+            continuation,
+            canceled=True,
+            error="verification canceled while paused or pending resume",
+        )
+        phases = (continuation.execute_phase, phase)
+        filesystem_status = continuation.filesystem_status
+        recording_status = _combined_recording(
+            xset.recording,
+            continuation.recording,
+        )
+
+    candidate_authority = (
+        snapshot_post_copy_selection_authority(continuation.candidates)
+        if isinstance(continuation, VerifyContinuation)
+        else None
+    )
+    terminal_authority = snapshot_execution_set_authority(xset)
+    boundary = _RecordingBoundary(
+        deps.open_recording,
+        lambda: _strict_execution_revalidator(xset),
+    )
+    recording_failure: _ClosedRecordingFailure | None = None
+    integrity_failure: FailureDetail | None = None
+    try:
+        with boundary.open(_recording_spec(xset)) as recording:
+            finish_authority = snapshot_execution_set_authority(xset)
+            try:
+                recording_status = _finish_recording(
+                    recording,
+                    xset,
+                    filesystem_status,
+                    recording_status,
+                )
+                if candidate_authority is not None:
+                    revalidate_post_copy_selection_authority(
+                        continuation.candidates,
+                        candidate_authority,
+                        allow_progress=False,
+                    )
+            except Exception as error:
+                integrity_failure = retired_failure_detail(error)
+                terminal_authority = finish_authority
+            else:
+                terminal_authority = snapshot_execution_set_authority(xset)
+    except Exception as error:
+        recording_failure = (
+            boundary.enter_failure or _close_recording_failure(error)
+        )
+        retire_exception_graph(error)
+        _note_closed_recording_issue(
+            xset,
+            TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+            recording_failure,
+        )
+        recording_status = xset.recording
+        terminal_authority = snapshot_execution_set_authority(xset)
+        try:
+            recording_status = _finish_existing_recording(
+                deps,
+                xset,
+                filesystem_status,
+                recording_status,
+            )
+            if candidate_authority is not None:
+                revalidate_post_copy_selection_authority(
+                    continuation.candidates,
+                    candidate_authority,
+                    allow_progress=False,
+                )
+        except Exception as finish_error:
+            integrity_failure = retired_failure_detail(finish_error)
+        else:
+            terminal_authority = snapshot_execution_set_authority(xset)
+    if integrity_failure is None and boundary.integrity_failure is not None:
+        integrity_failure = boundary.integrity_failure
+    if integrity_failure is None and candidate_authority is not None:
+        try:
+            revalidate_post_copy_selection_authority(
+                continuation.candidates,
+                candidate_authority,
+                allow_progress=False,
+            )
+        except Exception as error:
+            integrity_failure = retired_failure_detail(error)
+    if boundary.exit_failure is not None:
+        recording_failure = boundary.exit_failure
+        if integrity_failure is None:
+            _note_closed_recording_issue(
+                xset,
+                TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+                boundary.exit_failure,
+            )
+            recording_status = xset.recording
+            terminal_authority = snapshot_execution_set_authority(xset)
+    execute_phase = (
+        phase
+        if isinstance(continuation, ExecuteContinuation)
+        else continuation.execute_phase
+    )
+    terminal = OperationResult(
+        status=filesystem_status,
+        recording=recording_status,
+        recording_issues=terminal_authority.recording_issues,
+        omitted_detail_count=terminal_authority.omitted_detail_count,
+        disposition=disposition,
+        canceled=True,
+        phases=phases,
+        bytes_done=execute_phase.bytes_done,
+        bytes_total=(
+            execute_phase.bytes_total
+            if execute_phase.bytes_total is not None
+            else execute_phase.bytes_done
+        ),
+        error=(
+            None
+            if recording_failure is None
+            else recording_failure.detail
+        ),
+    )
+    if integrity_failure is not None:
+        return _recording_integrity_failure_result(
+            terminal,
+            integrity_failure,
+            terminal_authority,
+            verification=isinstance(continuation, VerifyContinuation),
+            filesystem_status=(
+                filesystem_status
+                if isinstance(continuation, VerifyContinuation)
+                else SessionState.FAILED
             ),
         )
-        try:
-            recording.finish(result.status, result.recording)
-        except Exception:
-            result = replace(result, recording=RecordingStatus.DEGRADED)
-        return result
+    return terminal
 
 
 def refusal_views(verdict: Verdict) -> tuple[RefusalView, ...]:
@@ -214,15 +2157,73 @@ def refusal_views(verdict: Verdict) -> tuple[RefusalView, ...]:
     return tuple(views)
 
 
-def _emit_items(ctx: RunContext, items: tuple[ItemOutcome, ...]) -> None:
-    for item in items:
-        ctx.emit(item)
+def _strict_execution_revalidator(
+    xset: ExecutionSet,
+) -> Callable[[], None]:
+    authority = snapshot_execution_set_authority(xset)
+
+    def revalidate() -> None:
+        revalidate_execution_set_authority(
+            xset,
+            authority,
+            allow_progress=False,
+        )
+
+    return revalidate
+
+
+def _emit_execution_exclusion_suffix(
+    continuation: ExecuteContinuation,
+    ctx: RunContext,
+    items: tuple[ItemOutcome, ...],
+    continuation_sink: Callable[[ExecutionContinuation], None],
+    *,
+    accept: Callable[[ItemOutcome], None] | None = None,
+    advance: Callable[[ExecuteContinuation], None] | None = None,
+    revalidate: Callable[[], None] | None = None,
+    allow_control: bool = True,
+) -> tuple[ExecuteContinuation, tuple[ItemOutcome, ...]]:
+    """Publish the unreported deterministic suffix and advance its witness."""
+
+    cursor = continuation.reported_exclusion_count
+    if cursor > len(items):
+        raise ValueError("reported exclusion count exceeds the derived exclusions")
+    emitted: list[ItemOutcome] = []
+    current = continuation
+    while cursor < len(items):
+        item = items[cursor]
+        try:
+            ctx.emit(
+                snapshot_item_outcome(
+                    item,
+                    item_id=item.item_id,
+                    kind=item.kind,
+                    path=item.path,
+                )
+            )
+            if accept is not None:
+                accept(item)
+            emitted.append(item)
+            cursor += 1
+            current = replace(current, reported_exclusion_count=cursor)
+            if advance is not None:
+                advance(current)
+            continuation_sink(current)
+            if revalidate is not None:
+                revalidate()
+        except (PauseRequested, Canceled) as error:
+            if allow_control:
+                raise
+            retire_exception_graph(error)
+            raise RuntimeError(
+                "control cannot interrupt terminal exclusion settlement"
+            ) from None
+    return current, tuple(emitted)
 
 
 def _exclusion_items(
     plan: Plan,
     decision: ExecutionSelection,
-    selection: frozenset,
 ) -> tuple[ItemOutcome, ...]:
     operations = {operation.op_id: operation for operation in plan.operations}
     return tuple(
@@ -235,27 +2236,1096 @@ def _exclusion_items(
             detail=exclusion.detail,
         )
         for exclusion in decision.exclusions
-        if exclusion.op_id not in selection
     )
 
 
-def _merge_operation_results(
-    plan: Plan,
-    executed: tuple[object, ...],
-    excluded: tuple[ItemOutcome, ...],
-) -> tuple[object, ...]:
-    by_id = {
-        str(item.item_id): item
-        for item in (*executed, *excluded)
-        if hasattr(item, "item_id")
+def _canonical_operation_outcome(
+    value: ItemOutcome,
+    pending_by_id: dict[str, PlanOperation],
+    accepted_by_id: dict[str, ItemOutcome],
+) -> ItemOutcome:
+    """Bind an executor outcome to reviewed operation identity and path facts."""
+
+    item_id = value.item_id
+    if type(item_id) is not str:
+        raise TypeError("executor outcome item id must be text")
+    if item_id in accepted_by_id:
+        raise ValueError("executor emitted a duplicate operation outcome")
+    operation = pending_by_id.get(item_id)
+    if operation is None:
+        raise ValueError("executor emitted an outcome outside its selection")
+    return snapshot_item_outcome(
+        value,
+        item_id=item_id,
+        kind=operation.kind,
+        path=operation.target_rel_path,
+    )
+
+
+def _reconcile_executor_outcomes(
+    xset: ExecutionSet,
+    authority: ExecutionSetAuthority,
+    pending_by_id: dict[str, PlanOperation],
+    accepted_by_id: dict[str, ItemOutcome],
+    *,
+    complete: bool,
+) -> None:
+    """Require accepted operation events to match durable continuation truth."""
+
+    accepted_ids = {
+        item_id for item_id in accepted_by_id if item_id in pending_by_id
     }
-    ordered = [
-        by_id.pop(str(operation.op_id))
-        for operation in plan.operations
-        if str(operation.op_id) in by_id
-    ]
-    ordered.extend(by_id.values())
-    return tuple(ordered)
+    if complete and len(accepted_ids) != len(pending_by_id):
+        raise ValueError("executor omitted an outcome for a pending operation")
+    initially_settled_ids = set(authority.status)
+    newly_settled_ids = {
+        str(op_id)
+        for op_id in xset.status
+        if str(op_id) not in initially_settled_ids
+    }
+    if accepted_ids != newly_settled_ids:
+        raise ValueError(
+            "executor settlement must match its accepted operation outcomes"
+        )
+    for item_id in accepted_ids:
+        item = accepted_by_id[item_id]
+        op_id = pending_by_id[item_id].op_id
+        settled_outcome = xset.status.get(op_id)
+        recording_reason = xset.recording_reasons.get(op_id)
+        expected_recording = (
+            RecordingStatus.DEGRADED
+            if recording_reason is not None
+            else RecordingStatus.OK
+        )
+        if (
+            item.outcome is not settled_outcome
+            or item.recording is not expected_recording
+            or item.recording_reason is not recording_reason
+        ):
+            raise ValueError(
+                "executor outcome disagrees with execution-set settlement"
+            )
+
+
+def _validate_executor_result(
+    xset: ExecutionSet,
+    result: OperationResult,
+) -> None:
+    """Bind the executor aggregate to workflow-owned settlement axes."""
+
+    if result.status not in {SessionState.COMPLETED, SessionState.FAILED}:
+        raise ValueError("executor returned an invalid terminal status")
+    if result.disposition is not Disposition.RAN or result.canceled:
+        raise ValueError("executor returned an invalid execution disposition")
+    if result.phases:
+        raise ValueError("executor returned workflow-owned phases")
+    if (
+        result.audit is not RecordingStatus.OK
+        or result.review_fact_limit is not None
+    ):
+        raise ValueError("executor returned workflow-owned result fields")
+    if result.omitted_detail_count != xset.omitted_detail_count:
+        raise ValueError(
+            "executor result omitted detail count disagrees with execution set"
+        )
+    if (
+        result.recording is not xset.recording
+        or result.recording_issues != xset.recording_issues
+    ):
+        raise ValueError(
+            "executor result recording must match execution-set recording"
+        )
+
+    phase = _execute_continuation_phase(xset, PhaseStatus.COMPLETED, None)
+    if result.bytes_done != phase.bytes_done or result.bytes_total != phase.bytes_total:
+        raise ValueError("executor byte totals disagree with execution settlement")
+    if any(
+        outcome in {Outcome.FAILED, Outcome.CANCELED, Outcome.DEFERRED}
+        for outcome in xset.status.values()
+    ) and result.status is not SessionState.FAILED:
+        raise ValueError("executor status disagrees with operation settlements")
+
+
+def _canonical_integrity_outcome(
+    value: IntegrityOutcome,
+    candidate_by_id: dict[str, PostCopyCandidate],
+    completed_ids: set[str],
+) -> IntegrityOutcome:
+    """Bind a verifier outcome to its admitted post-copy candidate."""
+
+    item_id = value.item_id
+    if type(item_id) is not str:
+        raise TypeError("integrity outcome item id must be text")
+    if item_id in completed_ids:
+        raise ValueError("verifier emitted a duplicate integrity outcome")
+    candidate = candidate_by_id.get(item_id)
+    if candidate is None:
+        raise ValueError("verifier emitted an outcome outside its candidates")
+    identity = candidate.recorded_identity
+    return snapshot_integrity_outcome(
+        value,
+        item_id=candidate.item_id,
+        row_id=None if identity is None else identity.row_id,
+        location_id=None if identity is None else identity.location_id,
+        path=candidate.display_path,
+        phase="verify",
+    )
+
+
+def _validate_post_copy_verifier_completion(
+    selection: PostCopySelection,
+    authority: PostCopySelectionAuthority,
+    pending_by_id: dict[str, PostCopyCandidate],
+    *,
+    complete: bool,
+) -> None:
+    """Revalidate verifier-owned completion against accepted outcome identities."""
+
+    revalidate_post_copy_selection_authority(
+        selection,
+        authority,
+        allow_progress=True,
+    )
+    completed = dict(selection.completed_bytes)
+    initial_completed = dict(authority.completed_bytes)
+    initial_candidate_ids = {
+        candidate.item_id for candidate in authority.candidates
+    }
+    pending_ids = set(pending_by_id)
+    emitted_ids = initial_candidate_ids - set(initial_completed) - pending_ids
+    if set(completed) != set(initial_completed) | emitted_ids:
+        raise ValueError(
+            "post-copy verifier completion must match its emitted outcomes"
+        )
+    if complete and pending_ids:
+        raise ValueError("post-copy verifier returned with pending candidates")
+
+
+def _iter_ordered_operation_results(
+    plan: Plan,
+    items_by_id: dict[str, ItemOutcome],
+    initially_settled: dict[
+        str,
+        tuple[Outcome, ItemRecordingReason | None],
+    ] | None = None,
+) -> Iterator[ItemOutcome]:
+    for plan_operation in plan.operations:
+        item_id = str(plan_operation.op_id)
+        item = items_by_id.get(item_id)
+        if item is not None:
+            yield item
+            continue
+        if initially_settled is None:
+            continue
+        settlement = initially_settled.get(item_id)
+        if settlement is None:
+            continue
+        outcome, recording_reason = settlement
+        yield ItemOutcome(
+            item_id=item_id,
+            kind=plan_operation.kind,
+            path=plan_operation.target_rel_path,
+            outcome=outcome,
+            detail={"continued": True},
+            recording=(
+                RecordingStatus.DEGRADED
+                if recording_reason is not None
+                else RecordingStatus.OK
+            ),
+            recording_reason=recording_reason,
+        )
+
+
+_BYTE_PRODUCING_KINDS = frozenset(
+    {
+        OperationKind.COPY,
+        OperationKind.UPDATE,
+        OperationKind.MOVE_UPDATE,
+    }
+)
+
+
+def _verify_continuation(
+    xset: ExecutionSet,
+    filesystem_status: SessionState,
+    execute_phase: PhaseResult,
+) -> VerifyContinuation:
+    candidates: list[PostCopyCandidate] = []
+    missing_evidence_ids: list[str] = []
+    target_root = Path(xset.plan.target_root.path)
+    recording = xset.recording
+    for operation in xset.plan.operations:
+        if (
+            operation.op_id not in xset.selection
+            or operation.kind not in _BYTE_PRODUCING_KINDS
+            or xset.status.get(operation.op_id) is not Outcome.SUCCEEDED
+        ):
+            continue
+        evidence = xset.published_evidence.get(operation.op_id)
+        if evidence is None:
+            missing_evidence_ids.append(str(operation.op_id))
+            continue
+        candidates.append(_post_copy_candidate(operation, evidence, target_root))
+        if evidence.recorded_identity is None:
+            recording = RecordingStatus.DEGRADED
+    return VerifyContinuation(
+        execution_set=xset,
+        candidates=PostCopySelection(tuple(candidates)),
+        filesystem_status=filesystem_status,
+        recording=recording,
+        execute_phase=execute_phase,
+        missing_evidence_ids=tuple(missing_evidence_ids),
+    )
+
+
+def _post_copy_candidate(
+    operation: PlanOperation,
+    evidence: PublishedCopyEvidence,
+    target_root: Path,
+) -> PostCopyCandidate:
+    identity = evidence.recorded_identity
+    attestation = snapshot_attestation(evidence.attestation)
+    return PostCopyCandidate(
+        item_id=str(operation.op_id),
+        root=target_root,
+        display_path=operation.target_rel_path,
+        expected_stat=attestation.subject,
+        copy_attestation=attestation,
+        recorded_identity=(
+            None
+            if identity is None
+            else PostCopyRecordIdentity(
+                row_id=identity.row_id,
+                location_id=identity.location_id,
+                scope_token=identity.scope_token,
+                rel_path_key=identity.rel_path_key,
+            )
+        ),
+    )
+
+
+def _execute_result_phase(
+    xset: ExecutionSet,
+    result: OperationResult,
+) -> PhaseResult:
+    try:
+        status = PhaseStatus(result.status.value)
+    except ValueError as error:
+        retire_exception_graph(error)
+        raise ValueError("execution returned invalid compound filesystem truth") from None
+    error_text = (
+        None
+        if result.error is None
+        else f"{result.error.type_name}: {result.error.message}"
+    )
+    bounded_error = bounded_utf8_text(
+        error_text,
+        "verify continuation execute phase error",
+    )
+    if error_text is not None and bounded_error is None:
+        _note_omitted_diagnostics(xset, 1)
+    return PhaseResult(
+        phase=ExecuteContinuation.phase,
+        status=status,
+        items_done=len(xset.status),
+        items_total=len(xset.selection),
+        bytes_done=result.bytes_done,
+        bytes_total=result.bytes_total,
+        error=bounded_error,
+    )
+
+
+def _normalize_execute_result_diagnostics(
+    xset: ExecutionSet,
+    result: OperationResult,
+) -> OperationResult:
+    if result.omitted_detail_count != xset.omitted_detail_count:
+        raise ValueError(
+            "executor result omitted detail count disagrees with execution set"
+        )
+    normalized = normalize_result_diagnostics(result)
+    _note_omitted_diagnostics(
+        xset,
+        normalized.omitted_detail_count - result.omitted_detail_count,
+    )
+    return normalized
+
+
+def _note_omitted_diagnostics(xset: ExecutionSet, count: int) -> None:
+    if not count:
+        return
+    xset.omitted_detail_count = require_safe_int(
+        xset.omitted_detail_count + count,
+        "execution omitted_detail_count",
+    )
+
+
+def _execute_continuation_phase(
+    xset: ExecutionSet,
+    status: PhaseStatus,
+    error: str | None,
+) -> PhaseResult:
+    bytes_total = sum(
+        operation.content_bytes
+        for operation in xset.plan.operations
+        if operation.op_id in xset.selection
+        and operation.kind in _BYTE_PRODUCING_KINDS
+    )
+    committed_bytes = sum(
+        operation.content_bytes
+        for operation in xset.plan.operations
+        if xset.status.get(operation.op_id) is Outcome.SUCCEEDED
+        and operation.kind in _BYTE_PRODUCING_KINDS
+    )
+    bytes_done = max(committed_bytes, xset.bytes_done_high_water)
+    return PhaseResult(
+        phase=ExecuteContinuation.phase,
+        status=status,
+        items_done=len(xset.status),
+        items_total=len(xset.selection),
+        bytes_done=min(bytes_done, bytes_total),
+        bytes_total=bytes_total,
+        error=error,
+    )
+
+
+def _verify_phase(
+    continuation: VerifyContinuation,
+    *,
+    items_done_floor: int = 0,
+    incomplete: bool = False,
+    canceled: bool = False,
+    error: str | None = None,
+) -> PhaseResult:
+    if incomplete and canceled:
+        raise ValueError("verify phase cannot be incomplete and canceled")
+    candidates = continuation.candidates
+    items_total, bytes_total = _verify_progress_totals(continuation)
+    status = (
+        PhaseStatus.CANCELED
+        if canceled
+        else PhaseStatus.INCOMPLETE
+        if incomplete
+        else PhaseStatus.COMPLETED
+    )
+    return PhaseResult(
+        phase=VerifyContinuation.phase,
+        status=status,
+        items_done=max(candidates.completed_count, items_done_floor),
+        items_total=items_total,
+        bytes_done=candidates.processed_bytes,
+        bytes_total=bytes_total,
+        error=error,
+    )
+
+
+def _verification_terminal_result(
+    continuation: VerifyContinuation,
+    *,
+    verify_phase: PhaseResult,
+    items: tuple[ItemOutcome | IntegrityOutcome, ...],
+    recording: RecordingStatus,
+    canceled: bool,
+    error: FailureDetail | None,
+) -> OperationResult:
+    """Project already-settled verification truth with its execute continuation."""
+
+    execute_phase = continuation.execute_phase
+    return OperationResult(
+        status=continuation.filesystem_status,
+        recording=recording,
+        disposition=Disposition.RAN,
+        canceled=canceled,
+        items=items,
+        phases=(execute_phase, verify_phase),
+        bytes_done=execute_phase.bytes_done,
+        bytes_total=(
+            execute_phase.bytes_total
+            if execute_phase.bytes_total is not None
+            else execute_phase.bytes_done
+        ),
+        error=error,
+    )
+
+
+def _verify_progress_totals(
+    continuation: VerifyContinuation,
+) -> tuple[int, int]:
+    candidates = continuation.candidates
+    bytes_total = candidates.physical_bytes_total(
+        _missing_evidence_bytes(continuation)
+    )
+    return (
+        (
+            len(candidates.candidates)
+            + len(continuation.missing_evidence_ids)
+        ),
+        bytes_total,
+    )
+
+
+def _missing_evidence_bytes(continuation: VerifyContinuation) -> int:
+    missing = set(continuation.missing_evidence_ids)
+    return sum(
+        operation.content_bytes
+        for operation in continuation.execution_set.plan.operations
+        if str(operation.op_id) in missing
+    )
+
+
+def _missing_evidence_error(item_ids: tuple[str, ...]) -> str | None:
+    if not item_ids:
+        return None
+    return "missing published evidence for successful operations: " + ", ".join(
+        item_ids
+    )
+
+
+def _settle_prerun_failure(
+    continuation: ExecutionContinuation,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    failure: FailureDetail,
+    exclusion_items: tuple[ItemOutcome, ...],
+    *,
+    resumed: bool,
+    sink: Callable[[ExecutionContinuation], None],
+    fresh_status: SessionState = SessionState.FAILED,
+    fresh_refusal_items: tuple[ItemOutcome, ...] | None = None,
+) -> OperationResult:
+    """Dispatch one pre-run failure without duplicating custody policy."""
+
+    if isinstance(continuation, VerifyContinuation):
+        return _settle_verify_incomplete(continuation, deps, failure)
+    if not isinstance(continuation, ExecuteContinuation):
+        raise TypeError("pre-run settlement requires a typed continuation")
+    if resumed:
+        return _settle_execute_resume_failure(
+            continuation,
+            ctx,
+            deps,
+            failure,
+            exclusion_items,
+            continuation_sink=sink,
+        )
+    if fresh_status is SessionState.FAILED:
+        return _settle_fresh_execute_boundary(
+            continuation,
+            ctx,
+            exclusion_items,
+            continuation_sink=sink,
+            error=failure,
+        )
+    if fresh_status is SessionState.REFUSED:
+        if fresh_refusal_items is None:
+            return OperationResult(
+                status=SessionState.REFUSED,
+                disposition=Disposition.UNRUN,
+            )
+        return _settle_fresh_execute_refusal(
+            continuation,
+            ctx,
+            fresh_refusal_items,
+            continuation_sink=sink,
+        )
+    raise ValueError("fresh pre-run settlement must fail or refuse")
+
+
+def _settle_fresh_execute_refusal(
+    continuation: ExecuteContinuation,
+    ctx: RunContext,
+    exclusion_items: tuple[ItemOutcome, ...],
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None],
+) -> OperationResult:
+    """Publish fresh refusal exclusions without opening execution custody."""
+
+    emitted_items: list[ItemOutcome] = []
+    try:
+        _continuation, _emitted = _emit_execution_exclusion_suffix(
+            continuation,
+            ctx,
+            exclusion_items,
+            continuation_sink,
+            accept=emitted_items.append,
+            revalidate=_strict_execution_revalidator(
+                continuation.execution_set
+            ),
+            allow_control=False,
+        )
+    except Exception as error:
+        return OperationResult(
+            status=SessionState.REFUSED,
+            disposition=Disposition.UNRUN,
+            items=tuple(emitted_items),
+            error=retired_failure_detail(error),
+        )
+    return OperationResult(
+        status=SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+        items=tuple(emitted_items),
+    )
+
+
+def _settle_fresh_execute_boundary(
+    continuation: ExecuteContinuation,
+    ctx: RunContext,
+    exclusion_items: tuple[ItemOutcome, ...],
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+    status: SessionState = SessionState.FAILED,
+    error: FailureDetail | None = None,
+) -> OperationResult:
+    """Project pre-executor truth without consulting a lossy snapshot."""
+
+    if status not in {SessionState.FAILED, SessionState.CANCELED}:
+        raise ValueError("fresh execute boundary must fail or cancel")
+    if status is SessionState.FAILED and error is None:
+        raise ValueError("fresh execute failure requires an error")
+    emitted_items: list[ItemOutcome] = []
+    try:
+        _continuation, _emitted = _emit_execution_exclusion_suffix(
+            continuation,
+            ctx,
+            exclusion_items,
+            continuation_sink or (lambda value: None),
+            accept=emitted_items.append,
+            revalidate=_strict_execution_revalidator(
+                continuation.execution_set
+            ),
+            allow_control=False,
+        )
+    except (PauseRequested, Canceled):
+        raise
+    except Exception as emit_error:
+        emit_failure = retired_failure_detail(emit_error)
+        if error is None:
+            error = emit_failure
+        else:
+            error = FailureDetail(
+                error.type_name,
+                f"{error.message}; outcome emission also failed: "
+                f"{emit_failure.type_name}: {emit_failure.message}",
+            )
+    phase = _execute_continuation_phase(
+        continuation.execution_set,
+        (
+            PhaseStatus.CANCELED
+            if status is SessionState.CANCELED
+            else PhaseStatus.FAILED
+        ),
+        None if error is None else f"{error.type_name}: {error.message}",
+    )
+    return OperationResult(
+        status=status,
+        recording=continuation.execution_set.recording,
+        disposition=Disposition.UNRUN,
+        canceled=status is SessionState.CANCELED,
+        items=tuple(emitted_items),
+        bytes_done=phase.bytes_done,
+        bytes_total=(
+            phase.bytes_total
+            if phase.bytes_total is not None
+            else phase.bytes_done
+        ),
+        error=error,
+    )
+
+
+def _recording_open_failure_result(
+    continuation: ExecutionContinuation,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    failure: _ClosedRecordingFailure,
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+) -> OperationResult:
+    """Project an unavailable run recording from authoritative continuation."""
+
+    xset = continuation.execution_set
+    _note_closed_recording_issue(
+        xset,
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+        failure,
+    )
+    detail = failure.detail
+    execution_authority = snapshot_execution_set_authority(xset)
+    if isinstance(continuation, VerifyContinuation):
+        candidate_authority = snapshot_post_copy_selection_authority(
+            continuation.candidates
+        )
+        phase = _verify_phase(
+            continuation,
+            incomplete=True,
+            error=f"{detail.type_name}: {detail.message}",
+        )
+        terminal = _verification_terminal_result(
+            continuation,
+            verify_phase=phase,
+            items=(),
+            recording=RecordingStatus.DEGRADED,
+            canceled=False,
+            error=detail,
+        )
+        try:
+            _finish_existing_recording(
+                deps,
+                xset,
+                continuation.filesystem_status,
+                xset.recording,
+            )
+            revalidate_post_copy_selection_authority(
+                continuation.candidates,
+                candidate_authority,
+                allow_progress=False,
+            )
+        except Exception as error:
+            return _recording_integrity_failure_result(
+                terminal,
+                retired_failure_detail(error),
+                execution_authority,
+                verification=True,
+                filesystem_status=continuation.filesystem_status,
+            )
+        return terminal
+
+    phase = _execute_continuation_phase(
+        xset,
+        PhaseStatus.FAILED,
+        f"{detail.type_name}: {detail.message}",
+    )
+    emitted_exclusions: list[ItemOutcome] = []
+    try:
+        decision = derive_execution_selection(
+            xset.plan,
+            user_deselected=xset.user_deselected,
+        )
+        exclusion_items = _exclusion_items(xset.plan, decision)
+        _continuation, _emitted = _emit_execution_exclusion_suffix(
+            continuation,
+            ctx,
+            exclusion_items,
+            continuation_sink or (lambda value: None),
+            accept=emitted_exclusions.append,
+            revalidate=_strict_execution_revalidator(xset),
+            allow_control=False,
+        )
+    except (PauseRequested, Canceled):
+        raise
+    except Exception as emit_error:
+        emit_failure = _recording_failure_detail(emit_error)
+        error_context = f"{emit_failure.type_name}: {emit_failure.message}"
+        phase_error = (
+            f"{detail.type_name}: {detail.message}; "
+            f"outcome emission also failed: {error_context}"
+        )
+        phase = replace(phase, error=phase_error)
+    terminal = OperationResult(
+        status=SessionState.FAILED,
+        recording=RecordingStatus.DEGRADED,
+        disposition=Disposition.RAN,
+        items=tuple(emitted_exclusions),
+        phases=(phase,) if continuation.verify_after_execute else (),
+        bytes_done=phase.bytes_done,
+        bytes_total=(
+            phase.bytes_total
+            if phase.bytes_total is not None
+            else phase.bytes_done
+        ),
+        error=detail,
+    )
+    try:
+        _finish_existing_recording(
+            deps,
+            xset,
+            SessionState.FAILED,
+            RecordingStatus.DEGRADED,
+        )
+    except Exception as error:
+        return _recording_integrity_failure_result(
+            terminal,
+            retired_failure_detail(error),
+            execution_authority,
+            verification=False,
+            filesystem_status=SessionState.FAILED,
+        )
+    return terminal
+
+
+def _recording_entry_canceled_result(
+    continuation: ExecutionContinuation,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+) -> OperationResult:
+    """Settle entry-time cancellation without reopening the recording owner."""
+
+    xset = continuation.execution_set
+    emitted_items: list[ItemOutcome] = []
+    emission_error: FailureDetail | None = None
+    candidate_authority: PostCopySelectionAuthority | None = None
+    if isinstance(continuation, ExecuteContinuation):
+        try:
+            decision = derive_execution_selection(
+                xset.plan,
+                user_deselected=xset.user_deselected,
+            )
+            continuation, _emitted = _emit_execution_exclusion_suffix(
+                continuation,
+                ctx,
+                _exclusion_items(xset.plan, decision),
+                continuation_sink or (lambda value: None),
+                accept=emitted_items.append,
+                revalidate=_strict_execution_revalidator(xset),
+                allow_control=False,
+            )
+        except (PauseRequested, Canceled):
+            raise
+        except Exception as error:
+            emission_error = retired_failure_detail(error)
+        phase = _execute_continuation_phase(
+            xset,
+            PhaseStatus.CANCELED,
+            "execution canceled while entering run recording",
+        )
+        phases = (phase,) if continuation.verify_after_execute else ()
+        filesystem_status = SessionState.CANCELED
+        recording_status = xset.recording
+        execute_phase = phase
+    else:
+        candidate_authority = snapshot_post_copy_selection_authority(
+            continuation.candidates
+        )
+        phase = _verify_phase(
+            continuation,
+            canceled=True,
+            error="verification canceled while entering run recording",
+        )
+        phases = (continuation.execute_phase, phase)
+        filesystem_status = continuation.filesystem_status
+        recording_status = _combined_recording(
+            xset.recording,
+            continuation.recording,
+        )
+        execute_phase = continuation.execute_phase
+    terminal = OperationResult(
+        status=filesystem_status,
+        recording=recording_status,
+        disposition=Disposition.RAN,
+        canceled=True,
+        items=tuple(emitted_items),
+        phases=phases,
+        bytes_done=execute_phase.bytes_done,
+        bytes_total=(
+            execute_phase.bytes_total
+            if execute_phase.bytes_total is not None
+            else execute_phase.bytes_done
+        ),
+        error=emission_error,
+    )
+    execution_authority = snapshot_execution_set_authority(xset)
+    try:
+        recording_status = _finish_existing_recording(
+            deps,
+            xset,
+            filesystem_status,
+            recording_status,
+        )
+        if candidate_authority is not None:
+            revalidate_post_copy_selection_authority(
+                continuation.candidates,
+                candidate_authority,
+                allow_progress=False,
+            )
+    except Exception as error:
+        return _recording_integrity_failure_result(
+            terminal,
+            retired_failure_detail(error),
+            execution_authority,
+            verification=isinstance(continuation, VerifyContinuation),
+            filesystem_status=(
+                filesystem_status
+                if isinstance(continuation, VerifyContinuation)
+                else SessionState.FAILED
+            ),
+        )
+    return replace(terminal, recording=recording_status)
+
+
+def _settle_execute_resume_failure(
+    continuation: ExecuteContinuation,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    error: FailureDetail,
+    exclusion_items: tuple[ItemOutcome, ...],
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+) -> OperationResult:
+    """Finish an already-started execute continuation without more domain work."""
+
+    emitted_items: list[ItemOutcome] = []
+    try:
+        continuation, _emitted = _emit_execution_exclusion_suffix(
+            continuation,
+            ctx,
+            exclusion_items,
+            continuation_sink or (lambda value: None),
+            accept=emitted_items.append,
+            revalidate=_strict_execution_revalidator(
+                continuation.execution_set
+            ),
+            allow_control=False,
+        )
+    except (PauseRequested, Canceled):
+        raise
+    except Exception as emit_error:
+        error = retired_failure_detail(emit_error)
+    phase = _execute_continuation_phase(
+        continuation.execution_set,
+        PhaseStatus.FAILED,
+        f"{error.type_name}: {error.message}",
+    )
+    terminal = OperationResult(
+        status=SessionState.FAILED,
+        recording=continuation.execution_set.recording,
+        disposition=Disposition.RAN,
+        items=tuple(emitted_items),
+        phases=(phase,) if continuation.verify_after_execute else (),
+        bytes_done=phase.bytes_done,
+        bytes_total=(
+            phase.bytes_total
+            if phase.bytes_total is not None
+            else phase.bytes_done
+        ),
+        error=error,
+    )
+    execution_authority = snapshot_execution_set_authority(
+        continuation.execution_set
+    )
+    try:
+        recording_status = _finish_existing_recording(
+            deps,
+            continuation.execution_set,
+            SessionState.FAILED,
+            terminal.recording,
+        )
+    except Exception as finish_error:
+        return _recording_integrity_failure_result(
+            terminal,
+            retired_failure_detail(finish_error),
+            execution_authority,
+            verification=False,
+            filesystem_status=SessionState.FAILED,
+        )
+    return replace(terminal, recording=recording_status)
+
+
+def _settle_verify_incomplete(
+    continuation: VerifyContinuation,
+    deps: SyncDependencies,
+    error: FailureDetail,
+) -> OperationResult:
+    candidate_authority = snapshot_post_copy_selection_authority(
+        continuation.candidates
+    )
+    phase = _verify_phase(
+        continuation,
+        incomplete=True,
+        error=f"{error.type_name}: {error.message}",
+    )
+    recording_status = _combined_recording(
+        continuation.execution_set.recording,
+        continuation.recording,
+    )
+    terminal = _verification_terminal_result(
+        continuation,
+        verify_phase=phase,
+        items=(),
+        recording=recording_status,
+        canceled=False,
+        error=error,
+    )
+    execution_authority = snapshot_execution_set_authority(
+        continuation.execution_set
+    )
+    try:
+        recording_status = _finish_existing_recording(
+            deps,
+            continuation.execution_set,
+            continuation.filesystem_status,
+            recording_status,
+        )
+        revalidate_post_copy_selection_authority(
+            continuation.candidates,
+            candidate_authority,
+            allow_progress=False,
+        )
+    except Exception as finish_error:
+        return _recording_integrity_failure_result(
+            terminal,
+            retired_failure_detail(finish_error),
+            execution_authority,
+            verification=True,
+            filesystem_status=continuation.filesystem_status,
+        )
+    return replace(terminal, recording=recording_status)
+
+
+def _combined_recording(
+    *values: RecordingStatus,
+) -> RecordingStatus:
+    return (
+        RecordingStatus.DEGRADED
+        if RecordingStatus.DEGRADED in values
+        else RecordingStatus.OK
+    )
+
+
+def _recording_spec(xset: ExecutionSet) -> RecordingSpec:
+    """Project one immutable recording input without rebuilding reviewed facts."""
+
+    return RecordingSpec(
+        xset.plan,
+        xset.selection,
+        xset.run_id,
+        xset.commitment,
+    )
+
+
+def _finish_existing_recording(
+    deps: SyncDependencies,
+    xset: ExecutionSet,
+    status: SessionState,
+    recording_status: RecordingStatus,
+) -> RecordingStatus:
+    finisher = deps.finish_existing_recording
+    return _invoke_recording_finish(
+        xset,
+        recording_status,
+        lambda: finisher(
+            _recording_spec(xset),
+            status,
+            recording_status,
+        ),
+    )
+
+
+def _finish_recording(
+    recording: RunRecording,
+    xset: ExecutionSet,
+    status: SessionState,
+    recording_status: RecordingStatus,
+) -> RecordingStatus:
+    return _invoke_recording_finish(
+        xset,
+        recording_status,
+        lambda: recording.finish(status, recording_status),
+    )
+
+
+def _invoke_recording_finish(
+    xset: ExecutionSet,
+    recording_status: RecordingStatus,
+    invoke: Callable[[], None],
+) -> RecordingStatus:
+    """Invoke one recording finish under its execution-set guard."""
+
+    authority = snapshot_execution_set_authority(xset)
+    try:
+        invoke()
+    except Exception as error:
+        try:
+            revalidate_execution_set_authority(
+                xset,
+                authority,
+                allow_progress=False,
+            )
+        except Exception:
+            retire_exception_graph(error)
+            raise
+        _note_task_recording_issue(
+            xset,
+            TaskRecordingIssueReason.FINISH_FAILED,
+            error,
+        )
+    else:
+        revalidate_execution_set_authority(
+            xset,
+            authority,
+            allow_progress=False,
+        )
+    return _combined_recording(recording_status, xset.recording)
+
+
+def _try_add_exception_note(error: BaseException, note: str) -> None:
+    """Add secondary diagnostics without replacing the escaping primary."""
+
+    try:
+        BaseException.add_note(error, note)
+    except BaseException as note_error:
+        retire_exception_graph(note_error)
+
+
+def _note_task_recording_issue(
+    xset: ExecutionSet,
+    reason: TaskRecordingIssueReason,
+    error: BaseException,
+) -> None:
+    _note_closed_recording_issue(
+        xset,
+        reason,
+        _close_recording_failure(error),
+    )
+
+
+def _note_closed_recording_issue(
+    xset: ExecutionSet,
+    reason: TaskRecordingIssueReason,
+    failure: _ClosedRecordingFailure,
+) -> None:
+    issue = TaskRecordingIssue(reason)
+    xset.note_task_recording_issue(
+        issue.reason,
+        failure.issue_detail,
+    )
+
+
+def _close_recording_failure(error: BaseException) -> _ClosedRecordingFailure:
+    type_name = type(error).__name__
+    try:
+        detail = retired_failure_detail(error)
+    except BaseException as diagnostic_error:
+        retire_exception_graph(diagnostic_error)
+        return _ClosedRecordingFailure(
+            FailureDetail(
+                type_name,
+                "recording diagnostic unavailable",
+            ),
+            None,
+        )
+    return _ClosedRecordingFailure(
+        detail,
+        f"{detail.type_name}: {detail.message}",
+    )
+
+
+def _recording_failure_detail(error: BaseException) -> FailureDetail:
+    return _close_recording_failure(error).detail
+
+
+def _result_with_execution_recording(
+    result: OperationResult,
+    xset: ExecutionSet,
+) -> OperationResult:
+    """Attach the centrally reduced item/task recording witnesses."""
+
+    return replace(
+        result,
+        recording=_combined_recording(result.recording, xset.recording),
+        recording_issues=xset.recording_issues,
+        omitted_detail_count=xset.omitted_detail_count,
+    )
 
 
 def _commitment_error(xset: ExecutionSet) -> str | None:
@@ -269,33 +3339,90 @@ def _commitment_error(xset: ExecutionSet) -> str | None:
         return "commitment plan fingerprint does not match the reviewed plan"
     if commitment.selection_digest != selection_digest(xset.selection):
         return "commitment selection digest does not match the reviewed selection"
+    if not xset.selection:
+        return "nothing is selected to synchronize"
     return None
 
 
-def _validated_roots(source_path: str, target_path: str) -> tuple[Root, Root]:
-    source = Path(source_path).resolve(strict=True)
-    target = Path(target_path).resolve(strict=True)
-    if not source.is_dir():
-        raise NotADirectoryError(f"source is not a directory: {source}")
-    if not target.is_dir():
-        raise NotADirectoryError(f"target is not a directory: {target}")
-    source_key = os.path.normcase(str(source))
-    target_key = os.path.normcase(str(target))
+def _ordinary_logical_root(path: str) -> Path:
+    logical = lexical_absolute_path(path)
+    try:
+        admit_root_chain(
+            RootAuthority(logical),
+            anchor_probe=current_volume_anchor,
+        )
+    except RootAuthorityError as error:
+        cause = BaseException.__cause__.__get__(error, BaseException)
+        try:
+            if error.issue in {
+                RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+                RootAuthorityIssue.REPARSE_COMPONENT,
+                RootAuthorityIssue.NON_DIRECTORY_COMPONENT,
+            }:
+                detail = (
+                    "location root chain contains a nonordinary directory: "
+                    f"{error.logical_path}"
+                )
+            else:
+                detail = logical_error_text(
+                    cause if isinstance(cause, OSError) else error
+                )
+        finally:
+            if isinstance(cause, BaseException):
+                retire_exception_graph(cause)
+            retire_exception_graph(error)
+        raise ValueError(detail) from None
+    return Path(logical)
+
+
+def _physical_logical_root(path: Path) -> Path:
+    try:
+        resolved = Path(to_extended_length_path(str(path))).resolve(
+            strict=True
+        )
+    except OSError as error:
+        try:
+            detail = logical_error_text(error)
+        finally:
+            retire_exception_graph(error)
+        raise ValueError(detail) from None
+    return Path(from_extended_length_path(str(resolved)))
+
+
+def _validate_sync_paths(
+    source_path: str,
+    target_path: str,
+) -> tuple[Path, Path]:
+    """Resolve one interface path pair without exposing native path spelling."""
+
+    source = _ordinary_logical_root(source_path)
+    target = _ordinary_logical_root(target_path)
+    source_key = os.path.normcase(str(_physical_logical_root(source)))
+    target_key = os.path.normcase(str(_physical_logical_root(target)))
     try:
         common = os.path.normcase(os.path.commonpath((source_key, target_key)))
-    except ValueError:
+    except ValueError as error:
+        retire_exception_graph(error)
         common = ""
     if common in {source_key, target_key}:
         raise ValueError("source and target must be distinct, non-nested directories")
-    return Root(str(source), "source"), Root(str(target), "target")
+    return source, target
 
 
-def _finish_best_effort(
-    recording: RunRecording,
-    status: SessionState,
-    recording_status: RecordingStatus,
-) -> None:
+def validate_sync_paths(
+    source_path: str,
+    target_path: str,
+) -> tuple[Path, Path]:
+    """Resolve an interface path pair without retaining failed path frames."""
+
     try:
-        recording.finish(status, recording_status)
-    except Exception:
-        pass
+        return _validate_sync_paths(source_path, target_path)
+    except BaseException as error:
+        retire_exception_graph(error)
+        del source_path, target_path
+        raise
+
+
+def _validated_roots(source_path: str, target_path: str) -> tuple[Root, Root]:
+    source, target = validate_sync_paths(source_path, target_path)
+    return Root(str(source), "source"), Root(str(target), "target")

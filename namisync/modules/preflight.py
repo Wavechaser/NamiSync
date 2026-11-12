@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager, nullcontext
+from contextvars import ContextVar
+from dataclasses import dataclass
+from datetime import datetime, timezone
 import os
+from pathlib import Path, PureWindowsPath
 import shutil
 import stat as stat_module
-from datetime import datetime, timezone
-from pathlib import Path, PureWindowsPath
+from types import MappingProxyType
 from typing import Protocol
 
 from namisync.core.evidence import Outcome
-from namisync.core.execution import ExecutionSet
+from namisync.core.execution import ExecutionReview
+from namisync.core.file_identity import file_identity_from_stat
 from namisync.core.models import (
     CapabilityProfile,
     EntryKind,
-    FileIdentity,
     FileStat,
     MetadataSnapshot,
     Root,
@@ -23,17 +28,22 @@ from namisync.core.models import (
     owned_temp_run_id,
 )
 from namisync.core.pathing import (
+    fold_validated_path,
+    from_extended_length_path,
     is_path_below,
     join_under_root,
+    lexical_absolute_path,
+    logical_error_text,
     normalize_relative_path,
+    to_extended_length_path,
     validate_relative_path,
 )
 from namisync.core.planning import (
-    FilterSet,
     OperationKind,
     PlanOperation,
     calculate_required_bytes,
     quarantined_operation_ids,
+    planned_metadata_matches,
 )
 from namisync.core.preflight import (
     ObservedWorld,
@@ -45,116 +55,304 @@ from namisync.core.preflight import (
     TrashObservation,
     Verdict,
 )
+from namisync.core.root_authority import (
+    NativeVolumeInfo,
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    RootHold,
+    admit_existing_relative_chain,
+    admit_root,
+    hold_root,
+    is_directory_stat,
+    is_placeholder_stat,
+    is_reparse_stat,
+    observe_native_volume,
+)
+from namisync.core.review import (
+    PLAN_SOURCE_REFERENCE_BYTES,
+    PlanReviewAdmission,
+    PlanReviewProducerAdmission,
+)
+from namisync.core.scalars import (
+    checked_add_signed_64,
+    require_signed_64,
+    require_utf16_path,
+)
 
 
-class SettingsReader(Protocol):
-    def read_filters(self) -> FilterSet: ...
+class _PlanRefusalList(list[Refusal]):
+    """Gate the raw refusal population before each ordinary append."""
 
-    def read_policy_fingerprint(self) -> str: ...
+    __slots__ = ("_admission",)
+
+    def __init__(self, admission: PlanReviewProducerAdmission | None) -> None:
+        if (
+            admission is not None
+            and type(admission) is not PlanReviewProducerAdmission
+        ):
+            raise TypeError("preflight review admission has the wrong type")
+        self._admission = admission
+
+    def append(self, refusal: Refusal) -> None:
+        if type(refusal) is not Refusal:
+            raise TypeError("preflight refusals must contain Refusal values")
+        if self._admission is not None:
+            self._admission.require_informational_source_rows(len(self) + 1)
+        super().append(refusal)
 
 
 class ObservationFileSystem(Protocol):
-    def observe_root(self, root: Root) -> RootObservation: ...
+    def observe_root(self, authority: RootAuthority) -> RootObservation: ...
 
-    def stat(self, root: Root, rel_path: str, profile: CapabilityProfile) -> StatObservation: ...
+    def stat(
+        self,
+        authority: RootAuthority,
+        rel_path: str,
+        profile: CapabilityProfile,
+    ) -> StatObservation: ...
 
-    def free_space(self, target: Root) -> int: ...
+    def free_space(self, authority: RootAuthority) -> int: ...
 
     def reclaimable_temp_bytes(
         self,
-        target: Root,
+        authority: RootAuthority,
         parent_paths: frozenset[str],
         current_run_id: str,
     ) -> int: ...
 
-    def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation: ...
+    def observe_trash(
+        self,
+        authority: RootAuthority,
+    ) -> TrashObservation: ...
 
     def now_utc(self) -> datetime: ...
 
 
-class StaticSettingsReader:
-    def __init__(self, filters: FilterSet, policy_fingerprint: str) -> None:
-        self._filters = filters
-        self._policy_fingerprint = policy_fingerprint
-
-    def read_filters(self) -> FilterSet:
-        return self._filters
-
-    def read_policy_fingerprint(self) -> str:
-        return self._policy_fingerprint
+def _native_path(path: str | Path) -> str:
+    return to_extended_length_path(str(path))
 
 
-def _volume_observation(path: str) -> tuple[VolumeId, VolumeEvidence]:
-    if os.name != "nt":
-        observed = os.stat(path, follow_symlinks=False)
-        return VolumeId(f"{observed.st_dev:x}", "UNKNOWN"), VolumeEvidence(device_id=str(Path(path).anchor))
+def _resolved_logical_path(path: str | Path, *, strict: bool) -> str:
+    return _resolve_native_path(_native_path(path), strict=strict)
 
-    import ctypes
-    from ctypes import wintypes
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    volume_path = ctypes.create_unicode_buffer(32768)
-    if not kernel32.GetVolumePathNameW(path, volume_path, len(volume_path)):
-        raise OSError(ctypes.get_last_error(), "GetVolumePathNameW failed", path)
-    label = ctypes.create_unicode_buffer(261)
-    filesystem = ctypes.create_unicode_buffer(261)
-    serial = wintypes.DWORD()
-    max_component = wintypes.DWORD()
-    flags = wintypes.DWORD()
-    if not kernel32.GetVolumeInformationW(
-        volume_path.value,
-        label,
-        len(label),
-        ctypes.byref(serial),
-        ctypes.byref(max_component),
-        ctypes.byref(flags),
-        filesystem,
-        len(filesystem),
-    ):
-        raise OSError(ctypes.get_last_error(), "GetVolumeInformationW failed", path)
-    fs_type = filesystem.value.upper() or "UNKNOWN"
-    return VolumeId(f"{serial.value:08X}", fs_type), VolumeEvidence(label.value or None, volume_path.value)
+def _resolve_native_path(native_path: str, *, strict: bool) -> str:
+    """Resolve a prepared native operand and validate its logical result."""
+
+    resolved = Path(native_path).resolve(strict=strict)
+    return from_extended_length_path(str(resolved))
+
+
+def _root_authority(
+    root: Root,
+    expected_volume: VolumeId | None,
+    reviewed_evidence: VolumeEvidence | None,
+) -> RootAuthority:
+    return RootAuthority(
+        root.path,
+        None if reviewed_evidence is None else reviewed_evidence.device_id,
+        expected_volume,
+    )
+
+
+def _classify_root_facts(
+    expected_volume: VolumeId | None,
+    reviewed_anchor: str | None,
+    observed: RootObservation | None,
+) -> RootAuthorityIssue | None:
+    if observed is None:
+        return RootAuthorityIssue.ANCHOR_UNAVAILABLE
+    if observed.error is not None or observed.resolved_path is None:
+        return observed.authority_issue or RootAuthorityIssue.ANCHOR_UNAVAILABLE
+    if reviewed_anchor is not None:
+        evidence_anchor = (
+            None
+            if observed.volume_evidence is None
+            else observed.volume_evidence.device_id
+        )
+        if not evidence_anchor:
+            return RootAuthorityIssue.ANCHOR_UNAVAILABLE
+        try:
+            current_anchor = lexical_absolute_path(evidence_anchor)
+            expected_anchor = lexical_absolute_path(reviewed_anchor)
+        except (OSError, TypeError, ValueError):
+            return RootAuthorityIssue.ANCHOR_UNAVAILABLE
+        if os.path.normcase(os.path.normpath(current_anchor)) != os.path.normcase(
+            os.path.normpath(expected_anchor)
+        ):
+            return RootAuthorityIssue.ANCHOR_CHANGED
+    if expected_volume is None or observed.volume_id != expected_volume:
+        return RootAuthorityIssue.VOLUME_CHANGED
+    return None
+
+
+@dataclass(slots=True)
+class _HeldObservationRoot:
+    hold: RootHold
+    admitted: NativeVolumeInfo | None = None
+
+
+@dataclass(slots=True)
+class _ObservationInvocation:
+    owner: LocalObservationFileSystem
+    stack: ExitStack | None
+    roots: dict[RootAuthority, _HeldObservationRoot]
+
+
+_OBSERVATION_INVOCATION: ContextVar[_ObservationInvocation | None] = ContextVar(
+    "preflight_root_invocation", default=None
+)
 
 
 class LocalObservationFileSystem:
     """Read-only local observation implementation used by composition roots."""
 
-    def observe_root(self, root: Root) -> RootObservation:
-        try:
-            resolved = str(Path(root.path).resolve(strict=True))
-            if not Path(resolved).is_dir():
-                raise NotADirectoryError(resolved)
-            volume_id, evidence = _volume_observation(resolved)
-            return RootObservation(resolved, volume_id, evidence)
-        except (OSError, PermissionError) as error:
-            return RootObservation(None, None, None, str(error))
+    @contextmanager
+    def root_scope(self) -> Iterator[None]:
+        with ExitStack() as stack:
+            invocation = _ObservationInvocation(self, stack, {})
+            token = _OBSERVATION_INVOCATION.set(invocation)
+            try:
+                yield
+            finally:
+                invocation.stack = None
+                _OBSERVATION_INVOCATION.reset(token)
 
-    def stat(self, root: Root, rel_path: str, profile: CapabilityProfile) -> StatObservation:
+    def _admit_root(self, authority: RootAuthority) -> NativeVolumeInfo:
+        invocation = _OBSERVATION_INVOCATION.get()
+        if (
+            invocation is None
+            or invocation.owner is not self
+            or invocation.stack is None
+        ):
+            return admit_root(authority)
+        scoped = invocation.roots.get(authority)
+        if scoped is None:
+            scoped = _HeldObservationRoot(
+                invocation.stack.enter_context(hold_root(authority))
+            )
+            invocation.roots[authority] = scoped
+        if scoped.admitted is not None and scoped.hold.confirm():
+            scoped.hold.require_ordinary()
+            return scoped.admitted
+        admitted = admit_root(authority)
+        if scoped.hold.confirm():
+            scoped.hold.require_ordinary()
+            scoped.admitted = admitted
+        return admitted
+
+    def _has_confirmed_root(self, authority: RootAuthority) -> bool:
+        invocation = _OBSERVATION_INVOCATION.get()
+        if (
+            invocation is None
+            or invocation.owner is not self
+            or invocation.stack is None
+        ):
+            return False
+        scoped = invocation.roots.get(authority)
+        return (
+            scoped is not None
+            and scoped.admitted is not None
+            and scoped.hold.confirm()
+        )
+
+    def observe_root(self, authority: RootAuthority) -> RootObservation:
+        try:
+            admitted = self._admit_root(authority)
+            resolved = _resolved_logical_path(
+                authority.logical_root,
+                strict=True,
+            )
+            return RootObservation(
+                resolved,
+                admitted.volume_id,
+                admitted.evidence,
+            )
+        except RootAuthorityError as error:
+            return RootObservation(
+                None,
+                None,
+                None,
+                logical_error_text(error),
+                error.issue,
+            )
+        except (OSError, PermissionError, ValueError) as error:
+            return RootObservation(
+                None, None, None, logical_error_text(error)
+            )
+
+    def stat(
+        self,
+        authority: RootAuthority,
+        rel_path: str,
+        profile: CapabilityProfile,
+    ) -> StatObservation:
         try:
             canonical = validate_relative_path(rel_path)
-            candidate = join_under_root(root.path, canonical)
-            resolved_root = str(Path(root.path).resolve(strict=True))
-            resolved_candidate = str(Path(candidate).resolve(strict=False))
+            candidate = join_under_root(authority.logical_root, canonical)
+        except (OSError, PermissionError, ValueError) as error:
+            return StatObservation(
+                None, logical_error_text(error), True, False
+            )
+
+        admitted = self._admit_root(authority)
+        try:
+            held_root = self._has_confirmed_root(authority)
+            exists = admit_existing_relative_chain(
+                authority,
+                canonical,
+                include_leaf=not held_root,
+            )
+            resolved_root = (
+                authority.logical_root
+                if held_root
+                else _resolved_logical_path(authority.logical_root, strict=True)
+            )
+            native_candidate = _native_path(candidate)
+            resolved_candidate = (
+                candidate if held_root
+                else _resolve_native_path(native_candidate, strict=False)
+            )
             contained = is_path_below(resolved_candidate, resolved_root)
             representable = len(resolved_candidate) <= profile.max_path
             if not contained:
                 return StatObservation(None, "resolved path escapes root", False, representable)
+            if not exists:
+                return StatObservation(None, None, True, representable)
             try:
-                observed = os.stat(candidate, follow_symlinks=False)
+                observed = os.stat(
+                    native_candidate, follow_symlinks=False
+                )
             except FileNotFoundError:
                 return StatObservation(None, None, True, representable)
-            if stat_module.S_ISREG(observed.st_mode):
-                kind = EntryKind.FILE
-                size = int(observed.st_size)
-            elif stat_module.S_ISDIR(observed.st_mode):
+            if is_placeholder_stat(observed):
+                raise RootAuthorityError(
+                    RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+                    candidate,
+                    "path contains a placeholder component",
+                )
+            if is_reparse_stat(observed):
+                raise RootAuthorityError(
+                    RootAuthorityIssue.REPARSE_COMPONENT,
+                    candidate,
+                    "path contains a reparse component",
+                )
+            if is_directory_stat(observed):
                 kind = EntryKind.DIRECTORY
                 size = 0
+            elif stat_module.S_ISREG(observed.st_mode):
+                kind = EntryKind.FILE
+                size = int(observed.st_size)
             else:
                 return StatObservation(None, "unsupported entry type", True, representable)
-            volume_id, _ = _volume_observation(root.path)
             identity = (
-                FileIdentity(volume_id.serial, int(observed.st_ino))
-                if profile.stable_file_identity and int(observed.st_ino) > 0
+                file_identity_from_stat(
+                    admitted.volume_id.serial,
+                    profile.fs_type,
+                    getattr(observed, "st_ino", None),
+                )
+                if profile.stable_file_identity
                 else None
             )
             attributes = int(getattr(observed, "st_file_attributes", 0))
@@ -171,31 +369,55 @@ class LocalObservationFileSystem:
             )
             return StatObservation(snapshot, None, True, representable)
         except (OSError, PermissionError, ValueError) as error:
-            return StatObservation(None, str(error), True, False)
+            return StatObservation(
+                None, logical_error_text(error), True, False
+            )
 
-    def free_space(self, target: Root) -> int:
-        return int(shutil.disk_usage(target.path).free)
+    def free_space(self, authority: RootAuthority) -> int:
+        self._admit_root(authority)
+        return require_signed_64(
+            shutil.disk_usage(_native_path(authority.logical_root)).free,
+            "target free space",
+        )
 
     def reclaimable_temp_bytes(
         self,
-        target: Root,
+        authority: RootAuthority,
         parent_paths: frozenset[str],
         current_run_id: str,
     ) -> int:
         total = 0
-        target_volume, _ = _volume_observation(target.path)
+        admitted = self._admit_root(authority)
+        root = authority.logical_root
         for parent_path in sorted(parent_paths, key=lambda value: (normalize_relative_path(value, allow_root=True), value)):
             if parent_path and (
                 normalize_relative_path(parent_path) == ".SYNCTRASH"
                 or normalize_relative_path(parent_path).startswith(".SYNCTRASH\\")
             ):
                 continue
-            absolute = target.path if not parent_path else join_under_root(target.path, parent_path)
+            absolute = root if not parent_path else join_under_root(root, parent_path)
             try:
-                parent_volume, _ = _volume_observation(absolute)
-                if parent_volume != target_volume:
+                if parent_path and not admit_existing_relative_chain(
+                    authority,
+                    parent_path,
+                    include_leaf=True,
+                ):
                     continue
-                with os.scandir(absolute) as entries:
+                if parent_path:
+                    parent_stat = os.stat(
+                        _native_path(absolute),
+                        follow_symlinks=False,
+                    )
+                    if (
+                        is_placeholder_stat(parent_stat)
+                        or is_reparse_stat(parent_stat)
+                        or not is_directory_stat(parent_stat)
+                    ):
+                        continue
+                parent_volume = observe_native_volume(absolute)
+                if parent_volume.volume_id != admitted.volume_id:
+                    continue
+                with os.scandir(_native_path(absolute)) as entries:
                     for entry in entries:
                         owner = owned_temp_run_id(entry.name)
                         if (
@@ -203,123 +425,375 @@ class LocalObservationFileSystem:
                             and owner != current_run_id
                             and entry.is_file(follow_symlinks=False)
                         ):
-                            total += int(entry.stat(follow_symlinks=False).st_size)
-            except (FileNotFoundError, PermissionError, NotADirectoryError):
+                            total = checked_add_signed_64(
+                                total,
+                                entry.stat(follow_symlinks=False).st_size,
+                                "reclaimable temporary bytes",
+                            )
+            except OSError:
                 continue
         return total
 
-    def observe_trash(self, target: Root, expected_volume: VolumeId | None) -> TrashObservation:
-        trash = os.path.join(target.path, ".synctrash")
+    def observe_trash(
+        self,
+        authority: RootAuthority,
+    ) -> TrashObservation:
+        trash = os.path.join(authority.logical_root, ".synctrash")
+        self._admit_root(authority)
         try:
-            root_resolved = str(Path(target.path).resolve(strict=True))
-            trash_path = Path(trash)
-            exists = trash_path.exists()
-            resolved = str(trash_path.resolve(strict=False))
-            contained = is_path_below(resolved, root_resolved)
-            junction = bool(exists and hasattr(trash_path, "is_junction") and trash_path.is_junction())
-            attributes = int(getattr(os.lstat(trash), "st_file_attributes", 0)) if exists else 0
-            reparse_safe = not exists or not (
-                trash_path.is_symlink() or junction or attributes & 0x00000400
+            exists = admit_existing_relative_chain(
+                authority,
+                ".synctrash",
+                include_leaf=True,
             )
-            available = not exists or trash_path.is_dir()
-            writable_path = trash if exists else target.path
+            root_resolved = _resolved_logical_path(
+                authority.logical_root,
+                strict=True,
+            )
+            resolved = _resolved_logical_path(
+                trash,
+                strict=False,
+            )
+            contained = is_path_below(resolved, root_resolved)
+            if not contained:
+                return TrashObservation(
+                    resolved,
+                    False,
+                    False,
+                    False,
+                    False,
+                    False,
+                    "trash path resolves outside target root",
+                )
+            if exists:
+                observed = os.stat(
+                    _native_path(trash),
+                    follow_symlinks=False,
+                )
+                if is_placeholder_stat(observed):
+                    raise RootAuthorityError(
+                        RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+                        trash,
+                        "trash path is a placeholder",
+                    )
+                if is_reparse_stat(observed):
+                    raise RootAuthorityError(
+                        RootAuthorityIssue.REPARSE_COMPONENT,
+                        trash,
+                        "trash path is a reparse component",
+                    )
+                available = is_directory_stat(observed)
+            else:
+                available = True
+            writable_path = _native_path(
+                trash if exists else authority.logical_root
+            )
             writable = os.access(writable_path, os.W_OK)
-            actual_volume, _ = _volume_observation(resolved if exists else target.path)
-            same_volume = expected_volume is not None and actual_volume == expected_volume
-            return TrashObservation(resolved, available, contained, same_volume, writable, reparse_safe)
-        except (OSError, PermissionError) as error:
-            return TrashObservation(None, False, False, False, False, False, str(error))
+            actual_volume = observe_native_volume(
+                resolved if exists else authority.logical_root
+            )
+            same_volume = (
+                authority.expected_volume_id is not None
+                and actual_volume.volume_id == authority.expected_volume_id
+            )
+            return TrashObservation(
+                resolved,
+                available,
+                contained,
+                same_volume,
+                writable,
+                True,
+            )
+        except (OSError, PermissionError, ValueError) as error:
+            return TrashObservation(
+                None,
+                False,
+                False,
+                False,
+                False,
+                False,
+                logical_error_text(error),
+            )
 
     def now_utc(self) -> datetime:
         return datetime.now(timezone.utc)
 
 
-def _operation_subjects(xset: ExecutionSet) -> tuple[dict[Subject, tuple[Root, str, CapabilityProfile]], frozenset[str]]:
+def _require_execution_review(value: object) -> ExecutionReview:
+    if type(value) is not ExecutionReview:
+        raise TypeError("preflight requires an exact ExecutionReview")
+    return value
+
+
+def _operation_subjects(
+    review: ExecutionReview,
+    *,
+    plan_review: bool = False,
+) -> tuple[
+    dict[Subject, tuple[Root, str, CapabilityProfile]],
+    frozenset[str],
+]:
     subjects: dict[Subject, tuple[Root, str, CapabilityProfile]] = {}
     target_parents: set[str] = set()
-    plan = xset.plan
-    for operation in xset.remaining():
-        if operation.source_rel_path is not None:
+    review = _require_execution_review(review)
+    plan = review.plan
+
+    def retain_subject(
+        subject: Subject,
+        value: tuple[Root, str, CapabilityProfile],
+        *,
+        replace_existing: bool = True,
+    ) -> None:
+        if subject in subjects and not replace_existing:
+            return
+        subjects[subject] = value
+
+    for operation in review.remaining():
+        observe_files = not (plan_review and operation.kind is OperationKind.NOOP)
+        if observe_files and operation.source_rel_path is not None:
             subject = Subject(plan.source_root.root_id, normalize_relative_path(operation.source_rel_path))
-            subjects[subject] = (plan.source_root, operation.source_rel_path, plan.source_profile)
-        target_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.target_rel_path))
-        subjects[target_subject] = (plan.target_root, operation.target_rel_path, plan.target_profile)
+            retain_subject(
+                subject,
+                (
+                    plan.source_root,
+                    operation.source_rel_path,
+                    plan.source_profile,
+                ),
+            )
+        if observe_files:
+            target_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.target_rel_path))
+            retain_subject(
+                target_subject,
+                (
+                    plan.target_root,
+                    operation.target_rel_path,
+                    plan.target_profile,
+                ),
+            )
         parent = str(PureWindowsPath(operation.target_rel_path).parent)
         parent = "" if parent == "." else parent
         target_parents.add(parent)
         if parent:
             parent_subject = Subject(plan.target_root.root_id, normalize_relative_path(parent))
-            subjects.setdefault(parent_subject, (plan.target_root, parent, plan.target_profile))
+            retain_subject(
+                parent_subject,
+                (plan.target_root, parent, plan.target_profile),
+                replace_existing=False,
+            )
         if operation.prior_target_rel_path is not None:
-            prior_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.prior_target_rel_path))
-            subjects[prior_subject] = (plan.target_root, operation.prior_target_rel_path, plan.target_profile)
+            if observe_files:
+                prior_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.prior_target_rel_path))
+                retain_subject(
+                    prior_subject,
+                    (
+                        plan.target_root,
+                        operation.prior_target_rel_path,
+                        plan.target_profile,
+                    ),
+                )
             prior_parent = str(PureWindowsPath(operation.prior_target_rel_path).parent)
             prior_parent = "" if prior_parent == "." else prior_parent
             target_parents.add(prior_parent)
             if prior_parent:
                 parent_subject = Subject(plan.target_root.root_id, normalize_relative_path(prior_parent))
-                subjects.setdefault(parent_subject, (plan.target_root, prior_parent, plan.target_profile))
+                retain_subject(
+                    parent_subject,
+                    (plan.target_root, prior_parent, plan.target_profile),
+                    replace_existing=False,
+                )
     return subjects, frozenset(target_parents)
 
 
+def plan_observation_scope(
+    review: ExecutionReview,
+    *,
+    plan_review: bool = False,
+) -> tuple[dict[Subject, str], frozenset[str]]:
+    """Return the exact path populations the plan observer may publish."""
+
+    subjects, target_parents = _operation_subjects(review, plan_review=plan_review)
+    return (
+        {
+            subject: rel_path
+            for subject, (_, rel_path, _) in subjects.items()
+        },
+        target_parents,
+    )
+
+
 def observe(
-    xset: ExecutionSet,
+    review: ExecutionReview,
     fs: ObservationFileSystem,
-    settings: SettingsReader,
+    *,
+    plan_review: bool = False,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> ObservedWorld:
     """Read the current scoped world without making any safety decision."""
 
-    subjects, target_parents = _operation_subjects(xset)
+    if (
+        review_admission is not None
+        and type(review_admission) is not PlanReviewProducerAdmission
+    ):
+        raise TypeError("preflight review admission has the wrong type")
+    review = _require_execution_review(review)
+    if review_admission is not None:
+        review_admission.require_source_rows(len(review.plan.operations))
+    scope = getattr(fs, "root_scope", None)
+    with nullcontext() if scope is None else scope():
+        return _observe(review, fs, plan_review=plan_review)
+
+
+def _observe(
+    review: ExecutionReview,
+    fs: ObservationFileSystem,
+    *,
+    plan_review: bool,
+) -> ObservedWorld:
+    plan = review.plan
+
+    def authority_for(root: Root) -> RootAuthority:
+        if root.root_id == plan.source_root.root_id:
+            return _root_authority(
+                root,
+                plan.source_volume_id,
+                plan.source_volume_evidence,
+            )
+        return _root_authority(
+            root,
+            plan.target_volume_id,
+            plan.target_volume_evidence,
+        )
+
+    roots: dict[str, RootObservation] = {}
+    authorities: dict[str, RootAuthority] = {}
+    admitted_roots: dict[str, bool] = {}
+
+    def reject_root(root: Root, error: RootAuthorityError) -> None:
+        roots[root.root_id] = RootObservation(
+            None, None, None, logical_error_text(error), error.issue,
+        )
+        admitted_roots[root.root_id] = False
+
+    for root in (review.plan.source_root, review.plan.target_root):
+        try:
+            authority = authority_for(root)
+            authorities[root.root_id] = authority
+            observation = fs.observe_root(authority)
+        except RootAuthorityError as error:
+            reject_root(root, error)
+        except (OSError, PermissionError, ValueError) as error:
+            observation = RootObservation(
+                None, None, None, logical_error_text(error)
+            )
+            roots[root.root_id] = observation
+            admitted_roots[root.root_id] = False
+        else:
+            roots[root.root_id] = observation
+            admitted_roots[root.root_id] = _classify_root_facts(
+                authority.expected_volume_id,
+                authority.reviewed_anchor,
+                observation,
+            ) is None
+
+    subjects, target_parents = _operation_subjects(
+        review,
+        plan_review=plan_review,
+    )
     stats: dict[Subject, StatObservation] = {}
     paths: dict[Subject, str] = {}
     for subject, (root, rel_path, profile) in sorted(subjects.items()):
-        try:
-            stats[subject] = fs.stat(root, rel_path, profile)
-        except (OSError, PermissionError, ValueError) as error:
-            stats[subject] = StatObservation(None, str(error))
         paths[subject] = rel_path
-    roots: dict[str, RootObservation] = {}
-    for root in (xset.plan.source_root, xset.plan.target_root):
+        if not admitted_roots.get(root.root_id, False):
+            root_observation = roots.get(root.root_id)
+            stats[subject] = StatObservation(
+                None,
+                root_observation.error
+                if (
+                    root_observation is not None
+                    and root_observation.error is not None
+                )
+                else "root observation unavailable",
+            )
+            continue
         try:
-            roots[root.root_id] = fs.observe_root(root)
+            stats[subject] = fs.stat(
+                authorities[root.root_id],
+                rel_path,
+                profile,
+            )
+        except RootAuthorityError as error:
+            reject_root(root, error)
+            stats[subject] = StatObservation(
+                None,
+                logical_error_text(error),
+            )
         except (OSError, PermissionError, ValueError) as error:
-            roots[root.root_id] = RootObservation(None, None, None, str(error))
-    try:
-        free_space = fs.free_space(xset.plan.target_root)
-    except (OSError, PermissionError):
+            stats[subject] = StatObservation(
+                None, logical_error_text(error)
+            )
+
+    target = review.plan.target_root
+    if admitted_roots.get(target.root_id, False):
+        try:
+            free_space = fs.free_space(authorities[target.root_id])
+        except RootAuthorityError as error:
+            reject_root(target, error)
+            free_space = None
+        except (OSError, PermissionError, ValueError):
+            free_space = None
+    else:
         free_space = None
-    try:
-        reclaimable = fs.reclaimable_temp_bytes(
-            xset.plan.target_root,
-            target_parents,
-            str(xset.run_id),
-        )
-    except (OSError, PermissionError):
+
+    if admitted_roots.get(target.root_id, False):
+        try:
+            reclaimable = fs.reclaimable_temp_bytes(
+                authorities[target.root_id],
+                target_parents,
+                str(review.run_id),
+            )
+        except RootAuthorityError as error:
+            reject_root(target, error)
+            reclaimable = 0
+        except (OSError, PermissionError, ValueError):
+            reclaimable = 0
+    else:
         reclaimable = 0
-    remaining = xset.remaining()
     needs_trash = any(
         operation.kind is OperationKind.TRASH
         or (
-            xset.plan.trash_on_update
+            review.plan.trash_on_update
             and operation.kind in {OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
         )
-        for operation in remaining
+        for operation in review.remaining()
     )
-    if needs_trash:
+    if needs_trash and admitted_roots.get(target.root_id, False):
         try:
-            trash = fs.observe_trash(xset.plan.target_root, xset.plan.target_volume_id)
+            trash = fs.observe_trash(
+                authorities[target.root_id]
+            )
+        except RootAuthorityError as error:
+            reject_root(target, error)
+            trash = TrashObservation(
+                None,
+                False,
+                False,
+                False,
+                False,
+                False,
+                logical_error_text(error),
+            )
         except (OSError, PermissionError, ValueError) as error:
-            trash = TrashObservation(None, False, False, False, False, False, str(error))
+            trash = TrashObservation(
+                None,
+                False,
+                False,
+                False,
+                False,
+                False,
+                logical_error_text(error),
+            )
     else:
         trash = None
-    settings_error = None
-    try:
-        current_filters = settings.read_filters()
-        current_policy_fingerprint = settings.read_policy_fingerprint()
-    except (OSError, PermissionError, ValueError) as error:
-        current_filters = xset.plan.filter_snapshot
-        current_policy_fingerprint = xset.plan.policy_fingerprint
-        settings_error = str(error)
     return ObservedWorld(
         stats=stats,
         paths=paths,
@@ -328,10 +802,256 @@ def observe(
         free_space=free_space,
         reclaimable_temp_bytes=reclaimable,
         trash=trash,
-        current_filters=current_filters,
-        current_policy_fingerprint=current_policy_fingerprint,
         observed_at=fs.now_utc(),
-        settings_error=settings_error,
+    )
+
+
+def _validate_subject(value: object, review: ExecutionReview) -> Subject:
+    if type(value) is not Subject:
+        raise TypeError("observed-world subjects must be exact Subject values")
+    if type(value.root_id) is not str or type(value.rel_path_key) is not str:
+        raise TypeError("observed-world subject fields must be text")
+    if (
+        value.root_id != review.plan.source_root.root_id
+        and value.root_id != review.plan.target_root.root_id
+    ):
+        raise ValueError("observed subject names an unknown root")
+    canonical_key = validate_relative_path(
+        value.rel_path_key,
+        allow_root=True,
+    )
+    if value.rel_path_key != fold_validated_path(canonical_key):
+        raise ValueError("observed subject path key is not canonical")
+    return value
+
+
+def _validate_optional_text(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise TypeError(f"{field_name} must be text or null")
+    return value
+
+
+def _validate_stat_observation(value: object) -> StatObservation:
+    if type(value) is not StatObservation:
+        raise TypeError("observed stats must contain StatObservation values")
+    if type(value.contained) is not bool or type(value.representable) is not bool:
+        raise TypeError("observed stat flags must be bools")
+    if value.stat is not None and type(value.stat) is not FileStat:
+        raise TypeError("observed file stat has the wrong type")
+    _validate_optional_text(value.error, "stat observation error")
+    return value
+
+
+def _validate_native_path(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    return require_utf16_path(value, field_name)
+
+
+def _validate_root_observation(value: object) -> RootObservation:
+    if type(value) is not RootObservation:
+        raise TypeError("observed roots must contain RootObservation values")
+    if (
+        value.authority_issue is not None
+        and type(value.authority_issue) is not RootAuthorityIssue
+    ):
+        raise TypeError("observed root authority issue has the wrong type")
+    _validate_native_path(value.resolved_path, "observed root path")
+    if value.volume_id is not None and type(value.volume_id) is not VolumeId:
+        raise TypeError("observed volume identity has the wrong type")
+    if (
+        value.volume_evidence is not None
+        and type(value.volume_evidence) is not VolumeEvidence
+    ):
+        raise TypeError("observed volume evidence has the wrong type")
+    _validate_optional_text(value.error, "root observation error")
+    if value.authority_issue is not None and value.error is None:
+        raise ValueError("root authority issue requires an observation error")
+    return value
+
+
+def _validate_trash_observation(value: object) -> TrashObservation | None:
+    if value is None:
+        return None
+    if type(value) is not TrashObservation:
+        raise TypeError("observed trash has the wrong type")
+    if (
+        type(value.available) is not bool
+        or type(value.contained) is not bool
+        or type(value.same_volume) is not bool
+        or type(value.writable) is not bool
+        or type(value.reparse_safe) is not bool
+    ):
+        raise TypeError("observed trash flags must be bools")
+    _validate_native_path(value.resolved_path, "observed trash path")
+    _validate_optional_text(value.error, "trash observation error")
+    return value
+
+
+def adopt_plan_observed_world(
+    value: object,
+    review: ExecutionReview,
+    admission: PlanReviewProducerAdmission,
+    *,
+    plan_review: bool = False,
+) -> ObservedWorld:
+    """Admit one exact observer graph without rebuilding it."""
+
+    if type(value) is not ObservedWorld:
+        raise TypeError("plan observer must return an exact ObservedWorld")
+    review = _require_execution_review(review)
+    if type(admission) is not PlanReviewProducerAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    for field_name, population in (
+        ("stats", value.stats),
+        ("paths", value.paths),
+        ("roots", value.roots),
+    ):
+        if type(population) is not MappingProxyType:
+            raise TypeError(
+                f"observed-world {field_name} must be an exact mapping proxy"
+            )
+    if type(value.target_parent_paths) is not frozenset:
+        raise TypeError("observed target parent paths must be an exact frozenset")
+    admission.require_source_rows(len(review.plan.operations))
+
+    allowed_paths, allowed_parents = plan_observation_scope(
+        review, plan_review=plan_review
+    )
+    for raw_subject, raw_observation in value.stats.items():
+        subject = _validate_subject(raw_subject, review)
+        if subject not in allowed_paths:
+            raise ValueError("observer returned a subject outside the plan")
+        _validate_stat_observation(raw_observation)
+
+    for raw_subject, raw_path in value.paths.items():
+        subject = _validate_subject(raw_subject, review)
+        if type(raw_path) is not str:
+            raise TypeError("observed paths must contain text values")
+        path = validate_relative_path(raw_path, allow_root=True)
+        if (
+            raw_path != path
+            or subject not in allowed_paths
+            or allowed_paths[subject] != path
+        ):
+            raise ValueError("observer returned a path outside the plan")
+    if value.stats.keys() != value.paths.keys():
+        raise ValueError("observed stats and paths must name the same subjects")
+
+    for raw_parent in value.target_parent_paths:
+        if type(raw_parent) is not str:
+            raise TypeError("observed target parents must contain text values")
+        parent = validate_relative_path(raw_parent, allow_root=True)
+        if raw_parent != parent or parent not in allowed_parents:
+            raise ValueError("observer returned an unknown target parent")
+
+    for raw_root_id, raw_observation in value.roots.items():
+        if type(raw_root_id) is not str or (
+            raw_root_id != review.plan.source_root.root_id
+            and raw_root_id != review.plan.target_root.root_id
+        ):
+            raise ValueError("observed root names an unknown endpoint")
+        _validate_root_observation(raw_observation)
+
+    if value.free_space is not None:
+        require_signed_64(value.free_space, "observed free space")
+    require_signed_64(
+        value.reclaimable_temp_bytes,
+        "observed reclaimable temporary bytes",
+    )
+    _validate_trash_observation(value.trash)
+    if (
+        type(value.observed_at) is not datetime
+        or value.observed_at.tzinfo is not timezone.utc
+    ):
+        raise TypeError("observation timestamp must use exact canonical UTC")
+    return value
+
+
+def adopt_plan_verdict(
+    value: object,
+    world: ObservedWorld,
+    review: ExecutionReview,
+    admission: PlanReviewProducerAdmission,
+    *,
+    plan_review: bool = False,
+) -> Verdict:
+    """Admit exact preflight output without rebuilding or reordering it."""
+
+    if type(value) is not Verdict or type(value.refusals) is not tuple:
+        raise TypeError("preflight must return an exact Verdict")
+    review = _require_execution_review(review)
+    if type(admission) is not PlanReviewProducerAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    if type(world) is not ObservedWorld:
+        raise TypeError("admitted preflight world has the wrong type")
+    if value.observed is not world:
+        raise ValueError("preflight verdict observed a different world")
+    if type(value.ok) is not bool or value.ok == bool(value.refusals):
+        raise ValueError("preflight verdict truth does not match its refusals")
+    admission.require_informational_source_rows(len(value.refusals))
+
+    allowed_paths, _ = plan_observation_scope(review, plan_review=plan_review)
+    for raw_refusal in value.refusals:
+        if type(raw_refusal) is not Refusal:
+            raise TypeError("preflight refusals must contain exact Refusal values")
+        if type(raw_refusal.code) is not RefusalCode:
+            raise TypeError("preflight refusal code has the wrong type")
+        if raw_refusal.op_id is not None and (
+            type(raw_refusal.op_id) is not str
+            or raw_refusal.op_id not in review.selection
+        ):
+            raise ValueError("preflight refusal names an unselected operation")
+        subject = (
+            None
+            if raw_refusal.subject is None
+            else _validate_subject(raw_refusal.subject, review)
+        )
+        if subject is not None and subject not in allowed_paths:
+            raise ValueError("preflight refusal names an unobserved subject")
+        if type(raw_refusal.detail) is not str:
+            raise TypeError("preflight refusal detail must be text")
+    return value
+
+
+def admit_retained_plan_observed_world(
+    value: ObservedWorld,
+    admission: PlanReviewAdmission,
+) -> None:
+    """Charge the shallow collection slots retained by the plan artifact."""
+
+    if type(value) is not ObservedWorld:
+        raise TypeError("retained plan world must be an exact ObservedWorld")
+    if type(admission) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    admission.admit(
+        domain_bytes=(
+            2 * len(value.stats)
+            + 2 * len(value.paths)
+            + len(value.target_parent_paths)
+            + 2 * len(value.roots)
+        )
+        * PLAN_SOURCE_REFERENCE_BYTES,
+    )
+
+
+def admit_retained_plan_verdict(
+    value: Verdict,
+    admission: PlanReviewAdmission,
+) -> None:
+    """Charge final informational rows and refusal-tuple slots once."""
+
+    if type(value) is not Verdict or type(value.refusals) is not tuple:
+        raise TypeError("retained plan verdict must be an exact Verdict")
+    if type(admission) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    admission.admit(
+        informational_rows=len(value.refusals),
+        informational_bytes=(
+            len(value.refusals) * PLAN_SOURCE_REFERENCE_BYTES
+        ),
     )
 
 
@@ -346,7 +1066,7 @@ def _paths_overlap(first: str, second: str) -> bool:
 
 
 def _add_stat_refusals(
-    refusals: list[Refusal],
+    refusals: _PlanRefusalList,
     operation: PlanOperation,
     subject: Subject,
     observation: StatObservation | None,
@@ -384,25 +1104,82 @@ def _add_stat_refusals(
         refusals.append(Refusal(RefusalCode.SIZE_CHANGED, operation.op_id, subject))
     if abs(actual.mtime_ns - expected.mtime_ns) > granularity_ns:
         refusals.append(Refusal(RefusalCode.MTIME_CHANGED, operation.op_id, subject))
-    if actual.metadata != expected.metadata or actual.nlink != expected.nlink:
+    if not planned_metadata_matches(actual, expected, operation.kind):
         refusals.append(Refusal(RefusalCode.METADATA_CHANGED, operation.op_id, subject))
 
 
-def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
+def preflight(
+    review: ExecutionReview,
+    world: ObservedWorld,
+    *,
+    plan_review: bool = False,
+    review_admission: PlanReviewProducerAdmission | None = None,
+) -> Verdict:
     """Purely judge all applicable refusal reasons for an execution set."""
 
-    plan = xset.plan
-    refusals: list[Refusal] = []
+    if (
+        review_admission is not None
+        and type(review_admission) is not PlanReviewProducerAdmission
+    ):
+        raise TypeError("preflight review admission has the wrong type")
+    review = _require_execution_review(review)
+    refusals = _PlanRefusalList(review_admission)
+    plan = review.plan
     source_root = world.roots.get(plan.source_root.root_id)
     target_root = world.roots.get(plan.target_root.root_id)
-    for expected, observed in ((plan.source_volume_id, source_root), (plan.target_volume_id, target_root)):
-        if observed is None or observed.error is not None or observed.resolved_path is None:
-            refusals.append(Refusal(RefusalCode.ROOT_UNAVAILABLE, detail=observed.error if observed else "missing root observation"))
-            continue
-        if observed.volume_evidence is not None and observed.volume_evidence.clone_ambiguous:
+    for expected, reviewed_evidence, observed in (
+        (
+            plan.source_volume_id,
+            plan.source_volume_evidence,
+            source_root,
+        ),
+        (
+            plan.target_volume_id,
+            plan.target_volume_evidence,
+            target_root,
+        ),
+    ):
+        issue = _classify_root_facts(
+            expected,
+            (
+                None
+                if reviewed_evidence is None
+                else reviewed_evidence.device_id
+            ),
+            observed,
+        )
+        if issue is not None:
+            changed = issue in {
+                RootAuthorityIssue.ANCHOR_CHANGED,
+                RootAuthorityIssue.VOLUME_CHANGED,
+            }
+            refusals.append(
+                Refusal(
+                    RefusalCode.ROOT_CHANGED
+                    if changed
+                    else RefusalCode.ROOT_UNAVAILABLE,
+                    detail=(
+                        ""
+                        if changed
+                        else (
+                            (
+                                observed.error
+                                or "root authority observation unavailable"
+                            )
+                            if observed is not None
+                            else "missing root observation"
+                        )
+                    ),
+                )
+            )
+        if (
+            observed is not None
+            and observed.error is None
+            and observed.resolved_path is not None
+            and observed.volume_evidence is not None
+            and observed.volume_evidence.clone_ambiguous
+        ):
             refusals.append(Refusal(RefusalCode.VOLUME_CLONE_AMBIGUOUS))
-        if expected is None or observed.volume_id != expected:
-            refusals.append(Refusal(RefusalCode.ROOT_CHANGED))
     if (
         source_root is not None
         and target_root is not None
@@ -412,20 +1189,8 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
     ):
         refusals.append(Refusal(RefusalCode.ROOTS_OVERLAP))
 
-    if world.current_filters != plan.filter_snapshot:
-        refusals.append(Refusal(RefusalCode.FILTER_DRIFT))
-    if world.current_policy_fingerprint != plan.policy_fingerprint:
-        refusals.append(Refusal(RefusalCode.OPTIONS_DRIFT))
-    if world.settings_error is not None:
-        refusals.append(
-            Refusal(
-                RefusalCode.OBSERVATION_UNAVAILABLE,
-                detail=f"semantic settings unavailable: {world.settings_error}",
-            )
-        )
-
     operations_by_id = {operation.op_id: operation for operation in plan.operations}
-    remaining = xset.remaining()
+    remaining = review.remaining()
     remaining_ids = {operation.op_id for operation in remaining}
     quarantined = quarantined_operation_ids(plan.operations)
     direct_target_subjects: set[Subject] = set()
@@ -462,15 +1227,18 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
                 Refusal(RefusalCode.BLOCKED_CORRESPONDENCE, operation.op_id)
             )
         for dependency in operation.dependencies:
-            if dependency not in xset.selection:
+            if dependency not in review.selection:
                 refusals.append(Refusal(RefusalCode.SELECTION_NOT_CLOSED, operation.op_id, detail=str(dependency)))
                 continue
-            dependency_status = xset.status.get(dependency)
+            dependency_status = review.status.get(dependency)
             dependency_operation = operations_by_id.get(dependency)
             if dependency_status in unavailable or (dependency_operation is not None and dependency_operation.blocked):
                 refusals.append(Refusal(RefusalCode.DEPENDENCY_UNAVAILABLE, operation.op_id, detail=str(dependency)))
             elif dependency_status is None and dependency not in remaining_ids:
                 refusals.append(Refusal(RefusalCode.DEPENDENCY_UNAVAILABLE, operation.op_id, detail=str(dependency)))
+
+        if plan_review and operation.kind is OperationKind.NOOP:
+            continue
 
         if operation.source_rel_path is not None and operation.source_expected is not None:
             subject = Subject(plan.source_root.root_id, normalize_relative_path(operation.source_rel_path))
@@ -533,14 +1301,24 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
         remaining,
         target_profile=plan.target_profile,
         trash_on_update=plan.trash_on_update,
+        review_admission=review_admission,
     )
-    if world.free_space is None:
+    available_bytes = (
+        None
+        if world.free_space is None
+        else checked_add_signed_64(
+            world.free_space,
+            world.reclaimable_temp_bytes,
+            "available target bytes",
+        )
+    )
+    if available_bytes is None:
         refusals.append(Refusal(RefusalCode.OBSERVATION_UNAVAILABLE, detail="target free space unavailable"))
-    elif required_bytes > world.free_space + world.reclaimable_temp_bytes:
+    elif required_bytes > available_bytes:
         refusals.append(
             Refusal(
                 RefusalCode.INSUFFICIENT_SPACE,
-                detail=f"required={required_bytes}; available={world.free_space + world.reclaimable_temp_bytes}",
+                detail=f"required={required_bytes}; available={available_bytes}",
             )
         )
 
@@ -564,7 +1342,13 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
                 refusals.append(Refusal(RefusalCode.TRASH_REPARSE))
 
     unique = {
-        (refusal.code, refusal.op_id, refusal.subject, refusal.detail): refusal for refusal in refusals
+        (
+            refusal.code,
+            refusal.op_id,
+            refusal.subject,
+            refusal.detail,
+        ): refusal
+        for refusal in refusals
     }
     ordered = tuple(
         sorted(

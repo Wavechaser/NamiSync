@@ -1,0 +1,1943 @@
+import assert from "node:assert/strict";
+import {createHash} from "node:crypto";
+import {readFile} from "node:fs/promises";
+
+
+class TestClassList {
+  constructor() {
+    this.values = new Set();
+  }
+
+  add(...values) {
+    for (const value of values) {
+      this.values.add(value);
+    }
+  }
+
+  contains(value) {
+    return this.values.has(value);
+  }
+}
+
+class TestStyle {
+  constructor() {
+    this.values = new Map();
+  }
+
+  setProperty(name, value) {
+    this.values.set(name, String(value));
+  }
+
+  getPropertyValue(name) {
+    return this.values.get(name) ?? "";
+  }
+
+  set blockSize(value) {
+    this.setProperty("block-size", value);
+  }
+
+  get blockSize() {
+    return this.getPropertyValue("block-size");
+  }
+}
+
+class TestElement {
+  constructor(tagName, ownerDocument) {
+    this.tagName = tagName.toUpperCase();
+    this.ownerDocument = ownerDocument;
+    this.children = [];
+    this.classList = new TestClassList();
+    this.dataset = {};
+    this.style = new TestStyle();
+    this.attributes = new Map();
+    this.value = "";
+    this.listeners = new Map();
+    this.parentElement = null;
+    this.scrollTop = 0;
+    this.clientHeight = 0;
+    this.clampScrollOnMutation = false;
+  }
+
+  addEventListener(name, listener) {
+    const listeners = this.listeners.get(name) ?? [];
+    listeners.push(listener);
+    this.listeners.set(name, listeners);
+  }
+
+  removeEventListener(name, listener) {
+    const listeners = this.listeners.get(name) ?? [];
+    this.listeners.set(
+      name,
+      listeners.filter((candidate) => candidate !== listener),
+    );
+  }
+
+  dispatch(name, event = {}) {
+    if (event.target === undefined) {
+      event.target = this;
+    }
+    event.currentTarget = this;
+    for (const listener of this.listeners.get(name) ?? []) {
+      listener(event);
+    }
+    if (!event.cancelBubble && this.parentElement !== null) {
+      this.parentElement.dispatch(name, event);
+    }
+  }
+
+  append(...children) {
+    for (const child of children) {
+      child.parentElement = this;
+    }
+    this.children.push(...children);
+  }
+
+  insertBefore(child, reference) {
+    child.remove();
+    const index = reference === null ? this.children.length : this.children.indexOf(reference);
+    assert.ok(index >= 0);
+    this.children.splice(index, 0, child);
+    child.parentElement = this;
+    if (this.clampScrollOnMutation) this.scrollTop = 0;
+  }
+
+  remove() {
+    if (this.parentElement === null) return;
+    this.detachCount = (this.detachCount ?? 0) + 1;
+    this.parentElement.children = this.parentElement.children.filter((child) => child !== this);
+    if (this.parentElement.clampScrollOnMutation) this.parentElement.scrollTop = 0;
+    this.parentElement = null;
+  }
+
+  replaceChildren(...children) {
+    for (const child of this.children) {
+      if (child.parentElement === this) {
+        child.parentElement = null;
+      }
+    }
+    for (const child of children) {
+      child.parentElement = this;
+    }
+    this.children = [...children];
+    if (this.clampScrollOnMutation) {
+      this.scrollTop = 0;
+    }
+  }
+
+  setAttribute(name, value) {
+    this.attributes.set(name, String(value));
+  }
+
+  getAttribute(name) {
+    return this.attributes.get(name) ?? null;
+  }
+
+  removeAttribute(name) {
+    this.attributes.delete(name);
+  }
+
+  focus() {
+    this.ownerDocument.activeElement = this;
+    this.dispatch("focus");
+  }
+
+  get textContent() {
+    return this.value;
+  }
+
+  set textContent(value) {
+    assert.equal(typeof value, "string");
+    this.value = value;
+  }
+}
+
+class TestWindow {
+  constructor() {
+    this.animationFrames = [];
+    this.resizeObservers = [];
+    const observers = this.resizeObservers;
+    this.ResizeObserver = class {
+      constructor(callback) {
+        assert.equal(typeof callback, "function");
+        this.callback = callback;
+        this.disconnectCalls = 0;
+        this.targets = new Set();
+        observers.push(this);
+      }
+
+      observe(target) {
+        this.targets.add(target);
+      }
+
+      disconnect() {
+        this.disconnectCalls += 1;
+        this.targets.clear();
+      }
+    };
+  }
+
+  requestAnimationFrame(callback) {
+    this.animationFrames.push(callback);
+    return this.animationFrames.length;
+  }
+
+  flushAnimationFrame() {
+    const callbacks = this.animationFrames;
+    this.animationFrames = [];
+    for (const callback of callbacks) {
+      callback(0);
+    }
+  }
+
+  triggerResize(target) {
+    for (const observer of this.resizeObservers) {
+      if (observer.targets.has(target)) {
+        observer.callback([{target}], observer);
+      }
+    }
+  }
+}
+
+class TestDocument {
+  constructor() {
+    this.activeElement = null;
+    this.created = 0;
+    this.defaultView = new TestWindow();
+  }
+
+  createElement(tagName) {
+    this.created += 1;
+    return new TestElement(tagName, this);
+  }
+}
+
+globalThis.Element = TestElement;
+
+const treePath = process.argv[2];
+const renderPath = process.argv[3];
+const fixturePath = process.argv[4];
+const expectedFixtureSha256 = process.argv[5];
+assert.ok(treePath, "tree module path is required");
+assert.ok(renderPath, "render module path is required");
+assert.ok(fixturePath, "tree fixture path is required");
+assert.match(
+  expectedFixtureSha256 ?? "",
+  /^[0-9a-f]{64}$/u,
+  "tree fixture SHA-256 is required",
+);
+
+const fixtureBytes = await readFile(fixturePath);
+const fixtureSha256 = createHash("sha256").update(fixtureBytes).digest("hex");
+assert.equal(fixtureSha256, expectedFixtureSha256);
+const fixtureText = new TextDecoder("utf-8", {fatal: true}).decode(fixtureBytes);
+const fixture = JSON.parse(fixtureText);
+assertTreeFixture(fixture);
+const fixtureViews = fixture.views;
+const fixtureNodeIds = fixture.node_ids;
+
+const renderSource = await readFile(renderPath, "utf8");
+const renderUrl = dataModuleUrl(renderSource);
+const treeSource = await readFile(treePath, "utf8");
+const renderSpecifier = '"./render.js"';
+assert.equal(treeSource.split(renderSpecifier).length - 1, 1);
+const highlightUrl = dataModuleUrl(await readFile(new URL("row_highlight.js", `file:///${treePath.replaceAll("\\", "/")}`), "utf8"));
+const tableControllerUrl = dataModuleUrl(await readFile(new URL("table_controller.js", `file:///${treePath.replaceAll("\\", "/")}`), "utf8"));
+const linkedTreeSource = treeSource.replace(
+  renderSpecifier,
+  JSON.stringify(renderUrl),
+).replace("./row_highlight.js", highlightUrl).replace("./table_controller.js", tableControllerUrl);
+const {ROW_H, createTree} = await import(dataModuleUrl(linkedTreeSource));
+
+assert.equal(ROW_H, 28);
+for (const height of [0, -1, 24.5, null]) {
+  assert.throws(() => createTree(new TestDocument().createElement("div"), {}, height), /tree row height/);
+}
+assert.throws(() => createTree({}), /tree root must be an Element/);
+assert.throws(
+  () => createTree(new TestDocument().createElement("div"), {toggle: true}),
+  /tree toggle callback must be a function/,
+);
+
+const requested = [];
+const toggled = [];
+const activated = [];
+const activeChanges = [];
+const document = new TestDocument();
+const root = document.createElement("div");
+root.ariaLabel = "Plan";
+let requestedGeneration = null;
+let tree;
+tree = createTree(root, {
+  requestIndex: (index, generation) => {
+    requested.push(index);
+    requestedGeneration = generation;
+  },
+  toggle: (...value) => toggled.push(value),
+  activate: (nodeId) => activated.push(nodeId),
+  activeChanged: (nodeId) => {
+    activeChanges.push(nodeId);
+    const activeId = root.getAttribute("aria-activedescendant");
+    assert.equal(activeId === null ? null : treeItems(root).find((item) => item.id === activeId).dataset.nodeId,
+      nodeId, "active identity is published after its accessible row is current");
+  },
+});
+assert.equal(root.getAttribute("role"), "tree");
+assert.equal(root.role, undefined);
+assert.equal(root.tabIndex, 0);
+assert.ok(root.classList.contains("nami-tree"));
+assert.equal(root.style.getPropertyValue("--row-h"), "28px");
+assert.equal(root.children.length, 2);
+const topSpacer = root.children[0];
+const bottomSpacer = root.children[1];
+assertSpacer(topSpacer);
+assertSpacer(bottomSpacer);
+
+const firstGeneration = tree.beginWindowRequest();
+const secondGeneration = tree.beginWindowRequest();
+assert.equal(firstGeneration, 1);
+assert.equal(secondGeneration, 2);
+
+let staleReads = 0;
+const unreadableWindow = new Proxy({}, {
+  get() {
+    staleReads += 1;
+    throw new Error("stale window was read");
+  },
+  ownKeys() {
+    staleReads += 1;
+    throw new Error("stale window was enumerated");
+  },
+});
+assert.equal(tree.commitWindow(firstGeneration, unreadableWindow), false);
+assert.equal(staleReads, 0);
+
+const layoutCodePoints = [
+  ...Array.from({length: 0x20}, (_, index) => index),
+  ...Array.from({length: 0x21}, (_, index) => 0x7f + index),
+  0x00ad,
+  0x061c,
+  0x200b,
+  0x200e,
+  0x200f,
+  ...Array.from({length: 0x07}, (_, index) => 0x2028 + index),
+  ...Array.from({length: 0x10}, (_, index) => 0x2060 + index),
+  0xfeff,
+  0x27e6,
+  0x27e7,
+];
+const layoutDisplay =
+  `layout-${layoutCodePoints.map((codePoint) =>
+    String.fromCodePoint(codePoint)).join("")}-end`;
+const layoutRendered = `layout-${layoutCodePoints.map(
+  (codePoint) => `⟦U+${codePoint.toString(16).toUpperCase().padStart(4, "0")}⟧`,
+).join("")}-end`;
+const activeLayoutControlPattern =
+  /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/u;
+const supplementalDisplay =
+  "wave \u{1f30a}\ufe0f e\u0301 <img onerror=alert(1)> العربية עברית A\u200cB\u200dC \u{e0020} & \u6d77";
+const supplementalLongDisplay = `${"\u6ce2".repeat(600)} end`;
+
+const layoutFixtureRow = fixtureViews.layout_control.rows[1];
+assert.equal(layoutFixtureRow.node_id, fixtureNodeIds.layout_control);
+const layoutFixtureRendered = visibleFilesystemText(layoutFixtureRow.display);
+const accessedFields = new Map();
+const trackedContainer = new Proxy(
+  fixtureViews.head.rows[1],
+  {
+    get(target, property, receiver) {
+      if (typeof property === "string") {
+        accessedFields.set(property, (accessedFields.get(property) ?? 0) + 1);
+      }
+      return Reflect.get(target, property, receiver);
+    },
+  },
+);
+const firstWindow = Object.freeze({
+  ...fixtureViews.head,
+  rows: Object.freeze([
+    fixtureViews.head.rows[0],
+    trackedContainer,
+    ...fixtureViews.head.rows.slice(2),
+  ]),
+});
+assert.equal(tree.commitWindow(secondGeneration, firstWindow), true);
+assert.deepEqual(
+  [...accessedFields.keys()].sort(),
+  [
+    "depth", "display", "expanded", "first_child_visible_index", "node_id",
+    "parent_visible_index",
+    "position_in_set", "set_size", "visible_index",
+  ],
+);
+assert.equal(root.children.length, 6);
+assert.equal(topSpacer.style.blockSize, "0px");
+assert.equal(
+  bottomSpacer.style.blockSize,
+  `${(fixtureViews.head.total - fixtureViews.head.rows.length) * ROW_H}px`,
+);
+
+let firstRows = treeItems(root);
+assert.equal(firstRows.length, 4);
+assert.equal(firstRows[0].dataset.nodeId, fixtureViews.head.rows[0].node_id);
+assert.equal(firstRows[0].id, "nami-tree-1-row-0");
+assert.equal(firstRows[0].ariaLevel, "1");
+assert.equal(firstRows[0].ariaPosInSet, "1");
+assert.equal(firstRows[0].ariaSetSize, "1");
+assert.equal(firstRows[0].ariaExpanded, "true");
+assert.equal(firstRows[0].dataset.active, "true");
+assert.equal(root.getAttribute("aria-activedescendant"), firstRows[0].id);
+assert.deepEqual(activeChanges, [fixtureViews.head.rows[0].node_id]);
+assert.equal(root.ariaActiveDescendant, undefined);
+for (const [index, element] of firstRows.entries()) {
+  const sourceRow = fixtureViews.head.rows[index];
+  assert.equal(element.ariaLevel, String(sourceRow.depth + 1));
+  assert.equal(element.ariaPosInSet, String(sourceRow.position_in_set));
+  assert.equal(element.ariaSetSize, String(sourceRow.set_size));
+}
+assert.equal(firstRows[1].dataset.nodeId, fixtureNodeIds.projection);
+assert.equal(firstRows[1].ariaExpanded, "true");
+assert.equal(firstRows[2].ariaExpanded, undefined);
+assert.equal(firstRows[3].dataset.nodeId, fixtureNodeIds.layout_control);
+assert.equal(firstRows[3].children[1].textContent, layoutFixtureRendered);
+assert.equal(
+  activeLayoutControlPattern.test(firstRows[3].children[1].textContent),
+  false,
+);
+assert.ok(
+  firstRows[3].children[0].classList.contains(
+    "nami-tree-row__disclosure--leaf",
+  ),
+);
+
+const nextGeneration = tree.beginWindowRequest();
+assert.equal(tree.commitWindow(nextGeneration, fixtureViews.next), true);
+const nextRows = treeItems(root);
+assert.equal(nextRows[0].dataset.nodeId, fixtureNodeIds.ordinary_unicode);
+assert.equal(
+  nextRows[0].children[1].textContent,
+  fixtureViews.next.rows[0].display,
+);
+assert.equal(nextRows[1].dataset.nodeId, fixtureNodeIds.long_unicode);
+assert.equal(
+  nextRows[1].children[1].textContent,
+  fixtureViews.next.rows[1].display,
+);
+const restoredHeadGeneration = tree.beginWindowRequest();
+assert.equal(
+  tree.commitWindow(
+    restoredHeadGeneration,
+    fixtureViews.head,
+    fixtureViews.head.rows[0].node_id,
+  ),
+  true,
+);
+firstRows = treeItems(root);
+
+// Disclosure owns its pointer event. A synchronous replacement from toggle
+// must not bubble into the detached row and activate it a second time.
+const pointerDocument = new TestDocument();
+const pointerRoot = pointerDocument.createElement("div");
+const pointerToggles = [];
+const pointerActivations = [];
+let pointerTree;
+pointerTree = createTree(pointerRoot, {
+  toggle: (...value) => {
+    pointerToggles.push(value);
+    const generation = pointerTree.beginWindowRequest();
+    pointerTree.commitWindow(generation, fixtureViews.pointer_expanded);
+  },
+  activate: (nodeId) => pointerActivations.push(nodeId),
+});
+const pointerGeneration = pointerTree.beginWindowRequest();
+assert.equal(
+  pointerTree.commitWindow(
+    pointerGeneration,
+    fixtureViews.pointer_collapsed,
+  ),
+  true,
+);
+const pointerRows = treeItems(pointerRoot);
+const pointerContainer = pointerRows.find(
+  (element) => element.dataset.nodeId === fixtureNodeIds.projection,
+);
+assert.ok(pointerContainer);
+dispatchClick(pointerContainer.children[0]);
+assert.deepEqual(pointerToggles, [[fixtureNodeIds.projection, true]]);
+assert.deepEqual(pointerActivations, []);
+assert.equal(pointerDocument.activeElement, pointerRoot);
+assert.equal(
+  pointerRoot.getAttribute("aria-activedescendant"),
+  pointerContainer.id,
+);
+const expandedPointerRows = treeItems(pointerRoot);
+const expandedContainer = expandedPointerRows.find(
+  (element) => element.dataset.nodeId === fixtureNodeIds.projection,
+);
+const pointerLeaf = expandedPointerRows.find(
+  (element) => element.dataset.nodeId === fixtureViews.pointer_expanded.rows[2].node_id,
+);
+assert.ok(expandedContainer);
+assert.ok(pointerLeaf);
+dispatchClick(expandedContainer.children[1]);
+assert.deepEqual(pointerToggles, [[fixtureNodeIds.projection, true]]);
+assert.deepEqual(pointerActivations, [fixtureNodeIds.projection]);
+dispatchClick(pointerLeaf.children[0]);
+assert.deepEqual(pointerToggles, [[fixtureNodeIds.projection, true]]);
+assert.deepEqual(pointerActivations, [fixtureNodeIds.projection]);
+dispatchClick(pointerLeaf);
+assert.deepEqual(pointerActivations, [
+  fixtureNodeIds.projection,
+  pointerLeaf.dataset.nodeId,
+]);
+assert.equal(
+  pointerRoot.getAttribute("aria-activedescendant"),
+  pointerLeaf.id,
+);
+
+const triStateRoot = new TestDocument().createElement("div");
+const triStateTree = createTree(triStateRoot);
+const observedExpandedStates = [];
+for (const name of [
+  "pointer_expanded",
+  "pointer_collapsed",
+  "projected_empty",
+]) {
+  const generation = triStateTree.beginWindowRequest();
+  assert.equal(triStateTree.commitWindow(generation, fixtureViews[name]), true);
+  const projection = treeItems(triStateRoot).find(
+    (element) => element.dataset.nodeId === fixtureNodeIds.projection,
+  );
+  assert.ok(projection);
+  observedExpandedStates.push(projection.ariaExpanded ?? null);
+}
+assert.deepEqual(observedExpandedStates, ["true", "false", null]);
+
+const keyTreeRoot = new TestDocument().createElement("div");
+const keyToggles = [];
+let keyTree;
+keyTree = createTree(keyTreeRoot, {
+  toggle: (nodeId, expanded) => {
+    keyToggles.push([nodeId, expanded]);
+    const generation = keyTree.beginWindowRequest();
+    keyTree.commitWindow(
+      generation,
+      expanded
+        ? fixtureViews.pointer_expanded
+        : fixtureViews.pointer_collapsed,
+    );
+  },
+});
+const keyGeneration = keyTree.beginWindowRequest();
+keyTree.commitWindow(keyGeneration, fixtureViews.pointer_collapsed);
+dispatchKey(keyTreeRoot, "ArrowDown");
+dispatchKey(keyTreeRoot, "ArrowRight");
+assert.deepEqual(keyToggles, [[fixtureNodeIds.projection, true]]);
+dispatchKey(keyTreeRoot, "ArrowRight");
+assert.equal(
+  keyTreeRoot.getAttribute("aria-activedescendant"),
+  treeItems(keyTreeRoot)[2].id,
+);
+dispatchKey(keyTreeRoot, "ArrowLeft");
+assert.equal(
+  keyTreeRoot.getAttribute("aria-activedescendant"),
+  treeItems(keyTreeRoot)[1].id,
+);
+dispatchKey(keyTreeRoot, "ArrowLeft");
+assert.deepEqual(keyToggles, [
+  [fixtureNodeIds.projection, true],
+  [fixtureNodeIds.projection, false],
+]);
+
+const thrown = new Error("toggle sentinel");
+const throwingRoot = new TestDocument().createElement("div");
+const throwingActivations = [];
+const throwingTree = createTree(throwingRoot, {
+  toggle: () => {
+    throw thrown;
+  },
+  activate: (nodeId) => throwingActivations.push(nodeId),
+});
+const throwingGeneration = throwingTree.beginWindowRequest();
+throwingTree.commitWindow(throwingGeneration, {
+  offset: 0,
+  total: 1,
+  rows: [localRow(0, "throwing-container", "Throwing container", {
+    container: true,
+  })],
+});
+const throwingEvent = clickEvent();
+assert.throws(
+  () => treeItems(throwingRoot)[0].children[0].dispatch(
+    "click",
+    throwingEvent,
+  ),
+  (error) => error === thrown,
+);
+assert.equal(throwingEvent.cancelBubble, true);
+assert.deepEqual(throwingActivations, []);
+
+dispatchKey(root, "ArrowRight");
+assert.equal(
+  root.getAttribute("aria-activedescendant"),
+  firstRows[1].id,
+);
+dispatchKey(root, "Enter");
+assert.deepEqual(activated, [fixtureNodeIds.projection]);
+dispatchKey(root, "ArrowDown");
+dispatchKey(root, "ArrowDown");
+assert.equal(root.getAttribute("aria-activedescendant"), firstRows[3].id);
+dispatchKey(root, "Enter");
+assert.deepEqual(activated, [
+  fixtureNodeIds.projection,
+  fixtureNodeIds.layout_control,
+]);
+assert.deepEqual(toggled, []);
+dispatchKey(root, "End");
+assert.deepEqual(requested, [fixtureViews.maximum.total - 1]);
+assert.equal(
+  tree.commitWindow(requestedGeneration, fixtureViews.tail),
+  true,
+);
+assert.equal(
+  topSpacer.style.blockSize,
+  `${fixtureViews.tail.offset * ROW_H}px`,
+);
+assert.equal(bottomSpacer.style.blockSize, "0px");
+assert.equal(
+  root.getAttribute("aria-activedescendant"),
+  treeItems(root).at(-1).id,
+);
+dispatchKey(root, "Home");
+assert.deepEqual(requested, [fixtureViews.maximum.total - 1, 0]);
+assert.equal(
+  tree.commitWindow(requestedGeneration, fixtureViews.head),
+  true,
+);
+assert.equal(
+  root.getAttribute("aria-activedescendant"),
+  treeItems(root)[0].id,
+);
+
+// Active-descendant navigation scrolls only the tree viewport and only when
+// the complete fixed-height row falls outside it.
+const viewportRoot = new TestDocument().createElement("div");
+viewportRoot.clientHeight = 2 * ROW_H;
+const viewportTree = createTree(viewportRoot);
+const viewportGeneration = viewportTree.beginWindowRequest();
+viewportTree.commitWindow(viewportGeneration, fixtureWindow(0, 4));
+assert.equal(viewportRoot.scrollTop, 0);
+dispatchKey(viewportRoot, "ArrowDown");
+assert.equal(viewportRoot.scrollTop, 0);
+viewportRoot.scrollTop = ROW_H;
+dispatchKey(viewportRoot, "ArrowDown");
+assert.equal(viewportRoot.scrollTop, ROW_H);
+dispatchKey(viewportRoot, "ArrowDown");
+assert.equal(viewportRoot.scrollTop, 2 * ROW_H);
+dispatchKey(viewportRoot, "Home");
+assert.equal(viewportRoot.scrollTop, 0);
+assert.equal(
+  viewportRoot.getAttribute("aria-activedescendant"),
+  treeItems(viewportRoot)[0].id,
+);
+
+const pagedRoot = new TestDocument().createElement("div");
+pagedRoot.clientHeight = 2 * ROW_H;
+const pagedRequests = [];
+let pagedGeneration = null;
+let pagedTree;
+pagedTree = createTree(pagedRoot, {
+  requestIndex: (index, generation) => {
+    pagedRequests.push(index);
+    pagedGeneration = generation;
+  },
+});
+const pagedInitial = pagedTree.beginWindowRequest();
+pagedTree.commitWindow(pagedInitial, fixtureWindow(0, 2));
+dispatchKey(pagedRoot, "End");
+assert.deepEqual(pagedRequests, [fixtureViews.maximum.total - 1]);
+assert.equal(pagedRoot.scrollTop, 0);
+assert.equal(
+  pagedTree.commitWindow(pagedGeneration, fixtureViews.tail),
+  true,
+);
+assert.equal(
+  pagedRoot.getAttribute("aria-activedescendant"),
+  treeItems(pagedRoot).at(-1).id,
+);
+assert.equal(
+  pagedRoot.scrollTop,
+  (fixtureViews.tail.total * ROW_H) - pagedRoot.clientHeight,
+);
+dispatchKey(pagedRoot, "Home");
+assert.deepEqual(pagedRequests, [fixtureViews.maximum.total - 1, 0]);
+assert.equal(
+  pagedTree.commitWindow(pagedGeneration, fixtureWindow(0, 2)),
+  true,
+);
+assert.equal(pagedRoot.scrollTop, 0);
+
+// A passive viewport resize is reconciled by the same coalesced frame as
+// scroll paging. Enlarging without a scroll requests the newly exposed row.
+const resizeDocument = new TestDocument();
+const resizeRoot = resizeDocument.createElement("div");
+resizeRoot.clientHeight = 2 * ROW_H;
+const resizeRequests = [];
+const resizeTree = createTree(resizeRoot, {
+  requestIndex: (index, generation) => {
+    resizeRequests.push({index, generation});
+  },
+});
+assert.equal(resizeDocument.defaultView.resizeObservers.length, 1);
+const [resizeObserver] = resizeDocument.defaultView.resizeObservers;
+assert.deepEqual([...resizeObserver.targets], [resizeRoot]);
+const resizeInitial = resizeTree.beginWindowRequest();
+assert.equal(
+  resizeTree.commitWindow(resizeInitial, fixtureWindow(0, 2)),
+  true,
+);
+resizeDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeRequests, []);
+assert.deepEqual(
+  treeItems(resizeRoot).map((element) => element.dataset.nodeId),
+  fixtureViews.maximum.rows.slice(0, 2).map((row) => row.node_id),
+);
+assert.equal(resizeRoot.scrollTop, 0);
+resizeRoot.clientHeight = 4 * ROW_H;
+resizeDocument.defaultView.triggerResize(resizeRoot);
+assert.equal(resizeDocument.defaultView.animationFrames.length, 1);
+resizeDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeRequests, [{index: 3, generation: 2}]);
+assert.equal(
+  resizeTree.commitWindow(2, fixtureWindow(0, 4)),
+  true,
+);
+resizeDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeRequests, [{index: 3, generation: 2}]);
+assert.deepEqual(
+  treeItems(resizeRoot).map((element) => element.dataset.nodeId),
+  fixtureViews.maximum.rows.slice(0, 4).map((row) => row.node_id),
+);
+assert.equal(resizeRoot.children[0].style.blockSize, "0px");
+assert.equal(treeItems(resizeRoot).length, 4);
+assert.equal(resizeRoot.scrollTop, 0);
+resizeRoot.clientHeight = 8 * ROW_H;
+resizeDocument.defaultView.triggerResize(resizeRoot);
+assert.equal(resizeDocument.defaultView.animationFrames.length, 1);
+resizeTree.dispose();
+resizeTree.dispose();
+assert.equal(resizeObserver.disconnectCalls, 1);
+assert.deepEqual([...resizeObserver.targets], []);
+for (const name of ["keydown", "scroll", "focus"]) {
+  assert.deepEqual(resizeRoot.listeners.get(name), []);
+}
+resizeDocument.defaultView.flushAnimationFrame();
+resizeDocument.defaultView.triggerResize(resizeRoot);
+resizeRoot.dispatch("scroll");
+resizeDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeRequests, [{index: 3, generation: 2}]);
+assert.throws(
+  () => resizeTree.beginWindowRequest(),
+  /controller is disposed/,
+);
+assert.equal(resizeTree.commitWindow(2, unreadableWindow), false);
+assert.equal(staleReads, 0);
+
+// Scroll paging is last-state-wins and owns its request generations. The
+// viewport can temporarily contain only a spacer, but it must not retain an
+// offscreen active descendant or snap back when refocused during that gap.
+const scrollDocument = new TestDocument();
+const scrollRoot = scrollDocument.createElement("div");
+scrollRoot.clientHeight = 4 * ROW_H;
+const scrollRequests = [];
+const scrollActiveChanges = [];
+const scrollCancellations = [];
+let scrollTree;
+scrollTree = createTree(scrollRoot, {
+  activeChanged: (nodeId) => scrollActiveChanges.push(nodeId),
+  requestCancelled: (generation) => {
+    assert.equal(scrollTree.commitWindow(generation, unreadableWindow), false,
+      "cancellation runs only after the retired generation is inert");
+    scrollCancellations.push(generation);
+  },
+  requestIndex: (index, generation) => {
+    scrollRequests.push({index, generation});
+  },
+});
+const scrollInitial = scrollTree.beginWindowRequest();
+assert.equal(
+  scrollTree.commitWindow(scrollInitial, fixtureWindow(0, 4)),
+  true,
+);
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, []);
+
+scrollRoot.scrollTop = 4 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollRoot.scrollTop = 8 * ROW_H;
+scrollRoot.dispatch("scroll");
+assert.equal(scrollDocument.defaultView.animationFrames.length, 1);
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, [{index: 11, generation: 2}]);
+assert.equal(scrollRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(scrollActiveChanges.at(-1), null, "viewport gaps retire the toolbar target");
+scrollRoot.focus();
+assert.equal(scrollRoot.scrollTop, 8 * ROW_H);
+assert.equal(scrollRoot.getAttribute("aria-activedescendant"), null);
+
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, [{index: 11, generation: 2}]);
+
+scrollRoot.scrollTop = 12 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, [{index: 11, generation: 2}],
+  "new scroll demand shares the in-flight generation");
+assert.equal(scrollTree.commitWindow(2, fixtureWindow(8, 4)), false,
+  "a disjoint reply cannot replace the current viewport");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests, [
+  {index: 11, generation: 2},
+  {index: 15, generation: 3},
+]);
+assert.deepEqual(scrollCancellations, []);
+assert.equal(scrollTree.commitWindow(2, unreadableWindow), false);
+assert.equal(staleReads, 0);
+assert.equal(scrollActiveChanges.at(-1), null, "stale windows cannot publish another active identity");
+
+scrollRoot.scrollTop = 0;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.equal(
+  scrollRoot.getAttribute("aria-activedescendant"),
+  treeItems(scrollRoot)[0].id,
+);
+assert.deepEqual(scrollRequests, [
+  {index: 11, generation: 2},
+  {index: 15, generation: 3},
+]);
+assert.equal(scrollTree.commitWindow(3, unreadableWindow), false);
+assert.deepEqual(scrollCancellations, [3], "covered return emits a cancellation without another request");
+assert.equal(staleReads, 0);
+
+scrollRoot.scrollTop = 4 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+const trailingRequest = scrollRequests.at(-1);
+assert.deepEqual(trailingRequest, {index: 7, generation: 5});
+assert.equal(
+  scrollTree.commitWindow(trailingRequest.generation, fixtureWindow(4, 4)),
+  true,
+);
+assert.equal(scrollRoot.scrollTop, 4 * ROW_H);
+assert.deepEqual(scrollCancellations, [3], "successful commits do not emit cancellation");
+assert.deepEqual(
+  treeItems(scrollRoot).map((element) => element.dataset.nodeId),
+  fixtureViews.maximum.rows.slice(4, 8).map((rowValue) => rowValue.node_id),
+);
+assert.equal(
+  scrollRoot.getAttribute("aria-activedescendant"),
+  treeItems(scrollRoot)[0].id,
+);
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests.at(-1), trailingRequest);
+
+scrollRoot.scrollTop = 0;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+const leadingRequest = scrollRequests.at(-1);
+assert.deepEqual(leadingRequest, {index: 0, generation: 6});
+assert.equal(
+  scrollTree.commitWindow(leadingRequest.generation, fixtureWindow(0, 4)),
+  true,
+);
+scrollDocument.defaultView.flushAnimationFrame();
+
+// An external projection request cannot be superseded from its stale DOM.
+const externalGeneration = scrollTree.beginWindowRequest();
+scrollRoot.scrollTop = 20 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests.at(-1), leadingRequest);
+assert.equal(
+  scrollTree.commitWindow(externalGeneration, fixtureWindow(20, 4)),
+  true,
+);
+scrollDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(scrollRequests.at(-1), leadingRequest);
+
+// A scroll frame queued before a keyboard request is stale and cannot cancel
+// it. A scroll observed after a keyboard request is newer user intent.
+scrollRoot.scrollTop = 24 * ROW_H;
+scrollRoot.dispatch("scroll");
+dispatchKey(scrollRoot, "End");
+const endRequest = scrollRequests.at(-1);
+assert.deepEqual(endRequest, {
+  index: fixtureViews.maximum.total - 1,
+  generation: 8,
+});
+scrollDocument.defaultView.flushAnimationFrame();
+assert.equal(
+  scrollTree.commitWindow(endRequest.generation, fixtureViews.tail),
+  true,
+);
+assert.equal(scrollRoot.scrollTop, fixtureViews.tail.offset * ROW_H);
+scrollDocument.defaultView.flushAnimationFrame();
+
+const resetGeneration = scrollTree.beginWindowRequest();
+assert.equal(
+  scrollTree.commitWindow(resetGeneration, fixtureWindow(20, 4)),
+  true,
+);
+scrollDocument.defaultView.flushAnimationFrame();
+dispatchKey(scrollRoot, "End");
+const supersededKeyboard = scrollRequests.at(-1);
+scrollRoot.scrollTop = 21 * ROW_H;
+scrollRoot.dispatch("scroll");
+scrollDocument.defaultView.flushAnimationFrame();
+const newerScroll = scrollRequests.at(-1);
+assert.equal(newerScroll.index, 24);
+assert.ok(newerScroll.generation > supersededKeyboard.generation);
+assert.equal(
+  scrollTree.commitWindow(supersededKeyboard.generation, unreadableWindow),
+  false,
+);
+assert.equal(staleReads, 0);
+assert.equal(
+  scrollTree.commitWindow(newerScroll.generation, fixtureWindow(21, 4)),
+  true,
+);
+assert.equal(scrollRoot.scrollTop, 21 * ROW_H);
+assert.equal(
+  scrollRoot.getAttribute("aria-activedescendant"),
+  treeItems(scrollRoot)[2].id,
+);
+
+// A wheel movement wholly inside the current window updates only the
+// presentation focus; it neither requests a page nor activates a node.
+const coveredDocument = new TestDocument();
+const coveredRoot = coveredDocument.createElement("div");
+coveredRoot.clientHeight = 4 * ROW_H;
+const coveredRequests = [];
+const coveredActivations = [];
+const coveredTree = createTree(coveredRoot, {
+  requestIndex: (...value) => coveredRequests.push(value),
+  activate: (...value) => coveredActivations.push(value),
+});
+const coveredGeneration = coveredTree.beginWindowRequest();
+coveredTree.commitWindow(coveredGeneration, fixtureWindow(0, 8));
+coveredDocument.defaultView.flushAnimationFrame();
+coveredRoot.scrollTop = 4 * ROW_H;
+coveredRoot.dispatch("scroll");
+coveredDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(coveredRequests, []);
+assert.deepEqual(coveredActivations, []);
+assert.equal(coveredRoot.scrollTop, 4 * ROW_H);
+assert.equal(
+  coveredRoot.getAttribute("aria-activedescendant"),
+  treeItems(coveredRoot)[4].id,
+);
+
+// Exact and fractional viewport boundaries select only an intersected spacer.
+const boundaryDocument = new TestDocument();
+const boundaryRoot = boundaryDocument.createElement("div");
+boundaryRoot.clientHeight = 4 * ROW_H;
+const boundaryRequests = [];
+const boundaryTree = createTree(boundaryRoot, {
+  requestIndex: (index, generation) => {
+    boundaryRequests.push({index, generation});
+  },
+});
+const boundaryInitial = boundaryTree.beginWindowRequest();
+boundaryTree.commitWindow(boundaryInitial, fixtureWindow(0, 4));
+boundaryDocument.defaultView.flushAnimationFrame();
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(boundaryRequests, []);
+boundaryRoot.scrollTop = 0.25;
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(boundaryRequests, [{index: 4, generation: 2}]);
+boundaryRoot.scrollTop = 0;
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.equal(boundaryTree.commitWindow(2, unreadableWindow), false);
+const boundaryReset = boundaryTree.beginWindowRequest();
+boundaryRoot.scrollTop = 4 * ROW_H;
+boundaryTree.commitWindow(boundaryReset, fixtureWindow(4, 4));
+boundaryDocument.defaultView.flushAnimationFrame();
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.equal(boundaryRequests.length, 1);
+boundaryRoot.scrollTop = (4 * ROW_H) - 0.25;
+boundaryRoot.dispatch("scroll");
+boundaryDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(boundaryRequests.at(-1), {index: 3, generation: 5});
+
+// A throwing request callback leaves the old DOM and scroll position intact,
+// keeps prior generations stale, and permits a later scroll retry.
+const callbackError = new Error("request sentinel");
+const throwingRequestDocument = new TestDocument();
+const throwingRequestRoot = throwingRequestDocument.createElement("div");
+throwingRequestRoot.clientHeight = 4 * ROW_H;
+const throwingRequests = [];
+let throwRequest = true;
+const throwingRequestTree = createTree(throwingRequestRoot, {
+  requestIndex: (index, generation) => {
+    throwingRequests.push({index, generation});
+    if (throwRequest) {
+      throwRequest = false;
+      throw callbackError;
+    }
+  },
+});
+const throwingRequestInitial = throwingRequestTree.beginWindowRequest();
+throwingRequestTree.commitWindow(
+  throwingRequestInitial,
+  fixtureWindow(0, 4),
+);
+throwingRequestDocument.defaultView.flushAnimationFrame();
+throwingRequestRoot.scrollTop = 4 * ROW_H;
+throwingRequestRoot.dispatch("scroll");
+const throwingFingerprint = fingerprint(throwingRequestRoot);
+assert.throws(
+  () => throwingRequestDocument.defaultView.flushAnimationFrame(),
+  (error) => error === callbackError,
+);
+assert.equal(throwingRequestRoot.scrollTop, 4 * ROW_H);
+assert.deepEqual(fingerprint(throwingRequestRoot), throwingFingerprint);
+assert.equal(
+  throwingRequestTree.commitWindow(throwingRequestInitial, unreadableWindow),
+  false,
+);
+throwingRequestRoot.dispatch("scroll");
+throwingRequestDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(throwingRequests, [
+  {index: 7, generation: 2},
+  {index: 7, generation: 3},
+]);
+
+// A malformed current response is read completely before mounted geometry or
+// active state changes, and the same generation remains retryable.
+const atomicDocument = new TestDocument();
+const atomicRoot = atomicDocument.createElement("div");
+atomicRoot.clientHeight = 2 * ROW_H;
+const atomicTree = createTree(atomicRoot);
+const atomicInitial = atomicTree.beginWindowRequest();
+atomicTree.commitWindow(atomicInitial, fixtureWindow(0, 2));
+atomicDocument.defaultView.flushAnimationFrame();
+atomicRoot.scrollTop = ROW_H;
+const atomicGeneration = atomicTree.beginWindowRequest();
+const atomicFingerprint = fingerprint(atomicRoot);
+const atomicActiveDescendant = atomicRoot.getAttribute("aria-activedescendant");
+const atomicActiveFlags = treeItems(atomicRoot).map(
+  (element) => element.dataset.active ?? null,
+);
+const malformedRow = new Proxy(fixtureViews.maximum.rows[1], {
+  get(target, property, receiver) {
+    if (property === "set_size") {
+      throw callbackError;
+    }
+    return Reflect.get(target, property, receiver);
+  },
+});
+assert.throws(
+  () => atomicTree.commitWindow(atomicGeneration, {
+    offset: 1,
+    total: fixtureViews.maximum.total,
+    rows: [malformedRow],
+  }),
+  (error) => error === callbackError,
+);
+assert.equal(atomicRoot.scrollTop, ROW_H);
+assert.deepEqual(fingerprint(atomicRoot), atomicFingerprint);
+assert.equal(
+  atomicRoot.getAttribute("aria-activedescendant"),
+  atomicActiveDescendant,
+);
+assert.deepEqual(
+  treeItems(atomicRoot).map((element) => element.dataset.active ?? null),
+  atomicActiveFlags,
+);
+assert.equal(
+  atomicTree.commitWindow(atomicGeneration, fixtureWindow(1, 2)),
+  true,
+);
+
+// Enter is newer than an in-flight passive page and invalidates that response.
+const intentDocument = new TestDocument();
+const intentRoot = intentDocument.createElement("div");
+intentRoot.clientHeight = 4 * ROW_H;
+const intentRequests = [];
+const intentActivations = [];
+const intentTree = createTree(intentRoot, {
+  requestIndex: (index, generation) => {
+    intentRequests.push({index, generation});
+  },
+  activate: (nodeId) => intentActivations.push(nodeId),
+});
+const intentInitial = intentTree.beginWindowRequest();
+intentTree.commitWindow(intentInitial, fixtureWindow(0, 4));
+intentDocument.defaultView.flushAnimationFrame();
+intentRoot.scrollTop = ROW_H;
+intentRoot.dispatch("scroll");
+intentDocument.defaultView.flushAnimationFrame();
+const passiveIntentRequest = intentRequests.at(-1);
+assert.equal(passiveIntentRequest.index, 4);
+dispatchKey(intentRoot, "Enter");
+assert.deepEqual(intentActivations, [fixtureNodeIds.projection]);
+assert.equal(
+  intentTree.commitWindow(passiveIntentRequest.generation, unreadableWindow),
+  false,
+);
+
+// A delayed event from a rendered-key programmatic reveal cannot masquerade
+// as a newer user scroll and cancel a subsequent off-window key request.
+const programDocument = new TestDocument();
+const programRoot = programDocument.createElement("div");
+programRoot.clientHeight = 4 * ROW_H;
+const programRequests = [];
+const programTree = createTree(programRoot, {
+  requestIndex: (index, generation) => {
+    programRequests.push({index, generation});
+  },
+});
+const programInitial = programTree.beginWindowRequest();
+programTree.commitWindow(programInitial, fixtureWindow(0, 8));
+programDocument.defaultView.flushAnimationFrame();
+for (let index = 0; index < 4; index += 1) {
+  dispatchKey(programRoot, "ArrowDown");
+}
+assert.equal(programRoot.scrollTop, ROW_H);
+dispatchKey(programRoot, "End");
+const programKeyboard = programRequests.at(-1);
+programRoot.dispatch("scroll");
+programDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(programRequests, [programKeyboard]);
+assert.equal(
+  programTree.commitWindow(programKeyboard.generation, fixtureViews.tail),
+  true,
+);
+
+const shortDocument = new TestDocument();
+const shortRoot = shortDocument.createElement("div");
+shortRoot.clientHeight = ROW_H - 1;
+const shortTree = createTree(shortRoot);
+const shortGeneration = shortTree.beginWindowRequest();
+shortTree.commitWindow(shortGeneration, fixtureWindow(0, 1));
+shortDocument.defaultView.flushAnimationFrame();
+assert.equal(shortRoot.getAttribute("aria-activedescendant"), null);
+
+// A valid narrow response is terminal for the viewport snapshot that asked
+// for it. It cannot alternate missing endpoints without a newer scroll.
+const narrowDocument = new TestDocument();
+const narrowRoot = narrowDocument.createElement("div");
+narrowRoot.clientHeight = 4 * ROW_H;
+narrowRoot.clampScrollOnMutation = true;
+const narrowRequests = [];
+const narrowTree = createTree(narrowRoot, {
+  requestIndex: (index, generation) => {
+    narrowRequests.push({index, generation});
+  },
+});
+const narrowInitial = narrowTree.beginWindowRequest();
+narrowTree.commitWindow(narrowInitial, fixtureWindow(0, 4));
+narrowDocument.defaultView.flushAnimationFrame();
+narrowRoot.scrollTop = 4 * ROW_H;
+narrowRoot.dispatch("scroll");
+narrowDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(narrowRequests, [{index: 7, generation: 2}]);
+narrowRoot.dispatch("scroll");
+assert.equal(narrowDocument.defaultView.animationFrames.length, 1);
+assert.equal(narrowTree.commitWindow(2, fixtureWindow(7, 1)), true);
+assert.equal(narrowRoot.scrollTop, 4 * ROW_H);
+assert.equal(narrowRoot.getAttribute("aria-activedescendant"), treeItems(narrowRoot)[0].id,
+  "restoring DOM-clamped scroll precedes choosing the visible active row");
+narrowDocument.defaultView.flushAnimationFrame();
+assert.equal(narrowDocument.defaultView.animationFrames.length, 0);
+narrowRoot.dispatch("scroll");
+assert.equal(narrowDocument.defaultView.animationFrames.length, 0);
+assert.deepEqual(narrowRequests, [{index: 7, generation: 2}]);
+
+// Moving while an overlapping read is in flight accepts its rows immediately,
+// preserves the current viewport, and focuses a currently visible row.
+const movingDocument = new TestDocument();
+const movingRoot = movingDocument.createElement("div");
+movingRoot.clientHeight = 4 * ROW_H;
+const movingRequests = [];
+const movingTree = createTree(movingRoot, {
+  requestIndex: (index, generation) => movingRequests.push({index, generation}),
+});
+movingTree.commitWindow(movingTree.beginWindowRequest(), fixtureWindow(0, 4));
+movingDocument.defaultView.flushAnimationFrame();
+movingRoot.scrollTop = 4 * ROW_H;
+movingRoot.dispatch("scroll");
+movingDocument.defaultView.flushAnimationFrame();
+for (const index of [5, 6, 7, 8]) {
+  movingRoot.scrollTop = index * ROW_H;
+  movingRoot.dispatch("scroll");
+  movingDocument.defaultView.flushAnimationFrame();
+}
+assert.equal(movingRequests.length, 1);
+assert.equal(movingTree.commitWindow(movingRequests[0].generation, fixtureWindow(4, 12)), true);
+assert.equal(movingRoot.scrollTop, 8 * ROW_H);
+assert.equal(movingRoot.getAttribute("aria-activedescendant"), treeItems(movingRoot)[4].id);
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, 1, "a covering response needs no follow-up read");
+movingRoot.scrollTop = 16 * ROW_H;
+movingRoot.dispatch("scroll");
+movingDocument.defaultView.flushAnimationFrame();
+movingRoot.scrollTop = 18 * ROW_H;
+movingRoot.dispatch("scroll");
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, 2);
+assert.equal(movingTree.commitWindow(movingRequests[1].generation, fixtureWindow(16, 4)), true);
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, 3, "partial overlap is adopted then requests remaining coverage");
+assert.equal(movingRequests[2].index, 21);
+const movingExternal = movingTree.beginWindowRequest();
+assert.equal(movingTree.finishWindowRequest(movingRequests[2].generation), false,
+  "a stale failed read cannot settle a newer external request");
+assert.equal(movingTree.commitWindow(movingExternal, fixtureWindow(18, 4)), true);
+
+// Failure reconciles one newer viewport demand, but never retries at rest.
+movingRoot.scrollTop = 28 * ROW_H;
+movingRoot.dispatch("scroll");
+movingDocument.defaultView.flushAnimationFrame();
+const movingFailure = movingRequests.at(-1).generation;
+movingRoot.scrollTop = 32 * ROW_H;
+movingRoot.dispatch("scroll");
+const beforeMovingFailure = movingRequests.length;
+assert.equal(movingTree.finishWindowRequest(movingFailure), true);
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, beforeMovingFailure + 1,
+  "a failed read reconciles demand that moved while it was running");
+movingTree.finishWindowRequest(movingRequests.at(-1).generation);
+movingDocument.defaultView.flushAnimationFrame();
+assert.equal(movingRequests.length, beforeMovingFailure + 1,
+  "unchanged failed demand remains settled");
+
+
+
+// A changed viewport observed while that narrow response is in flight still
+// receives one new last-state-wins request and can converge normally.
+const changedDocument = new TestDocument();
+const changedRoot = changedDocument.createElement("div");
+changedRoot.clientHeight = 4 * ROW_H;
+const changedRequests = [];
+const changedTree = createTree(changedRoot, {
+  requestIndex: (index, generation) => {
+    changedRequests.push({index, generation});
+  },
+});
+const changedInitial = changedTree.beginWindowRequest();
+changedTree.commitWindow(changedInitial, fixtureWindow(0, 4));
+changedDocument.defaultView.flushAnimationFrame();
+changedRoot.scrollTop = 4 * ROW_H;
+changedRoot.dispatch("scroll");
+changedDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(changedRequests, [{index: 7, generation: 2}]);
+changedRoot.scrollTop = 8 * ROW_H;
+changedRoot.dispatch("scroll");
+assert.equal(changedTree.commitWindow(2, fixtureWindow(7, 1)), false);
+changedDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(changedRequests, [
+  {index: 7, generation: 2},
+  {index: 11, generation: 3},
+]);
+assert.equal(changedTree.commitWindow(3, fixtureWindow(8, 4)), true);
+assert.equal(changedDocument.defaultView.animationFrames.length, 0);
+assert.equal(changedRoot.scrollTop, 8 * ROW_H);
+
+const unmeasuredRoot = new TestDocument().createElement("div");
+unmeasuredRoot.scrollTop = 17;
+const unmeasuredTree = createTree(unmeasuredRoot);
+const unmeasuredGeneration = unmeasuredTree.beginWindowRequest();
+unmeasuredTree.commitWindow(unmeasuredGeneration, fixtureWindow(5, 1));
+assert.equal(unmeasuredRoot.scrollTop, 17);
+unmeasuredRoot.clientHeight = ROW_H;
+unmeasuredRoot.focus();
+assert.equal(unmeasuredRoot.scrollTop, 5 * ROW_H);
+
+// A compact invocation shares every spacer, reveal and viewport calculation.
+const compactDocument = new TestDocument();
+const compactRoot = compactDocument.createElement("div");
+compactRoot.clientHeight = 2 * 24;
+const compactRequests = [];
+const compactTree = createTree(compactRoot, {
+  requestIndex: (index, generation) => compactRequests.push({index, generation}),
+}, 24);
+const compactGeneration = compactTree.beginWindowRequest();
+compactTree.commitWindow(compactGeneration, fixtureWindow(0, 4));
+compactDocument.defaultView.flushAnimationFrame();
+assert.equal(compactRoot.style.getPropertyValue("--row-h"), "24px");
+assert.equal(compactRoot.children.at(-1).style.blockSize, `${(fixtureWindow(0, 4).total - 4) * 24}px`);
+dispatchKey(compactRoot, "ArrowDown");
+dispatchKey(compactRoot, "ArrowDown");
+assert.equal(compactRoot.scrollTop, 24);
+compactRoot.scrollTop = 4 * 24;
+compactRoot.dispatch("scroll");
+compactDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(compactRequests, [{index: 5, generation: 2}]);
+assert.equal(compactRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(compactTree.commitWindow(2, fixtureWindow(4, 4)), true);
+assert.equal(compactRoot.children[0].style.blockSize, `${4 * 24}px`);
+assert.equal(compactRoot.scrollTop, 4 * 24);
+assert.equal(compactRoot.getAttribute("aria-activedescendant"), treeItems(compactRoot)[0].id);
+const compactStale = compactTree.beginWindowRequest();
+const compactCurrent = compactTree.beginWindowRequest();
+assert.equal(compactTree.commitWindow(compactStale, unreadableWindow), false);
+assert.equal(compactTree.commitWindow(compactCurrent, fixtureWindow(4, 4)), true);
+compactTree.dispose();
+
+// An outer viewport keeps tree semantics while reserving the sticky header.
+const outerDocument = new TestDocument();
+const outerViewport = outerDocument.createElement("div");
+const outerRoot = outerDocument.createElement("div");
+outerViewport.append(outerRoot);
+outerViewport.clientHeight = 3 * 24; // Header plus two complete rows.
+outerRoot.clientHeight = 1000 * 24; // Content height is never the viewport.
+const outerRequests = [];
+const outerTree = createTree(outerRoot, {
+  requestIndex: (index, generation) => outerRequests.push({index, generation}),
+}, 24, outerViewport, 24);
+outerTree.commitWindow(outerTree.beginWindowRequest(), fixtureWindow(0, 4));
+outerDocument.defaultView.flushAnimationFrame();
+dispatchKey(outerRoot, "ArrowDown");
+dispatchKey(outerRoot, "ArrowDown");
+assert.equal(outerViewport.scrollTop, 24, "bottom reveal reserves the header height");
+assert.equal(outerRoot.scrollTop, 0, "the semantic root never scrolls");
+dispatchKey(outerRoot, "Home");
+assert.equal(outerViewport.scrollTop, 0, "top reveal leaves the row below the header");
+outerViewport.scrollTop = 4 * 24;
+outerViewport.dispatch("scroll");
+outerDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(outerRequests, [{index: 5, generation: 2}]);
+assert.equal(outerRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(outerTree.commitWindow(2, fixtureWindow(4, 4)), true);
+assert.equal(outerViewport.scrollTop, 4 * 24, "page adoption preserves outer scrolling");
+assert.equal(outerRoot.getAttribute("aria-activedescendant"), treeItems(outerRoot)[0].id);
+outerTree.dispose();
+outerViewport.scrollTop = 20 * 24;
+outerViewport.dispatch("scroll");
+outerDocument.defaultView.flushAnimationFrame();
+assert.equal(outerRequests.length, 1, "disposal detaches the outer listener");
+
+// Passive Follow retains identity independently of the loaded window and DOM.
+const passiveDocument = new TestDocument();
+const passiveRoot = passiveDocument.createElement("div");
+passiveRoot.clientHeight = 2 * ROW_H;
+const passiveChanges = [];
+const passiveTree = createTree(passiveRoot, {activeChanged: nodeId => passiveChanges.push(nodeId)});
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
+const retiredPassiveGeneration = passiveTree.beginWindowRequest();
+const acceptedOrdinaryGeneration = passiveTree.beginWindowRequest();
+assert.equal(passiveTree.commitPassiveWindow(retiredPassiveGeneration, unreadableWindow), false);
+passiveTree.commitWindow(acceptedOrdinaryGeneration, fixtureWindow(200, 4));
+assert.notEqual(passiveRoot.getAttribute("aria-activedescendant"), null,
+  "a rejected passive publication cannot change ordinary active-row policy");
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
+const passiveActive = passiveRoot.getAttribute("aria-activedescendant");
+const passiveNode = treeItems(passiveRoot).find(row => row.id === passiveActive).dataset.nodeId;
+const passiveChangeCount = passiveChanges.length;
+passiveTree.commitPassiveWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
+passiveTree.setPassiveScrollOffset(2);
+passiveRoot.dispatch("scroll");
+passiveDocument.defaultView.flushAnimationFrame();
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), passiveActive);
+const retainedPassiveTop = passiveRoot.scrollTop;
+passiveRoot.dispatch("focus");
+assert.equal(passiveRoot.scrollTop, retainedPassiveTop,
+  "passive focus restoration cannot undo a current-item reveal");
+passiveTree.commitPassiveWindow(passiveTree.beginWindowRequest(), fixtureWindow(200, 4));
+passiveTree.setPassiveScrollOffset(200);
+passiveRoot.dispatch("scroll");
+passiveDocument.defaultView.flushAnimationFrame();
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(passiveChanges.length, passiveChangeCount, "off-window publication never clears identity");
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), fixtureWindow(200, 4));
+passiveDocument.defaultView.flushAnimationFrame();
+passiveRoot.dispatch("focus");
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), null,
+  "off-window identity has no detached ARIA target");
+const offWindowTop = passiveRoot.scrollTop;
+passiveTree.cancelNavigation();
+for (const key of ["Tab", "Shift", "x"]) passiveRoot.dispatch("keydown", {key});
+passiveDocument.defaultView.flushAnimationFrame();
+passiveRoot.dispatch("focus");
+assert.equal(passiveRoot.scrollTop, offWindowTop, "focus and unrelated keys never reveal the retained row");
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), fixtureWindow(0, 4));
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), passiveActive, "row return restores ARIA");
+assert.equal(passiveChanges.length, passiveChangeCount);
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), {...fixtureWindow(200, 4),
+  anchor_node_id:passiveNode, anchor_visible_index:17});
+assert.equal(passiveRoot.getAttribute("aria-activedescendant"), null, "an exact off-window anchor retains identity");
+passiveTree.commitWindow(passiveTree.beginWindowRequest(), {...fixtureWindow(200, 4),
+  anchor_node_id:passiveNode, anchor_visible_index:null});
+assert.equal(passiveChanges.at(-1), null, "exact view absence clears identity without a replacement");
+dispatchKey(passiveRoot, "Home");
+passiveTree.dispose();
+
+// Passive Follow keeps a loaded edge target visible without an incidental read.
+const followDocument = new TestDocument();
+const followRoot = followDocument.createElement("div");
+followRoot.clientHeight = 8 * ROW_H;
+const followRequests = [];
+const followTree = createTree(followRoot, {
+  requestIndex: index => followRequests.push(index),
+});
+followTree.commitWindow(followTree.beginWindowRequest(), fixtureWindow(0, 256));
+const followActive = followRoot.getAttribute("aria-activedescendant");
+followTree.commitPassiveWindow(followTree.beginWindowRequest(), fixtureWindow(0, 256));
+let followHeight = followRoot.clientHeight;
+let followHeightReads = 0;
+Object.defineProperty(followRoot, "clientHeight", {
+  get() { followHeightReads += 1; return followHeight; },
+  set(value) { followHeight = value; },
+});
+followTree.setPassiveScrollOffset(253);
+assert.equal(followHeightReads, 0, "Follow reuses measured geometry instead of forcing layout");
+followRoot.dispatch("scroll");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRoot.scrollTop, 248 * ROW_H);
+assert.ok(255 * ROW_H < followRoot.scrollTop + followRoot.clientHeight,
+  "the last loaded target stays visible");
+assert.deepEqual(followRequests, [], "loaded-edge Follow does not bypass the read cadence");
+assert.equal(followRoot.getAttribute("aria-activedescendant"), followActive);
+followRoot.clientHeight = 16 * ROW_H;
+followDocument.defaultView.triggerResize(followRoot);
+const resizedHeightReads = followHeightReads;
+followTree.setPassiveScrollOffset(253);
+assert.equal(followRoot.scrollTop, 240 * ROW_H, "resized viewport constrains Follow to loaded coverage");
+assert.equal(followHeightReads, resizedHeightReads, "resized Follow uses observer geometry");
+followRoot.clientHeight = 20 * ROW_H;
+const beforeResizedFollowReads = followHeightReads;
+followTree.setPassiveScrollOffset(253);
+assert.equal(followHeightReads, beforeResizedFollowReads,
+  "Follow does not synchronously remeasure a positive cached viewport");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRoot.scrollTop, 236 * ROW_H,
+  "the existing frame reclamps Follow after resize before observer delivery");
+assert.deepEqual(followRequests, [], "resizing before the Follow frame cannot request unloaded tail rows");
+followRoot.clientHeight = 24 * ROW_H;
+followTree.setPassiveScrollOffset(253);
+followRoot.dispatch("wheel");
+followRoot.scrollTop = 100 * ROW_H;
+followRoot.dispatch("scroll");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRoot.scrollTop, 100 * ROW_H, "manual scrolling retires the pending Follow correction");
+followRoot.clientHeight = 0;
+followDocument.defaultView.triggerResize(followRoot);
+followRoot.clientHeight = 8 * ROW_H;
+followTree.setPassiveScrollOffset(253);
+assert.equal(followRoot.scrollTop, 248 * ROW_H,
+  "first visible Follow measures a hidden viewport before its observer fires");
+followDocument.defaultView.triggerResize(followRoot);
+followTree.setPassiveScrollOffset(253);
+assert.equal(followRoot.scrollTop, 248 * ROW_H, "hidden-to-visible observation restores Follow geometry");
+followRoot.scrollTop = 260 * ROW_H;
+followRoot.dispatch("scroll");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRequests.length, 1, "user scrolling still requests missing rows");
+followTree.commitPassiveWindow(followTree.beginWindowRequest(), fixtureWindow(200, 4));
+followTree.setPassiveScrollOffset(200);
+followRoot.dispatch("scroll");
+followDocument.defaultView.flushAnimationFrame();
+assert.equal(followRoot.scrollTop, 200 * ROW_H);
+assert.equal(followRequests.length, 2, "a short window still requests viewport coverage");
+followTree.dispose();
+
+// A queued passive correction never takes ownership back from newer input,
+// publication, or controller retirement.
+const {createTableController} = await import(tableControllerUrl);
+for (const retirement of ["wheel", "keyboard", "programmatic", "request", "publication", "hidden", "reset", "dispose"]) {
+  const owner = new TestDocument();
+  const viewport = owner.createElement("div");
+  viewport.clientHeight = 8 * ROW_H;
+  const requests = [];
+  const controller = createTableController(viewport, ROW_H, 0,
+    {requestIndex: index => requests.push(index)});
+  controller.setWindow(fixtureWindow(0, 256));
+  owner.defaultView.flushAnimationFrame();
+  controller.setFollowScrollTop(253 * ROW_H);
+  viewport.clientHeight = 20 * ROW_H;
+  if (retirement === "wheel") viewport.dispatch("wheel");
+  if (retirement === "keyboard") viewport.dispatch("keydown", {key:"ArrowDown"});
+  if (retirement === "programmatic") controller.setScrollTop(100 * ROW_H);
+  if (retirement === "request") controller.beginWindowRequest();
+  if (retirement === "publication") controller.setWindow(fixtureWindow(0, 256));
+  if (retirement === "hidden") {
+    viewport.clientHeight = 0;
+    owner.defaultView.flushAnimationFrame();
+    viewport.clientHeight = 20 * ROW_H;
+    controller.schedule();
+  }
+  if (retirement === "reset") { controller.reset(); controller.setWindow(fixtureWindow(0, 256)); }
+  if (retirement === "dispose") controller.dispose();
+  viewport.scrollTop = 100 * ROW_H;
+  owner.defaultView.flushAnimationFrame();
+  assert.equal(viewport.scrollTop, 100 * ROW_H, `${retirement} retires the pending passive correction`);
+  assert.deepEqual(requests, [], `${retirement} cannot resurrect a Follow coverage request`);
+  controller.dispose();
+}
+
+// A blocked manual scroll still reports Follow override, without retiring the
+// passive active identity when the callback renders or the gate later opens.
+const blockedDocument = new TestDocument();
+const blockedRoot = blockedDocument.createElement("div");
+blockedRoot.clientHeight = 2 * ROW_H;
+let interactionAllowed = true;
+const blockedChanges = [], blockedScrolls = [];
+const blockedTree = createTree(blockedRoot, {
+  interactionAllowed:() => interactionAllowed,
+  activeChanged:nodeId => blockedChanges.push(nodeId),
+  manualScroll:(...bounds) => blockedScrolls.push(bounds),
+});
+blockedTree.commitWindow(blockedTree.beginWindowRequest(), fixtureWindow(0, 4));
+const blockedActive = blockedRoot.getAttribute("aria-activedescendant");
+blockedTree.commitPassiveWindow(blockedTree.beginWindowRequest(), fixtureWindow(0, 4));
+blockedTree.setPassiveScrollOffset(2);
+blockedRoot.dispatch("scroll");
+blockedDocument.defaultView.flushAnimationFrame();
+assert.deepEqual(blockedScrolls, [], "programmatic reveal never reports manual override");
+interactionAllowed = false;
+blockedRoot.dispatch("wheel");
+blockedRoot.scrollTop = 2 * ROW_H;
+blockedRoot.dispatch("scroll");
+assert.deepEqual(blockedScrolls, [[2, 3]], "blocked manual scroll notifies its consumer");
+interactionAllowed = true;
+blockedDocument.defaultView.flushAnimationFrame();
+assert.equal(blockedRoot.getAttribute("aria-activedescendant"), blockedActive,
+  "blocked scroll retains passive identity after the gate opens");
+assert.equal(blockedChanges.length, 1);
+blockedTree.dispose();
+
+const retainedDocument = new TestDocument();
+const retainedRoot = retainedDocument.createElement("div");
+retainedRoot.clientHeight = 2 * ROW_H;
+const retainedRequests = [], retainedHighlights = [];
+const retainedTree = createTree(retainedRoot, {
+  requestIndex:(index, generation) => retainedRequests.push({index, generation}),
+  highlight:(...args) => retainedHighlights.push(args),
+});
+retainedTree.commitWindow(retainedTree.beginWindowRequest(), fixtureWindow(0, 4));
+retainedTree.commitPassiveWindow(retainedTree.beginWindowRequest(), fixtureWindow(200, 4));
+dispatchKey(retainedRoot, "ArrowDown");
+retainedRoot.dispatch("keydown", {key:"ArrowDown", shiftKey:true, preventDefault() {}});
+assert.deepEqual(retainedRequests.map(request => request.index), [1, 2], "held arrows accumulate from retained index");
+const retainedRequest = retainedRequests.at(-1);
+retainedTree.commitWindow(retainedRequest.generation, fixtureWindow(0, 4));
+assert.deepEqual(retainedHighlights, [["extend", fixtureWindow(0, 4).rows[2].node_id]]);
+assert.equal(retainedRoot.getAttribute("aria-activedescendant"), treeItems(retainedRoot)[2].id);
+retainedTree.dispose();
+
+// A view change can move an ordinary active row off-window without any prior Follow.
+const anchoredDocument = new TestDocument();
+const anchoredRoot = anchoredDocument.createElement("div");
+anchoredRoot.clientHeight = 2 * ROW_H;
+const anchoredChanges = [], anchoredRequests = [];
+const anchoredTree = createTree(anchoredRoot, {
+  activeChanged:nodeId => anchoredChanges.push(nodeId),
+  requestIndex:(index, generation) => anchoredRequests.push({index, generation}),
+});
+anchoredTree.commitWindow(anchoredTree.beginWindowRequest(), fixtureWindow(0, 4));
+const anchoredNode = anchoredChanges.at(-1);
+anchoredTree.commitWindow(anchoredTree.beginWindowRequest(), {...fixtureWindow(200, 4),
+  anchor_node_id:anchoredNode, anchor_visible_index:17}, null, false);
+anchoredDocument.defaultView.flushAnimationFrame();
+anchoredRoot.dispatch("focus");
+assert.deepEqual(anchoredChanges, [anchoredNode], "positive off-window anchor survives queued reconciliation");
+assert.equal(anchoredRoot.getAttribute("aria-activedescendant"), null);
+assert.equal(anchoredRoot.scrollTop, 0, "focus does not reveal an admitted off-window identity");
+dispatchKey(anchoredRoot, "ArrowDown");
+assert.equal(anchoredRequests.at(-1).index, 18, "explicit navigation uses the newly admitted index");
+anchoredTree.dispose();
+
+// Arbitrary recycling cannot leave a stale active index or descendant.
+const recycledGeneration = tree.beginWindowRequest();
+assert.equal(
+  tree.commitWindow(
+    recycledGeneration,
+    fixtureViews.tail,
+    "missing-preferred",
+  ),
+  true,
+);
+const recycledActive = root.getAttribute("aria-activedescendant");
+assert.ok(treeItems(root).some((element) => element.id === recycledActive));
+dispatchKey(root, "ArrowRight");
+assert.equal(root.getAttribute("aria-activedescendant"), recycledActive);
+
+const emptyGeneration = tree.beginWindowRequest();
+assert.equal(tree.commitWindow(emptyGeneration, fixtureViews.empty), true);
+assert.equal(root.getAttribute("aria-activedescendant"), null);
+assert.equal(activeChanges.at(-1), null);
+assert.equal(treeItems(root).length, 0);
+root.focus();
+assert.equal(root.getAttribute("aria-activedescendant"), null);
+dispatchUnconsumedKey(root, "Home");
+assert.deepEqual(requested, [fixtureViews.maximum.total - 1, 0]);
+const repopulatedGeneration = tree.beginWindowRequest();
+assert.equal(
+  tree.commitWindow(repopulatedGeneration, fixtureViews.head),
+  true,
+);
+assert.equal(
+  root.getAttribute("aria-activedescendant"),
+  treeItems(root)[0].id,
+);
+
+const offWindowEmptyGeneration = tree.beginWindowRequest();
+assert.equal(tree.commitWindow(offWindowEmptyGeneration, {
+  offset: fixtureViews.maximum.total,
+  total: fixtureViews.maximum.total,
+  rows: [],
+}), true);
+assert.equal(root.getAttribute("aria-activedescendant"), null);
+root.focus();
+dispatchKey(root, "Home");
+assert.deepEqual(requested, [fixtureViews.maximum.total - 1, 0, 0]);
+assert.equal(
+  tree.commitWindow(requestedGeneration, fixtureViews.head),
+  true,
+);
+
+// Travel-side prefetch keeps a single window and cannot ping-pong on its short trailing margin.
+{
+const edgeDocument = new TestDocument();
+const edgeRoot = edgeDocument.createElement("div");
+edgeRoot.clientHeight = 16 * ROW_H;
+const edgeRequests = [];
+const edgeCancelled = [];
+const edgeTree = createTree(edgeRoot, {
+  requestIndex: (index, generation, offset) => edgeRequests.push({index, generation, offset}),
+  requestCancelled: (generation) => edgeCancelled.push(generation),
+});
+const edgeWindow = (offset, count = 256) => ({offset, total: 1000,
+  rows: fixtureViews.maximum.rows.slice(0, count).map((value, index) => ({...value,
+    visible_index: offset + index, parent_visible_index: null, first_child_visible_index: null}))});
+edgeTree.commitWindow(edgeTree.beginWindowRequest(), edgeWindow(0));
+edgeDocument.defaultView.flushAnimationFrame();
+const edgeScroll = (index) => {
+  edgeRoot.scrollTop = index * ROW_H;
+  edgeRoot.dispatch("scroll");
+  edgeDocument.defaultView.flushAnimationFrame();
+};
+edgeScroll(175);
+assert.equal(edgeRequests.length, 0, "65 rows remaining does not prefetch");
+edgeScroll(176);
+assert.equal(edgeRequests.at(-1).offset, 144, "64 rows remaining prefetches with 32 behind");
+edgeScroll(180);
+assert.equal(edgeRequests.length, 1, "covered travel retains the useful early read");
+assert.equal(edgeCancelled.length, 0);
+edgeTree.commitWindow(edgeRequests.at(-1).generation, edgeWindow(144));
+edgeDocument.defaultView.flushAnimationFrame();
+assert.equal(edgeRequests.length, 1, "the trailing edge does not cause reverse prefetch");
+edgeScroll(179);
+assert.equal(edgeRequests.at(-1).offset, 0, "reverse travel places 32 rows after the viewport");
+const reverseGeneration = edgeRequests.at(-1).generation;
+edgeScroll(330);
+assert.equal(edgeRequests.at(-1).offset, 298);
+assert.ok(edgeCancelled.includes(reverseGeneration), "reversal retires stale intent");
+assert.equal(edgeTree.commitWindow(reverseGeneration, edgeWindow(0)), false);
+edgeTree.finishWindowRequest(edgeRequests.at(-1).generation);
+const failedCount = edgeRequests.length;
+edgeScroll(330);
+assert.equal(edgeRequests.length, failedCount, "failed early read cannot loop at rest");
+edgeScroll(331);
+const shortGeneration = edgeRequests.at(-1).generation;
+edgeTree.commitWindow(shortGeneration, edgeWindow(320, 12));
+edgeDocument.defaultView.flushAnimationFrame();
+const shortCount = edgeRequests.length;
+edgeScroll(331);
+assert.equal(edgeRequests.length, shortCount, "short page does not refill at rest");
+edgeTree.commitWindow(edgeTree.beginWindowRequest(), edgeWindow(744, 12));
+edgeScroll(984);
+assert.equal(edgeRequests.at(-1).offset, 952, "a short tail window cannot pin later reads to total minus 256");
+edgeTree.commitWindow(edgeRequests.at(-1).generation, edgeWindow(952, 48));
+edgeDocument.defaultView.flushAnimationFrame();
+const tailCount = edgeRequests.length;
+edgeScroll(984);
+assert.equal(edgeRequests.length, tailCount, "settled endpoint does not duplicate its read");
+edgeScroll(985);
+assert.equal(edgeRequests.length, tailCount, "complete tail has no further travel-side rows to prefetch");
+for (const input of ["wheel", "pointerdown", "touchstart"]) {
+  dispatchKey(edgeRoot, "Home");
+  const keyboard = edgeRequests.at(-1);
+  edgeRoot.dispatch(input);
+  assert.ok(edgeCancelled.includes(keyboard.generation), `${input} immediately retires keyboard intent`);
+  assert.equal(edgeTree.commitWindow(keyboard.generation, edgeWindow(0)), false);
+  const external = edgeTree.beginWindowRequest();
+  edgeRoot.dispatch(input);
+  assert.equal(edgeTree.commitWindow(external, edgeWindow(952, 48)), true,
+    `${input} preserves the existing external request policy`);
+}
+edgeTree.dispose();
+}
+
+const maximumGeneration = tree.beginWindowRequest();
+assert.equal(
+  tree.commitWindow(maximumGeneration, fixtureViews.maximum),
+  true,
+);
+assert.equal(treeItems(root).length, 256);
+assert.equal(root.children.length, 258);
+assert.equal(
+  treeItems(root).find(
+    (element) => element.dataset.nodeId === fixtureNodeIds.layout_control,
+  ).children[1].textContent,
+  layoutFixtureRendered,
+);
+assert.equal(
+  treeItems(root).find(
+    (element) => element.dataset.nodeId === fixtureNodeIds.ordinary_unicode,
+  ).children[1].textContent,
+  fixtureViews.next.rows[0].display,
+);
+assert.equal(
+  treeItems(root).find(
+    (element) => element.dataset.nodeId === fixtureNodeIds.long_unicode,
+  ).children[1].textContent,
+  fixtureViews.next.rows[1].display,
+);
+
+const staleGeneration = tree.beginWindowRequest();
+const committedFingerprint = fingerprint(root);
+assert.equal(tree.commitWindow(maximumGeneration, unreadableWindow), false);
+assert.equal(staleReads, 0);
+assert.deepEqual(fingerprint(root), committedFingerprint);
+assert.equal(staleGeneration, maximumGeneration + 1);
+
+// This exhaustive vector remains deliberately renderer-local because a real
+// Windows filename cannot carry every defended code point (notably NUL).
+const sinkRoot = document.createElement("div");
+const sinkTree = createTree(sinkRoot);
+const sinkGeneration = sinkTree.beginWindowRequest();
+assert.equal(sinkTree.commitWindow(sinkGeneration, {
+  offset: 0,
+  total: 3,
+  rows: [
+    localRow(0, "sink-layout", layoutDisplay),
+    localRow(1, "sink-supplemental", supplementalDisplay),
+    localRow(2, "sink-long", supplementalLongDisplay),
+  ],
+}), true);
+const sinkRows = treeItems(sinkRoot);
+assert.equal(sinkRows[0].children[1].textContent, layoutRendered);
+assert.equal(sinkRows[1].children[1].textContent, supplementalDisplay);
+assert.equal(sinkRows[2].children[1].textContent, supplementalLongDisplay);
+assert.equal(
+  sinkRows.some((rowElement) =>
+    activeLayoutControlPattern.test(rowElement.children[1].textContent)),
+  false,
+);
+
+const contextRoot = new TestDocument().createElement("div");
+contextRoot.clientHeight = 42;
+const contexts = [];
+const contextTree = createTree(contextRoot, {context: (nodeId, event, element) => {
+  event.preventDefault();
+  contexts.push([nodeId, element]);
+}});
+contextTree.commitWindow(contextTree.beginWindowRequest(), fixtureViews.head);
+contextRoot.scrollTop = 14;
+const clippedRow = treeItems(contextRoot)[0];
+clippedRow.dispatch("contextmenu", {preventDefault() {}, stopPropagation() {}});
+assert.equal(contextRoot.scrollTop, 14, "pointer context on a clipped row must not reveal/scroll it");
+assert.equal(contextRoot.getAttribute("aria-activedescendant"), clippedRow.id);
+assert.equal(contexts[0][0], clippedRow.dataset.nodeId);
+contextRoot.dispatch("keydown", {key: "F10", shiftKey: true, preventDefault() {}});
+assert.equal(contexts[1][0], clippedRow.dataset.nodeId, "keyboard context uses the same active row");
+contextTree.dispose();
+
+process.stdout.write(`${JSON.stringify({
+  fixture_schema: fixture.schema,
+  fixture_sha256: fixtureSha256,
+  fixture_size: fixtureBytes.length,
+})}\n`);
+
+function localRow(index, nodeId, display, options = {}) {
+  const container = options.container ?? false;
+  return Object.freeze({
+    node_id: nodeId,
+    display,
+    depth: options.depth ?? 0,
+    is_container: container,
+    visible_index: index,
+    parent_visible_index: options.parent ?? null,
+    first_child_visible_index: options.firstChild ?? null,
+    position_in_set: options.position ?? 1,
+    set_size: options.setSize ?? 1,
+    expanded: container
+      ? (options.expanded === undefined ? false : options.expanded)
+      : null,
+  });
+}
+
+function fixtureWindow(offset, count) {
+  const rows = fixtureViews.maximum.rows.slice(offset, offset + count);
+  assert.equal(rows.length, count);
+  return {
+    offset,
+    total: fixtureViews.maximum.total,
+    rows,
+  };
+}
+
+function visibleFilesystemText(value) {
+  return value.replace(
+    /[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f\u2028-\u202e\u2060-\u206f\ufeff\u27e6-\u27e7]/gu,
+    (character) =>
+      `⟦U+${character.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")}⟧`,
+  );
+}
+
+function assertTreeFixture(value) {
+  assert.deepEqual(Object.keys(value).sort(), ["node_ids", "schema", "views"]);
+  assert.equal(value.schema, "namisync-tree-window-fixture-v1");
+  assert.deepEqual(Object.keys(value.node_ids).sort(), [
+    "layout_control",
+    "long_unicode",
+    "ordinary_unicode",
+    "projection",
+  ]);
+  assert.equal(new Set(Object.values(value.node_ids)).size, 4);
+  for (const nodeId of Object.values(value.node_ids)) {
+    assert.match(nodeId, /^node-[0-9a-f]{32}$/u);
+  }
+  assert.deepEqual(Object.keys(value.views).sort(), [
+    "empty",
+    "head",
+    "layout_control",
+    "maximum",
+    "next",
+    "pointer_collapsed",
+    "pointer_expanded",
+    "projected_empty",
+    "tail",
+  ]);
+  const rowKeys = [
+    "blocked_reason",
+    "dependency_count",
+    "depth",
+    "display",
+    "expanded",
+    "first_child_visible_index",
+    "highlighted",
+    "is_container",
+    "move_group",
+    "move_peer_id",
+    "mtime_ns",
+    "node_id",
+    "notice",
+    "operation_count",
+    "operation_id",
+    "operation_kind",
+    "parent_visible_index",
+    "position_in_set",
+    "presentation_kind",
+    "prior_name",
+    "reason",
+    "recall",
+    "risk",
+    "row_kind",
+    "selectable_operation_count",
+    "selected_operation_count",
+    "selection",
+    "selection_exclusion_reason",
+    "set_size",
+    "size",
+    "visible_index",
+  ];
+  for (const windowValue of Object.values(value.views)) {
+    assert.deepEqual(Object.keys(windowValue).sort(), [
+      "disposition", "highlight_revision", "offset", "rows", "total", "view_revision",
+    ]);
+    assert.ok(windowValue.rows.length <= 256);
+    for (const [relativeIndex, rowValue] of windowValue.rows.entries()) {
+      assert.deepEqual(Object.keys(rowValue).sort(), rowKeys);
+      assert.equal(rowValue.visible_index, windowValue.offset + relativeIndex);
+      assert.match(rowValue.node_id, /^node-[0-9a-f]{32}$/u);
+    }
+  }
+  assert.equal(value.views.empty.total, 0);
+  assert.deepEqual(value.views.empty.rows, []);
+  assert.equal(value.views.maximum.rows.length, 256);
+  assert.ok(value.views.maximum.total > 256);
+  assert.equal(
+    value.views.tail.rows.at(-1).visible_index,
+    value.views.tail.total - 1,
+  );
+}
+
+function dispatchKey(element, key) {
+  let prevented = false;
+  element.dispatch("keydown", {
+    key,
+    defaultPrevented: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    preventDefault() {
+      prevented = true;
+    },
+  });
+  assert.equal(prevented, true);
+}
+
+function dispatchUnconsumedKey(element, key) {
+  let prevented = false;
+  element.dispatch("keydown", {
+    key,
+    defaultPrevented: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    preventDefault() {
+      prevented = true;
+    },
+  });
+  assert.equal(prevented, false);
+}
+
+function clickEvent() {
+  return {
+    cancelBubble: false,
+    stopPropagation() {
+      this.cancelBubble = true;
+    },
+  };
+}
+
+function dispatchClick(element) {
+  element.dispatch("click", clickEvent());
+}
+
+function assertSpacer(element) {
+  assert.ok(element.classList.contains("nami-tree__spacer"));
+  assert.equal(element.ariaHidden, "true");
+  assert.notEqual(element.getAttribute("role"), "treeitem");
+}
+
+function treeItems(element) {
+  const items = element.children.filter(
+    (child) => child.getAttribute("role") === "treeitem",
+  );
+  for (const item of items) {
+    assert.equal(item.role, undefined);
+  }
+  return items;
+}
+
+function fingerprint(element) {
+  return element.children.map((child) => ({
+    id: child.id ?? null,
+    nodeId: child.dataset.nodeId ?? null,
+    text: child.children.at(-1)?.textContent ?? null,
+    blockSize: child.style.blockSize,
+  }));
+}
+
+function dataModuleUrl(source) {
+  return `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+}

@@ -1,5 +1,6 @@
 """Domain-blind session dispatch and control."""
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.dispatcher.contracts import (
     AdmissionClosed,
     AuditObserver,
@@ -7,6 +8,7 @@ from namisync.dispatcher.contracts import (
     ControlCode,
     ControlResult,
     PreparedSession,
+    SessionCleanupPending,
     SessionNotFound,
     SessionNotTerminal,
     ShutdownResult,
@@ -20,12 +22,13 @@ from namisync.dispatcher.custody import (
     ResourceLockProvider,
     WindowsNamedMutexProvider,
 )
-from namisync.dispatcher.dispatcher import Dispatcher
+from namisync.dispatcher.dispatcher import AdmissionAttachment, Dispatcher
 from namisync.dispatcher.event_bus import EventStream, UtcClock
 from namisync.dispatcher.store import InMemorySessionStore
 
 __all__ = [
     "AdmissionClosed",
+    "AdmissionAttachment",
     "AuditObserver",
     "ControlAction",
     "ControlCode",
@@ -37,6 +40,8 @@ __all__ = [
     "PreparedSession",
     "ResourceLease",
     "ResourceLockProvider",
+    "retire_exception_graph",
+    "SessionCleanupPending",
     "SessionNotFound",
     "SessionNotTerminal",
     "ShutdownResult",

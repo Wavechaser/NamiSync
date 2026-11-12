@@ -1,8 +1,9 @@
 # Planner Module
 
-Status: M0 path-preserving paired-sync implementation complete. Later scopes,
-content evidence, ingest policies, replay, repair, and undo reuse the same plan
-shape.
+The deterministic paired-sync planner, signed-64 boundary and independent
+planning-source admission and desktop Setup are active. The
+100,000-operation shape is a performance fixture, not a production maximum;
+DEFENSE owns active admission and PRESENTATION owns focused review-scale checks.
 
 ## Purpose
 
@@ -15,18 +16,43 @@ or executes/repairs anything.
 
 ```python
 plan(source: ScanResult, target: ScanResult,
-     correspondence: MappingSnapshot, options: SyncOptions,
-     scope: Scope) -> Plan
+     correspondence: MappingSnapshot, options: SyncOptions, *,
+     review_admission: PlanReviewProducerAdmission | None = None) -> Plan
 ```
+
+The optional exact producer admission is counter-free and exposes only
+independent domain/informational source gates. Mapping, assignment, operation,
+logical-byte, and final plan-result admission use that capability; it cannot
+charge the workflow's cumulative retained budget. During a plan run it shares
+one opaque admission token with the separate exact `PlanReviewAdmission`; this
+is refusal provenance, not a counter or retained-budget capability. Logical-
+byte overflow is issued through the supplied producer admission so workflow
+accepts only the active run's signal. Direct calls without a producer admission
+still raise the private signal, but it is deliberately unadmitted to any
+workflow. The separate retained-plan helper accepts only exact
+`PlanReviewAdmission`.
 
 ## Implemented M0 Surface
 
 `namisync.modules.planner.plan()` is a pure transformation over frozen core
 snapshots. `namisync.core.planning` owns the serializable plan, operation,
-assignment, policy, scope, deterministic-id/fingerprint, selection-digest,
-and shared capacity contracts. M0 implements `Scope.everything()` and the
-batch-shaped identity destination policy; the other scope constructors remain
-declared but raise rather than pretending to work.
+assignment, policy, deterministic-id/fingerprint, selection-digest,
+and shared capacity contracts. Planning uses the whole admitted candidate
+population and the batch-shaped identity destination policy. Scoped planning
+remains an accepted future outcome without a placeholder parameter or type.
+
+The ten exact planning dataclasses are frozen and slotted, so their
+instances carry only their declared fields. This structural constraint does
+not change plan identity, fingerprints, payloads, equality, validation, or
+selection behavior. The named internal (rung 3) workflow transfer validates
+exact public types and declared fields once; downstream first-party readers then
+trust the immutable adopted values. External (rung 1) inputs and reentrant
+(rung 2) policy callbacks retain their separate ingress and ordering checks.
+
+Depth ordering, parent walks, and strict descendant checks use the shared
+relative-path helpers in `namisync.core.pathing`. Their Stage 5.5 promotion was
+a pure relocation: the existing planner test file and all 31 behavioral tests
+remain unchanged.
 
 The implementation emits explicit parent-first directory operations, file
 copy/update/no-op intent, correspondence-qualified move or composite
@@ -36,16 +62,126 @@ Planner and preflight both call `calculate_required_bytes()`; neither stores or
 guesses target free space.
 
 `options` contains deletion and preservation policies, the symmetric mapping
-filter snapshot, the selected `DestinationPolicy`, and the latent
+filter snapshot, the selected `DestinationPolicy`, and the fingerprinted
 `propagate_source_casing` policy plus any already-extracted enrichment metadata.
-The casing policy defaults to false and is not exposed by a config file, CLI, or
-GUI yet. `MappingSnapshot` contains prior accepted pairs/no-ops, retained missing
-rows, and ambiguity/hardlink disqualifiers keyed by canonical path. Observed
-target free space is deliberately absent: review and execution call `observe()`
-and judge the same pure required-byte formula against current space.
+The casing policy defaults to false and is exposed through the primitive
+semantic-settings facade; there is no current settings CLI or GUI control.
+`MappingSnapshot` contains prior accepted pairs/no-ops and optional ambiguity
+and identity disqualifiers. The workflow's scan-scoped correspondence reader
+does not turn retained inventory paths or old link counts into current hardlink
+evidence. Move eligibility checks current source and target link counts and
+identity multiplicity, plus unique prior correspondence; repeated names of one
+file in ledger history alone do not disqualify it. Observed target
+free space is deliberately absent: review and execution call `observe()` and
+judge the same pure required-byte formula against current space.
+
+The Stage 6 adapter supplies one backend-canonical frozen Setup snapshot. The
+workflow translates its planning fields into immutable `SyncOptions`; linked
+verification remains workflow/session policy rather than planner input.
+Planner never rereads settings or accepts a parallel execution-time choice.
+Setup behavior is owned by DESKTOP_UI and INTERFACES; exact future DTOs are reopened. External encoding is owned by
+[BRIDGE.md](BRIDGE.md).
 
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
+
+Planning workflow supplies already-adopted immutable scans and one exactly
+captured correspondence result. Planner trusts those scan identities, captures
+the destination-policy identity and callback, and gives the callback the same
+filtered `FileRecord` leaves plus the adopted target scan. The callback boundary
+still checks filtered source rows, target domain rows, and target warnings
+through three independent counter-free gates before invocation. Its returned
+assignment is source-gated and reconstructed exactly once. The four raw mapping
+populations and the combined operation population each retain their independent
+first-excess gates; no mapping index, operation builder, dependency sort, or
+callback-input copy is charged as retained state.
+
+Workflow exact-adopts the fallible internal planner result once and retains
+that same immutable `Plan` identity. Admission validates the exact outer plan,
+operations, endpoints, profiles, policies, filters, assignment, required
+volumes and bytes, deterministic operation ids, and declared fingerprint
+without rebuilding the plan graph. Canonical `plan_fingerprint(value)`
+revalidation deliberately keeps the existing complete semantic projection to
+reject compound field drift; this row neither redesigns that identity contract
+nor charges or freezes its construction cost. Workflow then charges the final
+operation rows and only the unavoidable operation/dependency, assignment, and
+required-volume shallow slots once. Selection remains ordinary workflow policy
+and is neither copied nor charged by this prerequisite. First excess raises the
+private exact plan-limit signal without publishing a partial plan.
+
+Review-limit authority requires the private signal type, exact PLAN fact, and
+active same-run admission token. Workflow supplies one counter-free producer
+gate alongside its separate cumulative retained ledger; they share only that
+opaque token, not counters or retained-budget mutation. Planner logical-byte
+accumulation issues the signal through the supplied producer gate. Destination-
+policy identity, assignment, or unreviewed fingerprint failures—including
+tokenless exact signals and lookalikes with the same fact-shaped attributes—
+propagate or fail loudly without becoming refusal. Reviewed fingerprinting uses
+the one captured policy identity instead of rereading extension-owned policy
+properties across the reentrant boundary.
+
+`snapshot_plan_options`, `plan`, and `adopt_plan_candidate` isolate their
+public call frame and retire traceback/cause/context links before an error
+escapes. Property, assignment, fingerprint, and validation failures therefore
+preserve their existing public type, identity, and behavior without retaining
+stage-dependent policy, callback, shared scan, or input frames. Successful plan
+adoption returns the exact producer value; retained-plan admission remains a
+separate workflow step. The `ScalarDomainError` cause of the required private
+logical-byte signal remains by identity after its own frames retire. Arbitrary
+custom exception state leaves with the caller and is not retained planner
+custody.
+
+Those counters establish the planning-source wall, not the unrealized complete
+retained-graph model. Policy and planning construction temporaries,
+sorting/index storage, selection and preview values, additional complete-tree
+projection, generic container allocation, serialization/codec copies, native
+views, browser copies, and task retention require the later predeclared
+reservation model and independent validator.
+
+Core policy admission bounds the raw shape before canonicalization. A filter
+snapshot is an exact tuple of at most 64 nonempty valid-Unicode patterns, each
+at most 1,024 UTF-8 bytes and together at most 16,384 bytes. An assignment is
+an exact tuple of at most 150,000 typed items. Destination-policy name/version
+and optional group/conflict annotations have no narrower production grammar;
+each value is capped by the plan-domain ceiling, and their complete combined
+occurrences remain outside active publication-graph admission.
+Constructors and policy/assignment validators revalidate these contracts so
+forged frozen fields do not bypass them.
+
+## Exclude filter syntax and effect
+
+Setup's Exclude filters field adds one pattern per Add filter click or Enter.
+Patterns are Windows-style root-relative globs, not regular expressions or
+gitignore rules. Matching is case-insensitive for ordinary Windows names;
+both `/` and `\` are separators. Leading and trailing spaces are literal and
+are not trimmed. There is no negation/re-include rule or separate syntax check:
+admission validates nonempty Unicode text and the bounds above.
+
+`*` matches any sequence, including path separators; `?` matches one character;
+`[abc]` matches one listed character and `[!abc]` one unlisted character.
+Backslash is a separator, not an escape. Bracket forms such as `[*]` match a
+literal wildcard. Matching considers the complete relative path and each of
+its ancestors, so matching a directory excludes its descendants too.
+
+| Pattern | Effect |
+| --- | --- |
+| `*.tmp` | Exclude `.tmp` files at any depth. |
+| `build` | Exclude the top-level `build` entry and its entire subtree. |
+| `*\build` | Exclude nested `build` entries and their subtrees; add `build` separately for the top level. |
+| `photos\*.raw` | Exclude matching `.raw` files anywhere below `photos`, including deeper folders. |
+| `report?.txt` | Exclude root-relative names with one character after `report`. |
+
+Filters apply during planning after scanning; they do not prune traversal or
+make an incomplete scan complete. Excluded source entries produce no copy,
+update or directory-creation operation. Excluded target files are protected
+from target-only removal; excluded target directories and ancestors containing
+excluded entries are protected from directory cleanup. Unsupported entries may
+be omitted from plan rows by a filter, but scan-completeness safety still applies.
+
+The plan freezes and fingerprints the canonical filter snapshot: `/` becomes
+`\`, exact duplicate spellings are removed, and patterns are sorted. Case
+variants remain distinct entries even when they match alike. Later edits or
+default changes do not modify an existing reviewed plan.
 
 ## Plan Contract
 
@@ -55,6 +191,11 @@ deterministic operations, dependency graph/order, required volumes, required
 content bytes, concurrency assumption, and all source/target stat evidence
 needed by preflight. It contains no target-free-space observation.
 
+A plan also contains no content hash, copy-stream attestation, verification
+digest, or ledger evidence classification. Those values cannot affect dry-run
+intent and are queried from current ledger state only by later execution or
+inventory detail surfaces.
+
 Each operation has a stable id derived from canonical intent—not list position
 or random state—and includes kind, source/target relative paths, expected
 before-state, intended after-state, byte contribution, reason code,
@@ -63,11 +204,29 @@ paths or destination policy. Expected/intended metadata uses
 `MetadataSnapshot` (attributes and creation time) under the snapshotted
 preservation policy. No stream manifest enters a plan.
 
-Canonical JSON remains byte-compatible for valid Unicode paths and escapes a
-malformed surrogate code unit defensively instead of raising during operation-id
-or plan-fingerprint construction. The scanner rejects such code units before a
-path record exists; serializer hardening prevents unrelated free-form data from
-turning a review into a raw encoding failure.
+Plan and operation hashes use explicit complete field projections rather than
+generic dataclass traversal. `plan_fingerprint()` omits only the plan's own
+fingerprint; the canonical encoding of `plan_projection()` includes it. Non-null file indices use
+canonical quoted `FileIndex128` text, while sizes, timestamps, and other integer
+fields retain their numeric form. Sequence order and the established canonical
+JSON ordering of required-volume sets remain unchanged. Policy hashing keeps
+the destination policy's intentional name/version projection, not its private
+implementation state. Unsupported objects or keys and nonfinite numbers refuse
+at the shared closed JSON boundary described in [CORE.md](CORE.md).
+
+The shared epoch-6 cutover changes identity-bearing hashes; frozen identityless
+plan bytes remain identical. Workflow refingerprinting rejects an old
+numeric-identity fingerprint before execution while unchanged identityless
+fingerprints remain compatible. Current process-local workflow checkpoints are
+unversioned typed values; database reset does not silently rewrite old
+commitments.
+
+Valid Unicode strings retain their established UTF-8 encoding, including
+supplementary characters and literal backslash text. Malformed surrogate code
+units in any hash input or key refuse at strict serialization; they are not
+silently rewritten into a different decoded value. Scanner path validation and
+optional warning-detail omission remain separate admission rules described in
+[CORE.md](CORE.md).
 
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
 status. Its optional `Commitment` binds both the plan fingerprint and a
@@ -76,17 +235,27 @@ commitment. Workflow derives M0's safe subset from the full plan: direct
 blockers stay `BLOCKED`, correspondence/dependency exclusions stay `DEFERRED`,
 and incomplete scans withhold destructive/identity operations. Planner itself
 continues to emit complete deterministic intent and does not hide those items.
+That split is deliberate: a blocked parent/type conflict or unsupported source
+row remains reviewable alongside the raw policy removal the target-only diff
+would otherwise request. `derive_execution_selection()` quarantines the
+same-correspondence removal and blocked dependencies before preflight/execution,
+while unrelated safe work remains selectable. Interfaces therefore show full
+intent but can execute only the derived safe selection; they must not treat raw
+`Plan.operations` as executable authority.
 
 ## Diffing And Operation Rules
 
 - Compare through `DestinationPolicy.assign()`, including the M0 identity
   assignment; never directly assume source path equals target path.
-- Apply mapping filters symmetrically before diffing. Location ignores have
-  already bounded scan completeness.
+- Apply the plan's filter snapshot symmetrically before diffing. Location
+  ignores have already bounded scan completeness.
 - Compare mtimes within the coarser capability granularity.
-- Matching size, mtime within the coarser granularity, and standard attributes
-  is an M0 metadata no-op. An attributes-only change plans an update even when
-  size and mtime are unchanged. Content-aware no-op comes later.
+- Matching size, mtime within the coarser granularity, and the shared managed
+  attribute subset (readonly, hidden, system, and not-content-indexed) is an M0
+  metadata no-op. Drift in any managed bit plans an update even when size and
+  mtime are unchanged. Raw unmanaged bits such as ARCHIVE and TEMPORARY remain
+  in both reviewed snapshots but do not schedule work the executor does not
+  propagate. Content-aware no-op comes later.
 - Source-only files plan copy; changed matched files plan update.
 - Every directory the plan will create has an explicit parent-first
   mkdir-with-metadata operation; file and child-directory operations depend on
@@ -100,7 +269,7 @@ continues to emit complete deterministic intent and does not hide those items.
   exact spelling retain the normal metadata result: changed content plans an
   update and matching metadata plans a no-op. The typed `case_mismatch` reason
   is a non-blocking review advisory. By default the operation preserves the
-  target's observed spelling. The latent `propagate_source_casing=True` policy
+  target's observed spelling. The captured `propagate_source_casing=True` policy
   instead emits a zero-byte `recase` operation when metadata already matches,
   carrying both observed and requested spellings for a same-volume rename. If
   content metadata changed, the required update also publishes at the requested
@@ -134,8 +303,17 @@ content. Live trash consumes space until a retention workflow actually removes
 it. Reclaimable orphan temps are an observation used by preflight, not optimistic
 planner state.
 
-The plan snapshots the worker-count/concurrency assumption used by the formula;
-executor may use fewer workers but never more without re-planning/re-preflight.
+Stage 1 removed `worker_count` from options, plans, fingerprints, and payloads.
+The current executor admits one file operation at a time, and the capacity
+contract has no dormant file-concurrency tuning input.
+
+Planner construction follows the active checked-arithmetic and pre-publication
+refusal contract in
+[BRIDGE.md](BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; planner defines
+no local numeric domain. Every logical-byte rollup uses checked signed-64
+addition; an aggregate excess refuses publication with the typed plan/domain
+`logical-bytes` review-limit fact rather than wrapping or becoming a free-space
+diagnostic.
 
 The function consumes target `CapabilityProfile.supports_hardlinks`, populated
 from the Windows `FILE_SUPPORTS_HARD_LINKS` volume flag. For each concurrently
@@ -145,12 +323,28 @@ filesystem name or an attempted operation.
 
 ## Scope And Selection
 
-M0 implements `Scope.everything()` plus workflow-owned safe-subset selection.
-Pattern, explicit, and recorded-run scopes
-are declared now. Scope uses canonical stable candidate identities, not raw UI
-row numbers or display paths. The implemented selector closes dependencies,
-recomputes capacity/summaries, and reports forced exclusions; user-edited
-partial selection remains deferred.
+Planning uses the whole admitted candidate population; workflow-owned execution
+selection closes dependencies, recomputes capacity/summaries, and reports forced
+exclusions. Pattern, explicit candidate, and recorded-run planning scopes remain
+unrealized, including history replay, as described in [FEATURES](FEATURES.md).
+Those future outcomes do not prescribe a placeholder scope representation.
+
+The accepted Stage 6 review surface is a memoized workflow/interface
+projection of one immutable plan. Planner remains the authority for operations,
+dependencies, reasons, immutable statistics, and the pure dependency-closed
+selection calculation; search, collapse, windows, anchors, accessibility
+framing, live result overlays, and inferred move-peer presentation do not alter
+the plan.
+
+Multiple operations targeting one canonical path remain distinct executable
+members even when presentation groups them. Selection is global and
+dependency-closed, independent of filter and viewport, and execution commits to
+its exact digest. Notices are informational and cannot enter selection,
+collapse, path, detail, or execution scope. A refused bounded projection stages
+no partial review artifact. Tree identity, revision safety, paging,
+rollups, overlays, and move-peer suppression rules are owned by
+[PRESENTATION.md](PRESENTATION.md), with numeric containment in
+[DEFENSE.md](DEFENSE.md) §1.3.
 
 Replay, undo, and repair always plan fresh against current scans/evidence. A
 historical operation list is scope input, never executable authority.
@@ -160,15 +354,17 @@ historical operation list is scope input, never executable authority.
 The M0 identity policy returns a batch assignment. Batch shape is permanent so
 future templates can detect collisions and keep companion groups together.
 Assignments must be deterministic, root-relative, collision-complete, and path
-validated. Policy/enrichment versions and all assignment inputs are snapshotted
-in the plan. Ingest origin evidence uses feature-owned namespaced annotations
+validated. Policy/enrichment versions and assignment results are snapshotted in
+the plan; callback inputs are already-adopted immutable scan values. Ingest
+origin evidence uses feature-owned namespaced annotations
 (`ingest.origin.*`) so a later implementation does not require new generic
 schema. No policy receives filesystem or executor control.
 
-The unexposed `preserve_ads` policy is latent. When it is implemented, planner's
-only ADS responsibility is a mapping-level warning when the target capability
-cannot carry streams; enumeration, byte transfer, and validation remain
-executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
+The semantic-settings `preserve_ads` policy has no dedicated CLI/UI control and
+its transfer behavior remains latent. When it is implemented, planner's only
+ADS responsibility is a mapping-level warning when the target capability cannot
+carry streams; enumeration, byte transfer, and validation remain executor-time
+work. M1 has no ADS-enabled mapping or per-operation ADS state.
 
 ## Expectations Of Other Modules
 
@@ -191,68 +387,7 @@ executor-time work. M0 has no ADS-enabled mapping or per-operation ADS state.
   copy+trash.
 - Incomplete scans and unsupported entries remain visible; unsupported items
   are blocked, while workflow permits only completeness-independent operations.
-- Attribute-only drift is update-worthy; the remaining metadata no-op risk is
-  content changing behind equal size/time/attributes, and later content
-  evidence is additive.
-
-## Acceptance Criteria
-
-- Repeated serialization of identical inputs is byte-identical, including ids,
-  ordering, reasons, summaries, and assignment.
-- Randomized input ordering produces the same plan.
-- Nested empty directory fixtures create every level parent-first and an
-  immediate rescan/replan converges to no mutations.
-- Non-empty parent chains also produce explicit metadata-bearing mkdirs, and
-  every file/child operation depends on its nearest created parent.
-- Renamed-directory fixtures decompose into per-file moves, mkdir dependencies,
-  and safe emptied-directory cleanup; UI grouping does not change executable
-  operation ids or dependency order.
-- Target directories emptied by same-plan operations receive safe dependent
-  cleanup; nonempty/unselected directories never do.
-- Additive emits no target-only mutation; trash is default; mirror is rejected
-  unless internal authorization is explicit.
-- Every operation path passes core validation, remains under its root, and
-  supports long destination paths.
-- Stable-identity-less, duplicated-identity, multi-link, ambiguous prior
-  correspondence, and cross-location cases emit no move.
-- Persisted paired-noop evidence enables an unambiguous later rename to plan a
-  target-side move.
-- Move-update has one operation id and no intermediate state that can be
-  recorded as final success.
-- Same-side case collisions and file/directory collisions are blocked and
-  visible; one-to-one case and NFC/NFD spelling mismatches are non-blocking
-  typed advisories whose underlying update/no-op work remains executable.
-- Default planning preserves target spelling. Opt-in source-basename casing is
-  fingerprinted, survives workflow-payload round trips, and emits a zero-byte
-  same-key `recase` only when matching metadata makes content replacement
-  unnecessary. The payload field is required because omitting a fingerprinted
-  policy input cannot be losslessly defaulted during decode.
-- Incomplete source or target scans yield a reviewable full plan whose workflow
-  selection admits copy/update/mkdir/noop/recase and withholds move/move-update/
-  trash/delete; preflight refuses any caller that reintroduces withheld
-  operations.
-- Capacity property tests never undercount any allowed worker schedule and use
-  the exact same function as preflight.
-- No-hardlink update fixtures include displaced-version backup bytes under every
-  allowed worker schedule; hardlink-capable fixtures do not charge content bytes
-  for the link itself.
-- Filter application is symmetric; excluded retained rows are not planned as
-  missing/deleted, and the filter snapshot is serialized.
-- A readonly/hidden/system-only difference with unchanged size and mtime plans
-  an update and propagates through the real sync workflow.
-- Destination policy collision and companion-group property tests produce
-  deterministic, unique, reviewable assignments.
-- Planner tests use no filesystem/database fixture, proving purity.
-- Import-linter proves planner imports core but no sibling module.
-
-## M0 Verification
-
-`tests/test_planner.py` contains 31 filesystem-free planner tests covering
-random input order, byte-identical serialization, directory convergence,
-cleanup dependencies, move disqualifiers, policy collisions, symmetric
-filters, case/NFC advisory behavior, long paths, and hardlink-aware capacity.
-Payload and native rename coverage proves the latent recasing seam; a
-reviewed-sync regression proves changed content is not suppressed by a casing
-advisory and default target spelling is retained.
-Shared path/serialization contracts are covered in
-`tests/test_core_scanplan.py`.
+- Managed-attribute-only drift is update-worthy; unmanaged attribute drift is
+  retained as evidence without causing a non-convergent update. The remaining
+  metadata no-op risk is content changing behind equal size/time/managed
+  attributes, and later content evidence is additive.

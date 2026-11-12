@@ -1,0 +1,81 @@
+name: Windows verification and development package
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ordinary:
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # Frozen custody evidence validates historical Git objects.
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.15.2'
+          architecture: x64
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24.22.1'
+      - name: Install test dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .venv/Scripts/python.exe -m pip install --require-hashes -r tools/packaging/bootstrap.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .venv/Scripts/python.exe -m pip install --require-hashes --no-build-isolation -r tools/packaging/requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & .venv/Scripts/python.exe -m pip install --no-build-isolation '.[dev]'
+      - name: Ordinary tests
+        shell: pwsh
+        run: .venv/Scripts/python.exe -m pytest -q --junitxml=build/ci-ordinary.xml
+      - name: Import contracts
+        shell: pwsh
+        run: .venv/Scripts/lint-imports.exe
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: ordinary-results
+          path: build/ci-ordinary.xml
+          if-no-files-found: warn
+
+  portable:
+    needs: ordinary
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.15.2'
+          architecture: x64
+      - name: Build development package
+        shell: pwsh
+        run: |
+          python -m venv build/package-env
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build/package-env/Scripts/python.exe -m pip install --require-hashes -r tools/packaging/bootstrap.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build/package-env/Scripts/python.exe -m pip install --require-hashes --no-build-isolation -r tools/packaging/requirements.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & build/package-env/Scripts/python.exe tools/packaging/build.py build/portable
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: NamiSync-windows-x64-development
+          if-no-files-found: error
+          path: |
+            build/portable/NamiSync-windows-x64-dev.zip
+            build/portable/NamiSync-source-dev.zip
+            build/portable/SHA256SUMS.txt
+            build/portable/source-identity.json
+            build/portable/bundle-identity.json
+            build/portable/build-environment.txt
+            build/portable/native-origins.json
+            build/portable/freezer-tables/*.toc
+            build/portable/wheel/*.whl

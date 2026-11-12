@@ -1,0 +1,200 @@
+"""Checked scalar grammars shared by core, persistence, and interfaces."""
+
+from __future__ import annotations
+
+import re
+
+
+MAX_SAFE_INTEGER = (1 << 53) - 1
+MAX_SIGNED_64 = (1 << 63) - 1
+MAX_FILE_INDEX_128 = (1 << 128) - 1
+MAX_PATH_UTF16_UNITS = 32_767
+MAX_DIAGNOSTIC_UTF8_BYTES = 1_024
+# Logical row ceiling for each independently admitted runtime population.
+MAX_POPULATION_ROWS = 150_000
+# Complete external command envelopes are capped at this many UTF-8 bytes.
+# A request identifier cannot occupy more bytes than its containing envelope.
+MAX_REQUEST_ID_UTF8_BYTES = 65_536
+
+_CANONICAL_DECIMAL = re.compile(r"0|[1-9][0-9]*\Z")
+
+
+class ScalarDomainError(ValueError):
+    """A value cannot enter NamiSync's nonnegative signed-64 domain."""
+
+
+def require_safe_int(value: object, field_name: str) -> int:
+    """Return one exact non-Boolean JavaScript-safe integer."""
+
+    if type(value) is not int:
+        raise TypeError(f"{field_name} must be a non-Boolean integer")
+    if not 0 <= value <= MAX_SAFE_INTEGER:
+        raise ValueError(f"{field_name} is outside the SafeInt domain")
+    return value
+
+
+def require_signed_64(value: object, field_name: str) -> int:
+    """Return one exact nonnegative signed-64 integer."""
+
+    if type(value) is not int:
+        raise TypeError(f"{field_name} must be a non-Boolean integer")
+    if not 0 <= value <= MAX_SIGNED_64:
+        raise ScalarDomainError(
+            f"{field_name} is outside the nonnegative signed-64 domain"
+        )
+    return value
+
+
+def checked_add_signed_64(left: object, right: object, field_name: str) -> int:
+    """Add two accepted scalars without wrapping or widening the domain."""
+
+    first = require_signed_64(left, field_name)
+    second = require_signed_64(right, field_name)
+    if first > MAX_SIGNED_64 - second:
+        raise ScalarDomainError(
+            f"{field_name} exceeds the nonnegative signed-64 domain"
+        )
+    return first + second
+
+
+def scalar_64_to_text(value: object, field_name: str) -> str:
+    """Encode one internal signed-64 quantity as canonical decimal text."""
+
+    return str(require_signed_64(value, field_name))
+
+
+def scalar_64_from_text(value: object, field_name: str) -> int:
+    """Decode canonical decimal text without accepting JSON-number coercion."""
+
+    if type(value) is not str:
+        raise TypeError(f"{field_name} must be a canonical decimal string")
+    if _CANONICAL_DECIMAL.fullmatch(value) is None:
+        raise ValueError(f"{field_name} must be a canonical decimal string")
+    maximum = str(MAX_SIGNED_64)
+    if len(value) > len(maximum) or (len(value) == len(maximum) and value > maximum):
+        raise ScalarDomainError(f"{field_name} exceeds the signed-64 domain")
+    return int(value)
+
+
+def file_index_128_to_text(value: object, field_name: str = "file index") -> str:
+    """Encode one opaque Windows file index as canonical unsigned text."""
+
+    if type(value) is not int:
+        raise TypeError(f"{field_name} must be a non-Boolean integer")
+    if not 0 <= value <= MAX_FILE_INDEX_128:
+        raise ValueError(f"{field_name} is outside the FileIndex128 domain")
+    return str(value)
+
+
+def file_index_128_from_text(value: object, field_name: str = "file index") -> int:
+    """Decode one canonical opaque Windows file index."""
+
+    if type(value) is not str:
+        raise TypeError(f"{field_name} must be canonical unsigned-decimal text")
+    if _CANONICAL_DECIMAL.fullmatch(value) is None:
+        raise ValueError(f"{field_name} must be canonical unsigned-decimal text")
+    maximum = str(MAX_FILE_INDEX_128)
+    if len(value) > len(maximum) or (len(value) == len(maximum) and value > maximum):
+        raise ValueError(f"{field_name} exceeds the FileIndex128 domain")
+    return int(value)
+
+
+def bounded_utf8_text(
+    value: object,
+    field_name: str,
+    *,
+    maximum_bytes: int = 1_024,
+) -> str | None:
+    """Return complete diagnostic text, or ``None`` when it cannot fit."""
+
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise TypeError(f"{field_name} must be text or None")
+    if len(value) > maximum_bytes:
+        return None
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeEncodeError:
+        return None
+    return value if len(encoded) <= maximum_bytes else None
+
+
+def require_utf8_text(
+    value: object,
+    field_name: str,
+    *,
+    minimum_bytes: int = 0,
+    maximum_bytes: int,
+) -> str:
+    """Return exact Unicode text whose complete UTF-8 form fits the bound."""
+
+    if type(value) is not str:
+        raise TypeError(f"{field_name} must be text")
+    if not 0 <= minimum_bytes <= maximum_bytes:
+        raise ValueError("text byte bounds are invalid")
+    # Every Unicode scalar needs at least one UTF-8 byte. Refuse impossible
+    # lengths before creating an encoded copy of hostile input.
+    if len(value) > maximum_bytes:
+        raise ValueError(f"{field_name} exceeds the UTF-8 text bound")
+    encoded_bytes = 0
+    try:
+        for start in range(0, len(value), 4_096):
+            encoded_bytes += len(value[start : start + 4_096].encode("utf-8"))
+            if encoded_bytes > maximum_bytes:
+                raise ValueError(
+                    f"{field_name} exceeds the UTF-8 text bound"
+                )
+    except UnicodeEncodeError as error:
+        raise ValueError(f"{field_name} must be valid Unicode") from error
+    if encoded_bytes < minimum_bytes:
+        raise ValueError(f"{field_name} is shorter than its UTF-8 text bound")
+    return value
+
+
+def require_utf16_text(
+    value: object,
+    field_name: str,
+    *,
+    maximum_units: int,
+    allow_empty: bool = True,
+) -> str:
+    """Return exact Unicode text whose complete UTF-16 form fits the bound."""
+
+    if type(value) is not str:
+        raise TypeError(f"{field_name} must be text")
+    if not allow_empty and not value:
+        raise ValueError(f"{field_name} is required")
+    if "\x00" in value:
+        raise ValueError(f"{field_name} cannot contain NUL")
+    if len(value) > maximum_units:
+        raise ValueError(f"{field_name} exceeds the UTF-16 text bound")
+    try:
+        units = len(value.encode("utf-16-le")) // 2
+    except UnicodeEncodeError as error:
+        raise ValueError(f"{field_name} must be valid Unicode") from error
+    if units > maximum_units:
+        raise ValueError(f"{field_name} exceeds the UTF-16 text bound")
+    return value
+
+
+def require_utf16_path(
+    value: object,
+    field_name: str,
+    *,
+    maximum_units: int = MAX_PATH_UTF16_UNITS,
+) -> str:
+    """Validate one complete path-like string without truncation."""
+
+    try:
+        return require_utf16_text(
+            value,
+            field_name,
+            maximum_units=maximum_units,
+        )
+    except ValueError as error:
+        if "UTF-16 text bound" in str(error):
+            raise ValueError(
+                f"{field_name} exceeds the UTF-16 path bound"
+            ) from error
+        raise

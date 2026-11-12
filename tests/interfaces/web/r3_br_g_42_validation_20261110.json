@@ -1,0 +1,50 @@
+{
+  "schema": "namisync-br-g-42-validation-v1",
+  "revision": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+  "python": "3.15.2 (tags/v3.15.2:5e58eaa, Oct 25 2026, 17:27:03) [MSC v.1951 64 bit (AMD64)]",
+  "complete": true,
+  "passed": true,
+  "metrics": {
+    "history/release": {
+      "summary_max_s": 1.6812297999858856,
+      "item_page_samples": 200,
+      "event_page_samples": 200,
+      "item_page_p95_ms": 18.92910012975335,
+      "item_page_max_ms": 33.82419981062412,
+      "event_page_p95_ms": 19.304899964481592,
+      "event_page_max_ms": 29.808100312948227,
+      "children": 5,
+      "report_sha256": [
+        "db199da837375aa29f922e9f90be16bbaf445381b831810f4c1d3b99e8019755",
+        "8de14818fc2eed518d2dd022353cba6558d510ec772ef9d04e3cd3556b280865",
+        "d5ff9b7a2c91fc21823a1307cb84010f7ed3a0a753a9238d6425ddf69ca696ee",
+        "169923afcb7be2a2102b2e5a874f7fe03689e6fa4d9de979e5a2d8300bbfb63e",
+        "b2774875f772ede38a11c9e84375fe950690a377b14028e7bd3279b86d4b71e2"
+      ],
+      "passed": true,
+      "problems": []
+    },
+    "bridge-event/installed": {
+      "reliable_and_terminal": {
+        "events": 3100,
+        "worst_child_p95_ms": 6.0,
+        "maximum_ms": 51.0
+      },
+      "progress": {
+        "events": 7490,
+        "worst_child_p95_ms": 42.0,
+        "maximum_ms": 47.0
+      },
+      "children": 5,
+      "report_sha256": [
+        "a30e2765c62f72885254a7c25446b27cb03ac5093a42a9831c6319003ec96f14",
+        "33c31c5b6d9f4b7ba60b5f7d56c9a48a4169153301f5c2a3a3519e75ac90e093",
+        "8432d0bdbe41e6508363cba06ac975fa756d901f0919bc52a596cd5e4616a8be",
+        "91cb41be7dabb21eb5438ad5645a911039dbed83b47ff92103cc639342e4ec2d",
+        "78fa2cc792671a6464d84849aa256f027f07dfba584402f2b805b83ba628d8ae"
+      ],
+      "passed": true,
+      "problems": []
+    }
+  }
+}

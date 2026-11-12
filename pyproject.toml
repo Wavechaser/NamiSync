@@ -4,15 +4,24 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "namisync"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Safety-first one-way file mirroring for Windows"
 readme = "README.md"
 requires-python = ">=3.13"
 license = "GPL-3.0-or-later"
-dependencies = []
+license-files = ["LICENSE"]
+dependencies = [
+    "pywebview==6.2.1",
+    "pythonnet==3.2.1; sys_platform == 'win32'",
+    "bottle>=0.13.4",
+    "xxhash>=4.1.0,<5",
+]
 
 [project.scripts]
-nami-sync = "namisync.interfaces.cli:main"
+namisync = "namisync.interfaces.launcher:main"
+
+[project.gui-scripts]
+namisync-gui = "namisync.interfaces.launcher:gui_main"
 
 [project.optional-dependencies]
 dev = [
@@ -23,8 +32,23 @@ dev = [
 [tool.setuptools.packages.find]
 include = ["namisync*"]
 
+[tool.setuptools.package-data]
+"namisync.interfaces" = ["branding/*"]
+"namisync.interfaces.web" = ["assets/*", "assets/icons/*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "namisync.version.VERSION"}
+
 [tool.pytest.ini_options]
+addopts = '-m "not headed"'
 testpaths = ["tests"]
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
+markers = [
+    "background_headed: page-directed headed journey with unattended launch and input",
+    "native_desktop: headed scenario that exercises real Windows activation or a native dialog",
+    "headed: requires an interactive Windows desktop and the real WebView2 host",
+    "supplemental_node: optional deterministic JavaScript probe using NAMISYNC_TEST_NODE or PATH",
+]
 
 [tool.importlinter]
 root_package = "namisync"
@@ -53,10 +77,38 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
-name = "Domain modules are mutually independent"
+name = "Domain components are mutually independent"
+type = "independence"
+modules = [
+    "namisync.modules.scanner",
+    "namisync.modules.planner",
+    "namisync.modules.preflight",
+    "namisync.modules.executor",
+    "namisync.modules.verifier",
+]
+
+[[tool.importlinter.contracts]]
+name = "Executor native and pipeline leaves are independent"
+type = "independence"
+modules = [
+    "namisync.modules.executor.native",
+    "namisync.modules.executor.pipeline",
+]
+
+[[tool.importlinter.contracts]]
+name = "Executor leaves do not import runtime"
 type = "forbidden"
-source_modules = ["namisync.modules.*"]
-forbidden_modules = ["namisync.modules.*"]
+source_modules = [
+    "namisync.modules.executor.native",
+    "namisync.modules.executor.pipeline",
+]
+forbidden_modules = ["namisync.modules.executor.runtime"]
+
+[[tool.importlinter.contracts]]
+name = "Verifier native does not import engine"
+type = "forbidden"
+source_modules = ["namisync.modules.verifier.native"]
+forbidden_modules = ["namisync.modules.verifier.engine"]
 
 [[tool.importlinter.contracts]]
 name = "Database imports only core"
@@ -92,3 +144,23 @@ type = "forbidden"
 source_modules = ["namisync.interfaces"]
 forbidden_modules = ["namisync.core", "namisync.modules", "namisync.db"]
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Interface adapters depend on the shared service"
+type = "layers"
+layers = [
+    "namisync.interfaces.launcher",
+    "namisync.interfaces.cli | namisync.interfaces.web",
+    "namisync.interfaces.service",
+]
+
+[[tool.importlinter.contracts]]
+name = "Web task drain cannot reach domain lifecycle owners"
+type = "forbidden"
+source_modules = ["namisync.interfaces.web.drain"]
+forbidden_modules = [
+    "namisync.dispatcher",
+    "namisync.interfaces.session_observer",
+    "namisync.interfaces.service",
+    "namisync.interfaces.task_lifecycle",
+]

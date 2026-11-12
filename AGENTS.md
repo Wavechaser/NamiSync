@@ -1,54 +1,22 @@
 # NamiSync Working Rules
 
-## Project Goal
+## Product And Integrity
 
-Build a Windows 11 x64 headed desktop app for safe one-way file mirroring.
-Users review a dry-run plan before execution; location inventory, integrity
-verification, history, and the desktop UI are part of the active product, not
-future placeholders. Core sync behavior remains outside the GUI so it can be
-reused by CLI, queue, or service entry points.
+Build a Windows 11 x64 headed app for safe one-way file mirroring. Users review
+an explicit dry-run plan before execution. Inventory, integrity verification,
+history and desktop presentation are product responsibilities; sync behavior
+stays outside the GUI for reuse by other entry points.
 
-## Directory Conventions
-
-- `namisync/core/`: contracts, session state, events, path safety, and protocol
-  shapes. It imports only the Python standard library.
-- `namisync/modules/`: scanner, planner, preflight, executor, and verifier. It
-  imports `core`; modules do not import one another.
-- `namisync/db/`: recorder, repositories, schemas, and the history observer. It
-  imports `core` and is the sole writer of the main ledger.
-- `namisync/workflows/`: sync and integrity workflow coordination. It is the
-  only layer where modules meet and may import `core`, `modules`, and `db`.
-- `namisync/dispatcher/`: domain-blind session admission, custody, control, and
-  event fan-out. It imports `core`, never modules or workflows.
-- `namisync/interfaces/`: CLI, API, and desktop adapters. It imports workflows
-  and the dispatcher through the composition root and owns no domain policy.
-- `tests/`: pytest tests mirroring package boundaries where practical.
-- Active focused documentation lives in `docs/`:
-  - `BUGS.md` for substantive defects, verified fixes, and current status.
-  - `FEATURES.md` for all planned and existing features.
-  - `ARCHITECTURE.md` for project architectural decisions and design principles. 
-  - `HANDOFF.md` for the latest session only: changes made, verification, and
-    immediate next-session operational context. Replace it each session rather
-    than accumulating project-level reference material.
-- Superseded planning material lives in `docs/obsolete/`; it remains readable
-  for historical context but must not describe current behavior or guide new
-  implementation.
-- `README.md` at the repository root is the project-level README, package
-  readme, active documentation index, roadmap/future directions, and changelog.
-- `AGENTS.md` stays at the repository root as the repository instruction file.
-
-## System Integrity Principles
-
-These are product invariants. Preserve them unless the task explicitly changes
-their contract, and update the matching tests and documentation when it does.
+Preserve these invariants unless the user explicitly changes their contract,
+with matching tests and documentation:
 
 - **Operational safety:** filesystem changes follow an explicit reviewed plan;
   destructive behavior stays guarded, scoped, and visible to the user.
 - **Atomicity:** publish copied files atomically on the target volume, and only
   record durable state after the corresponding filesystem operation succeeds.
 - **Idempotency:** repeated scans and immediate reruns must converge on an
-  accurate no-op or near-no-op plan. Preserve stable metadata and timestamps
-  where they support that result.
+  accurate no-op or fire the same pending action. Preserve stable metadata and
+  timestamps where they support that result.
 - **Feature orthogonality:** planning/execution, inventory/integrity, history,
   and UI presentation have distinct responsibilities. Do not make one feature
   silently reinterpret, duplicate, or invalidate another feature's state.
@@ -57,77 +25,272 @@ their contract, and update the matching tests and documentation when it does.
   modules meet; `dispatcher` is domain-blind; and `interfaces` adapt workflows
   and sessions. Dependencies follow the import law in `ARCHITECTURE.md`; UI code
   does not decide sync behavior or reach around workflows.
+- `RootAuthority` is reviewed evidence, never lasting authorization. Consumers
+  admit under their own policies. A local root held open with directory access
+  and no delete sharing may replace repeated root admission only after full
+  admission inside that invocation-owned hold and a normalized DOS final path
+  matching the logical root exactly except drive-letter case. Before each access
+  that reuses admission, query the held handle's current attributes and refuse
+  reparse or placeholder state; a failed query cannot authorize access. Release it on
+  pause or exit. Remote,
+  unholdable or uncorroborated roots retain per-access admission, and descendant
+  guards remain. Shared core code probes, holds and classifies; it does not persist
+  bindings or decide consumer policy.
+- Bound complete external requests before constructing interface/presentation
+  values. All external adapters follow [BRIDGE.md](docs/BRIDGE.md)'s ingress
+  contract, including its equal-or-stricter bound for future adapters.
 
-## Naming Conventions
+## Structure And Task Routing
 
-- Python modules use lowercase snake_case.
-- Dataclasses, enums, and public types use clear domain names:
-  `RootMapping`, `FileRecord`, `ScanResult`, `SyncOptions`, `SyncPlan`,
-  `PlanOperation`, `ProgressEvent`, and `RunResult`.
-- Relative paths stored by the app are root-relative strings. Filesystem APIs
-  may use `pathlib.Path`, but persisted paths must not depend on a drive letter.
-- Deletion policies are named `trash`, `additive`, and `mirror`; `trash` is the
-  default user-facing policy.
-- Use `NamiSync` as the product name, `namisync` as the Python package and
-  module name, and `nami-sync` as the command-line executable. Never use
-  `nami_sync`.
+| Path | Responsibility and permitted project imports |
+| --- | --- |
+| `namisync/core/` | Contracts, session state/events, path safety, root evidence and protocols; standard library only. |
+| `namisync/modules/` | Isolated domain components; import contracts from core, never sibling components. Files within one component package may collaborate behind its facade. |
+| `namisync/db/` | Persistence, repositories and history observer; imports core; sole main-ledger writer. |
+| `namisync/workflows/` | Only place domain modules meet; imports core, modules and db. |
+| `namisync/dispatcher/` | Domain-blind admission, custody, control and event fan-out; imports core only. |
+| `namisync/interfaces/` | CLI/API/desktop adapters; access workflows and dispatcher through composition; no domain policy. `branding/` holds the app icon's SVG masters as package data. |
+| `tests/` | Pytest coverage following package boundaries. |
+| `tools/` | Development utilities; temporary fixtures, archives and evidence go in ignored `build/`. |
 
-## Implementation Rules
+Use the relevant routes below, not a mandatory full-document reading sequence:
 
-- Keep the minimum code that solves the current phase. Do not add speculative
-  features, extension points, or broad refactors.
-- Make surgical changes. Every changed line should trace to the current task.
-- Prefer explicit dataclasses and typed functions over implicit dictionaries for
-  core contracts.
-- Use `sqlite3` directly. Do not add an ORM.
-- Keep live SQLite databases local only. Do not place app DBs in cloud-synced
-  folders.
-- Use WAL mode for the main database.
-- Commit database state only after successful filesystem operations.
-- Preserve timestamps on copied files so reruns can stay stable.
-- Hide or guard `mirror` deletion until the rest of the safety model is proven.
+- Component work: read its focused document in `docs/`. In particular,
+  [EXECUTOR.md](docs/EXECUTOR.md) owns package/effect boundaries and the settlement
+  stability gate; [VERIFIER.md](docs/VERIFIER.md) owns engine/native boundaries;
+  [DATABASE.md](docs/DATABASE.md) owns persistence and placement requirements.
+- Cross-layer/contracts work: [ARCHITECTURE.md](docs/ARCHITECTURE.md) owns the
+  import law and contract-to-source locator. Exact shared shapes are source-owned
+  under core; prefer explicit dataclasses and typed functions.
+- Safety, bugfix boundaries, or quantitative claims: [DEFENSE.md](docs/DEFENSE.md), 
+  including §2.5 for proportional defense and §7 for evidence authority. New
+  defenses need a demonstrably plausible trigger. Diagnostics, targets and drift guards are not
+  acceptance merely because they were measured. Classify consequence and enforceability
+  before choosing the lowest sufficient tier; keep observations separate from
+  contracts/validators. Component docs own their criteria; PERFORMANCE owns
+  fixtures, profiles, scaling, aggregation/retention, artifacts and rerun triggers.
+- Adapter/host/lifecycle work: [INTERFACES.md](docs/INTERFACES.md); command/event
+  transport and ingress: [BRIDGE.md](docs/BRIDGE.md); tree/search/sort/selection
+  and scale: [PRESENTATION.md](docs/PRESENTATION.md).
+- UI and icons: [DESKTOP_UI.md](docs/DESKTOP_UI.md); icon assets or catalog servicing
+  should use the tooling and maintenance guidelines documented in [TOOLS.md](docs/TOOLS.md).
+- Measurement methods, fixtures, profiles, samples and results:
+  [PERFORMANCE.md](docs/PERFORMANCE.md). [DEFENSE.md](docs/DEFENSE.md) owns
+  consequence and evidence authority; component documents own behavior and
+  acceptance decisions.
+- Product scope: [FEATURES.md](docs/FEATURES.md); checkpoints:
+  [M1_PLAN.md](docs/M1_PLAN.md), the sole active M1 delivery register. Accepted
+  future outcomes remain binding, but unrealized representation, reservation,
+  DTO and command-count recipes are reconsidered at first use; retain only
+  narrow admission and measured scale obligations with named owners.
 
-## Windows Rules
+## Implementation And Verification
 
-- The target platform is native Windows 11 x64.
-- Use PowerShell syntax for project commands.
-- Prefer Python 3.13 from the project virtual environment.
-- Do not introduce WSL, Bash, Git Bash, or CMD workflows unless explicitly
-  requested or technically necessary.
-- Use long-path-safe handling where code touches filesystem paths.
+- Make only task-relevant changes; avoid speculative features and adjacent
+  refactors. Remove only orphans/artifacts created by this task, preserving
+  unrelated work. Keep build outputs, caches, virtual environments, databases
+  and sync trash out of Git.
+- Use `NamiSync`, Python package and console executable `namisync`, and GUI
+  executable `namisync-gui`; never
+  `nami_sync`. Use lowercase snake_case modules and clear domain type names.
+  Persist root-relative paths independent of drive letters; filesystem APIs
+  may use `pathlib.Path` with long-path-safe handling.
+- Use native PowerShell and prefer the project venv created with the selected
+  release interpreter in [TOOLS.md](docs/TOOLS.md#portable-build-preparation).
+  Do not introduce CMD, Bash, Git Bash or WSL unless requested or technically
+  necessary.
+- Follow [TESTS.md](docs/TESTS.md) for test scope and execution.
+  `tests/_departments.py` owns exact primary module assignment; do not duplicate
+  its catalogs in prose. Departments do not prove blast radius: add direct
+  consumer departments for public contracts and use the ordinary suite when
+  impact is broad or uncertain.
+- Import component public APIs through their facades; patch internal collaborators
+  in the owning submodule. For fixes, identify a reproducer first when practical;
+  add focused tests for new core behavior.
+- Documentation-only work needs consistency, link and diff checks; product
+  tests are needed when it changes an executable contract or test authority.
+- Use TESTS.md's automatic probe containment and bounded failure diagnostics.
+  Routine tests do not need a person or agent watching memory; inspect resource
+  evidence for failures or a named resource gate.
 
-## Testing And Verification
+### Execution Priorities
 
-- Use pytest.
-- For bug fixes, write or identify a reproducing test first when practical.
-- For new core behavior, add focused tests in the matching test area.
-- Document behavioral changes in the module-specific document in `docs/` in
-  the same change: GUI, database, scanner, planner, executor, history, or
-  another focused document as appropriate. Update or create that focused
-  document when a component has no adequate coverage.
-- Also update `README.md` whenever a change affects the product overview,
-  features, safety model, limitations, documentation index, roadmap, or other
-  cross-cutting/user-visible behavior. Keep superseded material in
-  `docs/obsolete/` rather than leaving it as active guidance.
-- Run the narrowest relevant verification after each change, then broader tests
-  before considering a phase complete.
-- Before declaring work complete, review the result for requirement drift,
-  brittle assumptions, security risks, hidden edge cases, and unnecessary
-  complexity.
+1. **Work by mechanism.** Trace owners and direct consumers, including fixtures
+   and external helpers. Classify the failure before fixing its family; scope
+   follows the accepted outcome, not a file list. Stop rules still apply.
+2. **Check the real seam early.** Run existing affected composition/native cases
+   before broad gates. Add no separate preflight suite or protocol.
+3. **Settle inputs before acceptance.** Finish writers and reconcile review
+   corrections before freezing. Serialize shared source, tests and validators.
+4. **Reuse evidence by dependency.** Changed product, producer, checker or driver
+   dependencies invalidate their evidence. Retain unaffected passes and failed
+   receipts; unchanged product bytes alone are insufficient.
+5. **Keep one current decision record.** M1_PLAN owns scope/decisions, HANDOFF
+   owns resumption context, and evidence owns chronology. Update those owners;
+   do not add parallel checklists or stop/resume transcripts.
 
-## Commit Readiness
+## Task Containment And Recovery
 
-- Before any future commit, review whether the relevant files under `docs/`,
-  `docs/obsolete/`, `README.md`, or `AGENTS.md` need updates for the committed
-  behavior.
-- Do not commit behavior changes whose matching documentation is stale.
-- When committing or pushing a versioned update, add a concise entry to the
-  README changelog describing the user-meaningful change.
+These boundaries apply with or without a skill. Execution skills define the
+investigation, interaction, delegation and recovery procedure; they cannot
+expand authority or relax repository gates.
 
-## Cleanup
+Default to a small change unless the user asks for a formal plan. Apply the
+relevant checks, tests, documentation, adversarial review and concise changelog
+entry without requiring a permanent worksheet or register for each fix. The user
+owns classification; agents do not impose a size threshold or eligibility rubric.
+When work crosses architectural ownership, public contracts, safety guarantees
+or multiple independently deliverable outcomes, explain the concrete boundary
+and ask the user to formalize it. Existing authorization persists. The safety,
+recurrence and recovery rules below always apply.
 
-- Remove only unused imports, variables, files, or generated artifacts created
-  by the current change.
-- Do not remove unrelated dead code or reformat adjacent files opportunistically.
-- Keep generated build outputs, caches, virtual environments, databases, and
-  sync trash out of Git.
+### Scope And Completion
+
+- For a user-requested formal batch or an existing accepted register, record
+  stable outcomes, dependencies, named verification, non-goals and task-specific
+  stops in its owning delivery document. Before implementing a pending row,
+  identify its owners and direct consumers, preserved guarantees, finite
+  production/test/doc population, acceptance gate and commit boundary. Check
+  relevant archived dispositions and likely regressions. Keep this proportional
+  to the outcome; routine in-bound choices need no new approval. Explicit
+  exclusions remain binding. Quantified criteria need a finite domain,
+  procedure and terminal observation; discovery may instead close over a named
+  corpus/method without authorizing fixes.
+- Continue through implementation, correction of introduced regressions, required
+  tests/docs and final adversarial review of every checkpoint. Completion means
+  every accepted row passes its named gate without regressing the declared
+  baseline. Resolve routine ambiguity from contracts and state material
+  assumptions; ask when an outcome or boundary changes.
+- Next-checkpoint design may overlap the predecessor's final implementation and
+  verification, but stays read-only toward product/tests and cannot weaken or
+  delay its gate. Record the inspected revision and revalidate changed seams
+  against the integrated predecessor. Dependent implementation waits for its
+  completion and active user scope; a future outcome or ready plan is not authority.
+
+### Findings And Scope Decisions
+
+- New findings do not add scope. Regressions are lost guarantees, false states,
+  unauthorized/duplicate effects or newly unbounded work; test color alone proves
+  neither their presence nor absence. Correct introduced regressions before a
+  mergeable commit. A bounded pre-existing substantive defect may receive a
+  separate fix commit only while no stop rule applies; log and defer other
+  verified findings. A blocked gate with no authorized remedy needs adjudication.
+- Only the user may change active scope. Suspend dependent work when an outcome,
+  architectural ownership, safety/effect model or mechanism/verification boundary
+  changes; do not split off a non-atomic commit to evade that boundary. Before a
+  scope-only full stop, investigate a finite corpus covering cause, owners,
+  dependencies and consumers (including external test helpers), preserved
+  guarantees and verification. Present one coherent proposal, not successive
+  first-failure additions. Investigation does not authorize implementation.
+- A narrow understood extension preserving outcome and ownership/safety may seek
+  an explicit in-turn decision. Larger architectural changes, unresolved
+  boundaries or changed safety/effects require a full stop and reviewable redesign.
+  Existing approval persists. While a decision is pending, only independent
+  authorized work may continue. No answer within a bounded response window means
+  stop and recover, never consent. Always-stop rules override investigation/waiting.
+- On the **second unplanned instance of one causal mechanism**, or **third
+  unplanned substantive defect** in a pass/checkpoint, finish only the current
+  safety-preserving atomic outcome and begin no further instance fix. Produce a
+  mechanism table of consequences, owners and common choke point (or why none
+  exists); reorganize and obtain review before resuming. Narrow reorganization
+  may use in-turn adjudication, never waive the pause/review. Count mechanisms
+  semantically, not by BUGS category spelling. Predeclared finite migrations
+  are exempt from this recurrence rule.
+
+### Mandatory Stops And Preservation
+
+- Always stop, preserve exact state and report evidence of supported-path data
+  loss/corruption, unauthorized or out-of-root mutation, supported security or
+  hard-wall escape, false durable/terminal success, duplicate/replayed mutation,
+  or inability to preserve/recover current work. Broad checkpoints may add
+  narrower stops with precise consequences/transitions before work starts;
+  only the user may expand them during a checkpoint.
+- If stopping before a merge-ready commit, preserve only task-owned changes on
+  an isolated disposable recovery branch with provenance, scope, verification
+  and excluded-work details sufficient for exact resumption. Never absorb or
+  destroy unrelated work. Recovery commits are not review units: never merge or
+  cherry-pick them as-is. Rebuild useful changes into coherent verified commits;
+  remove recovery refs only after review, integration and full accounting.
+
+## Commits And Documentation
+
+- One coherent checkpoint per mergeable commit, including its tests and matching
+  documentation. Review relevant docs, obsolete material, and AGENTS for updates
+  before committing; stale behavior documentation blocks readiness.
+- Update M1_PLAN when scope, decisions or checkpoint status changes, and at
+  session/stop boundaries; it is not a per-commit transcript. Replace HANDOFF at
+  session/stop boundaries. Atomic commits still carry matching subject docs;
+  CHANGELOG records task delivery. Keep command chronology in evidence.
+- Review each atomic outcome independently. After corrections, review the changed
+  delta and affected dependencies against the prior review; do not repeat
+  unchanged reviews or gates without a dependency reason.
+- Use `<category>(<optional-scope>): <imperative summary>` with the narrowest of
+  `feat`, `fix`, `perf`, `test`, `docs`, `refactor`, `build`, `chore`; scope is a
+  lowercase owning component, omitted for cross-cutting work. `wip` is recovery-
+  only, never on integration branches; its temporary readiness exemption does
+  not make it mergeable.
+- Update/create the owning component doc with behavior changes. Update README
+  for product, safety, limitations, roadmap or documentation-index changes.
+  At task delivery, extend the matching CHANGELOG task/date range or add a new
+  task when none fits; update README's summary only if its phase/milestone
+  synopsis changes. Replace HANDOFF with latest-session changes, verification
+  and immediate operational context. 
+
+## Documentation Maintenance
+
+Active subject documents live in `docs/`; superseded plans belong in
+`obsolete/` and must not guide current implementation. Root `AGENTS.md` owns
+repository execution boundaries. Root `README.md` remains the product/package
+readme, documentation index, roadmap and concise milestone/phase changelog;
+this file owns editing conventions, not a second product index.
+
+Read the section relevant to the document being edited. Update a subject's
+existing owner rather than creating parallel authority or copying its rules
+into every consumer document.
+
+### Subject Ownership
+
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md) owns durable decisions, contracts, layering,
+  coordination, invariants, type/protocol meaning and milestone direction.
+  Exact fields, enums, inheritance, protocols and signatures belong to the
+  owning core symbol. Keep the contract-to-source locator current; reproduce
+  exact shapes only when needed to explain an architectural decision. Module
+  docs explain use/extension policy without redefining shapes. Put dated
+  status, acceptance results, measurements and implementation walkthroughs in
+  the changelog, delivery plan or owning component document.
+- [DEFENSE.md](docs/DEFENSE.md) is normative for supported assumptions, trusted
+  boundaries, hard walls, tolerances, quantitative evidence, residual-risk
+  dispositions and model-reopen triggers. Other documents link to its policy
+  and describe their own mechanisms; they do not restate its tables or accept
+  a residual merely by describing it.
+- [FEATURES.md](docs/FEATURES.md) owns product behavior and distinguishes active
+  from unrealized outcomes, without milestone build recaps.
+- [BUGS.md](docs/BUGS.md) owns substantive defects and its entry conventions. Keep
+  entries module-first, roughly 6–12 rendered lines, retaining consequence,
+  cause, fix and essential residual/test context. Categories name reusable
+  causal mechanisms; severity follows the worst supported product consequence,
+  not the audit or gate that found it.
+- [M1_PLAN.md](docs/M1_PLAN.md) is the sole active M1 delivery register. Archive
+  superseded plan ancestry rather than maintaining parallel current authorities.
+- [PERFORMANCE.md](docs/PERFORMANCE.md) owns measurement methods, fixture/profile
+  and scaling descriptions, aggregation, provenance and results. Component
+  documents own their behavior and acceptance decisions; DEFENSE owns evidence
+  authority and consequence.
+- [HANDOFF.md](docs/HANDOFF.md) covers only the latest session: changes, verification
+  and immediate operational context. Replace it rather than accumulating a
+  project reference or transcript; retain necessary resumption/evidence pointers.
+- Superseded material are placed in `docs/obsolete/`. They are historical references, 
+  not current implementation guidance.
+
+### Changelogs
+
+Both root changelogs are newest-first. README has only `##` milestone/release
+and `###` phase summaries, never task entries. CHANGELOG repeats those levels
+and adds dated `####` tasks with concise delivery bullets. Before named releases,
+use milestone headings such as `M1`; afterward use version and nickname, such as
+`v0.1.0 "Gertrud"`.
+
+Before adding a task, decide whether the session advances an existing one;
+extend its date range and summary when it does. Put post-delivery work in the
+relevant hardening phase rather than appending it to the original feature task.
+Update README's changelog synopsis only when the milestone/phase summary changes.

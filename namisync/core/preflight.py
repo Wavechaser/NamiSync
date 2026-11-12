@@ -5,10 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Mapping, NamedTuple
 
 from .models import FileStat, VolumeEvidence, VolumeId
-from .planning import FilterSet, OpId
+from .planning import OpId
+from .root_authority import RootAuthorityIssue
+from .scalars import require_signed_64
 
 
 class Subject(NamedTuple):
@@ -16,7 +19,7 @@ class Subject(NamedTuple):
     rel_path_key: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StatObservation:
     stat: FileStat | None
     error: str | None = None
@@ -24,15 +27,20 @@ class StatObservation:
     representable: bool = True
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RootObservation:
     resolved_path: str | None
     volume_id: VolumeId | None
     volume_evidence: VolumeEvidence | None
     error: str | None = None
+    authority_issue: RootAuthorityIssue | None = None
+
+    def __post_init__(self) -> None:
+        if self.authority_issue is not None and self.error is None:
+            raise ValueError("root authority issue requires an observation error")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TrashObservation:
     resolved_path: str | None
     available: bool
@@ -43,7 +51,7 @@ class TrashObservation:
     error: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ObservedWorld:
     stats: Mapping[Subject, StatObservation]
     paths: Mapping[Subject, str]
@@ -52,20 +60,51 @@ class ObservedWorld:
     free_space: int | None
     reclaimable_temp_bytes: int
     trash: TrashObservation | None
-    current_filters: FilterSet
-    current_policy_fingerprint: str
     observed_at: datetime
-    settings_error: str | None = None
 
     def __post_init__(self) -> None:
-        if self.free_space is not None and self.free_space < 0:
-            raise ValueError("free space cannot be negative")
-        if self.reclaimable_temp_bytes < 0:
-            raise ValueError("reclaimable temp bytes cannot be negative")
+        if self.free_space is not None:
+            require_signed_64(self.free_space, "free space")
+        require_signed_64(
+            self.reclaimable_temp_bytes,
+            "reclaimable temporary bytes",
+        )
+        if not isinstance(self.observed_at, datetime):
+            raise TypeError("observation timestamp must be a datetime")
         if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
             raise ValueError("observation timestamp must be timezone-aware")
         if self.observed_at.utcoffset() != timezone.utc.utcoffset(self.observed_at):
             raise ValueError("observation timestamp must be UTC")
+        if (
+            type(self.observed_at) is not datetime
+            or self.observed_at.tzinfo is not timezone.utc
+        ):
+            object.__setattr__(
+                self,
+                "observed_at",
+                datetime(
+                    self.observed_at.year,
+                    self.observed_at.month,
+                    self.observed_at.day,
+                    self.observed_at.hour,
+                    self.observed_at.minute,
+                    self.observed_at.second,
+                    self.observed_at.microsecond,
+                    tzinfo=timezone.utc,
+                    fold=self.observed_at.fold,
+                ),
+            )
+        if type(self.target_parent_paths) is not frozenset:
+            raise TypeError("observed target parent paths must be an exact frozenset")
+        for field_name in ("stats", "paths", "roots"):
+            population = getattr(self, field_name)
+            if not isinstance(population, Mapping):
+                raise TypeError(f"observed-world {field_name} must be a mapping")
+            object.__setattr__(
+                self,
+                field_name,
+                MappingProxyType(dict(population)),
+            )
 
 
 class RefusalCode(StrEnum):
@@ -88,8 +127,6 @@ class RefusalCode(StrEnum):
     SIZE_CHANGED = "size_changed"
     MTIME_CHANGED = "mtime_changed"
     METADATA_CHANGED = "metadata_changed"
-    FILTER_DRIFT = "filter_drift"
-    OPTIONS_DRIFT = "options_drift"
     INSUFFICIENT_SPACE = "insufficient_space"
     TRASH_UNAVAILABLE = "trash_unavailable"
     TRASH_ESCAPE = "trash_escape"
@@ -100,7 +137,7 @@ class RefusalCode(StrEnum):
     PATH_UNREPRESENTABLE = "path_unrepresentable"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Refusal:
     code: RefusalCode
     op_id: OpId | None = None
@@ -108,7 +145,7 @@ class Refusal:
     detail: str = ""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Verdict:
     ok: bool
     refusals: tuple[Refusal, ...]

@@ -1,0 +1,2814 @@
+"""Installed-wheel child for the M1-4 process-live task shell witness."""
+
+from __future__ import annotations
+
+import argparse
+import importlib.metadata
+import json
+import os
+import sys
+import threading
+from contextlib import ExitStack
+from dataclasses import replace
+from pathlib import Path
+from types import MethodType
+from typing import Any, Callable
+from unittest.mock import patch
+
+from _headed_evidence import EvidencePaths, EvidencePublisher
+from _headed_cdp import NativeCdp, on_background_page_loaded, runtime_value, failure_site
+from _plan_again_trace import (
+    PlanAgainHostTrace,
+    trace_registry_plan_again,
+    traced_plan_again_commands,
+    validate_trace_snapshot,
+)
+from _startup_test_support import headed_command_extension
+
+
+_FAILURE_STAGES = frozenset(
+    {
+        "page_probe",
+        "page_initial",
+        "page_initial_ready",
+        "page_initial_capacity",
+        "page_initial_basic_close",
+        "page_initial_retry",
+        "page_initial_navigation",
+        "page_initial_navigation_cleanup",
+        "page_initial_navigation_recorded",
+        "page_busy",
+        "page_terminal_first",
+        "page_terminal_second",
+        "page_plan_review",
+        "page_plan_review_plan_surface",
+        "page_plan_review_move_reveal_query",
+        "page_plan_review_move_reveal_missing",
+        "page_plan_review_move_reveal_above",
+        "page_plan_review_move_reveal_below",
+        "page_plan_review_move_reveal_visible",
+        "page_plan_review_plan_offset",
+        "page_plan_review_plan_notice",
+        "page_plan_review_plan_refused",
+        "page_plan_review_plan_release",
+        "page_plan_review_plan_again",
+        "page_plan_review_plan_force",
+        "page_plan_review_plan_ack",
+        "page_plan_review_plan_execute",
+        "page_plan_review_plan_live",
+        "page_plan_review_plan_paused",
+        "page_plan_review_plan_resumed",
+        "page_plan_review_plan_empty_prepare",
+        "page_plan_review_plan_empty_wait",
+        "child",
+    }
+)
+_FAILURE_TYPES = frozenset(
+    {"AssertionError", "AttributeError", "RuntimeError", "TypeError", "ValueError", "Error"}
+)
+_COMPLETE_TEXT = "Task shell gate complete"
+_DRIVER_DIAGNOSTIC_KEYS = frozenset(
+    {
+        "actual_control_checkpoint", "active_element", "cdp_canceled", "cdp_faulted",
+        "authoritative_selection_state", "task_delivery_session_changed", "task_delivery_session_released",
+        "service_session_state", "task_delivery_active_drain_present",
+        "task_delivery_session_state", "task_delivery_start_identity_count",
+        "task_delivery_terminal_delivered", "task_delivery_terminal_record_present", "dialog_open",
+        "document_has_focus", "execute_disabled", "execute_focused", "execute_hidden",
+        "last_driver_step", "last_method", "page_confirmation_stage",
+        "live_service_state", "review_pending", "preflight_hook_count", "pause_disabled", "pause_hidden", "resume_hidden", "controls_hidden",
+        "runtime_has_exception_details", "runtime_result_type", "trusted_click_count",
+        "trusted_keydown_count", "trusted_keyup_count",
+        "browser_async_error",
+        "move_bottom_gap",
+        "plan_context_input",
+        "plan_context_readiness",
+    }
+)
+_PLAN_CONTEXT_READINESS_KEYS = frozenset(
+    {"document_focused", "connected", "visible", "focused", "hit_owned"}
+)
+
+
+_COMMON_JS = r"""
+var sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function until(predicate, label, attempts = 300) {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error("browser asynchronous error");
+    const value = predicate();
+    if (value) return value;
+    await sleep(25);
+  }
+  throw new Error(`timed out waiting for ${label}`);
+}
+async function untilAsync(predicate, label) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error("browser asynchronous error");
+    const value = await predicate();
+    if (value) return value;
+    await sleep(25);
+  }
+  throw new Error(`timed out waiting for ${label}`);
+}
+function rows() { return Array.from(document.querySelectorAll(".nami-task-rail__row")); }
+function rowByTitle(title) {
+  return rows().find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === title);
+}
+function selectedTitle() {
+  return document.querySelector('.nami-task-card[aria-current="page"]')?.dataset.taskLabel ?? null;
+}
+function workTitle() {
+  const label = document.querySelector(".nami-work-panel")?.getAttribute("aria-label") ?? "";
+  return label.startsWith("Work area — ") ? label.slice("Work area — ".length) : null;
+}
+function planGeometryFor(review) {
+  const viewport = review?.querySelector(".nami-plan-review__list");
+  const workBody = document.querySelector(".nami-work-panel__body");
+  const planActions = review?.querySelector(".nami-plan-review__actions");
+  const footerStatus = review.querySelector(".nami-plan-review__status");
+  const footerButtons = planActions.lastElementChild;
+  const statusCard = review.querySelector(".nami-plan-review__summary");
+  const statusTitle = review.querySelector(".nami-plan-review__status-title");
+  const statusDetail = review.querySelector(".nami-plan-review__status-summary");
+  const settingRows = [...review.querySelectorAll(".nami-plan-review__settings > span")];
+  const pathRows = [...review.querySelectorAll(".nami-plan-review__path")];
+  const searchInput = review.querySelector('[data-action="plan-search"]').getBoundingClientRect();
+  const searchButton = review.querySelector('[data-action="plan-search-submit"]').getBoundingClientRect();
+  return {
+    documentFitsViewport: document.documentElement.scrollHeight <= innerHeight + 1,
+    workBodyFitsViewport: workBody instanceof HTMLElement
+      && workBody.scrollHeight <= workBody.clientHeight + 1,
+    tableAbsorbsHeight: viewport instanceof HTMLElement
+      && viewport.clientHeight > 0 && viewport.scrollHeight >= viewport.clientHeight,
+    statusActionsVisible: planActions instanceof HTMLElement && planActions.checkVisibility()
+      && statusCard.contains(planActions)
+      && planActions.getBoundingClientRect().bottom <= innerHeight + 1,
+    actionsShareTitleRow: Math.abs(
+      (statusTitle.getBoundingClientRect().top + statusTitle.getBoundingClientRect().bottom) / 2
+      - (footerButtons.getBoundingClientRect().top + footerButtons.getBoundingClientRect().bottom) / 2) < 1,
+    feedbackBelowFacts: !footerStatus.hidden
+      && footerStatus.getBoundingClientRect().top >= statusDetail.getBoundingClientRect().bottom - 1
+      && [footerStatus, statusDetail].every(line => line.getBoundingClientRect().right
+        <= review.querySelector('.nami-plan-review__details-toggle').getBoundingClientRect().left + 1),
+    tableHasNoFooter: !review.querySelector(".nami-plan-review__table-card .nami-plan-review__actions"),
+    semanticSettingsVisible: settingRows.length === 2 && settingRows.every((row) =>
+      row.textContent.length > 0 && row.getBoundingClientRect().width > 0
+      && row.getBoundingClientRect().right <= review.getBoundingClientRect().right),
+    semanticSettingsAligned: settingRows.length === 2 && settingRows.every((row, index) =>
+      Math.abs(row.getBoundingClientRect().top - pathRows[index].getBoundingClientRect().top) < 1),
+    searchButtonInset: searchButton.top > searchInput.top && searchButton.bottom < searchInput.bottom
+      && searchButton.right < searchInput.right,
+  };
+}
+function statusFor(title) { return rowByTitle(title)?.querySelector(".nami-task-card__title")?.textContent ?? null; }
+function detailFor(title) { return rowByTitle(title)?.querySelector(".nami-task-card__status")?.textContent ?? null; }
+function clickNew() { document.querySelector(".nami-task-rail__create")?.click(); }
+function clickSelect(title) { rowByTitle(title)?.querySelector(".nami-task-card")?.click(); }
+function clickClose(title) { rowByTitle(title)?.querySelector(".nami-task-rail__close")?.click(); }
+async function submitPlan(title, reviewOptions = false, sourceCasing = false) {
+  clickSelect(title);
+  let source = await until(() => {
+    const input = document.querySelector("#setup-source-path");
+    return selectedTitle() === title && input instanceof HTMLInputElement && !input.disabled ? input : null;
+  }, "editable Plan Setup");
+  const paths = await control("paths");
+  source.value = paths.source;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  source = await until(() => document.querySelector("#setup-source-path"), "current source input");
+  source.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => document.querySelector("#setup-source-path")?.dataset.state === "resolved", "source admission");
+  let target = await until(() => document.querySelector("#setup-target-path"), "current target input");
+  if (!(target instanceof HTMLInputElement)) throw new Error("Plan target input is unavailable");
+  target.value = paths.target;
+  target.dispatchEvent(new Event("input", {bubbles: true}));
+  target = await until(() => document.querySelector("#setup-target-path"), "current target input");
+  target.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => document.querySelector("#setup-target-path")?.dataset.state === "resolved", "target admission");
+  if (reviewOptions) {
+    const more = document.querySelector(".nami-setup__more-summary");
+    if (!(more instanceof HTMLButtonElement)) throw new Error("Plan advanced options are unavailable");
+    more.click();
+    await until(() => more.ariaExpanded === "true", "expanded Plan options");
+    for (const key of ["verify_after_execute", "deletion_policy", "trash_on_update",
+      "preserve_created", "preserve_acl", "propagate_source_casing"]) {
+      const option = document.querySelector(`[data-option="${key}"]`);
+      if (!(option instanceof HTMLInputElement)) throw new Error(`Plan option ${key} is unavailable`);
+      const enabled = key === "propagate_source_casing" && sourceCasing;
+      if (option.checked !== enabled) option.click();
+      await until(() => document.querySelector(`[data-option="${key}"]`)?.checked === enabled,
+        `Plan option ${key} settled`);
+    }
+  }
+  const start = await until(() => {
+    const button = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+      .find((item) => item.textContent === "Create plan");
+    return document.querySelector("#setup-source-path")?.dataset.state === "resolved" &&
+      document.querySelector("#setup-target-path")?.dataset.state === "resolved" &&
+      button instanceof HTMLButtonElement && !button.disabled ? button : null;
+  }, "admitted Plan Setup");
+  start.click();
+}
+async function submitInventory(title) {
+  clickSelect(title);
+  const mode = await until(() => document.querySelector('.nami-setup__mode [data-value="inventory"]'),
+    "Inventory Setup mode");
+  mode.click();
+  const source = await until(() => {
+    const input = document.querySelector("#setup-source-path");
+    return selectedTitle() === title && input instanceof HTMLInputElement && !input.disabled &&
+      document.querySelector('[for="setup-source-path"]')?.textContent === "Root" ? input : null;
+  }, "editable Inventory root");
+  const paths = await control("paths");
+  source.value = paths.source;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  const current = await until(() => document.querySelector("#setup-source-path"), "current Inventory root");
+  current.dispatchEvent(new Event("blur", {bubbles: true}));
+  const start = await until(() => {
+    const button = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+      .find((item) => item.textContent === "Create inventory");
+    return document.querySelector("#setup-source-path")?.dataset.state === "resolved" &&
+      button instanceof HTMLButtonElement && !button.disabled ? button : null;
+  }, "admitted Inventory Setup");
+  start.click();
+}
+function resolvedBackground(variable) {
+  const witness = document.createElement("span");
+  witness.style.background = `var(${variable})`;
+  document.body.append(witness);
+  const value = getComputedStyle(witness).backgroundColor;
+  witness.remove();
+  return value;
+}
+function hasFocusRing(element) {
+  const style = getComputedStyle(element);
+  return style.boxShadow !== "none" ||
+    (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0);
+}
+function selectionAppearance(title) {
+  const row = rowByTitle(title);
+  const card = row?.querySelector(".nami-task-card");
+  const close = row?.querySelector(".nami-task-rail__close");
+  if (card === undefined || card === null) return null;
+  const style = getComputedStyle(card);
+  const marker = getComputedStyle(card, "::before");
+  return {
+    current: card.ariaCurrent,
+    persistentFill: style.backgroundColor === resolvedBackground("--color-selection-highlight"),
+    markerWidth: marker.width,
+    markerHeight: marker.height,
+    markerAccent: marker.backgroundColor === resolvedBackground("--color-accent-fill"),
+    closeLabel: close?.getAttribute("aria-label") ?? null,
+    closeEnabled: close?.disabled === false,
+  };
+}
+function selectedAppearanceSettled(title) {
+  const appearance = selectionAppearance(title);
+  return appearance?.current === "page" &&
+    appearance.persistentFill === true &&
+    appearance.markerWidth === "3px" &&
+    appearance.markerAccent === true;
+}
+function selectionCleared(title) {
+  const card = rowByTitle(title)?.querySelector(".nami-task-card");
+  if (card === undefined || card === null) return false;
+  const marker = getComputedStyle(card, "::before");
+  return card.ariaCurrent === "false" &&
+    getComputedStyle(card).backgroundColor === resolvedBackground("--color-neutral-subtle-background") &&
+    marker.content === "none";
+}
+function railGeometry(title) {
+  const row = rowByTitle(title);
+  const card = row?.querySelector(".nami-task-card");
+  const close = row?.querySelector(".nami-task-rail__close");
+  if (!(row instanceof HTMLElement) || !(card instanceof HTMLButtonElement) || !(close instanceof HTMLButtonElement)) return null;
+  const rowRect = row.getBoundingClientRect();
+  const cardRect = card.getBoundingClientRect();
+  const closeRect = close.getBoundingClientRect();
+  const create = document.querySelector(".nami-task-rail__create");
+  const createRect = create.getBoundingClientRect();
+  const headingRect = document.querySelector(".nami-task-rail__header h2").getBoundingClientRect();
+  return {
+    fullWidth: Math.abs(cardRect.left - rowRect.left) <= 1 && Math.abs(cardRect.right - rowRect.right) <= 1,
+    closeInset: closeRect.left > cardRect.left && closeRect.right < cardRect.right,
+    siblingDismiss: close.parentElement === row && close.parentElement === card.parentElement,
+    dismissTransparent: getComputedStyle(close).backgroundColor === "rgba(0, 0, 0, 0)",
+    createAligned: Math.abs((createRect.top + createRect.bottom) / 2 - (headingRect.top + headingRect.bottom) / 2) <= 1,
+    createLargeIcon: getComputedStyle(create.querySelector(".nami-icon")).width === "24px",
+  };
+}
+async function control(action, value = null) {
+  window.__namiTaskShellSequence = (window.__namiTaskShellSequence ?? 0) + 1;
+  const requestId = window.__namiTaskShellSequence.toString(16).padStart(32, "0");
+  const api = window.pywebview?.api;
+  if (typeof api?.dispatch !== "function") throw new Error("native bridge is unavailable");
+  const native = await api.dispatch(JSON.stringify({
+    schema_version: 1,
+    request_id: requestId,
+    command: "task_shell_test_control",
+    payload: { action, value },
+  }));
+  if (native === null || typeof native !== "object") throw new Error("invalid native response");
+  const response = JSON.parse(JSON.stringify(native.response));
+  if (native.response_token !== null) await api.dispatch(`ack:${native.response_token}`);
+  if (response?.request_id !== requestId || response?.ok !== true) {
+    throw new Error(`test control refused ${action}`);
+  }
+  return response.result;
+}
+async function ready() {
+  await until(() => document.querySelector("#host-status")?.textContent === "Ready", "Ready");
+}
+"""
+
+
+_INITIAL_SCRIPT = _COMMON_JS + r"""
+(async () => {
+  await ready();
+  await until(() => rows().length === 46, "46 seeded tasks");
+  await control("checkpoint", "ready");
+  clickNew();
+  await until(() => rows().length === 47, "first new task");
+  clickNew();
+  await until(() => rows().length === 48, "second new task");
+  const newest = rows().slice(0, 3).map((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel);
+  const setup = await until(() => {
+    const value = document.querySelector(".nami-work-panel__body .nami-setup");
+    return value instanceof HTMLElement && value.checkVisibility() ? value : null;
+  }, "live Setup form");
+  const setupVisible = setup.querySelector("#setup-source-path") instanceof HTMLInputElement &&
+    setup.querySelector("#setup-target-path") instanceof HTMLInputElement;
+  const idleGeometry = railGeometry("Task 47");
+  const focusCard = rowByTitle("Task 47")?.querySelector(".nami-task-card");
+  focusCard.focus({focusVisible: false});
+  await sleep(100);
+  const pointerFocusHidden = !hasFocusRing(focusCard);
+  focusCard.blur();
+  focusCard.focus({focusVisible: true});
+  await until(() => hasFocusRing(focusCard), "task card keyboard focus ring");
+  const keyboardFocusVisible = hasFocusRing(focusCard);
+  clickNew();
+  await until(() => document.querySelector("#host-status")?.textContent?.includes("could not be created"), "capacity refusal");
+  const refusedCount = rows().length;
+  const taskList = document.querySelector(".nami-task-rail__items");
+  const settingsButton = document.querySelector(".nami-task-rail__settings");
+  const settingsBefore = settingsButton.getBoundingClientRect();
+  taskList.scrollTop = taskList.scrollHeight;
+  const independentRail = taskList.scrollTop > 0 &&
+    Math.abs(settingsButton.getBoundingClientRect().top - settingsBefore.top) <= 1 &&
+    settingsBefore.bottom <= innerHeight &&
+    taskList.getBoundingClientRect().bottom <= settingsBefore.top &&
+    document.documentElement.scrollHeight <= innerHeight + 1;
+  taskList.scrollTop = 0;
+  const retainedSource = document.querySelector("#setup-source-path");
+  retainedSource.value = "C:\\retained-settings-draft";
+  retainedSource.dispatchEvent(new Event("input", {bubbles: true}));
+  settingsButton.click();
+  await until(() => document.querySelector("#theme-mode-trigger")?.disabled === false, "Settings theme readiness");
+  const defaultVerify = await until(() => {
+    const input = document.querySelector('[data-default-option="verify_after_execute"]');
+    return input instanceof HTMLInputElement && !input.disabled ? input : null;
+  }, "Setup defaults readiness");
+  const originalDefaultVerify = defaultVerify.checked;
+  if (originalDefaultVerify) throw new Error("isolated fixture must start with verification off");
+  const defaultsFooter = document.querySelector(".nami-settings__footer");
+  const defaultsCard = defaultsFooter.closest(".nami-settings__card");
+  const cleanDefaultsHeight = defaultsCard.getBoundingClientRect().height;
+  defaultVerify.checked = true;
+  defaultVerify.dispatchEvent(new Event("change", {bubbles: true}));
+  const footerBounds = defaultsFooter.getBoundingClientRect();
+  const saveBounds = document.querySelector("#setup-defaults-save").getBoundingClientRect();
+  const advisoryBounds = document.querySelector("#setup-defaults-status").getBoundingClientRect();
+  const defaultsFooterStable = Math.abs(defaultsCard.getBoundingClientRect().height - cleanDefaultsHeight) <= 1;
+  const defaultsFooterAligned = Math.abs(saveBounds.right - footerBounds.right) <= 1
+    && Math.abs(advisoryBounds.left - footerBounds.left) <= 1
+    && advisoryBounds.right <= saveBounds.left
+    && advisoryBounds.top >= saveBounds.top && advisoryBounds.bottom <= saveBounds.bottom;
+  const settingsSurface = document.querySelector(".nami-work-panel").getAttribute("aria-label") === "Settings" &&
+    document.querySelectorAll("#settings-view > .nami-card").length === 3 &&
+    document.querySelector("#settings-view").textContent.includes('0.1.0 "Gertrud"') &&
+    rows().length === 48 && settingsButton.getAttribute("aria-current") === "page";
+  clickSelect("Task 48");
+  await until(() => workTitle() === "Task 48", "return from Settings");
+  const settingsDraftRetained = document.querySelector("#setup-source-path") === retainedSource &&
+    retainedSource.value === "C:\\retained-settings-draft" &&
+    document.querySelector('[data-option="verify_after_execute"]').checked === false;
+  settingsButton.click();
+  await until(() => !defaultVerify.disabled, "reopened Setup defaults");
+  const defaultsDraftRetained = defaultVerify.checked;
+  document.querySelector("#setup-defaults-save").click();
+  await until(() => document.querySelector("#setup-defaults-status").textContent.startsWith("Defaults saved."),
+    "saved Setup defaults");
+  clickSelect("Task 48");
+  await until(() => workTitle() === "Task 48", "saved defaults preserve old task");
+  await control("checkpoint", "capacity");
+  clickSelect("Task 47");
+  await until(() => selectedTitle() === "Task 47" && workTitle() === "Task 47", "older task selection");
+  await until(() => selectedAppearanceSettled("Task 47"), "older task selected appearance");
+  const olderAppearance = selectionAppearance("Task 47");
+  clickSelect("Task 48");
+  await until(() => selectedTitle() === "Task 48" && workTitle() === "Task 48", "newer task return");
+  await until(() => selectedAppearanceSettled("Task 48") && selectionCleared("Task 47"), "transferred task selection appearance");
+  const newerAppearance = selectionAppearance("Task 48");
+  const olderSelectionCleared = selectionCleared("Task 47");
+  clickClose("Task 48");
+  await until(() => rows().length === 47 && rowByTitle("Task 48") === undefined, "successful close");
+  await control("checkpoint", "basic_close");
+
+  await control("arm_close_failure");
+  const beforeCloseRefusal = await control("status");
+  clickClose("Task 47");
+  await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__close")?.getAttribute("aria-label") === "Retry close for Task 47", "failed close recovery");
+  const afterCloseRefusal = await control("status");
+  const failureDetail = detailFor("Task 47");
+  const retainedAfterFailure = rows().length === 47 && failureDetail === "Close was refused. Retry close.";
+  const refusedCloseBeforeEffect = afterCloseRefusal.close_failures === beforeCloseRefusal.close_failures + 1
+    && afterCloseRefusal.close_original_calls === beforeCloseRefusal.close_original_calls;
+  clickClose("Task 47");
+  await until(() => rows().length === 46 && rowByTitle("Task 47") === undefined, "close retry");
+  const afterCloseRetry = await control("status");
+  const singleCloseAfterRetry = afterCloseRetry.close_failures === afterCloseRefusal.close_failures
+    && afterCloseRetry.close_original_calls === beforeCloseRefusal.close_original_calls + 1;
+  await control("checkpoint", "retry");
+
+  await control("arm_create_delay");
+  clickNew();
+  await untilAsync(async () => (await control("status")).create_waiting === true, "delayed create");
+  clickSelect("Task 46");
+  await control("release_create");
+  await until(() => rows().length === 47, "delayed create return");
+  const navigationStayed = selectedTitle() === "Task 46" && workTitle() === "Task 46";
+  await control("checkpoint", "navigation");
+  clickClose("Task 49");
+  await until(() => rows().length === 46, "delayed create cleanup");
+  await control("checkpoint", "navigation_cleanup");
+
+  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, refusedCloseBeforeEffect, singleCloseAfterRetry, failureDetail, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
+  await control("checkpoint", "navigation_recorded");
+  clickNew();
+  await until(() => rows().length === 47 && statusFor("Task 50") === "New task", "busy Setup task");
+  const inheritedVerify = await until(() => {
+    const input = document.querySelector('[data-option="verify_after_execute"]');
+    return input instanceof HTMLInputElement && !input.disabled ? input : null;
+  }, "new task Setup defaults");
+  const newTaskDefaults = inheritedVerify.checked;
+  inheritedVerify.checked = false;
+  inheritedVerify.dispatchEvent(new Event("change", {bubbles: true}));
+  settingsButton.click();
+  await until(() => !defaultVerify.disabled, "restore isolated Setup defaults");
+  defaultVerify.checked = originalDefaultVerify;
+  defaultVerify.dispatchEvent(new Event("change", {bubbles: true}));
+  document.querySelector("#setup-defaults-save").click();
+  await until(() => document.querySelector("#setup-defaults-status").textContent.startsWith("Defaults saved."),
+    "restored isolated Setup defaults");
+  clickSelect("Task 50");
+  await until(() => workTitle() === "Task 50", "restored new task draft");
+  const newTaskOverrideRetained = document.querySelector('[data-option="verify_after_execute"]').checked === false;
+  await control("record", {setup_defaults: {defaultsDraftRetained, newTaskDefaults, newTaskOverrideRetained,
+    defaultsFooterStable, defaultsFooterAligned,
+    adsUnavailable: document.querySelector('[data-option="preserve_ads"]').disabled}});
+  await control("start_busy");
+  await control("set_stage", "busy");
+})()
+"""
+
+
+_BUSY_SCRIPT = _COMMON_JS + r"""
+(async () => {
+  await submitPlan("Task 50");
+  await until(() => rows().length === 47 && statusFor("Task 50") === "Planning", "busy task");
+  await untilAsync(async () => (await control("track_busy")).ready === true, "published busy session");
+  await untilAsync(async () => (await control("status")).busy_entered === true, "busy scanner");
+  await until(() => {
+    const pane = document.querySelector(".nami-plan-review");
+    return pane?.querySelector(".nami-plan-review__status-title")?.textContent === "Planning"
+      && pane.querySelector(".nami-plan-review__progress.nami-progress--indeterminate")
+      && !pane.querySelector(".nami-plan-review__table-card").hidden
+      && pane.querySelectorAll(".nami-plan-review__rows [data-node-id]").length === 0
+      && pane.querySelector('[data-action="execute"]').disabled;
+  }, "observed blank planning shell");
+  const blankPlanningShell = true;
+  await control("arm_busy_drain_failure");
+  clickClose("Task 50");
+  await until(() => detailFor("Task 50") === "Canceling and closing…", "pending cancellation");
+  const pending = await untilAsync(async () => {
+    const status = await control("status");
+    return status.busy_present === true && status.busy_state === "canceling" ? status : null;
+  }, "admitted pending cancellation");
+  const retainedPending = rows().length === 47 && rowByTitle("Task 50") !== undefined;
+  const retry = await until(() => {
+    const button = rowByTitle("Task 50")?.querySelector(".nami-task-rail__retry");
+    return button && !button.hidden && !button.disabled ? button : null;
+  }, "stopped busy-task updates");
+  retry.click();
+  await until(() => rowByTitle("Task 50")?.querySelector(".nami-task-rail__retry")?.hidden === true,
+    "exact busy-task observation recovery");
+  const recovered = await control("status");
+  await control("settle_busy");
+  await until(() => rows().length === 46, "settled busy close");
+  const settled = await control("status");
+  await control("record", { busy: { blankPlanningShell, pending, retainedPending, recovered, settled } });
+  await control("arm_release_delay");
+  clickNew();
+  await until(() => rows().length === 47 && statusFor("Task 51") === "New task", "terminal Setup task");
+  await control("start_terminal");
+  await control("set_stage", "terminal_first");
+})()
+"""
+
+
+_TERMINAL_FIRST_SCRIPT = _COMMON_JS + r"""
+(async () => {
+  await submitInventory("Task 51");
+  await until(() => rows().length === 47 && statusFor("Task 51") === "Inventory scan completed", "terminal presentation");
+  await untilAsync(async () => (await control("status")).release_waiting === true, "blocked terminal release");
+  const before = await control("status");
+  await control("record", { terminal_first: { count: rows().length, status: statusFor("Task 51"), before } });
+  await control("set_stage", "terminal_second");
+})()
+"""
+
+
+_TERMINAL_SECOND_SCRIPT = _COMMON_JS + r"""
+(async () => {
+  await until(() => rows().length === 47 && statusFor("Task 51") === "Inventory scan completed", "terminal presentation");
+  await untilAsync(async () => (await control("status")).release_waiting === true, "held terminal release");
+  const retained = await control("status");
+  await control("release_cleanup");
+  await untilAsync(async () => (await control("status")).session_released === true, "terminal release");
+  const released = await control("status");
+  clickClose("Task 51");
+  await until(() => rows().length === 46, "terminal explicit close");
+  const closed = await control("status");
+  const report = {
+    terminal_second: {
+      count_before_close: 47,
+      status_before_close: "Inventory scan completed",
+      retained,
+      released,
+      closed,
+    },
+  };
+  await control("record", report);
+  await control("start_plan_review");
+  await control("set_stage", "plan_review");
+})()
+"""
+
+
+_PLAN_REVIEW_SCRIPT = _COMMON_JS + r"""
+function recordAsyncError(error, line) {
+  if (window.__namiFirstAsyncError) return;
+  const name = error?.name;
+  const type = ["Error", "TypeError", "ReferenceError", "SyntaxError", "RangeError"]
+    .includes(name) ? name : "Error";
+  const match = String(error?.stack ?? "").match(/:(\d{1,6}):\d{1,6}(?:\)|$)/m);
+  const location = Number.isSafeInteger(line) && line > 0 && line <= 1000000
+    ? line : match ? Number(match[1]) : null;
+  window.__namiFirstAsyncError = {type, line: location};
+}
+window.addEventListener("unhandledrejection", (event) => {
+  recordAsyncError(event.reason, null);
+});
+window.addEventListener("error", (event) => {
+  recordAsyncError(event.error, event.lineno);
+});
+(async () => {
+  window.__namiConfirmationStage = "starting";
+  window.__namiConfirmationInputEvidence = null;
+  window.__namiConfirmationTrustedInput = {keydown: 0, keyup: 0, click: 0};
+  for (const type of ["keydown", "keyup", "click"]) {
+    document.addEventListener(type, (event) => {
+      if (event.isTrusted) window.__namiConfirmationTrustedInput[type] += 1;
+    }, true);
+  }
+  clickNew();
+  await until(() => rows().length === 47 && statusFor("Task 52") === "New task", "review Setup task");
+  await submitPlan("Task 52", true, true);
+  await until(() => rows().length === 47 && statusFor("Task 52") === "Plan ready", "reviewed plan task");
+  await control("track_review_task");
+  await until(() => document.querySelector(".nami-plan-review"), "Plan review surface");
+  await until(() => document.querySelector(".nami-plan-review__rows [data-node-id]"), "Plan review rows");
+  await control("checkpoint", "plan_surface");
+  const review = document.querySelector(".nami-plan-review");
+  const facts = review.querySelector(".nami-plan-review__status-summary").textContent;
+  const viewport = review.querySelector(".nami-plan-review__list");
+  const planGeometry = planGeometryFor(review);
+  const nestedPill = await until(() => [...viewport.querySelectorAll(".nami-plan-move-pill")]
+    .find((pill) => pill.textContent.includes("move-parent")), "surviving-parent move pill");
+  const pillRow = nestedPill.closest("[data-node-id]");
+  const groupNodeId = pillRow.dataset.nodeId;
+  const parentName = "move-parent";
+  const pillBadge = nestedPill.querySelector(".nami-badge");
+  const pillStyle = getComputedStyle(pillBadge);
+  const movePill = {
+    badgeText: pillBadge.querySelector(".nami-plan-move-pill__count").textContent,
+    destinationText: nestedPill.querySelector(".nami-plan-move-pill__destination").textContent,
+    destinationInBadge: pillBadge.contains(nestedPill.querySelector(".nami-plan-move-pill__destination")),
+    background: pillStyle.backgroundColor, foreground: pillStyle.color,
+    selectionAbsent: pillRow.querySelector("input") === null,
+    accessibleLabel: nestedPill.ariaLabel,
+  };
+  window.__namiMovePillReady = true;
+  await until(() => window.__namiMovePillCaptured === true, "native move-pill screenshot");
+  const disclosure = pillRow.querySelector(".nami-file-row__disclosure");
+  movePill.initiallyCollapsed = disclosure.ariaExpanded === "false";
+  disclosure.click();
+  await until(() => review.dataset.pending === ""
+    && viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`)?.ariaExpanded === "true",
+    "expanded initial prior contents");
+  viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`).click();
+  await until(() => review.dataset.pending === ""
+    && viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`)?.ariaExpanded === "false",
+    "collapsed prior contents");
+  movePill.collapsed = true;
+  viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`).click();
+  await until(() => review.dataset.pending === ""
+    && viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-file-row__disclosure`)?.ariaExpanded === "true",
+    "expanded prior contents");
+  viewport.querySelector(`[data-node-id="${groupNodeId}"] .nami-plan-move-pill`).click();
+  const canonicalParent = () => [...viewport.querySelectorAll('[data-node-id]')]
+    .find(row => row.querySelector('.nami-file-row__name-text')?.textContent === parentName);
+  await until(() => review.dataset.pending === ""
+    && canonicalParent() !== undefined,
+    "exact canonical destination parent");
+  const parentRow = canonicalParent();
+  const parentIndex = Number(parentRow.ariaRowIndex) - 2;
+  const parentContextTop = Math.max(0, parentIndex - 4) * 24;
+  const parentBounds = parentRow.getBoundingClientRect();
+  const parentViewportBounds = viewport.getBoundingClientRect();
+  if (Math.abs(viewport.scrollTop - parentContextTop) > 1 / devicePixelRatio
+      || parentBounds.top < parentViewportBounds.top + 24 - 1 / devicePixelRatio
+      || parentBounds.bottom > parentViewportBounds.bottom + 1 / devicePixelRatio) {
+    throw new Error('canonical destination parent lacks visible leading context');
+  }
+  movePill.revealedParent = parentRow.querySelector('.nami-file-row__name-text').textContent;
+  const searchMove = review.querySelector('[data-action="plan-search"]');
+  searchMove.value = "moved to root";
+  searchMove.dispatchEvent(new Event("input", {bubbles: true}));
+  review.querySelector('[data-action="plan-search-submit"]').click();
+  await until(() => review.dataset.pending === "" && viewport.querySelector(".nami-plan-move-pill")?.textContent.includes("root"),
+    "filtered root move pill");
+  const filteredMaximumScroll = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+  viewport.querySelector(".nami-plan-move-pill").click();
+  await until(() => review.dataset.pending === "", "root move response");
+  const rootDestinationRow = [...viewport.querySelectorAll("[data-node-id]")]
+    .find((row) => row.querySelector(".nami-file-row__name-text")?.textContent === "ZzzMove.txt");
+  const rootBounds = rootDestinationRow?.getBoundingClientRect();
+  const viewportBounds = viewport.getBoundingClientRect();
+  const pixelTolerance = 1 / devicePixelRatio;
+  await control("checkpoint", searchMove.value !== "" ? "move_reveal_query"
+    : rootBounds === undefined ? "move_reveal_missing"
+      : rootBounds.top < viewportBounds.top + 24 - pixelTolerance ? "move_reveal_above"
+        : rootBounds.bottom > viewportBounds.bottom + pixelTolerance ? "move_reveal_below" : "move_reveal_visible");
+  await until(() => review.dataset.pending === "" && searchMove.value === ""
+    && [...viewport.querySelectorAll("[data-node-id]")].some((row) => {
+      if (row.querySelector(".nami-file-row__name-text")?.textContent !== "ZzzMove.txt") return false;
+      const bounds = row.getBoundingClientRect();
+      const visible = viewport.getBoundingClientRect();
+      visible.y += 24; visible.height -= 24;
+      return bounds.top >= visible.top - pixelTolerance && bounds.bottom <= visible.bottom + pixelTolerance;
+    }),
+    "root move exact item and obstructing search cleared");
+  movePill.rootReveal = true;
+  movePill.filteredFarScroll = viewport.scrollTop > filteredMaximumScroll;
+  const destinationRow = [...viewport.querySelectorAll("[data-node-id]")]
+    .find((row) => row.querySelector(".nami-file-row__name-text")?.textContent === "ZzzMove.txt");
+  const loadedRows = [...viewport.querySelectorAll("[data-node-id]")];
+  movePill.geometry = {
+    row: destinationRow.getBoundingClientRect().toJSON(), viewport: viewport.getBoundingClientRect().toJSON(),
+    scrollTop: viewport.scrollTop, scrollHeight: viewport.scrollHeight, clientHeight: viewport.clientHeight,
+    firstIndex: Number(loadedRows[0].ariaRowIndex) - 2,
+    lastIndex: Number(loadedRows.at(-1).ariaRowIndex) - 2,
+    targetIndex: Number(destinationRow.ariaRowIndex) - 2, expectedRowHeight: 24, devicePixelRatio,
+  };
+  viewport.scrollTop = 280 * 24;
+  viewport.dispatchEvent(new Event("scroll"));
+  await until(() => Number(viewport.querySelector("[data-node-id]")?.ariaRowIndex) > 2, "offset Plan window");
+  await control("checkpoint", "plan_offset");
+  const firstOffsetRow = viewport.querySelector("[data-node-id]");
+  const topSpacer = viewport.querySelector(".nami-plan-review__spacer");
+  const expectedOffset = Number(firstOffsetRow.ariaRowIndex) - 2;
+  const spacerAligned = parseFloat(topSpacer.style.blockSize) === expectedOffset * 24;
+  const table = review.querySelector(".nami-plan-review__list");
+  const tableCard = review.querySelector(".nami-plan-review__table-card");
+  const tableHeader = review.querySelector(".nami-file-list__header");
+  const tableCells = [...tableHeader.children];
+  const sizingGeometry = () => ({
+    widths: tableCells.map((cell) => cell.getBoundingClientRect().width),
+    headerLefts: tableCells.map((cell) => cell.getBoundingClientRect().left),
+    rowLefts: [...firstOffsetRow.children].map((cell) => cell.getBoundingClientRect().left),
+    usableWidth: tableHeader.clientWidth,
+    scrollWidth: table.scrollWidth,
+    clientWidth: table.clientWidth,
+    scrollLeft: table.scrollLeft,
+  });
+  const fittedGeometry = sizingGeometry();
+  tableCard.style.inlineSize = "80rem";
+  const widenedGeometry = sizingGeometry();
+  tableCard.style.removeProperty("inline-size");
+  const restoredGeometry = sizingGeometry();
+  tableCard.style.inlineSize = "32rem";
+  table.scrollLeft = table.scrollWidth;
+  const overflowGeometry = sizingGeometry();
+  table.scrollLeft = 0;
+  tableCard.style.inlineSize = "80rem";
+  const passiveSizing = {
+    fitted: fittedGeometry, widened: widenedGeometry, restored: restoredGeometry,
+    overflow: overflowGeometry,
+  };
+  const columnOrder = [...firstOffsetRow.children].map((cell) => cell.dataset.fileColumn).join(",");
+  const sortTarget = tableCells[1].querySelector("button");
+  const sortTargetFillsCell = Math.abs(sortTarget.getBoundingClientRect().width
+    - tableCells[1].clientWidth + 2 * parseFloat(getComputedStyle(tableCells[1]).paddingLeft)) < 1;
+  const rowCells = [...firstOffsetRow.children];
+  const columnsAligned = tableCells.length === 7 && rowCells.length === 7
+    && tableCells.every((cell, index) => Math.abs(
+      cell.getBoundingClientRect().left - rowCells[index].getBoundingClientRect().left,
+    ) <= 0.5);
+  const headerScrollClear = getComputedStyle(tableHeader).position === "sticky"
+    && getComputedStyle(viewport).overflowY === "auto"
+    && getComputedStyle(tableHeader).scrollbarGutter === "auto"
+    && getComputedStyle(viewport).scrollbarGutter === "stable";
+  // A narrow fitted layout can leave Notes at its minimum; create resize room.
+  const nameResizeHandle = review.querySelector('.nami-file-list__column-resizer[data-column="name"]');
+  nameResizeHandle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100 }));
+  window.dispatchEvent(new PointerEvent("pointermove", { clientX: 76 }));
+  window.dispatchEvent(new PointerEvent("pointerup", { clientX: 76 }));
+  const resizeHandle = review.querySelector('.nami-file-list__column-resizer[data-column="size"]');
+  const sizeBefore = tableCells[4].getBoundingClientRect().width;
+  resizeHandle.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, clientX: 100 }));
+  window.dispatchEvent(new PointerEvent("pointermove", { clientX: 108 }));
+  window.dispatchEvent(new PointerEvent("pointerup", { clientX: 108 }));
+  const pointerResizeWorked = tableCells[4].getBoundingClientRect().width > sizeBefore + 7;
+  const sizeAfterPointer = tableCells[4].getBoundingClientRect().width;
+  resizeHandle.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "ArrowRight" }));
+  const keyboardResizeWorked = tableCells[4].getBoundingClientRect().width > sizeAfterPointer + 7;
+  tableCard.style.removeProperty("inline-size");
+  const sizeSort = review.querySelector('[data-sort-column="size"]');
+  sizeSort.click();
+  await until(() => tableCells[4].ariaSort === "ascending" && review.dataset.pending === "", "ascending Size sort");
+  sizeSort.click();
+  await until(() => tableCells[4].ariaSort === "descending" && review.dataset.pending === "", "second Size sort");
+  const chevronsVisible = !sizeSort.querySelector(".nami-icon--chevron-down").hidden;
+  sizeSort.click();
+  await until(() => tableCells[4].ariaSort === "none" && review.dataset.pending === "", "canonical Plan header reset");
+  review.querySelector('[data-action="filter-menu"]').click();
+  const noticeFilter = review.querySelector('.nami-filter-menu__popup [data-filter="notice"]');
+  noticeFilter.click();
+  await until(() => viewport.textContent.includes("insufficient_space")
+    && review.dataset.pending === ""
+    && review.querySelector('[data-action="plan-again"]')?.disabled === false,
+  "settled review refusal notice");
+  await control("checkpoint", "plan_notice");
+  const initialRows = viewport.textContent;
+  const execute = review.querySelector('[data-action="execute"]');
+  const initial = {
+    planningIssuesVisible: facts.includes("planning issues"),
+    refusalNotice: initialRows.includes("insufficient_space"),
+    redundantStatusCountsAbsent: !facts.includes("destructive") && !facts.includes("visible"),
+    requiredBytesVisible: facts.includes("B required"),
+    rowRiskVisible: initialRows.includes("Risk:"),
+    persistentAcknowledgmentAbsent: review.querySelector('[data-action="destructive-confirmation"]') === null,
+    executeReady: execute instanceof HTMLButtonElement && !execute.disabled,
+    rowHeight: getComputedStyle(review.querySelector("[data-node-id]")).height,
+    spacerAligned,
+    columnsAligned,
+    columnOrder,
+    sortTargetFillsCell,
+    headerScrollClear,
+    pointerResizeWorked,
+    keyboardResizeWorked,
+    passiveSizing,
+    chevronsVisible,
+    planGeometry,
+  };
+  await control("prepare_plan_again");
+  const planAgainTraceEnabled = globalThis.__namiPlanAgainTrace !== undefined;
+  if (planAgainTraceEnabled) {
+    await control("begin_plan_again_trace", "task-52-53");
+    globalThis.__namiPlanAgainTrace.begin("task-52-53");
+  }
+  const planAgainBefore = {
+    row_count: rows().length,
+    selected_title: selectedTitle(),
+    work_title: workTitle(),
+    review_present: review.isConnected,
+    review_pending: review.dataset.pending,
+    plan_again_disabled: review.querySelector('[data-action="plan-again"]')?.disabled ?? null,
+  };
+  let firstPlanAgainError = null;
+  try {
+    review.querySelector('[data-action="plan-again"]').click();
+    await until(() => rows().length === 48, "fresh Plan-again task");
+  } catch (error) {
+    firstPlanAgainError = error;
+  }
+  try {
+    await control("record", { plan_again_preselection_diagnostic: {
+      phase: "task-52-53",
+      before: planAgainBefore,
+      after: {
+        row_count: rows().length,
+        fresh_row_present: rowByTitle("Task 53") !== undefined,
+        selected_title: selectedTitle(),
+        work_title: workTitle(),
+        review_present: review.isConnected,
+        review_pending: review.dataset.pending,
+        plan_again_disabled: review.querySelector('[data-action="plan-again"]')?.disabled ?? null,
+      },
+      host: await control("status"),
+    } });
+  } catch (error) {
+    if (planAgainTraceEnabled && firstPlanAgainError === null) firstPlanAgainError = error;
+  }
+  if (planAgainTraceEnabled) {
+    try {
+      const trace = globalThis.__namiPlanAgainTrace.snapshot();
+      await control("record_plan_again_trace", trace);
+      if (!globalThis.__namiPlanAgainTrace.end("task-52-53")) {
+        throw new Error("first Plan-again trace phase did not end");
+      }
+    } catch (error) {
+      if (firstPlanAgainError === null) firstPlanAgainError = error;
+    }
+  }
+  if (firstPlanAgainError !== null) throw firstPlanAgainError;
+  await until(() => selectedTitle() === "Task 53", "fresh Plan-again selection");
+  await until(() => document.querySelector(".nami-plan-review__rows")?.textContent.includes("source-added.txt"), "changed source plan row");
+  await until(() => document.querySelector(".nami-plan-review__rows")?.textContent.includes("target-added.txt"), "changed target plan row");
+  await control("checkpoint", "plan_again");
+  await control("track_review_task");
+  const fresh = document.querySelector(".nami-plan-review");
+  const detailsToggle = fresh.querySelector(".nami-plan-review__details-toggle");
+  if (detailsToggle.ariaExpanded === "true") detailsToggle.click();
+  // Finite layout witness: feedback is presentation-only and restored before gestures.
+  const statusCard = fresh.querySelector(".nami-plan-review__summary");
+  const statusDetail = fresh.querySelector(".nami-plan-review__status-summary");
+  const feedback = fresh.querySelector(".nami-plan-review__status");
+  const savedFeedback = {text: feedback.textContent, hidden: feedback.hidden};
+  const savedDetail = statusDetail.textContent;
+  feedback.hidden = false;
+  statusDetail.textContent = "120000 of 120000 selected · 12.00 GiB required · 120000 planning issues";
+  feedback.textContent = "Review preflight failed. Resolve notices and plan again.";
+  const statusLayout = () => getComputedStyle(statusDetail).whiteSpace === "normal"
+    && getComputedStyle(feedback).whiteSpace === "normal"
+    && Math.abs(statusDetail.getBoundingClientRect().left - feedback.getBoundingClientRect().left) <= 1
+    && feedback.getBoundingClientRect().top >= statusDetail.getBoundingClientRect().bottom
+    && [statusDetail, feedback].every(node => node.getBoundingClientRect().right
+      <= detailsToggle.getBoundingClientRect().left + 1
+      && node.scrollWidth <= node.clientWidth + 1);
+  if (!statusLayout()) throw new Error("Default status must stack and wrap left of Details");
+  statusCard.style.inlineSize = "650px";
+  await new Promise(requestAnimationFrame);
+  if (!statusLayout()) throw new Error("Narrow status must stack and wrap left of Details");
+  statusCard.style.removeProperty("inline-size");
+  statusDetail.textContent = savedDetail;
+  feedback.textContent = savedFeedback.text;
+  feedback.hidden = savedFeedback.hidden;
+  const centralCards = [fresh.querySelector(".nami-plan-review__plan"), statusCard,
+    fresh.querySelector(".nami-plan-review__table-card")];
+  const centralWidths = () => centralCards.map((node) => node.getBoundingClientRect().width);
+  const detailsLayout = { foldedWidths: centralWidths() };
+  detailsToggle.click();
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  const detailsPane = fresh.querySelector(".nami-plan-review__diagnostics");
+  detailsLayout.expandedWidths = centralWidths();
+  detailsLayout.rectangles = [...centralCards, detailsPane].map((node) => {
+    const rect = node.getBoundingClientRect();
+    return [rect.left, rect.top, rect.right, rect.bottom];
+  });
+  detailsLayout.rem = parseFloat(getComputedStyle(document.documentElement).fontSize);
+  fresh.querySelector(".nami-plan-review__global-diagnostics").focus();
+  detailsToggle.click();
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  detailsLayout.focusRestored = document.activeElement === detailsToggle && detailsPane.hidden;
+  const metadataRow = fresh.querySelector(".nami-plan-review__rows [data-node-id]");
+  const metadataColors = [".nami-file-row__size", ".nami-plan-row__modified", ".nami-file-row__notes"]
+    .map((selector) => getComputedStyle(metadataRow.querySelector(selector)).color);
+  if (new Set(metadataColors).size !== 1) throw new Error("Plan metadata colors must agree");
+  const styleValue = (selector, property) =>
+    getComputedStyle(document.querySelector(selector))[property];
+  for (const [selector, property, expected] of [
+    [".nami-plan-review__progress", "height", "8px"],
+    [".nami-task-card__progress", "height", "4px"],
+    [".nami-plan-review__summary", "paddingTop", "16px"],
+    [".nami-plan-review__table-card", "paddingTop", "16px"],
+    [".nami-plan-review__view-switcher", "borderTopLeftRadius", "6px"],
+    [".nami-task-rail__row .nami-task-card", "paddingLeft", "20px"],
+  ]) {
+    if (styleValue(selector, property) !== expected) {
+      throw new Error(`Plan geometry mismatch: ${selector} ${property}`);
+    }
+  }
+  const selectionFacts = () => fresh.querySelector(".nami-plan-review__status-summary").textContent;
+  const selectedBefore = Number(selectionFacts().split(" ")[0]);
+  const selectableRow = [...fresh.querySelectorAll('.nami-plan-review__rows [data-node-id]')]
+    .find((row) => row.textContent.includes("shared.txt")
+      && row.querySelector('input[type="checkbox"]:checked:not(:disabled)'));
+  const selectionNode = selectableRow.dataset.nodeId;
+  selectableRow.querySelector('input[type="checkbox"]').click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore - 1} of `)
+    && fresh.dataset.pending === "", "row deselection roundtrip");
+  fresh.querySelector(`[data-node-id="${selectionNode}"] input[type="checkbox"]`).click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore} of `)
+    && fresh.dataset.pending === "", "row reselection roundtrip");
+  const bulkCheckbox = fresh.querySelector('.nami-file-list__header input[type="checkbox"]');
+  bulkCheckbox.click();
+  await until(() => selectionFacts().startsWith("0 of ")
+    && fresh.dataset.pending === "", "view deselection roundtrip");
+  bulkCheckbox.click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore} of `)
+    && fresh.dataset.pending === "", "view reselection roundtrip");
+  const highlightedRow = () => fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  const highlightInvoker = highlightedRow();
+  highlightedRow().querySelector('.nami-file-row__name').click();
+  await until(() => !highlightInvoker.isConnected && highlightedRow()?.dataset.highlighted === "true"
+    && document.activeElement === highlightedRow() && fresh.dataset.pending === "", "row highlight roundtrip");
+  const focusViewport = fresh.querySelector('.nami-plan-review__list');
+  const focusScrollOffset = (Number(highlightedRow().ariaRowIndex)) * 24;
+  focusViewport.scrollTop = focusScrollOffset;
+  await new Promise(requestAnimationFrame);
+  if (highlightedRow().getBoundingClientRect().bottom > fresh.querySelector('.nami-file-list__header').getBoundingClientRect().bottom
+      || focusViewport.scrollTop !== focusScrollOffset) throw new Error("focus restoration fixture must scroll the retained focused row out of view");
+  const beforeFocusReplacement = highlightedRow();
+  highlightedRow().querySelector('input[type="checkbox"]').click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore - 1} of `)
+    && fresh.dataset.pending === "", "highlighted deselection roundtrip");
+  if (highlightedRow() === beforeFocusReplacement || document.activeElement !== highlightedRow()
+      || focusViewport.scrollTop !== focusScrollOffset) throw new Error("Plan row replacement must retain focus without changing scroll");
+  fresh.querySelector(`[data-node-id="${selectionNode}"] input[type="checkbox"]`).click();
+  await until(() => selectionFacts().startsWith(`${selectedBefore} of `)
+    && fresh.dataset.pending === "", "highlighted reselection roundtrip");
+  fresh.querySelector(`[data-node-id="${selectionNode}"]`).dispatchEvent(
+    new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+  await until(() => !fresh.querySelector('[data-highlighted="true"]'), "clear fixture highlight");
+  const hasKeyboardOutline = (element) => {
+    const style = getComputedStyle(element);
+    return style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0;
+  };
+  const focusLifecycleRow = fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  focusLifecycleRow.focus({focusVisible: true});
+  focusLifecycleRow.dispatchEvent(
+    new KeyboardEvent("keydown", {key: "ArrowDown", shiftKey: true, bubbles: true}));
+  await until(
+    () => document.activeElement?.dataset?.nodeId
+      && document.activeElement.dataset.nodeId !== selectionNode
+      && fresh.dataset.pending === "",
+    "Shift-ArrowDown from focused row",
+  );
+  const rowArrowFocusedNode = document.activeElement?.dataset?.nodeId ?? null;
+  const arrowBounds = document.activeElement.getBoundingClientRect();
+  const arrowViewport = focusViewport.getBoundingClientRect();
+  const arrowHeaderBottom = fresh.querySelector('.nami-file-list__header').getBoundingClientRect().bottom;
+  if (arrowBounds.top < arrowHeaderBottom - pixelTolerance
+      || arrowBounds.bottom > arrowViewport.top + focusViewport.clientHeight + pixelTolerance) {
+    throw new Error("explicit Plan keyboard movement must reveal the focused target");
+  }
+  const childArrowRow = fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  childArrowRow.querySelector('input[type="checkbox"]')?.focus({focusVisible: true});
+  childArrowRow.querySelector('input[type="checkbox"]')?.dispatchEvent(
+    new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+  await until(
+    () => document.activeElement?.dataset?.nodeId
+      && document.activeElement.dataset.nodeId !== selectionNode
+      && fresh.dataset.pending === "",
+    "ArrowDown from child checkbox",
+  );
+  const childArrowFocusedNode = document.activeElement?.dataset?.nodeId ?? null;
+  const pointerNode = childArrowFocusedNode ?? rowArrowFocusedNode ?? selectionNode;
+  let pointerRow = fresh.querySelector(`[data-node-id="${pointerNode}"]`)
+    ?? fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+  const pointerInvoker = pointerRow;
+  pointerRow.querySelector('.nami-file-row__name').dispatchEvent(
+    new MouseEvent("click", {bubbles: true, ctrlKey: true, shiftKey: true}));
+  await until(() => {
+    pointerRow = fresh.querySelector(`[data-node-id="${pointerNode}"]`)
+      ?? fresh.querySelector(`[data-node-id="${selectionNode}"]`);
+    return !pointerInvoker.isConnected && pointerRow?.isConnected
+      && pointerRow.dataset.highlighted === "true" && fresh.dataset.pending === "";
+  }, "pointer focus row");
+  const pointerFocusSuppressed = !hasKeyboardOutline(pointerRow);
+  pointerRow.blur();
+  pointerRow.focus({focusVisible: true});
+  await until(() => hasKeyboardOutline(pointerRow), "keyboard focus re-entry ring");
+  const keyboardFocusRestored = hasKeyboardOutline(pointerRow);
+  if (!pointerFocusSuppressed || !keyboardFocusRestored) {
+    throw new Error("Plan row pointer focus ring modality did not transition correctly");
+  }
+  const rowMenuInput = [];
+  window.__namiPlanContextEvidence = rowMenuInput;
+  const contextPopup = fresh.querySelector('.nami-row-menu');
+  const contextNodeId = pointerRow.dataset.nodeId;
+  const contextInvoker = () => fresh.querySelector(`[data-node-id="${contextNodeId}"]`);
+  for (const name of ['shift', 'menu']) {
+    const events = [];
+    let opened = null;
+    let invoker = null;
+    const observe = event => {
+      const fact = {type:event.type, key:event.key ?? null, trusted:event.isTrusted,
+        target:event.target.closest('[data-node-id]')?.dataset.nodeId === contextNodeId
+          ? 'row' : contextPopup.contains(event.target) ? 'menu' : 'other',
+        get default_prevented() { return event.defaultPrevented; }};
+      events.push(fact);
+    };
+    for (const type of ['keydown', 'keyup', 'contextmenu']) document.addEventListener(type, observe, true);
+    window.__namiPlanContextDown = () => {
+      opened = {item:contextPopup.firstElementChild,
+        rectangle:[contextPopup.getBoundingClientRect().left, contextPopup.getBoundingClientRect().top]};
+    };
+    window.__namiPlanContextCheck = async () => {
+      invoker = contextInvoker();
+      if (invoker === null) return {connected:false};
+      invoker.focus();
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      invoker = contextInvoker();
+      if (invoker === null) return {connected:false};
+      const rect = invoker.getBoundingClientRect();
+      const point = {x:(rect.left + rect.right) / 2, y:(rect.top + rect.bottom) / 2};
+      return {document_focused:document.hasFocus(), connected:invoker.isConnected,
+        visible:rect.width > 0 && rect.height > 0, focused:document.activeElement === invoker,
+        hit_owned:invoker.contains(document.elementFromPoint(point.x, point.y))};
+    };
+    window.__namiPlanContextStage = `${name}-ready`;
+    await until(() => window.__namiPlanContextAck === name, `native Plan ${name} roundtrip`, 1200);
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    for (const type of ['keydown', 'keyup', 'contextmenu']) document.removeEventListener(type, observe, true);
+    const rect = contextPopup.getBoundingClientRect();
+    rowMenuInput.push({name, events, popup_visible:!contextPopup.hidden,
+      stable_focus:opened?.item === document.activeElement,
+      stable_position:opened?.rectangle[0] === rect.left && opened?.rectangle[1] === rect.top});
+    window.__namiPlanContextCheck = () => {
+      const item = document.activeElement;
+      const rect = item.getBoundingClientRect();
+      return {document_focused:document.hasFocus(), connected:contextPopup.isConnected,
+        visible:!contextPopup.hidden && rect.width > 0 && rect.height > 0,
+        focused:contextPopup.contains(item),
+        hit_owned:item.contains(document.elementFromPoint((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2))};
+    };
+    window.__namiPlanContextStage = `${name}-escape-ready`;
+    await until(() => window.__namiPlanContextAck === `${name}-escape`, `native Plan ${name} Escape`, 1200);
+    const canonicalInvoker = contextInvoker();
+    rowMenuInput.at(-1).escape = {popup_hidden:contextPopup.hidden,
+      invoker_connected:invoker.isConnected, invoker_canonical:canonicalInvoker === invoker,
+      focused_invoker:document.activeElement === invoker,
+      focused_canonical:document.activeElement === canonicalInvoker,
+      active_node_id:document.activeElement?.dataset?.nodeId ?? null,
+      active_class:String(document.activeElement?.className ?? '').slice(0, 120),
+      popup_focused:contextPopup.contains(document.activeElement), pending:fresh.dataset.pending};
+    if (!contextPopup.hidden || canonicalInvoker === null || document.activeElement !== canonicalInvoker) throw new Error('Plan menu Escape failed');
+  }
+  const changedRows = fresh.querySelector(".nami-plan-review__rows").textContent;
+  const freshExecute = fresh.querySelector('[data-action="execute"]');
+  await control("refuse_execution");
+  await control("checkpoint", "plan_force");
+  await until(() => freshExecute.disabled === false, "fresh Execute readiness");
+  await control("checkpoint", "plan_ack");
+  window.__namiConfirmationStage = "execute-ready";
+  await until(() => document.querySelector("#execution-confirmation")?.open, "destructive confirmation");
+  if (styleValue(".nami-execution-confirmation > p", "marginTop") !== "16px"
+      || styleValue(".nami-execution-confirmation__actions", "marginTop") !== "24px") {
+    throw new Error("Destructive confirmation spacing mismatch");
+  }
+  window.__namiConfirmationStage = "cancel-open";
+  await until(() => !document.querySelector("#execution-confirmation")?.open, "native Escape cancellation");
+  window.__namiConfirmationInputEvidence.escapeReturnedFocus =
+    document.activeElement === freshExecute;
+  window.__namiConfirmationStage = "reopen-ready";
+  await until(() => document.querySelector("#execution-confirmation")?.open, "reopened destructive confirmation");
+  window.__namiConfirmationStage = "confirm-open";
+  await until(
+    () => document.querySelector("#execution-confirmation")?.dataset.closing === "true",
+    "native confirmation",
+  );
+  window.__namiConfirmationStage = "confirm-closing";
+  await until(() => !document.querySelector("#execution-confirmation")?.open, "confirmation exit");
+  await control("checkpoint", "plan_execute");
+  await until(
+    () => statusFor("Task 53") === "Execution did not start",
+    "post-admission preflight refusal",
+  );
+  await control("checkpoint", "plan_refused");
+  await untilAsync(async () => (await control("status")).review_session_released === true, "refused execution release");
+  await control("checkpoint", "plan_release");
+  await until(() => fresh.querySelector('[data-action="execute"]').hidden, "committed selection review");
+  await until(() => fresh.querySelector(".nami-plan-review__status-title")?.textContent
+    === "Execution did not start"
+    && fresh.querySelector(".nami-plan-review__execution")?.textContent
+      .includes("Disposition: Unrun"), "refused execution review refresh");
+  await until(() => fresh.querySelector(".nami-plan-review__status")?.textContent
+    .includes("Execution preflight refused.")
+    && fresh.querySelector(".nami-plan-review__status")?.textContent
+      .includes("The target has insufficient free space. Free space on its drive.")
+    && fresh.querySelector(".nami-plan-review__status")?.textContent
+      .includes("Resolve these issues, then restart task with Plan Again."),
+    "specific preflight refusal guidance");
+  const refused = {
+    committed: fresh.querySelector('[data-action="execute"]').hidden,
+    unrun: statusFor("Task 53") === "Execution did not start",
+    message: fresh.querySelector(".nami-plan-review__status").textContent,
+    executionHeader: fresh.querySelector(".nami-plan-review__status-title").textContent,
+    executionAxes: fresh.querySelector(".nami-plan-review__execution").textContent,
+  };
+
+  const freedTaskTitle = "Task 1";
+  const freedTask = rowByTitle(freedTaskTitle);
+  const freedTaskClose = freedTask?.querySelector(".nami-task-rail__close");
+  const freedTaskStatus = statusFor(freedTaskTitle);
+  const freedTaskWasSelected = selectedTitle() === freedTaskTitle;
+  if (!(freedTaskClose instanceof HTMLButtonElement) || freedTaskClose.disabled
+      || freedTaskStatus !== "New task" || freedTaskWasSelected) {
+    throw new Error("unused capacity task is unavailable for close");
+  }
+  clickClose(freedTaskTitle);
+  await until(
+    () => rows().length === 47 && rowByTitle(freedTaskTitle) === undefined
+      && selectedTitle() === "Task 53" && workTitle() === "Task 53",
+    "unused capacity task close",
+  );
+  const capacitySlot = {
+    closedTitle: freedTaskTitle,
+    closedStatus: freedTaskStatus,
+    closedWasSelected: freedTaskWasSelected,
+    closedIdentityRemoved: rowByTitle(freedTaskTitle) === undefined,
+    retainedSelectedTask: selectedTitle() === "Task 53" && workTitle() === "Task 53",
+    countBeforePlanAgain: rows().length,
+  };
+
+  await control("prepare_live_execution");
+  if (planAgainTraceEnabled) {
+    await control("begin_plan_again_trace", "task-53-54");
+    globalThis.__namiPlanAgainTrace.begin("task-53-54");
+  }
+  let secondPlanAgainError = null;
+  try {
+    fresh.querySelector('[data-action="plan-again"]').click();
+    await until(
+      () => rows().length === 48 && rowByTitle("Task 54") !== undefined,
+      "live Plan-again task",
+    );
+  } catch (error) {
+    secondPlanAgainError = error;
+  }
+  if (planAgainTraceEnabled) {
+    try {
+      const trace = globalThis.__namiPlanAgainTrace.snapshot();
+      await control("record_plan_again_trace", trace);
+      if (!globalThis.__namiPlanAgainTrace.end("task-53-54")) {
+        throw new Error("second Plan-again trace phase did not end");
+      }
+    } catch (error) {
+      if (secondPlanAgainError === null) secondPlanAgainError = error;
+    }
+  }
+  if (secondPlanAgainError !== null) throw secondPlanAgainError;
+  await until(() => selectedTitle() === "Task 54", "live Plan-again selection");
+  await until(() => document.querySelector(".nami-plan-review__rows [data-node-id]"), "live Plan rows");
+  const live = document.querySelector(".nami-plan-review");
+  const liveExecute = live.querySelector('[data-action="execute"]');
+  await until(() => liveExecute.disabled === false, "live Execute readiness");
+  const liveViewport = live.querySelector('.nami-plan-review__list');
+  liveViewport.scrollTop = 280 * 24;
+  liveViewport.dispatchEvent(new Event('scroll'));
+  await until(() => liveViewport.scrollTop > 0, 'off-window execution start');
+  window.__namiConfirmationStage = "live-execute-ready";
+  await until(() => document.querySelector("#execution-confirmation")?.open, "live destructive confirmation");
+  window.__namiConfirmationStage = "live-confirm-open";
+  await until(
+    () => window.__namiConfirmationInputEvidence?.liveEnterConfirmed === true,
+    "native live confirmation",
+  );
+  await untilAsync(async () => (await control("status")).execution_entered === true, "live execution");
+  await until(() => !live.querySelector('[data-action="pause"]').closest(".nami-plan-review__control-group").hidden, "live controls");
+  await control("checkpoint", "plan_live");
+  liveViewport.scrollTop = 280 * 24;
+  liveViewport.dispatchEvent(new Event('scroll'));
+  await until(() => liveViewport.scrollTop > 24, 'held-progress off-window position');
+  const offWindowOffset = liveViewport.scrollTop;
+  const focusBeforeFollow = live.querySelector('[data-action="pause"]');
+  // Confirmation keeps the page inert until its close frames finish.
+  await until(() => !document.querySelector("#execution-confirmation")?.open, "live confirmation closed");
+  focusBeforeFollow.focus();
+  if (document.activeElement !== focusBeforeFollow) throw new Error("live Pause did not take focus");
+  const selectionBeforeFollow = await control('follow_snapshot');
+  const followAnchor = await control('follow_anchor');
+  const followContextTop = Math.max(0, followAnchor.index - 4) * 24;
+  const followTargetVisible = () => liveViewport.querySelector(`[data-node-id="${followAnchor.node_id}"]`) !== null
+    && Math.abs(liveViewport.scrollTop - followContextTop) <= pixelTolerance;
+  const titleBeforeFollow = selectedTitle();
+  await control('release_follow_progress');
+  await until(followTargetVisible, 'automatic current-operation movement');
+  const goCurrent = live.querySelector('[data-action="go-current-operation"]');
+  const enableFollow = live.querySelector('[data-action="enable-operation-follow"]');
+  await until(() => !goCurrent.hidden, 'current-operation navigation');
+  const automaticPreservesFocus = document.activeElement === focusBeforeFollow;
+  const automaticOffset = liveViewport.scrollTop;
+  let trustedFollowWheels = 0;
+  liveViewport.addEventListener('wheel', event => { if (event.isTrusted) trustedFollowWheels += 1; });
+  const followBounds = liveViewport.getBoundingClientRect();
+  window.__namiFollowWheelPoint = {x: followBounds.left + followBounds.width / 2, y: followBounds.top + 30};
+  await until(() => window.__namiFollowWheelDone === true && liveViewport.scrollTop > 24
+    && !enableFollow.hidden, 'native scroll override');
+  const manualOffset = liveViewport.scrollTop;
+  goCurrent.click();
+  await until(followTargetVisible, 'one-shot current-operation jump');
+  const goStayedManual = !enableFollow.hidden;
+  enableFollow.click();
+  await until(() => enableFollow.hidden, 'explicit follow enable');
+  const followNavigation = {
+    automaticMoved: Math.abs(automaticOffset - followContextTop) <= pixelTolerance
+      && offWindowOffset > automaticOffset + 24,
+    nativeOverride: manualOffset > 24 && trustedFollowWheels > 0,
+    goStayedManual, explicitEnable: enableFollow.hidden,
+    focusPreserved: automaticPreservesFocus && document.activeElement === focusBeforeFollow,
+    selectionPreserved: JSON.stringify(await control('follow_snapshot')) === JSON.stringify(selectionBeforeFollow)
+      && selectedTitle() === titleBeforeFollow,
+  };
+  const executionToggle = live.querySelector('[data-action="pause"]');
+  const controlsAppearance = {
+    runningNeutral: executionToggle.classList.contains("nami-button--secondary"),
+    pauseRegular: !executionToggle.querySelector(".nami-icon--pause").hidden,
+  };
+  executionToggle.click();
+  await until(() => live.querySelector('[data-action="resume"]')?.disabled === false, "paused execution");
+  await control("checkpoint", "plan_paused");
+  const paused = live.querySelector(".nami-plan-review__status").textContent;
+  controlsAppearance.sameToggle = live.querySelector('[data-action="resume"]') === executionToggle;
+  controlsAppearance.pausedAccent = executionToggle.classList.contains("nami-button--primary");
+  controlsAppearance.playFilled = !executionToggle.querySelector(".nami-icon--play-filled").hidden;
+  executionToggle.click();
+  await until(() => live.querySelector('[data-action="pause"]')?.disabled === false, "resumed execution");
+  const resumed = executionToggle.dataset.action === "pause";
+  await control("checkpoint", "plan_resumed");
+  const cancelControl = live.querySelector('[data-action="cancel"]');
+  controlsAppearance.cancelNeutral = cancelControl.classList.contains("nami-button--secondary");
+  controlsAppearance.stopRegular = !cancelControl.querySelector(".nami-icon--stop").hidden;
+  cancelControl.click();
+  controlsAppearance.cancelArmed = cancelControl.classList.contains("nami-button--primary")
+    && !cancelControl.querySelector(".nami-icon--stop-filled").hidden;
+  controlsAppearance.firstClickDidNotCancel = live.dataset.pending === ""
+    && !cancelControl.disabled && statusFor("Task 54") === "Execution in progress";
+  cancelControl.click();
+  await until(() => statusFor("Task 54") === "Execution canceled", "canceled execution");
+  await until(
+    () => live.querySelector(".nami-plan-review__execution")?.textContent.includes("Filesystem: Canceled"),
+    "canceled execution review",
+  );
+  const canceledExecutionHeader = live.querySelector(".nami-plan-review__execution").textContent;
+  await control("checkpoint", "plan_empty_prepare");
+  await until(() => !live.querySelector('[data-action="plan-again"]').disabled, "settled Plan-again eligibility");
+  const countBeforeEmptyPlanAgain = rows().length;
+  clickClose("Task 2");
+  await until(() => rows().length === 47 && rowByTitle("Task 2") === undefined, "empty Plan capacity slot");
+  await control("prepare_empty_plan");
+  live.querySelector('[data-action="plan-again"]').click();
+  await control("checkpoint", "plan_empty_wait");
+  await until(() => rows().length === 48 && rowByTitle("Task 55") !== undefined, "empty Plan-again task");
+  clickSelect("Task 55");
+  await until(() => selectedTitle() === "Task 55", "empty Plan selection");
+  const emptyReview = await until(
+    () => statusFor("Task 55") === "Plan ready" && document.querySelector(".nami-plan-review"),
+    "empty Plan review",
+  );
+  await until(
+    () => !emptyReview.querySelector(".nami-plan-review__rows [data-node-id]"),
+    "empty Plan rows",
+  );
+  const emptyPlanGeometry = planGeometryFor(emptyReview);
+  const emptyPlanMessage = emptyReview.textContent.toLowerCase().includes("empty");
+  await control("record", {
+    plan_review: {
+      detailsLayout,
+      initial,
+      movePill,
+      refused,
+      planAgainChangedSource: changedRows.includes("source-added.txt"),
+      planAgainChangedTarget: changedRows.includes("target-added.txt"),
+      capacitySlot: {
+        ...capacitySlot,
+        countAfterPlanAgain: countBeforeEmptyPlanAgain,
+        newTaskTitle: rowByTitle("Task 54")?.querySelector(".nami-task-card")?.dataset.taskLabel ?? null,
+      },
+      confirmationInput: window.__namiConfirmationInputEvidence,
+      rowMenuInput,
+      paused: paused.length > 0,
+      resumed,
+      controlsAppearance,
+      canceled: statusFor("Task 54") === "Execution canceled",
+      canceledExecutionHeader,
+      followNavigation,
+      emptyPlanGeometry,
+      emptyPlanMessage,
+    },
+  });
+  const marker = document.createElement("p");
+  marker.textContent = "Task shell gate complete";
+  document.body.append(marker);
+  await control("complete");
+  return { complete: true };
+})()
+"""
+
+
+class _Recorder:
+    def __init__(self, paths: EvidencePaths) -> None:
+        self._publisher = EvidencePublisher(paths)
+        self._lock = threading.Lock()
+        self._initial: str | None = None
+        self._post_ready_failure: dict[str, str] | None = None
+        self._data: dict[str, Any] = {
+            "schema_version": 1,
+            "phase": "starting",
+            "startup_errors": [],
+            "report": {},
+        }
+
+    def set(self, name: str, value: object) -> None:
+        with self._lock:
+            self._data[name] = value
+
+    def merge_report(self, value: dict[str, object]) -> None:
+        with self._lock:
+            self._data["report"].update(value)
+
+    def startup_error(self, _message: str) -> None:
+        self.set("startup_errors", [{"type": "DesktopStartupError"}])
+
+    def failure(self, stage: str, error: BaseException) -> None:
+        if stage not in _FAILURE_STAGES:
+            stage = "child"
+        failure = {"stage": stage, "type": _error_type(error)}
+        with self._lock:
+            if self._initial == "failure":
+                return
+            if self._initial == "ready":
+                if self._post_ready_failure is None:
+                    self._post_ready_failure = failure
+                return
+            diagnostics = {
+                name: value for name, value in self._data.items()
+                if name in {"plan_again_browser_trace", "plan_again_host_trace"}
+            }
+            plan_again_diagnostic = self._data["report"].get("plan_again_preselection_diagnostic")
+            if plan_again_diagnostic is not None:
+                diagnostics["plan_again_preselection_diagnostic"] = plan_again_diagnostic
+            self._publisher.publish_failure({"failure": failure, **diagnostics})
+            self._initial = "failure"
+
+    def complete(self) -> None:
+        with self._lock:
+            if self._initial is not None:
+                return
+            self._data["phase"] = "complete"
+            self._publisher.publish_ready(dict(self._data))
+            self._initial = "ready"
+
+    @property
+    def settled(self) -> bool:
+        with self._lock:
+            return self._initial is not None
+
+    def finish(self, exit_code: int, *, host_returned: bool) -> None:
+        with self._lock:
+            payload: dict[str, object] = {
+                "host_returned": host_returned,
+                "exit_code": exit_code,
+            }
+            if self._post_ready_failure is not None:
+                payload["post_ready_failure"] = dict(self._post_ready_failure)
+            self._publisher.publish_final(payload)
+
+
+class _Control:
+    def __init__(
+        self, recorder: _Recorder, source: Path, target: Path,
+        plan_again_trace: PlanAgainHostTrace | None = None,
+    ) -> None:
+        self.recorder = recorder
+        self.source = source
+        self.target = target
+        self.registry: object | None = None
+        self.service: object | None = None
+        self.stage = "initial"
+        self.checkpoint = "ready"
+        self.create_gate = threading.Event()
+        self.create_waiting = threading.Event()
+        self.delay_create = False
+        self.fail_close_remaining = 0
+        self.close_failures = 0
+        self.close_original_calls = 0
+        self.busy_gate = threading.Event()
+        self.busy_entered = threading.Event()
+        self.busy_task_id: str | None = None
+        self.busy_session_id: str | None = None
+        self.fail_busy_drain = False
+        self.busy_drain_failures = 0
+        self.busy_reobservations = 0
+        self.terminal_task_id: str | None = None
+        self.release_gate = threading.Event()
+        self.release_waiting = threading.Event()
+        self.delay_release = False
+        self.release_calls = 0
+        self.observer_release_calls = 0
+        self.original_deps: object | None = None
+        self.review_deps: object | None = None
+        self.force_preflight_refusal = False
+        self.block_execution = False
+        self.execution_entered = threading.Event()
+        self.execution_release = threading.Event()
+        self.follow_release = threading.Event()
+        self.follow_operation_id: str | None = None
+        self.review_task_id: str | None = None
+        self.review_plan_session_id: str | None = None
+        self.preflight_hook_count = 0
+        self.diagnostic_lock = threading.Lock()
+        self.plan_again_trace = plan_again_trace
+
+    def release_probe_holds(self) -> None:
+        self.create_gate.set()
+        self.busy_gate.set()
+        self.release_gate.set()
+        self.follow_release.set()
+        self.execution_release.set()
+
+    def bind(self, registry: object) -> None:
+        if self.registry is not None:
+            return
+        self.registry = registry
+        if self.plan_again_trace is not None:
+            trace_registry_plan_again(registry, self.plan_again_trace)
+        self.service = registry._lifecycle
+        service = self.service
+        original_create = service.create_task_shell
+        original_close_shell = service.close_task_shell
+        original_release = service.release_task_session
+        original_observer_release = service._observer.release
+        original_drain_for_bridge = registry.drain_for_bridge
+        original_reobserve_task = service.reobserve_task
+
+        def drain_for_bridge(_registry: object, task_id: str, session_id: str,
+                             drain_id: str, *, replay_from: int | None) -> object:
+            if self.fail_busy_drain and task_id == self.busy_task_id and (
+                self._service().get_session(session_id).state == "canceling"
+            ):
+                from namisync.interfaces.task_port import TaskUnavailableError
+
+                self.fail_busy_drain = False
+                self.busy_drain_failures += 1
+                raise TaskUnavailableError("injected temporary observation loss")
+            return original_drain_for_bridge(
+                task_id, session_id, drain_id, replay_from=replay_from,
+            )
+
+        def reobserve_task(_service: object, task_id: str, session_id: str,
+                           sink: object, from_sequence: int) -> object:
+            if task_id == self.busy_task_id:
+                self.busy_reobservations += 1
+            return original_reobserve_task(task_id, session_id, sink, from_sequence)
+
+        def create_task_shell(_service: object, command_id: str, delivery_factory: object) -> object:
+            result = original_create(command_id, delivery_factory)
+            if self.delay_create:
+                self.delay_create = False
+                self.create_waiting.set()
+                if not self.create_gate.wait(10):
+                    raise RuntimeError("delayed create was not released")
+                self.create_gate.clear()
+                self.create_waiting.clear()
+            return result
+
+        def close_task_shell(_service: object, task_id: str) -> object:
+            if self.fail_close_remaining > 0:
+                self.fail_close_remaining -= 1
+                self.close_failures += 1
+                from namisync.interfaces.web.commands import CommandAdmissionError
+
+                raise CommandAdmissionError("injected pre-effect close refusal")
+            self.close_original_calls += 1
+            return original_close_shell(task_id)
+
+        def release_task_session(_service: object, *args: object, **kwargs: object) -> object:
+            self.release_calls += 1
+            if self.delay_release:
+                self.release_waiting.set()
+                if not self.release_gate.wait(10):
+                    raise RuntimeError("terminal cleanup was not released")
+            return original_release(*args, **kwargs)
+
+        def observer_release(session_id: str) -> object:
+            self.observer_release_calls += 1
+            return original_observer_release(session_id)
+
+        service.create_task_shell = MethodType(create_task_shell, service)
+        service.close_task_shell = MethodType(close_task_shell, service)
+        service.release_task_session = MethodType(release_task_session, service)
+        service._observer.release = observer_release
+        service.reobserve_task = MethodType(reobserve_task, service)
+        registry.drain_for_bridge = MethodType(drain_for_bridge, registry)
+
+        for index in range(46):
+            registry.create_task_shell(f"{1000 + index:032x}")
+
+    def status(self) -> dict[str, object]:
+        registry = self._registry()
+        tasks = registry.list_tasks().tasks
+        terminal = None
+        session_released = None
+        if self.terminal_task_id is not None:
+            match = next((task for task in tasks if task.task_id == self.terminal_task_id), None)
+            terminal = match is not None and match.session_state == "completed"
+            session_released = None if match is None else match.session_released
+        review_session_released = None
+        if self.review_task_id is not None:
+            review_match = next(
+                (task for task in tasks if task.task_id == self.review_task_id),
+                None,
+            )
+            review_session_released = (
+                None if review_match is None else review_match.session_released
+            )
+        busy_state = None
+        if self.busy_session_id is not None:
+            try:
+                busy_state = self._service().get_session(self.busy_session_id).state
+            except self._session_not_found_type():
+                busy_state = "retired"
+        return {
+            "task_count": len(tasks),
+            "create_waiting": self.create_waiting.is_set(),
+            "close_failures": self.close_failures,
+            "close_original_calls": self.close_original_calls,
+            "busy_entered": self.busy_entered.is_set(),
+            "busy_state": busy_state,
+            "busy_present": any(task.task_id == self.busy_task_id for task in tasks),
+            "busy_drain_failures": self.busy_drain_failures,
+            "busy_reobservations": self.busy_reobservations,
+            "terminal": terminal,
+            "terminal_present": any(task.task_id == self.terminal_task_id for task in tasks),
+            "release_waiting": self.release_waiting.is_set(),
+            "session_released": session_released,
+            "release_calls": self.release_calls,
+            "observer_release_calls": self.observer_release_calls,
+            "execution_entered": self.execution_entered.is_set(),
+            "review_session_released": review_session_released,
+        }
+
+    def diagnostic_status(self) -> dict[str, object]:
+        result: dict[str, object] = {
+            "authoritative_selection_state": None,
+            "task_delivery_session_changed": None,
+            "task_delivery_session_released": None,
+            "task_delivery_session_state": None,
+            "task_delivery_start_identity_count": None,
+            "service_session_state": None,
+            "task_delivery_active_drain_present": None,
+            "task_delivery_terminal_delivered": None,
+            "task_delivery_terminal_record_present": None,
+            "preflight_hook_count": None,
+            "live_service_state": None,
+        }
+        with self.diagnostic_lock:
+            result["preflight_hook_count"] = self.preflight_hook_count
+        if self.review_task_id is None:
+            return result
+        registry = self._registry()
+        current_session_id = None
+        with registry._condition:
+            task = registry._tasks.get(self.review_task_id)
+            view = registry._plan_views.get(self.review_task_id)
+            if task is not None:
+                with task.condition:
+                    session_id = (
+                        task.prior_session_id
+                        if task.transition and task.prior_session_id is not None
+                        else task.session_id
+                    )
+                    prior_record = (
+                        task.prior_delivery.delivered_terminal_record
+                        if task.transition and task.prior_delivery is not None
+                        else None
+                    )
+                    if session_id is None:
+                        session_state = None
+                    elif prior_record is not None:
+                        session_state = prior_record.state
+                    elif task.delivered_terminal_record is not None:
+                        session_state = task.delivered_terminal_record.state
+                    else:
+                        session_state = "active"
+                    result.update({
+                        "task_delivery_session_changed": (
+                            self.review_plan_session_id is not None
+                            and session_id != self.review_plan_session_id
+                        ),
+                        "task_delivery_session_released": (
+                            bool(task.prior_delivery.session_released)
+                            if task.transition and task.prior_delivery is not None
+                            else task.session_released
+                        ),
+                        "task_delivery_session_state": session_state,
+                        "task_delivery_start_identity_count": len(task.start_response_ids),
+                        "task_delivery_active_drain_present": task.active_drain is not None,
+                        "task_delivery_terminal_delivered": task.delivered_terminal_record is not None,
+                        "task_delivery_terminal_record_present": task.terminal_record is not None,
+                    })
+                    current_session_id = session_id
+        if view is not None:
+            result["authoritative_selection_state"] = view.summary()["selection_state"]
+        if current_session_id is not None:
+            try:
+                result["service_session_state"] = self._service().get_session(
+                    current_session_id
+                ).state
+            except self._session_not_found_type():
+                result["service_session_state"] = "retired"
+        return result
+
+    def command(self, payload: object) -> object:
+        if type(payload) is not dict or set(payload) != {"action", "value"}:
+            raise ValueError("test control payload is invalid")
+        action = payload["action"]
+        value = payload["value"]
+        if action == "status":
+            return self.status()
+        if action == "paths":
+            return {"source": str(self.source), "target": str(self.target)}
+        if action == "record" and type(value) is dict:
+            self.recorder.merge_report(value)
+            return {"accepted": True}
+        if action == "checkpoint" and value in {
+            "ready", "capacity", "basic_close", "retry", "navigation",
+            "navigation_cleanup", "navigation_recorded"
+            , "plan_surface", "plan_offset", "plan_notice", "plan_refused",
+            "plan_release", "plan_again", "plan_live", "plan_paused",
+            "plan_resumed", "plan_force", "plan_ack", "plan_execute",
+            "plan_empty_prepare", "plan_empty_wait", "move_reveal_query",
+            "move_reveal_missing", "move_reveal_above", "move_reveal_below", "move_reveal_visible"
+        }:
+            self.checkpoint = value
+            return {"accepted": True}
+        if action == "set_stage" and value in {
+            "busy", "terminal_first", "terminal_second",
+            "plan_review"
+        }:
+            self.stage = value
+            return {"accepted": True}
+        if action == "arm_close_failure":
+            self.fail_close_remaining = 1
+            return {"accepted": True}
+        if action == "arm_create_delay":
+            self.create_gate.clear()
+            self.create_waiting.clear()
+            self.delay_create = True
+            return {"accepted": True}
+        if action == "release_create":
+            self.create_gate.set()
+            return {"accepted": True}
+        if action == "start_busy":
+            self._start_busy()
+            return {"accepted": True}
+        if action == "track_busy":
+            task = self._registry().list_tasks().tasks[-1]
+            if task.task_id != self.busy_task_id:
+                raise RuntimeError("busy UI task identity changed")
+            if task.session_id is None:
+                return {"ready": False}
+            self.busy_session_id = task.session_id
+            return {"ready": True}
+        if action == "arm_busy_drain_failure":
+            self.fail_busy_drain = True
+            return {"accepted": True}
+        if action == "settle_busy":
+            self.busy_gate.set()
+            self._service()._runtime._deps = self.original_deps
+            return {"accepted": True}
+        if action == "start_terminal":
+            self._start_terminal()
+            return {"accepted": True}
+        if action == "begin_plan_again_trace" and value in {
+            "task-52-53", "task-53-54",
+        } and self.plan_again_trace is not None:
+            self.plan_again_trace.begin(value)
+            return {"accepted": True}
+        if action == "record_plan_again_trace" and self.plan_again_trace is not None:
+            if type(value) is not dict or type(value.get("cases")) is not dict:
+                raise ValueError("browser Plan-again trace payload is invalid")
+            phases = set(value["cases"])
+            if phases not in ({"task-52-53"}, {"task-52-53", "task-53-54"}):
+                raise ValueError("browser Plan-again trace phases are invalid")
+            validate_trace_snapshot(value, phases, allow_overflow=True)
+            self.recorder.set("plan_again_browser_trace", value)
+            host = self.plan_again_trace.snapshot()
+            self.plan_again_trace.end(
+                "task-53-54" if "task-53-54" in phases else "task-52-53"
+            )
+            validate_trace_snapshot(host, phases, allow_empty=True, allow_overflow=True)
+            self.recorder.set("plan_again_host_trace", host)
+            validate_trace_snapshot(value, phases)
+            validate_trace_snapshot(host, phases, allow_empty=True)
+            return {"accepted": True}
+        if action == "start_plan_review":
+            self._start_plan_review()
+            return {"accepted": True}
+        if action == "prepare_plan_again":
+            self._prepare_plan_again()
+            return {"accepted": True}
+        if action == "prepare_empty_plan":
+            self._prepare_empty_plan()
+            return {"accepted": True}
+        if action == "refuse_execution":
+            self.force_preflight_refusal = True
+            return {"accepted": True}
+        if action == "track_review_task":
+            review_task = self._registry().list_tasks().tasks[-1]
+            self.review_task_id = review_task.task_id
+            self.review_plan_session_id = review_task.session_id
+            return {"accepted": True}
+        if action == "release_follow_progress":
+            self.follow_release.set()
+            return {"accepted": True}
+        if action == "follow_snapshot":
+            task = self._registry().list_tasks().tasks[-1]
+            summary = self._registry().open_plan_view(task.task_id)
+            return {key: summary[key] for key in (
+                "task_id", "selection_revision", "selected_operation_count", "highlight_revision",
+            )}
+        if action == "follow_anchor":
+            task = self._registry().list_tasks().tasks[-1]
+            summary = self._registry().open_plan_view(task.task_id)
+            return self._registry().get_plan_operation_anchor(
+                task.task_id, session_id=task.session_id,
+                expected_revision=summary["view_revision"], operation_id=self.follow_operation_id,
+            )
+        if action == "prepare_live_execution":
+            self.follow_release.clear()
+            self.follow_operation_id = None
+            self.force_preflight_refusal = False
+            self.block_execution = True
+            self.execution_entered.clear()
+            self.execution_release.clear()
+            return {"accepted": True}
+        if action == "arm_release_delay":
+            self.release_gate.clear()
+            self.release_waiting.clear()
+            self.delay_release = True
+            return {"accepted": True}
+        if action == "release_cleanup":
+            self.delay_release = False
+            self.release_gate.set()
+            return {"accepted": True}
+        if action == "complete":
+            self.execution_release.set()
+            if self.review_deps is not None:
+                self._service()._runtime._deps = self.review_deps
+            self.recorder.complete()
+            return {"accepted": True}
+        raise ValueError("unknown test control action")
+
+    def _start_busy(self) -> None:
+        service = self._service()
+        self.original_deps = service._runtime._deps
+        self.busy_task_id = self._registry().list_tasks().tasks[-1].task_id
+
+        def blocked_scanner(root: object, ignores: object, ctx: object, **kwargs: object) -> object:
+            self.busy_entered.set()
+            while not self.busy_gate.wait(0.01):
+                pass
+            ctx.checkpoint()
+            return self.original_deps.scanner(root, ignores, ctx, **kwargs)
+
+        service._runtime._deps = replace(self.original_deps, scanner=blocked_scanner)
+
+    def _start_terminal(self) -> None:
+        self.terminal_task_id = self._registry().list_tasks().tasks[-1].task_id
+
+    def _start_plan_review(self) -> None:
+        from namisync.core.planning import MappingPair
+        from namisync.core.preflight import Refusal, RefusalCode, Verdict
+
+        self.source.mkdir(parents=True, exist_ok=True)
+        self.target.mkdir(parents=True, exist_ok=True)
+        (self.source / "shared.txt").write_text("source-v1", encoding="utf-8")
+        (self.target / "shared.txt").write_text("target-before-v1", encoding="utf-8")
+        for index in range(300):
+            (self.source / f"z-{index:03d}.txt").write_text("fixture", encoding="utf-8")
+        nested = self.source / "nested-folder" / "child-folder"
+        nested.mkdir(parents=True)
+        (nested / "child.txt").write_text("nested fixture", encoding="utf-8")
+        move_paths = (
+            ("", "old-root", "ZzzMove.txt"),
+            ("move-parent", "move-parent/old", "Move.txt"),
+        )
+        for relative, previous, name in move_paths:
+            source_folder = self.source / relative
+            target_folder = self.target / previous
+            source_folder.mkdir(parents=True, exist_ok=True)
+            target_folder.mkdir(parents=True, exist_ok=True)
+            source_file = source_folder / name
+            target_file = target_folder / name
+            source_file.write_text("move fixture", encoding="utf-8")
+            target_file.write_text("move fixture", encoding="utf-8")
+            stamp = source_file.stat().st_mtime_ns
+            os.utime(target_file, ns=(stamp, stamp))
+        self.review_deps = self._service()._runtime._deps
+        original_preflight = self.review_deps.preflight
+        original_executor = self.review_deps.executor
+        original_correspondence = self.review_deps.correspondence
+
+        def correspondence(source: object, target: object) -> object:
+            observed = original_correspondence(source, target)
+            source_files = {item.rel_path: item for item in source.files}
+            target_files = {item.rel_path: item for item in target.files}
+            pairs = []
+            for relative, previous, name in move_paths:
+                source_path = str(Path(relative) / name)
+                target_path = str(Path(previous) / name)
+                current = source_files.get(source_path)
+                prior = target_files.get(target_path)
+                if current is not None and prior is not None:
+                    # Supply the fixture's prior pairing, using actual scanner
+                    # identities; the production planner decides MOVE intent.
+                    pairs.append(MappingPair(
+                        prior.rel_path_key, prior.rel_path, prior.rel_path_key,
+                        current.file_identity, prior.file_identity,
+                    ))
+            return replace(observed, pairs=(*observed.pairs, *pairs))
+
+        def preflight(review: object, world: object, **kwargs: object) -> object:
+            if self.force_preflight_refusal:
+                with self.diagnostic_lock:
+                    self.preflight_hook_count += 1
+                return Verdict(
+                    False,
+                    (Refusal(RefusalCode.INSUFFICIENT_SPACE, detail="headed review refusal"),),
+                    world,
+                )
+            return original_preflight(review, world, **kwargs)
+
+        def executor(*args: object, **kwargs: object) -> object:
+            if not self.block_execution:
+                return original_executor(*args, **kwargs)
+            from namisync.core.events import Progress
+            from namisync.core.session import RunContext
+
+            context = args[1]
+            held = False
+
+            def emit(body: object) -> None:
+                nonlocal held
+                if not held and type(body) is Progress and body.item_id is not None:
+                    held = True
+                    self.follow_operation_id = body.item_id
+                    self.execution_entered.set()
+                    while not self.follow_release.wait(0.01):
+                        context.checkpoint()
+                    context.emit(body)
+                    while not self.execution_release.wait(0.01):
+                        context.checkpoint()
+                else:
+                    context.emit(body)
+
+            policies = replace(args[3], progress_interval_seconds=0)
+            return original_executor(
+                args[0], RunContext(emit, context.checkpoint), args[2], policies, *args[4:], **kwargs,
+            )
+
+        self._service()._runtime._deps = replace(
+            self.review_deps,
+            correspondence=correspondence,
+            preflight=preflight,
+            executor=executor,
+        )
+        self.force_preflight_refusal = True
+
+    def _prepare_plan_again(self) -> None:
+        (self.source / "shared.txt").write_text("source-v2", encoding="utf-8")
+        (self.source / "source-added.txt").write_text("source-added", encoding="utf-8")
+        (self.target / "shared.txt").write_text("target-before-v2", encoding="utf-8")
+        (self.target / "target-added.txt").write_text("target-added", encoding="utf-8")
+        self.force_preflight_refusal = False
+        self.block_execution = False
+        self.execution_entered.clear()
+        self.execution_release.clear()
+
+    def _prepare_empty_plan(self) -> None:
+        for root in (self.source, self.target):
+            for child in root.iterdir():
+                if child.is_dir():
+                    for nested in sorted(child.rglob("*"), reverse=True):
+                        if nested.is_file() or nested.is_symlink():
+                            nested.unlink()
+                        elif nested.is_dir():
+                            nested.rmdir()
+                    child.rmdir()
+                else:
+                    child.unlink()
+        self.force_preflight_refusal = False
+        self.block_execution = False
+
+    def _registry(self) -> object:
+        if self.registry is None:
+            raise RuntimeError("task registry is unavailable")
+        return self.registry
+
+    def _service(self) -> object:
+        if self.service is None:
+            raise RuntimeError("service is unavailable")
+        return self.service
+
+    @staticmethod
+    def _session_not_found_type() -> type[Exception]:
+        from namisync.dispatcher import SessionNotFound
+
+        return SessionNotFound
+
+
+def _test_spec(handler: Callable[[object], object]) -> object:
+    from namisync.interfaces.web.commands import (
+        CommandAccess, CommandRetry, CommandSpec, CommandResponsePolicy, FieldRequirement,
+    )
+
+    return CommandSpec(
+        validate_payload=lambda payload: payload,
+        handler=handler,
+        access=CommandAccess.READ_ONLY,
+        command_id=FieldRequirement.FORBIDDEN,
+        revision=FieldRequirement.FORBIDDEN,
+        response_policy=CommandResponsePolicy.INTERACTIVE,
+        retry=CommandRetry.NONE,
+    )
+
+
+def _runtime_value(task: object) -> object:
+    return runtime_value(task)
+
+
+def _sanitized_browser_error(value: object) -> dict[str, object] | None:
+    if type(value) is not dict or set(value) != {"type", "line"}:
+        return None
+    if type(value["type"]) is not str or value["type"] not in {
+        "Error", "TypeError", "ReferenceError", "SyntaxError", "RangeError",
+    }:
+        return None
+    line = value["line"]
+    if line is not None and (type(line) is not int or not 0 < line <= 1000000):
+        return None
+    return {"type": value["type"], "line": line}
+
+
+def _write_driver_diagnostic(path: Path, record: dict[str, object]) -> None:
+    if set(record) != _DRIVER_DIAGNOSTIC_KEYS:
+        raise TypeError("driver diagnostic shape is invalid")
+    path.write_text(json.dumps(record, sort_keys=True), encoding="utf-8")
+
+
+def _bounded_plan_context_readiness(value: object) -> dict[str, bool] | None:
+    if (
+        type(value) is not dict
+        or set(value) != _PLAN_CONTEXT_READINESS_KEYS
+        or any(type(item) is not bool for item in value.values())
+    ):
+        return None
+    return {name: value[name] for name in sorted(_PLAN_CONTEXT_READINESS_KEYS)}
+
+
+def _drive_plan_confirmation(
+    native: object,
+    core: object,
+    recorder: _Recorder,
+    control: _Control,
+    retained: list[object],
+    screenshot: Path,
+) -> Callable[[BaseException, object | None], None]:
+    from System import Action
+
+    failed = False
+    last_driver_step = "start"
+    last_method: str | None = None
+    last_plan_context_readiness: dict[str, bool] | None = None
+
+    def fail(error: BaseException, task: object | None = None) -> None:
+        nonlocal failed
+        if failed:
+            return
+        failed = True
+        diagnostic_path = screenshot.with_name("execution-confirmation-driver.json")
+        faulted = bool(task is not None and task.IsFaulted)
+        canceled = bool(task is not None and task.IsCanceled)
+        result_type = None
+        has_exception_details = None
+        if task is not None and not faulted and not canceled and last_method == "Runtime.evaluate":
+            try:
+                envelope = json.loads(str(task.Result))
+                if type(envelope) is dict:
+                    has_exception_details = "exceptionDetails" in envelope
+                    result = envelope.get("result")
+                    if type(result) is dict and type(result.get("type")) is str:
+                        result_type = result["type"]
+            except (TypeError, ValueError):
+                pass
+        base = {
+            "actual_control_checkpoint": control.checkpoint,
+            "active_element": None,
+            "authoritative_selection_state": None,
+            "task_delivery_session_changed": None,
+            "task_delivery_session_released": None,
+            "task_delivery_session_state": None,
+            "task_delivery_start_identity_count": None,
+            "service_session_state": None,
+            "task_delivery_active_drain_present": None,
+            "task_delivery_terminal_delivered": None,
+            "task_delivery_terminal_record_present": None,
+            "cdp_canceled": canceled,
+            "cdp_faulted": faulted,
+            "dialog_open": None,
+            "document_has_focus": None,
+            "execute_disabled": None,
+            "execute_focused": None,
+            "execute_hidden": None,
+            "live_service_state": None, "review_pending": None,
+            "pause_disabled": None, "pause_hidden": None, "resume_hidden": None, "controls_hidden": None,
+            "last_driver_step": last_driver_step,
+            "last_method": last_method,
+            "page_confirmation_stage": None,
+            "preflight_hook_count": None,
+            "runtime_has_exception_details": has_exception_details,
+            "runtime_result_type": result_type,
+            "trusted_click_count": None,
+            "trusted_keydown_count": None,
+            "trusted_keyup_count": None,
+            "browser_async_error": None,
+            "move_bottom_gap": None,
+            "plan_context_input": None,
+            "plan_context_readiness": last_plan_context_readiness,
+        }
+        diagnostic_expression = r"""
+(() => {
+  const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
+  const pause = document.querySelector('.nami-plan-review [data-control="pause-resume"]');
+  const dialog = document.querySelector("#execution-confirmation");
+  const active = document.activeElement;
+  const moveViewport = document.querySelector(".nami-plan-review__list");
+  const moveTarget = [...(moveViewport?.querySelectorAll("[data-node-id]") ?? [])]
+    .find((row) => row.querySelector(".nami-file-row__name-text")?.textContent === "ZzzMove.txt");
+  const moveGap = moveTarget === undefined ? null
+    : moveTarget.getBoundingClientRect().bottom - moveViewport.getBoundingClientRect().bottom;
+  const counters = window.__namiConfirmationTrustedInput ?? {};
+  const activeElement = active === execute ? "execute"
+    : active === dialog ? "dialog"
+      : active?.matches?.("[data-cancel-execution]") ? "cancel"
+        : active?.matches?.("[data-confirm-execution]") ? "confirm"
+          : active === null ? "none" : "other";
+  return {
+    browser_async_error: window.__namiFirstAsyncError ?? null,
+    move_bottom_gap: Number.isFinite(moveGap) && Math.abs(moveGap) <= 1000000 ? moveGap : null,
+    review_pending: ['','pause','resume','execute','view','selection','confirmation','plan-again'].includes(document.querySelector('.nami-plan-review')?.dataset.pending) ? document.querySelector('.nami-plan-review').dataset.pending : null,
+    pause_disabled: pause instanceof HTMLButtonElement ? pause.disabled : null,
+    pause_hidden: pause instanceof HTMLButtonElement ? pause.dataset.action !== 'pause' : null,
+    resume_hidden: pause instanceof HTMLButtonElement ? pause.dataset.action !== 'resume' : null,
+    controls_hidden: pause?.closest('.nami-plan-review__control-group')?.hidden ?? null,
+    active_element: activeElement,
+    dialog_open: dialog?.open === true,
+    document_has_focus: document.hasFocus(),
+    execute_disabled: execute instanceof HTMLButtonElement ? execute.disabled : null,
+    execute_focused: active === execute,
+    execute_hidden: execute instanceof HTMLButtonElement ? execute.hidden : null,
+    page_confirmation_stage:
+      typeof window.__namiConfirmationStage === "string"
+        ? window.__namiConfirmationStage : null,
+    trusted_click_count: Number.isSafeInteger(counters.click) ? counters.click : null,
+    trusted_keydown_count: Number.isSafeInteger(counters.keydown) ? counters.keydown : null,
+    trusted_keyup_count: Number.isSafeInteger(counters.keyup) ? counters.keyup : null,
+    plan_context_input: window.__namiPlanContextEvidence ?? null,
+  };
+})()
+"""
+
+        def publish(page: object = None) -> None:
+            try:
+                base.update(control.diagnostic_status())
+            except BaseException:
+                pass
+            if type(page) is dict:
+                for key in (
+                    "active_element", "dialog_open", "document_has_focus", "execute_disabled",
+                    "execute_focused", "execute_hidden", "page_confirmation_stage", "trusted_click_count",
+                    "trusted_keydown_count", "trusted_keyup_count",
+                    "pause_disabled", "pause_hidden", "resume_hidden", "controls_hidden", "review_pending",
+                    "move_bottom_gap",
+                    "plan_context_input",
+                ):
+                    if key in page:
+                        base[key] = page[key]
+                base["browser_async_error"] = _sanitized_browser_error(
+                    page.get("browser_async_error")
+                )
+            control.release_probe_holds()
+            _write_driver_diagnostic(diagnostic_path, base)
+            recorder.failure(f"page_plan_review_{control.checkpoint}", error)
+
+        try:
+            diagnostic_task = core.CallDevToolsProtocolMethodAsync(
+                "Runtime.evaluate",
+                json.dumps({
+                    "expression": diagnostic_expression,
+                    "returnByValue": True,
+                }),
+            )
+
+            def diagnostic_completed() -> None:
+                def finish() -> None:
+                    try:
+                        publish(_runtime_value(diagnostic_task))
+                    except BaseException:
+                        publish()
+
+                finish_action = Action(finish)
+                retained.append(finish_action)
+                native.BeginInvoke(finish_action)
+
+            completion = Action(diagnostic_completed)
+            retained.append(completion)
+            diagnostic_task.GetAwaiter().OnCompleted(completion)
+        except BaseException:
+            publish()
+
+    transport = NativeCdp(
+        native, core, retained,
+        lambda error, task, _step, _method: fail(error, task),
+    )
+
+    def call(
+        method: str,
+        parameters: dict[str, object],
+        then: Callable[[object], None],
+        step: str,
+    ) -> None:
+        nonlocal last_driver_step, last_method
+        if failed:
+            return
+        last_driver_step = step
+        last_method = method
+        transport.call(method, parameters, then, step)
+
+    def evaluate(expression: str, then: Callable[[object], None], step: str) -> None:
+        nonlocal last_driver_step, last_method
+        if failed:
+            return
+        last_driver_step = step
+        last_method = "Runtime.evaluate"
+        transport.evaluate(expression, then, step)
+
+    def capture(then: Callable[[], None], step: str, destination: Path = screenshot) -> None:
+        nonlocal last_driver_step, last_method
+        last_driver_step = step
+        last_method = "Page.captureScreenshot"
+        transport.capture(destination, then, step)
+
+    def dispatch(
+        events: list[tuple[str, dict[str, object]]],
+        done: Callable[[], None],
+        step: str,
+    ) -> None:
+        remaining = iter(events)
+        index = 0
+
+        def advance(_value: object = None) -> None:
+            nonlocal index
+            try:
+                method, parameters = next(remaining)
+            except StopIteration:
+                done()
+                return
+            index += 1
+            call(method, parameters, advance, f"{step}.{index}")
+
+        advance()
+
+    def key_events(key: str, code: str, virtual_key: int) -> list[tuple[str, dict[str, object]]]:
+        shared: dict[str, object] = {
+            "key": key,
+            "code": code,
+            "windowsVirtualKeyCode": virtual_key,
+            "nativeVirtualKeyCode": virtual_key,
+        }
+        if key == "Enter":
+            return [
+                ("Input.dispatchKeyEvent", {
+                    "type": "keyDown", "text": "\r", "unmodifiedText": "\r", **shared,
+                }),
+                ("Input.dispatchKeyEvent", {"type": "keyUp", **shared}),
+            ]
+        return [
+            ("Input.dispatchKeyEvent", {"type": "rawKeyDown", **shared}),
+            ("Input.dispatchKeyEvent", {"type": "keyUp", **shared}),
+        ]
+
+    def mouse_click(point: dict[str, object]) -> list[tuple[str, dict[str, object]]]:
+        shared = {
+            "x": point["x"], "y": point["y"], "button": "left", "clickCount": 1,
+        }
+        return [
+            ("Input.dispatchMouseEvent", {"type": "mousePressed", "buttons": 1, **shared}),
+            ("Input.dispatchMouseEvent", {"type": "mouseReleased", "buttons": 0, **shared}),
+        ]
+
+    def plan_context(index: int = 0) -> None:
+        nonlocal last_driver_step
+        stages = ("shift", "shift-escape", "menu", "menu-escape")
+        if index == len(stages):
+            evaluate(wait_execute, after_execute, "wait_execute")
+            return
+        name = stages[index]
+        expression = """(async () => {
+          for (let attempt = 0; attempt < 1200; attempt += 1) {
+            if (window.__namiPlanContextStage === """ + json.dumps(name + "-ready") + """) {
+              return await window.__namiPlanContextCheck();
+            }
+            await new Promise(resolve => setTimeout(resolve, 25));
+          }
+          throw new Error('Plan context input did not become ready');
+        })()"""
+
+        def send(facts: object) -> None:
+            nonlocal last_plan_context_readiness
+            last_plan_context_readiness = _bounded_plan_context_readiness(facts)
+            if type(facts) is not dict or not facts or any(value is not True for value in facts.values()):
+                raise RuntimeError("Plan context input target is unavailable")
+            key, virtual_key = (("Escape", 27) if name.endswith("-escape")
+                                else ("F10", 121) if name == "shift" else ("ContextMenu", 93))
+            events = key_events(key, key, virtual_key)
+            if name == "shift":
+                for _method, parameters in events:
+                    parameters["modifiers"] = 8
+            if not name.endswith("-escape"):
+                events.insert(1, ("Runtime.evaluate", {
+                    "expression": "window.__namiPlanContextDown();true", "returnByValue": True,
+                }))
+            dispatch(events, lambda: evaluate(
+                "window.__namiPlanContextAck=" + json.dumps(name) + ";true",
+                lambda _ack: plan_context(index + 1), "plan_context_ack_" + name,
+            ), "plan_context_" + name)
+
+        evaluate(expression, send, "wait_plan_context_" + name)
+
+    wait_execute = r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiConfirmationStage === "execute-ready") {
+      const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
+      if (!(execute instanceof HTMLButtonElement)) throw new Error("Execute control missing");
+      execute.focus();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (document.activeElement !== execute) throw new Error("Execute did not receive focus");
+      const rect = execute.getBoundingClientRect();
+      const point = {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+      const inViewport = rect.width > 0 && rect.height > 0 &&
+        point.x >= 0 && point.x < innerWidth && point.y >= 0 && point.y < innerHeight;
+      if (!inViewport || document.elementFromPoint(point.x, point.y) !== execute) {
+        throw new Error("Execute pointer target is not exact");
+      }
+      window.__namiExecuteFocused = true;
+      window.__namiExecutePointInViewport = true;
+      window.__namiExecuteHitTested = true;
+      return point;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for Execute readiness");
+})()
+"""
+    wait_cancel = r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiConfirmationStage === "cancel-open") {
+      const dialog = document.querySelector("#execution-confirmation");
+      const cancel = dialog?.querySelector("[data-cancel-execution]");
+      window.__namiConfirmationInputEvidence = {
+        nativeExecuteFocused: window.__namiExecuteFocused === true,
+        nativeExecutePointInViewport: window.__namiExecutePointInViewport === true,
+        nativeExecuteHitTested: window.__namiExecuteHitTested === true,
+        nativeModal: dialog?.matches(":modal") === true,
+        cancelInitiallyFocused: document.activeElement === cancel,
+        appInert: document.querySelector("#app")?.inert === true,
+        popupInert: document.querySelector("#theme-options")?.inert === true,
+      };
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for cancel-open confirmation");
+})()
+"""
+    wait_confirm = r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiConfirmationStage === "confirm-open") {
+      const dialog = document.querySelector("#execution-confirmation");
+      const confirm = dialog?.querySelector("[data-confirm-execution]");
+      const background = Array.from(document.querySelectorAll(".nami-task-rail__row"))
+        .find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === "Task 52")
+        ?.querySelector(".nami-task-card");
+      const rail = document.querySelector(".nami-task-rail__items");
+      if (!(dialog instanceof HTMLDialogElement) || !(confirm instanceof HTMLButtonElement)
+          || !(background instanceof HTMLButtonElement) || !(rail instanceof HTMLElement)) {
+        throw new Error("confirmation geometry is unavailable");
+      }
+      window.__namiConfirmationExitBarrier = dialog.animate(
+        [], {duration: 60000},
+      );
+      window.__namiConfirmationExitBarrier.pause();
+      rail.scrollTop = Math.min(120, rail.scrollHeight - rail.clientHeight);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const center = (element) => {
+        const rect = element.getBoundingClientRect();
+        return {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+      };
+      Object.assign(window.__namiConfirmationInputEvidence, {
+        escapeCanceled: true,
+        reopenCancelInitiallyFocused:
+          document.activeElement === dialog.querySelector("[data-cancel-execution]"),
+        selectedBeforeBackgroundInput:
+          document.querySelector('.nami-task-card[aria-current="page"]')?.dataset.taskLabel ?? null,
+        railScrollBeforeBackgroundInput: rail.scrollTop,
+      });
+      return {confirm: center(confirm), background: center(background)};
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for confirm-open confirmation");
+})()
+"""
+
+    def after_execute(value: object) -> None:
+        if type(value) is not dict:
+            raise RuntimeError("Execute pointer target was not verified")
+        dispatch(
+            mouse_click(value),
+            lambda: evaluate(wait_cancel, after_cancel, "wait_cancel"),
+            "open_execute_pointer",
+        )
+
+    def after_cancel(_value: object) -> None:
+        dispatch(
+            key_events("Escape", "Escape", 27),
+            lambda: evaluate(wait_reopen, after_reopen, "wait_reopen"),
+            "cancel_escape",
+        )
+
+    wait_reopen = r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiConfirmationStage === "reopen-ready") {
+      const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
+      if (!(execute instanceof HTMLButtonElement)) throw new Error("reopened Execute missing");
+      execute.focus();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (document.activeElement !== execute) throw new Error("reopened Execute did not receive focus");
+      const rect = execute.getBoundingClientRect();
+      const point = {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+      const inViewport = rect.width > 0 && rect.height > 0 &&
+        point.x >= 0 && point.x < innerWidth && point.y >= 0 && point.y < innerHeight;
+      if (!inViewport || document.elementFromPoint(point.x, point.y) !== execute) {
+        throw new Error("reopened Execute pointer target is not exact");
+      }
+      window.__namiConfirmationInputEvidence.reopenExecuteFocused = true;
+      window.__namiConfirmationInputEvidence.reopenExecutePointInViewport = true;
+      window.__namiConfirmationInputEvidence.reopenExecuteHitTested = true;
+      return point;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting to reopen confirmation");
+})()
+"""
+
+    def after_reopen(value: object) -> None:
+        if type(value) is not dict:
+            raise RuntimeError("reopened Execute pointer target was not verified")
+        dispatch(
+            mouse_click(value),
+            lambda: evaluate(wait_confirm, after_confirm, "wait_confirm"),
+            "reopen_execute_pointer",
+        )
+
+    def after_confirm(value: object) -> None:
+        if type(value) is not dict:
+            raise RuntimeError("confirmation geometry was not returned")
+        points = value
+        capture(lambda: exercise_focus(points), "capture_dialog")
+
+    def exercise_focus(points: dict[str, object]) -> None:
+        dispatch(key_events("Tab", "Tab", 9), lambda: evaluate(
+            "window.__namiConfirmationInputEvidence.firstTabFocusedConfirm = "
+            "document.activeElement?.matches('[data-confirm-execution]') === true; true",
+            lambda _first: dispatch(key_events("Tab", "Tab", 9), lambda: evaluate(
+                "window.__namiConfirmationInputEvidence.secondTabFocusedCancel = "
+                "document.activeElement?.matches('[data-cancel-execution]') === true; true",
+                lambda _second: exercise_background(points),
+                "verify_second_tab",
+            ), "dialog_tab_second"),
+            "verify_first_tab",
+        ), "dialog_tab_first")
+
+    def exercise_background(points: dict[str, object]) -> None:
+        background = points["background"]
+        events = mouse_click(background) + [("Input.dispatchMouseEvent", {
+            "type": "mouseWheel", "x": background["x"], "y": background["y"],
+            "deltaX": 0, "deltaY": 180,
+        })]
+        dispatch(events, lambda: evaluate(r"""
+(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 75));
+  const evidence = window.__namiConfirmationInputEvidence;
+  const dialog = document.querySelector("#execution-confirmation");
+  const rail = document.querySelector(".nami-task-rail__items");
+  evidence.backgroundPointerBlocked =
+    document.querySelector('.nami-task-card[aria-current="page"]')?.dataset.taskLabel
+      === evidence.selectedBeforeBackgroundInput;
+  evidence.backgroundWheelBlocked = rail?.scrollTop === evidence.railScrollBeforeBackgroundInput;
+  evidence.focusContained = document.activeElement === dialog || dialog?.contains(document.activeElement);
+  evidence.modalStayedOpen = dialog?.open === true && dialog.matches(":modal");
+  return true;
+})()
+""", lambda _verified: dispatch(
+            mouse_click(points["confirm"]),
+            lambda: evaluate(
+                wait_closing, lambda closing: exercise_closing(closing), "wait_closing",
+            ),
+            "confirm_pointer",
+        ), "verify_background"), "background_input")
+
+    wait_closing = r"""
+(async () => {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (window.__namiConfirmationStage === "confirm-closing") {
+      const background = Array.from(document.querySelectorAll(".nami-task-rail__row"))
+        .find((row) => row.querySelector(".nami-task-card")?.dataset.taskLabel === "Task 52")
+        ?.querySelector(".nami-task-card");
+      if (!(background instanceof HTMLButtonElement)) throw new Error("closing background missing");
+      const rect = background.getBoundingClientRect();
+      return {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("timed out waiting for closing confirmation");
+})()
+"""
+
+    def exercise_closing(value: object) -> None:
+        if type(value) is not dict:
+            raise RuntimeError("closing geometry was not returned")
+        dispatch(mouse_click(value), lambda: evaluate(r"""
+(() => {
+  const evidence = window.__namiConfirmationInputEvidence;
+  const dialog = document.querySelector("#execution-confirmation");
+  evidence.closingPointerBlocked =
+    dialog?.open === true && dialog.dataset.closing === "true" &&
+    document.querySelector('.nami-task-card[aria-current="page"]')?.dataset.taskLabel
+      === evidence.selectedBeforeBackgroundInput;
+  window.__namiConfirmationExitBarrier?.finish();
+  delete window.__namiConfirmationExitBarrier;
+  return true;
+})()
+""", lambda _verified: evaluate(
+            wait_live_execute, after_live_execute, "wait_live_execute",
+        ), "verify_closing"), "closing_background_pointer")
+
+    wait_live_execute = r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiConfirmationStage === "live-execute-ready") {
+      const execute = document.querySelector('.nami-plan-review [data-action="execute"]');
+      if (!(execute instanceof HTMLButtonElement)) throw new Error("live Execute missing");
+      execute.focus();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (document.activeElement !== execute) throw new Error("live Execute did not receive focus");
+      const rect = execute.getBoundingClientRect();
+      const point = {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+      const inViewport = rect.width > 0 && rect.height > 0 &&
+        point.x >= 0 && point.x < innerWidth && point.y >= 0 && point.y < innerHeight;
+      if (!inViewport || document.elementFromPoint(point.x, point.y) !== execute) {
+        throw new Error("live Execute pointer target is not exact");
+      }
+      window.__namiConfirmationInputEvidence.liveExecuteFocused = true;
+      window.__namiConfirmationInputEvidence.liveExecutePointInViewport = true;
+      window.__namiConfirmationInputEvidence.liveExecuteHitTested = true;
+      return point;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for live Execute readiness");
+})()
+"""
+
+    wait_live_confirm = r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiConfirmationStage === "live-confirm-open") {
+      const dialog = document.querySelector("#execution-confirmation");
+      const confirm = dialog?.querySelector("[data-confirm-execution]");
+      if (!(dialog instanceof HTMLDialogElement) || !(confirm instanceof HTMLButtonElement)) {
+        throw new Error("live confirmation missing");
+      }
+      window.__namiConfirmationExitBarrier = dialog.animate(
+        [], {duration: 60000},
+      );
+      window.__namiConfirmationExitBarrier.pause();
+      const rect = confirm.getBoundingClientRect();
+      return {x: (rect.left + rect.right) / 2, y: (rect.top + rect.bottom) / 2};
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("timed out waiting for live confirmation");
+})()
+"""
+
+    def after_live_execute(value: object) -> None:
+        if type(value) is not dict:
+            raise RuntimeError("live Execute pointer target was not verified")
+        dispatch(
+            mouse_click(value),
+            lambda: evaluate(wait_live_confirm, after_live, "wait_live_confirm"),
+            "live_execute_pointer",
+        )
+
+    wait_follow = r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiFollowWheelPoint) return window.__namiFollowWheelPoint;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("current-operation follow target did not become visible");
+})()
+"""
+
+    def scroll_follow(point: object) -> None:
+        if type(point) is not dict:
+            raise RuntimeError("follow viewport point is unavailable")
+        dispatch(
+            [("Input.dispatchMouseEvent", {
+                "type": "mouseWheel", "deltaX": 0, "deltaY": 6000, **point,
+            })],
+            lambda: evaluate("window.__namiFollowWheelDone=true;true", lambda _value: None, "follow_wheel_done"),
+            "follow_wheel",
+        )
+
+    def after_live(value: object) -> None:
+        if type(value) is not dict:
+            raise RuntimeError("live confirmation geometry was not returned")
+        dispatch(key_events("Tab", "Tab", 9), lambda: evaluate(
+            "window.__namiConfirmationInputEvidence.liveEnterFocusedConfirm = "
+            "document.activeElement?.matches('[data-confirm-execution]') === true; true",
+            lambda _focused: dispatch(key_events("Enter", "Enter", 13), lambda: evaluate(
+                r"""
+(async () => {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const dialog = document.querySelector("#execution-confirmation");
+    if (dialog?.dataset.closing === "true") {
+      window.__namiConfirmationInputEvidence.liveEnterConfirmed = true;
+      window.__namiConfirmationExitBarrier?.finish();
+      delete window.__namiConfirmationExitBarrier;
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("timed out waiting for Enter confirmation");
+})()
+""",
+                lambda _confirmed: evaluate(wait_follow, scroll_follow, "wait_follow"),
+                "verify_live_enter",
+            ), "live_confirm_enter"),
+            "verify_live_confirm_focus",
+        ), "live_confirm_tab")
+
+    evaluate(r"""
+(async () => {
+  for (let attempt = 0; attempt < 1200; attempt += 1) {
+    if (window.__namiFirstAsyncError) throw new Error('browser asynchronous error');
+    if (window.__namiMovePillReady) return true;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error('move-pill surface did not settle');
+})()
+""", lambda _ready: capture(lambda: evaluate(
+        "window.__namiMovePillCaptured=true;true",
+        lambda _captured: plan_context(),
+        "move_pill_captured",
+    ), "capture_move_pill", screenshot.with_name("move-pill.png")), "wait_move_pill")
+    return fail
+
+
+def _thread_sites() -> list[list[dict[str, object]]]:
+    """Bounded child-process stack locations without locals or full paths."""
+    allowed = {"dispatcher.py", "service.py", "drain.py", "session.py", "runtime.py",
+               "threading.py", "_task_shell_headed_child.py", "runner.py", "workflow.py",
+               "execution.py", "events.py", "context.py", "store.py", "pipeline.py",
+               "bridge.py", "commands.py", "lifecycle.py", "thread.py", "_base.py",
+               "util.py", "winforms.py", "edgechromium.py", "__init__.py"}
+    result = []
+    for frame in list(sys._current_frames().values())[:32]:
+        stack = []
+        for _ in range(24):
+            if frame is None:
+                break
+            filename = Path(frame.f_code.co_filename).name
+            if filename in allowed:
+                stack.append({"file": filename, "line": frame.f_lineno})
+            frame = frame.f_back
+        result.append(stack)
+    return result
+
+
+def _begin_probe(
+    window: object,
+    recorder: _Recorder,
+    control: _Control,
+    retained: list[object],
+    screenshot: Path,
+) -> None:
+    from System import Action
+
+    native = window.native
+    if native.InvokeRequired:
+        raise RuntimeError("task-shell probe left the UI thread")
+    core = native.browser.webview.CoreWebView2
+    starting_stage = control.stage
+    script = {
+        "initial": _INITIAL_SCRIPT,
+        "busy": _BUSY_SCRIPT,
+        "terminal_first": _TERMINAL_FIRST_SCRIPT,
+        "terminal_second": _TERMINAL_SECOND_SCRIPT,
+        "plan_review": _PLAN_REVIEW_SCRIPT,
+    }[starting_stage]
+    settings = json.dumps({"expression": script, "awaitPromise": True, "returnByValue": True})
+
+    task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", settings)
+    driver_failure = None
+    if starting_stage == "plan_review":
+        driver_failure = _drive_plan_confirmation(
+            native, core, recorder, control, retained, screenshot,
+        )
+
+    def completed() -> None:
+        def finish() -> None:
+            try:
+                value = _runtime_value(task)
+                if starting_stage == "plan_review" and value != {"complete": True}:
+                    raise RuntimeError("final page probe returned invalid evidence")
+                if control.stage != starting_stage:
+                    _begin_probe(window, recorder, control, retained, screenshot)
+            except BaseException as error:
+                control.release_probe_holds()
+                screenshot.with_name("runtime-thread-sites.json").write_text(
+                    json.dumps(_thread_sites(), sort_keys=True), encoding="utf-8",
+                )
+                screenshot.with_name("runtime-failure-site.json").write_text(
+                    json.dumps(failure_site(task), sort_keys=True), encoding="utf-8",
+                )
+                if driver_failure is not None:
+                    driver_failure(error, task)
+                    return
+                failure_stage = f"page_{starting_stage}"
+                if starting_stage in {"initial", "plan_review"}:
+                    failure_stage += f"_{control.checkpoint}"
+                recorder.failure(failure_stage, error)
+
+        finish_action = Action(finish)
+        retained.append(finish_action)
+        native.BeginInvoke(finish_action)
+
+    completion = Action(completed)
+    retained.append(completion)
+    task.GetAwaiter().OnCompleted(completion)
+
+
+def _configure_probe(
+    window: object,
+    recorder: _Recorder,
+    control: _Control,
+    retained: list[object],
+    screenshot: Path,
+    original: Callable[..., object],
+    large_window: bool,
+    *args: object,
+    **kwargs: object,
+) -> object:
+    controller = original(window, *args, **kwargs)
+
+    def begin() -> None:
+        if large_window and control.stage == "initial":
+            scale = window.native.DeviceDpi / 96
+            window.native.Width += int(160 * scale)
+            window.native.Height += int(100 * scale)
+        _begin_probe(window, recorder, control, retained, screenshot)
+
+    def fail(error: BaseException) -> None:
+        control.release_probe_holds()
+        recorder.failure("page_probe", error)
+
+    on_background_page_loaded(window, retained, begin, fail)
+    return controller
+
+
+def _runtime_identity() -> dict[str, object]:
+    import namisync
+
+    return {
+        "executable": str(Path(sys.executable).resolve()),
+        "namisync_file": str(Path(namisync.__file__).resolve()),
+        "versions": {
+            name: importlib.metadata.version(name)
+            for name in ("namisync", "pywebview", "pythonnet")
+        },
+    }
+
+
+def _parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--data-dir", required=True, type=Path)
+    parser.add_argument("--mutex", required=True)
+    parser.add_argument("--title", required=True)
+    parser.add_argument("--evidence-dir", required=True, type=Path)
+    parser.add_argument("--source", required=True, type=Path)
+    parser.add_argument("--target", required=True, type=Path)
+    parser.add_argument("--screenshot", required=True, type=Path)
+    parser.add_argument("--plan-again-trace", action="store_true")
+    parser.add_argument("--large-window", action="store_true")
+    return parser.parse_args()
+
+
+def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
+    from namisync.interfaces.web import host
+    from namisync.interfaces.web.host import DesktopInstanceIdentity
+    from namisync.interfaces.web.paths import AppPaths
+
+    plan_again_trace = PlanAgainHostTrace() if arguments.plan_again_trace else None
+    control = _Control(recorder, arguments.source, arguments.target, plan_again_trace)
+    retained: list[object] = []
+    original = host._configure_window_appearance
+    original_commands = host._production_commands
+
+    def commands(**kwargs: object) -> object:
+        result = original_commands(**kwargs)
+        return result if plan_again_trace is None else traced_plan_again_commands(
+            result, plan_again_trace,
+        )
+
+    def extension(_document: object, registry: object) -> dict[str, object]:
+        control.bind(registry)
+        return {"task_shell_test_control": _test_spec(control.command)}
+
+    recorder.set("runtime", _runtime_identity())
+    with ExitStack() as stack:
+        if plan_again_trace is not None:
+            stack.enter_context(patch.object(host, "_production_commands", commands))
+        stack.enter_context(headed_command_extension(host, extension))
+        stack.enter_context(
+            patch.object(
+                host,
+                "_configure_window_appearance",
+                lambda window, *args, **kwargs: _configure_probe(
+                    window, recorder, control, retained,
+                    arguments.screenshot.resolve(), original, arguments.large_window, *args, **kwargs
+                ),
+            )
+        )
+        try:
+            exit_code = host.run_desktop(
+                AppPaths.from_root(arguments.data_dir),
+                DesktopInstanceIdentity(arguments.mutex, arguments.title),
+                startup_error=recorder.startup_error,
+            )
+        finally:
+            control.release_probe_holds()
+    if not recorder.settled:
+        recorder.failure("child", RuntimeError("host returned before task-shell evidence completed"))
+    recorder.finish(exit_code, host_returned=True)
+    return exit_code
+
+
+def _error_type(error: BaseException) -> str:
+    name = type(error).__name__
+    return name if name in _FAILURE_TYPES else "Error"
+
+
+def main() -> int:
+    arguments = _parse_arguments()
+    recorder = _Recorder(EvidencePaths(arguments.evidence_dir.resolve()))
+    try:
+        return _run(arguments, recorder)
+    except BaseException as error:
+        recorder.failure("child", error)
+        recorder.finish(1, host_returned=False)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

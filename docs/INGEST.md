@@ -14,7 +14,7 @@ target-only library files.
 
 ## Pipeline
 
-1. Scan the source in memory with a card-specific ignore snapshot.
+1. Scan the source in memory with a card-specific `IgnoreSet`.
 2. Scan/inventory the destination library.
 3. Enrich source records through injected `MetadataExtractor` in cancellable
    batch mode.

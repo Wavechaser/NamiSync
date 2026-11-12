@@ -1,0 +1,40 @@
+NamiSync — terms for the Microsoft code in this build
+
+This build includes Microsoft Distributable Code: the Microsoft Visual C++
+runtime libraries (such as VCRUNTIME140.dll) and Microsoft code linked into
+the bundled Python runtime's .exe, .dll and .pyd files. Microsoft licenses
+that code to the maintainer on condition that everyone who receives it agrees
+to the terms below. These terms apply only to that Microsoft code. They do not
+change the GPL-3.0-or-later license of NamiSync (LICENSE), the Python license
+or the other licenses in THIRD-PARTY-NOTICES.txt.
+
+By extracting, running or passing on this build, you agree that you will not:
+
+1. remove, alter, hide or block any copyright, trademark, patent or other
+   notice of Microsoft or its suppliers in that code;
+2. use Microsoft's trademarks in a program's name or branding, or in any way
+   that suggests a program comes from or is endorsed by Microsoft;
+3. run or distribute that code on any platform other than Microsoft operating
+   systems, run-time technologies or application platforms;
+4. use or include that code in a malicious, deceptive or unlawful program, or
+   use it in any way that breaks the law;
+5. reverse engineer, decompile or disassemble that code, except where and only
+   to the extent that applicable law expressly permits it despite this
+   restriction;
+6. work around any technical limitation in that code; or
+7. modify or distribute that code, or its source, so that any part of it
+   becomes subject to a license that requires it to be disclosed or
+   distributed in source form, licensed for making derivative works, or
+   redistributable free of charge.
+
+If you pass this build, or any part containing that code, to anyone else, keep
+this file with it and require them to agree to these terms before they use it.
+
+Microsoft provides that code "as is". Microsoft gives no warranties,
+guarantees or conditions for it and offers no support for it through this
+build. To the extent the law allows, Microsoft and its suppliers are not
+liable for any damages arising from your use of it.
+
+If you do not agree to these terms, do not use this build; delete your copy.
+THIRD-PARTY-NOTICES.txt reproduces the Python Windows build's conditions in
+its "Additional Conditions for this Windows binary build" section.

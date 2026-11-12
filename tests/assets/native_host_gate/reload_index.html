@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>NamiSync replacement gate</title>
+  </head>
+  <body>
+    <main>
+      <h1>NamiSync replacement gate</h1>
+      <p id="host-status" role="status" aria-live="polite">Starting...</p>
+      <p id="probe-result" role="status" aria-live="polite">Waiting</p>
+    </main>
+    <script type="module" src="reload_probe.js"></script>
+  </body>
+</html>

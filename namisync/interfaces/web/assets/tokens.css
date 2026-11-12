@@ -1,0 +1,615 @@
+:root {
+  color-scheme: light dark;
+
+  /* The fifteen authored GUI Break 1 palette inputs are exact. */
+  --palette-red-main: #EE6666;
+  --palette-red-dark: #551111;
+  --palette-red-light: #FFAACC;
+  --palette-green-main: #33DD99;
+  --palette-green-dark: #004422;
+  --palette-green-light: #99EEDD;
+  --palette-blue-main: #33AAEE;
+  --palette-blue-dark: #002255;
+  --palette-blue-light: #99CCFF;
+  --palette-yellow-main: #FFAA22;
+  --palette-yellow-dark: #553300;
+  --palette-yellow-light: #FFDD44;
+  --palette-purple-main: #8844CC;
+  --palette-purple-dark: #331155;
+  --palette-purple-light: #BB88EE;
+
+  /* Font families are Windows-shell choices; the numeric ramp is Fluent. */
+  --font-family-body: "Segoe UI Variable", "Segoe UI", sans-serif;
+  --font-family-monospace: "Cascadia Mono", Consolas, monospace;
+  --font-size-caption: 12px;
+  --font-size-body: 14px;
+  --font-size-body-large: 16px;
+  --font-size-title: 20px;
+  --font-size-heading: 28px;
+  --line-height-caption: 16px;
+  --line-height-body: 20px;
+  --line-height-body-large: 22px;
+  --line-height-title: 28px;
+  --line-height-heading: 36px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+
+  --space-0: 0;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 8px;
+  --space-4: 12px;
+  --space-5: 16px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --scrollbar-size: 10px;
+
+  /* The local 4px radius labels select Fluent Medium, XLarge, and 2XLarge. */
+  --radius-none: 0;
+  --radius-small: 4px;
+  --radius-medium: 8px;
+  --radius-large: 12px;
+  --radius-circular: 10000px;
+
+  --icon-size-sm: 16px;
+  --icon-size-md: 20px;
+  --icon-size-lg: 24px;
+  --row-h: 28px;
+  --file-row-h: 24px;
+  --file-column-selection-default: 2rem;
+  --file-column-name-default: minmax(12rem, 1.8fr);
+  --file-column-size-default: minmax(5rem, 0.45fr);
+  --file-column-primary-default: minmax(8rem, 0.7fr);
+  --plan-action-column-width: minmax(6rem, 0.55fr);
+  --file-column-secondary-default: minmax(7rem, 0.65fr);
+  --file-column-notes-default: minmax(14rem, 1.3fr);
+  --setup-recent-columns: minmax(0, 1fr) 8rem;
+  --setup-batch-columns: minmax(0, 1fr) 8rem 6rem 3rem;
+
+  /* Instant reduction and the progress cycle are NamiSync behavior tokens. */
+  --motion-duration-instant: 0ms;
+  --motion-duration-fast: 100ms;
+  --motion-duration-normal: 200ms;
+  --motion-duration-slow: 300ms;
+  --motion-duration-progress-cycle: 1500ms;
+  --motion-easing-standard: cubic-bezier(0.33,0,0.67,1);
+  --motion-easing-accelerate: cubic-bezier(0.9,0.1,1,0.2);
+  --motion-easing-decelerate: cubic-bezier(0.1,0.9,0.2,1);
+
+  /*
+   * Fluent-derived aliases use Microsoft @fluentui/tokens 1.0.0-alpha.24
+   * at immutable commit 32b42a5bf79c1836047dfc7fae07b1320731bce4.
+   * package.json SHA-256: 6f2af81d6cadd474dc8e4a30cd512ccf5f0aa3e6221985ea6b28ce0e866c9991
+   * lightColor.ts SHA-256: 0882854a85d8433e530bb5e40adff342e321361c64cd295255127c06fea55a48
+   * darkColor.ts SHA-256: ed15b83e605999aa196ba04ac9d03557cf943a3ba7ce3a3979650992505c2bea
+   * borderRadius.ts SHA-256: 156bf14d20515100a28356daa7c07c9766a1108a0e4efef86ae171ee8c505f34
+   * curves.ts SHA-256: e1681eb819b86380e9ef6d52b9821b5fce2382d8d0070a33eef6429c4e0e2a6c
+   * durations.ts SHA-256: 34ef2eb5444fa422632f5ec1c2033f947d953f96c569e23e0ad8f78a6921f6bf
+   * fonts.ts SHA-256: ba5c662e2ec0e216f98ca28433ab439ecb4036d30d2311aa3f7d9c362ddcb2e9
+   * spacings.ts SHA-256: 63a64eba054236a88c80293f3128f89e988f22da90e7b4637a53ad92a89f9c2d
+   * shadows.ts SHA-256: 0f76754193af8f255401fe69f0288dd96767f4e35e7663bd0f84bf8af879d61a
+   * https://github.com/microsoft/fluentui/tree/32b42a5bf79c1836047dfc7fae07b1320731bce4/packages/tokens
+   * The offline provenance test records each local-to-upstream token mapping.
+   * Canvas intentionally selects Background1Hover (light) / Background2
+   * (dark) to match the native opaque fallback. Task-card overlays intentionally
+   * select the LightAlpha subtle aliases so Mica remains visible. Windows accent
+   * fallbacks, the dark disabled surface, and NamiSync's 15-swatch palette are
+   * separate, product-owned inputs.
+   * The package and source are MIT licensed.
+   */
+  --color-neutral-canvas: #f5f5f5;
+  --color-neutral-surface: #ffffff;
+  --color-neutral-surface-subtle: #fafafa;
+  --color-neutral-surface-hover: #f5f5f5;
+  --color-neutral-surface-pressed: #e0e0e0;
+  --color-neutral-surface-selected: #ebebeb;
+  --color-neutral-subtle-background: transparent;
+  --color-semantic-transparent: transparent;
+  --color-scrollbar-thumb: rgba(0,0,0,0.4);
+  --color-neutral-subtle-hover: rgba(255,255,255,0.7);
+  --color-neutral-subtle-pressed: rgba(255,255,255,0.5);
+  --color-selection-highlight: rgba(0,0,0,0.04);
+  --color-selection-highlight-pressed: rgba(0,0,0,0.02);
+  --color-neutral-foreground: #242424;
+  --color-neutral-foreground-secondary: #424242;
+  --color-neutral-foreground-tertiary: #616161;
+  --color-neutral-foreground-disabled: #bdbdbd;
+  --color-neutral-border: #616161;
+  --color-neutral-border-hover: #575757;
+  --color-neutral-border-pressed: #4d4d4d;
+  --color-neutral-border-subtle: #e0e0e0;
+  --color-neutral-disabled-background: #f0f0f0;
+  --color-card-background-solid: var(--color-neutral-surface);
+  --color-card-background: rgba(255,255,255,0.7);
+  --color-card-background-secondary: rgba(246,246,246,0.5);
+  --color-card-background-tertiary: #ffffff;
+  --color-card-border-solid: #ebebeb;
+  --color-card-border: rgba(0,0,0,0.06);
+  --color-flyout-background-solid: #ffffff;
+  --color-flyout-border-solid: #ebebeb;
+  --color-flyout-border: rgba(0,0,0,0.06);
+  --color-control-elevation-border-start: #0000000F;
+  --color-control-elevation-border-end: #00000029;
+  --color-control-elevation-border-flat: #0000000F;
+  --color-button-fill: #FFFFFFB3;
+  --color-button-fill-hover: #F9F9F980;
+  --color-button-fill-pressed: #F9F9F94D;
+  --color-button-fill-disabled: #F9F9F94D;
+  --color-text-control-fill: #FFFFFFB3;
+  --color-text-control-fill-hover: #F9F9F980;
+  --color-text-control-fill-pressed: #F9F9F94D;
+  --color-text-control-fill-focused: #FFFFFF;
+  --color-text-control-fill-disabled: #F9F9F94D;
+  --color-checkbox-fill-off: #00000006;
+  --color-checkbox-fill-off-hover: #0000000F;
+  --color-checkbox-fill-off-pressed: #00000018;
+  --color-checkbox-fill-off-disabled: transparent;
+  --color-toggle-fill-off: #00000006;
+  --color-toggle-fill-off-hover: #0000000F;
+  --color-toggle-fill-off-pressed: #00000018;
+  --color-control-border: #e5e5e5;
+  --color-button-edge-start: #0000000F;
+  --color-button-edge-end: #00000029;
+  --color-button-edge-flat: #0000000F;
+  --color-accent-button-edge-start: #FFFFFF14;
+  --color-accent-button-edge-end: #00000066;
+  --color-accent-button-edge-flat: var(--color-semantic-transparent);
+  --color-control-strong-stroke: #00000072;
+  --color-checkbox-stroke-disabled: #00000037;
+  --color-toggle-thumb-off: #0000009E;
+  --color-toggle-fill-disabled-off: var(--color-semantic-transparent);
+  --color-toggle-fill-disabled-on: #00000037;
+  --color-toggle-thumb-disabled-off: #0000005C;
+  --color-toggle-thumb-disabled-on: #FFFFFF;
+  --color-textbox-border: rgba(0,0,0,0.06);
+  --color-textbox-disabled-border: #0000000F;
+  --color-textbox-underline: rgba(0,0,0,0.45);
+  --color-backdrop: rgba(0,0,0,0.4);
+  --color-shadow-ambient: rgba(0,0,0,0.12);
+  --color-shadow-key: rgba(0,0,0,0.14);
+  --color-window-base: var(--color-neutral-canvas);
+  --color-accent-fill: #0067C0;
+  --color-accent-text-fill: #003E92;
+  --color-accent-fill-hover: #0067C0E6;
+  --color-accent-fill-pressed: #0067C0CC;
+  --color-accent-fill-foreground: #FFFFFF;
+  --color-focus-ring: #000000;
+  --color-focus-inner: #ffffff;
+  --color-main-fill-foreground: var(--color-neutral-foreground);
+  --filter-delete-foreground: var(--palette-red-main);
+  --filter-active-foreground: var(--color-neutral-foreground);
+  --filter-purple-active-foreground: var(--color-neutral-surface);
+  --filter-copy-background: var(--palette-blue-main);
+  --filter-update-background: var(--palette-yellow-main);
+  --filter-move-background: var(--palette-purple-main);
+  --filter-move-update-background: var(--palette-yellow-main);
+  --filter-recase-background: var(--palette-purple-main);
+  --filter-mkdir-background: var(--palette-blue-main);
+  --filter-trash-background: var(--palette-red-main);
+  --filter-delete-background: var(--palette-red-main);
+  --filter-delete-active-foreground: var(--color-main-fill-foreground);
+  --filter-blue-background-hover: #33AAEEE6;
+  --filter-blue-background-pressed: #33AAEECC;
+  --filter-yellow-background-hover: #FFAA22E6;
+  --filter-yellow-background-pressed: #FFAA22CC;
+  --filter-purple-background-hover: #8844CCE6;
+  --filter-purple-background-pressed: #8844CCCC;
+  --filter-red-background-hover: #EE6666E6;
+  --filter-red-background-pressed: #EE6666CC;
+  --filter-noop-background: var(--color-neutral-foreground-secondary);
+  --filter-noop-background-hover: #424242E6;
+  --filter-noop-background-pressed: #424242CC;
+  --filter-noop-foreground: var(--color-neutral-surface);
+  --elevation-2: 0 0 2px var(--color-shadow-ambient), 0 1px 2px var(--color-shadow-key);
+  --elevation-4: 0 0 2px var(--color-shadow-ambient), 0 2px 4px var(--color-shadow-key);
+  --elevation-8: 0 0 2px var(--color-shadow-ambient), 0 4px 8px var(--color-shadow-key);
+  --elevation-16: 0 0 2px var(--color-shadow-ambient), 0 8px 16px var(--color-shadow-key);
+
+  /* A rendered signal selects exactly one of these semantic channels. */
+  --intent-additive-foreground: var(--palette-blue-main);
+  --intent-relocating-foreground: var(--palette-purple-main);
+  --move-pill-background: var(--palette-purple-light);
+  --move-pill-background-hover: #BB88EEE6;
+  --move-pill-background-pressed: #BB88EECC;
+  --move-pill-foreground: var(--palette-purple-dark);
+  --move-pill-interaction-foreground: var(--move-pill-foreground);
+  --intent-replacing-foreground: var(--palette-yellow-main);
+  --intent-removing-foreground: var(--palette-red-main);
+  --intent-neutral-foreground: var(--color-neutral-foreground-secondary);
+  --intent-permanent-background: var(--palette-red-light);
+  --intent-permanent-foreground: var(--palette-red-dark);
+  --intent-exception-background: var(--palette-yellow-light);
+  --intent-exception-foreground: var(--palette-yellow-dark);
+
+  --lifecycle-neutral-foreground: var(--color-neutral-foreground-secondary);
+  --lifecycle-active-foreground: var(--color-accent-fill);
+  --lifecycle-completed-foreground: var(--palette-green-main);
+  --availability-online-fill: var(--palette-green-main);
+  --availability-offline-fill: var(--palette-red-main);
+  --lifecycle-attention-foreground: var(--palette-yellow-main);
+  --lifecycle-canceled-background: var(--color-neutral-surface-selected);
+  --lifecycle-canceled-foreground: var(--color-neutral-foreground-secondary);
+  --lifecycle-attention-background: var(--palette-yellow-light);
+  --lifecycle-attention-fill-foreground: var(--palette-yellow-dark);
+  --lifecycle-failure-background: var(--palette-red-light);
+  --lifecycle-failure-foreground: var(--palette-red-dark);
+
+  --integrity-positive-foreground: var(--palette-green-main);
+  --integrity-neutral-foreground: var(--color-neutral-foreground-secondary);
+  --integrity-attention-foreground: var(--palette-yellow-main);
+  --integrity-attention-background: var(--palette-yellow-light);
+  --integrity-attention-fill-foreground: var(--palette-yellow-dark);
+  --integrity-failure-background: var(--palette-red-light);
+  --integrity-failure-foreground: var(--palette-red-dark);
+
+  --progress-active-fill: var(--color-accent-fill);
+  --progress-paused-fill: var(--palette-yellow-main);
+  --progress-canceled-fill: var(--color-neutral-foreground-secondary);
+  --progress-track-background: var(--color-button-fill);
+}
+
+:root[data-window-material="mica"] {
+  --color-window-base: transparent;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-neutral-canvas: #1f1f1f;
+  --color-neutral-surface: #292929;
+  --color-neutral-surface-subtle: #1f1f1f;
+  --color-neutral-surface-hover: #3d3d3d;
+  --color-neutral-surface-pressed: #1f1f1f;
+  --color-neutral-surface-selected: #383838;
+  --color-neutral-subtle-background: transparent;
+  --color-neutral-subtle-hover: rgba(36,36,36,0.8);
+  --color-neutral-subtle-pressed: rgba(36,36,36,0.5);
+  --color-selection-highlight: rgba(255,255,255,0.08);
+  --color-selection-highlight-pressed: rgba(255,255,255,0.04);
+  --color-neutral-foreground: #ffffff;
+  --color-neutral-foreground-secondary: #d6d6d6;
+  --color-neutral-foreground-tertiary: #adadad;
+  --color-neutral-foreground-disabled: #5c5c5c;
+  --color-scrollbar-thumb: rgba(255,255,255,0.4);
+  --color-neutral-border: #adadad;
+  --color-neutral-border-hover: #bdbdbd;
+  --color-neutral-border-pressed: #b3b3b3;
+  --color-neutral-border-subtle: #0a0a0a;
+  --color-neutral-disabled-background: #2a2a2a;
+  --color-card-background-solid: var(--color-neutral-surface);
+  --color-card-background: rgba(255,255,255,0.05);
+  --color-card-background-secondary: rgba(255,255,255,0.03);
+  --color-card-background-tertiary: rgba(255,255,255,0.07);
+  --color-card-border-solid: #1c1c1c;
+  --color-card-border: rgba(0,0,0,0.10);
+  --color-flyout-background-solid: #292929;
+  --color-flyout-border-solid: #1c1c1c;
+  --color-flyout-border: rgba(0,0,0,0.20);
+  --color-control-elevation-border-start: #FFFFFF18;
+  --color-control-elevation-border-end: #FFFFFF12;
+  --color-control-elevation-border-flat: #FFFFFF12;
+  --color-button-fill: #FFFFFF0F;
+  --color-button-fill-hover: #FFFFFF15;
+  --color-button-fill-pressed: #FFFFFF08;
+  --color-button-fill-disabled: #FFFFFF0B;
+  --color-text-control-fill: #FFFFFF0F;
+  --color-text-control-fill-hover: #FFFFFF15;
+  --color-text-control-fill-pressed: #FFFFFF08;
+  --color-text-control-fill-focused: #1E1E1EB3;
+  --color-text-control-fill-disabled: #FFFFFF0B;
+  --color-checkbox-fill-off: #00000019;
+  --color-checkbox-fill-off-hover: #FFFFFF0B;
+  --color-checkbox-fill-off-pressed: #FFFFFF12;
+  --color-checkbox-fill-off-disabled: transparent;
+  --color-toggle-fill-off: #00000019;
+  --color-toggle-fill-off-hover: #FFFFFF0B;
+  --color-toggle-fill-off-pressed: #FFFFFF12;
+  --color-control-border: #353535;
+  --color-button-edge-start: #FFFFFF18;
+  --color-button-edge-end: #FFFFFF12;
+  --color-button-edge-flat: #FFFFFF12;
+  --color-accent-button-edge-start: #FFFFFF14;
+  --color-accent-button-edge-end: #00000023;
+  --color-accent-button-edge-flat: var(--color-semantic-transparent);
+  --color-control-strong-stroke: #FFFFFF8B;
+  --color-checkbox-stroke-disabled: #FFFFFF28;
+  --color-toggle-thumb-off: #FFFFFFC5;
+  --color-toggle-fill-disabled-off: var(--color-semantic-transparent);
+  --color-toggle-fill-disabled-on: #FFFFFF28;
+  --color-toggle-thumb-disabled-off: #FFFFFF5D;
+  --color-toggle-thumb-disabled-on: #FFFFFF87;
+  --color-textbox-border: rgba(255,255,255,0.07);
+  --color-textbox-disabled-border: #FFFFFF12;
+  --color-textbox-underline: rgba(255,255,255,0.55);
+  --color-backdrop: rgba(0,0,0,0.5);
+  --color-shadow-ambient: rgba(0,0,0,0.24);
+  --color-shadow-key: rgba(0,0,0,0.28);
+  --color-focus-ring: #ffffff;
+  --color-focus-inner: #000000;
+  --color-accent-fill: #4CC2FF;
+  --color-accent-text-fill: #99EBFF;
+  --color-accent-fill-hover: #4CC2FFE6;
+  --color-accent-fill-pressed: #4CC2FFCC;
+  --color-accent-fill-foreground: #000000;
+  --filter-delete-foreground: var(--palette-red-main);
+  --filter-active-foreground: var(--color-neutral-surface);
+  --filter-purple-active-foreground: var(--color-neutral-foreground);
+  --color-main-fill-foreground: var(--color-neutral-surface);
+  --filter-noop-background-hover: #D6D6D6E6;
+  --filter-noop-background-pressed: #D6D6D6CC;
+  --intent-relocating-foreground: var(--palette-purple-light);
+  --move-pill-background: var(--palette-purple-dark);
+  --move-pill-background-hover: #331155E6;
+  --move-pill-background-pressed: #331155CC;
+  --move-pill-foreground: var(--palette-purple-light);
+  --intent-permanent-background: var(--palette-red-dark);
+  --intent-permanent-foreground: var(--palette-red-main);
+  --intent-exception-background: var(--palette-yellow-dark);
+  --intent-exception-foreground: var(--palette-yellow-main);
+  --lifecycle-attention-background: var(--palette-yellow-dark);
+  --lifecycle-attention-fill-foreground: var(--palette-yellow-main);
+  --lifecycle-failure-background: var(--palette-red-dark);
+  --lifecycle-failure-foreground: var(--palette-red-main);
+  --integrity-attention-background: var(--palette-yellow-dark);
+  --integrity-attention-fill-foreground: var(--palette-yellow-main);
+  --integrity-failure-background: var(--palette-red-dark);
+  --integrity-failure-foreground: var(--palette-red-main);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-neutral-canvas: #1f1f1f;
+    --color-neutral-surface: #292929;
+    --color-neutral-surface-subtle: #1f1f1f;
+    --color-neutral-surface-hover: #3d3d3d;
+    --color-neutral-surface-pressed: #1f1f1f;
+    --color-neutral-surface-selected: #383838;
+    --color-neutral-subtle-background: transparent;
+    --color-neutral-subtle-hover: rgba(36,36,36,0.8);
+    --color-neutral-subtle-pressed: rgba(36,36,36,0.5);
+    --color-selection-highlight: rgba(255,255,255,0.08);
+    --color-selection-highlight-pressed: rgba(255,255,255,0.04);
+    --color-neutral-foreground: #ffffff;
+    --color-neutral-foreground-secondary: #d6d6d6;
+    --color-neutral-foreground-tertiary: #adadad;
+    --color-neutral-foreground-disabled: #5c5c5c;
+    --color-scrollbar-thumb: rgba(255,255,255,0.4);
+    --color-neutral-border: #adadad;
+    --color-neutral-border-hover: #bdbdbd;
+    --color-neutral-border-pressed: #b3b3b3;
+    --color-neutral-border-subtle: #0a0a0a;
+    --color-neutral-disabled-background: #2a2a2a;
+    --color-card-background-solid: var(--color-neutral-surface);
+    --color-card-background: rgba(255,255,255,0.05);
+    --color-card-background-secondary: rgba(255,255,255,0.03);
+    --color-card-background-tertiary: rgba(255,255,255,0.07);
+    --color-card-border-solid: #1c1c1c;
+    --color-card-border: rgba(0,0,0,0.10);
+    --color-flyout-background-solid: #292929;
+    --color-flyout-border-solid: #1c1c1c;
+    --color-flyout-border: rgba(0,0,0,0.20);
+    --color-control-elevation-border-start: #FFFFFF18;
+    --color-control-elevation-border-end: #FFFFFF12;
+    --color-control-elevation-border-flat: #FFFFFF12;
+    --color-button-fill: #FFFFFF0F;
+    --color-button-fill-hover: #FFFFFF15;
+    --color-button-fill-pressed: #FFFFFF08;
+    --color-button-fill-disabled: #FFFFFF0B;
+    --color-text-control-fill: #FFFFFF0F;
+    --color-text-control-fill-hover: #FFFFFF15;
+    --color-text-control-fill-pressed: #FFFFFF08;
+    --color-text-control-fill-focused: #1E1E1EB3;
+    --color-text-control-fill-disabled: #FFFFFF0B;
+    --color-checkbox-fill-off: #00000019;
+    --color-checkbox-fill-off-hover: #FFFFFF0B;
+    --color-checkbox-fill-off-pressed: #FFFFFF12;
+    --color-checkbox-fill-off-disabled: transparent;
+    --color-toggle-fill-off: #00000019;
+    --color-toggle-fill-off-hover: #FFFFFF0B;
+    --color-toggle-fill-off-pressed: #FFFFFF12;
+    --color-control-border: #353535;
+    --color-button-edge-start: #FFFFFF18;
+    --color-button-edge-end: #FFFFFF12;
+    --color-button-edge-flat: #FFFFFF12;
+    --color-accent-button-edge-start: #FFFFFF14;
+    --color-accent-button-edge-end: #00000023;
+    --color-accent-button-edge-flat: var(--color-semantic-transparent);
+    --color-control-strong-stroke: #FFFFFF8B;
+    --color-checkbox-stroke-disabled: #FFFFFF28;
+    --color-toggle-thumb-off: #FFFFFFC5;
+    --color-toggle-fill-disabled-off: var(--color-semantic-transparent);
+    --color-toggle-fill-disabled-on: #FFFFFF28;
+    --color-toggle-thumb-disabled-off: #FFFFFF5D;
+    --color-toggle-thumb-disabled-on: #FFFFFF87;
+    --color-textbox-border: rgba(255,255,255,0.07);
+    --color-textbox-disabled-border: #FFFFFF12;
+    --color-textbox-underline: rgba(255,255,255,0.55);
+    --color-backdrop: rgba(0,0,0,0.5);
+    --color-shadow-ambient: rgba(0,0,0,0.24);
+    --color-shadow-key: rgba(0,0,0,0.28);
+    --color-focus-ring: #ffffff;
+    --color-focus-inner: #000000;
+    --color-accent-fill: #4CC2FF;
+    --color-accent-text-fill: #99EBFF;
+    --color-accent-fill-hover: #4CC2FFE6;
+    --color-accent-fill-pressed: #4CC2FFCC;
+    --color-accent-fill-foreground: #000000;
+    --filter-delete-foreground: var(--palette-red-main);
+    --filter-active-foreground: var(--color-neutral-surface);
+    --filter-purple-active-foreground: var(--color-neutral-foreground);
+    --color-main-fill-foreground: var(--color-neutral-surface);
+    --filter-noop-background-hover: #D6D6D6E6;
+    --filter-noop-background-pressed: #D6D6D6CC;
+    --intent-relocating-foreground: var(--palette-purple-light);
+    --move-pill-background: var(--palette-purple-dark);
+    --move-pill-background-hover: #331155E6;
+    --move-pill-background-pressed: #331155CC;
+    --move-pill-foreground: var(--palette-purple-light);
+    --intent-permanent-background: var(--palette-red-dark);
+    --intent-permanent-foreground: var(--palette-red-main);
+    --intent-exception-background: var(--palette-yellow-dark);
+    --intent-exception-foreground: var(--palette-yellow-main);
+    --lifecycle-attention-background: var(--palette-yellow-dark);
+    --lifecycle-attention-fill-foreground: var(--palette-yellow-main);
+    --lifecycle-failure-background: var(--palette-red-dark);
+    --lifecycle-failure-foreground: var(--palette-red-main);
+    --integrity-attention-background: var(--palette-yellow-dark);
+    --integrity-attention-fill-foreground: var(--palette-yellow-main);
+    --integrity-failure-background: var(--palette-red-dark);
+    --integrity-failure-foreground: var(--palette-red-main);
+  }
+}
+
+@media (forced-colors: active) {
+  :root,
+  :root[data-theme="light"],
+  :root[data-theme="dark"],
+  :root:not([data-theme="light"]) {
+    --color-neutral-canvas: Canvas;
+    --color-neutral-surface: Canvas;
+    --color-neutral-surface-subtle: Canvas;
+    --color-neutral-surface-hover: Highlight;
+    --color-neutral-surface-pressed: Highlight;
+    --color-neutral-surface-selected: Highlight;
+    --color-neutral-subtle-background: Canvas;
+    --color-neutral-subtle-hover: Highlight;
+    --color-neutral-subtle-pressed: Highlight;
+    --color-selection-highlight: Highlight;
+    --color-selection-highlight-pressed: Highlight;
+    --color-neutral-foreground: CanvasText;
+    --color-neutral-foreground-secondary: CanvasText;
+    --color-neutral-foreground-tertiary: CanvasText;
+    --color-neutral-foreground-disabled: GrayText;
+    --color-neutral-border: ButtonBorder;
+    --color-neutral-border-hover: Highlight;
+    --color-neutral-border-pressed: Highlight;
+    --color-neutral-border-subtle: ButtonBorder;
+    --color-neutral-disabled-background: Canvas;
+    --color-card-background-solid: Canvas;
+    --color-card-background: Canvas;
+    --color-card-background-secondary: Canvas;
+    --color-card-background-tertiary: Canvas;
+    --color-card-border-solid: ButtonBorder;
+    --color-card-border: ButtonBorder;
+    --color-flyout-background-solid: Canvas;
+    --color-flyout-border-solid: ButtonBorder;
+    --color-flyout-border: ButtonBorder;
+    --color-control-elevation-border-start: ButtonBorder;
+    --color-control-elevation-border-end: ButtonBorder;
+    --color-control-elevation-border-flat: ButtonBorder;
+    --color-button-fill: ButtonFace;
+    --color-button-fill-hover: Highlight;
+    --color-button-fill-pressed: Highlight;
+    --color-button-fill-disabled: ButtonFace;
+    --color-text-control-fill: Field;
+    --color-text-control-fill-hover: Field;
+    --color-text-control-fill-pressed: Field;
+    --color-text-control-fill-focused: Field;
+    --color-text-control-fill-disabled: Field;
+    --color-checkbox-fill-off: ButtonFace;
+    --color-checkbox-fill-off-hover: Highlight;
+    --color-checkbox-fill-off-pressed: Highlight;
+    --color-checkbox-fill-off-disabled: ButtonFace;
+    --color-toggle-fill-off: ButtonFace;
+    --color-toggle-fill-off-hover: Highlight;
+    --color-toggle-fill-off-pressed: Highlight;
+    --color-button-edge-start: ButtonBorder;
+    --color-button-edge-end: ButtonBorder;
+    --color-button-edge-flat: ButtonBorder;
+    --color-accent-button-edge-start: Highlight;
+    --color-accent-button-edge-end: Highlight;
+    --color-accent-button-edge-flat: var(--color-semantic-transparent);
+    --color-toggle-thumb-off: ButtonText;
+    --color-toggle-fill-disabled-off: ButtonFace;
+    --color-toggle-fill-disabled-on: ButtonFace;
+    --color-toggle-thumb-disabled-off: GrayText;
+    --color-toggle-thumb-disabled-on: GrayText;
+    --color-control-border: ButtonBorder;
+    --color-control-strong-stroke: ButtonBorder;
+    --color-checkbox-stroke-disabled: GrayText;
+    --color-textbox-border: ButtonBorder;
+    --color-textbox-disabled-border: ButtonBorder;
+    --color-textbox-underline: CanvasText;
+    --color-backdrop: Canvas;
+    --color-shadow-ambient: CanvasText;
+    --color-shadow-key: CanvasText;
+    --color-window-base: Canvas !important;
+    --color-accent-fill: Highlight !important;
+    --color-accent-fill-hover: Highlight !important;
+    --color-accent-fill-pressed: Highlight !important;
+    --color-accent-fill-foreground: HighlightText !important;
+    --color-hyperlink-foreground: LinkText;
+    --color-focus-ring: Highlight;
+    --color-focus-inner: Canvas;
+    --filter-delete-foreground: CanvasText;
+    --filter-active-foreground: HighlightText;
+    --filter-copy-background: Highlight;
+    --filter-update-background: Highlight;
+    --filter-move-background: Highlight;
+    --filter-move-update-background: Highlight;
+    --filter-recase-background: Highlight;
+    --filter-mkdir-background: Highlight;
+    --filter-trash-background: Highlight;
+    --filter-delete-background: Highlight;
+    --filter-delete-active-foreground: HighlightText;
+    --filter-blue-background-hover: Highlight;
+    --filter-blue-background-pressed: Highlight;
+    --filter-yellow-background-hover: Highlight;
+    --filter-yellow-background-pressed: Highlight;
+    --filter-purple-background-hover: Highlight;
+    --filter-purple-background-pressed: Highlight;
+    --filter-red-background-hover: Highlight;
+    --filter-red-background-pressed: Highlight;
+    --filter-noop-background: Highlight;
+    --filter-noop-background-hover: Highlight;
+    --filter-noop-background-pressed: Highlight;
+    --filter-noop-foreground: HighlightText;
+    --filter-purple-active-foreground: HighlightText;
+    --move-pill-background: ButtonFace;
+    --move-pill-background-hover: Highlight;
+    --move-pill-background-pressed: Highlight;
+    --move-pill-foreground: ButtonText;
+    --move-pill-interaction-foreground: HighlightText;
+    --color-main-fill-foreground: HighlightText;
+    --intent-additive-foreground: CanvasText;
+    --intent-relocating-foreground: CanvasText;
+    --intent-replacing-foreground: CanvasText;
+    --intent-removing-foreground: CanvasText;
+    --intent-neutral-foreground: CanvasText;
+    --intent-permanent-background: Highlight;
+    --intent-permanent-foreground: HighlightText;
+    --intent-exception-background: Highlight;
+    --intent-exception-foreground: HighlightText;
+    --lifecycle-neutral-foreground: CanvasText;
+    --lifecycle-active-foreground: CanvasText;
+    --lifecycle-completed-foreground: CanvasText;
+    --lifecycle-attention-foreground: CanvasText;
+    --lifecycle-canceled-background: Highlight;
+    --lifecycle-canceled-foreground: HighlightText;
+    --lifecycle-attention-background: Highlight;
+    --lifecycle-attention-fill-foreground: HighlightText;
+    --lifecycle-failure-background: Highlight;
+    --lifecycle-failure-foreground: HighlightText;
+    --integrity-positive-foreground: CanvasText;
+    --integrity-neutral-foreground: CanvasText;
+    --integrity-attention-foreground: CanvasText;
+    --integrity-attention-background: Highlight;
+    --integrity-attention-fill-foreground: HighlightText;
+    --integrity-failure-background: Highlight;
+    --integrity-failure-foreground: HighlightText;
+    --progress-active-fill: Highlight;
+    --progress-paused-fill: Highlight;
+    --progress-canceled-fill: Highlight;
+    --progress-track-background: Canvas;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0.01ms;
+    --motion-duration-normal: 0.01ms;
+    --motion-duration-slow: 0.01ms;
+    --motion-duration-progress-cycle: 0.01ms;
+  }
+}

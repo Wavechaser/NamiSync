@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 .pytest_cache/
+.pytest-headed-bridge/
 .coverage
 htmlcov/
 
@@ -11,6 +12,7 @@ build/
 dist/
 *.egg-info/
 *.spec
+!tools/packaging/namisync.spec
 
 *.db
 *.db-wal

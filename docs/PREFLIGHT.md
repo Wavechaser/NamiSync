@@ -1,47 +1,124 @@
 # Preflight Module
 
-Status: M0 observation and pure judgment implementation complete. Fresh
-preflight remains mandatory immediately before every managed-data mutation,
-on resume, and on queued wakeup.
+Status: M0 observation and pure judgment implementation complete, with M1
+Stage 1's immutable reviewed-policy semantics and shared ephemeral root
+authority. Fresh preflight remains mandatory immediately before every
+managed-data mutation, on resume, and on queued wakeup. Stage 6's pre-model
+plan-review source/refusal admission is active for workflow-supplied review.
+
+Preflight uses the active capacity-observation and refusal contract in
+[BRIDGE.md](BRIDGE.md) and
+[DEFENSE.md](DEFENSE.md) §1.3 without defining a local numeric variant.
 
 ## Purpose
 
 Preflight separates current-world observation from pure judgment:
 
 ```python
-observe(xset: ExecutionSet, fs: FileSystem,
-        settings: SettingsReader) -> ObservedWorld
-preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict
+observe(review: ExecutionReview, fs: FileSystem, *, plan_review: bool = False,
+        review_admission: PlanReviewProducerAdmission | None = None) -> ObservedWorld
+preflight(review: ExecutionReview, world: ObservedWorld, *, plan_review: bool = False,
+          review_admission: PlanReviewProducerAdmission | None = None) -> Verdict
 ```
+
+Plan-review producers and result-adoption gates accept only the exact counter-
+free producer capability. They cannot charge retained rows or bytes. Separate
+retained-world and retained-verdict helpers accept only the cumulative
+`PlanReviewAdmission`; execution-time observer and judgment callbacks continue
+without review-capacity authority, while their returned compounds receive
+standalone producer admission and ordinary pre-run failure classification.
 
 ## Implemented M0 Surface
 
 `namisync.modules.preflight.observe()` consumes an injected read-only
-filesystem and settings reader. It records only remaining selected-operation
-subjects, required target parents, both roots, capacity, exact reclaimable temp
-bytes, trash safety, settings, and one UTC timestamp. The native local backend
-performs no cleanup or hydration.
+filesystem. It records only remaining selected-operation subjects, required
+target parents, both roots, capacity, exact reclaimable temp bytes, trash
+safety, and one UTC timestamp. The native local backend performs no cleanup and
+requests metadata rather than file contents. This is not a universal guarantee
+against provider-triggered hydration; see [SCANNER.md](SCANNER.md).
 
-`preflight()` consumes only the immutable `ObservedWorld` contract in
+The full execution scope is the default. Planning explicitly sets
+`plan_review=True` through observation, scope derivation, judgment and both
+result-adoption gates. That mode omits NOOP direct file subjects and their stat
+judgments while retaining their target parents and every non-stat check.
+Empty execution status and review-capacity authority do not select this mode.
+
+`preflight()` consumes only the frozen outer `ObservedWorld` contract in
 `namisync.core.preflight`. It reports all applicable typed run- and
 operation-level refusals for unsafe operations selected from incomplete scans,
 root/volume ambiguity, broken selection dependencies, blocked/quarantined work,
-direct or parent-path drift, policy drift, insufficient capacity, trash safety,
+direct or parent-path drift, insufficient capacity, trash safety,
 containment, and target path representation. Commitment checking remains at the
 execution-workflow entry, as review preflight intentionally works before a
 commitment exists.
 
-`observe()` performs read-only IO, including reading current semantic settings,
-and decides nothing. `preflight()` performs no IO and changes nothing. Neither
-repairs, re-plans, drops, cleans, or executes operations.
+The six exact preflight observation and verdict dataclasses are frozen and
+slotted, so instances carry only their declared fields. `ObservedWorld` copies
+its three mapping inputs into private dict-backed read-only mapping proxies
+after validating capacity scalars and UTC time; an exact `datetime` already
+using `timezone.utc` is retained, while a datetime subclass or zero-offset UTC
+alias is canonicalized before those mapping copies. Target-parent paths remain
+an exact `frozenset`. Frozen observation leaves make the complete published
+world deeply read-only, and later caller changes to input dictionaries cannot
+change it. Fallible internal result boundaries still require exact types and
+declared compound relations.
+
+`observe()` performs read-only filesystem/volume IO and decides nothing.
+`preflight()` performs no IO and changes nothing. Neither repairs, re-plans,
+drops, cleans, or executes operations. Admitted execution uses the immutable
+reviewed policy snapshot already bound into the plan; it never reinterprets the
+run from newer global defaults.
+
+An insufficient-space verdict does not mutate or invalidate the reviewed plan.
+Review preflight runs after plan construction and can publish that immutable
+artifact with a negative verdict. This differs from scan/planner population or
+logical-byte admission refusal, which publishes no plan. Execution preflight
+can refuse an admitted execution without starting the executor. The accepted
+M1 desktop recovery is explicit Plan again in a new task with fresh scans and
+review, not terminal subset retry or in-place plan repair. If the user frees
+space by deleting source/target entries, those fresh scans account for the
+changed world; preflight never silently adopts those changes into an old plan.
+
+During each preflight cycle, workflow creates one exact immutable
+`ExecutionReview` and passes that same instance to observation and judgment.
+Plan review supplies empty status; execution and resume copy current status only
+after capturing the existing mutable execution authority. Observation and
+result adoption check the plan operation count before deriving the scope.
+Each remaining operation can contribute a source, destination, prior target
+and the two target parents. These root-qualified observations describe the
+same operation, even when the source and destination use identical relative
+paths. Their keys must belong to the derived scope. The preflight module admits the
+observer's exact `ObservedWorld` without rebuilding it, rejects out-of-plan
+subjects, paths, parents, roots, or mismatched stat/path keys, and workflow
+passes that same world identity directly to judgment. Verdict admission requires
+the exact admitted world identity, gates the complete informational population
+before refusal traversal, validates truth, code, selection, subject, and text
+relations in place, and retains the exact callback verdict and refusal order.
+An equal replacement world is not the admitted world and fails ordinarily.
+Both adoption gates derive allowed subjects with the same explicit mode as the
+observer and judge. A review callback cannot publish an omitted NOOP file
+subject or a refusal naming it; a subject independently required as a target
+parent remains admissible.
+
+Only the final observed-world mapping slots and verdict refusal-tuple slots/
+informational rows are charged to the retained plan artifact. Construction
+maps, keys, sorting, selection, and scope-derivation temporaries are disposable
+and uncharged. A first excess is the shared typed `REFUSED+UNRUN` result and
+never becomes an incomplete ordinary verdict or saved partial plan.
+
+These source and retained-reference checks do not freeze the unrealized
+complete-object constants or account for construction/container capacity,
+complete projections, later task/serialization, native, or browser copies.
 
 ## Observation Boundary
 
 Observation touches only remaining selected-operation paths and their required
-parents/roots. It records source and target stats (or absence), root/physical
-volume evidence, free space, exact reclaimable owned-temp bytes, trash path
-resolution/writability, current filters from the injected settings reader, and
-one injected UTC timestamp.
+parents/roots. Review mode omits NOOP source and target file paths, but keeps
+their target parents in both the observed subjects and `target_parent_paths`.
+A NOOP target independently needed as another operation's parent still receives
+parent safety checks. Observation records source and target stats (or absence),
+root/physical volume evidence, free space, exact reclaimable owned-temp bytes,
+trash path resolution/writability, and one injected UTC timestamp.
 
 Stats are keyed by `Subject(root, rel_path_key)`, never by relative-path string
 alone, but observation still passes planned relative-path spelling to the
@@ -51,12 +128,93 @@ executor's non-replacing rename is the final occupancy guard: an ordinary
 case-insensitive target aliases the same object, while a distinct case-sensitive
 destination cannot be overwritten. Preflight never normalizes NFC/NFD spelling.
 
-Every path is first lexically validated, then opened/resolved under its root
-with long-path-safe, reparse-aware handling. Reclaimable temp accounting accepts
+`observe()` derives one ephemeral `RootAuthority` per root from the plan's
+logical root, optional reviewed volume anchor, and expected `VolumeId`. Its
+native filesystem enters one invocation-owned `root_scope()`; the first native
+root admission acquires a core root hold before fully admitting that authority.
+Only successful admission followed by the hold's strict final-path confirmation
+and fresh ordinary-directory attributes permits matching root facts to be
+reused for later calls in that invocation.
+Before each reuse, the backend requires current ordinary-directory attributes
+from that same held handle. This guard runs at the root-admission boundary of
+root, subject, free-space, reclaimable-temp and trash observations, without
+pathname probing or another final-path query. Reparse/placeholder evidence and
+attribute-query failure retain the existing typed root-refusal policy; neither
+can silently select the per-access fallback. The hold does not prevent in-place
+attribute changes or make check/use atomic; [DEFENSE.md](DEFENSE.md)'s quiescent
+root precondition remains required.
+An unavailable or unconfirmed hold retains per-access admission. Direct native
+backend calls outside that scope and supplied filesystems without activation
+retain their existing policy. Every supplied backend method still dispatches
+at its existing observation boundary.
+
+The native invocation owns its holds and admitted facts separately from the
+reusable filesystem adapter and returned world. Nested and later invocations
+admit again; return or any exception closes every hold and resets the scope.
+Admission no-follow checks every configured-root component below the
+reviewed/current mount before physical resolution, and typed anchor or volume
+changes remain observation evidence for pure judgment to map to `root_changed`.
+Subject root physical resolution is omitted only after that call's admission
+has checked fresh ordinary attributes on a live confirmed invocation hold. Its
+logical root spelling already matches the held normalized DOS final name except
+drive-letter case. For this held path, subject containment and the capability
+profile's `max_path` use the validated logical absolute candidate spelling for
+both present and missing subjects; candidate physical resolution is omitted.
+Final no-follow leaf stat and fresh temp-parent/trash volume observations remain.
+Unconfirmed holds and direct backend calls retain root/candidate resolution and
+its resolved-length policy. Native candidate spelling is prepared after chain
+admission and reused for the final stat (and fallback candidate resolution).
+The held path excludes the leaf from preliminary chain admission and obtains
+its metadata once with the final no-follow stat, retaining placeholder/reparse
+classification there. All existing intermediate components remain admitted.
+Fallback paths retain preliminary leaf admission and their final stat.
+
+Descendant admission and observation are separate moments. A descendant replaced
+after admission can change the observed result; omitting candidate resolution
+can lose its later escape refusal, including reporting absence after a missing
+intermediate ended admission. This accepted concurrent-observation distinction
+applies to planning and execution preflight. It is not atomic namespace evidence
+or permission to omit the executor's independent effect-time guards.
+A leaf appearing after preliminary admission can now be observed on the held
+path, whereas fallback's earlier absence ends that observation. A leaf removed
+before the final stat is absent. These are observation-time facts, not a frozen
+snapshot or a promise that a name continues to denote the observed object.
+
+### Handle-relative observation option
+
+A single native relative subject open remains a future option. Local NTFS and
+the supplied exFAT fixture support metadata-only strict opens plus same-handle
+Basic/Standard metadata; full 128-bit identity is queried only for profiles
+supporting it. This could remove the per-component pathname walk and candidate
+resolution while keeping subject metadata tied to the opened object. The
+investigation does not establish an equivalent complete observer or a production
+speedup; [PERFORMANCE](PERFORMANCE.md) owns the measured methods and limits.
+
+Real OneDrive probes show that default placeholder presentation can hide reparse
+attributes and that strict DONT_REPARSE opens can still succeed on exposed cloud
+entries. A final handle's attributes do not establish intermediate-component
+classification. Root admission, two acquisition lifetimes, alias corroboration,
+and complete parent/absence judgments also need a settled design. This option
+therefore remains unimplemented under [M1_PLAN](M1_PLAN.md); the current pathname
+algorithm and its existing placeholder policy remain active. These probes do
+not establish that the pathname algorithm detects every hidden cloud component.
+
+Every existing relative component of a subject, temp parent, or `.synctrash`
+path is likewise no-follow admitted before physical resolution, volume probing,
+writability checks, or enumeration. A missing subject remains ordinary absence;
+a missing or unsafe temp parent contributes no reclaimable bytes; and unsafe
+trash is unavailable. Reclaimable temp accounting accepts
 only regular files with the exact NamiSync temp grammar and a run id different
 from the current execution, in touched target parents outside trash on the
 target volume. `ObservedWorld` retains that identical parent set for the
 post-verdict recovery sweep. Observation never deletes those files.
+
+`Root`, `Subject`, and `ObservedWorld` paths retain ordinary absolute drive or
+UNC spelling. `LocalObservationFileSystem` converts roots, subjects, trash, and
+temp-parent paths to extended-length spelling only at Windows I/O calls, then
+converts resolved evidence back before containment checks or return. The
+capability profile's `max_path` remains a separate reviewed limit; native access
+does not silently override it.
 
 An observation failure is evidence, not an exception that silently skips a
 check. The snapshot records unknown/unavailable state so pure judgment refuses
@@ -77,10 +235,13 @@ the run. It verifies:
 - no selected operation is blocked, overlaps a blocked correspondence region,
   or depends on blocked, failed, canceled, or deferred work;
 - current source/target/type/identity/size/mtime evidence matches each planned
-  before-state within capability granularity;
+  before-state within capability granularity; review mode skips these direct
+  stat judgments for NOOPs, including observation, containment and representation
+  refusals, while retaining root, parent, blocked/quarantine and dependency checks;
+- managed attribute bits match; link count matches for MOVE and MOVE_UPDATE
+  eligibility, while creation time and other attribute bits are not drift facts;
 - expected absence is still absence and expected destination occupancy/type is
   unchanged;
-- current semantic filter/options/policy fingerprint equals the plan snapshot;
 - current required bytes for remaining operations fit free space plus safely
   reclaimable owned temps;
 - trash resolves beneath the target, on the same physical volume, without a
@@ -88,8 +249,12 @@ the run. It verifies:
 - every final destination remains root-constrained and representable on the
   target filesystem.
 
-Unrelated tree changes do not matter. A refusal never mutates `ExecutionSet`,
+Unrelated tree changes do not matter. Observation and judgment receive no
+mutable `ExecutionSet`; a refusal never changes its immutable `ExecutionReview`,
 silently removes an operation, or changes an operation to a safer-looking kind.
+The shared `core.planning.planned_metadata_matches` predicate owns only the
+metadata/link-count portion of these comparisons. Observations retain complete
+stats, and placeholder/reparse refusal remains at the observation boundary.
 
 Commitment validation is not preflight judgment: review uses preflight before a
 commitment exists. `run_execution` must refuse a missing plan fingerprint or
@@ -97,11 +262,15 @@ selection-digest match before it calls observation/preflight.
 
 ## Repetition And Freshness
 
-Plan review may display a verdict from one observation. Execution always makes
-a fresh observation; it does not reuse the review snapshot merely because it is
-recent. This resolves the contradictory reuse wording noted during review: time
-closeness is not evidence of unchanged state. Resume and queue wakeup likewise
-observe fresh.
+Plan review displays fresh checks for selected change operations and all required
+target parents, including NOOP parents, with NOOP file facts remaining as of the
+scans. A NOOP that changes between scan and review may therefore leave review
+ready. Execution always observes and judges every remaining selected operation,
+including NOOPs, before temp cleanup or executor admission; detected drift
+refuses the whole fresh run without changing target data. It does not reuse the review snapshot
+merely because it is recent. This resolves the contradictory reuse wording noted
+during review: time closeness is not evidence of unchanged state. Resume and
+queue wakeup likewise observe fresh.
 
 Residual TOCTOU remains after observation. Executor therefore performs a final
 per-operation guard immediately before each mutation; preflight does not replace
@@ -121,13 +290,17 @@ The shared formula uses the target's reviewed
 the old target's backup-copy bytes as well as replacement temps. Preflight never
 probes support or substitutes a filesystem-name guess.
 
+Free-space and reclaimable-byte observations must each enter the nonnegative
+signed-64 domain, and their effective-capacity sum uses checked addition before
+comparison with the already bounded required bytes. A scalar-domain violation
+fails closed; it is not relabeled as ordinary insufficient capacity.
+
 ## Expectations Of Other Modules
 
 - Planner embeds every before-state and policy snapshot needed for judgment.
 - Core supplies path/volume/evidence types and the shared capacity function.
-- Workflow supplies the injected settings reader used by observation.
-- Dispatcher holds/acquires required volume custody around execution; preflight
-  verifies identity but does not own locks.
+- Dispatcher holds/acquires required volume custody around execution; native
+  preflight's invocation root handles do not replace that custody.
 - Workflow alone invokes fresh observe/preflight immediately before executor
   mutation under the same custody. Executor imports no preflight sibling and
   retains live per-operation guards as the final TOCTOU defense.
@@ -145,6 +318,14 @@ status cases, not new safety logic. Queue wakeup calls the same functions.
 Network roots require a distinct weaker observation/custody profile and remain
 refused until that profile exists.
 
+Native held-root admission is bounded to one `observe()` invocation as described
+above; its fallback retains per-access root/full-volume observation. Each new
+observation, including resume and queue wakeup, admits again. A process-lifetime
+volume cache would make remount evidence stale and remains unacceptable. Further
+subject-stat or path-check consolidation is a separate outcome: it must preserve
+the existing observations or receive an explicit decision for changed concurrent
+refusal behavior under [M1_PLAN.md](M1_PLAN.md)'s equivalence rules.
+
 ## PoC Hardening
 
 - Scoped stats fix whole-tree over-refusal and duplicate full-walk latency.
@@ -159,45 +340,5 @@ refused until that profile exists.
   operation-specific mutation primitives can enforce touch-time conditions.
   Non-replacing destinations and emptiness checks do not by themselves bind a
   source pathname to the object previously observed; that requires an explicit
-  handle-bound operation or remains inside the external-writer boundary.
-
-## Acceptance Criteria
-
-- Pure-preflight tests run with no filesystem object and cover every refusal
-  combination without mutation.
-- Read-only harness proves observation creates, deletes, renames, hydrates, or
-  writes nothing.
-- Instrumentation proves observation stats only selected touched paths and
-  required parents/roots; an unrelated change never refuses the plan.
-- Incomplete-scan copy/update/mkdir/noop/recase selections pass, while any
-  manually selected move/move-update/trash/delete is refused with the
-  applicable source/target completeness code.
-- A manually selected operation overlapping blocked correspondence is refused;
-  ordinary workflow selection quarantines it before commitment.
-- Source drift, target drift, type change, identity change, destination
-  appearance, root swap, volume clone ambiguity, filter drift, and dependency
-  break each yield typed refusals.
-- Same-volume, contained, writable trash passes; reparse, off-volume, readonly,
-  and unresolved trash fails before mutation.
-- Capacity boundary/property tests agree with planner for full and partial
-  selections, include no-hardlink backup copies, and count only prior-run exact
-  regular-file temps in the same touched-parent scope execution sweeps; current
-  run, lookalike, untouched-parent, off-volume, and `.synctrash` entries are
-  excluded.
-- Review, immediate execution, resume, and queue wakeup return identical
-  verdicts for identical snapshots and fresh different verdicts after drift.
-- Refusal leaves plan, selection, statuses, filesystem, and ledger byte-for-byte
-  unchanged.
-- Missing or mismatched plan/selection commitment is refused by execution entry
-  before observation; ordinary review preflight remains usable without one.
-- A test changes an unrelated file between plan and execution and still passes;
-  a touched file change refuses.
-- Long-path and root-escape cases are judged through canonical validated paths.
-- Import-linter proves preflight imports core but no sibling module.
-
-## M0 Verification
-
-`tests/test_preflight.py` contains focused pure-verdict and instrumented
-observation tests proving selection-aware completeness, blocked-correspondence
-defense, scoped reads, fresh-world behavior, run-aware exact temp accounting,
-retained recovery scope, and no managed-data mutation.
+  handle-bound operation or remains inside the external-writer residual classes
+  and quiescent-root precondition owned by `DEFENSE.md`.

@@ -1,10 +1,16 @@
 # Inventory Domain
 
-Status: the database retention/reconciliation foundation is implemented; M1
-workflow, selection, acknowledgement/filter controls, and interface composition
-remain. Inventory is not a new sideways-calling operation module: scanner
-observes, workflows coordinate, and database repositories/recorder retain
-state.
+Status: the M1 role-free inventory workflow, three-shape scoped reconciliation,
+acknowledgement/restore, typed queries, standalone integrity selection, and the
+Stage 5.5 recursive scan-scope foundation are implemented. Inventory is not a new
+sideways-calling operation module: scanner observes, workflows coordinate, and
+database repositories/recorder retain state. The Stage 5 CLI exposes explicit
+location inventory and integrity starts through the shared service; desktop
+actions remain Stage 6. Shared location-candidate admission and bounded
+remembered-location reads are implemented workflow services. Desktop Setup
+starts standalone inventory on a typed, picked or remembered root; cached
+desktop projections and ledger-current presentation are implemented.
+Verify copied uses ordinary scoped integrity and its current-state results.
 
 ## Purpose
 
@@ -13,26 +19,319 @@ physical location and what integrity evidence exists. A location may exist with
 zero, one, or many mappings. Inventory state must not be reinterpreted by plan
 view state, mapping role, UI filters, or a partial scan.
 
-## Implemented Persistence Slice
+## Implemented Inventory Slice
 
 The ledger schema stores current observation fields separately from attested
 hash subject fields, including nullable identity/hardlink-group room, presence,
-unsupported reason, missing/acknowledgement/exclusion/reappearance timestamps,
-host provenance, and scope token. Ordinary scans update only current
-observation fields and cannot rewrite an established attestation.
+unsupported reason, missing/acknowledgement/reappearance timestamps, host
+provenance, and scope token. Ordinary scans update only current observation
+fields and cannot rewrite an established attestation.
 
 `LedgerRecorder.record_inventory()` batches present, directory, and unsupported
-observations. A complete online full scan uses a temporary key table to mark
-unseen present/unsupported rows missing without a parameter-sized `NOT IN`;
-incomplete and offline scans infer no missing state, while complete selected
-refreshes affect only selected keys. Reappearance is set on a missing-to-present
-transition.
+observations. A complete online `FULL` scan uses a temporary observed-key table
+to mark unseen present/unsupported rows missing without a parameter-sized
+`NOT IN`. Exact `PATHS` reconciliation affects only named keys. `SUBTREES`
+reuses the observed-key anti-join but bounds it to the union of remaining exact
+paths, each root equality, and each root's literal canonical descendant range.
+Incomplete and offline scans infer no missing state. Reappearance is set on a
+missing-to-present or missing-to-unsupported transition.
 
 `LedgerRepository` returns immutable typed rows and bounded canonical-path
-selections. The conditional integrity recorder writes attestation and optionally
-clears `reappeared_at`/advances true verification time in the same transaction.
-Acknowledgement/restore, mapping-filter state, stale-age queries, and the
-workflow that automatically constructs verifier selections remain M1 work.
+selections. Every multi-batch selection stays in one read transaction so a
+concurrent inventory commit cannot produce a torn result. The conditional
+integrity recorder writes attestation and optionally clears
+`reappeared_at`/advances true verification time in the same transaction.
+Acknowledgement/restore changes only visibility state, while stale-age queries
+select candidates without mutating them.
+
+General inventory, stale, missing, and row-id readers stream directly into
+`InventorySnapshot` values and stop before retaining the first returned row
+beyond 150,000. Requested paths, row ids, and mapping identities have a
+separate raw 150,000-occurrence wall applied before normalization,
+deduplication, sorting, or SQL construction. Absent or ineligible values within
+that wall can still produce an empty result; duplicates and malformed row ids
+retain their existing selection semantics, but none bypasses raw request
+admission. Chunked reads retain their one-snapshot ordering and do not
+accumulate raw `sqlite3.Row` shells beside the typed result. These count bounds do not establish an aggregate memory guarantee; focused scale checks belong to PRESENTATION.
+
+The inventory workflow re-resolves stable volume identity before each
+invocation, registers first locations in the exact order host -> volume
+observation -> role-free location -> scan -> inventory recording, and
+never creates a mapping from location-only activity. Resolution preserves five
+distinct outcomes: `resolved`, `offline`, `ambiguous`, `root_missing`, and
+`root_unavailable`. Ambiguity requires an explicit choice before submission;
+a changed candidate set (including a newly mounted clone) refuses before scan
+or hash work at initial start, resume, and queued wakeup. The resolver-selected
+mount is supplied to core's chain-only root admission; that admission performs
+no new volume observation, preserves the lexical path in workflow details, and
+still precedes the separate accessibility probe. If any component in the
+configured root path
+below its reviewed volume mount becomes a junction, symlink, placeholder, or
+other reparse point, resolution returns `root_unavailable` before probe,
+reconciliation, missing inference, or integrity hashing; the reviewed mount
+itself is the excluded trust anchor, and matching volume identity alone never
+authorizes a redirected tree. When that stable volume is legitimately mounted
+at one new path, resolution carries the current selected mount—not the stale
+stored hint—as the scanner and verifier trust anchor. When the configured root
+equals that selected folder mount, FULL scanning admits the anchor's own
+mount-point classification only under matching current mount and full-volume
+binding; no component below it inherits the exception.
+
+The native resolver's collection ceilings follow its actual candidate sources,
+not a claim that Windows has only a fixed number of mounts. A newly persisted
+binding can contain the 26 `GetLogicalDriveStringsW` roots plus at most one
+persisted hint, including the only route by which this implementation discovers
+a folder-mounted volume, so its bound is 27. Re-resolving an admitted binding
+can replay all 27 candidates as hints and enumerate 26 drive roots again, so a
+resolver result and `VolumeResolution` admit at most 53 candidates before path
+projection. Native logical-drive enumeration uses one fixed, API-derived
+105-character buffer and rejects an insufficient-buffer return, avoiding a
+size/fill race. All mounted-volume, binding, and resolution projections
+revalidate exact base types and bounded paths.
+
+The production dispatcher registry contains inventory (pause unsupported) and
+baseline/verify/rebaseline (pause supported), and the CLI reaches all four only
+through the shared service. In the current implementation, a fresh baseline
+selection admits eligible non-directory rows without evidence; fresh
+rebaseline and verify selections admit eligible rows with or without evidence.
+Integrity continuation stores the
+exact admitted inventory row ids plus completed ids/bytes. A resume always
+refreshes physical inventory but reconstructs the original ordered candidate
+set without reapplying those mode filters, so evidence drift cannot drop
+pending work and a newly appeared row cannot enter an admitted session.
+Fresh full, selected-path, and stale candidate reads apply their eligibility in
+SQL and admit at most 150,000 unique rows. The reconstruction queries only
+location-owned row IDs in 400-ID chunks under the same repository read snapshot;
+it does not materialize the complete location and preserves the frozen order.
+Foreign or missing saved identifiers refuse rather than widening selection.
+Stale-before integrity unions exact completed rows with eligible stale rows by
+identity before enforcing the count, so an overlap is charged once. An excess
+after successful refresh is `FAILED+RAN`, publishes no partial selection, and
+starts no verifier work; a recorder finalization failure retains error
+precedence. Accepted rows share one root `Path` owner rather than copying it per
+candidate. Request and population bounds remain independently enforced by
+scanner and workflow admission.
+
+The workflow checks the exact candidate-row tuple and its first-excess count,
+then constructs `IntegritySelection` directly; no injectable builder or second
+validator owns policy. A valid candidate excess reaches no sink, phase event,
+verifier context, or runner. The identity-deduplicated retained-byte gate must
+surround the real construction graph; until then only the row boundary and no-
+partial behavior are supported.
+
+Inventory scanning likewise receives a mandatory workflow-owned population
+admission. The production scanner checks the next combined domain or warning
+row before append. `ScanResult` construction owns complete graph validation;
+workflow then exact-adopts its tuple transfer, rechecks both raw populations,
+and compares the requested root and scope before any host, location, or
+inventory ledger row is written. A valid initial inventory excess is `REFUSED+UNRUN` with no saved
+details or partial inventory; malformed first-party scanner output remains a
+loud internal (rung 3) contract failure and keeps structural-error precedence.
+Integrity refresh has already started the request and therefore settles the
+same valid excess as `FAILED+RAN` without selection or verifier work.
+
+Resolution now snapshots the exact binding, mount, and volume-evidence fields
+before retaining them. After the no-follow root probe it obtains and snapshots a
+second mounted-volume population; any membership change returns retryable
+`root_unavailable` before scan, recorder, or verifier work. Inventory and
+integrity pass only the detached resolved binding downstream. A frozen
+dataclass is still evidence rather than a lasting authorization token, so the
+scanner and verifier keep their own fresh native admission.
+
+Integrity selection similarly reconstructs candidate stats, attestations,
+record identities, and invalidation facts into one workflow-owned graph. The
+initial snapshot validates that graph before exposure, a configured selection
+sink receives one full post-transfer audit, and runner return receives one full
+progress-aware audit. During the run, constant-time edge reconciliation pins
+the selection, item tuple, completion container, current accepted/completed
+delta, and monotonic first-party byte counters around context construction,
+events, and checkpoints instead of rescanning every candidate. Callback return
+requires those counters to equal their pre-transfer values. Reentrant consumers
+receive exact immutable public outcomes and verifier context. A reliably
+accepted outcome is retained immediately before post-callback reconciliation,
+so a later reentrant (rung 2) callback seam cannot erase the accepted prefix;
+classification remains `FAILED+RAN` for standalone integrity work. Pause and
+cancellation remain resumable only when every accepted outcome has matching
+continuation completion.
+
+Inventory scan scopes independently charge the combined raw selected-path and
+subtree-root population against 150,000 before canonical path dictionaries,
+sets, sorting, or codec tuple copies. Duplicate and covered paths still
+canonicalize with their established semantics after that raw-shape charge.
+Resolution detail follows complete-value omission at 1,024 UTF-8 bytes; it is
+never truncated into misleading recovery guidance.
+
+The implemented policy admits eligible null-evidence files to fresh
+rebaseline as well. It remains explicit acceptance of current content: always
+hash and conditionally replace/create evidence, even on a genuine match, and clear
+verification freshness. Compare-and-accept is deferred beyond M1. The
+[verifier policy table](VERIFIER.md#accepted-standalone-operation-policy)
+distinguishes the three operations and their evidence and freshness effects.
+
+Desktop rebaseline requires explicit acknowledgement of current evidence;
+baseline and verify do not. The bridge owns the exact receipted request shape
+and rejects a mismatched intent before scope, ledger, or native work.
+
+Inventory and integrity pause state is a process-local typed checkpoint, not a
+JSON payload or a durable protocol. Inventory retains the exact admitted
+binding, `subtree_roots`, and `selected_paths`; integrity additionally retains
+the exact frozen subjects, physical-read high-water, and aggregate recording
+status. Checkpoint construction detaches mutable collections, while reopening
+materializes fresh mutable state. The request constructors and their existing
+domain limits remain the enforcers; dispatcher custody neither decodes nor
+recertifies the checkpoint.
+
+Typed warnings remain part of the inventory and integrity domain values. An
+incomplete refresh therefore preserves the warning code, relative path, and
+detail rather than reporting only `complete=False`. Item ids retain their
+existing protocol spelling and enclosing signed-64 database-id bound. No
+process-local checkpoint byte budget, JSON version, or parallel wire vocabulary
+exists; external interface adapters remain responsible for bounding and
+validating their own requests before constructing these values.
+
+Those details are process-local terminal readback artifacts, not durable
+inventory. Each admitted inventory or integrity session owns its exact request
+id through the service relation. The artifact remains readable after terminal
+settlement and is dropped only after explicit session close completes the
+dispatcher's exact retirement fence. A failed close preserves the complete
+resolution, scope, and warning graph for retry; unrelated sessions remain
+unchanged. Successful runtime shutdown clears any remaining detail artifacts,
+while incomplete dispatcher or runtime shutdown preserves them.
+
+Every incomplete full or stale-scope integrity refresh refuses before hashing.
+An exact integrity pre-scan may continue only when all incompleteness is
+explained by warning-backed unreadable frozen subjects. Those rows enter the
+verifier once as `unsupported`, receive no attestation, and keep the integrity
+result incomplete without suppressing readable siblings. An ignored subject, a
+root/global warning, cancellation, or any other unaccounted scope gap still
+refuses before hashing.
+
+## Stage 6 Desktop Contracts (Protocol Subset Active)
+
+Location-candidate admission is owned by the inventory workflow; INTERFACES
+owns its application entry points and Setup integration. Paging belongs
+to PRESENTATION; external wire encoding to [BRIDGE.md](BRIDGE.md), with safety classification and active bounds in
+[DEFENSE.md](DEFENSE.md). Inventory consumes the shared workflow-owned location
+candidate pipeline and always re-admits a real start; a slot or
+`RootAuthority` is evidence, never cached authorization.
+
+The signed-64 scalar, full-width native identity, and event/persistence epoch
+consumed here are active. Remembered-location readback and Setup widgets are
+implemented. A standalone inventory task freezes only its admitted root,
+without sync options or a fabricated source/target pair. Pure workflow inventory
+projection, sibling ordering and task-bound read publication/paging are
+implemented, including their desktop renderer, whole/selected Refresh and
+complete-scope acknowledge/Restore visibility controls. The controls use the
+same-task full/exact/recursive Refresh and acknowledge/restore bridge actions.
+
+`workflows/inventory_projection.py` builds a complete immutable generation from
+the repository's typed rows and an independent warning population. It retains
+current observations, attested subjects, digest/provenance, timestamps and sticky
+invalidation separately; a row-id lookup does not scan the location again. The
+location-scoped tree owns path and domain indexes and complete-folder membership.
+Warnings use a separate identity domain, attach as ordered root leaves and enter
+none of those domain indexes or rollups. They retain their informational path
+without making it action authority. Domain and warning source occurrences each
+admit up to 150,000 rows independently; implicit ancestors do not introduce
+a new total-row wall. Scan completeness is separate workflow evidence and is
+not a pure projection admission decision.
+
+Complete-domain rollups include retained missing and acknowledged subjects;
+the missing facet counts only unacknowledged missing rows. Exact file-byte totals
+propagate once through source parents, publishing null with an overflow flag
+above the signed-64 domain. Raw own-object size and mtime sort keys remain
+separate from folder aggregate bytes; synthetic ancestors invent neither key.
+Unknown subject bytes mark containing totals partial rather than claiming that
+the known-byte sum is a complete total.
+Sibling sorts keep canonical ties and unavailable-last semantics and preserve
+the source topology, domain membership and evidence.
+
+The desktop inventory projection is one canonical server-side view over a
+complete immutable inventory generation. Search, filters, collapse, visible
+order, action scope, and windows all derive from that projection; the browser
+does not reconstruct hierarchy or scope from paths or its current page.
+Projection eviction removes only rebuildable view state. A refused refresh or
+failed projection construction stages no partial artifact and preserves the
+prior complete publication. A completed replacement advances its view revision,
+preserving search, facets, sort and collapsed folders that still exist. The
+published request can therefore differ from the current scan request; reads
+retain its truth without presenting it as evidence from a newer scan.
+
+Task Refresh requires exact current terminal delivery and release plus the
+retained complete view revision. Full scope uses its root; exact leaf and
+recursive folder scopes use only source-owned domain membership. Warning nodes
+refuse before workflow work. Every invocation creates a fresh request and freshly
+admits the location, with the prior selected mount only an admission hint. A
+location-less refusal retains the last location-bearing metadata so another
+explicit Refresh can recover after the root returns. That metadata cannot
+publish a falsely current projection. Original Refresh starts and failures are
+retained until task Close within the existing adapter capacity.
+
+`interfaces/web/inventory_review.py` retains one server-owned sort permutation
+and visible sequence per live task view. Literal case-folded display search,
+OR-combined facets and collapse derive the sequence before bounded `1..256`
+windows. Acknowledged missing subjects are excluded as direct matches unless
+the acknowledged facet is explicitly requested; an acknowledged folder can
+remain as structural context for matching descendants. Complete-domain rollups
+stay unchanged. View changes stage
+their new sequence before publication, and repeated windows serialize only
+their requested slice. The production bridge exposes open, update, window and
+current-detail reads and missing-row acknowledge/restore; no integrity overlay is activated.
+An incomplete scan may still supply a complete projection of reconciled ledger
+facts, with the original scan completeness disclosed separately.
+
+Visibility scope includes complete missing-row membership, never only search
+matches or loaded rows. Conditional writes preserve removed/reappeared subjects,
+and acknowledgment changes only visibility. The task service freezes an original
+timestamp and retains bounded actual disposition counts, including an unresolved
+suffix on failure; the failed row may already have committed. A complete current
+publication is mandatory for a new effect. A failed post-write rebuild keeps prior
+reads but requires a successful whole reload before another visibility action.
+Original results remain task-owned through Refresh until exact Close. The desktop
+keeps the original Check handle across task navigation, reports only confirmed
+effect counts, and permits Refresh from a retained prior publication so a dirty
+view can recover. Restore visibility never restores file content.
+
+The pure projection supplies the shared server-owned sibling sorter required by
+[Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow).
+New views and reset use canonical path-key order; filename, size, and mtime
+are explicit opt-in column/direction choices. Sort the complete projection
+before windowing, using raw own-object values, deterministic ties, and
+unavailable values last. A real folder may expose its own observed mtime;
+synthetic ancestors have no invented descendant-derived time. Sorting changes
+only presentation/view state, never selection, recursive action scope,
+integrity candidate order, or execution authority. Full production bridge
+support and raw mtime facts must accompany activation even if their GUI layout
+remains latent.
+Status/progress sorting, global flat sorting, and durable preferences are not
+M1 work. The active M1 delivery plan owns regression, race, and scale acceptance.
+
+Warning rows are informational leaves, not inventory subjects. They have typed,
+stable identities and attachment order, but never enter the canonical path
+index, domain subtree membership, rollups, or action-scope resolution. The
+existing detail read supplies snapshot-owned warning paths/diagnostics and
+rowless folder paths under the view revision, without ledger or filesystem reads.
+Compact window basenames and warning path tails do not change full-path search.
+Acknowledge/restore, refresh, and integrity commands reject a warning target
+before ledger or native work. Folder rollups cover domain descendants only and
+are independent of filtering and acknowledged-row hiding; checked byte
+accumulation reports overflow rather than clamping.
+
+Each inventory row keeps two orthogonal facts: ledger-derived
+`verification_state` and the latest ordinary-integrity overlay. Replacing that
+generation cannot rewrite original execution or automatic post-copy results.
+Selected-scope outcomes bind exact admitted row IDs. Verify copied instead
+freezes normalized execution target paths so a fresh scan can create previously
+unrecorded rows; result admission checks path/location/mode and one-to-one
+path/row binding before retaining outcomes. Unknown or conflicting subjects
+refuse. BRIDGE owns the bounded overlay and replacement protocol.
+
+File detail exposes current durable ledger evidence. Execution evidence remains
+a separate atomic-read projection over the original execution scope. Later
+inventory operations may supersede that evidence; current ordinary verification
+does not become a claim about original copy bytes. VERIFIER owns ordinary and
+linked verification policy, DATABASE the atomic read, and PRESENTATION the
+displayed distinction.
 
 ## State Model
 
@@ -40,6 +339,13 @@ Each row belongs to one physical location and has canonical/display relative
 path, present/missing/unsupported state, latest safe observation, optional hash
 and provenance, hash-observed/last-verified times, missing acknowledgement,
 reappearance marker, host provenance, and optional hardlink group.
+Rows with retained content evidence also carry an optional sticky verification
+invalidation (`metadata-drift` or `hash-mismatch`). The derived presentation
+state is `unverified`, `verified`, `modified`, or `mismatched`; it never infers
+current verification from a historical `last_verified_at` alone. For a present
+row with current observation and attestation, sticky `hash-mismatch` is
+projected before ordinary stat/identity drift, so later metadata change cannot
+downgrade the visible state to merely `modified`.
 
 Present files retain `MetadataSnapshot` attributes and creation time needed by
 reviewed preservation. Every walked directory has a `DirRecord`, and typed
@@ -47,14 +353,23 @@ reviewed preservation. Every walked directory has a `DirRecord`, and typed
 unsupported state is never reconstructed from warning text. ADS is not
 inventory state: the deferred feature enumerates streams only in the executor.
 
-Mapping correspondence is separate and mapping-scoped. A shared location keeps
-one physical inventory while each mapping retains independent source/target
-relationship evidence.
+Mapping correspondence is separate from role-free inventory. A shared location
+keeps one physical inventory while each mapping retains independent accepted
+source/target relationship evidence.
 
 Hashed rows preserve the stat unit that the hash attests. A later ordinary scan
 must not overwrite those baseline stats merely to reflect current modified
 content; current observation and retained attestation are distinct fields or
-records.
+records. If current kind/size/mtime or a known identity diverges, reconciliation
+sets a sticky invalidation marker while retaining the prior attestation for
+comparison and recovery. Later matching metadata does not clear that fact, and
+a known hash mismatch dominates metadata drift until a successful evidence
+write clears or replaces it.
+
+Integrity runs bind each native file open to the resolver-selected mount and
+the location's full `VolumeId`. The verifier rechecks that authority before
+each open and requires the opened handle to corroborate the expected volume
+serial before any bytes can become baseline or verification evidence.
 
 ## Reconciliation
 
@@ -62,7 +377,8 @@ records.
 
 - Upsert safely observed present/unsupported entries in batches.
 - Preserve established evidence unless a conditional evidence workflow changes
-  it.
+  it; mark evidence invalid when the new observation contradicts its attested
+  subject.
 - Mark previously present unseen rows missing only when the scan is complete for
   that location/ignore scope and the volume is online.
 - Preserve prior metadata/hash when marking missing.
@@ -72,19 +388,48 @@ records.
 
 ### Scoped refresh
 
-- Observe and update only requested canonical keys.
-- A requested absent path may be marked missing if its parent/root observation
-  is authoritative for that exact path.
-- Unrequested rows retain state; no location-wide missing sweep runs.
+- `PATHS` observes and reconciles only requested canonical keys; an exact
+  directory row never implies anything about its children. A completed exact
+  observation marks an absent prior `present` or `unsupported` subject missing.
+- `SUBTREES` recursively observes each canonical root and may retain exact paths
+  outside the roots in the same session. Overlapping roots and covered exact
+  paths are removed by segment-aware normalization; selecting the location root
+  becomes `FULL`.
+- Completed subtree missing inference covers prior `present` and `unsupported`
+  rows at each root and below it. It uses the default-binary range
+  `>= root || '\' AND < root || ']'` plus a separate equality, never `LIKE`, so
+  `%`, `_`, and `]` remain literal filename characters.
+- Already-missing and out-of-scope rows remain byte-for-byte unchanged. One
+  incomplete root conservatively withholds missing inference for the whole
+  mixed scope while retaining safe observations and typed warnings.
 
-### Offline and filtered states
+### Offline and visibility states
 
-An unmounted volume is offline, not a location full of missing files. Mapping
-filters mark rows excluded from that mapping view while preserving physical
-inventory evidence. Acknowledging missing hides it from the default view but
-does not delete evidence; restore reverses only acknowledgement.
+An unmounted volume is offline, not a location full of missing files.
+Acknowledging missing hides it from the default view but does not delete
+evidence; restore reverses only acknowledgement.
 
 ## Location And Mapping Guidance
+
+The workflow owns one location-candidate route for fresh plan roots and
+inventory/integrity starts. Its immutable typed result distinguishes literal
+input refusal, unsupported locations and current identity-resolution outcomes.
+The owning types and functions live in `namisync/workflows/inventory.py`;
+application adapters do not reinterpret diagnostic strings as states.
+
+Candidate text is bounded before parsing, native observation or ledger access.
+Only a literal absolute local path or an explicit durable location identity is
+admitted. Relative paths, shell/environment/home expansion, URI/device
+namespaces and remote roots do not acquire local path authority. Admission
+checks the root chain without following reparse points before resolving its
+volume identity, refuses files instead of selecting their parents, and keeps
+logical long paths distinct from extended-length native spelling.
+
+A candidate is current evidence, not authorization for later I/O. Remembered
+identity activation resolves current mounts afresh, and inventory/integrity
+recheck their binding when queued work actually starts. Scanner, preflight,
+executor and verifier retain their own point-of-use checks. A refused candidate
+does not register a location, create a mapping/run or add a recent suggestion.
 
 Repository reads return zero/one/many mapping associations. Workflows require
 explicit paired roots when association is ambiguous. Known drive-letter changes
@@ -92,6 +437,13 @@ resolve through `VolumeId(serial, fs_type)`; label changes are noted without
 rebind, a matching serial with changed filesystem type requires explicit rebind,
 and simultaneous duplicate identities require explicit user choice. Rebinding
 to a different location/volume is an explicit sampled verification workflow.
+
+The CLI selects exactly one positional root or `--location-id`; it never treats
+a numeric root as an id or infers a location from a mapping. Repeatable
+`--path` supplies an exact root-relative scope. If cloned volume identities
+produce multiple mounted candidates, the refusal lists them and requires an
+explicit `--mount` retry. Offline, missing-root, and unavailable-root states
+perform no missing reconciliation and give state-specific recovery guidance.
 
 ## Expectations Of Other Modules
 
@@ -106,9 +458,10 @@ to a different location/volume is an explicit sampled verification workflow.
 ## Evidence Staleness
 
 Staleness derives from injected UTC timestamps for observation, hash creation,
-and true verification. Queries can filter older-than cutoffs without changing
-rows. Selecting stale rows constructs a verifier selection; inventory itself
-does not hash in the background.
+and true verification, plus any durable invalidation or current/attested
+contradiction. Queries include invalidated rows regardless of verification age
+without changing them. Selecting stale rows constructs a verifier selection;
+inventory itself does not hash in the background.
 
 ## Latent Features
 
@@ -127,29 +480,3 @@ summary and policy; missing acknowledgement is not pruning.
 - Canonical keys prevent casing/separator wrong-target actions.
 - Mapping/location composite constraints prevent a correspondence pointing at
   an unrelated location.
-
-## Acceptance Criteria
-
-- A first complete scan creates one role-free location and deterministic rows
-  without creating a mapping.
-- Complete scans retain every walked directory and one canonical role-free
-  observation shape regardless of mapping policy.
-- Complete rescan marks only truly unseen in-scope rows missing and preserves
-  their hash/stat evidence.
-- Incomplete scan and offline volume mark no unseen row missing.
-- Scoped refresh changes only requested keys and performs bounded queries.
-- Returning missing rows become reappeared; matching verify or explicit
-  baseline clears reappearance atomically.
-- Acknowledgement/restore changes visibility state without deleting evidence.
-- Mapping filters preserve physical rows and cannot turn exclusions into target
-  deletion candidates.
-- Hashed baseline stats are not overwritten by ordinary observation of modified
-  content; verifier classifies it `modified`.
-- A location with >33k files reconciles without SQL variable overflow and with
-  bounded transaction/round-trip behavior.
-- Mapping-state foreign keys/composite checks reject target rows from another
-  location.
-- Drive-letter/label change resolves the same known volume; filesystem-type
-  change requires rebind; simultaneous clone ambiguity requires a choice.
-- Inventory queries expose zero/one/many mappings without guessing.
-- UI filtering and Plan invalidation cannot clear or mutate inventory state.

@@ -1,0 +1,100 @@
+import { pathToFileURL } from "node:url";
+
+class HTMLElementFake {
+  constructor() {
+    this.dataset = {};
+    this.properties = new Map();
+    this.style = {
+      setProperty: (name, value) => this.properties.set(name, value),
+    };
+  }
+}
+
+globalThis.HTMLElement = HTMLElementFake;
+
+const listeners = new Map();
+const webview = {
+  addEventListener(name, callback) {
+    listeners.set(name, callback);
+  },
+  removeEventListener(name, callback) {
+    if (listeners.get(name) === callback) listeners.delete(name);
+  },
+};
+const root = new HTMLElementFake();
+const moduleUrl = pathToFileURL(process.argv[2]).href;
+const { installAppearanceReceiver } = await import(moduleUrl);
+let observerCalls = 0;
+const observerRevisions = [];
+const receiver = installAppearanceReceiver(webview, root, (revision) => {
+  observerCalls += 1;
+  observerRevisions.push(revision);
+});
+const receive = listeners.get("message");
+let applied = false;
+const firstApplication = receiver.whenApplied().then(() => {
+  applied = true;
+});
+const base = {
+  kind: "namisync.appearance.v3",
+  revision: 2,
+  theme: "dark",
+  highContrast: false,
+  advancedColor: false,
+  material: "mica",
+  accentFill: "#123456",
+  accentFillHover: "#123456E6",
+  accentFillPressed: "#123456CC",
+  accentFillForeground: "#FFFFFF",
+  accentTextFill: "#003E92",
+};
+
+receive({ data: { ...base, revision: 1, accentFill: "red;url(x)" } });
+await Promise.resolve();
+const resolvedBeforeValidMessage = applied;
+receive({ data: base });
+await firstApplication;
+const resolvedAfterValidMessage = applied;
+let reapplied = false;
+const nextApplication = receiver.whenAppliedAfter(2).then(() => {
+  reapplied = true;
+});
+receive({ data: { ...base, revision: 1, accentFill: "#999999" } });
+receive({ data: { ...base, revision: 3, accentFill: "red;url(x)" } });
+receive({ data: { ...base, revision: 4, accentFillHover: "#123456" } });
+receive({ data: { ...base, revision: 5, unexpected: true } });
+receive({ data: Object.assign(Object.create(null), { ...base, revision: 6 }) });
+receive({ data: { ...base, revision: 6, advancedColor: "true" } });
+const { advancedColor: _omitted, ...withoutAdvancedColor } = base;
+receive({ data: { ...withoutAdvancedColor, revision: 6 } });
+receive({ data: { ...base, revision: 6, kind: "namisync.appearance.v2" } });
+receive({ data: { ...base, revision: 6, accentTextFill: "red;url(x)" } });
+const { accentTextFill: _omittedTextFill, ...withoutAccentTextFill } = base;
+receive({ data: { ...withoutAccentTextFill, revision: 6 } });
+await Promise.resolve();
+const resolvedBeforeNewRevision = reapplied;
+receive({
+  data: {
+    ...base,
+    revision: 7,
+    material: "degraded",
+    theme: "light",
+    advancedColor: true,
+  },
+});
+await nextApplication;
+
+const result = {
+  revision: receiver.revision(),
+  dataset: root.dataset,
+  properties: Object.fromEntries(root.properties),
+  resolvedBeforeValidMessage,
+  resolvedAfterValidMessage,
+  resolvedBeforeNewRevision,
+  resolvedAfterNewRevision: reapplied,
+  observerCalls,
+  observerRevisions,
+};
+receiver.close();
+result.listenerRemoved = !listeners.has("message");
+process.stdout.write(JSON.stringify(result));

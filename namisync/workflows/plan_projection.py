@@ -1,0 +1,1191 @@
+"""Immutable, bounded facts for the desktop plan-review tree."""
+
+from __future__ import annotations
+
+from collections.abc import Iterator, Sequence
+from dataclasses import dataclass, replace
+from enum import StrEnum
+from hashlib import blake2b
+from types import MappingProxyType
+from typing import Mapping
+
+from namisync.core.models import DirRecord, EntryKind, FileStat, ScanWarning
+from namisync.core.pathing import fold_validated_path
+from namisync.core.planning import OpId, OperationKind, Plan, PlanOperation
+from namisync.core.scalars import MAX_SIGNED_64
+
+from .models import PlanArtifact
+from .recall import RecallSummary, recall_paths, scan_recall_summary
+from .node_tree import (
+    NodeTree,
+    NodeTreeKind,
+    _ValidatedNodeTreeMember,
+    _build_validated_node_tree,
+)
+from .selection import (
+    ExecutionSelection,
+    derive_execution_selection,
+    require_derived_execution_selection,
+)
+from .sibling_order import canonical_siblings, preorder_positions, sorted_siblings
+
+
+class PlanSortColumn(StrEnum):
+    PATH = "path"
+    FILENAME = "filename"
+    SIZE = "size"
+    MTIME = "mtime"
+
+
+class SortDirection(StrEnum):
+    ASCENDING = "ascending"
+    DESCENDING = "descending"
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class CompactUnsignedIntegers(Sequence[int]):
+    """An immutable, random-access unsigned integer buffer."""
+
+    _storage: bytes
+    byte_width: int
+    _count: int
+
+    def __init__(self, values: Sequence[int], *, maximum: int | None = None) -> None:
+        count = len(values)
+        if any(type(value) is not int or value < 0 for value in values):
+            raise ValueError("compact integers must be exact nonnegative integers")
+        largest = max(values, default=0) if maximum is None else maximum
+        if type(largest) is not int or largest < 0:
+            raise ValueError("compact integer maximum must be nonnegative")
+        if any(value > largest for value in values):
+            raise ValueError("compact integer exceeds declared maximum")
+        width = 1 if largest < 2**8 else 2 if largest < 2**16 else 4 if largest < 2**32 else 8
+        if largest >= 2**64:
+            raise ValueError("compact integers exceed the supported range")
+        storage = bytearray(count * width)
+        for index, value in enumerate(values):
+            start = index * width
+            storage[start : start + width] = value.to_bytes(width, "little")
+        object.__setattr__(self, "_storage", bytes(storage))
+        object.__setattr__(self, "byte_width", width)
+        object.__setattr__(self, "_count", count)
+
+    @property
+    def byte_length(self) -> int:
+        return len(self._storage)
+
+    def __len__(self) -> int:
+        return self._count
+
+    def __getitem__(self, index: int | slice) -> int | tuple[int, ...]:
+        if isinstance(index, slice):
+            return tuple(self[position] for position in range(*index.indices(self._count)))
+        if type(index) is not int:
+            raise TypeError("compact integer index must be an integer or slice")
+        if index < 0:
+            index += self._count
+        if not 0 <= index < self._count:
+            raise IndexError(index)
+        start = index * self.byte_width
+        return int.from_bytes(self._storage[start : start + self.byte_width], "little")
+
+    def __iter__(self) -> Iterator[int]:
+        for index in range(self._count):
+            yield self[index]
+
+
+@dataclass(frozen=True, slots=True)
+class PlanProjectionNode:
+    node_id: str
+    display: str
+    rel_path_key: str
+    position: int
+    depth: int
+    parent_index: int | None
+    subtree_end: int
+    is_container: bool
+    row_kind: str
+    operation_id: str | None
+    operation_kind: str | None
+    reason: str | None
+    blocked_reason: str | None
+    selection: str
+    selectable_operation_count: int
+    selected_operation_count: int
+    operation_count: int
+    size: int | None
+    mtime_ns: int | None
+    dependency_count: int
+    risk: str
+    move_peer_id: str | None = None
+    notice: str | None = None
+    selection_exclusion_reason: str | None = None
+    filename_key: str | None = None
+    is_directory: bool = False
+    move_item_count: int = 0
+    move_destination_path: str | None = None
+    presentation_kind: str | None = None
+    prior_path: str | None = None
+    path: str | None = None
+    path_origin: str | None = None
+    source_path: str | None = None
+    scan_warning: ScanWarning | None = None
+    recall: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class PlanProjection:
+    request_id: str
+    nodes: tuple[PlanProjectionNode, ...]
+    position_by_node_id: Mapping[str, int]
+    operation_node_id_by_id: Mapping[str, str]
+    selected_operation_ids: frozenset[str]
+    preflight_ready: bool = True
+    preflight_refusal_count: int = 0
+    warning_count: int = 0
+    source_recall: RecallSummary = RecallSummary()
+    target_recall: RecallSummary = RecallSummary()
+
+    def __post_init__(self) -> None:
+        nodes = tuple(self.nodes)
+        positions = dict(self.position_by_node_id)
+        operations = dict(self.operation_node_id_by_id)
+        if type(self.preflight_ready) is not bool:
+            raise TypeError("plan projection preflight readiness must be a bool")
+        if type(self.preflight_refusal_count) is not int or self.preflight_refusal_count < 0:
+            raise ValueError("plan projection refusal count must be nonnegative")
+        if type(self.warning_count) is not int or self.warning_count < 0:
+            raise ValueError("plan projection warning count must be nonnegative")
+        if len(positions) != len(nodes):
+            raise ValueError("plan projection node index is incomplete")
+        for position, node in enumerate(nodes):
+            if node.position != position or positions.get(node.node_id) != position:
+                raise ValueError("plan projection node index is inconsistent")
+        object.__setattr__(self, "nodes", nodes)
+        object.__setattr__(self, "position_by_node_id", MappingProxyType(positions))
+        object.__setattr__(
+            self,
+            "operation_node_id_by_id",
+            MappingProxyType(operations),
+        )
+        object.__setattr__(
+            self,
+            "selected_operation_ids",
+            frozenset(self.selected_operation_ids),
+        )
+
+    def node_for_id(self, node_id: str) -> PlanProjectionNode:
+        try:
+            return self.nodes[self.position_by_node_id[node_id]]
+        except KeyError:
+            raise KeyError(node_id) from None
+
+
+@dataclass(frozen=True, slots=True)
+class PlanProjectionOrder:
+    """One sibling sort expressed as source positions and inverse ranks."""
+
+    projection: PlanProjection
+    ordered_source_positions: CompactUnsignedIntegers
+    order_rank_by_source_position: CompactUnsignedIntegers
+
+    def __post_init__(self) -> None:
+        if type(self.projection) is not PlanProjection:
+            raise TypeError("ordered projection must use an exact PlanProjection")
+        if type(self.ordered_source_positions) is not CompactUnsignedIntegers:
+            raise TypeError("ordered source positions must be compact integers")
+        if type(self.order_rank_by_source_position) is not CompactUnsignedIntegers:
+            raise TypeError("order ranks must be compact integers")
+        _validate_projection_topology(self.projection)
+        count = len(self.projection.nodes)
+        if len(self.ordered_source_positions) != count or len(self.order_rank_by_source_position) != count:
+            raise ValueError("plan order must cover every source node")
+        seen = bytearray(count)
+        for rank, source_position in enumerate(self.ordered_source_positions):
+            if source_position >= count or seen[source_position]:
+                raise ValueError("plan order must be a permutation")
+            seen[source_position] = 1
+            if self.order_rank_by_source_position[source_position] != rank:
+                raise ValueError("plan order ranks must invert the permutation")
+        if count and self.ordered_source_positions[0] != 0:
+            raise ValueError("plan order must begin with the source root")
+        open_ancestors: list[int] = []
+        for source_position in self.ordered_source_positions:
+            node = self.projection.nodes[source_position]
+            while len(open_ancestors) > node.depth:
+                open_ancestors.pop()
+            if node.depth == 0:
+                if source_position != 0 or open_ancestors:
+                    raise ValueError("plan order has an invalid root")
+            elif len(open_ancestors) != node.depth or open_ancestors[-1] != node.parent_index:
+                raise ValueError("plan order breaks source parent/subtree closure")
+            open_ancestors.append(source_position)
+
+    def _rebind_selection(self, projection: PlanProjection) -> PlanProjectionOrder:
+        """Rebind after the owner-preserving selection transform."""
+
+        if type(projection) is not PlanProjection:
+            raise TypeError("selection rebind requires an exact PlanProjection")
+        if projection.request_id != self.projection.request_id or len(projection.nodes) != len(self.projection.nodes):
+            raise ValueError("selection rebind changed projection identity")
+        rebound = object.__new__(PlanProjectionOrder)
+        object.__setattr__(rebound, "projection", projection)
+        object.__setattr__(rebound, "ordered_source_positions", self.ordered_source_positions)
+        object.__setattr__(rebound, "order_rank_by_source_position", self.order_rank_by_source_position)
+        return rebound
+
+
+@dataclass(slots=True)
+class _PlanProjectionDraft:
+    node_id: str
+    display: str
+    rel_path_key: str
+    depth: int
+    parent: int | None
+    is_container: bool
+    row_kind: str
+    operation_id: str | None
+    operation_kind: str | None
+    reason: str | None
+    blocked_reason: str | None
+    selection: str
+    selectable_operation_count: int
+    selected_operation_count: int
+    operation_count: int
+    size: int | None
+    mtime_ns: int | None
+    dependency_count: int
+    risk: str
+    move_peer_id: str | None = None
+    notice: str | None = None
+    selection_exclusion_reason: str | None = None
+    filename_key: str | None = None
+    is_directory: bool = False
+    move_item_count: int = 0
+    move_destination_path: str | None = None
+    presentation_kind: str | None = None
+    prior_path: str | None = None
+    path: str | None = None
+    path_origin: str | None = None
+    source_path: str | None = None
+    scan_warning: ScanWarning | None = None
+    recall: bool = False
+
+
+def build_plan_projection(
+    request_id: str,
+    artifact: PlanArtifact,
+    *,
+    user_deselected: frozenset[OpId] = frozenset(),
+    selection_decision: ExecutionSelection | None = None,
+) -> PlanProjection:
+    """Project operations, old-path ancestry, and all informational notices."""
+
+    if type(request_id) is not str or not request_id:
+        raise ValueError("request_id must be a nonempty string")
+    if type(artifact) is not PlanArtifact:
+        raise TypeError("artifact must be an exact PlanArtifact")
+    plan = artifact.plan
+    operations = {str(item.op_id): item for item in plan.operations}
+    decision = (
+        derive_execution_selection(plan, user_deselected=user_deselected)
+        if selection_decision is None
+        else require_derived_execution_selection(
+            selection_decision,
+            plan=plan,
+            user_deselected=user_deselected,
+        )
+    )
+    safety_decision = (
+        decision if not user_deselected else derive_execution_selection(plan)
+    )
+    selected = decision.selection
+    excluded = {str(item.op_id): item.reason for item in decision.exclusions}
+    selectable = frozenset(str(item) for item in safety_decision.selection)
+
+    target_tree = _operation_tree(request_id, plan.operations, prior=False)
+    drafts: list[_PlanProjectionDraft] = []
+    operation_draft_by_id: dict[str, int] = {}
+    target_draft_by_tree_position: dict[int, int] = {}
+    _append_operation_tree(
+        drafts,
+        target_tree,
+        plan,
+        operations,
+        selected,
+        selectable,
+        excluded,
+        target_draft_by_tree_position,
+        operation_draft_by_id,
+        parent_override=None,
+        row_prefix="",
+    )
+    target_paths = {
+        node.rel_path_key: target_draft_by_tree_position[node.position]
+        for node in target_tree.nodes
+    }
+    del target_tree, target_draft_by_tree_position
+
+    prior_operations = tuple(
+        item for item in plan.operations
+        if item.prior_target_rel_path is not None
+        and _presentation_kind(item) != "rename"
+    )
+    groups = _prior_move_groups(artifact, prior_operations)
+    target_directories = (
+        {item.rel_path_key: item for item in artifact.target_scan.directories} if groups else {}
+    )
+    for (ancestor_key, destination_key), group_operations in groups.items():
+        attachment = _ensure_prior_attachment(
+            drafts, target_paths, ancestor_key, target_directories, request_id,
+        )
+        prior_group = len(drafts)
+        destination_path = _parent_path(group_operations[0].target_rel_path)
+        drafts.append(
+            _structural_draft(
+                _projection_id(b"NamiSyncPriorV1", request_id, ancestor_key, destination_key),
+                f"{len(group_operations)} {'item' if len(group_operations) == 1 else 'items'} moved to {destination_path or 'root'}",
+                "",
+                drafts[attachment].depth + 1,
+                attachment,
+                row_kind="prior-group",
+                is_container=True,
+            )
+        )
+        first_operation = min(
+            group_operations,
+            key=lambda item: (fold_validated_path(item.target_rel_path.replace('/', '\\')), str(item.op_id)),
+        )
+        destination_index = (
+            target_paths[destination_key] if destination_key else
+            operation_draft_by_id[str(first_operation.op_id)]
+        )
+        drafts[prior_group].move_peer_id = drafts[destination_index].node_id
+        drafts[prior_group].move_item_count = len(group_operations)
+        drafts[prior_group].move_destination_path = destination_path
+        prior_tree = _operation_tree(
+            request_id + ":" + drafts[prior_group].node_id,
+            group_operations, prior=True, strip_ancestor=ancestor_key,
+        )
+        prior_draft_by_tree_position: dict[int, int] = {}
+        prior_operation_draft_by_id: dict[str, int] = {}
+        prior_path = group_operations[0].prior_target_rel_path
+        assert prior_path is not None
+        path_prefix = (
+            "\\".join(prior_path.replace('/', '\\').split('\\')[:ancestor_key.count('\\') + 1])
+            if ancestor_key else ""
+        )
+        _append_operation_tree(
+            drafts,
+            prior_tree,
+            plan,
+            operations,
+            selected,
+            frozenset(),
+            excluded,
+            prior_draft_by_tree_position,
+            prior_operation_draft_by_id,
+            parent_override=prior_group,
+            row_prefix="prior-",
+            path_prefix=path_prefix,
+        )
+        del prior_tree, prior_draft_by_tree_position
+        for operation_id, prior_draft in prior_operation_draft_by_id.items():
+            target_draft = operation_draft_by_id[operation_id]
+            drafts[target_draft].move_peer_id = drafts[prior_draft].node_id
+            drafts[prior_draft].move_peer_id = drafts[target_draft].node_id
+        del prior_operation_draft_by_id
+    source_recall_paths = recall_paths(artifact.source_scan)
+    target_recall_paths = recall_paths(artifact.target_scan)
+    for draft in drafts:
+        operation = operations.get(draft.operation_id)
+        if operation is None and draft.row_kind in {"folder", "operation-group"}:
+            draft.recall = draft.rel_path_key in source_recall_paths or draft.rel_path_key in target_recall_paths
+        if draft.row_kind.startswith("prior-") and draft.path is not None:
+            draft.recall = fold_validated_path(draft.path.replace('/', '\\')) in target_recall_paths
+        if operation is not None:
+            draft.recall = (
+                operation.source_rel_path is not None and fold_validated_path(operation.source_rel_path.replace('/', '\\')) in source_recall_paths
+                or fold_validated_path(operation.target_rel_path.replace('/', '\\')) in target_recall_paths
+                or operation.prior_target_rel_path is not None and fold_validated_path(operation.prior_target_rel_path.replace('/', '\\')) in target_recall_paths
+            )
+    del groups, target_paths, target_directories, operations, safety_decision, decision, excluded, selectable
+
+    for side, warnings in (
+        ("source", artifact.source_scan.warnings),
+        ("target", artifact.target_scan.warnings),
+    ):
+        for warning in warnings:
+            display = f"{side}: {warning.rel_path or 'root'} — {warning.code.value}"
+            if warning.detail:
+                display += f" — {warning.detail}"
+            draft = _notice_draft(request_id, len(drafts), display)
+            draft.path = warning.rel_path or ""
+            draft.path_origin = side
+            draft.scan_warning = warning
+            drafts.append(draft)
+    for refusal in artifact.verdict.refusals:
+        drafts.append(
+            _notice_draft(
+                request_id,
+                len(drafts),
+                (
+                    f"plan: {refusal.code.value}"
+                    + (f" — {refusal.detail}" if refusal.detail else "")
+                ),
+            )
+        )
+
+    if prior_operations:
+        drafts, operation_draft_by_id = _preorder_drafts(drafts, operation_draft_by_id)
+    return _materialize_projection(
+        request_id,
+        drafts,
+        selected,
+        operation_draft_by_id,
+        source_recall=scan_recall_summary(artifact.source_scan),
+        target_recall=scan_recall_summary(artifact.target_scan),
+        preflight_ready=artifact.verdict.ok,
+        preflight_refusal_count=len(artifact.verdict.refusals),
+        warning_count=(
+            len(artifact.source_scan.warnings) + len(artifact.target_scan.warnings)
+        ),
+    )
+
+
+def sort_plan_projection(
+    projection: PlanProjection,
+    column: PlanSortColumn,
+    direction: SortDirection,
+) -> PlanProjectionOrder:
+    """Sort complete sibling sets before any visible window is requested."""
+
+    if type(projection) is not PlanProjection:
+        raise TypeError("projection must be an exact PlanProjection")
+    _validate_projection_topology(projection)
+    if type(column) is not PlanSortColumn or type(direction) is not SortDirection:
+        raise TypeError("plan sort must use exact enums")
+    if column is PlanSortColumn.PATH and direction is not SortDirection.ASCENDING:
+        raise ValueError("canonical path sort supports ascending only")
+    children = canonical_siblings(projection.nodes)
+    canonical = _publish_plan_projection_order(projection, children)
+    return (
+        canonical
+        if column is PlanSortColumn.PATH
+        else _sort_plan_projection_from_canonical(canonical, column, direction)
+    )
+
+
+def _sort_plan_projection_from_canonical(
+    canonical: PlanProjectionOrder,
+    column: PlanSortColumn,
+    direction: SortDirection,
+) -> PlanProjectionOrder:
+    """Derive a trusted real sort from a validated canonical sibling order."""
+
+    if type(canonical) is not PlanProjectionOrder:
+        raise TypeError("canonical order must be an exact PlanProjectionOrder")
+    if type(column) is not PlanSortColumn or type(direction) is not SortDirection:
+        raise TypeError("plan sort must use exact enums")
+    if column is PlanSortColumn.PATH:
+        if direction is not SortDirection.ASCENDING:
+            raise ValueError("canonical path sort supports ascending only")
+        return canonical
+    projection = canonical.projection
+    children = sorted_siblings(
+        projection.nodes,
+        canonical.ordered_source_positions,
+        column.value,
+        descending=direction is SortDirection.DESCENDING,
+    )
+    return _publish_plan_projection_order(projection, children)
+
+
+def _publish_plan_projection_order(
+    projection: PlanProjection,
+    children: Mapping[int, Sequence[int]],
+) -> PlanProjectionOrder:
+    ordered, inverse = preorder_positions(children)
+    maximum = max(len(projection.nodes) - 1, 0)
+    published = object.__new__(PlanProjectionOrder)
+    object.__setattr__(published, "projection", projection)
+    object.__setattr__(
+        published,
+        "ordered_source_positions",
+        CompactUnsignedIntegers(ordered, maximum=maximum),
+    )
+    object.__setattr__(
+        published,
+        "order_rank_by_source_position",
+        CompactUnsignedIntegers(inverse, maximum=maximum),
+    )
+    return published
+
+
+def _validate_projection_topology(projection: PlanProjection) -> None:
+    count = len(projection.nodes)
+    nodes = projection.nodes
+    if not nodes or type(nodes[0]) is not PlanProjectionNode:
+        raise ValueError("plan order requires one exact source root")
+    open_containers: list[int] = []
+    for source_position, node in enumerate(nodes):
+        if type(node) is not PlanProjectionNode or node.position != source_position:
+            raise ValueError("plan order source positions are inconsistent")
+        if (
+            type(node.position) is not int
+            or type(node.depth) is not int
+            or type(node.subtree_end) is not int
+            or (node.parent_index is not None and type(node.parent_index) is not int)
+            or type(node.is_container) is not bool
+        ):
+            raise TypeError("plan order source topology uses invalid field types")
+        if node.subtree_end <= source_position or node.subtree_end > count:
+            raise ValueError("plan order source subtree extent is invalid")
+        if not node.is_container and node.subtree_end != source_position + 1:
+            raise ValueError("plan order source leaf spans descendants")
+        while open_containers and nodes[open_containers[-1]].subtree_end <= source_position:
+            open_containers.pop()
+        if source_position == 0:
+            if node.depth != 0 or node.parent_index is not None or node.subtree_end != count:
+                raise ValueError("plan order source root is invalid")
+        else:
+            if not open_containers or node.parent_index != open_containers[-1]:
+                raise ValueError("plan order source parent/subtree closure is invalid")
+            parent = nodes[node.parent_index]
+            if node.depth != parent.depth + 1 or node.subtree_end > parent.subtree_end:
+                raise ValueError("plan order source depth/subtree closure is invalid")
+        if node.is_container and node.subtree_end > source_position + 1:
+            open_containers.append(source_position)
+
+
+def apply_plan_projection_selection(
+    projection: PlanProjection,
+    *,
+    selected_operation_ids: frozenset[str],
+    exclusion_reasons: Mapping[str, str | None],
+) -> PlanProjection:
+    """Replace selection facts without rebuilding immutable plan structure."""
+
+    if type(projection) is not PlanProjection:
+        raise TypeError("projection must be an exact PlanProjection")
+    if not isinstance(selected_operation_ids, frozenset):
+        raise TypeError("selected operation ids must be a frozenset")
+    known = set(projection.operation_node_id_by_id)
+    if not selected_operation_ids <= known:
+        raise ValueError("selection contains an unknown operation")
+    reasons = dict(exclusion_reasons)
+    if not set(reasons) <= known:
+        raise ValueError("selection exclusions contain an unknown operation")
+
+    own_selectable = [node.selectable_operation_count for node in projection.nodes]
+    for node in projection.nodes:
+        if node.parent_index is not None:
+            own_selectable[node.parent_index] -= node.selectable_operation_count
+    selected_counts = [0] * len(projection.nodes)
+    for operation_id, node_id in projection.operation_node_id_by_id.items():
+        node = projection.node_for_id(node_id)
+        if operation_id in selected_operation_ids:
+            if own_selectable[node.position] != 1:
+                raise ValueError("selection contains an unavailable operation")
+            selected_counts[node.position] = 1
+    for position in range(len(projection.nodes) - 1, 0, -1):
+        parent = projection.nodes[position].parent_index
+        assert parent is not None
+        selected_counts[parent] += selected_counts[position]
+
+    operation_ids_by_node_id = {
+        node_id: operation_id
+        for operation_id, node_id in projection.operation_node_id_by_id.items()
+    }
+    nodes = tuple(
+        replace(
+            node,
+            selected_operation_count=selected_counts[node.position],
+            selection=(
+                "disabled"
+                if node.row_kind.startswith("prior-") or node.row_kind == "notice"
+                else _selection_state(
+                    node.selectable_operation_count,
+                    selected_counts[node.position],
+                    node.operation_count,
+                )
+            ),
+            selection_exclusion_reason=(
+                reasons.get(operation_ids_by_node_id[node.node_id])
+                if node.node_id in operation_ids_by_node_id
+                and operation_ids_by_node_id[node.node_id]
+                not in selected_operation_ids
+                else None
+            ),
+        )
+        for node in projection.nodes
+    )
+    return PlanProjection(
+        projection.request_id,
+        nodes,
+        projection.position_by_node_id,
+        projection.operation_node_id_by_id,
+        selected_operation_ids,
+        projection.preflight_ready,
+        projection.preflight_refusal_count,
+        projection.warning_count,
+        projection.source_recall, projection.target_recall,
+    )
+
+
+def _parent_path(path: str) -> str:
+    return path.replace('/', '\\').rpartition('\\')[0]
+
+
+def _presentation_kind(operation: PlanOperation) -> str:
+    if operation.kind is OperationKind.RECASE:
+        return "rename"
+    if (
+        operation.kind is OperationKind.MOVE
+        and operation.prior_target_rel_path is not None
+        and fold_validated_path(_parent_path(operation.target_rel_path))
+        == fold_validated_path(_parent_path(operation.prior_target_rel_path))
+    ):
+        return "rename"
+    return operation.kind.value
+
+
+def _prior_move_groups(
+    artifact: PlanArtifact,
+    prior_operations: tuple[PlanOperation, ...],
+) -> dict[tuple[str, str], list[PlanOperation]]:
+    if not prior_operations:
+        return {}
+    removed: set[str] = set()
+    for operation in artifact.plan.operations:
+        if operation.blocked:
+            continue
+        if operation.kind in {OperationKind.DELETE, OperationKind.TRASH}:
+            old_path, stat = operation.target_rel_path, operation.target_expected
+        elif operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE, OperationKind.RECASE}:
+            old_path = operation.prior_target_rel_path
+            stat = operation.prior_target_expected or operation.target_expected
+        else:
+            continue
+        if old_path is not None and stat is not None and stat.kind is EntryKind.DIRECTORY:
+            removed.add(fold_validated_path(old_path.replace('/', '\\')))
+    surviving: set[str] = set()
+    for directory in artifact.target_scan.directories:
+        key = directory.rel_path_key
+        probe = key
+        while probe and probe not in removed:
+            probe = _parent_path(probe)
+        if not probe:
+            surviving.add(key)
+    groups: dict[tuple[str, str], list[PlanOperation]] = {}
+    for operation in prior_operations:
+        assert operation.prior_target_rel_path is not None
+        ancestor = fold_validated_path(_parent_path(operation.prior_target_rel_path))
+        while ancestor and ancestor not in surviving:
+            ancestor = _parent_path(ancestor)
+        destination = fold_validated_path(_parent_path(operation.target_rel_path))
+        groups.setdefault((ancestor, destination), []).append(operation)
+    return groups
+
+
+def _ensure_prior_attachment(
+    drafts: list[_PlanProjectionDraft],
+    paths: dict[str, int],
+    ancestor_key: str,
+    records: Mapping[str, DirRecord],
+    request_id: str,
+) -> int:
+    missing: list[str] = []
+    key = ancestor_key
+    while key not in paths:
+        missing.append(key)
+        key = _parent_path(key)
+    parent = paths[key]
+    # Only newly needed context uses scan records; existing operation facts stay intact.
+    for key in reversed(missing):
+        record = records.get(key)
+        path = key if record is None else record.rel_path.replace('/', '\\')
+        detail_path = path
+        if record is None:
+            ancestor = records[ancestor_key].rel_path.replace('/', '\\')
+            detail_path = "\\".join(ancestor.split('\\')[:key.count('\\') + 1])
+        index = len(drafts)
+        draft = _structural_draft(
+            _projection_id(b"NamiSyncNodeV1", "plan", request_id, key),
+            _basename(path), key, drafts[parent].depth + 1, parent,
+            row_kind="folder", is_container=True,
+        )
+        draft.size = 0
+        draft.path = detail_path
+        draft.path_origin = "target"
+        draft.mtime_ns = None if record is None else record.mtime_ns
+        drafts.append(draft)
+        paths[key] = index
+        parent = index
+    drafts[parent].is_container = True
+    return parent
+
+
+def _preorder_drafts(
+    drafts: list[_PlanProjectionDraft], operation_positions: dict[str, int],
+) -> tuple[list[_PlanProjectionDraft], dict[str, int]]:
+    children: dict[int, list[int]] = {}
+    for position, draft in enumerate(drafts[1:], 1):
+        assert draft.parent is not None
+        children.setdefault(draft.parent, []).append(position)
+    pending = [0]
+    order: list[int] = []
+    while pending:
+        position = pending.pop()
+        order.append(position)
+        pending.extend(reversed(children.get(position, ())))
+    inverse = {old: new for new, old in enumerate(order)}
+    reordered = [drafts[position] for position in order]
+    for draft in reordered:
+        if draft.parent is not None:
+            draft.parent = inverse[draft.parent]
+            draft.depth = reordered[draft.parent].depth + 1
+    return reordered, {key: inverse[position] for key, position in operation_positions.items()}
+
+
+def _operation_tree(
+    scope_identity: str,
+    operations: tuple[PlanOperation, ...],
+    *,
+    prior: bool,
+    strip_ancestor: str = "",
+) -> NodeTree:
+    def member(operation: PlanOperation) -> _ValidatedNodeTreeMember:
+        rel_path = (
+            operation.prior_target_rel_path if prior else operation.target_rel_path
+        )
+        assert rel_path is not None
+        if strip_ancestor:
+            rel_path = rel_path.replace('/', '\\').split('\\', strip_ancestor.count('\\') + 1)[-1]
+        canonical = rel_path.replace("/", "\\")
+        return _ValidatedNodeTreeMember(
+            str(operation.op_id),
+            rel_path,
+            fold_validated_path(canonical),
+            False if prior else operation.kind is OperationKind.MKDIR,
+        )
+
+    return _build_validated_node_tree(
+        tree_kind=NodeTreeKind.PLAN,
+        scope_identity=scope_identity,
+        members=(member(operation) for operation in operations),
+    )
+
+
+def _append_operation_tree(
+    drafts: list[_PlanProjectionDraft],
+    tree: NodeTree,
+    plan: Plan,
+    operations: Mapping[str, PlanOperation],
+    selected: frozenset[str],
+    selectable: frozenset[str],
+    excluded: Mapping[str, str],
+    draft_by_tree_position: dict[int, int],
+    operation_draft_by_id: dict[str, int],
+    *,
+    parent_override: int | None,
+    row_prefix: str,
+    path_prefix: str = "",
+) -> None:
+    start_position = 0 if parent_override is None else 1
+    direct_selectable = [0] * len(tree.nodes)
+    direct_selected = [0] * len(tree.nodes)
+    subtree_selectable = [0] * len(tree.nodes)
+    subtree_selected = [0] * len(tree.nodes)
+    subtree_operations = [0] * len(tree.nodes)
+    subtree_sizes = [0] * len(tree.nodes)
+    subtree_partial = [False] * len(tree.nodes)
+    direct_sizes: list[int | None] = [None] * len(tree.nodes)
+    direct_conflict = [False] * len(tree.nodes)
+    for node in tree.nodes:
+        ids = node.member_ids
+        direct_selectable[node.position] = sum(item in selectable for item in ids)
+        direct_selected[node.position] = sum(item in selected for item in ids)
+        subtree_selectable[node.position] = direct_selectable[node.position]
+        subtree_selected[node.position] = direct_selected[node.position]
+        subtree_operations[node.position] = len(ids)
+        if row_prefix == "":
+            file_facts: set[int] = set()
+            kinds: set[EntryKind] = set()
+            unknown = False
+            blocked = False
+            for operation_id in ids:
+                operation = operations[operation_id]
+                stat = _operation_stat(operation)
+                blocked = blocked or operation.blocked
+                if stat is None:
+                    unknown = unknown or operation.kind is not OperationKind.MKDIR
+                else:
+                    kinds.add(stat.kind)
+                    if stat.kind is EntryKind.FILE:
+                        file_facts.add(stat.size)
+            direct_conflict[node.position] = (
+                len(file_facts) > 1
+                or (bool(file_facts) and EntryKind.DIRECTORY in kinds)
+            )
+            if len(file_facts) == 1 and not direct_conflict[node.position]:
+                direct_sizes[node.position] = next(iter(file_facts))
+            subtree_sizes[node.position] = direct_sizes[node.position] or 0
+            subtree_partial[node.position] = (
+                unknown or blocked or direct_conflict[node.position]
+            )
+    for position in range(len(tree.nodes) - 1, 0, -1):
+        parent = tree.nodes[position].parent_index
+        assert parent is not None
+        subtree_selectable[parent] += subtree_selectable[position]
+        subtree_selected[parent] += subtree_selected[position]
+        subtree_operations[parent] += subtree_operations[position]
+        if row_prefix == "":
+            subtree_sizes[parent] += subtree_sizes[position]
+            subtree_partial[parent] = subtree_partial[parent] or subtree_partial[position]
+
+    for node in tree.nodes[start_position:]:
+        if node.parent_index is None:
+            parent = None
+        elif parent_override is not None and node.parent_index == 0:
+            parent = parent_override
+        else:
+            parent = draft_by_tree_position[node.parent_index]
+        member_ids = node.member_ids
+        singular = operations[member_ids[0]] if len(member_ids) == 1 else None
+        singular_stat = None if singular is None else _operation_stat(singular)
+        singular_is_directory = (
+            singular is not None
+            and (
+                singular.kind is OperationKind.MKDIR
+                or (
+                    singular_stat is not None
+                    and singular_stat.kind is EntryKind.DIRECTORY
+                )
+            )
+        )
+        draft_index = len(drafts)
+        draft_by_tree_position[node.position] = draft_index
+        display = _basename(node.rel_path)
+        filename_key = display.casefold() if node.rel_path else None
+        if filename_key == display:
+            filename_key = display
+        drafts.append(
+            _operation_draft(
+                node.node_id,
+                display,
+                node.rel_path_key,
+                filename_key,
+                node.depth + (1 if parent_override is not None else 0),
+                parent,
+                node.is_container or len(member_ids) > 1,
+                (
+                    row_prefix + "operation-group"
+                    if len(member_ids) > 1
+                    else row_prefix + "operation"
+                    if singular is not None
+                    else row_prefix + "folder"
+                ),
+                singular,
+                _selection_state(
+                    subtree_selectable[node.position],
+                    subtree_selected[node.position],
+                    subtree_operations[node.position],
+                ),
+                subtree_selectable[node.position],
+                subtree_selected[node.position],
+                subtree_operations[node.position],
+                plan,
+                None if singular is None else excluded.get(str(singular.op_id)),
+            )
+        )
+        draft = drafts[draft_index]
+        draft.path = path_prefix + "\\" + node.rel_path if path_prefix else node.rel_path
+        draft.path_origin = "target"
+        if singular is not None:
+            draft.path = singular.prior_target_rel_path if row_prefix else singular.target_rel_path
+        if row_prefix == "":
+            draft = drafts[draft_index]
+            draft.is_directory = singular_is_directory
+            if draft.row_kind == "folder" or singular_is_directory:
+                draft.size = (
+                    None
+                    if subtree_sizes[node.position] > MAX_SIGNED_64
+                    else subtree_sizes[node.position]
+                )
+                if subtree_sizes[node.position] > MAX_SIGNED_64:
+                    draft.notice = "Partial size: overflow exceeds supported range"
+                elif subtree_partial[node.position] or not (
+                    plan.source_complete and plan.target_complete
+                ):
+                    draft.notice = "Partial size: incomplete file facts"
+            elif draft.row_kind == "operation-group":
+                draft.size = direct_sizes[node.position]
+                if direct_conflict[node.position]:
+                    draft.notice = "Partial size: conflicting facts"
+                elif subtree_partial[node.position]:
+                    draft.notice = "Partial size: incomplete file facts"
+        if singular is not None:
+            operation_draft_by_id[str(singular.op_id)] = draft_index
+        if len(member_ids) > 1:
+            for operation_id in member_ids:
+                operation = operations[operation_id]
+                member_index = len(drafts)
+                operation_draft_by_id[operation_id] = member_index
+                drafts.append(
+                    _operation_draft(
+                        _member_node_id(tree.scope_identity, operation_id),
+                        operation.kind.value.replace("_", " "),
+                        node.rel_path_key,
+                        filename_key,
+                        node.depth + 1 + (1 if parent_override is not None else 0),
+                        draft_index,
+                        False,
+                        row_prefix + "operation",
+                        operation,
+                        _selection_state(
+                            int(operation_id in selectable),
+                            int(operation_id in selected),
+                            1,
+                        ),
+                        int(operation_id in selectable),
+                        int(operation_id in selected),
+                        1,
+                        plan,
+                        excluded.get(operation_id),
+                    )
+                )
+                drafts[member_index].path = operation.prior_target_rel_path if row_prefix else operation.target_rel_path
+                drafts[member_index].path_origin = "target"
+
+
+def _operation_draft(
+    node_id: str,
+    display: str,
+    rel_path_key: str,
+    filename_key: str | None,
+    depth: int,
+    parent: int | None,
+    is_container: bool,
+    row_kind: str,
+    operation: PlanOperation | None,
+    selection: str,
+    selectable_count: int,
+    selected_count: int,
+    operation_count: int,
+    plan: Plan,
+    selection_exclusion_reason: str | None,
+) -> _PlanProjectionDraft:
+    stat = None if operation is None else _operation_stat(operation)
+    prior = row_kind.startswith("prior-")
+    return _PlanProjectionDraft(
+        node_id=node_id,
+        display=display or "Plan",
+        rel_path_key=rel_path_key,
+        depth=depth,
+        parent=parent,
+        is_container=is_container,
+        row_kind=row_kind,
+        operation_id=None if operation is None or prior else str(operation.op_id),
+        operation_kind=None if operation is None else operation.kind.value,
+        presentation_kind=None if operation is None else _presentation_kind(operation),
+        prior_path=None if operation is None or prior else operation.prior_target_rel_path,
+        source_path=(None if operation is None or prior or operation.source_expected is None
+                     else operation.source_rel_path),
+        reason=None if operation is None else operation.reason.value,
+        blocked_reason=(
+            None
+            if operation is None or operation.blocked_reason is None
+            else operation.blocked_reason.value
+        ),
+        selection="disabled" if prior else selection,
+        selectable_operation_count=0 if prior else selectable_count,
+        selected_operation_count=0 if prior else selected_count,
+        operation_count=operation_count,
+        size=None if prior or stat is None or stat.kind is not EntryKind.FILE else stat.size,
+        mtime_ns=None if prior or stat is None else stat.mtime_ns,
+        dependency_count=0 if operation is None else len(operation.dependencies),
+        risk="none" if operation is None else _operation_risk(operation, plan),
+        selection_exclusion_reason=None if prior else selection_exclusion_reason,
+        filename_key=filename_key,
+    )
+
+
+def _structural_draft(
+    node_id: str,
+    display: str,
+    rel_path_key: str,
+    depth: int,
+    parent: int | None,
+    *,
+    row_kind: str,
+    is_container: bool,
+) -> _PlanProjectionDraft:
+    return _PlanProjectionDraft(
+        node_id=node_id,
+        display=display,
+        rel_path_key=rel_path_key,
+        depth=depth,
+        parent=parent,
+        is_container=is_container,
+        row_kind=row_kind,
+        operation_id=None,
+        operation_kind=None,
+        reason=None,
+        blocked_reason=None,
+        selection="disabled",
+        selectable_operation_count=0,
+        selected_operation_count=0,
+        operation_count=0,
+        size=None,
+        mtime_ns=None,
+        dependency_count=0,
+        risk="none",
+        filename_key=_basename(rel_path_key).casefold() if rel_path_key else None,
+    )
+
+
+def _notice_draft(request_id: str, ordinal: int, display: str) -> _PlanProjectionDraft:
+    draft = _structural_draft(
+        _projection_id(b"NamiSyncNoticeV1", request_id, str(ordinal)),
+        display,
+        "",
+        1,
+        0,
+        row_kind="notice",
+        is_container=False,
+    )
+    draft.notice = display
+    return draft
+
+
+def _materialize_projection(
+    request_id: str,
+    drafts: list[_PlanProjectionDraft],
+    selected: frozenset[str],
+    operation_draft_by_id: Mapping[str, int],
+    *,
+    preflight_ready: bool,
+    preflight_refusal_count: int,
+    warning_count: int,
+    source_recall: RecallSummary,
+    target_recall: RecallSummary,
+) -> PlanProjection:
+    subtree_ends = [index + 1 for index in range(len(drafts))]
+    for index in range(len(drafts) - 1, 0, -1):
+        parent = drafts[index].parent
+        assert parent is not None
+        subtree_ends[parent] = max(subtree_ends[parent], subtree_ends[index])
+    nodes: list[PlanProjectionNode] = []
+    for index, draft in enumerate(drafts):
+        nodes.append(PlanProjectionNode(
+            node_id=draft.node_id,
+            display=draft.display,
+            rel_path_key=draft.rel_path_key,
+            position=index,
+            depth=draft.depth,
+            parent_index=draft.parent,
+            subtree_end=subtree_ends[index],
+            is_container=draft.is_container,
+            row_kind=draft.row_kind,
+            operation_id=draft.operation_id,
+            operation_kind=draft.operation_kind,
+            reason=draft.reason,
+            blocked_reason=draft.blocked_reason,
+            selection=draft.selection,
+            selectable_operation_count=draft.selectable_operation_count,
+            selected_operation_count=draft.selected_operation_count,
+            operation_count=draft.operation_count,
+            size=draft.size,
+            mtime_ns=draft.mtime_ns,
+            dependency_count=draft.dependency_count,
+            risk=draft.risk,
+            move_peer_id=draft.move_peer_id,
+            notice=draft.notice,
+            scan_warning=draft.scan_warning,
+            recall=draft.recall,
+            selection_exclusion_reason=draft.selection_exclusion_reason,
+            filename_key=draft.filename_key,
+            is_directory=draft.is_directory,
+            move_item_count=draft.move_item_count,
+            move_destination_path=draft.move_destination_path,
+            presentation_kind=draft.presentation_kind,
+            prior_path=draft.prior_path,
+            path=draft.path,
+            path_origin=draft.path_origin,
+            source_path=draft.source_path,
+        ))
+        drafts[index] = None  # type: ignore[list-item]
+    frozen_nodes = tuple(nodes)
+    nodes.clear()
+    drafts.clear()
+    subtree_ends.clear()
+    operation_lookup = {
+        operation_id: frozen_nodes[index].node_id
+        for operation_id, index in operation_draft_by_id.items()
+    }
+    return PlanProjection(
+        request_id,
+        frozen_nodes,
+        {node.node_id: node.position for node in frozen_nodes},
+        operation_lookup,
+        selected,
+        preflight_ready,
+        preflight_refusal_count,
+        warning_count,
+        source_recall, target_recall,
+    )
+
+
+def _selection_state(selectable: int, selected: int, total: int) -> str:
+    if selectable == 0:
+        return "disabled"
+    if selected == selectable and selectable == total:
+        return "selected"
+    if selected == 0 and selectable == total:
+        return "unselected"
+    return "mixed"
+
+
+def _operation_stat(operation: PlanOperation) -> FileStat | None:
+    return operation.intended or operation.source_expected or operation.target_expected or operation.prior_target_expected
+
+
+def _operation_risk(operation: PlanOperation, plan: Plan) -> str:
+    if operation.kind is OperationKind.UPDATE:
+        return "reversible" if plan.trash_on_update else "irreversible"
+    if operation.kind in {OperationKind.MOVE_UPDATE, OperationKind.TRASH}:
+        return "reversible"
+    if operation.kind is OperationKind.DELETE:
+        return "irreversible"
+    return "none"
+
+
+def _basename(path: str) -> str:
+    return path.rsplit("\\", 1)[-1] if path else "Plan"
+
+
+def _member_node_id(request_id: str, operation_id: str) -> str:
+    return _projection_id(b"NamiSyncMemberV1", request_id, operation_id)
+
+
+def _projection_id(person: bytes, *values: str) -> str:
+    digest = blake2b(digest_size=16, person=person)
+    for value in values:
+        encoded = value.encode("utf-8")
+        digest.update(len(encoded).to_bytes(4, "big"))
+        digest.update(encoded)
+    return f"node-{digest.hexdigest()}"
+
+
+__all__ = [
+    "CompactUnsignedIntegers",
+    "PlanProjection",
+    "PlanProjectionNode",
+    "PlanProjectionOrder",
+    "PlanSortColumn",
+    "SortDirection",
+    "apply_plan_projection_selection",
+    "build_plan_projection",
+    "sort_plan_projection",
+]

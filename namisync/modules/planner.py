@@ -3,25 +3,40 @@
 from __future__ import annotations
 
 import unicodedata
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from itertools import chain
 from pathlib import PureWindowsPath
-from typing import Iterable, Sequence
+from typing import Callable, Iterable, Mapping, Sequence
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.models import (
+    CapabilityProfile,
     DirRecord,
     EntryKind,
     FileIdentity,
     FileRecord,
     FileStat,
-    MetadataSnapshot,
+    MANAGED_FILE_ATTRIBUTE_MASK,
+    Root,
     ScanResult,
+    VolumeEvidence,
+    VolumeId,
 )
-from namisync.core.pathing import normalize_relative_path, validate_relative_path
+from namisync.core.pathing import (
+    fold_validated_path,
+    is_relative_path_descendant,
+    normalize_relative_path,
+    relative_path_depth,
+    relative_path_parent,
+    validate_relative_path,
+)
 from namisync.core.planning import (
     Assignment,
     BlockedReason,
     DeletionPolicy,
     DestinationAssignment,
+    FilterSet,
+    IdentityDestinationPolicy,
     MappingPair,
     MappingSnapshot,
     OperationKind,
@@ -29,36 +44,351 @@ from namisync.core.planning import (
     Plan,
     PlanFingerprint,
     PlanOperation,
-    Scope,
-    ScopeKind,
+    PreservationPolicy,
     SyncOptions,
     calculate_required_bytes,
     deterministic_operation_id,
     plan_fingerprint,
     policy_fingerprint,
+    re_fullmatch_op_id,
+    validate_assignment,
+    validate_filter_set,
 )
+from namisync.core.review import (
+    PLAN_SOURCE_REFERENCE_BYTES,
+    PlanReviewAdmission,
+    PlanReviewProducerAdmission,
+    _PlanReviewLimitSignal,
+)
+from namisync.core.scalars import ScalarDomainError
 
 
-def _depth(path: str) -> int:
-    return len(PureWindowsPath(path).parts)
+@dataclass(frozen=True, slots=True)
+class _DestinationPolicyIdentity:
+    """Immutable policy identity safe to retain after callback disposal."""
+
+    name: str
+    version: str
+
+    def assign(
+        self,
+        records: Sequence[FileRecord],
+        meta: Mapping[str, object],
+        target: ScanResult,
+    ) -> Assignment:
+        del records, meta, target
+        raise RuntimeError("a retained policy identity cannot assign destinations")
 
 
-def _parent(path: str) -> str | None:
-    parent = str(PureWindowsPath(path).parent)
-    return None if parent == "." else parent
+@dataclass(frozen=True, slots=True)
+class _DestinationPolicyCallback:
+    """Disposable callback paired with one captured policy identity.
+
+    Destination policies are trusted synchronous collaborators and must not
+    retain or export the detached records or target scan supplied to ``assign``.
+    Python cannot prevent a callback from publishing those aliases, so planner
+    custody drops every local callback-input owner before retaining its result.
+    """
+
+    name: str
+    version: str
+    callback: Callable[..., object]
+
+    def assign(
+        self,
+        records: Sequence[FileRecord],
+        meta: Mapping[str, object],
+        target: ScanResult,
+    ) -> object:
+        return self.callback(records, meta, target)
 
 
-def _is_descendant(path: str, directory: str) -> bool:
-    path_key = normalize_relative_path(path)
-    directory_key = normalize_relative_path(directory)
-    return path_key.startswith(directory_key + "\\")
+def _capture_destination_policy(
+    value: object,
+) -> tuple[_DestinationPolicyIdentity, Callable[..., object]]:
+    try:
+        name = value.name  # type: ignore[attr-defined]
+        version = value.version  # type: ignore[attr-defined]
+        callback = value.assign  # type: ignore[attr-defined]
+    except AttributeError as error:
+        retire_exception_graph(error)
+        raise TypeError("destination policy has an incomplete contract") from None
+    validate_assignment(Assignment(name, version, ()))
+    if not callable(callback):
+        raise TypeError("destination policy assign must be callable")
+    return _DestinationPolicyIdentity(name, version), callback
+
+
+def _copy_sync_options(value: object, destination_policy: object) -> SyncOptions:
+    if type(value) is not SyncOptions:
+        raise TypeError("planner options must be an exact SyncOptions")
+    if type(value.preservation) is not PreservationPolicy:
+        raise TypeError("planner preservation must be an exact PreservationPolicy")
+    validate_filter_set(value.filters)
+    return SyncOptions(
+        deletion_policy=value.deletion_policy,
+        preservation=PreservationPolicy(
+            value.preservation.preserve_ads,
+            value.preservation.preserve_created,
+            value.preservation.preserve_acl,
+        ),
+        filters=FilterSet(tuple(value.filters.patterns)),
+        destination_policy=destination_policy,  # type: ignore[arg-type]
+        trash_on_update=value.trash_on_update,
+        propagate_source_casing=value.propagate_source_casing,
+        internal_mirror_authorized=value.internal_mirror_authorized,
+    )
+
+
+def _snapshot_plan_options(value: object) -> tuple[SyncOptions, SyncOptions]:
+    """Capture disposable callback options and a callback-free retained copy."""
+
+    if type(value) is not SyncOptions:
+        raise TypeError("planner options must be an exact SyncOptions")
+    identity, callback = _capture_destination_policy(value.destination_policy)
+    retained_identity: object = identity
+    if type(value.destination_policy) is IdentityDestinationPolicy:
+        retained_identity = IdentityDestinationPolicy(identity.name, identity.version)
+    return (
+        _copy_sync_options(
+            value,
+            _DestinationPolicyCallback(identity.name, identity.version, callback),
+        ),
+        _copy_sync_options(value, retained_identity),
+    )
+
+
+def snapshot_plan_options(value: object) -> tuple[SyncOptions, SyncOptions]:
+    """Capture options after retiring rejected collaborator traceback links."""
+
+    try:
+        return _snapshot_plan_options(value)
+    except BaseException as error:
+        retire_exception_graph(error)
+        del value
+        raise
+
+
+def _snapshot_retained_options(value: object) -> SyncOptions:
+    """Copy option identity without retaining its live callback."""
+
+    if type(value) is not SyncOptions:
+        raise TypeError("planner options must be an exact SyncOptions")
+    identity, _ = _capture_destination_policy(value.destination_policy)
+    retained_identity: object = identity
+    if type(value.destination_policy) is IdentityDestinationPolicy:
+        retained_identity = IdentityDestinationPolicy(identity.name, identity.version)
+    return _copy_sync_options(value, retained_identity)
+
+
+def _snapshot_identity(value: FileIdentity | None) -> FileIdentity | None:
+    if value is None:
+        return None
+    if type(value) is not FileIdentity:
+        raise TypeError("mapping file identity has the wrong type")
+    return FileIdentity(value.volume_serial, value.file_index)
+
+
+def _snapshot_volume(value: VolumeId | None) -> VolumeId | None:
+    if value is None:
+        return None
+    if type(value) is not VolumeId:
+        raise TypeError("mapping volume identity has the wrong type")
+    return VolumeId(value.serial, value.fs_type)
+
+
+def snapshot_mapping_snapshot(
+    value: object,
+    *,
+    review_admission: PlanReviewProducerAdmission | None = None,
+) -> MappingSnapshot:
+    """Return an exact detached correspondence under independent source gates."""
+
+    admission = (
+        PlanReviewProducerAdmission()
+        if review_admission is None
+        else review_admission
+    )
+    if type(admission) is not PlanReviewProducerAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    populations = _validate_plan_mapping_source(value, admission)
+    pairs_source = populations[0][1]
+    ambiguous_source = populations[1][1]
+    disqualified_source = populations[2][1]
+    disqualified_target = populations[3][1]
+    assert type(value) is MappingSnapshot
+    pairs: list[MappingPair] = []
+    for pair in pairs_source:
+        if type(pair) is not MappingPair:
+            raise TypeError(
+                "planner correspondence pairs must contain exact MappingPair values"
+            )
+        if type(pair.source_rel_path_key) is not str:
+            raise TypeError("mapping source path key must be text")
+        canonical_source_key = validate_relative_path(
+            pair.source_rel_path_key
+        )
+        if pair.source_rel_path_key != fold_validated_path(
+            canonical_source_key
+        ):
+            raise ValueError("mapping source path key is not canonical")
+        source_identity = _snapshot_identity(pair.source_identity)
+        target_identity = _snapshot_identity(pair.target_identity)
+        if source_identity is None:
+            raise TypeError("mapping source identity must be a FileIdentity")
+        pairs.append(
+            MappingPair(
+                pair.source_rel_path_key,
+                pair.target_rel_path,
+                pair.target_rel_path_key,
+                source_identity,
+                target_identity,
+            )
+        )
+
+    def snapshot_ambiguous_key(key: object) -> str:
+        if type(key) is not str:
+            raise TypeError("mapping ambiguous source keys must be text")
+        canonical_key = validate_relative_path(key)
+        if key != fold_validated_path(canonical_key):
+            raise ValueError("mapping ambiguous source key is not canonical")
+        return key
+
+    def snapshot_identities(
+        population: frozenset[FileIdentity],
+    ) -> frozenset[FileIdentity]:
+        copied: list[FileIdentity] = []
+        for identity in population:
+            snapshot = _snapshot_identity(identity)
+            if snapshot is None:
+                raise TypeError(
+                    "mapping disqualified identities must be FileIdentity values"
+                )
+            copied.append(snapshot)
+        return frozenset(copied)
+
+    return MappingSnapshot(
+        _snapshot_volume(value.source_volume_id),
+        _snapshot_volume(value.target_volume_id),
+        tuple(pairs),
+        frozenset(snapshot_ambiguous_key(key) for key in ambiguous_source),
+        snapshot_identities(disqualified_source),
+        snapshot_identities(disqualified_target),
+    )
+
+
+def _validate_plan_mapping_source(
+    value: object,
+    admission: PlanReviewProducerAdmission,
+) -> tuple[tuple[str, object, type], ...]:
+    """Validate and source-gate the mapping populations without allocation."""
+
+    if type(value) is not MappingSnapshot:
+        raise TypeError("planner correspondence must be an exact MappingSnapshot")
+    if type(admission) is not PlanReviewProducerAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    populations = (
+        ("pairs", value.pairs, tuple),
+        ("ambiguous source keys", value.ambiguous_source_keys, frozenset),
+        (
+            "disqualified source identities",
+            value.disqualified_source_identities,
+            frozenset,
+        ),
+        (
+            "disqualified target identities",
+            value.disqualified_target_identities,
+            frozenset,
+        ),
+    )
+    for name, population, expected_type in populations:
+        if type(population) is not expected_type:
+            raise TypeError(f"planner correspondence {name} has the wrong type")
+    for _, population, _ in populations:
+        admission.require_source_rows(len(population))
+    return populations
+
+
+def _snapshot_assignment(
+    value: object,
+    admission: PlanReviewProducerAdmission,
+) -> Assignment:
+    if type(value) is not Assignment:
+        raise TypeError("destination policy must return an exact Assignment")
+    if type(value.items) is not tuple:
+        raise TypeError("assignment items must be an exact tuple")
+    admission.require_source_rows(len(value.items))
+    validate_assignment(value)
+    snapshot = Assignment(
+        value.policy_name,
+        value.policy_version,
+        tuple(
+            DestinationAssignment(
+                item.source_rel_path,
+                item.source_rel_path_key,
+                item.target_rel_path,
+                item.target_rel_path_key,
+                item.group_id,
+                item.conflict,
+            )
+            for item in value.items
+        ),
+    )
+    return snapshot
+
+
+class _OperationAdmission:
+    """Gate one combined operation source population before every append."""
+
+    __slots__ = ("admission", "count")
+
+    def __init__(
+        self,
+        admission: PlanReviewProducerAdmission,
+    ) -> None:
+        self.admission = admission
+        self.count = 0
+
+    def admit(self) -> None:
+        next_count = self.count + 1
+        self.admission.require_source_rows(next_count)
+        self.count = next_count
+
+
+class _OperationList(list[PlanOperation]):
+    """List whose shared gate runs before an operation becomes retained."""
+
+    __slots__ = ("_gate",)
+
+    def __init__(self, gate: _OperationAdmission | None) -> None:
+        super().__init__()
+        self._gate = gate
+
+    def append(self, operation: PlanOperation) -> None:
+        if self._gate is not None:
+            self._gate.admit()
+        super().append(operation)
+
+
+def _cleanup_operation_dependencies(
+    candidates: Iterable[str],
+) -> tuple[str, ...]:
+    """Deduplicate and freeze one cleanup operation's dependency ids."""
+
+    dependency_ids: set[str] = set()
+    for dependency in candidates:
+        dependency_ids.add(dependency)
+    return tuple(sorted(dependency_ids, key=str))
 
 
 def _metadata_equal(source: FileStat, target: FileStat, granularity_ns: int) -> bool:
     return (
         source.size == target.size
         and abs(source.mtime_ns - target.mtime_ns) <= granularity_ns
-        and source.metadata.attributes == target.metadata.attributes
+        and (
+            source.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+            == target.metadata.attributes & MANAGED_FILE_ATTRIBUTE_MASK
+        )
     )
 
 
@@ -170,12 +500,12 @@ def _validate_assignment(
 
 
 def _nearest_created_parent(path: str, created: dict[str, PlanOperation]) -> PlanOperation | None:
-    parent = _parent(path)
+    parent = relative_path_parent(path)
     while parent is not None:
         operation = created.get(normalize_relative_path(parent))
         if operation is not None:
             return operation
-        parent = _parent(parent)
+        parent = relative_path_parent(parent)
     return None
 
 
@@ -228,17 +558,26 @@ def _move_pair(
     return pair, old_target
 
 
-def plan(
+def _plan(
     source: ScanResult,
     target: ScanResult,
     correspondence: MappingSnapshot,
     options: SyncOptions,
-    scope: Scope,
+    *,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Plan:
     """Transform immutable observations and policy into immutable intent."""
 
-    if scope.kind is not ScopeKind.EVERYTHING:
-        raise NotImplementedError(f"scope {scope.kind.value!r} is declared but not implemented in M0")
+    admission = review_admission
+    assign_destinations: Callable[..., object] | None = None
+    policy_identity: _DestinationPolicyIdentity | None = None
+    if admission is not None:
+        if type(admission) is not PlanReviewProducerAdmission:
+            raise TypeError("plan review admission has the wrong type")
+        _validate_plan_mapping_source(correspondence, admission)
+        policy_identity, assign_destinations = _capture_destination_policy(
+            options.destination_policy
+        )
 
     source_files_all = sorted(source.files, key=lambda item: (item.rel_path_key, item.rel_path))
     target_files_all = sorted(target.files, key=lambda item: (item.rel_path_key, item.rel_path))
@@ -246,17 +585,46 @@ def plan(
     target_files = tuple(record for record in target_files_all if not options.filters.excludes(record.rel_path))
     source_dirs = tuple(
         record
-        for record in sorted(source.directories, key=lambda item: (_depth(item.rel_path) if item.rel_path else 0, item.rel_path_key, item.rel_path))
+        for record in sorted(source.directories, key=lambda item: (relative_path_depth(item.rel_path) if item.rel_path else 0, item.rel_path_key, item.rel_path))
         if record.rel_path and not options.filters.excludes(record.rel_path)
     )
     target_dirs = tuple(
         record
-        for record in sorted(target.directories, key=lambda item: (_depth(item.rel_path) if item.rel_path else 0, item.rel_path_key, item.rel_path))
+        for record in sorted(target.directories, key=lambda item: (relative_path_depth(item.rel_path) if item.rel_path else 0, item.rel_path_key, item.rel_path))
         if record.rel_path
     )
 
-    assignment = options.destination_policy.assign(source_files, {}, target)
-    assignments = _validate_assignment(assignment, source_files)
+    if admission is None:
+        assignment = options.destination_policy.assign(source_files, {}, target)
+    else:
+        admission.require_source_rows(len(source_files))
+        admission.require_source_rows(
+            len(target.files)
+            + len(target.directories)
+            + len(target.unsupported)
+        )
+        admission.require_informational_source_rows(len(target.warnings))
+        assert assign_destinations is not None
+        raw_assignment = assign_destinations(
+            source_files,
+            {},
+            target,
+        )
+        assignment = _snapshot_assignment(
+            raw_assignment,
+            admission,
+        )
+        del (
+            assign_destinations,
+            raw_assignment,
+        )
+        assert policy_identity is not None
+        if (
+            assignment.policy_name != policy_identity.name
+            or assignment.policy_version != policy_identity.version
+        ):
+            raise ValueError("destination assignment policy identity changed")
+    _validate_assignment(assignment, source_files)
     source_files_by_key = _group_by_key(source_files)
     target_files_by_key = _group_by_key(target_files)
     target_dirs_by_key = _group_by_key(target_dirs)
@@ -270,16 +638,23 @@ def plan(
         assigned_target_groups.setdefault(item.target_rel_path_key, []).append(item)
     assigned_target_keys = set(assigned_target_groups)
 
-    required_directory_paths: set[str] = {record.rel_path for record in source_dirs}
+    required_directory_paths: set[str] = set()
+    for record in source_dirs:
+        required_directory_paths.add(record.rel_path)
     for item in assignment.items:
-        parent = _parent(item.target_rel_path)
+        parent = relative_path_parent(item.target_rel_path)
         while parent is not None:
             required_directory_paths.add(parent)
-            parent = _parent(parent)
+            parent = relative_path_parent(parent)
 
-    mkdir_operations: list[PlanOperation] = []
+    operation_admission = (
+        None
+        if admission is None
+        else _OperationAdmission(admission)
+    )
+    mkdir_operations: list[PlanOperation] = _OperationList(operation_admission)
     created_directories: dict[str, PlanOperation] = {}
-    for directory_path in sorted(required_directory_paths, key=lambda value: (_depth(value), normalize_relative_path(value), value)):
+    for directory_path in sorted(required_directory_paths, key=lambda value: (relative_path_depth(value), normalize_relative_path(value), value)):
         directory_key = normalize_relative_path(directory_path)
         existing_dirs = target_dirs_by_key.get(directory_key, [])
         existing_files = target_files_by_key.get(directory_key, [])
@@ -320,7 +695,7 @@ def plan(
     granularity = max(source.profile.mtime_granularity_ns, target.profile.mtime_granularity_ns)
     source_identity_counts = _identity_counts(source_files)
     target_identity_counts = _identity_counts(target_files)
-    content_operations: list[PlanOperation] = []
+    content_operations: list[PlanOperation] = _OperationList(operation_admission)
     claimed_target_keys: set[str] = set()
     moved_from_keys: set[str] = set()
 
@@ -500,7 +875,7 @@ def plan(
             )
             claimed_target_keys.add(item.target_rel_path_key)
 
-    removal_operations: list[PlanOperation] = []
+    removal_operations: list[PlanOperation] = _OperationList(operation_admission)
     removed_file_keys = set(moved_from_keys)
     for target_record in target_files:
         if target_record.rel_path_key in claimed_target_keys or target_record.rel_path_key in moved_from_keys:
@@ -521,12 +896,13 @@ def plan(
         removal_operations.append(operation)
         removed_file_keys.add(target_record.rel_path_key)
 
-    blocked_operations: list[PlanOperation] = []
+    blocked_operations: list[PlanOperation] = _OperationList(operation_admission)
     visible_unsupported: dict[tuple[str, str], object] = {}
     for record in (*source.unsupported, *target.unsupported):
         if options.filters.excludes(record.rel_path):
             continue
-        visible_unsupported[(record.rel_path_key, record.rel_path)] = record
+        visible_key = (record.rel_path_key, record.rel_path)
+        visible_unsupported[visible_key] = record
     for record in sorted(visible_unsupported.values(), key=lambda item: (item.rel_path_key, item.rel_path)):  # type: ignore[attr-defined]
         blocked_operations.append(
             _blocked_operation(
@@ -541,7 +917,7 @@ def plan(
             )
         )
 
-    cleanup_operations: list[PlanOperation] = []
+    cleanup_operations: list[PlanOperation] = _OperationList(operation_admission)
     cleanup_by_key: dict[str, PlanOperation] = {}
     desired_directory_keys = {normalize_relative_path(path) for path in required_directory_paths}
     removal_by_path: dict[str, PlanOperation] = {}
@@ -550,7 +926,7 @@ def plan(
             removal_by_path[operation.target_rel_path] = operation
         elif operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE} and operation.prior_target_rel_path:
             removal_by_path[operation.prior_target_rel_path] = operation
-    for directory in sorted(target_dirs, key=lambda item: (-_depth(item.rel_path), item.rel_path_key, item.rel_path)):
+    for directory in sorted(target_dirs, key=lambda item: (-relative_path_depth(item.rel_path), item.rel_path_key, item.rel_path)):
         if (
             options.deletion_policy is DeletionPolicy.ADDITIVE
             or directory.rel_path_key in desired_directory_keys
@@ -559,35 +935,40 @@ def plan(
             continue
         excluded_child = any(
             bool(record.rel_path)
-            and _is_descendant(record.rel_path, directory.rel_path)
+            and is_relative_path_descendant(record.rel_path, directory.rel_path)
             and options.filters.excludes(record.rel_path)
             for record in (*target.files, *target.directories)
             if record.rel_path != directory.rel_path
         )
-        unsupported_child = any(_is_descendant(record.rel_path, directory.rel_path) for record in target.unsupported)
+        unsupported_child = any(is_relative_path_descendant(record.rel_path, directory.rel_path) for record in target.unsupported)
         remaining_file = any(
-            _is_descendant(record.rel_path, directory.rel_path) and record.rel_path_key not in removed_file_keys
+            is_relative_path_descendant(record.rel_path, directory.rel_path) and record.rel_path_key not in removed_file_keys
             for record in target.files
         )
         remaining_directory = any(
-            _parent(child.rel_path) == directory.rel_path
+            relative_path_parent(child.rel_path) == directory.rel_path
             and child.rel_path_key not in cleanup_by_key
             and child.rel_path_key not in desired_directory_keys
             for child in target_dirs
         )
         if excluded_child or unsupported_child or remaining_file or remaining_directory:
             continue
-        dependencies = [
-            operation.op_id
-            for path, operation in removal_by_path.items()
-            if path == directory.rel_path or _is_descendant(path, directory.rel_path)
-        ]
-        dependencies.extend(
-            operation.op_id
-            for key, operation in cleanup_by_key.items()
-            if _parent(operation.target_rel_path) == directory.rel_path
+        dependencies = _cleanup_operation_dependencies(
+            chain(
+                (
+                    operation.op_id
+                    for path, operation in removal_by_path.items()
+                    if path == directory.rel_path
+                    or is_relative_path_descendant(path, directory.rel_path)
+                ),
+                (
+                    operation.op_id
+                    for operation in cleanup_by_key.values()
+                    if relative_path_parent(operation.target_rel_path)
+                    == directory.rel_path
+                ),
+            ),
         )
-        dependencies = sorted(set(dependencies), key=str)
         cleanup = PlanOperation(
             op_id=deterministic_operation_id(OperationKind.DELETE, None, directory.rel_path, None, OperationReason.DIRECTORY_CLEANUP),
             kind=OperationKind.DELETE,
@@ -596,20 +977,48 @@ def plan(
             source_expected=None,
             target_expected=directory.stat,
             intended=None,
-            dependencies=tuple(dependencies),
+            dependencies=dependencies,
             reason=OperationReason.DIRECTORY_CLEANUP,
         )
         cleanup_operations.append(cleanup)
         cleanup_by_key[directory.rel_path_key] = cleanup
 
-    operations = tuple((*mkdir_operations, *content_operations, *removal_operations, *blocked_operations, *cleanup_operations))
+    operation_count = (
+        len(mkdir_operations)
+        + len(content_operations)
+        + len(removal_operations)
+        + len(blocked_operations)
+        + len(cleanup_operations)
+    )
+    operations = tuple(
+        (
+            *mkdir_operations,
+            *content_operations,
+            *removal_operations,
+            *blocked_operations,
+            *cleanup_operations,
+        )
+    )
+    if (
+        operation_admission is not None
+        and operation_admission.count != operation_count
+    ):
+        raise RuntimeError("plan operation admission did not cover every operation")
     required_bytes = calculate_required_bytes(
         operations,
         target_profile=target.profile,
         trash_on_update=options.trash_on_update,
+        review_admission=admission,
     )
     required_volumes = frozenset(
-        volume for volume in (source.volume_id, target.volume_id) if volume is not None
+        volume
+        for volume in (source.volume_id, target.volume_id)
+        if volume is not None
+    )
+    fingerprint_options = (
+        options
+        if policy_identity is None
+        else _copy_sync_options(options, policy_identity)
     )
     placeholder = Plan(
         source_root=source.root,
@@ -628,10 +1037,294 @@ def plan(
         filter_snapshot=options.filters,
         deletion_policy=options.deletion_policy,
         trash_on_update=options.trash_on_update,
-        policy_fingerprint=policy_fingerprint(options),
-        worker_count=options.worker_count,
+        policy_fingerprint=policy_fingerprint(fingerprint_options),
         required_volumes=required_volumes,
         required_bytes=required_bytes,
         fingerprint=PlanFingerprint("0" * 64),
     )
-    return replace(placeholder, fingerprint=plan_fingerprint(placeholder))
+    result = replace(placeholder, fingerprint=plan_fingerprint(placeholder))
+    return result
+
+
+def plan(
+    source: ScanResult,
+    target: ScanResult,
+    correspondence: MappingSnapshot,
+    options: SyncOptions,
+    *,
+    review_admission: PlanReviewProducerAdmission | None = None,
+) -> Plan:
+    """Plan after retiring owned traceback links from rejected inputs."""
+
+    try:
+        return _plan(
+            source,
+            target,
+            correspondence,
+            options,
+            review_admission=review_admission,
+        )
+    except BaseException as error:
+        cause = BaseException.__cause__.__get__(error, BaseException)
+        context = BaseException.__context__.__get__(error, BaseException)
+        preserve_scalar_cause = (
+            type(error) is _PlanReviewLimitSignal
+            and type(cause) is ScalarDomainError
+            and context is cause
+        )
+        if preserve_scalar_cause:
+            retire_exception_graph(cause)
+        else:
+            if isinstance(cause, BaseException):
+                retire_exception_graph(cause)
+            if isinstance(context, BaseException) and context is not cause:
+                retire_exception_graph(context)
+        retire_exception_graph(error)
+        if preserve_scalar_cause:
+            BaseException.__cause__.__set__(error, cause)
+            BaseException.__context__.__set__(error, context)
+        del source, target, correspondence, options, review_admission
+        del cause, context, preserve_scalar_cause
+        raise
+
+
+def _validate_plan_operation(value: object) -> PlanOperation:
+    if type(value) is not PlanOperation:
+        raise TypeError("plan operations must contain exact PlanOperation values")
+    if type(value.dependencies) is not tuple:
+        raise TypeError("plan operation dependencies must be an exact tuple")
+    if (
+        type(value.op_id) is not str
+        or not re_fullmatch_op_id(value.op_id)
+        or type(value.kind) is not OperationKind
+        or type(value.reason) is not OperationReason
+        or (
+            value.blocked_reason is not None
+            and type(value.blocked_reason) is not BlockedReason
+        )
+    ):
+        raise TypeError("plan operation has an invalid typed field")
+
+    for dependency in value.dependencies:
+        if type(dependency) is not str or not re_fullmatch_op_id(dependency):
+            raise TypeError("plan operation dependency has an invalid id")
+
+    if value.op_id != deterministic_operation_id(
+        value.kind,
+        value.source_rel_path,
+        value.target_rel_path,
+        value.prior_target_rel_path,
+        value.reason,
+    ):
+        raise ValueError("operation id does not match canonical intent")
+    return value
+
+
+def _adopt_plan_candidate(
+    value: object,
+    source: ScanResult,
+    target: ScanResult,
+    options: SyncOptions,
+    *,
+    review_admission: PlanReviewProducerAdmission | None = None,
+) -> Plan:
+    """Validate and adopt one exact immutable planner result."""
+
+    if type(value) is not Plan:
+        raise TypeError("planner must return an exact Plan")
+    if type(value.operations) is not tuple:
+        raise TypeError("plan operations must be an exact tuple")
+    if type(value.assignment) is not Assignment:
+        raise TypeError("plan assignment must be an exact Assignment")
+    if type(value.assignment.items) is not tuple:
+        raise TypeError("plan assignment items must be an exact tuple")
+    if type(value.required_volumes) is not frozenset:
+        raise TypeError("plan required volumes must be an exact frozenset")
+    if type(value.required_bytes) is not int:
+        raise TypeError("plan required bytes must be an exact integer")
+    if type(value.policy_fingerprint) is not str:
+        raise TypeError("plan policy fingerprint must be text")
+    if (
+        type(value.fingerprint) is not str
+        or len(value.fingerprint) != 64
+        or any(
+            character not in "0123456789abcdef"
+            for character in value.fingerprint
+        )
+    ):
+        raise ValueError("plan fingerprint must be lowercase SHA-256 text")
+
+    admission = (
+        PlanReviewProducerAdmission()
+        if review_admission is None
+        else review_admission
+    )
+    if type(admission) is not PlanReviewProducerAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    admission.require_source_rows(len(value.operations))
+    if len(value.required_volumes) > 2:
+        raise ValueError("plan required volumes exceed the endpoint limit")
+
+    retained_options = _snapshot_retained_options(options)
+    admission.require_source_rows(len(value.assignment.items))
+    assignment = validate_assignment(value.assignment)
+    filtered_source_files = tuple(
+        record
+        for record in source.files
+        if not retained_options.filters.excludes(record.rel_path)
+    )
+    _validate_assignment(assignment, filtered_source_files)
+    if (
+        assignment.policy_name != retained_options.destination_policy.name
+        or assignment.policy_version
+        != retained_options.destination_policy.version
+    ):
+        raise ValueError(
+            "plan assignment policy does not match requested policy"
+        )
+
+    for operation in value.operations:
+        _validate_plan_operation(operation)
+
+    if type(value.source_root) is not Root:
+        raise TypeError("plan source root has the wrong type")
+    if type(value.target_root) is not Root:
+        raise TypeError("plan target root has the wrong type")
+    for volume in (value.source_volume_id, value.target_volume_id):
+        if volume is not None and type(volume) is not VolumeId:
+            raise TypeError("plan endpoint volume identity has the wrong type")
+    for evidence in (
+        value.source_volume_evidence,
+        value.target_volume_evidence,
+    ):
+        if evidence is not None and type(evidence) is not VolumeEvidence:
+            raise TypeError("plan endpoint volume evidence has the wrong type")
+    if (
+        type(value.source_profile) is not CapabilityProfile
+        or type(value.target_profile) is not CapabilityProfile
+    ):
+        raise TypeError("plan capability profile has the wrong type")
+    if (
+        value.source_root != source.root
+        or value.target_root != target.root
+        or value.source_volume_id != source.volume_id
+        or value.target_volume_id != target.volume_id
+        or value.source_volume_evidence != source.volume_evidence
+        or value.target_volume_evidence != target.volume_evidence
+        or value.source_profile != source.profile
+        or value.target_profile != target.profile
+    ):
+        raise ValueError("plan endpoint evidence does not match admitted scans")
+    if (
+        type(value.source_complete) is not bool
+        or type(value.target_complete) is not bool
+    ):
+        raise TypeError("plan completeness fields must be bools")
+    if (
+        value.source_complete != (source.complete and source.is_full_scan)
+        or value.target_complete != (target.complete and target.is_full_scan)
+    ):
+        raise ValueError("plan completeness does not match admitted scans")
+    if type(value.preservation) is not PreservationPolicy:
+        raise TypeError("plan preservation must be an exact PreservationPolicy")
+    if type(value.filter_snapshot) is not FilterSet:
+        raise TypeError("plan filter snapshot must be an exact FilterSet")
+    validate_filter_set(value.filter_snapshot)
+    if (
+        value.preservation != retained_options.preservation
+        or value.filter_snapshot != retained_options.filters
+        or type(value.deletion_policy) is not DeletionPolicy
+        or value.deletion_policy is not retained_options.deletion_policy
+        or type(value.trash_on_update) is not bool
+        or value.trash_on_update != retained_options.trash_on_update
+    ):
+        raise ValueError("plan policy snapshot does not match requested options")
+
+    for volume in value.required_volumes:
+        if type(volume) is not VolumeId:
+            raise TypeError("plan required volumes must contain VolumeId values")
+    expected_volumes = frozenset(
+        volume
+        for volume in (source.volume_id, target.volume_id)
+        if volume is not None
+    )
+    if value.required_volumes != expected_volumes:
+        raise ValueError("plan required volumes do not match admitted scans")
+    required_bytes = calculate_required_bytes(
+        value.operations,
+        target_profile=value.target_profile,
+        trash_on_update=retained_options.trash_on_update,
+        review_admission=admission,
+    )
+    if value.required_bytes != required_bytes:
+        raise ValueError("plan required bytes do not match operations")
+    expected_policy_fingerprint = policy_fingerprint(retained_options)
+    if value.policy_fingerprint != expected_policy_fingerprint:
+        raise ValueError(
+            "plan policy fingerprint does not match requested options"
+        )
+
+    if value.fingerprint != plan_fingerprint(value):
+        raise ValueError("plan fingerprint does not match canonical plan")
+    return value
+
+
+def adopt_plan_candidate(
+    value: object,
+    source: ScanResult,
+    target: ScanResult,
+    options: SyncOptions,
+    *,
+    review_admission: PlanReviewProducerAdmission | None = None,
+) -> Plan:
+    """Adopt a candidate after retiring rejected input traceback links."""
+
+    try:
+        return _adopt_plan_candidate(
+            value,
+            source,
+            target,
+            options,
+            review_admission=review_admission,
+        )
+    except BaseException as error:
+        retire_exception_graph(error)
+        del value, source, target, options, review_admission
+        raise
+
+
+def admit_retained_plan_candidate(
+    value: object,
+    admission: PlanReviewAdmission,
+) -> None:
+    """Atomically commit one already validated authoritative plan shape."""
+
+    if type(value) is not Plan:
+        raise TypeError("retained plan must be an exact Plan")
+    if type(admission) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    if type(value.operations) is not tuple:
+        raise TypeError("plan operations must be an exact tuple")
+    if type(value.assignment) is not Assignment:
+        raise TypeError("plan assignment must be an exact Assignment")
+    if type(value.assignment.items) is not tuple:
+        raise TypeError("plan assignment items must be an exact tuple")
+    if type(value.required_volumes) is not frozenset:
+        raise TypeError("plan required volumes must be an exact frozenset")
+
+    operation_slots = 0
+    for operation in value.operations:
+        if type(operation) is not PlanOperation:
+            raise TypeError("plan operations must contain exact PlanOperation values")
+        if type(operation.dependencies) is not tuple:
+            raise TypeError("plan operation dependencies must be an exact tuple")
+        operation_slots += 1 + len(operation.dependencies)
+    reference_slots = (
+        operation_slots
+        + len(value.assignment.items)
+        + len(value.required_volumes)
+    )
+    admission.admit(
+        domain_rows=len(value.operations),
+        domain_bytes=reference_slots * PLAN_SOURCE_REFERENCE_BYTES,
+    )

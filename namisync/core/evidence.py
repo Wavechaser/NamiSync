@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Protocol, TypeAlias
 
-from namisync.core.models import FileStat
+from namisync.core.models import FileStat, file_stat_fact, snapshot_file_stat
+from namisync.core.scalars import require_signed_64
 
 
 class Outcome(StrEnum):
@@ -36,6 +38,68 @@ class Provenance(StrEnum):
     VERIFY_ATTESTED = "verify"
 
 
+class StreamingHasher(Protocol):
+    """Standard-library-only streaming content-hasher seam."""
+
+    def update(self, data: bytes | memoryview) -> None:
+        """Consume the supplied bytes synchronously without retaining the view."""
+        ...
+
+    def digest(self) -> bytes: ...
+
+
+HasherFactory: TypeAlias = Callable[[], StreamingHasher]
+
+
+class HasherContractError(RuntimeError):
+    """A supplied content hasher violated the fixed streaming contract."""
+
+
+def new_content_hasher(factory: HasherFactory) -> StreamingHasher:
+    """Construct and validate one streaming content hasher."""
+
+    try:
+        hasher = factory()
+    except Exception as error:
+        raise HasherContractError("content hasher factory failed") from error
+    if not callable(getattr(hasher, "update", None)):
+        raise HasherContractError("content hasher must provide update(bytes)")
+    if not callable(getattr(hasher, "digest", None)):
+        raise HasherContractError("content hasher must provide digest()")
+    return hasher
+
+
+def update_content_hasher(hasher: StreamingHasher, chunk: bytes | memoryview) -> None:
+    """Add one chunk while preserving the shared hasher error contract."""
+
+    try:
+        hasher.update(chunk)
+    except Exception as error:
+        raise HasherContractError("content hasher update failed") from error
+
+
+def require_content_digest(value: object) -> bytes:
+    """Validate one raw digest returned by the canonical content hasher."""
+
+    if not isinstance(value, bytes):
+        raise HasherContractError("content hasher digest must be bytes")
+    if len(value) != 16:
+        raise HasherContractError(
+            "content hasher digest must contain exactly 16 bytes"
+        )
+    return value
+
+
+def finish_content_hasher(hasher: StreamingHasher) -> bytes:
+    """Finalize and validate one raw canonical content digest."""
+
+    try:
+        digest = hasher.digest()
+    except Exception as error:
+        raise HasherContractError("content hasher digest failed") from error
+    return require_content_digest(digest)
+
+
 def _require_utc(value: datetime, field_name: str) -> None:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"{field_name} must be timezone-aware")
@@ -47,21 +111,20 @@ def _require_utc(value: datetime, field_name: str) -> None:
 class ContentEvidence:
     """Digest evidence for an exact byte stream."""
 
-    algorithm: Literal["sha256"]
+    algorithm: Literal["xxh3_128"]
     digest: bytes
     size: int
     provenance: Provenance
     observed_at: datetime
 
     def __post_init__(self) -> None:
-        if self.algorithm != "sha256":
-            raise ValueError("only sha256 evidence is supported")
+        if self.algorithm != "xxh3_128":
+            raise ValueError("only xxh3_128 evidence is supported")
         if not isinstance(self.digest, bytes):
-            raise TypeError("sha256 digest must be bytes")
-        if len(self.digest) != 32:
-            raise ValueError("sha256 digest must contain exactly 32 bytes")
-        if self.size < 0:
-            raise ValueError("evidence size cannot be negative")
+            raise TypeError("xxh3_128 digest must be bytes")
+        if len(self.digest) != 16:
+            raise ValueError("xxh3_128 digest must contain exactly 16 bytes")
+        require_signed_64(self.size, "evidence size")
         _require_utc(self.observed_at, "observed_at")
 
 
@@ -75,3 +138,66 @@ class Attestation:
     def __post_init__(self) -> None:
         if not isinstance(self.subject, FileStat):
             raise TypeError("attestation subject must be FileStat evidence")
+        if self.content.size != self.subject.size:
+            raise ValueError("attestation content size must match its subject")
+
+
+def snapshot_content_evidence(value: object) -> ContentEvidence:
+    """Detach one exact content-evidence graph from a collaborator."""
+
+    if type(value) is not ContentEvidence:
+        raise TypeError("content evidence must have the exact public shape")
+    if type(value.algorithm) is not str:
+        raise TypeError("content evidence algorithm must be text")
+    if type(value.digest) is not bytes:
+        raise TypeError("content evidence digest must be exact bytes")
+    if type(value.provenance) is not Provenance:
+        raise TypeError("content evidence provenance has the wrong type")
+    if type(value.observed_at) is not datetime:
+        raise TypeError("content evidence time must be an exact datetime")
+    return ContentEvidence(
+        value.algorithm,
+        bytes(value.digest),
+        value.size,
+        value.provenance,
+        datetime.fromisoformat(value.observed_at.isoformat()),
+    )
+
+
+def snapshot_attestation(value: object) -> Attestation:
+    """Detach one exact attestation and its complete subject evidence."""
+
+    if type(value) is not Attestation:
+        raise TypeError("attestation must have the exact public shape")
+    return Attestation(
+        snapshot_content_evidence(value.content),
+        snapshot_file_stat(value.subject),
+    )
+
+
+def content_evidence_fact(
+    value: object,
+) -> tuple[str, bytes, int, Provenance, str]:
+    """Flatten exact content evidence into immutable comparison leaves."""
+
+    snapshot = snapshot_content_evidence(value)
+    return (
+        str(snapshot.algorithm),
+        bytes(snapshot.digest),
+        snapshot.size,
+        snapshot.provenance,
+        snapshot.observed_at.isoformat(),
+    )
+
+
+def attestation_fact(
+    value: object,
+) -> tuple[
+    tuple[str, bytes, int, Provenance, str],
+    tuple[object, ...],
+]:
+    """Flatten an exact attestation without retaining collaborator objects."""
+
+    if type(value) is not Attestation:
+        raise TypeError("attestation must have the exact public shape")
+    return content_evidence_fact(value.content), file_stat_fact(value.subject)

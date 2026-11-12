@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import re
-from pathlib import PureWindowsPath
+from pathlib import Path, PureWindowsPath
+
+from .scalars import require_utf16_path
 
 
 class PathValidationError(ValueError):
@@ -13,14 +15,20 @@ class PathValidationError(ValueError):
 
 _DRIVE_PREFIX = re.compile(r"^[A-Za-z]:")
 _DEVICE_PREFIXES = ("\\\\?\\", "\\\\.\\", "\\??\\")
+_INVALID_ABSOLUTE_COMPONENT_CHARACTERS = frozenset('<>"/\\|?*')
 _RESERVED_BASENAMES = {
     "CON",
+    "CONIN$",
+    "CONOUT$",
     "PRN",
     "AUX",
     "NUL",
     *(f"COM{number}" for number in range(1, 10)),
     *(f"LPT{number}" for number in range(1, 10)),
+    *(f"COM{number}" for number in "¹²³"),
+    *(f"LPT{number}" for number in "¹²³"),
 }
+_RESERVED_LENGTHS = frozenset(len(name) for name in _RESERVED_BASENAMES)
 
 
 def _uppercase_one_codepoint(value: str) -> str:
@@ -31,6 +39,9 @@ def _uppercase_one_codepoint(value: str) -> str:
     character whose uppercase form expands is therefore retained verbatim.
     """
 
+    uppercase = value.upper()
+    if len(uppercase) == len(value):
+        return uppercase
     mapped: list[str] = []
     for character in value:
         uppercase = character.upper()
@@ -41,12 +52,12 @@ def _uppercase_one_codepoint(value: str) -> str:
 def validate_relative_path(value: str, *, allow_root: bool = False) -> str:
     """Validate and return a canonical-separator Windows relative path."""
 
-    if not isinstance(value, str):
-        raise TypeError("relative path must be a string")
-    if "\x00" in value:
-        raise PathValidationError("relative path contains NUL")
-    if any("\ud800" <= character <= "\udfff" for character in value):
-        raise PathValidationError("relative path contains an unpaired surrogate")
+    try:
+        require_utf16_path(value, "relative path")
+    except TypeError:
+        raise
+    except ValueError as error:
+        raise PathValidationError(str(error)) from error
     if value == "":
         if allow_root:
             return ""
@@ -59,28 +70,61 @@ def validate_relative_path(value: str, *, allow_root: bool = False) -> str:
     if upper_prefix.startswith(_DEVICE_PREFIXES):
         raise PathValidationError("relative path uses a device namespace")
 
-    components = canonical.split("\\")
-    for component in components:
-        if component in {"", ".", ".."}:
-            raise PathValidationError("relative path has an unsafe component")
-        if ":" in component:
-            raise PathValidationError("relative path contains a stream or drive qualifier")
-        if component.endswith((" ", ".")):
-            raise PathValidationError("relative path has a Windows-ambiguous suffix")
-        basename = component.split(".", 1)[0]
-        if _uppercase_one_codepoint(basename) in _RESERVED_BASENAMES:
-            raise PathValidationError("relative path names a Windows device")
+    for component in canonical.split("\\"):
+        _validate_relative_component(component)
 
-    if PureWindowsPath(canonical).is_absolute():
-        raise PathValidationError("relative path is absolute")
     return canonical
+
+
+def _validate_relative_component(component: str) -> None:
+    """Check one component after text and path-prefix admission."""
+
+    if component in {"", ".", ".."}:
+        raise PathValidationError("relative path has an unsafe component")
+    if ":" in component:
+        raise PathValidationError("relative path contains a stream or drive qualifier")
+    if component.endswith((" ", ".")):
+        raise PathValidationError("relative path has a Windows-ambiguous suffix")
+    basename = component.split(".", 1)[0]
+    if (
+        len(basename) in _RESERVED_LENGTHS
+        and _uppercase_one_codepoint(basename) in _RESERVED_BASENAMES
+    ):
+        raise PathValidationError("relative path names a Windows device")
+
+
+def fold_validated_path(canonical: str) -> str:
+    """Fold a canonical path already returned by ``validate_relative_path``."""
+
+    return _uppercase_one_codepoint(canonical)
 
 
 def normalize_relative_path(value: str, *, allow_root: bool = False) -> str:
     """Return the canonical Windows comparison key for a relative path."""
 
     canonical = validate_relative_path(value, allow_root=allow_root)
-    return _uppercase_one_codepoint(canonical)
+    return fold_validated_path(canonical)
+
+
+def relative_path_depth(path: str) -> int:
+    """Return the number of components in a relative Windows path."""
+
+    return len(PureWindowsPath(path).parts)
+
+
+def relative_path_parent(path: str) -> str | None:
+    """Return a relative path's parent, or ``None`` for a top-level path."""
+
+    parent = str(PureWindowsPath(path).parent)
+    return None if parent == "." else parent
+
+
+def is_relative_path_descendant(path: str, directory: str) -> bool:
+    """Return whether ``path`` is strictly below ``directory`` by segments."""
+
+    path_key = normalize_relative_path(path)
+    directory_key = normalize_relative_path(directory)
+    return path_key.startswith(directory_key + "\\")
 
 
 def is_path_below(candidate: str, root: str) -> bool:
@@ -103,12 +147,203 @@ def join_under_root(root: str, relative_path: str) -> str:
     return candidate
 
 
+def _validate_absolute_path_spelling(path: str) -> None:
+    """Require an absolute drive/UNC path with stable ordinary components."""
+
+    canonical = path.replace("/", "\\")
+    upper = canonical.upper()
+    if upper.startswith(("\\\\?\\", "\\\\.\\", "\\??\\", "\\\\??\\")):
+        raise PathValidationError("path uses a device namespace")
+    if canonical.startswith("\\\\"):
+        pieces = canonical[2:].rstrip("\\").split("\\")
+        if len(pieces) < 2 or not pieces[0] or not pieces[1]:
+            raise PathValidationError("UNC path is incomplete")
+        components = pieces
+    elif (
+        _DRIVE_PREFIX.match(canonical)
+        and len(canonical) >= 3
+        and canonical[2] == "\\"
+    ):
+        tail = canonical[3:].rstrip("\\")
+        components = [] if not tail else tail.split("\\")
+    else:
+        raise PathValidationError("path is not an absolute drive or UNC path")
+
+    # Whole-text admission proves each component's Unicode, NUL and length
+    # checks. On failure, keep the original component-by-component errors.
+    try:
+        require_utf16_path(canonical, "relative path")
+        whole_text_valid = True
+    except (TypeError, ValueError):
+        whole_text_valid = False
+    for component in components:
+        if not component:
+            raise PathValidationError("absolute path has an empty component")
+        if not _INVALID_ABSOLUTE_COMPONENT_CHARACTERS.isdisjoint(component):
+            raise PathValidationError(
+                "absolute path has an invalid Windows component"
+            )
+        if not whole_text_valid:
+            validate_relative_path(component)
+            continue
+        if _DRIVE_PREFIX.match(component):
+            raise PathValidationError("relative path is absolute or qualified")
+        _validate_relative_component(component)
+
+
+def _display_extended_length_path(path: str) -> str | None:
+    """Strip a recognized native prefix for diagnostics, not path identity."""
+
+    upper = path.upper()
+    if upper.startswith("\\\\?\\UNC\\"):
+        logical = "\\\\" + path[8:]
+    elif upper.startswith("\\\\?\\"):
+        logical = path[4:]
+    else:
+        return None
+    if logical.upper().startswith(("\\\\.\\", "\\??\\", "\\\\??\\")):
+        return "<unsupported-device-path>"
+    return logical
+
+
+def from_extended_length_path(path: str) -> str:
+    """Return the ordinary drive/UNC spelling for one filesystem path.
+
+    NamiSync uses ordinary absolute paths for domain identity, persistence, and
+    display.  Extended-length spellings belong only at the native Windows I/O
+    boundary.  Other device namespaces are deliberately not filesystem roots
+    and are refused instead of being reinterpreted as UNC paths.
+    """
+
+    raw = os.fspath(path)
+    try:
+        require_utf16_path(raw, "path")
+    except TypeError:
+        raise
+    except ValueError as error:
+        raise PathValidationError(str(error)) from error
+    upper = raw.upper()
+    if upper.startswith(("\\\\.\\", "\\??\\", "\\\\??\\")):
+        raise PathValidationError("path uses a device namespace")
+    if upper.startswith("\\\\?\\") and "/" in raw[4:]:
+        raise PathValidationError(
+            "extended path uses a non-native separator"
+        )
+    if upper.startswith("\\\\?\\UNC\\"):
+        unc_parts = raw[8:].replace("/", "\\").split("\\")
+        logical = "\\\\" + raw[8:]
+        if (
+            len(unc_parts) < 2
+            or not unc_parts[0]
+            or not unc_parts[1]
+            or not PureWindowsPath(logical).is_absolute()
+        ):
+            raise PathValidationError("extended UNC path is incomplete")
+        _validate_absolute_path_spelling(logical)
+        try:
+            return require_utf16_path(logical, "path")
+        except ValueError as error:
+            raise PathValidationError(str(error)) from error
+    if upper.startswith("\\\\?\\"):
+        logical = raw[4:]
+        if not (
+            _DRIVE_PREFIX.match(logical)
+            and len(logical) >= 3
+            and logical[2] in {"\\", "/"}
+        ):
+            raise PathValidationError("unsupported extended device namespace")
+        _validate_absolute_path_spelling(logical)
+        try:
+            return require_utf16_path(logical, "path")
+        except ValueError as error:
+            raise PathValidationError(str(error)) from error
+    return raw
+
+
+def lexical_absolute_path(path: str | os.PathLike[str]) -> str:
+    """Return one logical absolute path without following filesystem links."""
+
+    return from_extended_length_path(to_extended_length_path(os.fspath(path)))
+
+
+def lexical_path_chain(
+    path: str | os.PathLike[str],
+    *,
+    trusted_anchor: str | os.PathLike[str] | None = None,
+) -> tuple[str, ...]:
+    """Return each lexical component below a trusted absolute anchor.
+
+    The anchor itself is deliberately excluded. Drive roots and UNC shares are
+    the default trusted anchors; callers that already hold a mounted-volume
+    root may provide it explicitly.
+    """
+
+    logical = lexical_absolute_path(path)
+    if trusted_anchor is None:
+        anchor = Path(logical).anchor
+        if not anchor:
+            raise PathValidationError("absolute path lacks a trusted anchor")
+    else:
+        anchor = lexical_absolute_path(trusted_anchor)
+        if not is_path_below(logical, anchor):
+            raise PathValidationError("path is outside its trusted anchor")
+    relative = os.path.relpath(logical, anchor)
+    if relative == os.curdir:
+        return ()
+    current = anchor
+    chain: list[str] = []
+    for component in Path(relative).parts:
+        if component in {os.curdir, os.pardir}:
+            raise PathValidationError("path escapes its trusted anchor")
+        current = os.path.join(current, component)
+        chain.append(current)
+    return tuple(chain)
+
+
 def to_extended_length_path(path: str) -> str:
     """Return a Windows extended-length spelling without changing identity."""
 
-    absolute = os.path.abspath(path)
-    if os.name != "nt" or absolute.startswith("\\\\?\\"):
+    raw = os.fspath(path)
+    logical = from_extended_length_path(raw)
+    if logical != raw:
+        # A valid extended drive/UNC spelling is already at the native boundary.
+        return raw
+    validated_absolute = os.name == "nt" and PureWindowsPath(logical).is_absolute()
+    if validated_absolute:
+        # Validate before ``abspath`` can normalize an ambiguous Win32 spelling
+        # onto a different ordinary filesystem object.
+        _validate_absolute_path_spelling(logical)
+    absolute = os.path.abspath(logical)
+    if os.name != "nt":
         return absolute
+    if not validated_absolute or absolute != logical:
+        _validate_absolute_path_spelling(absolute)
     if absolute.startswith("\\\\"):
         return "\\\\?\\UNC\\" + absolute[2:]
     return "\\\\?\\" + absolute
+
+
+def logical_error_text(error: BaseException) -> str:
+    """Render an exception without leaking native extended path spelling.
+
+    Only exact ``OSError`` filename fields are replaced. Arbitrary message text
+    is left untouched, so a diagnostic that merely discusses ``\\\\?\\`` is not
+    reinterpreted as filesystem identity.
+    """
+
+    detail = str(error)
+    for attribute in ("filename", "filename2"):
+        filename = getattr(error, attribute, None)
+        if not isinstance(filename, str):
+            continue
+        try:
+            logical = from_extended_length_path(filename)
+        except PathValidationError:
+            logical = _display_extended_length_path(filename)
+            if logical is None:
+                continue
+        if logical == filename:
+            continue
+        detail = detail.replace(repr(filename), repr(logical))
+        detail = detail.replace(filename, logical)
+    return detail

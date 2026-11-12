@@ -9,12 +9,17 @@ from namisync.core.models import (
     CapabilityProfile,
     EntryKind,
     FileIdentity,
+    FileRecord,
     FileStat,
     MetadataSnapshot,
     Root,
+    ScanResult,
+    ScanScope,
+    UnsupportedRecord,
     VolumeEvidence,
     VolumeId,
 )
+from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import (
     Assignment,
     DeletionPolicy,
@@ -77,8 +82,8 @@ def attestation(
 ) -> Attestation:
     return Attestation(
         ContentEvidence(
-            "sha256",
-            bytes([digest_byte]) * 32,
+            "xxh3_128",
+            bytes([digest_byte]) * 16,
             stat.size,
             provenance,
             observed_at,
@@ -141,11 +146,46 @@ def plan(operations: tuple[PlanOperation, ...]) -> Plan:
         filter_snapshot=FilterSet(),
         deletion_policy=DeletionPolicy.TRASH,
         trash_on_update=True,
-        policy_fingerprint="p" * 64,
-        worker_count=1,
+        policy_fingerprint="a" * 64,
         required_volumes=frozenset({source_volume, target_volume}),
         required_bytes=sum(item.content_bytes for item in operations),
         fingerprint=PlanFingerprint("f" * 64),
+    )
+
+
+def _scan(
+    setup,
+    records: tuple[FileRecord, ...],
+    *,
+    complete: bool = True,
+    scope: ScanScope | None = None,
+    unsupported: tuple[UnsupportedRecord, ...] = (),
+) -> ScanResult:
+    sync_plan = plan(())
+    return ScanResult(
+        root=sync_plan.source_root,
+        volume_id=sync_plan.source_volume_id,
+        volume_evidence=VolumeEvidence("Source", "C:"),
+        profile=sync_plan.source_profile,
+        files=records,
+        directories=(),
+        unsupported=unsupported,
+        warnings=(),
+        scope=scope or ScanScope.full(),
+        complete=complete,
+    )
+
+
+def _file(path: str, index: int, *, size: int = 7) -> FileRecord:
+    stat = file_stat(size=size, identity_index=index)
+    return FileRecord(
+        path,
+        normalize_relative_path(path),
+        stat.size,
+        stat.mtime_ns,
+        stat.file_identity,
+        stat.nlink,
+        stat.metadata,
     )
 
 

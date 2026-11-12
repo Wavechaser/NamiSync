@@ -1,55 +1,31 @@
-# NamiSync Session Handoff
+# Latest session — hosted CI terminal wait, 2026-11-12
 
-Date: 2026-07-24
+PR #5's ordinary job (run 43054819649, job 130641477993) finished with
+6,567 passes and one failure: linked Copy/Verify did not settle within the
+web drain helper's two-second wait. This was not the GitHub job timeout.
+Runner slowness is plausible but unproven; no worker stacks were captured.
 
-## Session Outcome
+The user authorized five seconds first. Changed only that test helper's deadline,
+with matching TESTS, CHANGELOG and M1_PLAN context. Product timing, polling and
+behavioral assertions are unchanged. PR #5 is already open; push updates it
+without a close/reopen cycle. The connector token expired; GitHub CLI works.
 
-The finalized M1 decisions are now promoted from `M1_PLAN.md` and
-`HASH_REFACTOR.md` into the active cross-cutting product and architecture
-documents. This was a documentation-only reconciliation; no runtime behavior
-changed.
+Verification before the change: all 12 parameter variants and all 295 owning
+module tests passed on selected Python 3.15.2. Post-change interfaces department:
+2,313 passed / 4,290 deselected in 184.20s
+on selected Python 3.15.2. Independent diff review found no actionable issues.
 
-The active documents now consistently specify canonical XXH3-128 content
-evidence, the exact adaptive copy policy and Windows finalization work, the
-in-session execute-to-verify workflow, four independent result axes, explicit
-pause continuation, split settings ownership, the coordinated database reset,
-retention deferral, and the dependency-ordered M1 build.
+## Retained operational context
 
-## Changes
+Further build cleanup is paused at its last 4.80 GiB / 99,527-file census;
+do not retry denied rows or remove worktrees. Evidence-storage/retention design
+is undecided. Keep F:\NamiSyncExecutorBenchSource, the user's H:\test_dir\source
+and target play directories including trash, all three detached worktrees and
+their runtime, reconstruction assets, release evidence and tester material.
+Six codex branches and 61 external resource roots were already cleared; worktree
+removal (Tier C) was not authorized.
 
-- Updated `FEATURES.md` with canonical content evidence, exact adaptive
-  pipelining, finalization/preallocation/readahead decisions, linked
-  verification semantics, split settings, reset posture, and deferred copy and
-  retention work.
-- Updated `ARCHITECTURE.md` with the XXH3-128 and attestation contracts,
-  nominal mixed results and phase summaries, hasher/copy seams, executor
-  pipeline architecture, transient verification candidates, explicit compound
-  continuation, facade/desktop boundaries, and the full M1 build order.
-- Updated `WORKFLOWS.md` to derive post-copy candidates from execution-owned
-  published evidence rather than the ledger, retain volume custody through
-  readback, and preserve separate phase progress and truth axes.
-- Reconciled `M1_PLAN.md` with the fixed 256 KiB / 1 MiB / 4 MiB policy and
-  marked its former workflow-document blocker resolved.
-- Updated `README.md` so its development overview and documentation index match
-  the promoted M1 design.
-- Deliberately left component-specific documents unchanged; they update with
-  the corresponding implementation stages.
-
-## Verification
-
-- `git diff --check`: clean apart from expected LF-to-CRLF notices.
-- Cross-document searches found no remaining active cross-cutting claim that
-  content evidence stays SHA-256, linked verification is ledger-first,
-  execution preflight rereads global settings, or retention ships in M1.
-- No pytest or import-linter run: only Markdown documentation changed.
-
-## Immediate Next Context
-
-- Implement M1 in the order frozen in `ARCHITECTURE.md` and `M1_PLAN.md`:
-  contracts/semantics, HASH Track 1 then Track 2, inventory/standalone
-  integrity, post-execution integration, facade/CLI, then GUI shell.
-- HASH Track 1 uses the fixed chunk bands but still benchmarks them and measures
-  the conditional preallocation crossover before landing tunables.
-- Component docs such as `CORE.md`, `EXECUTOR.md`, `VERIFIER.md`, `DATABASE.md`,
-  `INTERFACES.md`, and `DESKTOP_UI.md` intentionally remain implementation-time
-  updates, not sources that override the promoted cross-cutting contracts.
+Final candidate b0a3fe13 / Package05, ZIP SHA-256
+652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc.
+Keep dist/v0.1.0 and R5 delivery. M1 headings remain pending external delivery;
+Microsoft terms remain maintainer wording without legal review.

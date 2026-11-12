@@ -1,0 +1,781 @@
+# Development Tools
+
+`tools/` contains development-only utilities. `python -m tools`
+owns the executor/verifier measurement harness, deterministic corpus generator
+and selected performance cases. `tools/gui.ps1` is a standalone editable-source desktop convenience
+launcher. `tools/icons.py` maintains the fixed local icon vocabulary from
+`tools/icons.json`. None is part of the shipped `namisync` package. Pytest covers
+their behavior; measurement output remains subject to the authority rules below.
+
+## Headed GUI test harness
+
+For unattended WebView2 page journeys, `python -m tools.headed_background`
+starts pytest on a private Windows desktop. [TESTS](TESTS.md#run-levels)
+describes which native checks still need the input desktop.
+
+## Bug log access
+
+`python -m tools.bugs` reads canonical [BUGS](BUGS.md), validates the complete
+population before filtering, and prints full records as Markdown (default) or
+`--format jsonl`. It never edits the log. Stable IDs and entry conventions are
+owned by BUGS. Only the Python standard library is required.
+
+```powershell
+python -m tools.bugs --id BUG-0001
+python -m tools.bugs --text authority --text path --format jsonl --output build/bug-path-authority.jsonl
+python -m tools.bugs --owner interfaces --status FIXED --offset 0 --limit 20
+```
+
+`--owner`, `--scope` and `--category` are case-insensitive substring filters;
+`--id`, `--status` and `--severity` are case-insensitive exact filters. Repeat
+one of those options for alternatives; different fields combine with AND.
+Each repeated `--text` must occur somewhere in the complete entry (literal,
+case-insensitive, with whitespace normalized in both the query and search text
+so source line wrapping does not hide phrases). Exported text stays unchanged.
+No filter implies an active-defect assessment. `--source`
+selects another conforming log; by default the tool locates the repository log
+independently of the working directory.
+
+No implicit result limit applies. `--offset` (zero-based) and `--limit` select
+whole-record batches in source order after filtering. Standard error reports
+the complete, matched and emitted populations plus the source SHA-256; JSONL
+standard output contains records only. Each record retains its complete original
+paragraph, owner/scope, category, severity, uncoerced status/date label, source
+line span and stable anchor link. The hash identifies the exact input bytes;
+line numbers describe that snapshot, while IDs survive edits/moves.
+
+`--output` creates a new UTF-8 file and refuses an existing destination. Keep
+exports in ignored `build/`; regenerate after log edits. Validation finishes
+before any output file is opened and rejects malformed headers, unanchored or
+duplicate records, orphan anchors and unexplained text inside owner sections.
+This is a retrieval tool, not a semantic classifier or a second bug authority.
+
+## Portable build preparation
+
+`tools/packaging/` owns Windows portable-build inputs: Python entry shims,
+the PyInstaller specification, hash-locked build requirements and the build driver.
+`bootstrap.txt` locks pip/setuptools for source-distribution preparation;
+`requirements.txt` locks the complete Windows x64 runtime/freezer environment.
+Only `proxy_tools` requires a source archive; prepare it without build isolation
+so its build uses the locked bootstrap. Refresh locks deliberately from the
+selected published distributions, retaining download/hash evidence in `build/`.
+It contains no product policy. `.github/workflows/` owns CI YAML; ordinary
+verification and portable artifact builds run there, while interactive Windows
+11 acceptance remains separately recorded. Generated environments, unpacked
+artifacts and logs live only in ignored `build/` or `dist/`, with a fresh output
+directory per attempt; never overwrite an earlier candidate or failed receipt.
+`namisync/interfaces/branding/` retains SVG masters and derived Windows ICO
+assets. Build-time artwork tools are not runtime dependencies.
+
+Build a development package from a clean commit in a disposable CPython
+3.15.2 x64 environment. [BUILDING.txt](../tools/packaging/BUILDING.txt)
+records the release runtime's official Windows archive and digest.
+
+```powershell
+python -m venv build/package-env
+build/package-env/Scripts/python.exe -m pip install --require-hashes -r tools/packaging/bootstrap.txt
+build/package-env/Scripts/python.exe -m pip install --require-hashes --no-build-isolation -r tools/packaging/requirements.txt
+build/package-env/Scripts/python.exe tools/packaging/build.py build/portable-attempt-01
+```
+
+Choose a new output directory for each run. The driver refuses staged, unstaged
+or nonignored untracked files and environments that differ from the lock (an
+old NamiSync installation is replaced). It snapshots canonical Git blobs at
+HEAD, independent of checkout newline conversion, records file identities,
+builds and installs a wheel into that disposable environment, then freezes two correctly classified
+executables sharing `_internal/`. It validates PE architecture/subsystems and
+runs the actual console help command. Outputs include the development ZIP,
+source ZIP, wheel, SHA-256 checksums, source and bundle manifests and resolved
+environment. The Python executable hash and host platform are recorded. Commit
+time supplies SOURCE_DATE_EPOCH and ZIP timestamps; freezer subprocesses use a
+fixed PYTHONHASHSEED. ZIP order/attributes are stable. Repeatability means fixed
+source and dependency inputs with independently comparable outputs; this does
+not promise byte-identical binaries across Windows images or toolchain changes.
+Installed `.dist-info/RECORD` launcher hashes and `direct_url.json` wheel paths
+can vary with the disposable environment. Keep these metadata differences
+visible in bundle manifests; compare them separately from executable/resource
+bytes rather than hiding them or declaring equal ZIP checksums.
+Serviced Windows/SQLite DLL bytes may also differ between local and hosted
+Python installations despite matching Python and SQLite version strings.
+Bundle manifests and runner-image receipts preserve those identities; final
+acceptance must name the actual distributed artifact.
+These hashes identify distributed bytes; they are not an artwork-regeneration
+oracle. The icon is never rendered during this process. Explicit maintenance
+uses `tools/packaging/render_icon.py` (initial renderer: resvg-py 0.5.0 and
+Pillow 13.0.0), followed by visual review of the tracked ICO.
+
+The Windows GitHub workflow runs ordinary tests/import contracts before building
+and uploading development artifacts. Its Windows Server runner does not replace
+interactive Windows 11 acceptance. It has read-only repository permissions and
+does not publish releases. After the first release, extend the same validated
+build path to a manually approved draft-release job; final native evidence and
+artifact identity must still be accounted before publication. Exact dependency
+versions and download hashes are pinned here; distribution notices and source
+directions are included in each build. CI fetches full history for
+ordinary tests because custody validators consult historical Git objects. Its
+Actions are pinned by commit, with exact Python/Node versions. The current
+checkout v7.0.1, setup-python/setup-node v7.1.0 and upload-artifact v7.0.2
+Actions run on Node 24 independently of the Node installed for project tests.
+The hosted runner
+image remains serviced; record its identity from each run before comparing
+artifacts. Development test dependencies remain governed by the project dev
+extra; they are isolated from the locked portable build environment.
+
+### Distribution preparation
+
+The selected tester identity is `v0.1.0` (`0.1.0` in package/About), unsigned.
+[`START-HERE.txt`](../tools/packaging/START-HERE.txt) prepares extraction,
+prerequisites, checksum/unsigned-warning handling, first use, profile retention,
+upgrade and feedback instructions. [`BUILDING.txt`](../tools/packaging/BUILDING.txt)
+prepares matching-source and clean-commit build directions, including the
+distinction between a repository commit and an extracted source ZIP without Git
+history. [`MICROSOFT-TERMS.txt`](../tools/packaging/MICROSOFT-TERMS.txt) states
+the recipient terms that the CPython Windows build's Microsoft Distributable Code
+conditions require every distributor and end user to accept. `build.py` ships
+the three guides, the GPL, and `THIRD-PARTY-NOTICES.txt` at the bundle root.
+The notice exporter reads the About records and the pinned
+supplements under `tools/packaging/notices/`; its README describes text provenance
+and maintenance. Build-time export is offline and verifies the supplement hashes.
+The source archive includes these inputs and their byte-preserving Git attributes.
+No accepted release or download location is implied. A delivered tester set is
+copied byte-for-byte from its reviewed evidence directory into the git-ignored
+`dist/v<version>/` at the repository root. That folder holds only the files
+handed to testers, with their `SHA256SUMS.txt`; build environments, receipts
+and draft sets stay under `build/`.
+
+The 2026-11-05 census verifies all 477 files of retained local `build-d` against
+both its freezer collection table and bundle manifest at `b3095886`, plus the
+two entry-point analyses (763 distinct source/name pairs), bootloader and
+bootstrap inputs. `build/m1-release-20261104/distribution/census.py` and
+`census.json` retain paths, hashes, source owners and the twenty existing About
+notices. This is a finite distribution census, not a license-clearance claim.
+The earlier hosted bundle was independently verified, but its native-library
+origin tables were not uploaded, so local origins cannot be attributed to it.
+
+| Population | Existing coverage and remaining preparation |
+| --- | --- |
+| NamiSync, direct/transitive runtime packages, embedded web assets and WebView2 SDK | Ship the GPL and export the About records with versions, sources and full texts. Wheel METADATA alone does not cover embedded components. Pythonnet 3.2.1 resolves the compatibility assemblies from the host .NET Framework. |
+| CPython 3.15.2 and its stdlib/native extensions | Ship the Windows installation's license and incorporated-software notices, with exact native dependency supplements including Zstandard and zlib-ng. Preserve Microsoft binary-distribution conditions separately from NamiSync's GPL. |
+| Freezer bootstrap and implicit Python packages | Include PyInstaller's bootloader exception and file-specific terms, setuptools 84.1.0 and its included vendored packages and copied configuration/validation code, plus packaging 26.2. BUILDING identifies the exact MPL-covered source in the pinned setuptools wheel. |
+| Native files outside the Python installation/locked environment | Freezer PATH contains only the selected environment, Python and Windows directories. Exclude Windows-provided UCRT/API-set DLLs for the Windows 11 target. Refuse collected BINARY/EXTENSION origins outside the environment/Python roots or bytes differing from those origins. Python's VC runtime DLLs remain bundled. |
+| Corresponding source and build evidence | Pair source/executable archives and checksums with their identities and source/build directions. `native-origins.json` binds collected native inputs to hashes; `freezer-tables/` retains both analyses, bootloader and collection tables locally and in CI. Whole-ZIP equality remains unclaimed. |
+
+The historical ambient population was 29 core API sets, 13 CRT API sets and
+`ucrtbase.dll` (2,352,200 bytes). The locked freezer's resolver searches PATH and
+its inclusion policy retains that family for older Windows. Windows 11 resolves
+API sets through its loader and always uses the system UCRT. Removing those
+copies does not justify renewing resource evidence: R4 still assesses its exact
+candidate and dependency changes. Existing measured packages remain untouched.
+M1_PLAN owns the R2 gate and release decisions.
+Upstream references: [CPython 3.15.2 incorporated-software notices](https://github.com/python/cpython/blob/v3.15.2/Doc/license.rst),
+[its Windows external dependency inputs](https://github.com/python/cpython/blob/v3.15.2/PCbuild/get_externals.bat),
+[PyInstaller licensing](https://pyinstaller.org/en/stable/license.html) and
+[Microsoft redistribution guidance](https://learn.microsoft.com/en-us/cpp/windows/redistributing-visual-cpp-files?view=msvc-170),
+[system UCRT deployment](https://learn.microsoft.com/en-us/cpp/windows/universal-crt-deployment?view=msvc-170)
+and [Windows API sets](https://learn.microsoft.com/en-us/windows/win32/apiindex/windows-apisets).
+Text selection follows the actual distributed versions and provenance; the full
+Python notices may also describe optional Python components absent from this bundle.
+
+R2 validation (2026-11-09) uses the final isolated clean diagnostic snapshot and
+`build/m1-r2-20261109/attempt-04/`, not a frozen release candidate. Its census
+reconciles all 436 ZIP/bundle files, 133 native origin records and 773 distinct
+module/embedded/bootstrap input triples against the collection tables, source
+archive and notice records. The 51 records comprise twenty existing About texts
+and 31 supplements. Independent source review additionally followed the selected
+Python Windows projects (19 projects, 290 direct references, 790 resolved source/
+include paths) and 45 bootloader C/header files. This found the distinct bootloader
+zlib, HACL/KaRaMeL and wrapper notices that aggregate package licenses omit.
+The pinned source/header evidence lives beside the census and in
+`build/r2-notices-20261109/`. These are finite coverage observations, not a claim
+about arbitrary future dependency builds.
+
+The tools department passed 449 tests with three existing Windows privilege
+skips; the final notice-focused cases passed 16 tests. A fresh extraction outside
+the checkout runs with system-only PATH, reaches Ready under medium integrity,
+shows About 0.1.0 and twenty app notices, and closes with exit 0 and no remaining
+Job members. Full candidate/resource gates remain R4. Including the reproduced
+Microsoft binary conditions alone does not satisfy their recipient-agreement
+requirement; the bundled `MICROSOFT-TERMS.txt` states those terms for every
+recipient, and the maintainer asks testers to accept it at handoff.
+
+## Icon maintenance
+
+The recall advisory uses the pinned catalog's plain `cloud` glyph with
+native 16/20/24 px artwork, generated through the same offline provenance path.
+
+`namisync/interfaces/web/assets/icons/` contains fixed local monochrome SVGs
+from pinned `@fluentui/svg-icons`. `tools/icons.json` is the reviewed, development-
+only authority for package version, glyph selection and deliberate size fallbacks.
+Keep upstream filenames, exact package/file URLs, version, per-file SHA-256
+hashes and MIT license with the assets. Runtime registration, remote loading,
+generated SVG/path markup and data-derived asset paths are forbidden.
+
+`tools/icons.py` verifies archive integrity and copies native SVGs, generating
+provenance and marked fixed registry/CSS sections offline. Commit the generated
+source; the app never loads the catalog or generator. Tests belong in `tests/`
+and independently check catalog/output correspondence, SVG safety, packaging
+and rendering without a second glyph/hash catalog. Temporary archives, fixtures
+and command evidence belong in ignored `build/`.
+
+The shared Plan/Inventory Filter trigger uses the catalog-selected `filter`
+Regular artwork at its native 16/20/24 px sizes; it does not upgrade the package
+pin or use a generated custom glyph.
+
+Edit `tools/icons.json` to select glyph names and declare missing-size fallbacks,
+then synchronize and review the generated diff:
+
+Catalog schema 2 keeps existing glyph names Regular by default. Its `filled`
+map explicitly binds selected aliases to upstream glyphs: `play-filled` to
+`play` and `stop-filled` to `stop`. This generates fixed local Filled artwork
+without a runtime style selector. Remove an alias from both `glyphs` and
+`filled` when retiring it. Package provenance retains its existing schema.
+
+```powershell
+.\.venv\Scripts\python.exe tools/icons.py sync
+.\.venv\Scripts\python.exe tools/icons.py check
+
+# Use an already downloaded pinned npm archive without network access
+.\.venv\Scripts\python.exe tools/icons.py sync --archive "build/gui-icons/svg-icons-1.1.334.tgz"
+.\.venv\Scripts\python.exe tools/icons.py check --archive "build/gui-icons/svg-icons-1.1.334.tgz"
+
+# Optional explicit checkout root; otherwise inferred from the script's location
+.\.venv\Scripts\python.exe tools/icons.py check --root "F:\GitHubRepositories\NamiSync"
+.\.venv\Scripts\python.exe tools/icons.py --help
+```
+
+Both commands accept `--archive` and `--root`. Without `--archive`, the command
+downloads the official npm archive pinned by the catalog. It verifies SHA-512
+integrity before parsing selected members; it never extracts arbitrary archive
+paths. Native 16/20/24 px selection is automatic. Missing sizes require explicit
+20 px fallbacks; obsolete fallbacks are refused when native artwork exists.
+
+`sync` updates native SVGs, SOURCE provenance, and marked JavaScript/CSS regions.
+It removes only unchanged stale assets owned by the previous receipt. Do not
+hand-edit these generated outputs. `check` writes nothing and exits with status
+1 for drift or invalid input, or 0 when outputs match. A successful sync also
+exits 0. The tool is not a runtime loader and introduces no app dependency.
+
+For package updates, review the catalog's version, integrity, commit and license
+hash together. The archive omits the license file: retain or deliberately update
+the reviewed local `LICENSE.txt`; a missing file or hash mismatch is refused.
+Archive verification establishes upstream correspondence; receipt consistency
+tests alone do not. Run the icon/tool tests and installed gallery gate described
+in [TESTS.md](TESTS.md). Placement policy and icon semantics remain owned by
+[DESKTOP_UI.md](DESKTOP_UI.md#icon-placement-and-meaning).
+
+### Remove a glyph
+
+Remove its name from `glyphs` and its entry from `fallbacks`, if present. Run
+`check` to see pending drift, then `sync`. The tool removes its registry entry,
+CSS mappings, receipt records and unchanged previously owned SVGs. A modified
+stale SVG or unrelated file in the icon directory causes refusal before writes;
+review that local work before retrying. At least one glyph must remain.
+
+The tool does not rewrite or scan application callers. Remove or replace uses
+of the glyph in the same change: a remaining `createIcon` call with that name
+will be rejected by the fixed registry. Run the relevant caller tests and gallery
+gate. Deleting SVGs manually is not a catalog removal; `sync` restores selected
+assets from the pinned archive.
+
+### Upgrade Fluent artwork
+
+Choose a reviewed package version and update `upstream.version`, `integrity`
+and `git_commit` together. Verify the license at that revision and update its
+local file and catalog hash if needed. Changing only the version is insufficient:
+the old archive integrity will not authenticate the new download. The commit is
+reviewed provenance; when the tarball omits `gitHead`, the tool cannot independently
+prove the package-to-Git association.
+
+Run `check`, resolve any compatibility refusal, then run `sync` and review the
+diff. Same-name artwork is replaced, and all package URLs, hashes and provenance
+are regenerated. Names newly offered upstream are not added to the catalog.
+If upstream adds a native size previously covered by a fallback, remove that
+fallback explicitly. If a native size disappears, declare a supported 20 px
+fallback; missing 20 px artwork, renamed/removed glyphs or a changed SVG format
+require a deliberate selection or implementation decision. The tool refuses
+these cases rather than silently retaining old-version artwork or substituting
+another glyph. Existing locally edited selected files are regenerated by sync;
+review or preserve such work first.
+
+Finish with `check`, icon/tool tests and the installed gallery gate; new artwork
+still needs visual review. The tool does not discover or install the latest
+version automatically. Synthetic tests cover version transitions without
+changing the repository's actual package pin.
+
+## Editable GUI launcher
+
+Use PowerShell 7 and the repository virtual environment for ordinary UI
+iteration. Windows PowerShell 5.1 is refused before the launcher runs:
+
+```powershell
+# Real development shell
+.\tools\gui.ps1
+
+# Component gallery; dark when -Mode is omitted
+.\tools\gui.ps1 gallery
+.\tools\gui.ps1 gallery -Mode light
+.\tools\gui.ps1 gallery -Mode dark
+.\tools\gui.ps1 gallery -Mode forced
+.\tools\gui.ps1 gallery -Mode reduced
+
+# Grouped gallery profiles
+.\tools\gui.ps1 gallery -Mode fluent  # light + dark
+.\tools\gui.ps1 gallery -Mode all     # all four modes
+```
+
+Bare `gui.ps1` always selects the real shell. `gallery` defaults to `dark`, and
+explicit `gallery -Mode dark` selects the identical child, mode, data root,
+mutex, title, and scenario. `-Mode` without `gallery`, an unknown command, an
+unknown mode, and extra arguments are refused before launch. `fluent` expands
+to light and dark; `all` expands to light, dark, forced, and reduced.
+
+The launcher resolves the repository from its own path, uses only
+`.venv\Scripts\python.exe`, and verifies under isolated Python startup that
+`namisync` resolves inside this checkout. It never builds a wheel, creates or
+cleans an environment, falls back to a PATH interpreter, watches files, or
+implements hot reload. Source changes take effect on the next manual relaunch.
+
+The real shell enters the normal secured `run_desktop` composition through the
+existing test-owned headed child with a development-only identity:
+`Local\NamiSync.Development.Desktop` and `NamiSync [Development]`. Each gallery
+mode has its own corresponding development mutex/title and invokes the existing
+`_component_gallery_child.py` with the test-owned
+`tests/assets/component_gallery/gallery.js` scenario. Production launcher
+arguments, the production `Local\NamiSync.Desktop` mutex and `NamiSync` title,
+packaged assets, and both clean-wheel children remain unchanged.
+
+The shell keeps the ordinary Ready label hidden. Only smoke-test invocations
+explicitly pass the helper's `--expose-ready-status` switch for their UI Automation
+witness; `tools/gui.ps1` does not opt in to this test presentation override.
+
+Data is persistent and isolated beneath
+`%LOCALAPPDATA%\NamiSync-Development`: `shell` for the real development host and
+`gallery\<mode>\data` for each gallery mode. A launcher-control mutex refuses a
+second wrapper for the same concrete mode, and a child mutex already held at the
+pre-launch check is refused rather than treated as a window this invocation
+opened. There is no global gallery mutex: light, dark, forced, and reduced may
+run alongside one another, but a second instance of the same mode is refused.
+The real shell keeps its separate existing launcher/child mutexes.
+
+Grouped profiles acquire the same concrete per-mode launcher mutexes in fixed
+light/dark/forced/reduced order. `fluent` therefore reserves only light and
+dark and may coexist with forced or reduced; `all` reserves all four. Every
+selected child-mutex precheck completes before any grouped child starts. The
+launcher then starts every selected GUI process before waiting, waits on those
+exact process objects, and never enumerates, waits for, or terminates processes
+by image name.
+
+Before every launch the console prints the source, interpreter, data, and log
+paths plus the gallery scenario and diagnostic output when applicable. The
+window remains open until the operator closes it; the clean-wheel pytest parent,
+not the gallery child, is what normally closes a gallery after `ready`. After
+every window in the selected profile closes, Enter relaunches that same profile
+and Q quits.
+
+Gallery data remains stable, but each launch receives a fresh GUID-named
+diagnostic directory and a random ownership marker. After a normal ready/final
+lifecycle, cleanup requires that marker, the exact three-entry set, regular
+non-reparse files, and unchanged reviewed file stats. Successful cleanup prints
+one receipt for the selected profile:
+
+```text
+Exit [dark]: exit code 0; generated diagnostics removed.
+Exit [fluent]: exit code 0 on 2/2; generated diagnostics removed.
+Exit [all]: exit code 0 on 4/4; generated diagnostics removed.
+```
+
+The cleanup plan, each exact file/marker/directory removal, and final removal
+confirmation are available through PowerShell's `-Verbose` stream. They are
+hidden during routine success because the resolved `%LOCALAPPDATA%` paths were
+already printed before launch. This changes presentation only: the ownership,
+entry-set, identity-revalidation, and nonrecursive-deletion checks remain
+mandatory.
+
+A partial cleanup stays explicit on the normal warning stream: it prints the
+gallery mode, exit/status reason, retained diagnostic directory, completed
+paths, and whether the root and marker remain. Any unknown entry, replaced
+marker, changed file, or cleanup error retains the remaining directory. A
+nonzero exit, published failure, missing ready/final diagnostic, malformed or
+mismatched final record, or post-ready failure likewise names the failed mode,
+retains its diagnostic directory, and prints a bounded 80-line log tail.
+The clean-wheel parent remains the only complete evidence validator. The
+console labels an unchanged persistent log as old rather than attributing it to
+the failed launch; an unreadable log warns without bypassing the relaunch prompt.
+
+This is a dirty editable preview for interaction speed. Its manual interaction
+observations and logs are diagnostics, not clean-wheel, release, headed-gate, or
+compositor-health evidence. Use the commands in `TESTS.md` for acceptance.
+
+## Measurement authority
+
+`DEFENSE.md` §7 is the sole normative definition of the repository's
+measurement tiers and escalation rules. [PERFORMANCE](PERFORMANCE.md) owns
+measurement methods and results. Development tools declare which tier they
+serve, keep observation separate from verdict, and refuse input shapes they
+cannot account for. Compatible Tier 2 measurements may share one vertical-
+slice harness; structural count tests or serializer round trips do not promote
+a timing or memory target.
+
+Executor throughput/pipeline timings and verifier throughput/read timings are
+Tier 0 diagnostics: they vary with the runtime, storage topology, cache state,
+and concurrent load, and no shipped NamiSync boundary accepts or rejects work
+from these numbers. Repetition, structured output, and drift checks make the
+observations more interpretable; they do not promote them into release evidence
+or a performance gate.
+
+The existing SH-G-8 transport-custody authority remains frozen in place as an
+accepted historical exception, not a template. Its fixed corpus and structural
+sizer form a deterministic calculation; identical fresh children strengthened
+provenance but supplied no statistical power. It and the Tier-1 live check guard
+only the named realistic corpus, not a complete-domain hard wall. Do not extend
+or recalibrate that v1 apparatus by default.
+
+When a current event representation changes without changing the named scale
+axes, correct the live fixture, preserve the frozen calibration/holdout/ceiling,
+and rerun the installed-wheel event harness plus the one-child Tier-1 custody
+guard from clean committed source. Record the live drift and its ceiling margin;
+passing that guard is regression evidence, not a new calibration or acceptance
+artifact.
+
+The former BR-G-45 complete-graph model is retired and is retained only as
+historical provenance. Active tools preserve the runtime request/population
+bounds and the evidence authorities named by `DEFENSE.md`; no aggregate graph
+reservation or owner census is required for a future task surface.
+SH-G-15 owns scoped cold-start resource and repeated/long-workload leak/growth
+acceptance under DEFENSE section 7; runtime dependence alone does not require
+a universal containment model or a new calibration for every version. Shared `tools`
+support may be extracted for an actual empirical consumer, but only for
+canonical artifact/schema/digest checks, process isolation, source/runtime
+receipts, verdict exclusion, and frozen-contract validation. Corpus generation,
+root selection, measurement statistic, scaling axes, aggregate policy, and the
+component validator follow the declared measurement method in PERFORMANCE.
+
+## Measurement harness boundary
+
+The harness replaces the workflow and persistence edges while keeping the
+domain operations real:
+
+| Seam | Production | Tools |
+| --- | --- | --- |
+| `Recorder` | `db.recorder.SyncRunRecorder` | `LedgerlessRecorder` in memory |
+| `IntegrityRecorder` | `db.recorder.LedgerRecorder` | `CapturingIntegrityRecorder` |
+| `RunContext` | dispatcher fan-out | in-memory `Tape` |
+| Execution selection | reviewed workflow plan | real scan, plan, and safe-subset derivation once per reusable empty-target batch, or once per sample for mutable target pre-states |
+| Integrity selection | ledger inventory rows | fresh scan plus explicit evidence source |
+| Filesystem, copy backend, reader | native | native inner, optionally instrumented |
+
+The authority-bound verifier tap forwards native invocation activation and its
+private admission handoff while retaining the original bound-open dispatch.
+Readers without that activation retain per-access admission. Root acquisition
+is included in total verifier time, outside individual subject-open timing; the
+tap does not retain handles or admission after invocation exit.
+
+Executor correspondence is intentionally empty. Executor measurements therefore
+represent a first run with no retained history: COPY, UPDATE, NOOP, directory,
+and deletion-policy operations are available, but MOVE and MOVE_UPDATE are not.
+JSON output records `"correspondence": "empty"`. Adding invented mapping state
+would make the harness less trustworthy; a move benchmark should be added only
+with an explicit persisted-correspondence input contract.
+
+The executor/verifier rigs may import `core`, `modules`, and the pure
+`workflows.selection` helper. They do not import `db`, `dispatcher`,
+`interfaces`, or workflow runtime composition.
+
+## Executor settlement oracle
+
+`tools/executor_settlement_audit.py` is a retained maintenance gate for the
+executor settlement refactor. Unlike the measurement rig, it builds exact
+small plans through core contracts, injects a synchronous copy backend and
+public filesystem/recorder seams, and deliberately exercises success, failure,
+retry, cancellation, cleanup, and recording outcomes. It imports the executor
+only through the public `namisync.modules.executor` facade and does not import
+planner, scanner, preflight, workflow composition, tests, or executor-private
+symbols.
+
+This is the deterministic-semantic Tier 3 form: the in-code oracle declares
+expected truth independently, the committed baseline protects the complete
+observed trace, and three fresh normalized runs must be identical. Numeric
+calibration, headroom, and holdout are inapplicable; the common discipline is
+protected observations plus independently declared acceptance.
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit list
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit run failure.byte-published
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit oracle --repeat 3
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit snapshot --repeat 3
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit diff --repeat 3
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit check --repeat 3
+```
+
+The portable resume gate is exactly:
+
+```powershell
+python -m tools.executor_settlement_audit check --repeat 3
+```
+
+For the current 30-scenario, 70-row manifest, a successful gate ends with
+`settlement check passed: 30 scenarios x 3 runs`. `check` performs three fresh
+complete captures, requires every in-code policy row to pass, requires the
+three normalized traces to be byte-identical, and then compares that trace and
+manifest with the clean baseline stored at `HEAD`. The default baseline's
+canonical JSON also must match the separately reviewed semantic SHA-256 pinned
+in the tool. Staged or unstaged changes to that file make the official check
+fail; unrelated worktree changes do not. The command is read-only and never
+refreshes the baseline.
+
+The in-code oracle is independent of
+`tools/executor_settlement_baseline.json`. Each manifest row declares its
+expected terminal outcome, reason, recording state, durable-state detail,
+recorder behavior, retry/control behavior, cleanup, evidence, and final tree.
+Every installed filesystem fault rule must fire its declared number of times;
+an unused or partly consumed rule invalidates the fixture. The cleanup matrix
+includes failed pre-retry temp cleanup and proves it settles immediately as
+`cleanup-failed`, without sleeping or entering another control checkpoint.
+The observer matrices also pin restored MOVE/TRASH/DELETE subjects, a
+disappeared committed MKDIR, unreadable DELETE/UPDATE state, and changed,
+missing, or unreadable targets after confirmed publication. Three fail-closed
+collaborator rows require a committed MOVE to settle from its original
+operation error when failure policy or retry sleep raises, and a pending MKDIR
+to finalize when the next checkpoint raises; the collaborator injection itself
+must be consumed and its `RuntimeError` must still propagate.
+The JSON baseline separately retains the complete normalized collaborator and
+filesystem-boundary trace from the reviewed corrected-baseline lineage: 58
+unchanged rows from the corrected monolith plus 12 independently reviewed
+post-refactor stabilization rows. `check` requires both the policy oracle and
+the committed trace to match; either can fail while the other passes.
+
+The in-code oracle also carries a typed recording projection for the exact
+seven protected rows recorded by [archived recording acceptance](obsolete/M1_SHELL_H2.md); that catalog
+is part of the fail-closed manifest. Before normalization, an oracle-only side channel
+snapshots authoritative production `ExecutionSet.status`,
+`recording_reasons`, `recording_issues`, and aggregate recording alongside the
+typed reliable-item order. The projection keeps filesystem, item recording,
+task recording issues, and aggregate recording as separate axes, and rejects
+cross-axis combinations that could relabel a filesystem outcome or assign task
+degradation to an item.
+
+The side channel is removed only after the independent oracle validates it and
+before normalized capture. Separately, `_oracle_item_detail` and
+`_oracle_item_reason` remain explicit historical event-v4 trace adapters for
+the frozen normalized report. Those adapters protect trace compatibility; they
+are not recording-attribution authority. The normalized trace, JSON baseline,
+and current event contract therefore remain unchanged.
+
+`snapshot` requires at least three byte-identical complete runs, refuses every
+oracle mismatch, writes atomically, and will not replace an existing baseline
+unless `--replace` is explicit. `--baseline PATH` redirects snapshot and diff;
+on `check`, a path other than the default is explicitly labeled as an unpinned
+custom-baseline diagnostic and is not the resume gate. Resolving an alias of the
+default path cannot bypass its Git and semantic-pin checks. A snapshot is never
+an "accept current behavior" mechanism:
+when the oracle exposes a policy defect, fix and document that defect in its
+own commit, add its focused regression, restart the three-run gate, and only
+then replace the corrected baseline in a dedicated reviewed commit. Executor
+split, journal, reducer, verifier, and test-consolidation commits run `check`;
+they do not refresh the snapshot to make a difference pass.
+
+After a reviewed policy correction expands or changes the baseline, commit the
+replacement baseline and the explicit `REVIEWED_BASELINE_SHA256` update together
+in one dedicated baseline-replacement commit, separate from the oracle or
+behavior correction. Only then does the restarted three-run `check` establish
+the new structural-refactor gate. This makes a baseline replacement visible
+even if it accompanies an accidental behavior change.
+
+Absolute roots, volatile timestamps, native identities, handles, and wall time
+are removed from retained output. Symbolic paths preserve source/target/temp/
+trash relationships, identity equality is retained without raw inode values,
+and reliable event, recorder, retry, checkpoint, cleanup, and public
+filesystem-call order remains exact. The manifest has no skip, expected-fail,
+or unclassified state. A missing committed baseline is a hard `check` failure,
+not permission to proceed. Keep the oracle and corrected baseline through final
+refactor acceptance and at least the following settlement-hardening window.
+
+The retained baseline still uses tool `format_version: 1`; that number is not
+the core event schema. Its reviewed projection now projects and protects the
+integrated consequences of the historical core-event-v4 phase and attempt lifecycle, live
+control-boundary aggregates/path, continuation byte high-water, and
+reliable-outcome item counts. Opaque attempt ids are normalized
+by first-seen lifecycle ordinal, and a retired token may not resurrect. Future
+executor/verifier restructuring must not edit or regenerate the baseline.
+Only a separately reviewed policy correction may produce another replacement,
+after its focused transition regression and independent oracle expectations
+land and the three-run gate is restarted.
+
+## Workspace safety
+
+Executor targets and generated corpora are tool-owned workspaces. Their control
+and output evidence lives in sibling files outside the measured tree:
+
+- `<name>.rig-owned` is JSON bound to the resolved path, volume/device, and
+  directory identity.
+- `<name>.rig-lease` carries a tools signature and is locked exclusively for
+  the active operation.
+- `<name>.rig-outputs.json` binds the exact paths and filesystem identities
+  created by the last complete generator, materializer, or executor sample.
+
+The output manifest is one ordinary single-link, non-reparse JSON file with a
+bounded size, exact schema, duplicate-key rejection, sorted unique entries, and
+root path/device/inode binding. Its atomic replacement revalidates the prior
+occupant identity; malformed, oversized, hard-linked, replaced, or misbound
+manifests never authorize deletion.
+
+The tools refuse nonempty unowned directories, malformed or stale markers,
+replaced directories, concurrent claims, filesystem roots, the home or current
+directory, any requested workspace alias or generic reparse point, unrecognized
+lease files, and anything in or containing this repository. CLI admission keeps
+the requested absolute workspace path until this check, so resolving a junction
+before `claim` cannot erase the evidence. An empty unowned directory may be
+claimed because it contains no user data. Mutating helpers require the live
+claim object; marker- or lease-shaped files alone are not authority.
+
+The root marker proves only the directory boundary; it does not claim every
+descendant later placed there. Automatic reset and teardown first inventory the
+whole root without following reparse points. Every current path must appear in
+the output manifest; files must retain their full recorded identity and stat,
+directories must retain identity, and hard-link count must not drift. Unknown,
+replaced, modified, hard-linked, unreadable, or reparse entries refuse cleanup
+before mutation. The immutable plan printed to the operator is passed to the
+mutation seam; the complete live tree is compared with that exact plan again
+immediately before the first unlink. Passing a plan is not authority: an exact
+plan must re-bind to the expected output-manifest path and identity, and every
+entry must still be vouched for by that manifest. A path arriving after
+inspection is therefore refused rather than adopted into a second deletion
+set. Missing expected entries are tolerated when a new plan is inspected so an
+interrupted cleanup can be retried. Files are revalidated and unlinked
+individually, then
+identity-matched directories are removed deepest-first with `rmdir`; there is
+no recursive catch-all in the automatic path.
+
+Before every reset, teardown, or `clean`, the console prints the resolved root,
+manifest or explicit authority, and file/directory/byte counts. `--force-all`
+also prints every sorted relative path and kind because no manifest vouches for
+that set. A second receipt states exactly what was removed and whether the root
+and marker remain. Reset completion is printed before generator or template
+population starts, so a later write failure cannot hide an already completed
+deletion. Failed executor batches call the live manifest validator before
+describing output as exact and print the exact recovery command; mere sibling
+file existence is never called authority. `--keep` prints both workspace and
+manifest paths. Every partial-cleanup error reports completed counts and paths,
+plus retained root, marker, or manifest state.
+
+Markers and output manifests remain after `generate` and executor `--keep`, so
+known outputs can be regenerated or cleaned exactly. `clean --dry-run` prints
+the same boundary without mutation. A marker-only, partial, or legacy nonempty
+workspace is preserved by ordinary `clean`; after inspecting it, the operator
+may use `clean TARGET --force-all`, which still requires the valid root-bound
+marker and lease, inventories and prints the whole deletion set, applies only
+that displayed plan, and refuses reparse content or late arrivals. A malformed
+or stale sibling output manifest is preserved rather than guessed or deleted;
+the completion receipt names it and says it must be inspected and removed
+explicitly before that workspace name is reused. Older unbound text markers are
+never adopted.
+
+The manifest intentionally records identity and stat rather than hashing every
+file again before deletion. Deliberate same-inode byte modification followed by
+complete metadata restoration is therefore outside this development guard.
+Each path is revalidated immediately before deletion and the root is inventoried
+again afterward, but pathname deletion still has a small concurrent-substitution
+window; use a quiescent dedicated rig root.
+
+Templates and executor targets may not overlap in either direction. Template
+walk errors fail the setup instead of producing a partial pre-state. JSON and
+sidecar artifacts must be outside every measured/materialized root and may not
+alias each other or reserved marker, lease, or output-manifest paths. Artifact
+aliases and generic reparse points are refused before resolution. Existing
+output files with multiple hard links are refused because a distinct path is
+not a distinct artifact in that case.
+
+## Performance drivers
+
+`python -m tools executor`, `python -m tools verifier`, `python -m tools
+generate` and `python -m tools clean` remain development-only entry points.
+The executor/verifier harness uses the isolated seams above and the workspace
+safety policy in this document. [PERFORMANCE](PERFORMANCE.md#executor-and-verifier-methods)
+owns their measurement commands, fixtures, statistics, sidecars, cache
+interpretation, reports and rerun policy. Driver structure is under
+`tools/`; tests stay under `tests/`; generated output belongs in ignored
+`build/` or an explicitly owned external workspace.
+
+Executor metrics also collect invocation-local root admission diagnostics. Each
+used native source/target role reports held mode or its exact observed fallback
+reason once; unused roots do not claim admission. The rig snapshots these records
+per sample, renders them beside pipeline diagnostics and retains them in the
+`root_admission` report field. `--no-metrics` installs no collector and leaves
+that field empty. The observations explain which execution path was measured;
+they are not acceptance, operation outcomes or cached filesystem authorization.
+Core owns classification; possible short-name aliases remain tentative.
+
+The pipeline report also aggregates copy counts by `write_modes` and non-null
+`fallback_reasons`. These opt-in observations distinguish direct writes from
+buffered copies and capability fallback; they do not select a device policy.
+
+`tools/performance/` owns selected Plan, execution receipt/UI, bridge-event,
+table-loading and history measurements. Assets live beside their driver; small fixture/runner
+helpers are shared only where used. These drivers may compose the real
+interface and database endpoints they measure. They may reuse uncollected
+native test helpers; they must not import collected test modules. Tests stay
+under `tests/`, including independent fixture/action and failure controls.
+The frozen custody memory helper remains at its existing test path.
+
+Use `python -m tools performance --list` to discover cases, then
+`python -m tools performance FAMILY CASE --json OUTPUT` to run one. Installed
+receipt/UI cases additionally take `--installed-root`; Plan's public cases use
+component endpoints. Bridge-event builds
+its own wheel from committed HEAD and uses the working-tree driver. Reports
+distinguish those sources. See [PERFORMANCE](PERFORMANCE.md) for exact cases,
+installation methods, profiles and interpretation.
+
+The `table-loading` family has `plan-base` and `inventory-base` cases, three
+fresh installed children each. Use a new C5 disposable installed environment
+with its explicit ownership marker and a `c5-host-profile.json` beside output.
+`python -m tools.performance.table_loading --check` validates the fixtures without
+heading or timing; `--probe CASE --installed-root PATH --output PATH` runs one
+representative child before baseline collection. Supply an absolute output
+path because the child runs from its own raw-evidence directory. Coordinate headed runs and
+freeze writers first. The driver instruments four installed assets with exact
+anchors and retains original/instrumented/restored bytes under ignored `build/`;
+parent-owned restoration also covers child failure/deadline. Source product
+assets stay unchanged. [PERFORMANCE](PERFORMANCE.md#table-loading-diagnostic-method--gui-c5)
+owns its finite gestures, actual clock boundaries and diagnostic interpretation.
+
+Reports are published without overwriting an existing result. If the destination
+already exists, the performance command advises choosing a new `--json` path;
+it has no report-replacement flag. Repository-local
+output belongs under ignored `build/`; keep raw child evidence beside its report.
+An incomplete measurement returns nonzero and remains explicitly incomplete;
+completion means a valid observation, not acceptance of the historical timing
+target. Plan/UI latency and empirical representation memory are advisory.
+Correctness, counted scale behavior, custody, lifecycle/resource containment,
+history release limits, SH-G-15 and executor settlement retain their named gates.
+
+The R3 History release and bridge-event acceptance collection has its own
+collector and separate checker, `python -m tools.performance.br_g_42 collect DIR`
+and `validate DIR`. Collection refuses a dirty tree and launches five fresh
+children per case without retry. [PERFORMANCE](PERFORMANCE.md#r3-acceptance-collection--predeclared-2026-11-09)
+owns the statistics and limits.
+
+The M1-9 inventory cold projection gate has two dedicated commands, independent
+of that optional case registry:
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.performance.inventory --check
+.\.venv\Scripts\python.exe -m tools.performance.inventory --collect --profile build/m1-9-20261001/inventory-cold-profile-verified.json
+.\.venv\Scripts\python.exe -m tools.performance.validate_inventory build/m1-9-20261001/measurement-inventory-cold-<run-id>/raw.json
+```
+
+`--check` validates both complete fixtures without measuring elapsed time.
+Collection requires actual reference-profile, AC-power and quiet-workload facts;
+coordinate with the user before timing. The collector launches the package
+module in five fresh children per case and records each exact launch and raw
+result. The separate checker owns the retained 3/6-second comparison and refuses
+incomplete, wrong-fixture or changed-source evidence. [PERFORMANCE](PERFORMANCE.md#cold-inventory-projection-acceptance-method)
+owns the fixture, interval, finite dependencies, profile and interpretation.
+
+Generated inventory reports live only under ignored `build/m1-9-20261001/`:
+`measurement-inventory-fixture-check-<uuid>.json` contains untimed fixture facts;
+`measurement-inventory-cold-<timestamp>-<uuid>/` contains raw JSON, per-case/index
+stdout/stderr and a separate validation JSON. Create exclusively, preserve failed
+receipts and never overwrite reports. After final reviewed collection, retain
+compact raw/validation evidence under the existing test evidence convention;
+task-owned temporary fixtures may be cleaned only after their receipts and
+provenance are retained. No new general CLI framework or runtime feature is added.

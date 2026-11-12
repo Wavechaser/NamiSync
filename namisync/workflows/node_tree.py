@@ -1,0 +1,334 @@
+"""Pure, scope-qualified hierarchy construction for workflow projections."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from enum import StrEnum
+from hashlib import blake2b
+from types import MappingProxyType
+from typing import Iterable, Mapping
+
+from namisync.core.pathing import (
+    fold_validated_path,
+    validate_relative_path,
+)
+from namisync.core.review import (
+    MAX_PLAN_REVIEW_ROWS,
+    exceeds_population_wall,
+)
+
+
+class NodeTreeKind(StrEnum):
+    """Workflow projection families with independent node-id domains."""
+
+    PLAN = "plan"
+    INVENTORY = "inventory"
+
+
+NODE_TREE_ROW_LIMIT = MAX_PLAN_REVIEW_ROWS
+
+
+class NodeTreePopulationLimitError(ValueError):
+    """Raised before a tree builder retains its first excess source member."""
+
+    def __init__(self, tree_kind: NodeTreeKind) -> None:
+        super().__init__(f"{tree_kind.value} node tree exceeds its row limit")
+        self.tree_kind = tree_kind
+
+
+@dataclass(frozen=True, slots=True)
+class NodeTreeMember:
+    """One domain member attached to its canonical relative-path node."""
+
+    member_id: str
+    rel_path: str
+    rel_path_key: str
+    is_container: bool = False
+
+    def __post_init__(self) -> None:
+        if type(self.member_id) is not str or not self.member_id:
+            raise ValueError("member_id must be a nonempty string")
+        if type(self.rel_path) is not str or type(self.rel_path_key) is not str:
+            raise TypeError("member paths must be exact strings")
+        canonical = validate_relative_path(self.rel_path, allow_root=True)
+        if self.rel_path_key != fold_validated_path(canonical):
+            raise ValueError("member path key is not canonical")
+        if type(self.is_container) is not bool:
+            raise TypeError("is_container must be a bool")
+
+
+@dataclass(frozen=True, slots=True)
+class _ValidatedNodeTreeMember:
+    """Workflow-internal member whose source domain value already validated its path."""
+
+    member_id: str
+    rel_path: str
+    rel_path_key: str
+    is_container: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class NodeTreeNode:
+    """One node in a pre-order, parent-indexed tree array."""
+
+    node_id: str
+    rel_path: str
+    rel_path_key: str
+    member_ids: tuple[str, ...]
+    is_container: bool
+    position: int
+    depth: int
+    parent_index: int | None
+    subtree_end: int
+    subtree_member_count: int
+
+    @property
+    def display(self) -> str:
+        """Return the workflow-owned display form of this relative path."""
+
+        return self.rel_path or "All items"
+
+    @property
+    def synthetic(self) -> bool:
+        """Return whether the node exists only to carry hierarchy."""
+
+        return not self.member_ids
+
+
+@dataclass(frozen=True, slots=True)
+class NodeTree:
+    """Immutable nodes plus an authoritative identity index."""
+
+    tree_kind: NodeTreeKind
+    scope_identity: str
+    nodes: tuple[NodeTreeNode, ...]
+    _position_by_node_id: Mapping[str, int]
+
+    def node_for_id(self, node_id: str) -> NodeTreeNode:
+        return self.nodes[self.position_for_node_id(node_id)]
+
+    def position_for_node_id(self, node_id: str) -> int:
+        return self._position_by_node_id[node_id]
+
+    def subtree_positions(self, node_id: str) -> range:
+        node = self.node_for_id(node_id)
+        return range(node.position, node.subtree_end)
+
+    def subtree_member_ids(self, node_id: str) -> tuple[str, ...]:
+        member_ids: list[str] = []
+        for position in self.subtree_positions(node_id):
+            member_ids.extend(self.nodes[position].member_ids)
+        return tuple(member_ids)
+
+
+def build_node_tree(
+    *,
+    tree_kind: NodeTreeKind,
+    scope_identity: str,
+    members: Iterable[NodeTreeMember],
+) -> NodeTree:
+    """Build one deterministic tree and its subtree/member indexes."""
+
+    return _build_node_tree(
+        tree_kind=tree_kind,
+        scope_identity=scope_identity,
+        members=members,
+        revalidate_members=True,
+    )
+
+
+def _build_validated_node_tree(
+    *,
+    tree_kind: NodeTreeKind,
+    scope_identity: str,
+    members: Iterable[_ValidatedNodeTreeMember],
+) -> NodeTree:
+    """Build from exact members constructed inside the workflows package."""
+
+    return _build_node_tree(
+        tree_kind=tree_kind,
+        scope_identity=scope_identity,
+        members=members,
+        revalidate_members=False,
+    )
+
+
+def _build_node_tree(
+    *,
+    tree_kind: NodeTreeKind,
+    scope_identity: str,
+    members: Iterable[NodeTreeMember | _ValidatedNodeTreeMember],
+    revalidate_members: bool,
+) -> NodeTree:
+
+    if not isinstance(tree_kind, NodeTreeKind):
+        raise TypeError("tree_kind must be a NodeTreeKind")
+    if not isinstance(scope_identity, str) or not scope_identity:
+        raise ValueError("scope_identity must be a nonempty string")
+
+    display_paths: dict[str, str] = {"": ""}
+    direct_member_ids: dict[str, list[str]] = {}
+    explicit_containers: set[str] = set()
+    seen_member_ids: set[str] = set()
+
+    for source_index, member in enumerate(members):
+        if exceeds_population_wall(
+            source_index + 1,
+            limit=NODE_TREE_ROW_LIMIT,
+            field_name="node-tree source members",
+        ):
+            raise NodeTreePopulationLimitError(tree_kind)
+        if revalidate_members:
+            if type(member) is not NodeTreeMember:
+                raise TypeError("members must contain exact NodeTreeMember values")
+            member = NodeTreeMember(
+                member.member_id,
+                member.rel_path,
+                member.rel_path_key,
+                member.is_container,
+            )
+        elif type(member) is not _ValidatedNodeTreeMember:
+            raise TypeError("validated members have the wrong type")
+        if member.member_id in seen_member_ids:
+            raise ValueError(f"duplicate member_id: {member.member_id}")
+        seen_member_ids.add(member.member_id)
+        direct_member_ids.setdefault(member.rel_path_key, []).append(
+            member.member_id
+        )
+        if member.is_container:
+            explicit_containers.add(member.rel_path_key)
+
+        path = member.rel_path
+        path_key = member.rel_path_key
+        while True:
+            spelling = display_paths.get(path_key)
+            if spelling is None:
+                display_paths[path_key] = path
+            elif path < spelling:
+                display_paths[path_key] = path
+            if path_key == "":
+                break
+            parent = _tree_path_parent(path)
+            parent_key = _tree_path_key_parent(path_key)
+            path = "" if parent is None else parent
+            path_key = "" if parent_key is None else parent_key
+
+    children_by_path_key: dict[str, list[str]] = {
+        path_key: [] for path_key in display_paths
+    }
+    for path_key in display_paths:
+        if path_key == "":
+            continue
+        parent_key = _tree_path_key_parent(path_key)
+        children_by_path_key["" if parent_key is None else parent_key].append(
+            path_key
+        )
+    for child_keys in children_by_path_key.values():
+        child_keys.sort()
+
+    ordered_path_keys: list[str] = []
+    pending = [""]
+    while pending:
+        path_key = pending.pop()
+        ordered_path_keys.append(path_key)
+        pending.extend(reversed(children_by_path_key[path_key]))
+
+    position_by_path_key = {
+        path_key: position
+        for position, path_key in enumerate(ordered_path_keys)
+    }
+    subtree_ends = [
+        position + 1 for position in range(len(ordered_path_keys))
+    ]
+    subtree_member_counts = [
+        len(direct_member_ids.get(path_key, ()))
+        for path_key in ordered_path_keys
+    ]
+    for position in range(len(ordered_path_keys) - 1, 0, -1):
+        path_key = ordered_path_keys[position]
+        parent_key = _tree_path_key_parent(path_key)
+        parent_position = position_by_path_key[
+            "" if parent_key is None else parent_key
+        ]
+        subtree_ends[parent_position] = max(
+            subtree_ends[parent_position],
+            subtree_ends[position],
+        )
+        subtree_member_counts[parent_position] += subtree_member_counts[
+            position
+        ]
+
+    nodes: list[NodeTreeNode] = []
+    position_by_node_id: dict[str, int] = {}
+    node_id_prefix = blake2b(digest_size=16, person=b"NamiSyncNodeV1")
+    for value in (tree_kind.value, scope_identity):
+        encoded = value.encode("utf-8")
+        node_id_prefix.update(len(encoded).to_bytes(4, "big"))
+        node_id_prefix.update(encoded)
+    for position, path_key in enumerate(ordered_path_keys):
+        parent_key = (
+            None if path_key == "" else _tree_path_key_parent(path_key)
+        )
+        parent_index = (
+            None
+            if path_key == ""
+            else position_by_path_key[
+                "" if parent_key is None else parent_key
+            ]
+        )
+        digest = node_id_prefix.copy()
+        encoded_path_key = path_key.encode("utf-8")
+        digest.update(len(encoded_path_key).to_bytes(4, "big"))
+        digest.update(encoded_path_key)
+        node_id = f"node-{digest.hexdigest()}"
+        if node_id in position_by_node_id:
+            raise RuntimeError("deterministic node-id collision")
+        position_by_node_id[node_id] = position
+        nodes.append(
+            NodeTreeNode(
+                node_id=node_id,
+                rel_path=display_paths[path_key],
+                rel_path_key=path_key,
+                member_ids=tuple(
+                    sorted(direct_member_ids.get(path_key, ()))
+                ),
+                is_container=(
+                    path_key == ""
+                    or path_key in explicit_containers
+                    or bool(children_by_path_key[path_key])
+                ),
+                position=position,
+                depth=_tree_path_depth(path_key),
+                parent_index=parent_index,
+                subtree_end=subtree_ends[position],
+                subtree_member_count=subtree_member_counts[position],
+            )
+        )
+
+    return NodeTree(
+        tree_kind=tree_kind,
+        scope_identity=scope_identity,
+        nodes=tuple(nodes),
+        _position_by_node_id=MappingProxyType(position_by_node_id),
+    )
+
+
+def _tree_path_parent(path: str) -> str | None:
+    """Return the parent of one already-validated relative tree path."""
+
+    canonical = path.replace("/", "\\")
+    parent, separator, _name = canonical.rpartition("\\")
+    return parent if separator else None
+
+
+def _tree_path_key_parent(path_key: str) -> str | None:
+    """Return the parent of one canonical comparison key."""
+
+    parent, separator, _name = path_key.rpartition("\\")
+    return parent if separator else None
+
+
+def _tree_path_depth(path_key: str) -> int:
+    """Return depth for one canonical comparison key, including root."""
+
+    return 0 if not path_key else path_key.count("\\") + 1

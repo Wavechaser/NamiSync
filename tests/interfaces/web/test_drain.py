@@ -1,0 +1,7828 @@
+"""Ordinary BR-G-33/SH-G-8 evidence for adapter task drains."""
+
+from __future__ import annotations
+
+from collections import deque
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
+import gc
+import json
+from pathlib import Path
+from threading import Condition, Event, Thread, current_thread
+from time import monotonic, sleep
+from types import MappingProxyType, SimpleNamespace
+from weakref import ref
+
+import pytest
+
+from _bridge_result_support import dispatch_result
+
+from _event_v5_fixtures import maximum_reliable_envelope
+from namisync.core.events import (
+    CORE_EVENT_SCHEMA_VERSION, Envelope, Gap, ItemOutcome, PhaseChanged, Progress, StateChanged,
+    Terminal, TerminalSummary,
+)
+from namisync.core.evidence import ContentEvidence, Outcome, Provenance, RecordingStatus
+from namisync.core.execution import ItemRecordingReason
+from namisync.core.integrity import (
+    IntegrityOutcome, IntegrityReason, IntegrityResult, RecordDisposition,
+)
+from namisync.core.planning import OperationKind
+from namisync.core.preflight import Refusal, RefusalCode, Verdict
+from namisync.core.session import Disposition, OperationResult, SessionId, SessionState
+from namisync.dispatcher import (
+    Dispatcher,
+    PreparedSession,
+    SessionCleanupPending,
+    SessionNotFound,
+    WorkflowRegistration,
+)
+from namisync.dispatcher import event_bus as event_bus_module
+from namisync.interfaces import service as service_module
+from namisync.interfaces.service import NamiSyncService, PlanSession
+from namisync.interfaces.web.bridge import (
+    BRIDGE_SCHEMA_VERSION,
+    BridgeResponseTooLargeError,
+    _admit_task_drain_response_prefix,
+    _consume_task_drain_response,
+    _peek_task_drain_response,
+)
+from namisync.interfaces.web import drain as drain_module
+from namisync.interfaces.web.drain import (
+    DrainBusyError,
+    ObservationConflictError,
+    TaskRegistry,
+)
+from namisync.interfaces.task_port import (
+    _PlanSelectionSummary,
+    TaskCloseRequestView,
+    TaskIntentConflictError,
+    TaskCloseView,
+    TaskDrainView,
+    TaskEventUpdateView,
+    TaskRecordUpdateView,
+    TaskSessionReleaseView,
+    TaskShellView,
+    TaskStartView,
+    TaskTerminalDelivery,
+    TaskUnavailableError,
+)
+from namisync.interfaces.web.task_snapshot import TaskPresentationState
+from namisync.workflows import (
+    EXECUTION_KIND, ExecutionEvidenceResult, ExecutionEvidenceState,
+    ExecutionEvidenceWindow,
+    INVENTORY_KIND,
+    PLAN_KIND,
+    PlanProjection,
+    PlanProjectionNode,
+    PlanSortColumn,
+    RetainedExecutionItemWindow,
+    RetainedExecutionSummary,
+    RetainedIntegrityItemWindow,
+    SortDirection,
+)
+from namisync.workflows.views import (
+    SessionEventView, SessionRecordView, operation_result_view, session_event_view,
+)
+
+
+REQUEST = "1" * 32
+SESSION = "2" * 32
+DRAIN = "3" * 32
+
+
+def _plan_selection_summary(
+    *, revision: int = 0, required_bytes: str = "0"
+) -> _PlanSelectionSummary:
+    return _PlanSelectionSummary(
+        revision=revision,
+        state="reviewing",
+        requires_destructive_confirmation=False,
+        irreversible_update_count=0,
+        destructive_operation_count=0,
+        irreversible_operation_count=0,
+        destructive_operation_counts=MappingProxyType(
+            {"update": 0, "move_update": 0, "trash": 0, "delete": 0}
+        ),
+        required_bytes=required_bytes,
+    )
+
+
+def _raise_private_failure(
+    references: list[object],
+    *,
+    exception_base: type[BaseException] = Exception,
+    hostile_text: bool = False,
+) -> None:
+    payload_type = type("PrivatePayload", (), {})
+
+    def render(_error: BaseException) -> str:
+        raise AssertionError("private recovery failure text was rendered")
+
+    failure_type = type(
+        "PrivateFailure",
+        (exception_base,),
+        {"__str__": render} if hostile_text else {},
+    )
+    attached_payload = payload_type()
+    cause_payload = payload_type()
+    frame_only_payload = payload_type()
+    cause = failure_type("private cause")
+    cause.payload = cause_payload
+    failure = failure_type("private failure")
+    failure.payload = attached_payload
+    references.extend(
+        ref(value)
+        for value in (
+            payload_type,
+            failure_type,
+            attached_payload,
+            cause_payload,
+            frame_only_payload,
+        )
+    )
+    raise failure from cause
+
+
+def _private_malformed_recovery_record(
+    references: list[object],
+) -> SessionRecordView:
+    payload_type = type("PrivateRecoveryPayload", (), {})
+    string_type = type("PrivateRecoveryString", (str,), {})
+    payload = payload_type()
+    kind = string_type(PLAN_KIND)
+    kind.payload = payload
+    references.extend(ref(value) for value in (payload_type, string_type, payload))
+    return replace(_record(), kind=kind)
+
+
+def _private_invalid_plan(references: list[object]) -> object:
+    payload_type = type("PrivatePlanPayload", (), {})
+    plan_type = type("PrivatePlan", (), {})
+    payload = payload_type()
+    candidate = plan_type()
+    candidate.payload = payload
+    references.extend(
+        ref(value) for value in (payload_type, plan_type, payload, candidate)
+    )
+    return candidate
+
+
+def _private_plan_with_graph_string(references: list[object]) -> PlanSession:
+    payload_type = type("PrivatePlanStringPayload", (), {})
+    string_type = type("PrivatePlanString", (str,), {})
+    payload = payload_type()
+    request_id = string_type(REQUEST)
+    request_id.payload = payload
+    references.extend(
+        ref(value) for value in (payload_type, string_type, payload)
+    )
+    return PlanSession(request_id, SESSION)
+
+
+def _raw_task_start_view(
+    task_id: object,
+    request_id: object,
+    session_id: object,
+) -> TaskStartView:
+    candidate = object.__new__(TaskStartView)
+    object.__setattr__(candidate, "task_id", task_id)
+    object.__setattr__(candidate, "request_id", request_id)
+    object.__setattr__(candidate, "session_id", session_id)
+    return candidate
+
+
+class _ManualClock:
+    def __init__(self) -> None:
+        self._condition = Condition()
+        self._value = 0.0
+        self._calls = 0
+
+    def __call__(self) -> float:
+        with self._condition:
+            self._calls += 1
+            self._condition.notify_all()
+            return self._value
+
+    @property
+    def calls(self) -> int:
+        with self._condition:
+            return self._calls
+
+    def advance_to(self, value: float) -> None:
+        with self._condition:
+            if value < self._value:
+                raise ValueError("manual clock cannot move backward")
+            self._value = value
+
+    def wait_for_calls(self, expected: int) -> None:
+        deadline = monotonic() + 1
+        with self._condition:
+            while self._calls < expected:
+                remaining = deadline - monotonic()
+                assert remaining > 0
+                self._condition.wait(remaining)
+
+
+def _event(sequence: int, body_type: str = "StateChanged") -> SessionEventView:
+    bodies = {
+        "StateChanged": StateChanged(SessionState.RUNNING),
+        "Progress": Progress("execute", 0, None, 0, None, None),
+        "Gap": Gap(1),
+        "Terminal": Terminal(
+            TerminalSummary.from_result(OperationResult(SessionState.COMPLETED))
+        ),
+    }
+    return session_event_view(Envelope(
+        SessionId(SESSION),
+        sequence,
+        datetime(2026, 1, 1, tzinfo=timezone.utc),
+        CORE_EVENT_SCHEMA_VERSION,
+        bodies[body_type],
+    ))
+
+
+def _execution_event(
+    session_id: str,
+    sequence: int,
+    body: object,
+) -> SessionEventView:
+    return session_event_view(Envelope(
+        SessionId(session_id),
+        sequence,
+        datetime(2026, 1, 1, tzinfo=timezone.utc),
+        CORE_EVENT_SCHEMA_VERSION,
+        body,
+    ))
+
+
+def _record(
+    *,
+    terminal: bool = True,
+    kind: str = PLAN_KIND,
+    supports_pause: bool = False,
+) -> SessionRecordView:
+    return SessionRecordView(
+        SESSION,
+        kind,
+        "completed" if terminal else "pending",
+        supports_pause,
+        "2026-01-01T00:00:00+00:00",
+        None,
+        "2026-01-01T00:00:00+00:00" if terminal else None,
+        operation_result_view(OperationResult(SessionState.COMPLETED))
+        if terminal else None,
+    )
+
+
+class _Service:
+    def __init__(
+        self,
+        *,
+        task_token: Callable[[], str] | None = None,
+    ) -> None:
+        self.sink = None
+        self.start_calls = []
+        self.reobserve_calls = []
+        self.lifecycle_calls = []
+        self.shells: dict[str, str] = {}
+        self._task_token = task_token or (lambda: "a" * 32)
+        self.start_entered = Event()
+        self.release_start = Event()
+        self.release_start.set()
+        self.reobserve_entered = Event()
+        self.release_reobserve = Event()
+        self.release_reobserve.set()
+        self.reobserve_result = _record(terminal=False)
+        self.projection_calls = 0
+
+    def create_task_shell(self, command_id, delivery_factory):
+        task_id = self.shells.get(command_id)
+        if task_id is None:
+            task_id = f"task-{self._task_token()}"
+            self.shells[command_id] = task_id
+        delivery_factory(task_id)
+        return TaskShellView(task_id)
+
+    def close_task_shell(self, task_id):
+        self.lifecycle_calls.append(("close_task_shell", task_id))
+        return TaskShellView(task_id)
+
+    def cancel_task_session(self, task_id, session_id):
+        self.lifecycle_calls.append(("cancel_task_session", task_id, session_id))
+        return service_module.ControlView(
+            "accepted", session_id, "running", "canceling", "", True
+        )
+
+    def pause_task_session(self, task_id, session_id):
+        self.lifecycle_calls.append(("pause_task_session", task_id, session_id))
+        return service_module.ControlView(
+            "accepted", session_id, "running", "paused", "", True
+        )
+
+    def resume_task_session(self, task_id, session_id):
+        self.lifecycle_calls.append(("resume_task_session", task_id, session_id))
+        return service_module.ControlView(
+            "accepted", session_id, "paused", "running", "", True
+        )
+
+    def start_task_plan(
+        self,
+        source,
+        target,
+        *,
+        deletion_policy,
+        command_id,
+        delivery_factory,
+    ):
+        task_id = f"task-{self._task_token()}"
+        sink = delivery_factory(task_id)
+        candidate = self.start_plan(
+            source,
+            target,
+            deletion_policy=deletion_policy,
+            command_id=command_id,
+            observation_sink=sink,
+        )
+        return TaskStartView(task_id, candidate.request_id, candidate.session_id)
+
+    def start_plan(self, source, target, **kwargs):
+        self.start_calls.append(
+            (
+                source,
+                target,
+                {
+                    "deletion_policy": kwargs["deletion_policy"],
+                    "command_id": kwargs["command_id"],
+                },
+            )
+        )
+        self.sink = kwargs["observation_sink"]
+        self.sink(_event(1))
+        self.start_entered.set()
+        assert self.release_start.wait(2)
+        return PlanSession(REQUEST, SESSION)
+
+    def start_task_execution(
+        self,
+        task_id,
+        request_id,
+        *,
+        expected_revision,
+        destructive_acknowledged,
+        command_id,
+        delivery_factory,
+    ):
+        self.start_calls.append(
+            (
+                "task-execution",
+                task_id,
+                request_id,
+                expected_revision,
+                destructive_acknowledged,
+                command_id,
+            )
+        )
+        sink = delivery_factory(task_id)
+        session_id = "b" * 32
+        sink(replace(_event(1), session_id=session_id))
+        return TaskStartView(task_id, "c" * 32, session_id)
+
+    def recover_task_execution(self, *args, **kwargs):
+        return None
+
+    def get_plan_projection(self, request_id):
+        self.projection_calls += 1
+        root = PlanProjectionNode(
+            node_id="node-" + "1" * 32,
+            display="Plan",
+            rel_path_key="",
+            position=0,
+            depth=0,
+            parent_index=None,
+            subtree_end=1,
+            is_container=True,
+            row_kind="folder",
+            operation_id=None,
+            operation_kind=None,
+            reason=None,
+            blocked_reason=None,
+            selection="disabled",
+            selectable_operation_count=0,
+            selected_operation_count=0,
+            operation_count=0,
+            size=None,
+            mtime_ns=None,
+            dependency_count=0,
+            risk="none",
+        )
+        projection = PlanProjection(
+            request_id,
+            (root,),
+            {root.node_id: 0},
+            {},
+            frozenset(),
+        )
+        return projection, _plan_selection_summary(), "source", "target"
+
+    def get_plan_selection_membership(self, request_id, expected_revision):
+        assert request_id
+        assert expected_revision == 0
+        return frozenset()
+
+    def reobserve_task(self, task_id, session_id, sink, from_sequence):
+        assert task_id.startswith("task-")
+        return self.reobserve(session_id, sink, from_sequence)
+
+    def reobserve(self, session_id, sink, from_sequence):
+        self.reobserve_calls.append((session_id, sink, from_sequence))
+        self.reobserve_entered.set()
+        assert self.release_reobserve.wait(2)
+        return self.reobserve_result
+
+    def release_task_session(self, task_id, session_id, delivery):
+        self.lifecycle_calls.append(
+            ("release_task_session", task_id, session_id, delivery)
+        )
+        return TaskSessionReleaseView(task_id, session_id)
+
+    def read_task_execution_summary(self, task_id):
+        return RetainedExecutionSummary(
+            task_id,
+            "d" * 32,
+            operation_result_view(OperationResult(SessionState.COMPLETED)),
+            0,
+            0,
+            "target/.synctrash/" + "d" * 32,
+            has_successful_copied_files=False,
+        )
+
+    def read_task_execution_items(self, task_id, operation_ids):
+        return RetainedExecutionItemWindow(task_id, "d" * 32, ())
+
+    def read_task_integrity_items(self, task_id, operation_ids):
+        return RetainedIntegrityItemWindow(task_id, "d" * 32, ())
+
+    def read_task_execution_evidence(self, task_id, operation_ids):
+        return ExecutionEvidenceWindow("d" * 32, ())
+
+    def close_task(self, task_id, session_id, delivery):
+        self.lifecycle_calls.append(("close_task", task_id, session_id, delivery))
+        return TaskCloseView(task_id, session_id)
+
+
+class _ExecutionOverlayService(_Service):
+    operation_id = "9" * 32
+    run_id = "d" * 32
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.execution_sink = None
+        self.execution_reads: list[tuple[str, tuple[str, ...]]] = []
+        self.operation_item = ItemOutcome(
+            self.operation_id,
+            OperationKind.COPY,
+            "copy.txt",
+            Outcome.SUCCEEDED,
+            detail={"message": "copied"},
+        )
+        self.integrity_item = IntegrityOutcome(
+            self.operation_id,
+            None,
+            None,
+            "copy.txt",
+            IntegrityResult.VERIFIED,
+            read_strategy=None,
+            recording=RecordingStatus.OK,
+            record_disposition=RecordDisposition.NOOP,
+            phase="verify",
+        )
+
+    def get_plan_projection(self, request_id):
+        self.projection_calls += 1
+        root = PlanProjectionNode(
+            "node-" + "1" * 32, "Plan", "", 0, 0, None, 2, True,
+            "folder", None, None, None, None, "selected", 1, 1, 1,
+            None, None, 0, "none",
+        )
+        operation = PlanProjectionNode(
+            "node-" + "2" * 32, "copy.txt", "copy.txt", 1, 1, 0, 2,
+            True, "operation", self.operation_id, "copy", None, None,
+            "selected", 1, 1, 1, 4, None, 0, "none",
+            presentation_kind="copy",
+        )
+        projection = PlanProjection(
+            request_id,
+            (root, operation),
+            {root.node_id: 0, operation.node_id: 1},
+            {self.operation_id: operation.node_id},
+            frozenset({self.operation_id}),
+        )
+        return projection, _plan_selection_summary(required_bytes="4"), "source", "target"
+
+    def get_plan_selection_membership(self, request_id, expected_revision):
+        return frozenset({self.operation_id})
+
+    def start_task_execution(self, task_id, request_id, **kwargs):
+        self.execution_sink = kwargs["delivery_factory"](task_id)
+        session_id = "b" * 32
+        self.execution_sink(replace(_event(1), session_id=session_id))
+        return TaskStartView(task_id, "c" * 32, session_id)
+
+    def read_task_execution_summary(self, task_id):
+        return RetainedExecutionSummary(
+            task_id,
+            self.run_id,
+            operation_result_view(OperationResult(
+                SessionState.COMPLETED,
+                items=(self.operation_item, self.integrity_item),
+                bytes_done=4,
+                bytes_total=4,
+            )),
+            0,
+            0,
+            "target/.synctrash/" + self.run_id,
+            has_successful_copied_files=True,
+        )
+
+    def read_task_execution_items(self, task_id, operation_ids):
+        self.execution_reads.append(("operation", operation_ids))
+        items = (self.operation_item,) if self.operation_id in operation_ids else ()
+        return RetainedExecutionItemWindow(task_id, self.run_id, items)
+
+    def read_task_integrity_items(self, task_id, operation_ids):
+        self.execution_reads.append(("integrity", operation_ids))
+        items = (self.integrity_item,) if self.operation_id in operation_ids else ()
+        return RetainedIntegrityItemWindow(task_id, self.run_id, items)
+
+    def read_task_execution_evidence(self, task_id, operation_ids):
+        self.execution_reads.append(("evidence", operation_ids))
+        results = ()
+        if self.operation_id in operation_ids:
+            results = (ExecutionEvidenceResult(
+                self.operation_id,
+                ExecutionEvidenceState.RECORDED_COPY,
+                ContentEvidence(
+                    "xxh3_128",
+                    b"\x01" * 16,
+                    4,
+                    Provenance.COPY_ATTESTED,
+                    datetime(2026, 1, 1, tzinfo=timezone.utc),
+                ),
+            ),)
+        return ExecutionEvidenceWindow(self.run_id, results)
+
+
+def _make_registry(lifecycle, **kwargs) -> TaskRegistry:
+    return TaskRegistry(
+        lifecycle,
+        response_codec=drain_module._TaskDrainResponseCodec(
+            BridgeResponseTooLargeError,
+            _admit_task_drain_response_prefix,
+            _peek_task_drain_response,
+            _consume_task_drain_response,
+        ),
+        **kwargs,
+    )
+
+
+def test_task_shell_create_list_replay_and_exact_close() -> None:
+    service = _Service()
+    registry = _make_registry(service)
+    command_id = "4" * 32
+
+    created = registry.create_task_shell(command_id)
+    replay = registry.create_task_shell(command_id)
+    retained = registry.list_tasks()
+
+    assert replay == created
+    assert retained.tasks[0].task_id == created.task_id
+    assert retained.tasks[0].session_id is None
+    assert retained.tasks[0].session_state is None
+    assert retained.tasks[0].session_released is False
+    assert registry.request_task_close(created.task_id, None) == TaskCloseRequestView(
+        created.task_id,
+        None,
+        "closed",
+    )
+    assert registry.request_task_close(created.task_id, None) == TaskCloseRequestView(
+        created.task_id,
+        None,
+        "closed",
+    )
+    assert registry.list_tasks().tasks == ()
+    assert service.lifecycle_calls == [("close_task_shell", created.task_id)]
+
+
+def test_task_shell_is_not_listed_before_adapter_publication() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.delivered = Event()
+            self.release = Event()
+
+        def create_task_shell(self, command_id, delivery_factory):
+            task_id = f"task-{self._task_token()}"
+            delivery_factory(task_id)
+            self.delivered.set()
+            assert self.release.wait(2)
+            return TaskShellView(task_id)
+
+    service = Service()
+    registry = _make_registry(service)
+    results = []
+    worker = Thread(
+        target=lambda: results.append(registry.create_task_shell("4" * 32))
+    )
+    worker.start()
+    assert service.delivered.wait(2)
+
+    assert registry.list_tasks().tasks == ()
+    service.release.set()
+    worker.join(2)
+
+    assert not worker.is_alive()
+    assert registry.list_tasks().tasks[0].task_id == results[0].task_id
+
+
+def test_shell_and_session_closes_share_one_bounded_receipt_population() -> None:
+    tokens = iter(f"{value:032x}" for value in range(1, 51))
+    service = _Service(task_token=lambda: next(tokens))
+    registry = _make_registry(service)
+    closed = []
+    for value in range(49):
+        task = registry.create_task_shell(f"{value + 100:032x}")
+        closed.append(task.task_id)
+        registry.request_task_close(task.task_id, None)
+
+    assert len(registry._close_receipts) == drain_module._CLOSE_RECEIPT_CAPACITY
+    with pytest.raises(TaskUnavailableError):
+        registry.request_task_close(closed[0], None)
+    assert registry.request_task_close(closed[-1], None).disposition == "closed"
+
+
+def test_busy_task_close_requests_cancel_and_retains_task() -> None:
+    service = _Service()
+    registry = _make_registry(service)
+    started = registry.start_plan(
+        r"C:\source",
+        r"D:\target",
+        deletion_policy=None,
+        command_id="5" * 32,
+    )
+
+    result = registry.request_task_close(started.task_id, started.session_id)
+
+    assert result == TaskCloseRequestView(
+        started.task_id,
+        started.session_id,
+        "pending",
+    )
+    summary = registry.list_tasks().tasks[0]
+    assert summary.task_id == started.task_id
+    assert summary.session_id == started.session_id
+    assert summary.session_state == "active"
+    assert summary.session_released is False
+    assert service.lifecycle_calls == [
+        ("cancel_task_session", started.task_id, started.session_id)
+    ]
+
+
+def test_repeated_busy_task_close_is_pending_without_duplicate_cancel_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entered = Event()
+    release = Event()
+    canceling_delivery_entered = Event()
+    release_canceling_delivery = Event()
+    canceling_offered = Event()
+
+    original_offer = drain_module._TaskState._offer
+
+    def observe_canceling_offer(self, generation, update):
+        if (
+            type(update) is SessionEventView
+            and update.body_type == "StateChanged"
+            and update.body == {"state": "canceling"}
+        ):
+            canceling_delivery_entered.set()
+            assert release_canceling_delivery.wait(1)
+            original_offer(self, generation, update)
+            canceling_offered.set()
+            return
+        original_offer(self, generation, update)
+
+    monkeypatch.setattr(
+        drain_module._TaskState,
+        "_offer",
+        observe_canceling_offer,
+    )
+
+    class Invocation:
+        def run(self, context):
+            entered.set()
+            assert release.wait(2)
+            context.checkpoint()
+            return OperationResult(SessionState.COMPLETED)
+
+        def snapshot(self) -> object:
+            return "busy"
+
+    dispatcher = Dispatcher(
+        {
+            PLAN_KIND: WorkflowRegistration(
+                lambda _request: PreparedSession("busy"),
+                lambda _checkpoint: Invocation(),
+            )
+        }
+    )
+    monkeypatch.setattr(service_module, "_dispatcher", lambda _runtime: dispatcher)
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
+    registry = _make_registry(service, drain_wait=0.1)
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+
+    try:
+        started = registry.start_plan(
+            str(source),
+            str(target),
+            deletion_policy=None,
+            command_id="5" * 32,
+        )
+        assert entered.wait(1)
+        registry.drain(
+            started.task_id,
+            started.session_id,
+            "6" * 32,
+            replay_from=None,
+        )
+
+        first = registry.request_task_close(started.task_id, started.session_id)
+        assert canceling_delivery_entered.wait(1)
+        before_delivery = registry.drain(
+            started.task_id,
+            started.session_id,
+            "7" * 32,
+            replay_from=None,
+        )
+        assert not any(
+            type(update) is TaskEventUpdateView
+            and update.event.body_type == "StateChanged"
+            and update.event.body == {"state": "canceling"}
+            for update in before_delivery.updates
+        )
+        assert dispatcher.get(SessionId(started.session_id)).state is SessionState.CANCELING
+
+        release_canceling_delivery.set()
+        assert canceling_offered.wait(1)
+        canceled = registry.drain(
+            started.task_id,
+            started.session_id,
+            "8" * 32,
+            replay_from=None,
+        )
+        second = registry.request_task_close(started.task_id, started.session_id)
+        repeated = registry.drain(
+            started.task_id,
+            started.session_id,
+            "9" * 32,
+            replay_from=None,
+        )
+
+        assert first.disposition == second.disposition == "pending"
+        assert dispatcher.get(SessionId(started.session_id)).state is SessionState.CANCELING
+        assert [
+            update.event.body
+            for update in canceled.updates
+            if type(update) is TaskEventUpdateView
+            and update.event.body_type == "StateChanged"
+            and update.event.body == {"state": "canceling"}
+        ] == [{"state": "canceling"}]
+        assert repeated.updates == ()
+        assert registry.list_tasks().tasks[0].task_id == started.task_id
+    finally:
+        release_canceling_delivery.set()
+        release.set()
+        registry.begin_close()
+        service.close(timeout=2)
+
+
+def test_task_response_codec_binding_is_exact_idempotent_and_conflict_safe() -> None:
+    class Admit:
+        def __call__(self, *args, **kwargs):
+            return _admit_task_drain_response_prefix(*args, **kwargs)
+
+        def __eq__(self, other: object) -> bool:
+            del other
+            raise AssertionError("codec binding invoked collaborator equality")
+
+    registry = TaskRegistry(_Service())
+    admit = Admit()
+    response_codec = drain_module._TaskDrainResponseCodec(
+        BridgeResponseTooLargeError,
+        admit,
+        _peek_task_drain_response,
+        _consume_task_drain_response,
+    )
+    registry.bind_response_codec(response_codec)
+    registry.bind_response_codec(
+        drain_module._TaskDrainResponseCodec(
+            BridgeResponseTooLargeError,
+            admit,
+            _peek_task_drain_response,
+            _consume_task_drain_response,
+        )
+    )
+
+    with pytest.raises(TypeError, match="codec must be exact"):
+        registry.bind_response_codec(object())  # type: ignore[arg-type]
+
+    with pytest.raises(RuntimeError, match="already bound"):
+        registry.bind_response_codec(
+            drain_module._TaskDrainResponseCodec(
+                BridgeResponseTooLargeError,
+                Admit(),
+                _peek_task_drain_response,
+                _consume_task_drain_response,
+            )
+        )
+    assert registry._response_codec is response_codec
+
+
+@pytest.mark.parametrize("operation", ("drain", "drain_for_bridge"))
+def test_task_drain_fails_closed_before_response_codec_binding(
+    operation: str,
+) -> None:
+    registry = TaskRegistry(_Service())
+
+    with pytest.raises(RuntimeError, match="response codec is not bound"):
+        getattr(registry, operation)(
+            "task-" + "1" * 32,
+            SESSION,
+            DRAIN,
+            replay_from=None,
+        )
+
+
+def _registry(
+    service=None,
+    *,
+    clock=monotonic,
+    drain_wait=0.2,
+    progress_linger=drain_module._PROGRESS_LINGER_SECONDS,
+):
+    service = service or _Service()
+    return _make_registry(
+        service,
+        clock=clock,
+        drain_wait=drain_wait,
+        progress_linger=progress_linger,
+    ), service
+
+
+def _wake_task(registry: TaskRegistry, task_id: str) -> None:
+    task = registry._tasks[task_id]
+    with task.condition:
+        task.condition.notify_all()
+
+
+@dataclass
+class _ProgressWait:
+    clock: _ManualClock
+    registry: TaskRegistry
+    service: _Service
+    task_id: str
+    baseline_calls: int
+    thread: Thread
+    done: Event
+    results: list[TaskDrainView]
+    errors: list[BaseException]
+
+    def finish(self) -> TaskDrainView:
+        assert self.done.wait(1)
+        self.thread.join(1)
+        assert not self.errors
+        assert len(self.results) == 1
+        return self.results[0]
+
+    def stop(self) -> None:
+        if self.thread.is_alive():
+            self.registry.begin_close()
+            self.thread.join(1)
+
+
+@contextmanager
+def _progress_wait(
+    *,
+    drain_wait: float = 25.0,
+    progress_linger: float = 10.0,
+    progress_sequence: int | None = 2,
+) -> Iterator[_ProgressWait]:
+    clock = _ManualClock()
+    registry, service = _registry(
+        clock=clock,
+        drain_wait=drain_wait,
+        progress_linger=progress_linger,
+    )
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    if progress_sequence is not None:
+        service.sink(_event(progress_sequence, "Progress"))
+    baseline_calls = clock.calls
+    done = Event()
+    results: list[TaskDrainView] = []
+    errors: list[BaseException] = []
+
+    def drain() -> None:
+        try:
+            results.append(
+                registry.drain(
+                    start.task_id,
+                    SESSION,
+                    "5" * 32,
+                    replay_from=None,
+                )
+            )
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            done.set()
+
+    thread = Thread(target=drain)
+    thread.start()
+    waiting = _ProgressWait(
+        clock,
+        registry,
+        service,
+        start.task_id,
+        baseline_calls,
+        thread,
+        done,
+        results,
+        errors,
+    )
+    try:
+        clock.wait_for_calls(baseline_calls + 2)
+        yield waiting
+    finally:
+        waiting.stop()
+
+
+def _start(registry: TaskRegistry, command_id: str = "4" * 32):
+    return registry.start_plan(
+        "source",
+        "target",
+        deletion_policy=None,
+        command_id=command_id,
+    )
+
+
+def test_maximum_reliable_head_drains_alone_below_the_bridge_response_wall() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    value = maximum_reliable_envelope()
+    event = SessionEventView(
+        SESSION,
+        2,
+        str(value["at"]),
+        CORE_EVENT_SCHEMA_VERSION,
+        str(value["body_type"]),
+        value["body"],  # type: ignore[arg-type]
+    )
+    service.sink(event)
+
+    drained = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    response = {
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": "6" * 32,
+        "ok": True,
+        "result": dispatch_result(drained)["result"],
+    }
+    encoded = json.dumps(
+        response,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    assert len(drained.updates) == 1
+    assert drained.updates[0].event == event  # type: ignore[union-attr]
+    assert len(encoded) < 8_388_608
+    registry.begin_close()
+
+
+def test_drain_keeps_an_oversized_reliable_tail_for_the_next_response() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    initial = registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    value = maximum_reliable_envelope()
+    for sequence in range(2, 10):
+        service.sink(SessionEventView(
+            SESSION,
+            sequence,
+            str(value["at"]),
+            CORE_EVENT_SCHEMA_VERSION,
+            str(value["body_type"]),
+            dict(value["body"]),  # type: ignore[arg-type]
+        ))
+
+    first = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    second = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+    updates = (*first.updates, *second.updates)
+
+    assert 0 < len(first.updates) < 8
+    assert all(update.update_type == "event" for update in updates)
+    assert first.snapshot["revision"] == initial.snapshot["revision"] + len(first.updates)
+    assert second.snapshot["revision"] == initial.snapshot["revision"] + len(updates)
+    assert "item_outcomes" not in first.snapshot
+    assert "item_outcomes" not in second.snapshot
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in updates
+    ] == list(range(2, 10))
+    registry.begin_close()
+
+
+def test_drain_response_prefix_owns_each_source_before_advancing(monkeypatch) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    first = _event(2)
+    second = _event(3)
+    service.sink(first)
+    service.sink(second)
+    original = drain_module._tag_update
+    tagged = []
+
+    def hostile_tag(update):
+        if tagged:
+            object.__setattr__(tagged[0], "body_type", "Gap")
+        tagged.append(update)
+        return original(update)
+
+    monkeypatch.setattr(drain_module, "_tag_update", hostile_tag)
+    admitted = registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    assert [update.event.body_type for update in admitted.updates] == [
+        "StateChanged",
+        "StateChanged",
+    ]
+    assert len(tagged) == 2 and tagged[0].body_type == "Gap"
+    assert admitted.snapshot["revision"] == 3
+    assert admitted.snapshot["gap_first_missed_seq"] is None
+    registry.begin_close()
+
+
+def test_progress_rate_uses_sink_time_after_coalescing_and_failed_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = _ManualClock()
+    registry, service = _registry(clock=clock, progress_linger=1.0)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    clock.advance_to(1.0)
+    service.sink(_execution_event(SESSION, 2, Progress("execute", 0, 2, 0, 100, None)))
+    clock.advance_to(2.0)
+    registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    clock.advance_to(3.0)
+    service.sink(_execution_event(SESSION, 3, Progress("execute", 0, 2, 20, 100, None)))
+    clock.advance_to(4.0)
+    service.sink(_execution_event(SESSION, 4, Progress("execute", 0, 2, 30, 100, None)))
+    task = registry._tasks[start.task_id]
+    assert task.progress_available_at == 3.0
+    assert task.progress_sample_at == 4.0
+    assert [update.sequence for update in task.queue] == [4]
+
+    clock.advance_to(100.0)
+    before = task.presentation_state
+    queued = tuple(task.queue)
+    with monkeypatch.context() as patch:
+        patch.setattr("namisync.interfaces.web.bridge.MAX_BRIDGE_RESPONSE_JSON_BYTES", 100)
+        with pytest.raises(RuntimeError, match="response ceiling"):
+            registry.drain_for_bridge(start.task_id, SESSION, "6" * 32, replay_from=None)
+    assert task.progress_sample_at == 4.0
+    assert task.presentation_state is before
+    assert tuple(task.queue) == queued
+
+    clock.advance_to(200.0)
+    drained = registry.drain(start.task_id, SESSION, "7" * 32, replay_from=None)
+    assert [update.event.sequence for update in drained.updates] == [4]
+    assert drained.snapshot["revision"] == before.revision + 1
+    assert drained.snapshot["presentation"]["throughput_bytes_per_second"] == pytest.approx(10.0)
+    assert task.progress_sample_at is None
+    registry.begin_close()
+
+
+def test_progress_sample_survives_a_byte_excluded_tail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = _ManualClock()
+    registry, service = _registry(clock=clock, progress_linger=1.0)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    clock.advance_to(1.0)
+    service.sink(_execution_event(SESSION, 2, Progress("execute", 0, 2, 0, 100, None)))
+    clock.advance_to(2.0)
+    registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    reliable = _event(3)
+    service.sink(reliable)
+    clock.advance_to(3.0)
+    service.sink(_execution_event(SESSION, 4, Progress("execute", 0, 2, 20, 100, None)))
+    task = registry._tasks[start.task_id]
+    first_only = TaskDrainView(
+        start.task_id, SESSION, "6" * 32,
+        (TaskEventUpdateView("event", reliable),),
+        task.presentation_state.advance(TaskEventUpdateView("event", reliable), None).snapshot(),
+    )
+    first_bytes = len(json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": "0" * 32,
+        "ok": True,
+        "result": dispatch_result(first_only)["result"],
+    }, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    clock.advance_to(100.0)
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "namisync.interfaces.web.bridge.MAX_BRIDGE_RESPONSE_JSON_BYTES",
+            first_bytes,
+        )
+        partial = registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
+    assert [update.event.sequence for update in partial.updates] == [3]
+    assert [update.sequence for update in task.queue] == [4]
+    assert task.progress_sample_at == 3.0
+
+    clock.advance_to(200.0)
+    service.sink(_execution_event(
+        SESSION, 5, ItemOutcome("operation-" + "a" * 32, "copy", "file.bin", Outcome.SUCCEEDED),
+    ))
+    tail = registry.drain(start.task_id, SESSION, "7" * 32, replay_from=None)
+    assert [update.event.sequence for update in tail.updates] == [4, 5]
+    # A reliable successor wakes the progress-only tail without changing its sample.
+    assert task.presentation_state.sample_at == 3.0
+    registry.begin_close()
+
+
+def test_inconsistent_progress_does_not_block_terminal_delivery(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    registry, service = _registry(progress_linger=0.001)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    service.sink(_execution_event(SESSION, 2, Progress("execute", 0, 2, 20, 100, None)))
+    registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    service.sink(_execution_event(SESSION, 3, Progress("execute", 0, 2, 10, 100, None)))
+    service.sink(_event(4, "Terminal"))
+    service.sink(_record())
+    drained = registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
+    assert [update.update_type for update in drained.updates] == [
+        "event", "event", "record",
+    ]
+    assert drained.snapshot["progress_inconsistent"] is True
+    assert drained.snapshot["session_state"] == "completed"
+    assert drained.snapshot["terminal_result"] is not None
+    assert registry._tasks[start.task_id].delivered_terminal_record is not None
+    assert [record.message for record in caplog.records if "progress presentation" in record.message] == [
+        "task progress presentation became inconsistent",
+    ]
+    registry.release_terminal_session(start.task_id, SESSION)
+    registry.begin_close()
+
+
+def test_drain_uses_one_stable_source_population_during_reentrant_capture() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    first = _event(2)
+    service.sink(first)
+    service.sink(_event(3))
+    conflicts = []
+
+    class ReentrantBody(dict):
+        armed = True
+
+        def items(self):
+            if self.armed:
+                self.armed = False
+                try:
+                    service.sink(_event(4))
+                except ObservationConflictError as error:
+                    conflicts.append(error)
+            return super().items()
+
+    object.__setattr__(first, "body", ReentrantBody(first.body))
+
+    current = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    service.sink(_event(4))
+    successor = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in current.updates
+    ] == [2, 3]
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in successor.updates
+    ] == [4]
+    assert len(conflicts) == 1
+    assert type(conflicts[0]) is ObservationConflictError
+    registry.begin_close()
+
+
+def test_full_drain_refuses_reentrant_reliable_offer_without_waiting() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    first = _event(2)
+    service.sink(first)
+    for sequence in range(3, 66):
+        service.sink(_event(sequence))
+    conflicts = []
+
+    class ReentrantBody(dict):
+        armed = True
+
+        def items(self):
+            if self.armed:
+                self.armed = False
+                try:
+                    service.sink(_event(66))
+                except ObservationConflictError as error:
+                    conflicts.append(error)
+            return super().items()
+
+    object.__setattr__(first, "body", ReentrantBody(first.body))
+
+    current = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    service.sink(_event(66))
+    successor = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+
+    assert len(current.updates) == 64
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in successor.updates
+    ] == [66]
+    assert len(conflicts) == 1
+    assert type(conflicts[0]) is ObservationConflictError
+    registry.begin_close()
+
+
+def test_drain_refuses_reentrant_drain_without_superseding_capture() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    first = _event(2)
+    service.sink(first)
+    service.sink(_event(3))
+    conflicts = []
+
+    class ReentrantBody(dict):
+        armed = True
+
+        def items(self):
+            if self.armed:
+                self.armed = False
+                try:
+                    registry.drain(
+                        start.task_id,
+                        SESSION,
+                        "7" * 32,
+                        replay_from=None,
+                    )
+                except ObservationConflictError as error:
+                    conflicts.append(error)
+            return super().items()
+
+    object.__setattr__(first, "body", ReentrantBody(first.body))
+
+    current = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    service.sink(_event(4))
+    successor = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in current.updates
+    ] == [2, 3]
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in successor.updates
+    ] == [4]
+    assert len(conflicts) == 1
+    assert type(conflicts[0]) is ObservationConflictError
+    registry.begin_close()
+
+
+def _envelope_item_id(run_index: int, tick: int, item_index: int) -> str:
+    return f"{run_index * 1_000 + tick * 10 + item_index + 1:032x}"
+
+
+@dataclass
+class _IntegratedRun:
+    entered: Event
+    release: Event
+    progress_count: int = 0
+    reliable_count: int = 0
+    flood_done: Event | None = None
+    finish: Event | None = None
+
+
+@dataclass
+class _IntegratedInvocation:
+    name: str
+    run_state: _IntegratedRun
+
+    def run(self, context):
+        state = self.run_state
+        state.entered.set()
+        assert state.release.wait(2)
+        for index in range(state.progress_count):
+            context.emit(
+                Progress(
+                    "execute",
+                    items_done=index + 1,
+                    items_total=state.progress_count,
+                    bytes_done=index + 1,
+                    bytes_total=state.progress_count,
+                    current_path=f"{self.name}-progress-{index}",
+                )
+            )
+        for index in range(state.reliable_count):
+            context.emit(
+                ItemOutcome(
+                    item_id=f"{index + 1:032x}",
+                    kind="copy",
+                    path=f"{self.name}-{index}.txt",
+                    outcome=Outcome.SUCCEEDED,
+                )
+            )
+        if state.flood_done is not None:
+            state.flood_done.set()
+        if state.finish is not None:
+            assert state.finish.wait(2)
+        return OperationResult(SessionState.COMPLETED)
+
+    def snapshot(self) -> object:
+        return self.name
+
+
+@dataclass
+class _EnvelopeRun:
+    name: str
+    index: int
+    tick_releases: tuple[Event, ...]
+    tick_emitted: tuple[Event, ...]
+    abort: Event
+    entered: Event
+    progress_emitted: int = 0
+    reliable_emitted: int = 0
+
+
+@dataclass
+class _EnvelopeInvocation:
+    run_state: _EnvelopeRun
+
+    def run(self, context):
+        state = self.run_state
+        state.entered.set()
+        reliable_pattern = (3, 3, 2, 2)
+        for tick in range(60):
+            state.tick_releases[tick].wait()
+            if state.abort.is_set():
+                return OperationResult(SessionState.CANCELED, canceled=True)
+            for offset in range(25):
+                completed = tick * 25 + offset + 1
+                context.emit(
+                    Progress(
+                        "execute",
+                        items_done=completed,
+                        items_total=1_500,
+                        bytes_done=completed,
+                        bytes_total=1_500,
+                        current_path=f"{state.name}-progress-{completed}",
+                    )
+                )
+                state.progress_emitted += 1
+            reliable_count = reliable_pattern[(state.index + tick) % 4]
+            for item_index in range(reliable_count):
+                context.emit(
+                    ItemOutcome(
+                        item_id=_envelope_item_id(
+                            state.index,
+                            tick,
+                            item_index,
+                        ),
+                        kind="copy",
+                        path=f"{state.name}-{tick:02d}-{item_index}.txt",
+                        outcome=Outcome.SUCCEEDED,
+                    )
+                )
+                state.reliable_emitted += 1
+            state.tick_emitted[tick].set()
+        return OperationResult(SessionState.COMPLETED)
+
+    def snapshot(self) -> object:
+        return self.run_state.name
+
+
+def _wait_terminal(dispatcher: Dispatcher, session_id: str) -> None:
+    deadline = monotonic() + 5
+    while monotonic() < deadline:
+        record = dispatcher.get(session_id)
+        if record.result is not None:
+            return
+        sleep(0.005)
+    raise AssertionError(f"session did not reach terminal truth: {session_id}")
+
+
+def _drain_until_record(
+    registry: TaskRegistry,
+    task_id: str,
+    session_id: str,
+    drain_ids,
+):
+    updates = []
+    for _ in range(8):
+        batch = registry.drain(
+            task_id,
+            session_id,
+            next(drain_ids),
+            replay_from=None,
+        )
+        updates.extend(batch.updates)
+        if any(update.update_type == "record" for update in batch.updates):
+            return updates
+    raise AssertionError("terminal task record was not drained")
+
+
+def _mark_terminal_drained(
+    registry: TaskRegistry,
+    start,
+    terminal_record: SessionRecordView | None = None,
+) -> None:
+    task = registry._tasks[start.task_id]
+    with task.condition:
+        execution = task.execution_session_id == start.session_id
+        task.terminal_record = terminal_record or replace(
+            _record(
+                kind=EXECUTION_KIND if execution else PLAN_KIND,
+                supports_pause=execution,
+            ),
+            session_id=start.session_id,
+            started_at="2026-01-01T00:00:00+00:00" if execution else None,
+        )
+        task.terminal_pending = True
+        task.condition.notify_all()
+    for index in range(2):
+        drained = registry.drain(
+            start.task_id,
+            start.session_id,
+            DRAIN if index == 0 else "9" * 32,
+            replay_from=None,
+        )
+        if any(update.update_type == "record" for update in drained.updates):
+            return
+        assert drained.updates and drained.updates[-1].event.body_type == "Gap"
+    raise AssertionError("terminal task record was not drained")
+
+
+def _start_execution_overlay(
+    service: _ExecutionOverlayService | None = None,
+) -> tuple[TaskRegistry, _ExecutionOverlayService, TaskStartView, TaskStartView]:
+    service = service or _ExecutionOverlayService()
+    registry, _ = _registry(service)
+    planned = _start(registry)
+    _mark_terminal_drained(registry, planned)
+    registry.release_terminal_session(planned.task_id, planned.session_id)
+    registry.open_plan_view(planned.task_id)
+    execution = registry.start_execution(
+        planned.task_id,
+        request_id=planned.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(planned.task_id, planned.request_id, 0, False),
+    )
+    return registry, service, planned, execution
+
+
+def test_failed_application_admission_discards_provisional_delivery_state() -> None:
+    class Service(_Service):
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            sink = delivery_factory("task-" + "a" * 32)
+            sink(_event(1))
+            raise RuntimeError("application admission failed")
+
+    registry, service = _registry(Service())
+
+    with pytest.raises(RuntimeError, match="task start failed"):
+        _start(registry)
+
+    assert service.lifecycle_calls == []
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+    assert registry._start_responses == {}
+
+
+def test_br_g_33_integrated_admission_and_visible_overflow_gap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    adopt_entered = Event()
+    adopt_release = Event()
+    adopted_session_ids = []
+    overflow_release = Event()
+    overflow_finish = Event()
+    overflow_done = Event()
+    runs = {
+        "overflow": _IntegratedRun(
+            Event(),
+            overflow_release,
+            reliable_count=260,
+            flood_done=overflow_done,
+            finish=overflow_finish,
+        ),
+    }
+
+    def prepare_plan(request) -> PreparedSession:
+        name = Path(request.source_path).name
+        return PreparedSession(name)
+
+    def open_plan(checkpoint: object) -> _IntegratedInvocation:
+        name = checkpoint
+        return _IntegratedInvocation(name, runs[name])
+
+    dispatcher = Dispatcher(
+        {
+            PLAN_KIND: WorkflowRegistration(prepare_plan, open_plan),
+        }
+    )
+    monkeypatch.setattr(service_module, "_dispatcher", lambda _runtime: dispatcher)
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
+    real_adopt = service._observer.adopt
+
+    def instrumented_adopt(
+        session_id,
+        sink,
+        stream,
+        *,
+        from_sequence=1,
+    ):
+        result = real_adopt(
+            session_id,
+            sink,
+            stream,
+            from_sequence=from_sequence,
+        )
+        if not adopt_entered.is_set():
+            adopted_session_ids.append(session_id)
+            adopt_entered.set()
+            assert adopt_release.wait(2)
+        return result
+
+    monkeypatch.setattr(service._observer, "adopt", instrumented_adopt)
+    registry = _make_registry(service, drain_wait=1.0)
+    drain_ids = iter(f"{index:032x}" for index in range(100, 500))
+
+    def roots(name: str) -> tuple[str, str]:
+        source = tmp_path / "sources" / name
+        target = tmp_path / "targets" / name
+        source.mkdir(parents=True)
+        target.mkdir(parents=True)
+        return str(source), str(target)
+
+    try:
+        assert dispatcher._replay_capacity == 128
+        assert dispatcher._subscriber_capacity == 64
+        assert drain_module._CAPACITY == 64
+
+        source, target = roots("overflow")
+        start_results = []
+        start_errors = []
+
+        def start_first() -> None:
+            try:
+                start_results.append(
+                    registry.start_plan(
+                        source,
+                        target,
+                        deletion_policy=None,
+                        command_id=f"{1:032x}",
+                    )
+                )
+            except BaseException as error:
+                start_errors.append(error)
+
+        start_thread = Thread(target=start_first)
+        start_thread.start()
+        assert adopt_entered.wait(1)
+        assert start_thread.is_alive()
+        with pytest.raises(SessionNotFound):
+            dispatcher.get(adopted_session_ids[0])
+        assert not runs["overflow"].entered.wait(0.05)
+        adopt_release.set()
+        start_thread.join(2)
+        assert not start_thread.is_alive()
+        assert not start_errors
+        overflow = start_results[0]
+        assert runs["overflow"].entered.wait(1)
+        pending = registry.drain(
+            overflow.task_id,
+            overflow.session_id,
+            next(drain_ids),
+            replay_from=None,
+        )
+        pending_events = [
+            (update.event.body_type, update.event.body)
+            for update in pending.updates
+            if update.update_type == "event"
+        ]
+        assert pending_events[0] == ("StateChanged", {"state": "pending"})
+        assert not any(body_type == "Gap" for body_type, _body in pending_events)
+
+        assert dispatcher.get(overflow.session_id).result is None
+        overflow_release.set()
+        assert overflow_done.wait(2)
+        assert dispatcher.get(overflow.session_id).result is None
+
+        accepted_item_ids: set[str] = set()
+        ordinary_gap = None
+        first_batch = registry.drain(
+            overflow.task_id,
+            overflow.session_id,
+            next(drain_ids),
+            replay_from=None,
+        )
+        # A scheduling lead can surface the Gap as this entire first batch.
+        assert first_batch.updates
+        for _ in range(4):
+            batch = (
+                first_batch
+                if ordinary_gap is None and _ == 0
+                else registry.drain(
+                    overflow.task_id,
+                    overflow.session_id,
+                    next(drain_ids),
+                    replay_from=None,
+                )
+            )
+            for update in batch.updates:
+                if update.update_type != "event":
+                    continue
+                if update.event.body_type == "Gap":
+                    ordinary_gap = update.event
+                    break
+                if update.event.body_type == "ItemOutcome":
+                    accepted_item_ids.add(update.event.body["item_id"])
+            if ordinary_gap is not None:
+                break
+        assert ordinary_gap is not None
+        first_missed = ordinary_gap.body["first_missed_seq"]
+
+        recovery = registry.drain(
+            overflow.task_id,
+            overflow.session_id,
+            next(drain_ids),
+            replay_from=first_missed,
+        )
+        recovered_events = [
+            update.event for update in recovery.updates if update.update_type == "event"
+        ]
+        assert len(recovery.updates) == 64
+        assert recovered_events[0].body_type == "Gap"
+        assert recovered_events[0].body == {"first_missed_seq": first_missed}
+        retained_tail = [
+            event for event in recovered_events[1:] if event.body_type == "ItemOutcome"
+        ]
+        assert retained_tail
+        assert retained_tail[0].sequence > first_missed
+        accepted_item_ids.update(event.body["item_id"] for event in retained_tail)
+        emitted_item_ids = {f"{index + 1:032x}" for index in range(260)}
+        assert emitted_item_ids - accepted_item_ids
+
+        overflow_finish.set()
+        _wait_terminal(dispatcher, overflow.session_id)
+        terminal_updates = _drain_until_record(
+            registry,
+            overflow.task_id,
+            overflow.session_id,
+            drain_ids,
+        )
+        terminal = next(
+            update.record
+            for update in terminal_updates
+            if update.update_type == "record"
+        )
+        assert terminal.state == "completed"
+        assert terminal.result is not None
+        full_result = dispatcher.get(overflow.session_id).result
+        assert full_result is not None
+        assert len(full_result.items) == 260
+        assert any(
+            update.update_type == "event" and update.event.body_type == "Terminal"
+            for update in terminal_updates
+        )
+    finally:
+        adopt_release.set()
+        overflow_release.set()
+        overflow_finish.set()
+        registry.begin_close()
+        service.close(timeout=2)
+
+
+def test_sh_g_8_br_g_42_normal_event_envelope_is_bounded_and_lossless(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tick_releases = tuple(Event() for _ in range(60))
+    abort = Event()
+    runs = {
+        f"envelope-{index}": _EnvelopeRun(
+            f"envelope-{index}",
+            index,
+            tick_releases,
+            tuple(Event() for _ in range(60)),
+            abort,
+            Event(),
+        )
+        for index in range(4)
+    }
+
+    def prepare_plan(request) -> PreparedSession:
+        name = Path(request.source_path).name
+        return PreparedSession(name)
+
+    def open_plan(checkpoint: object) -> _EnvelopeInvocation:
+        return _EnvelopeInvocation(runs[checkpoint])
+
+    dispatcher = Dispatcher(
+        {PLAN_KIND: WorkflowRegistration(prepare_plan, open_plan)}
+    )
+    monkeypatch.setattr(service_module, "_dispatcher", lambda _runtime: dispatcher)
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
+    real_adopt = service._observer.adopt
+    adopted_session_ids = []
+    observed_adapter_queue_lengths = []
+    observed_dispatcher_queue_lengths = []
+
+    class _ObservedAdapterQueue(deque):
+        def __init__(self, values=()):
+            super().__init__(values)
+            observed_adapter_queue_lengths.append(len(self))
+
+        def append(self, value):
+            super().append(value)
+            observed_adapter_queue_lengths.append(len(self))
+
+    class _ObservedDispatcherQueue(deque):
+        def __init__(self, values=()):
+            super().__init__(values)
+            observed_dispatcher_queue_lengths.append(len(self))
+
+        def append(self, value):
+            super().append(value)
+            observed_dispatcher_queue_lengths.append(len(self))
+
+    def observed_adapter_deque(values=()):
+        return _ObservedAdapterQueue(values)
+
+    real_event_stream_init = event_bus_module.EventStream.__init__
+
+    def instrumented_event_stream_init(stream, *args, **kwargs):
+        real_event_stream_init(stream, *args, **kwargs)
+        stream._items = _ObservedDispatcherQueue(stream._items)
+
+    monkeypatch.setattr(drain_module, "deque", observed_adapter_deque)
+    monkeypatch.setattr(
+        event_bus_module.EventStream,
+        "__init__",
+        instrumented_event_stream_init,
+    )
+
+    def instrumented_adopt(
+        session_id,
+        sink,
+        stream,
+        *,
+        from_sequence=1,
+    ):
+        result = real_adopt(
+            session_id,
+            sink,
+            stream,
+            from_sequence=from_sequence,
+        )
+        adopted_session_ids.append(session_id)
+        return result
+
+    monkeypatch.setattr(service._observer, "adopt", instrumented_adopt)
+    registry = _make_registry(
+        service,
+        drain_wait=0.1,
+        progress_linger=0.001,
+    )
+    drain_ids = iter(f"{index:032x}" for index in range(100, 2_000))
+    starts = []
+    delivered_reliable: dict[str, list[str]] = {}
+    delivered_progress: dict[str, list[int]] = {}
+    terminal_records = {}
+
+    try:
+        for index in range(4):
+            name = f"envelope-{index}"
+            source = tmp_path / "sources" / name
+            target = tmp_path / "targets" / name
+            source.mkdir(parents=True)
+            target.mkdir(parents=True)
+            start = registry.start_plan(
+                str(source),
+                str(target),
+                deletion_policy=None,
+                command_id=f"{index + 1:032x}",
+            )
+            starts.append(start)
+            task = registry._tasks[start.task_id]
+            with task.condition:
+                task.queue = _ObservedAdapterQueue(task.queue)
+            delivered_reliable[start.session_id] = []
+            delivered_progress[start.session_id] = []
+            assert runs[name].entered.wait(1)
+
+        assert set(adopted_session_ids) == {
+            start.session_id for start in starts
+        }
+        assert len(adopted_session_ids) == 4
+        assert dispatcher._subscriber_capacity == 64
+        assert drain_module._CAPACITY == 64
+        assert all(
+            dispatcher.get(start.session_id).state is SessionState.RUNNING
+            for start in starts
+        )
+        assert all(
+            run.progress_emitted == 0 and run.reliable_emitted == 0
+            for run in runs.values()
+        )
+        assert not any(release.is_set() for release in tick_releases)
+
+        fixture_deadline = monotonic() + 15
+        reliable_pattern = (3, 3, 2, 2)
+        for tick in range(60):
+            tick_releases[tick].set()
+            for run in runs.values():
+                remaining = fixture_deadline - monotonic()
+                assert remaining > 0 and run.tick_emitted[tick].wait(remaining)
+            for index, start in enumerate(starts):
+                expected_ids = {
+                    _envelope_item_id(index, tick, item_index)
+                    for item_index in range(
+                        reliable_pattern[(index + tick) % 4]
+                    )
+                }
+                seen_this_tick: set[str] = set()
+                while seen_this_tick != expected_ids:
+                    assert monotonic() < fixture_deadline
+                    batch = registry.drain(
+                        start.task_id,
+                        start.session_id,
+                        next(drain_ids),
+                        replay_from=None,
+                    )
+                    for update in batch.updates:
+                        if update.update_type == "record":
+                            terminal_records[start.session_id] = update.record
+                            continue
+                        event = update.event
+                        assert event.body_type != "Gap"
+                        if event.body_type == "ItemOutcome":
+                            item_id = event.body["item_id"]
+                            delivered_reliable[start.session_id].append(item_id)
+                            if item_id in expected_ids:
+                                seen_this_tick.add(item_id)
+                        elif event.body_type == "Progress":
+                            delivered_progress[start.session_id].append(
+                                event.body["items_done"]
+                            )
+                assert seen_this_tick == expected_ids
+
+        for start in starts:
+            if start.session_id not in terminal_records:
+                updates = _drain_until_record(
+                    registry,
+                    start.task_id,
+                    start.session_id,
+                    drain_ids,
+                )
+                for update in updates:
+                    if update.update_type == "record":
+                        terminal_records[start.session_id] = update.record
+                    elif update.event.body_type == "Progress":
+                        delivered_progress[start.session_id].append(
+                            update.event.body["items_done"]
+                        )
+                    elif update.event.body_type == "ItemOutcome":
+                        delivered_reliable[start.session_id].append(
+                            update.event.body["item_id"]
+                        )
+                    else:
+                        assert update.event.body_type != "Gap"
+
+        assert sum(run.progress_emitted for run in runs.values()) == 6_000
+        assert sum(run.reliable_emitted for run in runs.values()) == 600
+        assert sum(map(len, delivered_reliable.values())) == 600
+        for index, start in enumerate(starts):
+            expected = [
+                _envelope_item_id(index, tick, item_index)
+                for tick in range(60)
+                for item_index in range(reliable_pattern[(index + tick) % 4])
+            ]
+            assert delivered_reliable[start.session_id] == expected
+            progress = delivered_progress[start.session_id]
+            assert progress
+            assert all(
+                earlier < later
+                for earlier, later in zip(progress, progress[1:], strict=False)
+            )
+            assert progress[-1] == 1_500
+            record = terminal_records[start.session_id]
+            assert record.state == "completed"
+            assert record.started_at is not None
+            assert record.ended_at is not None
+            result = record.result
+            assert result is not None
+            assert result.filesystem == "completed"
+            assert result.headline == "success"
+            assert result.integrity == "not-run"
+            assert result.recording == "ok"
+            assert result.audit == "ok"
+            assert result.disposition == "ran"
+            assert result.canceled is False
+            assert result.error is None
+            full_result = dispatcher.get(start.session_id).result
+            assert full_result is not None
+            assert [item.item_id for item in full_result.items] == expected
+            assert all(item.outcome is Outcome.SUCCEEDED for item in full_result.items)
+        assert set(terminal_records) == {
+            start.session_id for start in starts
+        }
+        assert observed_adapter_queue_lengths
+        assert 1 <= max(observed_adapter_queue_lengths) <= 64
+        assert observed_dispatcher_queue_lengths
+        assert 1 <= max(observed_dispatcher_queue_lengths) <= 64
+    finally:
+        abort.set()
+        for release in tick_releases:
+            release.set()
+        registry.begin_close()
+        service.close(timeout=2)
+
+
+def test_sh_g_8_observation_attaches_before_start_returns_and_pending_is_drained() -> None:
+    registry, service = _registry()
+    service.release_start.clear()
+    results = []
+    thread = Thread(target=lambda: results.append(_start(registry)))
+    thread.start()
+
+    assert service.start_entered.wait(1)
+    assert service.sink is not None
+    service.release_start.set()
+    thread.join(1)
+    start = results[0]
+    drained = registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    assert start.task_id == "task-" + "a" * 32
+    assert [item.event.sequence for item in drained.updates] == [1]
+    assert all(item.update_type == "event" for item in drained.updates)
+
+
+def test_start_response_is_singleflight_and_wire_policy_conflicts() -> None:
+    registry, service = _registry()
+    service.release_start.clear()
+    results = []
+    errors = []
+
+    def call(source="source"):
+        try:
+            results.append(
+                registry.start_plan(
+                    source,
+                    "target",
+                    deletion_policy=None,
+                    command_id="4" * 32,
+                    wire_intent=("source-slot", "target-slot", None),
+                )
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    first = Thread(target=call)
+    second = Thread(target=call)
+    first.start()
+    assert service.start_entered.wait(1)
+    second.start()
+    with pytest.raises(TaskIntentConflictError):
+        registry.start_plan(
+            "different",
+            "target",
+            deletion_policy="mirror",
+            command_id="4" * 32,
+            wire_intent=("source-slot", "target-slot", "mirror"),
+        )
+    service.release_start.set()
+    first.join(1)
+    second.join(1)
+
+    assert not errors
+    assert len(service.start_calls) == 1
+    assert results == [results[0], results[0]]
+
+
+@pytest.mark.parametrize(
+    ("failure", "expected_type", "expected_message"),
+    (
+        (
+            ObservationConflictError("private observation"),
+            ObservationConflictError,
+            "task start observation conflicted",
+        ),
+        (
+            TaskUnavailableError("private availability"),
+            TaskUnavailableError,
+            "task became unavailable during start",
+        ),
+        (
+            KeyboardInterrupt("private interruption"),
+            KeyboardInterrupt,
+            "task start was interrupted",
+        ),
+        (
+            SystemExit("private exit"),
+            KeyboardInterrupt,
+            "task start was interrupted",
+        ),
+        (
+            GeneratorExit("private generator exit"),
+            KeyboardInterrupt,
+            "task start was interrupted",
+        ),
+        (ValueError("private generic"), RuntimeError, "task start failed"),
+    ),
+)
+def test_failed_start_raises_fresh_closed_failure_category(
+    failure: BaseException,
+    expected_type: type[BaseException],
+    expected_message: str,
+) -> None:
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target, kwargs
+            raise failure
+
+    registry, _ = _registry(Service())
+
+    with pytest.raises(expected_type) as raised:
+        _start(registry)
+
+    assert raised.value is not failure
+    assert str(raised.value) == expected_message
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert registry._start_responses == {}
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+
+
+def test_invalid_task_start_view_discards_only_provisional_delivery_state(
+) -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            delivery_factory("task-" + "a" * 32)
+            return _private_invalid_plan(graph_references)
+
+    service = Service()
+    registry, _ = _registry(service)
+
+    with pytest.raises(RuntimeError) as raised:
+        _start(registry)
+
+    assert str(raised.value) == "task start failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert service.lifecycle_calls == []
+    assert registry._start_responses == {}
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+
+
+def test_exact_task_start_with_graph_string_discards_provisional_state() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            task_id = "task-" + "a" * 32
+            delivery_factory(task_id)
+            private = _private_plan_with_graph_string(graph_references)
+            return _raw_task_start_view(
+                task_id,
+                private.request_id,
+                private.session_id,
+            )
+
+    service = Service()
+    registry, _ = _registry(service)
+
+    with pytest.raises(RuntimeError, match="task start failed") as raised:
+        _start(registry)
+
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert service.lifecycle_calls == []
+    assert registry._start_responses == {}
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+
+
+@pytest.mark.parametrize(
+    ("request_id", "session_id"),
+    (("invalid", SESSION), (REQUEST, "invalid")),
+)
+def test_invalid_task_start_ids_discard_provisional_delivery_state(
+    request_id: str,
+    session_id: str,
+) -> None:
+    class Service(_Service):
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            task_id = "task-" + "a" * 32
+            delivery_factory(task_id)
+            return _raw_task_start_view(task_id, request_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+
+    with pytest.raises(RuntimeError, match="task start failed"):
+        _start(registry)
+
+    assert service.lifecycle_calls == []
+    assert registry._start_responses == {}
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+
+
+def test_concurrent_failed_start_retires_private_exception_graph() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target, kwargs
+            self.start_entered.set()
+            assert self.release_start.wait(2)
+            _raise_private_failure(graph_references)
+
+    service = Service()
+    service.release_start.clear()
+    registry, _ = _registry(service)
+    errors: list[BaseException] = []
+
+    def start() -> None:
+        try:
+            _start(registry)
+        except BaseException as error:
+            errors.append(error)
+
+    first = Thread(target=start)
+    second = Thread(target=start)
+    first.start()
+    assert service.start_entered.wait(1)
+    second.start()
+    deadline = monotonic() + 1
+    participants = 0
+    while monotonic() < deadline:
+        with registry._condition:
+            participants = registry._start_responses["4" * 32].participants
+        if participants == 2:
+            break
+        sleep(0.005)
+    assert participants == 2
+    service.release_start.set()
+    first.join(1)
+    second.join(1)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert len(errors) == 2
+    assert errors[0] is not errors[1]
+    assert all(type(error) is RuntimeError for error in errors)
+    assert all(str(error) == "task start failed" for error in errors)
+    assert all(error.__cause__ is None for error in errors)
+    assert all(error.__context__ is None for error in errors)
+    assert all(reference() is None for reference in graph_references[2:])
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert registry._start_responses == {}
+    assert registry._tasks == {}
+
+
+def test_br_g_33_progress_linger_default_and_constructor_boundary() -> None:
+    assert _make_registry(_Service())._progress_linger == 0.150
+    assert _make_registry(_Service(), progress_linger=1)._progress_linger == 1.0
+    for value in (True, False, None, "0.150"):
+        with pytest.raises(TypeError, match="progress linger"):
+            _make_registry(_Service(), progress_linger=value)
+    invalid_numbers = (
+        0.0,
+        -0.001,
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    )
+    for value in invalid_numbers:
+        with pytest.raises(ValueError, match="positive and finite"):
+            _make_registry(_Service(), progress_linger=value)
+
+
+def test_br_g_33_progress_only_linger_has_one_fixed_cadence_deadline() -> None:
+    with _progress_wait() as waiting:
+        waiting.clock.advance_to(9.0)
+        waiting.service.sink(_event(3, "Progress"))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        assert not waiting.done.is_set()
+
+        waiting.clock.advance_to(10.0)
+        waiting.service.sink(_event(4, "Progress"))
+        result = waiting.finish()
+
+        assert [update.event.sequence for update in result.updates] == [4]
+
+
+def test_br_g_33_first_progress_may_wait_the_full_default_linger() -> None:
+    with _progress_wait(
+        progress_linger=0.150,
+        progress_sequence=None,
+    ) as waiting:
+        waiting.clock.advance_to(1.0)
+        waiting.service.sink(_event(2, "Progress"))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+
+        waiting.clock.advance_to(1.149)
+        _wake_task(waiting.registry, waiting.task_id)
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 4)
+        assert not waiting.done.is_set()
+
+        waiting.clock.advance_to(1.150)
+        _wake_task(waiting.registry, waiting.task_id)
+        result = waiting.finish()
+
+        assert [update.event.sequence for update in result.updates] == [2]
+
+
+def test_br_g_33_prequeued_progress_keeps_its_first_availability_deadline() -> None:
+    clock = _ManualClock()
+    registry, service = _registry(
+        clock=clock,
+        drain_wait=25.0,
+        progress_linger=0.150,
+    )
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    service.sink(_event(2, "Progress"))
+
+    clock.advance_to(0.151)
+    drained = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+
+    assert [update.event.sequence for update in drained.updates] == [2]
+
+
+def test_br_g_33_progress_linger_starts_at_availability_and_keeps_outer_cap() -> None:
+    with _progress_wait(
+        drain_wait=12.0,
+        progress_linger=10.0,
+        progress_sequence=None,
+    ) as waiting:
+        waiting.clock.advance_to(5.0)
+        waiting.service.sink(_event(2, "Progress"))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+
+        waiting.clock.advance_to(10.0)
+        _wake_task(waiting.registry, waiting.task_id)
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 4)
+        assert not waiting.done.is_set()
+
+        waiting.clock.advance_to(12.0)
+        _wake_task(waiting.registry, waiting.task_id)
+        result = waiting.finish()
+
+        assert [update.event.sequence for update in result.updates] == [2]
+
+
+@pytest.mark.parametrize(
+    "body_type",
+    ["StateChanged", "Gap", "Terminal"],
+)
+def test_br_g_33_reliable_events_bypass_progress_linger(body_type: str) -> None:
+    with _progress_wait() as waiting:
+        waiting.service.sink(_event(3, body_type))
+        result = waiting.finish()
+
+        assert [
+            (update.event.sequence, update.event.body_type)
+            for update in result.updates
+        ] == [(2, "Progress"), (3, body_type)]
+
+
+def _copy_result(sequence: int, **changes: object) -> SessionEventView:
+    body = ItemOutcome(f"{sequence:032x}", OperationKind.COPY,
+                       f"file-{sequence}", Outcome.SUCCEEDED)
+    return _execution_event(SESSION, sequence, replace(body, **changes))
+
+
+def _integrity_result(sequence: int, **changes: object) -> SessionEventView:
+    body = IntegrityOutcome(
+        f"{sequence:032x}", str(sequence), "1", f"file-{sequence}",
+        IntegrityResult.VERIFIED, record_disposition=RecordDisposition.APPLIED,
+    )
+    return _execution_event(SESSION, sequence, replace(body, **changes))
+
+
+@pytest.mark.parametrize("session_kind,phase,result", [
+    pytest.param("baseline", "baseline", IntegrityResult.BASELINED, id="baseline"),
+    pytest.param("verify", "verify", IntegrityResult.BASELINED, id="verify-unattested"),
+    pytest.param("verify", "verify", IntegrityResult.VERIFIED, id="verify-attested"),
+    pytest.param("rebaseline", "rebaseline", IntegrityResult.BASELINED, id="rebaseline"),
+    pytest.param(EXECUTION_KIND, "verify", IntegrityResult.VERIFIED, id="linked-verify"),
+])
+def test_integrity_result_collection_has_one_fixed_25ms_deadline(
+    session_kind, phase, result,
+) -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = session_kind
+        waiting.clock.advance_to(1.0)
+        waiting.service.sink(_integrity_result(2, phase=phase, result=result))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        assert not waiting.done.is_set()
+
+        waiting.clock.advance_to(1.020)
+        waiting.service.sink(_integrity_result(
+            3, phase=phase, result=result, record_disposition=RecordDisposition.NOOP,
+        ))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 4)
+        assert not waiting.done.is_set()
+        waiting.service.sink(_execution_event(SESSION, 4, Progress(phase, 2, 3, 0, None, None)))
+
+        waiting.clock.advance_to(1.025)
+        _wake_task(waiting.registry, waiting.task_id)
+        assert [
+            (update.event.sequence, update.event.body_type)
+            for update in waiting.finish().updates
+        ] == [(2, "IntegrityOutcome"), (3, "IntegrityOutcome"), (4, "Progress")]
+
+
+@pytest.mark.parametrize("successor", [
+    pytest.param(_event(3, "StateChanged"), id="control"),
+    pytest.param(_execution_event(SESSION, 3, PhaseChanged("verify")), id="phase"),
+    pytest.param(_event(3, "Gap"), id="gap"),
+    pytest.param(_event(3, "Terminal"), id="terminal-event"),
+    pytest.param(_record(kind="verify", supports_pause=True), id="terminal-record"),
+    pytest.param(_integrity_result(3, result=IntegrityResult.ERROR), id="failure"),
+    pytest.param(_integrity_result(3, reason=IntegrityReason.RECORDING_ERROR), id="reason"),
+    pytest.param(_integrity_result(3, detail=""), id="detail"),
+    pytest.param(_integrity_result(3, detail_omitted_count=1), id="omitted-detail"),
+    pytest.param(_integrity_result(3, recording=RecordingStatus.DEGRADED), id="degraded"),
+    pytest.param(_integrity_result(3, record_disposition=None), id="no-disposition"),
+    pytest.param(_integrity_result(3, record_disposition=RecordDisposition.STALE), id="stale"),
+    pytest.param(_integrity_result(3, record_disposition=RecordDisposition.CONFLICT), id="conflict"),
+])
+def test_nonordinary_results_bypass_integrity_collection(successor) -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = "verify"
+        first = _integrity_result(2)
+        waiting.service.sink(first)
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        assert not waiting.done.is_set()
+
+        waiting.service.sink(successor)
+        updates = waiting.finish().updates
+        assert updates[0].event == first
+        assert (updates[1].event if type(successor) is SessionEventView
+                else updates[1].record) == successor
+        assert waiting.clock() == 0.0
+
+
+@pytest.mark.parametrize("session_kind,event", [
+    pytest.param(PLAN_KIND, _integrity_result(2), id="unowned"),
+    pytest.param("verify", _integrity_result(
+        2, phase="baseline", result=IntegrityResult.BASELINED), id="wrong-mode"),
+    pytest.param("baseline", _integrity_result(2, phase="baseline"), id="verified-baseline"),
+    pytest.param(EXECUTION_KIND, _integrity_result(
+        2, result=IntegrityResult.BASELINED), id="linked-baselined"),
+    pytest.param(EXECUTION_KIND, _integrity_result(
+        2, row_id=None, location_id=None), id="unrecorded-linked"),
+])
+def test_integrity_results_outside_owned_success_bypass_collection(session_kind, event) -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = session_kind
+        waiting.service.sink(event)
+        assert waiting.finish().updates[0].event == event
+        assert waiting.clock() == 0.0
+
+
+def test_copy_result_collection_has_one_fixed_25ms_deadline() -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
+        waiting.clock.advance_to(1.0)
+        waiting.service.sink(_copy_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        assert not waiting.done.is_set()
+        waiting.clock.advance_to(1.020)
+        waiting.service.sink(_copy_result(3))
+        waiting.service.sink(_event(4, "Progress"))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 4)
+        assert not waiting.done.is_set()
+        waiting.clock.advance_to(1.025)
+        _wake_task(waiting.registry, waiting.task_id)
+        result = waiting.finish()
+        assert [update.event.sequence for update in result.updates] == [2, 3, 4]
+
+
+@pytest.mark.parametrize("successor", [
+    _event(3, "StateChanged"), _event(3, "Gap"), _event(3, "Terminal"),
+    _record(), _copy_result(3, kind=OperationKind.UPDATE),
+    _copy_result(3, outcome=Outcome.FAILED, reason="io-error"),
+    _copy_result(3, detail_omitted_count=1),
+    _copy_result(3, detail={"durability_warnings": ("parent flush unsupported",)}),
+    _copy_result(3, recording=RecordingStatus.DEGRADED,
+                 recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED),
+])
+def test_nonordinary_results_bypass_copy_collection(successor) -> None:
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = EXECUTION_KIND
+        waiting.service.sink(_copy_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        waiting.service.sink(successor)
+        result = waiting.finish()
+        assert result.updates[0].event.sequence == 2
+        assert len(result.updates) == 2
+        assert waiting.clock() == 0.0
+
+
+@pytest.fixture(params=[
+    pytest.param((EXECUTION_KIND, _copy_result), id="copy"),
+    pytest.param(("verify", _integrity_result), id="ordinary-verify"),
+])
+def collectable_result(request):
+    return request.param
+
+
+def test_full_reliable_queue_bypasses_result_collection_without_loss(collectable_result) -> None:
+    session_kind, make_result = collectable_result
+    with _progress_wait(progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = session_kind
+        for sequence in range(2, 66):
+            waiting.service.sink(make_result(sequence))
+        result = waiting.finish()
+        assert [update.event.sequence for update in result.updates] == list(range(2, 66))
+        assert waiting.clock() == 0.0
+
+
+def test_result_collection_keeps_outer_drain_deadline(collectable_result) -> None:
+    session_kind, make_result = collectable_result
+    with _progress_wait(drain_wait=1.0, progress_sequence=None) as waiting:
+        waiting.registry._tasks[waiting.task_id].session_kind = session_kind
+        waiting.clock.advance_to(0.990)
+        waiting.service.sink(make_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        waiting.clock.advance_to(1.0)
+        _wake_task(waiting.registry, waiting.task_id)
+        assert waiting.finish().updates[0].event.sequence == 2
+
+
+def test_result_collection_supersession_and_shutdown_leave_reliable_queue_intact(collectable_result) -> None:
+    session_kind, make_result = collectable_result
+    with _progress_wait(progress_sequence=None) as waiting:
+        task = waiting.registry._tasks[waiting.task_id]
+        task.session_kind = session_kind
+        waiting.service.sink(make_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        with pytest.raises(DrainBusyError):
+            waiting.registry.drain(waiting.task_id, SESSION, "6" * 32,
+                                   replay_from=None)
+        assert waiting.finish().updates == ()
+        assert [update.sequence for update in task.queue] == [2]
+        assert waiting.clock() == 0.0
+    with _progress_wait(progress_sequence=None) as waiting:
+        task = waiting.registry._tasks[waiting.task_id]
+        task.session_kind = session_kind
+        waiting.service.sink(make_result(2))
+        waiting.clock.wait_for_calls(waiting.baseline_calls + 3)
+        waiting.registry.begin_close()
+        assert waiting.done.wait(1)
+        waiting.thread.join(1)
+        assert len(waiting.errors) == 1
+        assert isinstance(waiting.errors[0], TaskUnavailableError)
+        assert [update.sequence for update in task.queue] == [2]
+
+
+def test_copy_results_outside_execution_bypass_collection() -> None:
+    clock = _ManualClock()
+    registry, service = _registry(clock=clock)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    service.sink(_copy_result(2))
+    assert registry.drain(start.task_id, SESSION, "5" * 32,
+                          replay_from=None).updates[0].event.sequence == 2
+    assert clock() == 0.0
+
+
+def test_replay_bypasses_result_collection(collectable_result) -> None:
+    session_kind, make_result = collectable_result
+    clock = _ManualClock()
+
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            sink(make_result(from_sequence))
+            return self.reobserve_result
+
+    service = Service()
+    registry, _ = _registry(service, clock=clock)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    registry._tasks[start.task_id].session_kind = session_kind
+    recovered = registry.drain(start.task_id, SESSION, "5" * 32, replay_from=2)
+    assert recovered.updates[0].event.sequence == 2
+    assert clock() == 0.0
+
+
+def test_br_g_33_terminal_record_bypasses_progress_linger() -> None:
+    with _progress_wait() as waiting:
+        terminal = _record()
+        waiting.service.sink(terminal)
+        result = waiting.finish()
+
+        assert [update.update_type for update in result.updates] == [
+            "event",
+            "record",
+        ]
+        assert result.updates[1].record == terminal
+        assert (
+            waiting.registry._tasks[waiting.task_id].delivered_terminal_record
+            == terminal
+        )
+
+
+def test_br_g_33_recovered_progress_bypasses_progress_linger() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            sink(_event(from_sequence, "Progress"))
+            return self.reobserve_result
+
+    clock = _ManualClock()
+    service = Service()
+    registry, _ = _registry(
+        service,
+        clock=clock,
+        drain_wait=25.0,
+        progress_linger=10.0,
+    )
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    recovered = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=2,
+    )
+
+    assert service.reobserve_calls[0][2] == 2
+    assert [update.event.sequence for update in recovered.updates] == [2]
+
+
+def test_br_g_33_progress_coalescing_keeps_numeric_holes_without_recovery() -> None:
+    with _progress_wait() as waiting:
+        waiting.service.sink(_event(4, "Progress"))
+        waiting.service.sink(_event(5))
+        result = waiting.finish()
+
+        assert [update.event.sequence for update in result.updates] == [4, 5]
+        assert all(
+            update.event.body_type != "Gap" for update in result.updates
+        )
+        assert waiting.service.reobserve_calls == []
+
+
+def test_br_g_33_progress_coalesces_and_reliable_never_drops_or_reorders() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    for sequence in range(2, 1002):
+        service.sink(_event(sequence, "Progress"))
+    service.sink(_event(1002, "StateChanged"))
+    drained = registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    assert [(item.event.sequence, item.event.body_type) for item in drained.updates] == [
+        (1001, "Progress"),
+        (1002, "StateChanged"),
+    ]
+    assert service.reobserve_calls == []
+
+
+def test_br_g_33_progress_yields_to_a_full_reliable_queue() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    for sequence in range(2, 66):
+        service.sink(_event(sequence))
+
+    service.sink(_event(66, "Progress"))
+    drained = registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+
+    assert len(drained.updates) == 64
+    assert all(item.event.body_type != "Progress" for item in drained.updates)
+
+
+def test_br_g_33_reliable_capacity_blocks_until_drain_and_close_wakes() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    for sequence in range(2, 66):
+        service.sink(_event(sequence))
+    offered = Event()
+
+    def offer() -> None:
+        service.sink(_event(66))
+        offered.set()
+
+    producer = Thread(target=offer)
+    producer.start()
+    assert not offered.wait(0.05)
+    first = registry.drain(start.task_id, SESSION, "5" * 32, replay_from=None)
+    assert offered.wait(1)
+    producer.join(1)
+    second = registry.drain(start.task_id, SESSION, "6" * 32, replay_from=None)
+
+    assert [item.event.sequence for item in first.updates] == list(range(2, 66))
+    assert [item.event.sequence for item in second.updates] == [66]
+
+    for sequence in range(67, 131):
+        service.sink(_event(sequence))
+    blocked = Event()
+    closer_producer = Thread(
+        target=lambda: (service.sink(_event(131)), blocked.set())
+    )
+    closer_producer.start()
+    assert not blocked.wait(0.05)
+    registry.begin_close()
+    assert blocked.wait(1)
+    closer_producer.join(1)
+
+
+def test_br_g_33_superseding_drain_consumes_nothing_and_busy_waits_for_release() -> None:
+    with _progress_wait(drain_wait=1.0) as waiting:
+        with pytest.raises(DrainBusyError):
+            waiting.registry.drain(
+                waiting.task_id,
+                SESSION,
+                "6" * 32,
+                replay_from=None,
+            )
+        superseded = waiting.finish()
+        waiting.clock.advance_to(10.0)
+        after = waiting.registry.drain(
+            waiting.task_id,
+            SESSION,
+            "7" * 32,
+            replay_from=None,
+        )
+
+        assert superseded.updates == ()
+        assert [item.event.sequence for item in after.updates] == [2]
+
+
+def test_br_g_33_competing_recovery_cannot_reobserve_before_busy_refusal() -> None:
+    with _progress_wait(drain_wait=1.0) as waiting:
+        with pytest.raises(DrainBusyError):
+            waiting.registry.drain(
+                waiting.task_id,
+                SESSION,
+                "6" * 32,
+                replay_from=2,
+            )
+
+        assert waiting.finish().updates == ()
+        assert waiting.service.reobserve_calls == []
+
+
+def test_br_g_33_recovery_clears_uncertain_queue_and_calls_facade_outside_lock() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    service.sink(_event(2))
+    service.release_reobserve.clear()
+    results = []
+    recovery = Thread(
+        target=lambda: results.append(
+            registry.drain(
+                start.task_id,
+                SESSION,
+                "5" * 32,
+                replay_from=2,
+            )
+        )
+    )
+    recovery.start()
+    assert service.reobserve_entered.wait(1)
+    acquired = registry._tasks[start.task_id].condition.acquire(timeout=0.2)
+    assert acquired
+    registry._tasks[start.task_id].condition.release()
+    service.release_reobserve.set()
+    recovery.join(1)
+
+    assert service.reobserve_calls[0][2] == 2
+    assert results[0].updates == ()
+
+
+def test_br_g_33_terminal_recovery_enqueues_record_and_stops_at_truth() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    terminal = _record()
+    service.reobserve_result = terminal
+
+    drained = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=2,
+    )
+
+    assert len(drained.updates) == 1
+    assert drained.updates[0].update_type == "record"
+    assert drained.updates[0].record == terminal
+
+
+def test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            sink(
+                SessionEventView(
+                    session_id,
+                    2,
+                    "2026-01-01T00:00:00+00:00",
+                    CORE_EVENT_SCHEMA_VERSION,
+                    "Gap",
+                    {"first_missed_seq": 2},
+                )
+            )
+            sink(
+                SessionEventView(
+                    session_id,
+                    4,
+                    "2026-01-01T00:00:00+00:00",
+                    CORE_EVENT_SCHEMA_VERSION,
+                    "StateChanged",
+                    {"state": "running"},
+                )
+            )
+            return self.reobserve_result
+
+    service = Service()
+    terminal = _record()
+    service.reobserve_result = terminal
+    registry, _ = _registry(service)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    drained = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=2,
+    )
+
+    assert [update.update_type for update in drained.updates] == [
+        "event",
+        "event",
+        "record",
+    ]
+    assert [
+        update.event.body_type for update in drained.updates[:2]
+    ] == ["Gap", "StateChanged"]
+    assert drained.updates[0].event.body == {"first_missed_seq": 2}
+    assert drained.updates[2].record == terminal
+
+
+def test_br_g_33_terminal_recovery_never_exceeds_the_queue_or_batch_cap() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            for sequence in range(2, 66):
+                sink(_event(sequence))
+            return _record()
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    replay = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=2,
+    )
+    before_terminal = monotonic()
+    terminal = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+    terminal_elapsed = monotonic() - before_terminal
+
+    assert len(replay.updates) == 64
+    assert all(update.update_type == "event" for update in replay.updates)
+    assert len(terminal.updates) == 1
+    assert terminal.updates[0].update_type == "record"
+    assert terminal_elapsed < 0.1
+
+
+def test_br_g_33_synchronous_recovery_cannot_deadlock_at_reliable_capacity() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            del session_id, from_sequence
+            for sequence in range(2, 67):
+                sink(_event(sequence))
+            return _record(terminal=False)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    with pytest.raises(ObservationConflictError) as raised:
+        registry.drain(
+            start.task_id,
+            SESSION,
+            "5" * 32,
+            replay_from=2,
+        )
+
+    assert str(raised.value) == "task observation recovery conflicted"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+
+    assert not registry._tasks[start.task_id].queue
+    assert registry._tasks[start.task_id].terminal_record is None
+
+
+@pytest.mark.parametrize(
+    ("exception_base", "expected_type", "expected_message"),
+    (
+        (Exception, RuntimeError, "task observation recovery failed"),
+        (
+            ObservationConflictError,
+            ObservationConflictError,
+            "task observation recovery conflicted",
+        ),
+        (
+            TaskUnavailableError,
+            TaskUnavailableError,
+            "task became unavailable during observation recovery",
+        ),
+        (
+            KeyboardInterrupt,
+            KeyboardInterrupt,
+            "task observation recovery was interrupted",
+        ),
+        (
+            SystemExit,
+            KeyboardInterrupt,
+            "task observation recovery was interrupted",
+        ),
+        (
+            GeneratorExit,
+            KeyboardInterrupt,
+            "task observation recovery was interrupted",
+        ),
+    ),
+    ids=(
+        "exception",
+        "observation-conflict",
+        "task-unavailable",
+        "keyboard-interrupt",
+        "system-exit",
+        "generator-exit",
+    ),
+)
+def test_br_g_33_failed_recovery_retires_private_graph_and_invalidates_callbacks(
+    exception_base: type[BaseException],
+    expected_type: type[BaseException],
+    expected_message: str,
+) -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        recovery_sink = None
+
+        def reobserve(self, session_id, sink, from_sequence):
+            del session_id, from_sequence
+            self.recovery_sink = sink
+            _raise_private_failure(
+                graph_references,
+                exception_base=exception_base,
+                hostile_text=True,
+            )
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    with pytest.raises(expected_type) as raised:
+        registry.drain(
+            start.task_id,
+            SESSION,
+            "5" * 32,
+            replay_from=2,
+        )
+    assert str(raised.value) == expected_message
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    service.recovery_sink(_event(2))
+
+    assert not registry._tasks[start.task_id].queue
+    task = registry._tasks[start.task_id]
+    assert not task.transition
+    assert task.active_drain is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+
+def test_br_g_33_task_session_mismatch_and_concurrent_recovery_are_named() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    with pytest.raises(TaskUnavailableError):
+        registry.drain(start.task_id, "9" * 32, DRAIN, replay_from=None)
+
+    service.release_reobserve.clear()
+    errors = []
+    first = Thread(
+        target=lambda: registry.drain(
+            start.task_id,
+            SESSION,
+            "5" * 32,
+            replay_from=2,
+        )
+    )
+    first.start()
+    assert service.reobserve_entered.wait(1)
+    with pytest.raises(ObservationConflictError):
+        registry.drain(
+            start.task_id,
+            SESSION,
+            "6" * 32,
+            replay_from=2,
+        )
+    service.release_reobserve.set()
+    first.join(1)
+
+
+def test_br_g_33_shutdown_wakes_blocked_drain_without_domain_cleanup() -> None:
+    with _progress_wait(drain_wait=1.0) as waiting:
+        waiting.registry.begin_close()
+        assert waiting.done.wait(1)
+        waiting.thread.join(1)
+
+        assert len(waiting.errors) == 1
+        assert isinstance(waiting.errors[0], TaskUnavailableError)
+        assert waiting.service.lifecycle_calls == []
+
+
+def test_br_g_33_close_task_delegates_terminal_fact_and_retires_delivery() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    _mark_terminal_drained(registry, start)
+    delivery = TaskTerminalDelivery(
+        replace(_record(), session_id=start.session_id)
+    )
+    closed = registry.close_task(start.task_id, start.session_id)
+
+    assert closed == TaskCloseView(start.task_id, start.session_id)
+    assert service.lifecycle_calls == [
+        ("close_task", start.task_id, start.session_id, delivery),
+    ]
+    assert start.task_id not in registry._tasks
+    with pytest.raises(TaskUnavailableError):
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+
+def _inventory_read_registry(*, selected_paths=(), subtree_roots=(), path="one.txt"):
+    from namisync.core.models import EntryKind, VolumeId, ScanWarning, ScanWarningCode
+    from namisync.db.repositories import InventoryPresence, InventorySnapshot
+    from namisync.workflows import (RecallSummary, InventoryDetails, LocationBinding, VolumeResolution,
+        VolumeResolutionState, build_inventory_projection)
+    from namisync.workflows.views import inventory_current_detail
+    from _db_fixtures import NOW, file_stat, attestation
+
+    stat = file_stat(identity_index=1)
+    from namisync.core.pathing import normalize_relative_path
+    row = InventorySnapshot("1", 1, path, normalize_relative_path(path), EntryKind.FILE, InventoryPresence.PRESENT,
+        stat, attestation(stat), NOW, NOW, "scope", None, None, None, None, None)
+    projection = build_inventory_projection(1, (row,), (
+        ScanWarning(ScanWarningCode.ACCESS_DENIED, "warning", "unreadable"),))
+    binding = LocationBinding(VolumeId("test", "NTFS"), "", "C:\\", ("C:\\",), False, location_id=1)
+    details = InventoryDetails(REQUEST, VolumeResolution(VolumeResolutionState.RESOLVED,
+        binding, r"C:\root", "C:\\"), location_id=1, observed_count=1, complete=False,
+        selected_paths=selected_paths, subtree_roots=subtree_roots, recall=RecallSummary())
+    class Service(_Service):
+        def __init__(self):
+            super().__init__()
+            self.detail = inventory_current_detail(row)
+            self.detail_calls = []
+            self.before_detail = lambda: None
+        def get_task_inventory_projection(self, task_id, request_id):
+            self.projection_calls += 1
+            assert request_id == REQUEST
+            return projection, details
+        def read_inventory_detail(self, location_id, row_id):
+            self.detail_calls.append((location_id, row_id))
+            self.before_detail()
+            return self.detail
+    registry, service = _registry(Service())
+    start = _start(registry)
+    registry._tasks[start.task_id].task_kind = "inventory"
+    _mark_terminal_drained(registry, start, replace(_record(kind="inventory", supports_pause=False), session_id=start.session_id))
+    return registry, service, start, projection
+
+
+@pytest.mark.parametrize(("paths", "roots", "kind", "path"), [
+    ((), (), "location", None),
+    (("one.txt",), (), "item", "one.txt"),
+    ((), ("folder",), "folder", "folder"),
+    (("one.txt", "two.txt"), (), "selection", None),
+    ((), ("folder", "other"), "selection", None),
+    (("one.txt",), ("folder",), "selection", None),
+])
+def test_inventory_summary_carries_bounded_producing_scope(paths, roots, kind, path):
+    registry, service, start, projection = _inventory_read_registry(
+        selected_paths=paths, subtree_roots=roots)
+    registry.release_terminal_session(start.task_id, start.session_id)
+    assert registry.open_inventory_view(start.task_id)["scan_scope"] == {"kind": kind, "path": path}
+
+
+@pytest.mark.parametrize("copied", [False, True])
+def test_inventory_anchor_admits_only_current_ordinary_scope_without_reads_or_binding(copied):
+    from namisync.interfaces.web.drain import _InventoryIntegrityState
+    from namisync.workflows import CopiedSubjectScope
+    registry, service, start, projection = _inventory_read_registry(path=r"folder\one.txt")
+    registry.release_terminal_session(start.task_id, start.session_id)
+    view = registry.open_inventory_view(start.task_id)
+    task = registry._tasks[start.task_id]
+    task.session_id, task.request_id, task.session_kind = "8" * 32, "9" * 32, "verify"
+    task.session_released = False
+    ordinary = _InventoryIntegrityState("verify", 1, frozenset({"1"}),
+        request_id=task.request_id, session_id=task.session_id,
+        copied_scope=CopiedSubjectScope((r"FOLDER\ONE.TXT",)) if copied else None)
+    task.ordinary_integrity = ordinary
+    before = (service.projection_calls, list(service.detail_calls), dict(ordinary.path_rows), dict(ordinary.row_paths))
+    payload = dict(session_id=task.session_id, expected_revision=view["view_revision"], item_id="1:1")
+    assert registry.get_inventory_anchor(start.task_id, **payload)["node_id"] == projection.node_id_by_row_id["1"]
+    assert registry.get_inventory_anchor(start.task_id, **{**payload, "session_id": start.session_id})["disposition"] == "conflict"
+    assert registry.get_inventory_anchor(start.task_id, **{**payload, "expected_revision": 99})["disposition"] == "conflict"
+    with pytest.raises(ValueError, match="location"):
+        registry.get_inventory_anchor(start.task_id, **{**payload, "item_id": "2:1"})
+    if copied:
+        assert registry.get_inventory_anchor(start.task_id, **{**payload, "item_id": "1:2"})["index"] is None
+        ordinary.path_rows["FOLDER\\ONE.TXT"] = "2"
+        with pytest.raises(ValueError, match="copied scope"):
+            registry.get_inventory_anchor(start.task_id, **payload)
+        ordinary.path_rows.clear()
+    else:
+        with pytest.raises(ValueError, match="selected scope"):
+            registry.get_inventory_anchor(start.task_id, **{**payload, "item_id": "1:2"})
+    assert (service.projection_calls, service.detail_calls, ordinary.path_rows, ordinary.row_paths) == before
+
+
+def test_inventory_read_open_waits_for_release_then_windows_need_no_full_reread():
+    registry, service, start, projection = _inventory_read_registry()
+    with pytest.raises(TaskUnavailableError):
+        registry.open_inventory_view(start.task_id)
+    assert service.projection_calls == 0
+    registry.release_terminal_session(start.task_id, start.session_id)
+    summary = registry.open_inventory_view(start.task_id)
+    assert not summary["scan_complete"] and summary["warning_count"] == 1
+    assert registry.open_inventory_view(start.task_id) == {**summary, "disposition": "current"}
+    for offset in range(3):
+        assert len(registry.get_inventory_window(start.task_id, expected_revision=0, offset=offset, limit=1)["rows"]) <= 1
+    node = projection.node_id_by_row_id["1"]
+    nominated = registry.get_inventory_window(start.task_id, expected_revision=0, offset=2,
+                                              limit=1, anchor_node_id=node)
+    full = registry.get_inventory_window(start.task_id, expected_revision=0, offset=0, limit=256)
+    assert nominated["anchor_node_id"] == node
+    assert nominated["anchor_visible_index"] == next(
+        row["visible_index"] for row in full["rows"] if row["node_id"] == node)
+    detail = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=node)
+    assert detail["detail"]["attestation"]["content"]["provenance"] == "copy"
+    assert service.detail_calls == [(1, "1")] and service.projection_calls == 1
+    warning = next(node for node in projection.nodes if node.warning)
+    warning_detail = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=warning.node_id)
+    assert warning_detail["detail"] is None
+    assert warning_detail["snapshot"] == {"path": warning.warning.rel_path,
+        "warning": {"code": warning.warning.code.value, "detail": warning.warning.detail}}
+    stale = registry.get_inventory_detail(start.task_id, expected_revision=1, node_id=warning.node_id)
+    assert stale["disposition"] == "conflict" and stale["snapshot"] is None
+    with pytest.raises(ValueError, match="synthetic inventory root"):
+        registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=projection.nodes[0].node_id)
+    assert service.detail_calls == [(1, "1")]
+    registry.close_task(start.task_id, start.session_id)
+    assert registry._inventory_views == {}
+
+
+@pytest.mark.parametrize("blocked", ["dirty", "loading", "unreleased", "prior-publication"])
+def test_inventory_selection_requires_current_settled_publication(blocked):
+    registry, service, start, projection = _inventory_read_registry()
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    task = registry._tasks[start.task_id]
+    if blocked == "dirty":
+        task.inventory_view_dirty = True
+    elif blocked == "loading":
+        task.inventory_view_loading = True
+    elif blocked == "unreleased":
+        task.session_released = False
+    else:
+        task.request_id = "f" * 32
+    with pytest.raises(TaskUnavailableError):
+        registry.set_inventory_selection(start.task_id, start.request_id,
+            expected_revision=0, node_id=None, selected=True)
+    with pytest.raises(TaskUnavailableError):
+        registry.set_inventory_highlighted_selection(start.task_id, start.request_id,
+            expected_revision=0, expected_highlight_revision=0, selected=True)
+    assert registry._inventory_views[start.task_id].selected_row_ids == frozenset()
+
+
+@pytest.mark.parametrize(("activity", "new_scan", "current_scan"), [
+    ("inventory", True, True),
+    ("inventory", False, True),
+    ("inventory", True, False),
+    ("verify", True, True),
+    ("baseline", True, True),
+    ("rebaseline", True, True),
+])
+def test_inventory_selection_initializes_once_and_preserves_empty_choices(activity, new_scan, current_scan):
+    registry, service, start, projection = _inventory_read_registry()
+    task = registry._tasks[start.task_id]
+    task.session_kind = "inventory"
+    registry.release_terminal_session(start.task_id, start.session_id)
+    initial = registry.open_inventory_view(start.task_id)
+    assert initial["selected_file_count"] == 1
+    cleared = registry.set_inventory_selection(start.task_id, start.request_id,
+        expected_revision=0, node_id=None, selected=False)
+    original = service.get_task_inventory_projection
+    _, details = original(start.task_id, start.request_id)
+    request_id = "f" * 32 if new_scan else start.request_id
+    scan_id = request_id if current_scan else start.request_id
+    service.get_task_inventory_projection = lambda *args: (projection, replace(details, request_id=scan_id))
+    task.session_kind, task.request_id = activity, request_id
+    task.generation += 1
+    task.inventory_view_dirty = True
+    published = registry.open_inventory_view(start.task_id)
+    assert published["selected_file_count"] == 0
+    assert published["view_revision"] == cleared["view_revision"] + 1
+    assert registry.open_inventory_view(start.task_id)["selected_file_count"] == 0
+
+
+def test_inventory_real_integrity_and_refresh_preserve_subset_missing_and_new_files(tmp_path):
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.workflows import LocationCandidate
+    root = tmp_path / "files"
+    root.mkdir()
+    (root / "one.bin").write_bytes(b"one")
+    (root / "two.bin").write_bytes(b"two")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+            return registry.open_inventory_view(start.task_id)
+        shell = registry.create_task_shell("1" * 32)
+        scan = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id="2" * 32, wire_intent=("inventory", str(root)))
+        summary = finish(scan)
+        assert summary["selected_file_count"] == 2
+        rows = registry.get_inventory_window(scan.task_id, expected_revision=0, offset=0, limit=256)["rows"]
+        subset = registry.set_inventory_selection(scan.task_id, scan.request_id,
+            expected_revision=0, node_id=rows[0]["node_id"], selected=False)
+        assert subset["selected_file_count"] == 1
+        baseline = registry.start_inventory_integrity(scan.task_id, scan.request_id,
+            expected_revision=subset["view_revision"], mode="baseline", accept_current_evidence=False,
+            command_id="3" * 32, wire_intent=("baseline",))
+        baselined = finish(baseline)
+        assert baselined["scan_request_id"] != summary["scan_request_id"]
+        assert baselined["selected_file_count"] == 1
+        (root / "one.bin").unlink()
+        (root / "two.bin").unlink()
+        (root / "new.bin").write_bytes(b"new")
+        refresh = registry.refresh_inventory(scan.task_id, baseline.request_id,
+            expected_revision=baselined["view_revision"], node_id=None,
+            command_id="4" * 32, wire_intent=("refresh",))
+        refreshed = finish(refresh)
+        assert refreshed["selected_file_count"] == 1
+        assert refreshed["scan_request_id"] == refresh.request_id
+        fresh_rows = registry.get_inventory_window(scan.task_id,
+            expected_revision=refreshed["view_revision"], offset=0, limit=256)["rows"]
+        assert {row["display"]: (row["presence"], row["selection"]) for row in fresh_rows} == {
+            "one.bin": ("missing", "none"), "two.bin": ("missing", "all"),
+            "new.bin": ("present", "none"),
+        }
+        registry.close_task(scan.task_id, refresh.session_id)
+
+
+def test_inventory_selection_real_scan_release_view_and_close(tmp_path):
+    from namisync.interfaces.service import SessionObserver, _dispatcher
+    from namisync.workflows import LocationCandidate
+    from _inventory_fixtures import _Resolver, _Scanner, _file, _runtime
+    from _service_fixtures import make_service
+
+    mount = tmp_path / "mount"
+    (mount / "managed" / "folder").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file(r"folder\one.bin", 1), _file("outside.bin", 2)))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    dispatcher = _dispatcher(runtime)
+    service = make_service(runtime=runtime, dispatcher=dispatcher, observer=SessionObserver(dispatcher))
+    registry = _make_registry(service, drain_wait=0.1)
+    try:
+        shell = registry.create_task_shell("1" * 32)
+        start = registry.start_setup_inventory(shell.task_id,
+            LocationCandidate.remembered(location_id, selected_mount=str(mount)),
+            command_id="2" * 32, wire_intent=("inventory", "root"))
+        _wait_terminal(dispatcher, start.session_id)
+        for value in range(100, 150):
+            registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+            if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                break
+        registry.release_terminal_session(start.task_id, start.session_id)
+        assert registry.open_inventory_view(start.task_id)["selected_file_count"] == 2
+        cleared = registry.set_inventory_selection(start.task_id, start.request_id,
+            expected_revision=0, node_id=None, selected=False)
+        assert cleared["selected_file_count"] == 0
+        result = registry.set_inventory_selection(start.task_id, start.request_id,
+            expected_revision=1, node_id=None, selected=True)
+        assert result["selected_file_count"] == 2 and result["selection"] == "all"
+        assert len(scanner.calls) == 1
+        assert registry.get_inventory_window(start.task_id,
+            expected_revision=0, offset=0, limit=256)["disposition"] == "conflict"
+        rows = registry.get_inventory_window(start.task_id,
+            expected_revision=2, offset=0, limit=256)["rows"]
+        assert all(row["selection"] == "all" for row in rows)
+        assert registry.set_inventory_selection(start.task_id, start.request_id,
+            expected_revision=0, node_id=None, selected=False)["disposition"] == "conflict"
+        folder = next(row for row in rows if row["is_container"])
+        highlighted = registry.mutate_inventory_highlight(start.task_id,
+            expected_view_revision=2, expected_highlight_revision=0,
+            gesture="replace", node_id=folder["node_id"])
+        assert highlighted["highlighted_count"] == 1 and highlighted["selected_file_count"] == 2
+        assert registry.set_inventory_highlighted_selection(start.task_id, start.request_id,
+            expected_revision=2, expected_highlight_revision=0, selected=False)["disposition"] == "conflict"
+        selected = registry.set_inventory_highlighted_selection(start.task_id, start.request_id,
+            expected_revision=2, expected_highlight_revision=1, selected=False)
+        assert selected["selected_file_count"] == 1 and selected["highlighted_count"] == 1
+        assert registry.get_inventory_window(start.task_id,
+            expected_revision=3, offset=0, limit=256)["rows"][0]["highlighted"]
+        registry.close_task(start.task_id, start.session_id)
+        assert registry._inventory_views == {}
+    finally:
+        service.close()
+
+
+def test_inventory_structural_folder_detail_uses_guarded_snapshot_without_ledger_read():
+    registry, service, start, projection = _inventory_read_registry(path=r"Parent\Nested\file.txt")
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    folder = next(node for node in projection.nodes if node.rel_path == r"Parent\Nested")
+    value = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=folder.node_id)
+    assert value["detail"] is None and value["snapshot"] == {"path": r"Parent\Nested", "warning": None}
+    stale = registry.get_inventory_detail(start.task_id, expected_revision=1, node_id=folder.node_id)
+    assert stale["disposition"] == "conflict" and stale["snapshot"] is None and stale["detail"] is None
+    assert service.detail_calls == []
+
+
+@pytest.mark.parametrize("notices", (False, True))
+def test_supported_long_inventory_paths_cross_production_window_and_detail_bridge(notices):
+    import json
+    from namisync.core.models import ScanWarning, ScanWarningCode
+    from namisync.core.pathing import normalize_relative_path
+    from namisync.workflows import build_inventory_projection
+    from namisync.workflows.views import inventory_current_detail
+    from namisync.interfaces.web.bridge import AdmissionGranted, BridgeDispatcher
+    from namisync.interfaces.web.commands import production_command_specs
+    from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
+
+    registry, service, start, original = _inventory_read_registry()
+    _, details = service.get_task_inventory_projection(start.task_id, start.request_id)
+    prefix = "\\".join(["文" * 250] * 100)
+    paths = [prefix + rf"\item-{index:03}.txt" for index in range(256)]
+    original_row = original.row_for_id("1")
+    rows = tuple(replace(original_row, row_id=str(index + 1), rel_path=path,
+        rel_path_key=normalize_relative_path(path)) for index, path in enumerate(paths))
+    warnings = tuple(ScanWarning(ScanWarningCode.SCALAR_UNREPRESENTABLE, path, "\x01" * 1024) for path in paths)
+    projection = build_inventory_projection(1, () if notices else rows, warnings if notices else ())
+    service.get_task_inventory_projection = lambda *_: (projection, details)
+    service.detail = inventory_current_detail(rows[0])
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    commands = production_command_specs(picker=lambda: None, slots=SimpleNamespace(), registry=registry,
+        cosmetics=SimpleNamespace(), shell_ready=lambda _: None, readiness_echo=lambda *_: True)
+    dispatcher = BridgeDispatcher(document=SimpleNamespace(require_trusted=lambda: None), commands=commands,
+        admit=lambda _: AdmissionGranted(ReadinessContext(CommandPhase.OPEN, 0)))
+
+    def dispatch(command, payload):
+        return dispatcher.dispatch(json.dumps({"schema_version": 1, "request_id": "a1" * 16,
+            "command": command, "payload": {"task_id": start.task_id, "expected_revision": 0, **payload}}))
+
+    response = dispatch("get_inventory_window", {"offset": 0 if notices else 100, "limit": 256})
+    assert response["ok"] is True and len(response["result"]["rows"]) == 256
+    window_row = response["result"]["rows"][0]
+    assert len(window_row["display"].encode("utf-16-le")) // 2 <= 300
+    if notices:
+        assert set(window_row["warning"]) == {"code", "detail"}
+    else:
+        assert window_row["display"] == "item-000.txt"
+    exact = dispatch("get_inventory_detail", {"node_id": window_row["node_id"]})
+    assert exact["ok"] is True and exact["result"]["snapshot"]["path"] == paths[0]
+    if notices:
+        assert exact["result"]["detail"] is None
+        assert exact["result"]["snapshot"]["warning"]["detail"] == warnings[0].detail
+        assert service.detail_calls == []
+    else:
+        assert exact["result"]["detail"]["row"]["path"] == paths[0]
+        assert service.detail_calls == [(1, "1")]
+
+
+@pytest.mark.parametrize("change", ["removed", "renamed", "generation", "view", "close"])
+def test_inventory_current_detail_refuses_stale_location_path_and_view(change):
+    registry, service, start, projection = _inventory_read_registry()
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    node_id = projection.node_id_by_row_id["1"]
+    if change == "removed":
+        service.detail = None
+    elif change == "renamed":
+        service.detail["row"]["path_key"] = "MOVED.TXT"
+    elif change == "generation":
+        service.before_detail = lambda: setattr(registry._tasks[start.task_id], "generation", 10)
+    elif change == "view":
+        service.before_detail = lambda: registry.update_inventory_view(start.task_id,
+            expected_revision=0, search_query="one", filters=frozenset(),
+            sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+            collapse_node_id=None, collapsed=None)
+    else:
+        service.before_detail = lambda: registry.close_task(start.task_id, start.session_id)
+    if change == "close":
+        with pytest.raises(TaskUnavailableError):
+            registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=node_id)
+    else:
+        result = registry.get_inventory_detail(start.task_id, expected_revision=0, node_id=node_id)
+        assert result["detail"] is None
+        assert result["snapshot"] is None
+        assert result["disposition"] == ("unavailable" if change in {"removed", "renamed"} else "conflict")
+
+
+def test_inventory_projection_failure_leaves_released_task_and_no_partial_view():
+    registry, service, start, projection = _inventory_read_registry()
+    registry.release_terminal_session(start.task_id, start.session_id)
+    def refuse(*args):
+        raise ValueError("projection refused")
+    service.get_task_inventory_projection = refuse
+    with pytest.raises(ValueError, match="refused"):
+        registry.open_inventory_view(start.task_id)
+    assert registry._tasks[start.task_id].session_released
+    assert registry._inventory_views == {}
+    registry.close_task(start.task_id, start.session_id)
+
+
+@pytest.mark.parametrize("close_during_build", [False, True])
+def test_inventory_open_serializes_construction_and_fences_close(close_during_build):
+    registry, service, start, projection = _inventory_read_registry()
+    registry.release_terminal_session(start.task_id, start.session_id)
+    entered, release = Event(), Event()
+    original = service.get_task_inventory_projection
+    def blocked(*args):
+        entered.set()
+        assert release.wait(2)
+        return original(*args)
+    service.get_task_inventory_projection = blocked
+    results, errors = [], []
+    def open_view():
+        try:
+            results.append(registry.open_inventory_view(start.task_id))
+        except BaseException as error:
+            errors.append(error)
+    first = Thread(target=open_view)
+    first.start()
+    assert entered.wait(2)
+    second = Thread(target=open_view)
+    second.start()
+    try:
+        if close_during_build:
+            registry.close_task(start.task_id, start.session_id)
+    finally:
+        release.set()
+        first.join(2)
+        second.join(2)
+    assert not first.is_alive() and not second.is_alive()
+    assert service.projection_calls == 1
+    if close_during_build:
+        assert results == [] and len(errors) == 2
+        assert all(isinstance(error, TaskUnavailableError) for error in errors)
+        assert registry._inventory_views == {}
+    else:
+        assert errors == [] and len(results) == 2
+        assert sorted(result["disposition"] for result in results) == ["current", "opened"]
+
+
+@pytest.mark.parametrize("failure_phase", ["none", "pre-admission", "invocation"])
+@pytest.mark.parametrize("scope", ["location", "item", "folder"])
+def test_inventory_refresh_real_service_releases_replaces_and_replays_old_starts(tmp_path, failure_phase, scope):
+    from namisync.core.pathing import normalize_relative_path
+    from namisync.interfaces.service import SessionObserver, _dispatcher
+    from namisync.workflows import LocationCandidate
+    from _inventory_fixtures import _Resolver, _Scanner, _file, _runtime
+    from _service_fixtures import make_service
+
+    mount = tmp_path / "mount"
+    (mount / "managed" / "folder").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file(r"folder\one.bin", 1), _file("outside.bin", 2)))
+    class Resolver(_Resolver):
+        probe_calls = 0
+        refuse_probe = None
+        def probe_root(self, root_path):
+            self.probe_calls += 1
+            if self.probe_calls == self.refuse_probe:
+                raise PermissionError("root temporarily unavailable")
+            return super().probe_root(root_path)
+    resolver = Resolver(mount)
+    runtime, location_id = _runtime(tmp_path, resolver, scanner, {})
+    dispatcher = _dispatcher(runtime)
+    service = make_service(runtime=runtime, dispatcher=dispatcher,
+                           observer=SessionObserver(dispatcher))
+    registry = _make_registry(service, drain_wait=0.1)
+    def finish(start):
+        _wait_terminal(dispatcher, start.session_id)
+        for value in range(100, 150):
+            registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+            if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                break
+        registry.release_terminal_session(start.task_id, start.session_id)
+    try:
+        shell = registry.create_task_shell("1" * 32)
+        first = registry.start_setup_inventory(shell.task_id,
+            LocationCandidate.remembered(location_id, selected_mount=str(mount)),
+            command_id="2" * 32, wire_intent=("inventory", "root"))
+        finish(first)
+        summary = registry.open_inventory_view(first.task_id)
+        assert summary["rollup"]["domain_count"] == 2
+        assert summary["scan_scope"] == {"kind": "location", "path": None}
+        projection = registry._inventory_views[first.task_id].projection
+        scope_path = {"location": None, "item": r"folder\one.bin", "folder": "folder"}[scope]
+        node_id = None if scope_path is None else projection.nodes[
+            projection.position_by_path_key[normalize_relative_path(scope_path)]].node_id
+        expected_scope = {"kind": scope, "path": scope_path}
+        offline = failure_phase == "invocation"
+        refresh_command = "3" * 32
+        if failure_phase != "none":
+            resolver.refuse_probe = resolver.probe_calls + (2 if offline else 1)
+        if failure_phase == "pre-admission":
+            with pytest.raises(RuntimeError):
+                registry.refresh_inventory(first.task_id, first.request_id,
+                    expected_revision=0, node_id=None, command_id=refresh_command,
+                    wire_intent=("refresh", first.request_id))
+            assert registry._tasks[first.task_id].session_id == first.session_id
+            assert registry._tasks[first.task_id].request_id == first.request_id
+            assert registry._tasks[first.task_id].session_released
+            assert len(scanner.calls) == 1
+            resolver.refuse_probe = None
+            with pytest.raises(RuntimeError):
+                registry.refresh_inventory(first.task_id, first.request_id,
+                    expected_revision=0, node_id=None, command_id=refresh_command,
+                    wire_intent=("refresh", first.request_id))
+            refresh_command = "d" * 32
+        second = registry.refresh_inventory(first.task_id, first.request_id,
+            expected_revision=0, node_id=node_id, command_id=refresh_command,
+            wire_intent=("refresh", first.request_id))
+        assert registry.open_inventory_view(first.task_id)["request_id"] == first.request_id
+        assert registry._inventory_views[first.task_id].summary()["scan_scope"] == summary["scan_scope"]
+        assert registry.get_inventory_window(first.task_id, expected_revision=0, offset=0, limit=1)["rows"]
+        finish(second)
+        if offline:
+            assert registry._tasks[first.task_id].delivered_terminal_record.state == "refused"
+            with pytest.raises(TaskUnavailableError):
+                registry.open_inventory_view(first.task_id)
+            assert service._task_inventory_details[first.task_id][0] == first.request_id
+            assert registry._inventory_views[first.task_id].summary()["scan_scope"] == summary["scan_scope"]
+            assert registry.get_inventory_window(first.task_id, expected_revision=0, offset=0, limit=1)["rows"]
+            with pytest.raises(TaskUnavailableError):
+                _refresh(registry, first, command_id="e" * 32)
+            resolver.refuse_probe = None
+        else:
+            replacement = registry.open_inventory_view(first.task_id)
+            assert replacement["request_id"] == second.request_id and replacement["view_revision"] == 1
+            assert replacement["scan_scope"] == expected_scope
+        third = registry.refresh_inventory(first.task_id, second.request_id,
+            expected_revision=0 if offline else 1, node_id=None, command_id="4" * 32,
+            wire_intent=("refresh", second.request_id))
+        finish(third)
+        assert registry.open_inventory_view(first.task_id)["view_revision"] == (1 if offline else 2)
+        assert registry.open_inventory_view(first.task_id)["scan_scope"] == {"kind": "location", "path": None}
+        assert service._task_inventory_details[first.task_id][1].resolution.selected_mount == str(mount)
+        assert registry.refresh_inventory(first.task_id, first.request_id,
+            expected_revision=0, node_id=node_id, command_id=refresh_command,
+            wire_intent=("refresh", first.request_id)) == second
+        assert service._lifecycle.replay_start(refresh_command, "task-inventory",
+            ("refresh", first.request_id)).session_id == second.session_id
+        assert set(service._lifecycle._sessions) == {third.session_id}
+        assert len(scanner.calls) == (2 if offline else 3)
+        registry.close_task(first.task_id, third.session_id)
+        assert registry._start_responses == {}
+        assert service._lifecycle._start_receipts == {}
+        assert service._task_inventory_details == {}
+    finally:
+        service.close()
+
+
+@pytest.mark.parametrize("failure_phase", ["none", "before", "after", "reappeared", "close"])
+def test_inventory_visibility_real_service_retains_actual_partial_prefix_and_close_cleanup(tmp_path, failure_phase):
+    from datetime import timedelta
+    from namisync.interfaces.service import SessionObserver, _dispatcher
+    from namisync.workflows import LocationCandidate
+    from _inventory_fixtures import _Resolver, _Scanner, _file, _runtime
+    from _service_fixtures import make_service
+    mount = tmp_path / "mount"
+    (mount / "managed" / "folder").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file(r"folder\one.bin", 1), _file(r"folder\two.bin", 2), _file("outside.bin", 3)))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    dispatcher = _dispatcher(runtime)
+    service = make_service(runtime=runtime, dispatcher=dispatcher, observer=SessionObserver(dispatcher))
+    registry = _make_registry(service, drain_wait=0.1)
+    def finish(start):
+        _wait_terminal(dispatcher, start.session_id)
+        for value in range(100, 150):
+            registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+            if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                break
+        registry.release_terminal_session(start.task_id, start.session_id)
+        registry.open_inventory_view(start.task_id)
+    try:
+        shell = registry.create_task_shell("1" * 32)
+        first = registry.start_setup_inventory(shell.task_id,
+            LocationCandidate.remembered(location_id, selected_mount=str(mount)),
+            command_id="2" * 32, wire_intent=("inventory", "root"))
+        finish(first)
+        scanner.records = ()
+        current = _refresh(registry, first)
+        finish(current)
+        view = registry._inventory_views[first.task_id]
+        folder = view.projection.nodes[view.projection.position_by_path_key["FOLDER"]].node_id
+        if failure_phase == "reappeared":
+            scanner.records = (_file(r"folder\one.bin", 1),)
+            independent = service.start_inventory(location_id=location_id)
+            _wait_terminal(dispatcher, independent.session_id)
+            service.close_session(independent.session_id)
+        calls = []
+        closers = []
+        closed = Event()
+        original = runtime.acknowledge_inventory
+        def change(command_id, location_id, row_id, *, changed_at):
+            calls.append((command_id, row_id, changed_at))
+            runtime.clock.value += timedelta(days=1)
+            if len(calls) == 1 and failure_phase == "close":
+                task = registry._tasks[current.task_id]
+                with task.condition:
+                    delivery = registry._terminal_delivery_locked(task)
+                def close():
+                    service.close_task(current.task_id, current.session_id, delivery)
+                    closed.set()
+                closer = Thread(target=close)
+                closers.append(closer)
+                closer.start()
+                deadline = monotonic() + 1
+                while service._lifecycle._sessions[current.session_id].settlement_claim is None and monotonic() < deadline:
+                    sleep(0.001)
+                assert service._lifecycle._sessions[current.session_id].settlement_claim is not None
+                assert not closed.is_set(), "Close waits for the invocation-owned visibility claim"
+            if len(calls) == 2 and failure_phase == "before":
+                raise RuntimeError("write refused before commit")
+            result = original(command_id, location_id, row_id, changed_at=changed_at)
+            if len(calls) == 2 and failure_phase == "after":
+                raise RuntimeError("write response lost after commit")
+            return result
+        runtime.acknowledge_inventory = change
+        result = _visibility(registry, current, revision=1, node_id=folder)
+        assert result["total"] == 2
+        partial = failure_phase in {"before", "after"}
+        assert result["applied"] == (1 if partial or failure_phase == "reappeared" else 2)
+        assert result["stale"] == (1 if failure_phase == "reappeared" else 0)
+        assert result["unresolved_count"] == (1 if partial else 0)
+        assert result["disposition"] == ("partial" if partial else "completed")
+        assert calls[0][2] == calls[1][2]
+        if failure_phase == "close":
+            closers[0].join(2)
+            assert closed.is_set() and not closers[0].is_alive()
+            assert service._visibility_receipts == {}
+            assert _visibility(registry, current, revision=1, node_id=folder) == result
+            assert current.task_id not in service._lifecycle._tasks
+            return
+        assert _visibility(registry, current, revision=1, node_id=folder) == result
+        assert len(calls) == 2
+        rows = runtime.list_inventory(location_id)
+        assert sum(row.acknowledged_at is not None for row in rows) == (1 if failure_phase in {"before", "reappeared"} else 2)
+        assert registry._inventory_views[current.task_id].view_revision == 2
+        restored = _visibility(registry, current, action="restore", revision=2, node_id=folder, command_id="7" * 32)
+        assert restored["applied"] == (1 if failure_phase in {"before", "reappeared"} else 2)
+        assert restored["noop"] == (1 if failure_phase == "before" else 0)
+        assert restored["unresolved_count"] == 0
+        assert all(row.acknowledged_at is None for row in runtime.list_inventory(location_id))
+        newer = _refresh(registry, current, revision=3, command_id="8" * 32)
+        finish(newer)
+        assert _visibility(registry, current, revision=1, node_id=folder) == result
+        receipt = service._visibility_receipts["6" * 32]
+        assert service.change_task_inventory_visibility(current.task_id, current.request_id,
+            action="acknowledge", location_id=location_id, row_ids=tuple(item[1] for item in calls),
+            expected_revision=1, command_id="6" * 32, signature=receipt.signature[-1]) == result
+        service._visibility_receipts["independent-cli"] = ("retained",)
+        registry.close_task(current.task_id, newer.session_id)
+        assert registry._start_responses == {}
+        assert service._visibility_receipts == {"independent-cli": ("retained",)}
+    finally:
+        service.close()
+
+
+def _visibility(registry, start, *, action="acknowledge", revision=0, node_id=None, command_id="6" * 32):
+    return registry.change_inventory_visibility(start.task_id, start.request_id,
+        action=action, expected_revision=revision, node_id=node_id, command_id=command_id,
+        wire_intent=("inventory-visibility", action, start.task_id, start.request_id, revision, node_id))
+
+
+def _inventory_visibility_registry(count=3):
+    from namisync.db.repositories import InventoryPresence
+    from namisync.workflows import build_inventory_projection
+    from _db_fixtures import NOW
+    registry, service, start, previous = _inventory_refresh_registry()
+    _, details = service.get_task_inventory_projection(start.task_id, start.request_id)
+    template = previous.row_for_id("1")
+    rows = tuple(replace(template, row_id=str(index + 1), presence=InventoryPresence.MISSING,
+        rel_path=f"folder\\member{index}.txt", rel_path_key=f"FOLDER\\MEMBER{index}.TXT", missing_since=NOW)
+        for index in range(count)) + (replace(template, row_id=str(count + 1),
+        presence=InventoryPresence.MISSING, rel_path="outside.txt", rel_path_key="OUTSIDE.TXT", missing_since=NOW),)
+    projection = build_inventory_projection(1, rows, tuple(node.warning for node in previous.nodes if node.warning))
+    service.get_task_inventory_projection = lambda task_id, request_id: (projection, replace(details, request_id=request_id))
+    registry._inventory_views.pop(start.task_id)
+    registry.open_inventory_view(start.task_id)
+    service.visibility_calls = []
+    def change(task_id, request_id, **kwargs):
+        service.visibility_calls.append((task_id, request_id, kwargs))
+        return {"task_id": task_id, "request_id": request_id, "action": kwargs["action"],
+            "expected_revision": kwargs["expected_revision"], "total": len(kwargs["row_ids"]),
+            "applied": len(kwargs["row_ids"]), "noop": 0, "stale": 0, "conflict": 0,
+            "unresolved_count": 0, "disposition": "completed"}
+    service.change_task_inventory_visibility = change
+    return registry, service, start, projection
+
+
+@pytest.mark.parametrize("scope", ["full", "folder", "leaf", "warning"])
+def test_inventory_visibility_complete_scope_is_independent_of_filter_collapse_and_window(scope):
+    registry, service, start, projection = _inventory_visibility_registry(300)
+    folder = projection.nodes[projection.position_by_path_key["FOLDER"]].node_id
+    registry.update_inventory_view(start.task_id, expected_revision=0, search_query="outside",
+        filters=frozenset({"missing"}), sort_column=PlanSortColumn.PATH,
+        sort_direction=SortDirection.ASCENDING, collapse_node_id=folder, collapsed=True)
+    assert registry.get_inventory_window(start.task_id, expected_revision=1, offset=0, limit=256)["total"] < 256
+    node = (None if scope == "full" else folder if scope == "folder"
+        else projection.node_id_by_row_id["1"] if scope == "leaf" else projection.nodes[-1].node_id)
+    if scope == "warning":
+        with pytest.raises(ValueError, match="warnings"):
+            _visibility(registry, start, revision=1, node_id=node)
+        assert service.visibility_calls == []
+        return
+    result = _visibility(registry, start, revision=1, node_id=node)
+    assert result["total"] == {"full": 301, "folder": 300, "leaf": 1}[scope]
+    assert len(service.visibility_calls[0][2]["row_ids"]) == result["total"]
+    assert registry._inventory_views[start.task_id].view_revision == 2
+
+
+def test_inventory_visibility_failed_rebuild_keeps_reads_but_blocks_effect_until_whole_reload():
+    registry, service, start, projection = _inventory_visibility_registry()
+    original = service.get_task_inventory_projection
+    def refused(*args):
+        assert registry._start_responses["6" * 32].result["applied"] == 4
+        raise ValueError("post-effect rebuild refused")
+    service.get_task_inventory_projection = refused
+    result = _visibility(registry, start)
+    assert result["applied"] == 4 and result["disposition"] == "completed"
+    assert registry.get_inventory_window(start.task_id, expected_revision=0, offset=0, limit=1)["rows"]
+    with pytest.raises(TaskUnavailableError):
+        _visibility(registry, start, command_id="7" * 32)
+    assert _visibility(registry, start) == result and len(service.visibility_calls) == 1
+    service.get_task_inventory_projection = original
+    assert registry.open_inventory_view(start.task_id)["view_revision"] == 1
+    assert not registry._tasks[start.task_id].inventory_view_dirty
+    _visibility(registry, start, revision=1, command_id="7" * 32)
+    assert len(service.visibility_calls) == 2
+
+
+def test_inventory_visibility_replay_waits_for_rebuild_and_preserves_concurrent_view_gesture():
+    registry, service, start, projection = _inventory_visibility_registry()
+    entered, release, rebuilding, publish = Event(), Event(), Event(), Event()
+    original_change, original_projection = service.change_task_inventory_visibility, service.get_task_inventory_projection
+    def change(*args, **kwargs):
+        entered.set()
+        assert release.wait(2)
+        return original_change(*args, **kwargs)
+    def build(*args):
+        rebuilding.set()
+        assert publish.wait(2)
+        return original_projection(*args)
+    service.change_task_inventory_visibility = change
+    service.get_task_inventory_projection = build
+    results = []
+    first = Thread(target=lambda: results.append(_visibility(registry, start)))
+    first.start()
+    assert entered.wait(1)
+    assert registry.get_inventory_window(start.task_id, expected_revision=0, offset=0, limit=1)["rows"]
+    registry.update_inventory_view(start.task_id, expected_revision=0, search_query="outside",
+        filters=frozenset(), sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None)
+    with pytest.raises(TaskUnavailableError):
+        _refresh(registry, start, revision=1, command_id="7" * 32)
+    with pytest.raises(TaskUnavailableError):
+        _visibility(registry, start, revision=1, command_id="8" * 32)
+    replay = Thread(target=lambda: results.append(_visibility(registry, start)))
+    replay.start()
+    release.set()
+    assert rebuilding.wait(1)
+    assert registry._start_responses["6" * 32].result is not None
+    assert results == [] and not registry._start_responses["6" * 32].complete
+    publish.set()
+    first.join(2)
+    replay.join(2)
+    assert not first.is_alive() and not replay.is_alive()
+    assert len(results) == 2 and results[0] == results[1]
+    assert len(service.visibility_calls) == 1
+    assert registry._inventory_views[start.task_id].search_query == "outside"
+    assert registry._inventory_views[start.task_id].view_revision == 2
+
+
+def test_inventory_visibility_uses_shared_capacity_and_close_prunes_original_results():
+    registry, service, start, projection = _inventory_visibility_registry()
+    available = drain_module._START_RESPONSE_CAPACITY - len(registry._start_responses)
+    for index in range(available):
+        _visibility(registry, start, revision=index, command_id=f"{index + 6000:032x}")
+    assert len(registry._start_responses) == drain_module._START_RESPONSE_CAPACITY
+    with pytest.raises(drain_module.InventoryCommandCapacityError):
+        _visibility(registry, start, revision=available, command_id="f" * 32)
+    with pytest.raises(drain_module.InventoryCommandCapacityError):
+        _refresh(registry, start, revision=available, command_id="e" * 32)
+    assert len(service.visibility_calls) == available
+    registry.close_task(start.task_id, start.session_id)
+    assert registry._start_responses == {}
+
+
+def test_inventory_visibility_refuses_prior_publication_for_new_scan_even_after_release():
+    registry, service, start, projection = _inventory_visibility_registry()
+    current = _refresh(registry, start)
+    _mark_terminal_drained(registry, current, replace(_record(kind="inventory", supports_pause=False), session_id=current.session_id))
+    registry.release_terminal_session(start.task_id, current.session_id)
+    with pytest.raises(TaskUnavailableError):
+        _visibility(registry, current)
+    assert service.visibility_calls == []
+    registry.open_inventory_view(start.task_id)
+    _visibility(registry, current, revision=1)
+    assert len(service.visibility_calls) == 1
+
+
+def _inventory_refresh_registry():
+    from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+    from namisync.workflows import build_inventory_projection
+    registry, service, start, previous = _inventory_read_registry()
+    _, details = service.get_task_inventory_projection(start.task_id, start.request_id)
+    row = replace(previous.row_for_id("1"), rel_path=r"folder\one.txt", rel_path_key=r"FOLDER\ONE.TXT")
+    projection = build_inventory_projection(1, (row,), (
+        ScanWarning(ScanWarningCode.ACCESS_DENIED, "warning", "unreadable"),))
+    service.get_task_inventory_projection = lambda task_id, request_id: (
+        projection, replace(details, request_id=request_id))
+    service.refresh_calls = []
+    service.refresh_sinks = []
+    def refresh(task_id, request_id, **kwargs):
+        service.refresh_calls.append((task_id, request_id, kwargs))
+        sink = kwargs["delivery_factory"](task_id)
+        service.refresh_sinks.append(sink)
+        index = len(service.refresh_calls) + 1000
+        return TaskStartView(task_id, f"{index:032x}", f"{index + 1000:032x}")
+    service.start_task_inventory_refresh = refresh
+    registry.release_terminal_session(start.task_id, start.session_id)
+    registry.open_inventory_view(start.task_id)
+    return registry, service, start, projection
+
+
+def _refresh(registry, start, *, revision=0, node_id=None, command_id="5" * 32):
+    return registry.refresh_inventory(start.task_id, start.request_id,
+        expected_revision=revision, node_id=node_id, command_id=command_id,
+        wire_intent=("inventory-refresh", start.task_id, start.request_id, revision, node_id))
+
+
+@pytest.mark.parametrize("scope", ["full", "exact", "recursive", "warning"])
+def test_inventory_refresh_resolves_only_server_domain_scope(scope):
+    registry, service, start, projection = _inventory_refresh_registry()
+    node_id = (None if scope == "full" else projection.node_id_by_row_id["1"] if scope == "exact"
+        else projection.nodes[projection.position_by_path_key["FOLDER"]].node_id if scope == "recursive"
+        else next(node.node_id for node in projection.nodes if node.warning))
+    if scope == "warning":
+        with pytest.raises(ValueError, match="warnings"):
+            _refresh(registry, start, node_id=node_id)
+        assert service.refresh_calls == []
+        assert "5" * 32 not in registry._start_responses
+    else:
+        fresh = _refresh(registry, start, node_id=node_id)
+        request = service.refresh_calls[0][2]
+        assert request["selected_paths"] == ((r"folder\one.txt",) if scope == "exact" else ())
+        assert request["subtree_roots"] == (("folder",) if scope == "recursive" else ())
+        assert request["location_id"] == 1
+        assert registry.open_inventory_view(start.task_id)["request_id"] == start.request_id
+        assert registry._tasks[start.task_id].session_id == fresh.session_id
+
+
+@pytest.mark.parametrize("call_factory", [False, True])
+def test_inventory_refresh_failed_admission_restores_prior_delivery_and_retains_failure(call_factory):
+    registry, service, start, projection = _inventory_refresh_registry()
+    prior = registry._inventory_views[start.task_id]
+    calls = []
+    def refuse(task_id, request_id, **kwargs):
+        calls.append(request_id)
+        if call_factory:
+            kwargs["delivery_factory"](task_id)
+        raise ValueError("refresh admission refused")
+    service.start_task_inventory_refresh = refuse
+    for attempt in range(2):
+        with pytest.raises(Exception):
+            _refresh(registry, start)
+        task = registry._tasks[start.task_id]
+        assert task.request_id == start.request_id and task.session_id == start.session_id
+        assert task.session_released and task.delivered_terminal_record is not None
+        assert not task.transition and task.prior_delivery is None
+        assert registry._inventory_views[start.task_id] is prior
+    assert calls == [start.request_id]
+    registry.close_task(start.task_id, start.session_id)
+    assert registry._start_responses == {}
+
+
+def test_inventory_refresh_failed_originals_use_shared_capacity_and_close_prunes_them():
+    registry, service, start, projection = _inventory_refresh_registry()
+    calls = []
+    def refuse(task_id, request_id, **kwargs):
+        calls.append(request_id)
+        raise ValueError("refresh admission refused")
+    service.start_task_inventory_refresh = refuse
+    available = drain_module._START_RESPONSE_CAPACITY - len(registry._start_responses)
+    for index in range(available):
+        with pytest.raises(Exception):
+            _refresh(registry, start, command_id=f"{index + 4000:032x}")
+    assert len(calls) == available
+    assert len(registry._start_responses) == drain_module._START_RESPONSE_CAPACITY
+    with pytest.raises(RuntimeError, match="close a task"):
+        _refresh(registry, start, command_id="f" * 32)
+    assert len(calls) == available
+    registry.close_task(start.task_id, start.session_id)
+    assert registry._start_responses == {}
+
+
+def test_inventory_refresh_failed_replacement_keeps_readable_view_and_preserves_gestures():
+    registry, service, start, projection = _inventory_refresh_registry()
+    folder_id = projection.nodes[projection.position_by_path_key["FOLDER"]].node_id
+    registry.update_inventory_view(start.task_id, expected_revision=0, search_query="one",
+        filters=frozenset({"present"}), sort_column=PlanSortColumn.SIZE,
+        sort_direction=SortDirection.DESCENDING, collapse_node_id=folder_id, collapsed=True)
+    prior = registry._inventory_views[start.task_id]
+    fresh = _refresh(registry, start, revision=1)
+    _mark_terminal_drained(registry, fresh, replace(_record(kind="inventory", supports_pause=False), session_id=fresh.session_id))
+    registry.release_terminal_session(start.task_id, fresh.session_id)
+    original = service.get_task_inventory_projection
+    def refuse(*args):
+        raise ValueError("replacement refused")
+    service.get_task_inventory_projection = refuse
+    with pytest.raises(ValueError, match="refused"):
+        registry.open_inventory_view(start.task_id)
+    assert registry._inventory_views[start.task_id] is prior
+    assert registry.get_inventory_window(start.task_id, expected_revision=1, offset=0, limit=1)["rows"]
+    service.get_task_inventory_projection = original
+    current = registry.open_inventory_view(start.task_id)
+    assert current["view_revision"] == 2 and current["request_id"] == fresh.request_id
+    assert current["search_query"] == "one" and current["filters"] == ["present"]
+    assert current["sort_column"] == "size" and current["sort_direction"] == "descending"
+    assert registry._inventory_views[start.task_id].collapsed_node_ids == {folder_id}
+    assert registry.get_inventory_window(start.task_id, expected_revision=1, offset=0, limit=1)["disposition"] == "conflict"
+
+
+def test_inventory_refresh_shared_capacity_refuses_before_scan_and_close_prunes_originals():
+    registry, service, start, projection = _inventory_refresh_registry()
+    first = start
+    for index in range(drain_module._START_RESPONSE_CAPACITY - len(registry._start_responses)):
+        start = _refresh(registry, start, revision=index, command_id=f"{index + 3000:032x}")
+        _mark_terminal_drained(registry, start, replace(_record(kind="inventory", supports_pause=False), session_id=start.session_id))
+        registry.release_terminal_session(start.task_id, start.session_id)
+        registry.open_inventory_view(start.task_id)
+    assert len(registry._start_responses) == drain_module._START_RESPONSE_CAPACITY
+    calls = len(service.refresh_calls)
+    with pytest.raises(RuntimeError, match="close a task"):
+        _refresh(registry, start, revision=calls, command_id="f" * 32)
+    assert len(service.refresh_calls) == calls
+    registry.close_task(first.task_id, start.session_id)
+    assert registry._start_responses == {} and registry._inventory_views == {}
+
+
+def test_inventory_refresh_concurrent_identical_original_has_one_scan_and_late_sink_is_inert():
+    registry, service, start, projection = _inventory_refresh_registry()
+    original = service.start_task_inventory_refresh
+    entered, release = Event(), Event()
+    def blocked(*args, **kwargs):
+        entered.set()
+        assert release.wait(2)
+        return original(*args, **kwargs)
+    service.start_task_inventory_refresh = blocked
+    prior_generation = registry._tasks[start.task_id].generation
+    old_sink = registry._tasks[start.task_id].sink(prior_generation)
+    results, errors = [], []
+    def refresh():
+        try:
+            results.append(_refresh(registry, start))
+        except BaseException as error:
+            errors.append(error)
+    first, second = Thread(target=refresh), Thread(target=refresh)
+    first.start()
+    assert entered.wait(2)
+    second.start()
+    release.set()
+    first.join(2)
+    second.join(2)
+    assert not first.is_alive() and not second.is_alive()
+    assert errors == [] and len(results) == 2 and results[0] == results[1]
+    assert len(service.refresh_calls) == 1
+    old_sink(replace(_record(kind="inventory", supports_pause=False), session_id=start.session_id))
+    assert registry._tasks[start.task_id].queue == deque()
+    with pytest.raises(TaskIntentConflictError):
+        registry.refresh_inventory(start.task_id, start.request_id, expected_revision=0,
+            node_id=None, command_id="5" * 32, wire_intent=("different",))
+
+
+def test_inventory_refresh_replacement_does_not_lose_a_concurrent_view_gesture():
+    registry, service, start, projection = _inventory_refresh_registry()
+    fresh = _refresh(registry, start)
+    _mark_terminal_drained(registry, fresh, replace(_record(kind="inventory", supports_pause=False), session_id=fresh.session_id))
+    registry.release_terminal_session(start.task_id, fresh.session_id)
+    original = service.get_task_inventory_projection
+    def changing(*args):
+        registry.update_inventory_view(start.task_id, expected_revision=0, search_query="one",
+            filters=frozenset(), sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None)
+        return original(*args)
+    service.get_task_inventory_projection = changing
+    assert registry.open_inventory_view(start.task_id)["disposition"] == "conflict"
+    assert registry._inventory_views[start.task_id].request_id == start.request_id
+    service.get_task_inventory_projection = original
+    summary = registry.open_inventory_view(start.task_id)
+    assert summary["view_revision"] == 2 and summary["search_query"] == "one"
+
+
+def test_terminal_session_release_refuses_before_record_delivery() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    with pytest.raises(TaskUnavailableError, match="terminal record"):
+        registry.release_terminal_session(start.task_id, start.session_id)
+
+    assert service.lifecycle_calls == []
+    assert start.task_id in registry._tasks
+
+
+def test_terminal_session_release_retains_start_response_replay() -> None:
+    registry, service = _registry()
+    command_id = "4" * 32
+    wire_intent = ("source-slot", "target-slot", None)
+    start = registry.start_plan(
+        "source",
+        "target",
+        deletion_policy=None,
+        command_id=command_id,
+        wire_intent=wire_intent,
+    )
+    _mark_terminal_drained(registry, start)
+
+    released = registry.release_terminal_session(
+        start.task_id,
+        start.session_id,
+    )
+
+    assert released == TaskSessionReleaseView(start.task_id, start.session_id)
+    assert service.lifecycle_calls == [
+        (
+            "release_task_session",
+            start.task_id,
+            start.session_id,
+            TaskTerminalDelivery(
+                replace(_record(), session_id=start.session_id)
+            ),
+        ),
+    ]
+    assert start.task_id in registry._tasks
+    assert not registry._tasks[start.task_id].retiring
+    assert command_id in registry._start_responses
+    assert registry.replay_start(command_id, wire_intent) == start
+    with pytest.raises(TaskUnavailableError):
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+
+@pytest.mark.parametrize("refusal_origin", ["preflight", "commitment", "review-preflight"])
+def test_m1_7_fast_refused_execution_reaches_task_drain_and_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    refusal_origin: str,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "copy.txt").write_text("copy", encoding="utf-8")
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
+    registry = _make_registry(service, drain_wait=0.2)
+    drain_ids = iter(f"{index:032x}" for index in range(100, 120))
+
+    def refuse_execution(_review, world, **_kwargs):
+        return Verdict(False, (
+            Refusal(RefusalCode.INSUFFICIENT_SPACE, detail="private detail"),
+            Refusal(RefusalCode.ROOT_UNAVAILABLE, detail="private root"),
+            Refusal(RefusalCode.INSUFFICIENT_SPACE),
+        ), world)
+
+    if refusal_origin == "review-preflight":
+        monkeypatch.setattr(service._runtime, "_deps", replace(
+            service._runtime._deps, preflight=refuse_execution,
+        ))
+
+    try:
+        planned = registry.start_plan(
+            str(source),
+            str(target),
+            deletion_policy=None,
+            command_id=f"{1:032x}",
+        )
+        _wait_terminal(service._dispatcher, planned.session_id)
+        _drain_until_record(
+            registry,
+            planned.task_id,
+            planned.session_id,
+            drain_ids,
+        )
+        registry.release_terminal_session(planned.task_id, planned.session_id)
+
+        original_dependencies = service._runtime._deps
+
+        if refusal_origin == "preflight":
+            monkeypatch.setattr(service._runtime, "_deps", replace(
+                original_dependencies, preflight=refuse_execution,
+            ))
+        elif refusal_origin == "commitment":
+            original_commit = service._runtime.commit_plan
+
+            def invalid_commit(*args, **kwargs):
+                request = original_commit(*args, **kwargs)
+                xset = request.execution_set
+                xset.commitment = replace(xset.commitment, plan_fingerprint="invalid")
+                return request
+
+            monkeypatch.setattr(service._runtime, "commit_plan", invalid_commit)
+        execution = registry.start_execution(
+            planned.task_id,
+            request_id=planned.request_id,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id=f"{2:032x}",
+            wire_intent=(planned.task_id, planned.request_id, 0, False),
+        )
+        expected_refusal = {
+            "origin": "commitment" if refusal_origin == "commitment" else "preflight",
+            "codes": [] if refusal_origin == "commitment" else ["insufficient_space", "root_unavailable"],
+        }
+        if refusal_origin == "review-preflight":
+            assert execution.disposition == "preflight-refused"
+            assert execution.state == "reviewing" and execution.session is None
+            assert execution.refusal.origin == "preflight"
+            assert list(execution.refusal.codes) == expected_refusal["codes"]
+            assert registry.list_tasks().tasks[0].session_id == planned.session_id
+            assert list(target.iterdir()) == []
+            assert registry.open_plan_view(planned.task_id)["selection_state"] == "reviewing"
+            return
+        _wait_terminal(service._dispatcher, execution.session_id)
+        updates = _drain_until_record(
+            registry,
+            execution.task_id,
+            execution.session_id,
+            drain_ids,
+        )
+        terminal = next(
+            update.record
+            for update in updates
+            if type(update) is TaskRecordUpdateView
+        )
+
+        assert terminal.kind == EXECUTION_KIND
+        assert terminal.supports_pause is True
+        assert terminal.state == "refused"
+        assert terminal.result is not None
+        registry.release_terminal_session(execution.task_id, execution.session_id)
+        summary = registry.list_tasks().tasks[0]
+        assert summary.session_state == "refused"
+        assert summary.session_released is True
+        retained = registry.open_plan_view(planned.task_id)
+        assert retained["selection_state"] == "committed"
+        assert retained["execution"]["refusal"] == expected_refusal
+        assert retained["execution"]["started_at"] == terminal.started_at
+        assert retained["execution"]["ended_at"] is not None
+        assert retained["execution"]["result"].disposition == "unrun"
+        assert list(target.iterdir()) == []
+        assert service.get_execution_details(execution.request_id).refusals == ()
+        window = registry.get_plan_window(planned.task_id,
+            expected_revision=retained["view_revision"], offset=0, limit=1)
+        assert window["execution"]["refusal"] == expected_refusal
+    finally:
+        registry.begin_close()
+        service.close(timeout=2)
+
+
+def test_m1_7_execution_reuses_plan_task_and_preserves_original_start_replay() -> None:
+    registry, service = _registry()
+    plan_command = "4" * 32
+    wire_intent = ("source-slot", "target-slot", None)
+    plan_start = registry.start_plan(
+        "source",
+        "target",
+        deletion_policy=None,
+        command_id=plan_command,
+        wire_intent=wire_intent,
+    )
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+
+    execution = registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    )
+    summary = registry.list_tasks().tasks[0]
+
+    assert execution == TaskStartView(plan_start.task_id, "c" * 32, "b" * 32)
+    assert summary.task_id == plan_start.task_id
+    assert summary.request_id == execution.request_id
+    assert summary.plan_request_id == plan_start.request_id
+    assert summary.session_kind == "sync-execution"
+    assert summary.session_id == execution.session_id
+    assert summary.session_released is False
+    assert registry.replay_start(plan_command, wire_intent) == plan_start
+    with pytest.raises(TaskUnavailableError):
+        registry.close_task(plan_start.task_id, plan_start.session_id)
+    assert service.lifecycle_calls == [
+        (
+            "release_task_session",
+            plan_start.task_id,
+            plan_start.session_id,
+            TaskTerminalDelivery(
+                replace(_record(), session_id=plan_start.session_id)
+            ),
+        )
+    ]
+
+
+def test_m1_7_execution_refuses_changed_request_snapshot_before_submission() -> None:
+    registry, service = _registry()
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+
+    with pytest.raises(TaskUnavailableError):
+        registry.start_execution(
+            plan_start.task_id,
+            request_id="f" * 32,
+            expected_revision=0,
+            destructive_acknowledged=True,
+            command_id="5" * 32,
+            wire_intent=(plan_start.task_id, "f" * 32, 0, True),
+        )
+
+    assert not any(call[0] == "task-execution" for call in service.start_calls)
+    task = registry._tasks[plan_start.task_id]
+    assert task.request_id == plan_start.request_id
+    assert task.session_id == plan_start.session_id
+    assert task.session_released is True
+    assert not task.transition
+
+
+def test_m1_7_execution_controls_require_exact_current_task_session() -> None:
+    registry, service = _registry()
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    execution = registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    )
+
+    paused = registry.control_execution(
+        execution.task_id, execution.session_id, "pause"
+    )
+    resumed = registry.control_execution(
+        execution.task_id, execution.session_id, "resume"
+    )
+    canceled = registry.control_execution(
+        execution.task_id, execution.session_id, "cancel"
+    )
+
+    assert (paused.after, resumed.after, canceled.after) == (
+        "paused", "running", "canceling"
+    )
+    with pytest.raises(TaskUnavailableError):
+        registry.control_execution(
+            plan_start.task_id, plan_start.session_id, "cancel"
+        )
+    assert [call[0] for call in service.lifecycle_calls[-3:]] == [
+        "pause_task_session", "resume_task_session", "cancel_task_session"
+    ]
+
+
+def test_m1_8_live_execution_overlay_is_bounded_replay_exact_and_copy_safe() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    assert service.execution_sink is not None
+    operation = service.operation_item
+    service.execution_sink(_execution_event(execution.session_id, 2, operation))
+    revision_after_item = registry._tasks[planned.task_id].execution_revision
+    service.execution_sink(_execution_event(execution.session_id, 3, operation))
+    assert registry._tasks[planned.task_id].execution_revision == revision_after_item
+
+    service.execution_sink(_execution_event(execution.session_id, 4, Gap(10)))
+    service.execution_sink(_execution_event(execution.session_id, 5, Gap(5)))
+    revision_after_extrema = registry._tasks[planned.task_id].execution_revision
+    service.execution_sink(_execution_event(execution.session_id, 6, Gap(10)))
+    assert registry._tasks[planned.task_id].execution_revision == revision_after_extrema
+
+    current = registry.open_plan_view(planned.task_id)
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=current["view_revision"],
+        offset=0,
+        limit=2,
+    )
+    assert service.execution_reads == []
+    assert window["execution"]["gap"] == {
+        "minimum_first_missed_seq": 5,
+        "maximum_first_missed_seq": 10,
+    }
+    assert window["rows"][0]["is_container"] is True
+    compact = window["rows"][0]["execution"]["operation"]
+    assert compact == {
+        "result": "succeeded",
+        "reason": None,
+        "recording": "ok",
+        "recording_reason": None,
+        "detail_omitted_count": 0,
+    }
+    assert window["rows"][0]["execution"]["automatic_verification"] is None
+    assert window["rows"][0]["execution"]["evidence"] is None
+    assert registry.get_execution_detail(
+        planned.task_id,
+        service.operation_id,
+        expected_execution_revision=window["execution"]["execution_revision"],
+    )["disposition"] == "not-retained"
+    assert registry.get_execution_detail(
+        planned.task_id,
+        service.operation_id,
+        expected_execution_revision=0,
+    )["disposition"] == "conflict"
+    compact["result"] = "failed"
+    repeated = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=current["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert repeated["rows"][0]["execution"]["operation"]["result"] == "succeeded"
+
+    verification = replace(service.integrity_item, detail_omitted_count=2)
+    service.execution_sink(
+        _execution_event(execution.session_id, 7, verification)
+    )
+    with_verification = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=current["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert with_verification["rows"][0]["execution"] == {
+        "operation": {
+            "result": "succeeded", "reason": None, "recording": "ok",
+            "recording_reason": None, "detail_omitted_count": 0,
+        },
+        "automatic_verification": {
+            "result": "verified", "reason": None, "recording": "ok",
+            "record_disposition": "noop", "detail_omitted_count": 2,
+        },
+        "evidence": None,
+    }
+    with_verification["rows"][0]["execution"]["automatic_verification"][
+        "result"
+    ] = "failed"
+    repeated = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=current["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert repeated["rows"][0]["execution"]["automatic_verification"][
+        "result"
+    ] == "verified"
+
+    before_conflict = registry._tasks[planned.task_id].execution_revision
+    changed = replace(
+        operation,
+        outcome=Outcome.FAILED,
+        reason="io-error",
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
+    )
+    with pytest.raises(ObservationConflictError, match="compact fact"):
+        service.execution_sink(_execution_event(execution.session_id, 8, changed))
+    forged_phase = replace(service.integrity_item, phase="baseline")
+    with pytest.raises(ObservationConflictError, match="verification changed its phase"):
+        service.execution_sink(
+            _execution_event(execution.session_id, 9, forged_phase)
+        )
+    assert registry._tasks[planned.task_id].execution_revision == before_conflict
+    foreign = replace(operation, item_id="8" * 32)
+    with pytest.raises(ObservationConflictError, match="outside the retained Plan"):
+        service.execution_sink(_execution_event(execution.session_id, 10, foreign))
+    assert registry._tasks[planned.task_id].execution_revision == before_conflict
+
+
+def test_m1_8_pre_execution_window_does_not_read_retained_execution() -> None:
+    service = _ExecutionOverlayService()
+    registry, _ = _registry(service)
+    planned = _start(registry)
+    _mark_terminal_drained(registry, planned)
+    registry.release_terminal_session(planned.task_id, planned.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=2,
+    )
+
+    assert service.execution_reads == []
+    assert window["execution"] == summary["execution"]
+    rows_by_operation = {row["operation_id"]: row for row in window["rows"]}
+    assert rows_by_operation[service.operation_id]["execution"] == {
+        "operation": None,
+        "automatic_verification": None,
+        "evidence": None,
+    }
+    structural = drain_module._decorate_execution_window(
+        {"rows": [{"operation_id": None}]},
+        summary["execution"],
+        {},
+        {},
+        {},
+    )
+    assert structural["rows"][0]["execution"] is None
+
+
+def test_m1_8_execution_times_follow_the_matching_terminal_record() -> None:
+    registry, _service, planned, execution = _start_execution_overlay()
+    before = registry.open_plan_view(planned.task_id)["execution"]
+    assert before["started_at"] is None
+    assert before["ended_at"] is None
+
+    _mark_terminal_drained(registry, execution)
+    delivered = registry._tasks[planned.task_id].delivered_terminal_record
+    assert delivered is not None
+    assert delivered.started_at is not None
+    assert delivered.ended_at is not None
+    assert registry.open_plan_view(planned.task_id)["execution"]["ended_at"] is None
+
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    retained = summary["execution"]
+    assert retained["started_at"] == delivered.started_at
+    assert retained["ended_at"] == delivered.ended_at
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert window["execution"] == retained
+
+
+
+def test_m1_8_unrun_execution_retains_completion_without_a_start() -> None:
+    refused_result = operation_result_view(OperationResult(
+        SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+    ))
+
+    class Service(_ExecutionOverlayService):
+        def read_task_execution_summary(self, task_id):
+            return replace(
+                super().read_task_execution_summary(task_id),
+                result=refused_result,
+            )
+
+    registry, _service, planned, execution = _start_execution_overlay(Service())
+    refused_record = SessionRecordView(
+        execution.session_id,
+        EXECUTION_KIND,
+        "refused",
+        True,
+        "2026-01-01T00:00:00+00:00",
+        None,
+        "2026-01-01T00:00:03+00:00",
+        refused_result,
+    )
+    _mark_terminal_drained(registry, execution, refused_record)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    retained = registry.open_plan_view(planned.task_id)["execution"]
+    assert retained["result"] == refused_result
+    assert retained["started_at"] is None
+    assert retained["ended_at"] == refused_record.ended_at
+
+
+def test_m1_8_delivery_factory_arms_execution_before_fast_item() -> None:
+    class Service(_ExecutionOverlayService):
+        def start_task_execution(self, task_id, request_id, **kwargs):
+            self.execution_sink = kwargs["delivery_factory"](task_id)
+            session_id = "b" * 32
+            self.execution_sink(
+                _execution_event(session_id, 1, self.operation_item)
+            )
+            return TaskStartView(task_id, "c" * 32, session_id)
+
+    registry, service, planned, _execution = _start_execution_overlay(Service())
+    summary = registry.open_plan_view(planned.task_id)
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert window["rows"][0]["execution"]["operation"]["result"] == "succeeded"
+    assert service.execution_reads == []
+
+
+def test_m1_8_execution_revision_overflow_cannot_partially_publish_fact() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    task = registry._tasks[planned.task_id]
+    task.execution_revision = drain_module.MAX_JAVASCRIPT_SAFE_INTEGER
+    assert service.execution_sink is not None
+    with pytest.raises(OverflowError, match="revision is exhausted"):
+        service.execution_sink(
+            _execution_event(execution.session_id, 2, service.operation_item)
+        )
+    assert task.execution_operation_results == {}
+    with pytest.raises(OverflowError, match="revision is exhausted"):
+        service.execution_sink(_execution_event(execution.session_id, 3, Gap(4)))
+    assert task.execution_gap_minimum is None
+    assert task.execution_gap_maximum is None
+
+
+def test_m1_8_retained_window_skips_full_detail_conversion_and_detail_reads_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    assert service.execution_sink is not None
+    service.execution_sink(_execution_event(execution.session_id, 2, Gap(6)))
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    original = drain_module.result_item_view
+    converted: list[object] = []
+
+    def observe(value):
+        converted.append(value)
+        return original(value)
+
+    monkeypatch.setattr(drain_module, "result_item_view", observe)
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert converted == []
+    row = window["rows"][0]["execution"]
+    assert row["operation"]["result"] == "succeeded"
+    assert row["automatic_verification"]["result"] == "verified"
+    assert row["evidence"]["state"] == "recorded-copy"
+    assert window["execution"]["gap"] == {
+        "minimum_first_missed_seq": 6,
+        "maximum_first_missed_seq": 6,
+    }
+    assert service.execution_reads == [
+        ("operation", (service.operation_id,)),
+        ("integrity", (service.operation_id,)),
+        ("evidence", (service.operation_id,)),
+    ]
+    row["operation"]["result"] = "failed"
+    row["automatic_verification"]["result"] = "failed"
+    row["evidence"]["state"] = "unavailable"
+    row["evidence"]["content"]["digest"] = "ff" * 16
+    repeated = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )["rows"][0]["execution"]
+    assert repeated["operation"]["result"] == "succeeded"
+    assert repeated["automatic_verification"]["result"] == "verified"
+    assert repeated["evidence"]["state"] == "recorded-copy"
+    assert repeated["evidence"]["content"]["digest"] == "01" * 16
+    detail = registry.get_execution_detail(
+        planned.task_id,
+        service.operation_id,
+        expected_execution_revision=window["execution"]["execution_revision"],
+    )
+    assert converted == [service.operation_item, service.integrity_item]
+    assert detail["disposition"] == "current"
+    assert detail["operation"].detail == {"message": "copied"}
+    assert detail["automatic_verification"].phase == "verify"
+    assert detail["evidence"]["content"]["digest"] == "01" * 16
+
+
+def test_m1_8_execution_release_retries_summary_capture_after_custody_release() -> None:
+    class Service(_ExecutionOverlayService):
+        summary_reads = 0
+
+        def read_task_execution_summary(self, task_id):
+            self.summary_reads += 1
+            if self.summary_reads == 1:
+                raise RuntimeError("retained summary is temporarily unavailable")
+            return super().read_task_execution_summary(task_id)
+
+    registry, service, planned, execution = _start_execution_overlay(Service())
+    _mark_terminal_drained(registry, execution)
+    with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        registry.release_terminal_session(execution.task_id, execution.session_id)
+    assert registry._tasks[planned.task_id].session_released is False
+
+    released = registry.release_terminal_session(execution.task_id, execution.session_id)
+    assert released == TaskSessionReleaseView(execution.task_id, execution.session_id)
+    assert service.summary_reads == 2
+    assert len([
+        call for call in service.lifecycle_calls
+        if call[0] == "release_task_session" and call[2] == execution.session_id
+    ]) == 2
+    assert registry.open_plan_view(planned.task_id)["execution"]["result"] is not None
+
+
+def test_m1_8_retained_window_rejects_a_changed_captured_run() -> None:
+    class Service(_ExecutionOverlayService):
+        def read_task_execution_items(self, task_id, operation_ids):
+            return replace(
+                super().read_task_execution_items(task_id, operation_ids),
+                run_id="e" * 32,
+            )
+
+    registry, _service, planned, execution = _start_execution_overlay(Service())
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    with pytest.raises(RuntimeError, match="task binding"):
+        registry.get_plan_window(
+            planned.task_id,
+            expected_revision=summary["view_revision"],
+            offset=0,
+            limit=1,
+        )
+
+
+def test_m1_8_live_overlay_survives_reobserve_generation_change() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    assert service.execution_sink is not None
+    service.execution_sink(
+        _execution_event(execution.session_id, 2, service.operation_item)
+    )
+    service.reobserve_result = SessionRecordView(
+        execution.session_id,
+        EXECUTION_KIND,
+        "pending",
+        True,
+        "2026-01-01T00:00:00+00:00",
+        None,
+        None,
+        None,
+    )
+    registry.drain(
+        planned.task_id,
+        execution.session_id,
+        DRAIN,
+        replay_from=None,
+    )
+    recovered = registry.drain(
+        planned.task_id,
+        execution.session_id,
+        "6" * 32,
+        replay_from=1,
+    )
+    assert recovered.updates == ()
+    summary = registry.open_plan_view(planned.task_id)
+    window = registry.get_plan_window(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        offset=0,
+        limit=1,
+    )
+    assert window["rows"][0]["execution"]["operation"]["result"] == "succeeded"
+    assert service.execution_reads == []
+
+
+def test_m1_8_retained_window_revalidates_after_outside_read() -> None:
+    class Service(_ExecutionOverlayService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.read_entered = Event()
+            self.allow_read = Event()
+
+        def read_task_execution_items(self, task_id, operation_ids):
+            self.read_entered.set()
+            assert self.allow_read.wait(2)
+            return super().read_task_execution_items(task_id, operation_ids)
+
+    service = Service()
+    registry, _service, planned, execution = _start_execution_overlay(service)
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    results: list[dict[str, object]] = []
+    errors: list[BaseException] = []
+
+    def read_window() -> None:
+        try:
+            results.append(registry.get_plan_window(
+                planned.task_id,
+                expected_revision=summary["view_revision"],
+                offset=0,
+                limit=1,
+            ))
+        except BaseException as error:
+            errors.append(error)
+
+    worker = Thread(target=read_window)
+    worker.start()
+    assert service.read_entered.wait(1)
+    changed = registry.update_plan_view(
+        planned.task_id,
+        expected_revision=summary["view_revision"],
+        search_query="copy",
+        filters=frozenset(),
+        sort_column=PlanSortColumn.PATH,
+        sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None,
+        collapsed=None,
+    )
+    service.allow_read.set()
+    worker.join(2)
+    assert not worker.is_alive()
+    assert errors == []
+    assert results[0]["disposition"] == "conflict"
+    assert results[0]["view_revision"] == changed["view_revision"]
+    assert results[0]["execution"] == changed["execution"]
+    assert results[0]["rows"] == []
+
+
+def test_m1_8_exact_detail_close_race_cannot_publish_stale_data() -> None:
+    class Service(_ExecutionOverlayService):
+        def __init__(self) -> None:
+            super().__init__()
+            self.read_entered = Event()
+            self.allow_read = Event()
+
+        def read_task_execution_items(self, task_id, operation_ids):
+            self.read_entered.set()
+            assert self.allow_read.wait(2)
+            return super().read_task_execution_items(task_id, operation_ids)
+
+    service = Service()
+    registry, _service, planned, execution = _start_execution_overlay(service)
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    errors: list[BaseException] = []
+
+    def read_detail() -> None:
+        try:
+            registry.get_execution_detail(
+                planned.task_id,
+                service.operation_id,
+                expected_execution_revision=summary["execution"]["execution_revision"],
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    worker = Thread(target=read_detail)
+    worker.start()
+    assert service.read_entered.wait(1)
+    assert registry.close_task(planned.task_id, execution.session_id) == TaskCloseView(
+        planned.task_id, execution.session_id,
+    )
+    service.allow_read.set()
+    worker.join(2)
+    assert not worker.is_alive()
+    assert len(errors) == 1
+    assert type(errors[0]) is TaskUnavailableError
+
+
+def test_m1_8_retained_window_rejects_foreign_returned_operation() -> None:
+    class Service(_ExecutionOverlayService):
+        def read_task_execution_items(self, task_id, operation_ids):
+            foreign = replace(self.operation_item, item_id="8" * 32)
+            return RetainedExecutionItemWindow(task_id, self.run_id, (foreign,))
+
+    registry, _service, planned, execution = _start_execution_overlay(Service())
+    _mark_terminal_drained(registry, execution)
+    registry.release_terminal_session(execution.task_id, execution.session_id)
+    summary = registry.open_plan_view(planned.task_id)
+    with pytest.raises(RuntimeError, match="operation item has invalid data"):
+        registry.get_plan_window(
+            planned.task_id,
+            expected_revision=summary["view_revision"],
+            offset=0,
+            limit=1,
+        )
+
+
+def test_m1_7_reopen_retains_view_identity_and_execution_commit_revision() -> None:
+    registry, service = _registry()
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+
+    opened = registry.open_plan_view(plan_start.task_id)
+    changed = registry.update_plan_view(
+        plan_start.task_id,
+        expected_revision=opened["view_revision"],
+        search_query="",
+        filters=frozenset(),
+        sort_column=PlanSortColumn.PATH,
+        sort_direction=SortDirection.ASCENDING,
+        collapse_node_id="node-" + "1" * 32,
+        collapsed=True,
+    )
+    reopened = registry.open_plan_view(plan_start.task_id)
+
+    assert reopened["view_revision"] == changed["view_revision"] == 1
+    assert reopened["collapsed_count"] == 1
+    assert service.projection_calls == 1
+
+    execution = registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    )
+    committed = registry.open_plan_view(plan_start.task_id)
+    assert committed["selection_state"] == "committed"
+    assert committed["view_revision"] == 2
+    assert service.projection_calls == 1
+    stale = registry.get_plan_window(
+        plan_start.task_id,
+        expected_revision=1,
+        offset=0,
+        limit=1,
+    )
+    assert stale["disposition"] == "conflict"
+    assert execution.session_id == "b" * 32
+
+
+@pytest.mark.parametrize("case", ("origins-ascii", "origins-cjk", "groups-cjk", "notices-cjk"))
+def test_supported_long_paths_remain_readable_through_production_plan_window(case) -> None:
+    from _db_fixtures import file_stat, operation, plan
+    from namisync.workflows import build_plan_projection
+    from namisync.workflows.models import PlanArtifact, PlanRequest
+    from namisync.interfaces.web.bridge import AdmissionGranted, BridgeDispatcher
+    from namisync.interfaces.web.commands import production_command_specs
+    from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
+
+    character = "a" if case == "origins-ascii" else "一"
+    prefix = (character * 254 + "\\") * 128
+    group_case = case == "groups-cjk"
+    notice_case = case == "notices-cjk"
+    operations = tuple(
+        operation(OperationKind.MOVE,
+                  source_path=prefix + f"Source{index:03}.txt", source=file_stat(),
+                  target_path=prefix + f"d{index:03}\\f.txt" if group_case else f"new\\f{index:03}.txt",
+                  prior_target_path=f"old{index:03}.txt" if group_case else prefix + f"f{index:03}.txt",
+                  target=file_stat())
+        for index in range(256)
+    )
+    value = plan(operations)
+    from namisync.core.models import ScanWarning, ScanWarningCode
+    warnings = tuple(ScanWarning(ScanWarningCode.ACCESS_DENIED, prefix + "leaf.txt", "diagnostic")
+                     for _ in range(256)) if notice_case else ()
+    if notice_case:
+        value = plan(())
+    assert all(len(str(value.target_root.path) + "\\" + path) <= 32_767
+               for item in operations for path in (item.target_rel_path, item.prior_target_rel_path))
+
+    class Service(_Service):
+        def get_plan_projection(self, request_id):
+            artifact = PlanArtifact(
+                PlanRequest(request_id, value.source_root.path, value.target_root.path),
+                SimpleNamespace(warnings=warnings, directories=(), files=(), unsupported=()), SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+                value, Verdict(True, (), SimpleNamespace()),
+            )
+            return (build_plan_projection(request_id, artifact),
+                    _plan_selection_summary(), r"C:\source", r"D:\target")
+
+    registry, service = _registry(Service())
+    started = _start(registry)
+    _mark_terminal_drained(registry, started)
+    registry.release_terminal_session(started.task_id, started.session_id)
+    registry.open_plan_view(started.task_id)
+    revision = 0
+    if group_case:
+        registry.update_plan_view(
+            started.task_id, expected_revision=0, search_query="moved to",
+            filters=frozenset(), sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None,
+        )
+        revision = 1
+    commands = production_command_specs(
+        picker=lambda: None, slots=SimpleNamespace(), registry=registry,
+        cosmetics=SimpleNamespace(), shell_ready=lambda _: None,
+        readiness_echo=lambda *_: True,
+    )
+    dispatcher = BridgeDispatcher(
+        document=SimpleNamespace(require_trusted=lambda: None), commands=commands,
+        admit=lambda _: AdmissionGranted(ReadinessContext(CommandPhase.OPEN, 0)),
+    )
+    payload = {"task_id": started.task_id, "expected_revision": revision,
+               "offset": 0 if group_case or notice_case else 1, "limit": 256}
+    response = dispatcher.dispatch(json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION, "request_id": "a1" * 16,
+        "command": "get_plan_window", "payload": payload,
+    }))
+    assert response["ok"] is True
+    rows = response["result"]["rows"]
+    assert len(rows) == 256
+    assert all("prior_path" not in row for row in rows)
+    if group_case:
+        assert all(row["row_kind"] == "prior-group" for row in rows)
+        assert all(len(row["display"].encode("utf-16-le")) // 2 <= 300 for row in rows)
+        assert all(row["move_group"]["destination_display"].startswith("…\\") for row in rows)
+        assert all(len(row["move_group"]["destination_display"].encode("utf-16-le")) // 2 <= 255 for row in rows)
+        assert registry.get_plan_detail(started.task_id, expected_revision=revision,
+                                        node_id=rows[0]["node_id"])["detail"]["move_destination_path"].startswith(prefix)
+    elif notice_case:
+        assert all(row["row_kind"] == "notice" for row in rows)
+        assert all(len(row["display"].encode("utf-16-le")) // 2 <= 300 for row in rows)
+        assert all(len(row["notice"].encode("utf-16-le")) // 2 <= 300 for row in rows)
+        detail = registry.get_plan_detail(started.task_id, expected_revision=revision,
+                                          node_id=rows[0]["node_id"])["detail"]
+        assert detail["path"] == prefix + "leaf.txt" and detail["path_origin"] == "source"
+        assert prefix in detail["notice"] and detail["notice"].endswith(" — diagnostic")
+        registry.update_plan_view(
+            started.task_id, expected_revision=0, search_query=prefix[:1000],
+            filters=frozenset(), sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None,
+        )
+        assert registry.get_plan_window(started.task_id, expected_revision=1,
+                                        offset=0, limit=256)["total"] == 256
+        revision = 1
+    else:
+        operation_row = next(row for row in rows if row["operation_id"] is not None)
+        detail = registry.get_plan_detail(started.task_id, expected_revision=revision,
+                                          node_id=operation_row["node_id"])
+        assert detail["detail"]["prior_path"].startswith(prefix)
+        assert detail["detail"]["source_path"].startswith(prefix)
+    stale = registry.get_plan_detail(started.task_id, expected_revision=revision + 1,
+                                     node_id=rows[0]["node_id"])
+    assert stale["disposition"] == "conflict" and stale["detail"] is None
+    exact_response = dispatcher.dispatch(json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION, "request_id": "b2" * 16,
+        "command": "get_plan_detail", "payload": {
+            "task_id": started.task_id, "expected_revision": revision,
+            "node_id": rows[0]["node_id"],
+        },
+    }))
+    assert exact_response["ok"] is True
+    assert exact_response["result"]["disposition"] == "current"
+    assert exact_response["result"]["detail"] == registry.get_plan_detail(
+        started.task_id, expected_revision=revision, node_id=rows[0]["node_id"],
+    )["detail"]
+
+
+def test_new_plan_view_collapses_move_groups_and_reopen_preserves_expansion() -> None:
+    from _db_fixtures import file_stat, operation, plan
+    from namisync.workflows import build_plan_projection
+    from namisync.workflows.models import PlanArtifact, PlanRequest
+
+    moved = operation(OperationKind.MOVE, target_path=r"new\file.txt",
+                      prior_target_path=r"old\file.txt", target=file_stat())
+    value = plan((moved,))
+
+    class Service(_Service):
+        def get_plan_projection(self, request_id):
+            self.projection_calls += 1
+            artifact = PlanArtifact(
+                PlanRequest(request_id, value.source_root.path, value.target_root.path),
+                SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()), SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+                value, Verdict(True, (), SimpleNamespace()),
+            )
+            return (build_plan_projection(request_id, artifact),
+                    _plan_selection_summary(), "source", "target")
+
+    registry, service = _registry(Service())
+    started = _start(registry)
+    _mark_terminal_drained(registry, started)
+    registry.release_terminal_session(started.task_id, started.session_id)
+    opened = registry.open_plan_view(started.task_id)
+    assert opened["collapsed_count"] == 1
+    window = registry.get_plan_window(started.task_id, expected_revision=0,
+                                      offset=0, limit=256)
+    group = next(row for row in window["rows"] if row["row_kind"] == "prior-group")
+    assert group["expanded"] is False
+    assert not any(row["row_kind"] == "prior-operation" for row in window["rows"])
+    changed = registry.update_plan_view(
+        started.task_id, expected_revision=0, search_query="", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=group["node_id"], collapsed=False,
+    )
+    reopened = registry.open_plan_view(started.task_id)
+    assert reopened["view_revision"] == changed["view_revision"] == 1
+    assert reopened["collapsed_count"] == 0
+    assert service.projection_calls == 1
+    rows = registry.get_plan_window(started.task_id, expected_revision=1,
+                                   offset=0, limit=256)["rows"]
+    assert any(row["row_kind"] == "prior-operation" for row in rows)
+
+
+def test_plan_scope_mutation_guards_both_revisions_and_keeps_hidden_selection() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.selected = {"1" * 32, "2" * 32}
+            self.selection_revision = 0
+            self.mutations = []
+
+        def get_plan_projection(self, request_id):
+            self.projection_calls += 1
+            root = PlanProjectionNode(
+                "node-" + "0" * 32, "Plan", "", 0, 0, None, 4, True,
+                "folder", None, None, None, None, "selected", 2, 2, 2,
+                None, None, 0, "none",
+            )
+            folder = replace(root, node_id="folder", display="Folder", position=1,
+                             depth=1, parent_index=0)
+            leaves = tuple(
+                PlanProjectionNode(
+                    "node-" + str(index) * 32, name, name, index + 1, 2, 1,
+                    index + 2, False, "operation", str(index) * 32, kind,
+                    None, None, "selected", 1, 1, 1, None, None, 0, "none",
+                    presentation_kind=kind,
+                )
+                for index, (name, kind) in enumerate(
+                    (("copy.txt", "copy"), ("delete.txt", "delete")), start=1
+                )
+            )
+            nodes = (root, folder, *leaves)
+            projection = PlanProjection(
+                request_id, nodes, {node.node_id: node.position for node in nodes},
+                {node.operation_id: node.node_id for node in leaves},
+                frozenset(self.selected),
+            )
+            return (
+                projection,
+                _plan_selection_summary(revision=self.selection_revision),
+                "source",
+                "target",
+            )
+
+        def _preview(self):
+            return SimpleNamespace(
+                revision=self.selection_revision, state="reviewing",
+                selected_operation_ids=tuple(self.selected),
+                requires_destructive_confirmation=False,
+                irreversible_update_count=0, destructive_operation_count=0,
+                irreversible_operation_count=0,
+                destructive_operation_counts={"update": 0, "move_update": 0,
+                                              "trash": 0, "delete": 0},
+                required_bytes="0",
+                operations=tuple(SimpleNamespace(operation_id=identifier, reason=None)
+                                 for identifier in ("1" * 32, "2" * 32)),
+            )
+
+        def mutate_selection(self, request_id, expected_revision, *, deselect,
+                             reselect, command_id, intent_scope_revision,
+                             intent_highlight_revision=None):
+            self.mutations.append((deselect, reselect, command_id))
+            assert expected_revision == self.selection_revision
+            assert intent_scope_revision >= 1
+            self.selected.difference_update(deselect)
+            self.selected.update(reselect)
+            self.selection_revision += 1
+            return SimpleNamespace(disposition="applied", preview=self._preview())
+
+        def get_plan_selection_membership(self, request_id, expected_revision):
+            assert expected_revision == self.selection_revision
+            return frozenset(self.selected)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    registry.release_terminal_session(start.task_id, start.session_id)
+    opened = registry.open_plan_view(start.task_id)
+    filtered = registry.update_plan_view(
+        start.task_id, expected_revision=opened["view_revision"],
+        search_query="", filters=frozenset({"copy"}),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None,
+    )
+    assert filtered["selection_revision"] == 0
+    assert service.mutations == []
+    stale = registry.mutate_plan_scope(
+        start.task_id, expected_selection_revision=0, expected_view_revision=0,
+        selected=False, command_id="8" * 32,
+    )
+    assert stale["disposition"] == "conflict"
+    assert service.mutations == []
+    changed = registry.mutate_plan_scope(
+        start.task_id, expected_selection_revision=0, expected_view_revision=1,
+        selected=False, command_id="9" * 32,
+    )
+    assert changed["disposition"] == "applied"
+    assert service.mutations == [(("1" * 32,), (), "9" * 32)]
+    assert service.selected == {"2" * 32}
+    assert changed["scope_selected_operation_count"] == 0
+    stale_selection = registry.mutate_plan_scope(
+        start.task_id, expected_selection_revision=0,
+        expected_view_revision=changed["view_revision"],
+        selected=True, command_id="a" * 32,
+    )
+    assert stale_selection["disposition"] == "conflict"
+    assert service.selected == {"2" * 32}
+    with pytest.raises(ValueError, match="synthetic Plan root"):
+        registry.mutate_plan_selection(
+            start.task_id, expected_revision=1,
+            expected_view_revision=changed["view_revision"],
+            node_id="node-" + "0" * 32, selected=True,
+            command_id="b" * 32,
+        )
+    reset = registry.update_plan_view(
+        start.task_id, expected_revision=changed["view_revision"],
+        search_query="", filters=frozenset(),
+        sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+        collapse_node_id=None, collapsed=None,
+    )
+    assert reset["selection_revision"] == 1
+    assert reset["selected_operation_count"] == 1
+    assert service.selected == {"2" * 32}
+    highlighted = registry.mutate_plan_highlight(
+        start.task_id, expected_view_revision=reset["view_revision"],
+        expected_highlight_revision=reset["highlight_revision"],
+        gesture="replace", node_id="node-" + "1" * 32,
+    )
+    for revisions in (
+        (reset["view_revision"], reset["highlight_revision"], 1),
+        (reset["view_revision"], highlighted["highlight_revision"], 0),
+        (0, highlighted["highlight_revision"], 1),
+    ):
+        stale = registry.mutate_plan_highlighted_selection(
+            start.task_id, expected_view_revision=revisions[0],
+            expected_highlight_revision=revisions[1],
+            expected_selection_revision=revisions[2],
+            selected=True, command_id="c" * 32,
+        )
+        assert stale["disposition"] == "conflict"
+    assert len(service.mutations) == 1
+    restored = registry.mutate_plan_highlighted_selection(
+        start.task_id, expected_view_revision=reset["view_revision"],
+        expected_highlight_revision=highlighted["highlight_revision"],
+        expected_selection_revision=1,
+        selected=True, command_id="d" * 32,
+    )
+    assert restored["disposition"] == "applied"
+    assert service.mutations[-1] == ((), ("1" * 32,), "d" * 32)
+    assert service.selected == {"1" * 32, "2" * 32}
+    assert restored["highlighted_count"] == 1
+    together = registry.mutate_plan_highlight(
+        start.task_id, expected_view_revision=restored["view_revision"],
+        expected_highlight_revision=restored["highlight_revision"],
+        gesture="toggle", node_id="folder")
+    changed = registry.mutate_plan_highlighted_selection(
+        start.task_id, expected_view_revision=together["view_revision"],
+        expected_highlight_revision=together["highlight_revision"],
+        expected_selection_revision=together["selection_revision"],
+        selected=False, command_id="e" * 32)
+    assert service.mutations[-1] == (("1" * 32,), (), "e" * 32)
+    assert service.selected == {"2" * 32}, "the adapter does not add an unhighlighted descendant"
+    rows = registry.get_plan_window(start.task_id, expected_revision=changed["view_revision"],
+                                    offset=0, limit=256)["rows"]
+    assert next(row for row in rows if row["node_id"] == "folder")["selection"] == "mixed"
+
+
+def test_m1_7_execution_publication_failure_restores_released_plan_delivery() -> None:
+    class Service(_Service):
+        def start_task_execution(self, task_id, request_id, **kwargs):
+            kwargs["delivery_factory"](task_id)
+            raise RuntimeError("dispatcher refused execution")
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    before = registry.list_tasks().tasks[0]
+
+    with pytest.raises(RuntimeError, match="task start failed"):
+        registry.start_execution(
+            plan_start.task_id,
+            request_id=plan_start.request_id,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id="5" * 32,
+            wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+        )
+
+    after = registry.list_tasks().tasks[0]
+    assert after == before
+    assert after.session_id == plan_start.session_id
+    assert after.session_released is True
+
+
+def test_m1_7_execution_response_failure_recovers_admitted_receipt() -> None:
+    class Service(_Service):
+        admitted: TaskStartView | None = None
+
+        def start_task_execution(self, task_id, request_id, **kwargs):
+            sink = kwargs["delivery_factory"](task_id)
+            self.admitted = TaskStartView(task_id, "c" * 32, "b" * 32)
+            sink(replace(_event(1), session_id=self.admitted.session_id))
+            raise RuntimeError("response was lost after admission")
+
+        def recover_task_execution(self, *args, **kwargs):
+            return self.admitted
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+
+    recovered = registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    )
+    summary = registry.list_tasks().tasks[0]
+
+    assert recovered == service.admitted
+    assert summary.session_id == recovered.session_id
+    assert summary.session_released is False
+    assert registry.start_execution(
+        plan_start.task_id,
+        request_id=plan_start.request_id,
+        expected_revision=0,
+        destructive_acknowledged=False,
+        command_id="5" * 32,
+        wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+    ) == recovered
+    with pytest.raises(TaskIntentConflictError):
+        registry.start_execution(
+            plan_start.task_id,
+            request_id="f" * 32,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id="5" * 32,
+            wire_intent=(plan_start.task_id, "f" * 32, 0, False),
+        )
+
+
+def test_operation_anchor_fences_session_and_view_without_reading_execution() -> None:
+    registry, service, planned, execution = _start_execution_overlay()
+    summary = registry.open_plan_view(planned.task_id)
+    revision = summary["view_revision"]
+    before_tasks = registry.list_tasks()
+    before_reads = list(service.execution_reads)
+    payload = {"expected_revision": revision, "operation_id": service.operation_id}
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=execution.session_id, **payload,
+    ) == {
+        "disposition": "current", "view_revision": revision,
+        "node_id": "node-" + "2" * 32, "index": 0,
+    }
+    conflict = {"disposition": "conflict", "view_revision": revision,
+                "node_id": None, "index": None}
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=planned.session_id, **payload,
+    ) == conflict
+    assert registry.get_plan_operation_anchor(
+        planned.task_id, session_id=execution.session_id,
+        expected_revision=revision + 1, operation_id=service.operation_id,
+    ) == conflict
+    assert registry.list_tasks() == before_tasks
+    assert service.execution_reads == before_reads
+
+
+def test_m1_7_close_first_fences_plan_consumers_and_execution() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_entered = Event()
+            self.allow_close = Event()
+
+        def close_task(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(("close_task", task_id, session_id, delivery))
+            self.close_entered.set()
+            assert self.allow_close.wait(2)
+            return TaskCloseView(task_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    opened = registry.open_plan_view(plan_start.task_id)
+    close_results: list[TaskCloseView] = []
+    close_errors: list[BaseException] = []
+
+    def close_plan() -> None:
+        try:
+            close_results.append(
+                registry.close_task(plan_start.task_id, plan_start.session_id)
+            )
+        except BaseException as error:
+            close_errors.append(error)
+
+    close_thread = Thread(target=close_plan)
+    close_thread.start()
+    assert service.close_entered.wait(1)
+
+    plan_calls = (
+        lambda: registry.open_plan_view(plan_start.task_id),
+        lambda: registry.update_plan_view(
+            plan_start.task_id,
+            expected_revision=opened["view_revision"],
+            search_query="",
+            filters=frozenset(),
+            sort_column=PlanSortColumn.PATH,
+            sort_direction=SortDirection.ASCENDING,
+            collapse_node_id=None,
+            collapsed=None,
+        ),
+        lambda: registry.get_plan_window(
+            plan_start.task_id,
+            expected_revision=opened["view_revision"],
+            offset=0,
+            limit=1,
+        ),
+        lambda: registry.get_plan_anchor(
+            plan_start.task_id,
+            expected_revision=opened["view_revision"],
+            node_id="node-" + "1" * 32,
+        ),
+        lambda: registry.get_plan_operation_anchor(
+            plan_start.task_id,
+            session_id=plan_start.session_id,
+            expected_revision=opened["view_revision"],
+            operation_id="9" * 32,
+        ),
+        lambda: registry.mutate_plan_selection(
+            plan_start.task_id,
+            expected_revision=0,
+            expected_view_revision=opened["view_revision"],
+            node_id="node-" + "1" * 32,
+            selected=False,
+            command_id="6" * 32,
+        ),
+        lambda: registry.start_execution(
+            plan_start.task_id,
+            request_id=plan_start.request_id,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id="5" * 32,
+            wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+        ),
+    )
+    for call in plan_calls:
+        with pytest.raises(TaskUnavailableError):
+            call()
+
+    service.allow_close.set()
+    close_thread.join(2)
+    assert not close_thread.is_alive()
+    assert close_errors == []
+    assert close_results == [TaskCloseView(plan_start.task_id, plan_start.session_id)]
+    assert not any(call[0] == "task-execution" for call in service.start_calls)
+
+
+def test_m1_7_reserved_execution_wins_before_close(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.execution_entered = Event()
+            self.allow_execution = Event()
+
+        def start_task_execution(self, *args, **kwargs):
+            self.execution_entered.set()
+            assert self.allow_execution.wait(2)
+            return super().start_task_execution(*args, **kwargs)
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    task = registry._tasks[plan_start.task_id]
+    close_waiting = Event()
+    condition_type = type(task.condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if condition is task.condition and current_thread().name == "plan-close":
+            close_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+    execution_results: list[TaskStartView] = []
+    execution_errors: list[BaseException] = []
+    close_errors: list[BaseException] = []
+
+    def execute() -> None:
+        try:
+            execution_results.append(
+                registry.start_execution(
+                    plan_start.task_id,
+                    request_id=plan_start.request_id,
+                    expected_revision=0,
+                    destructive_acknowledged=False,
+                    command_id="5" * 32,
+                    wire_intent=(plan_start.task_id, plan_start.request_id, 0, False),
+                )
+            )
+        except BaseException as error:
+            execution_errors.append(error)
+
+    def close_plan() -> None:
+        try:
+            registry.close_task(plan_start.task_id, plan_start.session_id)
+        except BaseException as error:
+            close_errors.append(error)
+
+    execution_thread = Thread(target=execute)
+    execution_thread.start()
+    assert service.execution_entered.wait(1)
+    close_thread = Thread(target=close_plan, name="plan-close")
+    close_thread.start()
+    assert close_waiting.wait(1)
+
+    service.allow_execution.set()
+    execution_thread.join(2)
+    close_thread.join(2)
+
+    assert not execution_thread.is_alive()
+    assert not close_thread.is_alive()
+    assert execution_errors == []
+    assert execution_results == [
+        TaskStartView(plan_start.task_id, "c" * 32, "b" * 32)
+    ]
+    assert len(close_errors) == 1
+    assert isinstance(close_errors[0], TaskUnavailableError)
+    assert not any(call[0] == "close_task" for call in service.lifecycle_calls)
+
+
+def test_m1_7_close_first_refuses_fresh_plan_again_without_new_work() -> None:
+    class Service(_Service):
+        def start_task_plan_again(self, *args, **kwargs):
+            self.start_calls.append(("plan-again", args, kwargs))
+            raise AssertionError("retired Plan again reached the lifecycle")
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    close_entered = Event()
+    allow_close = Event()
+    original_close = service.close_task
+
+    def close_task(task_id, session_id, delivery):
+        close_entered.set()
+        assert allow_close.wait(2)
+        return original_close(task_id, session_id, delivery)
+
+    service.close_task = close_task
+    close_results = []
+    close_thread = Thread(
+        target=lambda: close_results.append(
+            registry.close_task(plan_start.task_id, plan_start.session_id)
+        )
+    )
+    close_thread.start()
+    assert close_entered.wait(1)
+
+    with pytest.raises(TaskUnavailableError):
+        registry.start_plan_again(
+            plan_start.task_id,
+            source_mount=None,
+            target_mount=None,
+            command_id="7" * 32,
+            wire_intent=(plan_start.task_id, None, None),
+        )
+    assert registry._provisional == {}
+    assert not any(call[0] == "plan-again" for call in service.start_calls)
+
+    allow_close.set()
+    close_thread.join(2)
+    assert not close_thread.is_alive()
+    assert close_results == [TaskCloseView(plan_start.task_id, plan_start.session_id)]
+
+
+@pytest.mark.parametrize("fail_plan_again", (False, True))
+def test_m1_7_plan_again_reservation_settles_before_close(
+    monkeypatch: pytest.MonkeyPatch,
+    fail_plan_again: bool,
+) -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.plan_again_entered = Event()
+            self.allow_plan_again = Event()
+
+        def start_task_plan_again(
+            self,
+            old_task_id,
+            request_id,
+            *,
+            command_id,
+            delivery_factory,
+            **_kwargs,
+        ):
+            self.start_calls.append(("plan-again", old_task_id, request_id))
+            self.plan_again_entered.set()
+            assert self.allow_plan_again.wait(2)
+            if fail_plan_again:
+                delivery_factory("task-" + "d" * 32)
+                raise RuntimeError("Plan again failed")
+            task_id = "task-" + "d" * 32
+            sink = delivery_factory(task_id)
+            session_id = "e" * 32
+            sink(replace(_event(1), session_id=session_id))
+            return TaskStartView(task_id, "f" * 32, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    old = registry._tasks[plan_start.task_id]
+    close_waiting = Event()
+    condition_type = type(old.condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if condition is old.condition and current_thread().name == "plan-again-close":
+            close_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+    plan_results = []
+    plan_errors: list[BaseException] = []
+    close_results = []
+
+    def plan_again() -> None:
+        try:
+            plan_results.append(
+                registry.start_plan_again(
+                    plan_start.task_id,
+                    source_mount=None,
+                    target_mount=None,
+                    command_id="7" * 32,
+                    wire_intent=(plan_start.task_id, None, None),
+                )
+            )
+        except BaseException as error:
+            plan_errors.append(error)
+
+    plan_thread = Thread(target=plan_again)
+    close_thread = Thread(
+        target=lambda: close_results.append(
+            registry.close_task(plan_start.task_id, plan_start.session_id)
+        ),
+        name="plan-again-close",
+    )
+    plan_thread.start()
+    assert service.plan_again_entered.wait(1)
+    close_thread.start()
+    assert close_waiting.wait(1)
+
+    service.allow_plan_again.set()
+    plan_thread.join(2)
+    close_thread.join(2)
+
+    assert not plan_thread.is_alive()
+    assert not close_thread.is_alive()
+    assert close_results == [TaskCloseView(plan_start.task_id, plan_start.session_id)]
+    if fail_plan_again:
+        assert len(plan_errors) == 1
+        assert isinstance(plan_errors[0], RuntimeError)
+        assert plan_results == []
+        assert registry._provisional == {}
+    else:
+        assert plan_errors == []
+        assert plan_results == [
+            TaskStartView("task-" + "d" * 32, "f" * 32, "e" * 32)
+        ]
+
+
+def test_m1_7_exact_plan_again_replays_after_source_task_close() -> None:
+    class Service(_Service):
+        def start_task_plan_again(
+            self,
+            old_task_id,
+            request_id,
+            *,
+            delivery_factory,
+            **_kwargs,
+        ):
+            self.start_calls.append(("plan-again", old_task_id, request_id))
+            task_id = "task-" + "d" * 32
+            sink = delivery_factory(task_id)
+            session_id = "e" * 32
+            sink(replace(_event(1), session_id=session_id))
+            return TaskStartView(task_id, "f" * 32, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    plan_start = _start(registry)
+    _mark_terminal_drained(registry, plan_start)
+    registry.release_terminal_session(plan_start.task_id, plan_start.session_id)
+    wire_intent = (plan_start.task_id, None, None)
+    admitted = registry.start_plan_again(
+        plan_start.task_id,
+        source_mount=None,
+        target_mount=None,
+        command_id="7" * 32,
+        wire_intent=wire_intent,
+    )
+    registry.close_task(plan_start.task_id, plan_start.session_id)
+
+    replay = registry.start_plan_again(
+        plan_start.task_id,
+        source_mount=None,
+        target_mount=None,
+        command_id="7" * 32,
+        wire_intent=wire_intent,
+    )
+
+    assert replay == admitted
+    assert [call[0] for call in service.start_calls].count("plan-again") == 1
+
+
+def test_terminal_session_release_lost_response_replay_is_idempotent() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+
+    first = registry.release_terminal_session(start.task_id, start.session_id)
+    replay = registry.release_terminal_session(start.task_id, start.session_id)
+    summary = registry.list_tasks().tasks[0]
+
+    assert first == replay == TaskSessionReleaseView(
+        start.task_id,
+        start.session_id,
+    )
+    assert summary.session_state == "completed"
+    assert summary.session_released is True
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "release_task_session",
+        "release_task_session",
+    ]
+    assert service.lifecycle_calls[0][1:] == service.lifecycle_calls[1][1:]
+
+
+def test_delayed_terminal_release_converges_from_close_receipt() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    registry.close_task(start.task_id, start.session_id)
+
+    released = registry.release_terminal_session(start.task_id, start.session_id)
+    close_replay = registry.request_task_close(start.task_id, start.session_id)
+
+    assert released == TaskSessionReleaseView(start.task_id, start.session_id)
+    assert close_replay == TaskCloseRequestView(
+        start.task_id,
+        start.session_id,
+        "closed",
+    )
+    assert start.task_id not in registry._tasks
+    assert [call[0] for call in service.lifecycle_calls] == ["close_task"]
+
+
+def test_explicit_close_after_terminal_release_delegates_both_operations() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    registry.release_terminal_session(start.task_id, start.session_id)
+
+    closed = registry.close_task(start.task_id, start.session_id)
+
+    assert closed == TaskCloseView(start.task_id, start.session_id)
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "release_task_session",
+        "close_task",
+    ]
+    assert start.task_id not in registry._tasks
+
+
+def test_release_failure_retains_delivery_state_for_high_level_retry() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.release_attempts = 0
+
+        def release_task_session(self, task_id, session_id, delivery):
+            self.release_attempts += 1
+            self.lifecycle_calls.append(
+                ("release_task_session", task_id, session_id, delivery)
+            )
+            if self.release_attempts == 1:
+                _raise_private_failure(graph_references)
+            return TaskSessionReleaseView(task_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+
+    with pytest.raises(Exception, match="private failure") as raised:
+        registry.release_terminal_session(start.task_id, start.session_id)
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert all(reference() is None for reference in graph_references[3:])
+    task = registry._tasks[start.task_id]
+    assert task.delivered_terminal_record is not None
+    released = registry.release_terminal_session(
+        start.task_id,
+        start.session_id,
+    )
+
+    assert released == TaskSessionReleaseView(start.task_id, start.session_id)
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "release_task_session",
+        "release_task_session",
+    ]
+    assert start.task_id in registry._tasks
+    del raised
+    gc.collect()
+    assert all(reference() is None for reference in graph_references)
+
+
+def test_close_failure_retains_delivery_state_for_high_level_retry() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_attempts = 0
+
+        def close_task(self, task_id, session_id, delivery):
+            self.close_attempts += 1
+            self.lifecycle_calls.append(
+                ("close_task", task_id, session_id, delivery)
+            )
+            if self.close_attempts == 1:
+                raise OSError("injected close failure")
+            return TaskCloseView(task_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+
+    with pytest.raises(OSError, match="close failure"):
+        registry.close_task(start.task_id, start.session_id)
+
+    assert start.task_id in registry._tasks
+    assert registry.close_task(
+        start.task_id,
+        start.session_id,
+    ) == TaskCloseView(start.task_id, start.session_id)
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "close_task",
+        "close_task",
+    ]
+    assert start.task_id not in registry._tasks
+
+
+def test_release_and_close_race_delegates_each_high_level_operation_once() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.release_entered = Event()
+            self.allow_release = Event()
+
+        def release_task_session(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("release_task_session", task_id, session_id, delivery)
+            )
+            self.release_entered.set()
+            assert self.allow_release.wait(2)
+            return TaskSessionReleaseView(task_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    released = []
+    closed = []
+    errors = []
+
+    def release() -> None:
+        try:
+            released.append(
+                registry.release_terminal_session(start.task_id, start.session_id)
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    def close() -> None:
+        try:
+            closed.append(registry.close_task(start.task_id, start.session_id))
+        except BaseException as error:
+            errors.append(error)
+
+    releasing = Thread(target=release)
+    closing = Thread(target=close)
+    releasing.start()
+    assert service.release_entered.wait(1)
+    closing.start()
+    service.allow_release.set()
+    releasing.join(1)
+    closing.join(1)
+
+    assert errors == []
+    assert released == [TaskSessionReleaseView(start.task_id, start.session_id)]
+    assert closed == [TaskCloseView(start.task_id, start.session_id)]
+    assert sorted(call[0] for call in service.lifecycle_calls) == [
+        "close_task",
+        "release_task_session",
+    ]
+
+
+def test_release_settles_a_stale_failed_recovery_without_deadlock() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            self.reobserve_entered.set()
+            assert self.release_reobserve.wait(2)
+            _raise_private_failure(
+                graph_references,
+                hostile_text=True,
+            )
+
+    service = Service()
+    service.release_reobserve.clear()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    drain_errors = []
+    release_results = []
+    release_errors = []
+
+    def recover() -> None:
+        try:
+            registry.drain(
+                start.task_id,
+                start.session_id,
+                "6" * 32,
+                replay_from=1,
+            )
+        except BaseException as error:
+            drain_errors.append(error)
+
+    def release() -> None:
+        try:
+            release_results.append(
+                registry.release_terminal_session(start.task_id, start.session_id)
+            )
+        except BaseException as error:
+            release_errors.append(error)
+
+    recovering = Thread(target=recover)
+    releasing = Thread(target=release)
+    recovering.start()
+    assert service.reobserve_entered.wait(1)
+    task = registry._tasks[start.task_id]
+    assert task.terminal_record is None
+    assert task.delivered_terminal_record is not None
+    releasing.start()
+    service.release_reobserve.set()
+    recovering.join(1)
+    releasing.join(1)
+
+    assert not recovering.is_alive()
+    assert not releasing.is_alive()
+    assert len(drain_errors) == 1
+    assert type(drain_errors[0]) is RuntimeError
+    assert str(drain_errors[0]) == "task observation recovery failed"
+    assert drain_errors[0].__cause__ is None
+    assert drain_errors[0].__context__ is None
+    assert release_errors == []
+    assert release_results == [
+        TaskSessionReleaseView(start.task_id, start.session_id)
+    ]
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "release_task_session",
+    ]
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+
+def test_release_settles_stale_successful_recovery_with_one_lifecycle_call() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            self.reobserve_entered.set()
+            assert self.release_reobserve.wait(2)
+            return _record(terminal=False)
+
+    service = Service()
+    service.release_reobserve.clear()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    drain_errors: list[BaseException] = []
+    release_results = []
+
+    def recover() -> None:
+        try:
+            registry.drain(
+                start.task_id,
+                start.session_id,
+                "6" * 32,
+                replay_from=1,
+            )
+        except BaseException as error:
+            drain_errors.append(error)
+
+    def release() -> None:
+        release_results.append(
+            registry.release_terminal_session(start.task_id, start.session_id)
+        )
+
+    recovering = Thread(target=recover)
+    releasing = Thread(target=release)
+    recovering.start()
+    assert service.reobserve_entered.wait(1)
+    releasing.start()
+    service.release_reobserve.set()
+    recovering.join(1)
+    releasing.join(1)
+
+    assert not recovering.is_alive()
+    assert not releasing.is_alive()
+    assert len(drain_errors) == 1
+    assert type(drain_errors[0]) is TaskUnavailableError
+    assert str(drain_errors[0]) == (
+        "task became unavailable during observation recovery"
+    )
+    assert drain_errors[0].__cause__ is None
+    assert drain_errors[0].__context__ is None
+    assert release_results == [
+        TaskSessionReleaseView(start.task_id, start.session_id)
+    ]
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "release_task_session",
+    ]
+
+
+def test_close_and_delayed_release_race_converges_through_close_receipt() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_entered = Event()
+            self.allow_close = Event()
+            self.release_entered = Event()
+            self.allow_release_failure = Event()
+
+        def close_task(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("close_task", task_id, session_id, delivery)
+            )
+            self.close_entered.set()
+            assert self.allow_close.wait(2)
+            return TaskCloseView(task_id, session_id)
+
+        def release_task_session(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("release_task_session", task_id, session_id, delivery)
+            )
+            self.release_entered.set()
+            assert self.allow_release_failure.wait(2)
+            raise TaskUnavailableError("application association is retired")
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    closed: list[TaskCloseView] = []
+    released: list[TaskSessionReleaseView] = []
+    errors: list[BaseException] = []
+
+    def release() -> None:
+        try:
+            released.append(
+                registry.release_terminal_session(
+                    start.task_id,
+                    start.session_id,
+                )
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    closing = Thread(
+        target=lambda: closed.append(
+            registry.close_task(start.task_id, start.session_id)
+        )
+    )
+    releasing = Thread(target=release)
+    closing.start()
+    assert service.close_entered.wait(1)
+    releasing.start()
+    assert service.release_entered.wait(1)
+    service.allow_close.set()
+    closing.join(1)
+    assert not closing.is_alive()
+    service.allow_release_failure.set()
+    releasing.join(1)
+
+    assert errors == []
+    assert closed == [TaskCloseView(start.task_id, start.session_id)]
+    assert released == [TaskSessionReleaseView(start.task_id, start.session_id)]
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "close_task",
+        "release_task_session",
+    ]
+
+
+def test_release_waits_for_post_service_close_receipt_publication(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_result = TaskCloseView("task-" + "a" * 32, SESSION)
+            self.release_entered = Event()
+
+        def close_task(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("close_task", task_id, session_id, delivery)
+            )
+            return self.close_result
+
+        def release_task_session(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("release_task_session", task_id, session_id, delivery)
+            )
+            self.release_entered.set()
+            raise TaskUnavailableError("application association is retired")
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    post_service_entered = Event()
+    allow_receipt_publication = Event()
+    release_done = Event()
+    closed: list[TaskCloseView] = []
+    released: list[TaskSessionReleaseView] = []
+    errors: list[BaseException] = []
+    real_post_init = TaskCloseView.__post_init__
+
+    def block_before_publication(result: TaskCloseView) -> None:
+        real_post_init(result)
+        if result is service.close_result:
+            post_service_entered.set()
+            assert allow_receipt_publication.wait(2)
+
+    monkeypatch.setattr(TaskCloseView, "__post_init__", block_before_publication)
+
+    def release() -> None:
+        try:
+            released.append(
+                registry.release_terminal_session(start.task_id, start.session_id)
+            )
+        except BaseException as error:
+            errors.append(error)
+        finally:
+            release_done.set()
+
+    closing = Thread(
+        target=lambda: closed.append(
+            registry.close_task(start.task_id, start.session_id)
+        )
+    )
+    releasing = Thread(target=release)
+    closing.start()
+    assert post_service_entered.wait(1)
+    releasing.start()
+    assert service.release_entered.wait(1)
+    assert not release_done.wait(0.05)
+    allow_receipt_publication.set()
+    closing.join(1)
+    releasing.join(1)
+
+    assert errors == []
+    assert closed == [service.close_result]
+    assert released == [TaskSessionReleaseView(start.task_id, start.session_id)]
+
+
+def test_release_waiting_for_close_publication_wakes_on_close_failure() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_entered = Event()
+            self.allow_close_failure = Event()
+            self.release_entered = Event()
+
+        def close_task(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("close_task", task_id, session_id, delivery)
+            )
+            self.close_entered.set()
+            assert self.allow_close_failure.wait(2)
+            raise OSError("injected close failure")
+
+        def release_task_session(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("release_task_session", task_id, session_id, delivery)
+            )
+            self.release_entered.set()
+            raise TaskUnavailableError("application association is retired")
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    close_errors: list[BaseException] = []
+    release_errors: list[BaseException] = []
+    release_done = Event()
+
+    def close() -> None:
+        try:
+            registry.close_task(start.task_id, start.session_id)
+        except BaseException as error:
+            close_errors.append(error)
+
+    def release() -> None:
+        try:
+            registry.release_terminal_session(start.task_id, start.session_id)
+        except BaseException as error:
+            release_errors.append(error)
+        finally:
+            release_done.set()
+
+    closing = Thread(target=close)
+    releasing = Thread(target=release)
+    closing.start()
+    assert service.close_entered.wait(1)
+    releasing.start()
+    assert service.release_entered.wait(1)
+    assert not release_done.wait(0.05)
+    service.allow_close_failure.set()
+    closing.join(1)
+    releasing.join(1)
+
+    assert len(close_errors) == 1
+    assert type(close_errors[0]) is OSError
+    assert len(release_errors) == 1
+    assert type(release_errors[0]) is TaskUnavailableError
+
+
+def test_shutdown_wakes_release_waiting_for_close_publication() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_entered = Event()
+            self.allow_close = Event()
+            self.release_entered = Event()
+
+        def close_task(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("close_task", task_id, session_id, delivery)
+            )
+            self.close_entered.set()
+            assert self.allow_close.wait(2)
+            return TaskCloseView(task_id, session_id)
+
+        def release_task_session(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("release_task_session", task_id, session_id, delivery)
+            )
+            self.release_entered.set()
+            raise TaskUnavailableError("application association is retired")
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    close_results: list[TaskCloseView] = []
+    close_errors: list[BaseException] = []
+    release_errors: list[BaseException] = []
+    release_done = Event()
+
+    def close() -> None:
+        try:
+            close_results.append(
+                registry.close_task(start.task_id, start.session_id)
+            )
+        except BaseException as error:
+            close_errors.append(error)
+
+    def release() -> None:
+        try:
+            registry.release_terminal_session(start.task_id, start.session_id)
+        except BaseException as error:
+            release_errors.append(error)
+        finally:
+            release_done.set()
+
+    closing = Thread(target=close)
+    releasing = Thread(target=release)
+    closing.start()
+    assert service.close_entered.wait(1)
+    releasing.start()
+    assert service.release_entered.wait(1)
+    assert not release_done.wait(0.05)
+    registry.begin_close()
+    assert release_done.wait(1)
+    assert len(release_errors) == 1
+    assert type(release_errors[0]) is TaskUnavailableError
+    response = registry._start_responses["4" * 32]
+    assert response.delivery_retiring
+    service.allow_close.set()
+    closing.join(1)
+    releasing.join(1)
+    assert not closing.is_alive()
+    assert not releasing.is_alive()
+    assert close_errors == []
+    assert close_results == [TaskCloseView(start.task_id, start.session_id)]
+    assert registry._close_receipts[(start.task_id, start.session_id)] == (
+        close_results[0]
+    )
+    assert "4" * 32 not in registry._start_responses
+
+
+def test_close_task_refuses_before_terminal_record_is_drained() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    with pytest.raises(TaskUnavailableError, match="terminal record"):
+        registry.close_task(start.task_id, start.session_id)
+
+    assert service.lifecycle_calls == []
+    assert start.task_id in registry._tasks
+
+
+def test_failed_candidate_discard_does_not_block_later_start() -> None:
+    task_tokens = iter(("a" * 32, "b" * 32))
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__(task_token=lambda: next(task_tokens))
+            self.return_mismatch = True
+
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            task_id = f"task-{self._task_token()}"
+            sink = delivery_factory(task_id)
+            sink(_event(1))
+            if self.return_mismatch:
+                self.return_mismatch = False
+                return TaskStartView(task_id, REQUEST, "8" * 32)
+            return TaskStartView(task_id, REQUEST, SESSION)
+
+    registry, service = _registry(Service())
+
+    with pytest.raises(ObservationConflictError):
+        _start(registry)
+
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+    assert registry._start_responses == {}
+    admitted = registry.start_plan(
+        "other-source",
+        "other-target",
+        deletion_policy=None,
+        command_id="5" * 32,
+    )
+    assert admitted == TaskStartView("task-" + "b" * 32, REQUEST, SESSION)
+    assert service.lifecycle_calls == []
+
+
+def test_shutdown_during_start_discards_provisional_delivery_locally() -> None:
+    registry: TaskRegistry | None = None
+
+    class Service(_Service):
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            task_id = "task-" + "a" * 32
+            delivery_factory(task_id)
+            assert registry is not None
+            registry.begin_close()
+            return TaskStartView(task_id, REQUEST, SESSION)
+
+    service = Service()
+    registry, _ = _registry(service)
+
+    with pytest.raises(TaskUnavailableError):
+        _start(registry)
+
+    assert service.lifecycle_calls == []
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+    assert registry._start_responses == {}
+
+
+def test_interrupted_application_start_discards_provisional_delivery_state() -> None:
+    class Service(_Service):
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            delivery_factory("task-" + "a" * 32)
+            raise KeyboardInterrupt("application start interrupted")
+
+    registry, service = _registry(Service())
+
+    with pytest.raises(KeyboardInterrupt, match="task start was interrupted") as raised:
+        _start(registry)
+
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert service.lifecycle_calls == []
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+    assert registry._start_responses == {}
+
+
+def test_failed_provisional_start_retires_private_interruption_graph() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            delivery_factory("task-" + "a" * 32)
+            _raise_private_failure(
+                graph_references,
+                exception_base=BaseException,
+            )
+
+    registry, _ = _registry(Service())
+
+    with pytest.raises(KeyboardInterrupt) as raised:
+        _start(registry)
+
+    assert str(raised.value) == "task start was interrupted"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert all(reference() is None for reference in graph_references[2:])
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+    assert registry._start_responses == {}
+    del raised
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+
+def test_retained_start_response_replays_without_reentering_application() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.task_start_calls = 0
+
+        def start_task_plan(self, *args, **kwargs):
+            self.task_start_calls += 1
+            if self.task_start_calls > 1:
+                raise AssertionError("transport replay reentered application")
+            return super().start_task_plan(*args, **kwargs)
+
+    service = Service()
+    registry, _ = _registry(service)
+    wire_intent = ("source-slot", "target-slot", None)
+    started = registry.start_plan(
+        "source",
+        "target",
+        deletion_policy=None,
+        command_id="4" * 32,
+        wire_intent=wire_intent,
+    )
+
+    replayed = registry.replay_start("4" * 32, wire_intent)
+
+    assert replayed == started
+    assert service.task_start_calls == 1
+    response = registry._start_responses["4" * 32]
+    assert response.command_id == "4" * 32
+    assert response.wire_intent == wire_intent
+    assert response.result == started
+    assert response.complete and response.participants == 0
+
+
+def test_concurrent_failed_provisional_start_is_one_response_flight() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.task_start_calls = 0
+
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            self.task_start_calls += 1
+            delivery_factory("task-" + "a" * 32)
+            self.start_entered.set()
+            assert self.release_start.wait(2)
+            raise OSError("private application failure")
+
+    service = Service()
+    service.release_start.clear()
+    registry, _ = _registry(service)
+    errors: list[BaseException] = []
+
+    def start() -> None:
+        try:
+            registry.start_plan(
+                "source",
+                "target",
+                deletion_policy=None,
+                command_id="4" * 32,
+                wire_intent=("source-slot", "target-slot", None),
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    first = Thread(target=start)
+    second = Thread(target=start)
+    first.start()
+    assert service.start_entered.wait(1)
+    second.start()
+    service.release_start.set()
+    first.join(1)
+    second.join(1)
+
+    assert service.task_start_calls == 1
+    assert len(errors) == 2
+    assert all(type(error) is RuntimeError for error in errors)
+    assert errors[0] is not errors[1]
+    assert all(str(error) == "task start failed" for error in errors)
+    assert all(error.__cause__ is None for error in errors)
+    assert all(error.__context__ is None for error in errors)
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+    assert registry._start_responses == {}
+
+
+def test_close_failure_retires_private_graph_before_high_level_retry() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_attempts = 0
+
+        def close_task(self, task_id, session_id, delivery):
+            self.close_attempts += 1
+            self.lifecycle_calls.append(
+                ("close_task", task_id, session_id, delivery)
+            )
+            if self.close_attempts == 1:
+                _raise_private_failure(graph_references)
+            return TaskCloseView(task_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+
+    with pytest.raises(Exception, match="private failure") as raised:
+        registry.close_task(start.task_id, start.session_id)
+
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert all(reference() is None for reference in graph_references[3:])
+    assert start.task_id in registry._tasks
+    assert registry._tasks[start.task_id].retiring
+    with pytest.raises(TaskUnavailableError):
+        registry.start_execution(
+            start.task_id,
+            request_id=start.request_id,
+            expected_revision=0,
+            destructive_acknowledged=False,
+            command_id="5" * 32,
+            wire_intent=(start.task_id, start.request_id, 0, False),
+        )
+    assert registry.close_task(
+        start.task_id,
+        start.session_id,
+    ) == TaskCloseView(start.task_id, start.session_id)
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "close_task",
+        "close_task",
+    ]
+    del raised
+    gc.collect()
+    assert all(reference() is None for reference in graph_references)
+
+
+def test_invalid_close_result_clears_publication_marker_for_retry() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.invalid = True
+
+        def close_task(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("close_task", task_id, session_id, delivery)
+            )
+            if self.invalid:
+                self.invalid = False
+                return object()
+            return TaskCloseView(task_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+
+    with pytest.raises(RuntimeError, match="invalid close data"):
+        registry.close_task(start.task_id, start.session_id)
+
+    response = registry._start_responses["4" * 32]
+    assert not response.delivery_retiring
+    assert start.task_id in registry._tasks
+    assert registry.close_task(
+        start.task_id,
+        start.session_id,
+    ) == TaskCloseView(start.task_id, start.session_id)
+
+
+def test_close_task_lost_response_retry_is_exact_and_idempotent() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    _mark_terminal_drained(registry, start)
+    first = registry.close_task(start.task_id, start.session_id)
+    replay = registry.close_task(start.task_id, start.session_id)
+
+    assert first == replay == TaskCloseView(start.task_id, start.session_id)
+    assert [call[0] for call in service.lifecycle_calls] == ["close_task"]
+    with pytest.raises(TaskUnavailableError):
+        registry.close_task(start.task_id, "9" * 32)
+
+
+def test_concurrent_task_close_is_one_response_flight_and_echoes_both_callers(
+) -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_call_entered = Event()
+            self.release_close_calls = Event()
+
+        def close_task(self, task_id, session_id, delivery):
+            self.lifecycle_calls.append(
+                ("close_task", task_id, session_id, delivery)
+            )
+            self.close_call_entered.set()
+            assert self.release_close_calls.wait(2)
+            return TaskCloseView(task_id, session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    results = []
+    errors = []
+
+    def close() -> None:
+        try:
+            results.append(registry.close_task(start.task_id, start.session_id))
+        except BaseException as error:
+            errors.append(error)
+
+    _mark_terminal_drained(registry, start)
+    first = Thread(target=close)
+    second = Thread(target=close)
+    first.start()
+    assert service.close_call_entered.wait(1)
+    second.start()
+    assert second.is_alive()
+    service.release_close_calls.set()
+    first.join(1)
+    second.join(1)
+
+    assert errors == []
+    assert results == [
+        TaskCloseView(start.task_id, start.session_id),
+        TaskCloseView(start.task_id, start.session_id),
+    ]
+    assert [call[0] for call in service.lifecycle_calls] == ["close_task"]
+
+
+def test_application_task_capacity_and_adapter_response_replay_converge() -> None:
+    assert drain_module._CLOSE_RECEIPT_CAPACITY == 48
+    task_tokens = iter(f"{value:032x}" for value in range(1, 10))
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__(task_token=lambda: next(task_tokens))
+            self.active = 0
+
+        def start_task_plan(self, *args, **kwargs):
+            if self.active >= 2:
+                raise TaskUnavailableError("task capacity is exhausted")
+            result = super().start_task_plan(*args, **kwargs)
+            self.active += 1
+            return result
+
+        def close_task(self, task_id, session_id, delivery):
+            result = super().close_task(task_id, session_id, delivery)
+            self.active -= 1
+            return result
+
+    service = Service()
+    registry, _ = _registry(service)
+    first_command = "1" * 32
+    second_command = "2" * 32
+    third_command = "3" * 32
+    first = registry.start_plan(
+        "source-1", "target-1", deletion_policy=None, command_id=first_command,
+    )
+    registry.start_plan(
+        "source-2", "target-2", deletion_policy=None, command_id=second_command,
+    )
+
+    assert registry.start_plan(
+        "source-1", "target-1", deletion_policy=None, command_id=first_command,
+    ) == first
+    with pytest.raises(TaskUnavailableError, match="capacity"):
+        registry.start_plan(
+            "source-3", "target-3", deletion_policy=None, command_id=third_command,
+        )
+
+    _mark_terminal_drained(registry, first)
+    registry.close_task(first.task_id, first.session_id)
+    admitted = registry.start_plan(
+        "source-3", "target-3", deletion_policy=None, command_id=third_command,
+    )
+    assert admitted.task_id == "task-" + f"{3:032x}"
+
+
+def test_start_response_cache_is_bounded_and_reuses_retired_slot() -> None:
+    assert drain_module._START_RESPONSE_CAPACITY == 48
+    task_tokens = iter(f"{value:032x}" for value in range(1, 100))
+    service = _Service(task_token=lambda: next(task_tokens))
+    registry, _ = _registry(service)
+    starts: list[TaskStartView] = []
+
+    for value in range(drain_module._START_RESPONSE_CAPACITY):
+        command_id = f"{value + 1:032x}"
+        starts.append(
+            registry.start_plan(
+                f"source-{value}", f"target-{value}", deletion_policy=None,
+                command_id=command_id,
+                wire_intent=(f"source-slot-{value}", f"target-slot-{value}", None),
+            )
+        )
+
+    assert registry.replay_start(
+        f"{1:032x}", ("source-slot-0", "target-slot-0", None),
+    ) == starts[0]
+    with pytest.raises(RuntimeError, match="adapter response capacity"):
+        registry.start_plan(
+            "overflow-source", "overflow-target", deletion_policy=None,
+            command_id=f"{49:032x}",
+            wire_intent=("overflow-source-slot", "overflow-target-slot", None),
+        )
+
+    _mark_terminal_drained(registry, starts[0])
+    registry.close_task(starts[0].task_id, starts[0].session_id)
+    admitted = registry.start_plan(
+        "replacement-source", "replacement-target", deletion_policy=None,
+        command_id=f"{50:032x}",
+        wire_intent=("replacement-source-slot", "replacement-target-slot", None),
+    )
+    assert admitted.task_id == "task-" + f"{50:032x}"
+
+    assert registry.replay_start(
+        f"{50:032x}", ("replacement-source-slot", "replacement-target-slot", None),
+    ) == admitted
+    with pytest.raises(RuntimeError, match="adapter response capacity"):
+        registry.start_plan(
+            "next-source", "next-target", deletion_policy=None,
+            command_id=f"{51:032x}",
+            wire_intent=("next-source-slot", "next-target-slot", None),
+        )
+
+
+
+def test_begin_close_during_factory_discards_provisional_before_publish() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.factory_returned = Event()
+            self.release_candidate = Event()
+
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del source, target, deletion_policy, command_id
+            task_id = "task-" + "a" * 32
+            delivery_factory(task_id)
+            self.factory_returned.set()
+            assert self.release_candidate.wait(2)
+            return TaskStartView(task_id, REQUEST, SESSION)
+
+    service = Service()
+    registry, _ = _registry(service)
+    failures: list[BaseException] = []
+
+    def start() -> None:
+        try:
+            _start(registry)
+        except BaseException as error:
+            failures.append(error)
+
+    worker = Thread(target=start)
+    worker.start()
+    assert service.factory_returned.wait(1)
+    registry.begin_close()
+    service.release_candidate.set()
+    worker.join(1)
+
+    assert len(failures) == 1
+    assert type(failures[0]) is TaskUnavailableError
+    assert service.lifecycle_calls == []
+    assert registry._provisional == {}
+    assert registry._tasks == {}
+    assert registry._start_responses == {}
+
+
+def test_repeated_task_close_bounds_active_state_and_close_receipts() -> None:
+    tokens = iter(f"{value:032x}" for value in range(1, 100))
+    service = _Service(task_token=lambda: next(tokens))
+    registry, _ = _registry(service)
+    closed = []
+    for value in range(drain_module._CLOSE_RECEIPT_CAPACITY + 1):
+        command_id = f"{value + 1:032x}"
+        started = registry.start_plan(
+            f"source-{value}",
+            f"target-{value}",
+            deletion_policy=None,
+            command_id=command_id,
+        )
+        _mark_terminal_drained(registry, started)
+        closed.append(registry.close_task(started.task_id, started.session_id))
+
+    assert registry._tasks == {}
+    assert registry._provisional == {}
+    assert registry._start_responses == {}
+    assert len(registry._close_receipts) == drain_module._CLOSE_RECEIPT_CAPACITY
+    with pytest.raises(TaskUnavailableError):
+        registry.close_task(closed[0].task_id, closed[0].session_id)
+    assert registry.close_task(
+        closed[-1].task_id,
+        closed[-1].session_id,
+    ) == closed[-1]
+
+
+def _malformed_task_updates():
+    event = _event(2)
+    record = _record()
+    return [
+        replace(event, sequence=True),
+        replace(event, sequence=0),
+        replace(event, session_id="f" * 32),
+        replace(record, result=None),
+        replace(record, state="pending", ended_at=None, result=None),
+        replace(record, ended_at=None),
+        replace(record, kind="sync-execute"),
+        replace(record, supports_pause=True),
+        replace(record, result=object()),
+        replace(record, state="failed"),
+        replace(record, result=replace(record.result, bytes_done=0)),
+        replace(record, result=replace(record.result, recording="degraded")),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("kind", "supports_pause"),
+    (
+        (PLAN_KIND, False),
+        (INVENTORY_KIND, False),
+        (EXECUTION_KIND, True),
+    ),
+)
+def test_task_offer_accepts_exact_supported_terminal_record_capability(
+    kind: str,
+    supports_pause: bool,
+) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    record = replace(
+        _record(kind=kind, supports_pause=supports_pause),
+        session_id=start.session_id,
+    )
+
+    service.sink(record)
+
+    assert registry._tasks[start.task_id].terminal_record == record
+
+
+@pytest.mark.parametrize(
+    ("kind", "supports_pause"),
+    (
+        (PLAN_KIND, True),
+        (INVENTORY_KIND, True),
+        (EXECUTION_KIND, False),
+        ("sync-execute", False),
+    ),
+)
+def test_task_offer_rejects_wrong_task_record_capability(
+    kind: str,
+    supports_pause: bool,
+) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+
+    with pytest.raises(ValueError, match="supported terminal result"):
+        service.sink(replace(
+            _record(kind=kind, supports_pause=supports_pause),
+            session_id=start.session_id,
+        ))
+
+    assert registry._tasks[start.task_id].terminal_record is None
+
+
+@pytest.mark.parametrize("update", _malformed_task_updates())
+def test_task_offer_validates_before_queue_or_custody_mutation(update) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    task = registry._tasks[start.task_id]
+    service.sink(_event(2, "Progress"))
+    before = (
+        tuple(task.queue), task.progress_available_at, task.terminal_record,
+        task.terminal_pending, task.delivered_terminal_event,
+        task.delivered_terminal_record,
+    )
+
+    with pytest.raises((TypeError, ValueError, ObservationConflictError)):
+        service.sink(update)
+
+    assert (
+        tuple(task.queue), task.progress_available_at, task.terminal_record,
+        task.terminal_pending, task.delivered_terminal_event,
+        task.delivered_terminal_record,
+    ) == before
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.lifecycle_calls == []
+
+
+@pytest.mark.parametrize("pending_record", [False, True])
+def test_task_drain_validates_whole_candidate_before_consuming(pending_record) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    task = registry._tasks[start.task_id]
+    mutable = _event(2)
+    service.sink(mutable)
+    service.sink(_event(3, "Progress"))
+    terminal = _record()
+    if pending_record:
+        task.terminal_record = terminal
+        task.terminal_pending = True
+    else:
+        service.sink(terminal)
+    # This mutation bypasses offer admission, as a retained collaborator can.
+    object.__setattr__(mutable, "sequence", 0)
+    before = (
+        tuple(task.queue), task.progress_available_at, task.terminal_record,
+        task.terminal_pending, task.delivered_terminal_event,
+        task.delivered_terminal_record,
+    )
+
+    with pytest.raises((TypeError, ValueError)):
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    assert (
+        tuple(task.queue), task.progress_available_at, task.terminal_record,
+        task.terminal_pending, task.delivered_terminal_event,
+        task.delivered_terminal_record,
+    ) == before
+    assert task.active_drain is None
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.lifecycle_calls == []
+
+    object.__setattr__(mutable, "sequence", 2)
+    drained = registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    assert [update.event.sequence for update in drained.updates[:-1]] == [1, 2, 3]
+    assert drained.updates[-1].record == terminal
+    registry.release_terminal_session(start.task_id, SESSION)
+    assert [call[0] for call in service.lifecycle_calls] == [
+        "release_task_session",
+    ]
+
+
+@pytest.mark.parametrize("record", [
+    replace(_record(), result=object()),
+    replace(_record(), state="failed"),
+    replace(_record(), ended_at=None),
+    replace(_record(), result=replace(_record().result, bytes_done=0)),
+])
+def test_task_recovery_rejects_malformed_current_record_without_receipt(record) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    service.reobserve_result = record
+    with pytest.raises(RuntimeError) as raised:
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=1)
+    assert str(raised.value) == "task observation recovery failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    task = registry._tasks[start.task_id]
+    assert not task.queue
+    assert task.terminal_record is None
+    assert not task.terminal_pending
+    assert task.delivered_terminal_event is None
+    assert task.delivered_terminal_record is None
+    assert task.active_drain is None and not task.transition
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.lifecycle_calls == []
+
+
+def test_task_recovery_drops_malformed_current_graph_before_reconciliation() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            del session_id, sink, from_sequence
+            return _private_malformed_recovery_record(graph_references)
+
+    registry, service = _registry(Service())
+    start = _start(registry)
+
+    with pytest.raises(RuntimeError) as raised:
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=1)
+
+    assert str(raised.value) == "task observation recovery failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    task = registry._tasks[start.task_id]
+    assert not task.queue
+    assert task.terminal_record is None
+    assert not task.terminal_pending
+    assert task.delivered_terminal_event is None
+    assert task.delivered_terminal_record is None
+    assert task.active_drain is None and not task.transition
+    assert service.lifecycle_calls == []
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+
+@pytest.mark.parametrize("record", [
+    _record(terminal=False),
+    replace(_record(terminal=False), state="running"),
+    replace(_record(), result=None),
+])
+def test_result_free_reobservation_is_not_a_terminal_delivery_receipt(record) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    service.reobserve_result = record
+    assert not registry.drain(
+        start.task_id, SESSION, DRAIN, replay_from=1,
+    ).updates
+    task = registry._tasks[start.task_id]
+    assert task.delivered_terminal_event is None
+    assert task.delivered_terminal_record is None
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.lifecycle_calls == []
+
+
+def test_invalid_pending_terminal_preserves_queued_events_and_pending_flag() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    task = registry._tasks[start.task_id]
+    task.terminal_record = replace(_record(), result=None)
+    task.terminal_pending = True
+    before = tuple(task.queue)
+    with pytest.raises((TypeError, ValueError)):
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    assert tuple(task.queue) == before
+    assert task.terminal_pending
+    assert task.delivered_terminal_event is None
+    assert task.delivered_terminal_record is None
+    assert task.active_drain is None
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.lifecycle_calls == []
+
+
+def test_terminal_event_alone_does_not_earn_release_receipt() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    service.sink(_event(2, "Terminal"))
+    assert len(registry.drain(
+        start.task_id, SESSION, DRAIN, replay_from=None,
+    ).updates) == 2
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.lifecycle_calls == []
+
+@pytest.mark.parametrize("mode", ["baseline", "rebaseline", "mixed"])
+def test_inventory_ordinary_native_selection_results_refresh_and_close(tmp_path, mode):
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.workflows import LocationCandidate
+    root = tmp_path / "files"
+    root.mkdir()
+    (root / "one.bin").write_bytes(b"ordinary bytes")
+    (root / "two.bin").write_bytes(b"more bytes")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            for value in range(100, 160):
+                registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+                if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                    break
+            state = registry._tasks[start.task_id].ordinary_integrity
+            if state is not None and state.session_id == start.session_id and not state.complete:
+                assert state.gap == (mode != "baseline")
+                assert len(state.items) == (2 if mode == "baseline" else 0)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        shell = registry.create_task_shell("1" * 32)
+        first = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id="2" * 32, wire_intent=("inventory", str(root)))
+        finish(first)
+        registry.open_inventory_view(first.task_id)
+        if mode == "mixed":
+            seed = service.start_baseline(root_path=str(root), selected_paths=("one.bin",))
+            _wait_terminal(service._dispatcher, seed.session_id)
+            service.close_session(seed.session_id)
+            assert [row.has_baseline for row in service.list_inventory(int(registry.open_inventory_view(first.task_id)["location_id"]))].count(True) == 1
+            mode = "rebaseline"
+        original_start = service.start_task_inventory_integrity
+        offered = []
+        def observed_start(task_id, request_id, **kwargs):
+            factory = kwargs["delivery_factory"]
+            def delivery(task_id):
+                sink = factory(task_id)
+                def accept(update):
+                    if type(update) is SessionEventView and update.body_type == "IntegrityOutcome":
+                        offered.append(update)
+                        if mode == "baseline":
+                            # Same selected row and location remain authoritative if display casing changes.
+                            sink(replace(update, body={**update.body, "path": update.body["path"].upper()}))
+                        else:
+                            # Model a lossy subscriber: only its Gap survives until terminal repair.
+                            sink(replace(update, body_type="Gap", body={"first_missed_seq": update.sequence}))
+                        return
+                    sink(update)
+                return accept
+            return original_start(task_id, request_id, **{**kwargs, "delivery_factory": delivery})
+        service.start_task_inventory_integrity = observed_start
+        assert registry.open_inventory_view(first.task_id)["selected_file_count"] == 2
+        cleared = registry.set_inventory_selection(first.task_id, first.request_id,
+            expected_revision=0, node_id=None, selected=False)
+        assert cleared["selected_file_count"] == 0
+        with pytest.raises(ValueError, match="selected"):
+            registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=1,
+                mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,))
+        selected = registry.set_inventory_selection(first.task_id, first.request_id,
+            expected_revision=1, node_id=None, selected=True)
+        assert selected["selected_file_count"] == 2
+        if mode == "rebaseline":
+            with pytest.raises(ValueError, match="acceptance"):
+                registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=2,
+                    mode=mode, accept_current_evidence=False, command_id="3" * 32, wire_intent=(mode,))
+        second = registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=2,
+            mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,))
+        finish(second)
+        summary = registry.open_inventory_view(first.task_id)
+        assert summary["scan_scope"]["kind"] == "selection"
+        assert summary["rollup"]["unverified"] == 2
+        assert len(offered) == 2
+        window = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)
+        ordinary = window["integrity"]
+        assert ordinary["session_id"] == second.session_id and ordinary["request_id"] == second.request_id
+        assert ordinary["complete"] and not ordinary["gap"] and len(ordinary["items"]) == 2
+        assert {item["result"] for item in ordinary["items"]} == {"baselined"}
+        assert registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=2,
+            mode=mode, accept_current_evidence=True, command_id="3" * 32, wire_intent=(mode,)) == second
+        third = registry.refresh_inventory(first.task_id, second.request_id, expected_revision=summary["view_revision"],
+            node_id=None, command_id="4" * 32, wire_intent=("refresh",))
+        finish(third)
+        summary = registry.open_inventory_view(first.task_id)
+        assert registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"] == ordinary
+        registry.close_task(first.task_id, third.session_id)
+        assert service._runtime._retained_inventory_integrity == {}
+        assert service._lifecycle._start_receipts == {}
+        assert registry._start_responses == {}
+
+
+def test_inventory_refresh_publishes_modified_evidence_and_retains_prior_verified_result(tmp_path):
+    import os
+    from namisync.workflows import LocationCandidate
+
+    root = tmp_path / "files"
+    root.mkdir()
+    path = root / "one.bin"
+    path.write_bytes(b"unchanged bytes")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+            summary = registry.open_inventory_view(start.task_id)
+            window = registry.get_inventory_window(start.task_id,
+                expected_revision=summary["view_revision"], offset=0, limit=256)
+            return summary, window
+
+        shell = registry.create_task_shell(next(ids))
+        first = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id=next(ids), wire_intent=("inventory", str(root)))
+        summary, _ = finish(first)
+        current = first
+        for mode in ("baseline", "verify"):
+            current = registry.start_inventory_integrity(first.task_id, current.request_id,
+                expected_revision=summary["view_revision"], mode=mode,
+                accept_current_evidence=False, command_id=next(ids), wire_intent=(mode,))
+            summary, window = finish(current)
+        assert summary["scan_request_id"] == current.request_id
+        assert window["rows"][0]["verification_state"] == "verified"
+        prior_result = window["integrity"]
+        assert prior_result["items"][0]["result"] == "verified"
+        before = path.stat()
+        os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 2_000_000_000))
+        refreshed = registry.refresh_inventory(first.task_id, current.request_id,
+            expected_revision=summary["view_revision"], node_id=None,
+            command_id=next(ids), wire_intent=("refresh",))
+        summary, window = finish(refreshed)
+        assert summary["scan_request_id"] == refreshed.request_id
+        assert window["rows"][0]["verification_state"] == "modified"
+        assert window["integrity"] == prior_result
+        assert service.list_inventory(int(summary["location_id"]))[0].verification_state == "modified"
+        fresh_shell = registry.create_task_shell(next(ids))
+        fresh = registry.start_setup_inventory(fresh_shell.task_id, LocationCandidate.literal(str(root)),
+            command_id=next(ids), wire_intent=("fresh-inventory", str(root)))
+        _, fresh_window = finish(fresh)
+        assert fresh_window["rows"][0]["verification_state"] == "modified"
+        assert "integrity" not in fresh_window
+        registry.close_task(first.task_id, refreshed.session_id)
+        registry.close_task(fresh.task_id, fresh.session_id)
+
+
+@pytest.mark.parametrize("available", [True, False, "close"])
+def test_execution_inventory_real_ledger_read_selection_and_close(tmp_path, monkeypatch, available):
+    from namisync.interfaces.service import NamiSyncService
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "one.txt").write_text("execution bytes", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id="1" * 32)
+        finish(planned)
+        with pytest.raises(TaskUnavailableError):
+            registry.open_inventory_view(planned.task_id)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False, command_id="2" * 32,
+            wire_intent=("execute",))
+        with pytest.raises(TaskUnavailableError):
+            registry.open_inventory_view(planned.task_id)
+        finish(execution)
+        def refuse(*args, **kwargs):
+            raise AssertionError("ledger browsing must not admit, scan or hash")
+        monkeypatch.setattr(service._runtime, "prepare_inventory", refuse)
+        monkeypatch.setattr(service._runtime._scanner, "scan", refuse)
+        monkeypatch.setattr(service._runtime, "prepare_verify", refuse)
+        if not available:
+            from namisync.db.repositories import LedgerRepository
+            from namisync.db.recorder import LedgerRecorder
+            monkeypatch.setattr(LedgerRepository, "find_location", lambda *args: None)
+            monkeypatch.setattr(LedgerRecorder, "ensure_location", refuse)
+        before_locations = service.remembered_locations()
+        if available == "close":
+            original = service.get_task_execution_inventory
+            def close_during_read(*args):
+                publication = original(*args)
+                registry.close_task(planned.task_id, execution.session_id)
+                return publication
+            monkeypatch.setattr(service, "get_task_execution_inventory", close_during_read)
+            with pytest.raises(TaskUnavailableError):
+                registry.open_inventory_view(planned.task_id)
+            with pytest.raises(TaskUnavailableError):
+                registry.open_plan_view(planned.task_id)
+            with pytest.raises(TaskUnavailableError):
+                original(planned.task_id, planned.request_id, execution.session_id)
+            return
+        if not available:
+            with pytest.raises(TaskUnavailableError, match="unavailable"):
+                registry.open_inventory_view(planned.task_id)
+            assert service.remembered_locations() == before_locations
+        else:
+            publication = service.get_task_execution_inventory(planned.task_id, planned.request_id, execution.session_id)
+            assert publication.scan_details is None
+            for task_id, request_id, session_id in [
+                ("task-" + "f" * 32, planned.request_id, execution.session_id),
+                (planned.task_id, "f" * 32, execution.session_id),
+                (planned.task_id, planned.request_id, "f" * 32),
+            ]:
+                with pytest.raises((TaskUnavailableError, ValueError)):
+                    service.get_task_execution_inventory(task_id, request_id, session_id)
+            summary = registry.open_inventory_view(planned.task_id)
+            assert all(summary[key] is None for key in (
+                "scan_request_id", "scan_complete", "scan_scope", "observed_count", "missing_count"))
+            assert summary["warning_count"] == 0
+            selected = registry.set_inventory_selection(planned.task_id, execution.request_id,
+                expected_revision=0, node_id=None, selected=True)
+            assert selected["selected_file_count"] == 1
+            hidden = registry.update_inventory_view(planned.task_id, expected_revision=1,
+                search_query="hidden", filters=frozenset(), sort_column=PlanSortColumn.PATH,
+                sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None)
+            assert hidden["hidden_selected_file_count"] == 1
+            shown = registry.update_inventory_view(planned.task_id, expected_revision=2,
+                search_query="", filters=frozenset(), sort_column=PlanSortColumn.PATH,
+                sort_direction=SortDirection.ASCENDING, collapse_node_id=None, collapsed=None)
+            window = registry.get_inventory_window(planned.task_id, expected_revision=3, offset=0, limit=256)
+            node_id = next(row["node_id"] for row in window["rows"] if row["row_id"] is not None)
+            assert registry.get_inventory_detail(planned.task_id, expected_revision=3, node_id=node_id)["disposition"] == "current"
+            assert registry.open_inventory_view(planned.task_id) == {**shown, "disposition": "current"}
+            assert service.remembered_locations() == before_locations
+        plan = registry.open_plan_view(planned.task_id)
+        plan_window = registry.get_plan_window(planned.task_id, expected_revision=plan["view_revision"], offset=0, limit=256)
+        if available:
+            assert registry.get_plan_detail(planned.task_id, expected_revision=plan["view_revision"],
+                node_id=plan_window["rows"][0]["node_id"])["disposition"] == "current"
+        registry.close_task(planned.task_id, execution.session_id)
+        with pytest.raises(TaskUnavailableError):
+            registry.open_inventory_view(planned.task_id)
+
+@pytest.mark.parametrize("refresh_before", [False, True])
+def test_execution_inventory_visibility_preserves_original_review(tmp_path, refresh_before):
+    from namisync.interfaces.service import NamiSyncService
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "one.txt").write_text("execution bytes", encoding="utf-8")
+    stale = target / "stale.txt"
+    stale.write_text("missing later", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        seeded = service.start_inventory(root_path=str(target))
+        _wait_terminal(service._dispatcher, seeded.session_id)
+        service.close_session(seeded.session_id)
+        stale.unlink()
+        missing_scan = service.start_inventory(root_path=str(target))
+        _wait_terminal(service._dispatcher, missing_scan.session_id)
+        service.close_session(missing_scan.session_id)
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 300))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id="1" * 32)
+        finish(planned)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False, command_id="2" * 32,
+            wire_intent=("execute",))
+        finish(execution)
+        original = registry._execution_summary_locked(registry._tasks[planned.task_id])
+        current = execution
+        view = registry.open_inventory_view(planned.task_id)
+        assert view["scan_request_id"] is None
+        if refresh_before:
+            current = registry.refresh_inventory(planned.task_id, execution.request_id,
+                expected_revision=view["view_revision"], node_id=None,
+                command_id="8" * 32, wire_intent=("refresh",))
+            finish(current)
+            view = registry.open_inventory_view(planned.task_id)
+            assert view["scan_request_id"] == current.request_id
+        projection = registry._inventory_views[planned.task_id].projection
+        location_id = projection.location_id
+        missing = next(row for row in service._runtime.list_inventory(location_id)
+            if row.rel_path == "stale.txt")
+        node_id = projection.node_id_by_row_id[missing.row_id]
+        result = _visibility(registry, current, revision=view["view_revision"], node_id=node_id)
+        assert result["applied"] == 1 and result["unresolved_count"] == 0
+        assert _visibility(registry, current, revision=view["view_revision"], node_id=node_id) == result
+        assert next(row for row in service._runtime.list_inventory(location_id)
+            if row.row_id == missing.row_id).acknowledged_at is not None
+        restored = _visibility(registry, current, action="restore",
+            revision=view["view_revision"] + 1, node_id=node_id, command_id="7" * 32)
+        assert restored["applied"] == 1 and restored["unresolved_count"] == 0
+        assert next(row for row in service._runtime.list_inventory(location_id)
+            if row.row_id == missing.row_id).acknowledged_at is None
+        assert registry._execution_summary_locked(registry._tasks[planned.task_id]) == original
+        assert registry.open_plan_view(planned.task_id)["request_id"] == planned.request_id
+        registry.close_task(planned.task_id, current.session_id)
+        assert service._visibility_receipts == {}
+        assert service._runtime._retained_execution_reviews == {}
+
+
+@pytest.mark.parametrize("linked", [False, True])
+@pytest.mark.parametrize("state,expected", [
+    ("unchanged", ["verified"]), ("changed", ["modified"]),
+    ("missing", ["missing"]), ("rowless", ["baselined"]),
+    ("rowless-missing", []), ("uncopied", []),
+])
+def test_execution_copied_verify_uses_ordinary_current_state_and_repeats(tmp_path, monkeypatch, linked, state, expected):
+    from namisync.db.connections import connect_ledger_writer
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.workflows import LocationCandidate
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    if state != "uncopied":
+        (source / "one.txt").write_bytes(b"copied bytes")
+    else:
+        (source / "folder").mkdir()
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 400))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            updates = _drain_until_record(registry, start.task_id, start.session_id, ids)
+            items = [update.event.body["item_id"] for update in updates
+                     if update.update_type == "event" and update.event.body_type == "IntegrityOutcome"]
+            snapshot = registry._tasks[start.task_id].presentation_state.snapshot()
+            assert snapshot["last_settled_integrity_item_id"] == (items[-1] if items else None)
+            assert snapshot["active_item"] is None
+            registry.release_terminal_session(start.task_id, start.session_id)
+            return registry.open_inventory_view(start.task_id)
+        shell = registry.create_task_shell("1" * 32)
+        planned = registry.start_setup_plan(shell.task_id,
+            LocationCandidate.literal(str(source)), LocationCandidate.literal(str(target)),
+            replace(service.read_setup_options(), verify_after_execute=linked),
+            command_id="2" * 32, wire_intent=("plan", linked))
+        _wait_terminal(service._dispatcher, planned.session_id)
+        _drain_until_record(registry, planned.task_id, planned.session_id, ids)
+        registry.release_terminal_session(planned.task_id, planned.session_id)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False, command_id="3" * 32,
+            wire_intent=("execute",))
+        view = finish(execution)
+        original = registry._execution_summary_locked(registry._tasks[planned.task_id])
+        if state == "uncopied":
+            assert original["has_successful_copied_files"] is False
+            before_starts = dict(registry._start_responses)
+            with pytest.raises(ValueError, match="selected files"):
+                registry.start_inventory_integrity(planned.task_id, execution.request_id,
+                    expected_revision=view["view_revision"], mode="verify", scope="copied",
+                    accept_current_evidence=False, command_id="6" * 32, wire_intent=("empty-copied",))
+            assert registry._start_responses == before_starts
+            assert registry._tasks[planned.task_id].session_id == execution.session_id
+            assert registry._tasks[planned.task_id].ordinary_integrity is None
+            registry.close_task(planned.task_id, execution.session_id)
+            return
+        assert original["has_successful_copied_files"] is True
+        if state == "unchanged":
+            (target / "outside.bin").write_bytes(b"outside copied scope")
+            refreshed = registry.refresh_inventory(planned.task_id, execution.request_id,
+                expected_revision=view["view_revision"], node_id=None,
+                command_id="8" * 32, wire_intent=("refresh-before-copied",))
+            view = finish(refreshed)
+            projection = registry._inventory_views[planned.task_id].projection
+            outside = next(node.node_id for node in projection.nodes if node.rel_path == "outside.bin")
+            assert view["selected_file_count"] == 0
+            view = registry.set_inventory_selection(planned.task_id, refreshed.request_id,
+                expected_revision=view["view_revision"], node_id=outside, selected=True)
+            assert view["selected_file_count"] == 1
+        if state.startswith("rowless"):
+            writer = connect_ledger_writer(tmp_path / "ledger.db")
+            try:
+                writer.execute("DELETE FROM inventory")
+                writer.commit()
+            finally:
+                writer.close()
+        if "missing" in state:
+            (target / "one.txt").unlink()
+        elif state == "changed":
+            (target / "one.txt").write_bytes(b"changed bytes with different length")
+        for index in range(2):
+            command_id = f"{index + 4:032x}"
+            current_request = registry._tasks[planned.task_id].request_id
+            started = registry.start_inventory_integrity(planned.task_id, current_request,
+                expected_revision=view["view_revision"], mode="verify", scope="copied",
+                accept_current_evidence=False, command_id=command_id,
+                wire_intent=("copied", index))
+            prior_revision = view["view_revision"]
+            view = finish(started)
+            assert registry.start_inventory_integrity(planned.task_id, current_request,
+                expected_revision=prior_revision, mode="verify", scope="copied",
+                accept_current_evidence=False, command_id=command_id,
+                wire_intent=("copied", index)) == started
+            overlay = registry.get_inventory_window(planned.task_id,
+                expected_revision=view["view_revision"], offset=0, limit=256)["integrity"]
+            assert overlay["complete"] and overlay["session_id"] == started.session_id
+            assert [item["result"] for item in overlay["items"]] == (
+                ["verified"] if state == "rowless" and index else expected)
+            assert view["scan_request_id"] == started.request_id
+            assert registry._execution_summary_locked(registry._tasks[planned.task_id]) == original
+            if state == "unchanged" and index == 0:
+                before_tasks = registry.list_tasks()
+                plan_view = registry.open_plan_view(planned.task_id)
+                before_plan = registry.get_plan_window(planned.task_id,
+                    expected_revision=plan_view["view_revision"], offset=0, limit=256)
+                failed_sinks, transition_summaries = [], []
+                def refuse_replacement(task_id, request_id, **kwargs):
+                    sink = kwargs["delivery_factory"](task_id)
+                    failed_sinks.append(sink)
+                    sink(replace(_event(1), session_id="f" * 32))
+                    transition_summaries.append(registry.list_tasks())
+                    raise RuntimeError("ordinary replacement refused")
+                with monkeypatch.context() as failure:
+                    failure.setattr(service, "start_task_inventory_integrity", refuse_replacement)
+                    with pytest.raises(RuntimeError, match="task start failed"):
+                        registry.start_inventory_integrity(planned.task_id, started.request_id,
+                            expected_revision=view["view_revision"], mode="baseline", scope="selected",
+                            accept_current_evidence=False, command_id="a" * 32,
+                            wire_intent=("failed-replacement",))
+                assert transition_summaries == [before_tasks]
+                failed_sinks[0](replace(_event(2), session_id="f" * 32))
+                assert registry.list_tasks() == before_tasks
+                assert registry._tasks[planned.task_id].queue == deque()
+                assert registry.get_inventory_window(planned.task_id,
+                    expected_revision=view["view_revision"], offset=0, limit=256)["integrity"] == overlay
+                assert registry.get_plan_window(planned.task_id,
+                    expected_revision=plan_view["view_revision"], offset=0, limit=256) == before_plan
+                assert registry._execution_summary_locked(registry._tasks[planned.task_id]) == original
+            if state == "unchanged":
+                review = service._runtime._retained_execution_reviews[planned.task_id]
+                operation_ids = tuple(review.operation_items)
+                evidence = service.read_task_execution_evidence(planned.task_id, operation_ids)
+                assert [item.state.value for item in evidence.results] == ["superseded"]
+            if state == "rowless" and index == 0:
+                result = service.read_task_inventory_integrity(planned.task_id).result
+                assert result.integrity == "baselined"
+                assert result.headline == "verification-incomplete"
+        assert registry.open_plan_view(planned.task_id)["request_id"] == planned.request_id
+        if state == "unchanged":
+            service.read_task_copied_paths = lambda task_id: ()
+            with pytest.raises(ValueError, match="selected files"):
+                registry.start_inventory_integrity(planned.task_id, started.request_id,
+                    expected_revision=view["view_revision"], mode="verify", scope="copied",
+                    accept_current_evidence=False, command_id="6" * 32, wire_intent=("empty-copied",))
+            assert "6" * 32 not in registry._start_responses
+            assert registry._tasks[planned.task_id].session_id == started.session_id
+        registry.close_task(planned.task_id, started.session_id)
+        assert service._runtime._retained_inventory_integrity == {}
+        assert service._runtime._retained_execution_reviews == {}
+
+
+def test_copied_overlay_admits_new_rows_but_keeps_path_row_bijection():
+    from namisync.interfaces.web.drain import _InventoryIntegrityState, ObservationConflictError
+    from namisync.workflows import CopiedSubjectScope
+    owner = _InventoryIntegrityState("verify", 7, frozenset(), copied_scope=CopiedSubjectScope(("one.bin", "two.bin")))
+    item = {"row_id": "1", "location_id": "7", "path": "one.bin", "phase": "verify",
+        "result": "verified", "reason": None, "recording": "ok", "record_disposition": None,
+        "detail_omitted_count": 0}
+    owner.add(item)
+    owner.add({**item, "path": "ONE.BIN"})
+    bindings = (dict(owner.path_rows), dict(owner.row_paths))
+    for variation in ({"row_id": "2"}, {"path": "two.bin"}, {"path": "outside.bin"},
+                      {"path": "..\\one.bin"}, {"location_id": "8"}, {"phase": "baseline"}):
+        with pytest.raises(ValueError if variation.get("path") == "..\\one.bin" else ObservationConflictError):
+            owner.add({**item, **variation})
+        assert (owner.path_rows, owner.row_paths) == bindings
+    with pytest.raises(ObservationConflictError, match="changed its outcome"):
+        owner.add({**item, "result": "mismatch"})
+    assert (owner.path_rows, owner.row_paths) == bindings
+    assert len(owner.items) == 1
+
+
+@pytest.mark.parametrize("action", ["resume", "cancel"])
+@pytest.mark.parametrize("completed_before_pause", [0, 1])
+def test_copied_dispatcher_partial_pause_and_terminal_reconciliation(tmp_path, monkeypatch, action, completed_before_pause):
+    from namisync.core.session import RunContext, SessionState
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.core.integrity import IntegrityMode
+    from namisync.workflows.runtime import LocalWorkflowRuntime
+    from _inventory_fixtures import _wait_for
+    started, release = Event(), Event()
+    calls = []
+    original = None
+    def gated(selection, context, recorder):
+        calls.append(tuple(item.item_id for item in selection.pending))
+        def pause_after_first():
+            context.run.checkpoint()
+            if selection.completed_count == completed_before_pause and len(calls) == 1:
+                started.set()
+                assert release.wait(5)
+                context.run.checkpoint()
+        return original(selection,
+            replace(context, run=RunContext(context.run.emit, pause_after_first)), recorder)
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    for index in range(2):
+        (source / f"{index}.txt").write_text(f"bytes {index}", encoding="utf-8")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 300))
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            manual_state = registry._tasks[start.task_id].ordinary_integrity
+            if manual_state is not None:
+                assert manual_state.gap and not manual_state.complete
+                assert manual_state.items == {}
+            registry.release_terminal_session(start.task_id, start.session_id)
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id="1" * 32)
+        finish(planned)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False,
+            command_id="2" * 32, wire_intent=("execute",))
+        finish(execution)
+        original = service._runtime._integrity_deps.runners[IntegrityMode.VERIFY]
+        service._runtime._integrity_deps.runners[IntegrityMode.VERIFY] = gated
+        original_start = service.start_task_inventory_integrity
+        def lossy_start(task_id, execution_session_id, **kwargs):
+            factory = kwargs["delivery_factory"]
+            def delivery(task_id):
+                sink = factory(task_id)
+                def accept(update):
+                    if type(update) is SessionEventView and update.body_type in {"PhaseChanged", "IntegrityOutcome"}:
+                        update = replace(update, body_type="Gap", body={"first_missed_seq": update.sequence})
+                    sink(update)
+                return accept
+            return original_start(task_id, execution_session_id, **{**kwargs, "delivery_factory": delivery})
+        monkeypatch.setattr(service, "start_task_inventory_integrity", lossy_start)
+        view = registry.open_inventory_view(planned.task_id)
+        manual = registry.start_inventory_integrity(planned.task_id, execution.request_id,
+            expected_revision=view["view_revision"], mode="verify", scope="copied",
+            accept_current_evidence=False, command_id="3" * 32, wire_intent=("copied",))
+        owner = registry._tasks[planned.task_id].ordinary_integrity
+        assert owner is not None and len(owner.copied_scope.path_keys) == 2
+        subject_index = owner.copied_scope
+
+        def browse_live(search_query):
+            view = registry.open_inventory_view(planned.task_id)
+            view = registry.update_inventory_view(planned.task_id,
+                expected_revision=view["view_revision"], search_query=search_query, filters=frozenset(),
+                sort_column=PlanSortColumn.PATH, sort_direction=SortDirection.ASCENDING,
+                collapse_node_id=None, collapsed=None)
+            window = registry.get_inventory_window(planned.task_id,
+                expected_revision=view["view_revision"], offset=0, limit=256)
+            overlay = window["integrity"]
+            assert overlay["session_id"] == manual.session_id
+            assert overlay["gap"] and not overlay["complete"] and overlay["items"] == []
+            node_id = next(row["node_id"] for row in window["rows"] if row["row_id"] is not None)
+            detail = registry.get_inventory_detail(planned.task_id,
+                expected_revision=view["view_revision"], node_id=node_id)
+            assert detail["disposition"] == "current"
+            detail_overlay = detail["integrity"]
+            assert detail_overlay["revision"] >= overlay["revision"]
+            assert detail_overlay == {**overlay, "revision": detail_overlay["revision"]}
+            with pytest.raises(TaskUnavailableError):
+                registry.set_inventory_selection(planned.task_id, manual.request_id,
+                    expected_revision=view["view_revision"], node_id=None, selected=True)
+            with pytest.raises(TaskUnavailableError):
+                registry.refresh_inventory(planned.task_id, manual.request_id,
+                    expected_revision=view["view_revision"], node_id=None,
+                    command_id="4" * 32, wire_intent=("refresh-live",))
+            with pytest.raises(TaskUnavailableError):
+                registry.start_inventory_integrity(planned.task_id, manual.request_id,
+                    expected_revision=view["view_revision"], mode="verify",
+                    accept_current_evidence=False, command_id="5" * 32,
+                    wire_intent=("verify-live",))
+
+        try:
+            assert started.wait(5)
+            browse_live("txt")
+            assert registry.control_integrity(planned.task_id, manual.session_id, "pause").accepted
+            release.set()
+            _wait_for(service._dispatcher, manual.session_id, SessionState.PAUSED)
+            browse_live("")
+            assert registry.control_integrity(planned.task_id, manual.session_id, action).accepted
+            finish(manual)
+            view = registry.open_inventory_view(planned.task_id)
+            overlay = registry.get_inventory_window(planned.task_id,
+                expected_revision=view["view_revision"], offset=0, limit=256)["integrity"]
+            assert overlay["complete"] and not overlay["gap"]
+            assert len(overlay["items"]) == (2 if action == "resume" else completed_before_pause)
+            assert all(item["result"] == "verified" for item in overlay["items"])
+            assert owner.copied_scope is subject_index
+            assert len(calls) == (2 if action == "resume" else 1)
+            assert registry._tasks[planned.task_id].execution_session_id == execution.session_id
+            registry.close_task(planned.task_id, manual.session_id)
+            with pytest.raises(TaskUnavailableError):
+                registry.open_inventory_view(planned.task_id)
+            assert service._runtime._retained_execution_reviews == {}
+            assert service._runtime._retained_inventory_integrity == {}
+        finally:
+            release.set()
+
+
+@pytest.mark.parametrize("action", ["resume", "cancel"])
+def test_inventory_ordinary_live_control_terminal_repair_and_zero_replacement(tmp_path, action):
+    from threading import Event
+    from namisync.core.integrity import IntegrityMode
+    from namisync.core.session import SessionState
+    from namisync.interfaces.service import NamiSyncService
+    from namisync.workflows import LocationCandidate
+    from _inventory_fixtures import _wait_for
+    root = tmp_path / "files"
+    root.mkdir()
+    (root / "one.bin").write_bytes(b"ordinary bytes")
+    with NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            for value in range(100, 160):
+                registry.drain(start.task_id, start.session_id, f"{value:032x}", replay_from=None)
+                if registry._tasks[start.task_id].delivered_terminal_record is not None:
+                    break
+            registry.release_terminal_session(start.task_id, start.session_id)
+            return registry.open_inventory_view(start.task_id)
+        shell = registry.create_task_shell("1" * 32)
+        first = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id="2" * 32, wire_intent=("inventory", str(root)))
+        finish(first)
+        selected = registry.set_inventory_selection(first.task_id, first.request_id, expected_revision=0, node_id=None, selected=True)
+        assert selected["disposition"] == "noop" and selected["selected_file_count"] == 1
+        baseline = registry.start_inventory_integrity(first.task_id, first.request_id, expected_revision=selected["view_revision"],
+            mode="baseline", accept_current_evidence=False, command_id="3" * 32, wire_intent=("baseline",))
+        summary = finish(baseline)
+        started, release = Event(), Event()
+        original = service._runtime._integrity_deps.runners[IntegrityMode.VERIFY]
+        calls = []
+        def gated(selection, context, recorder):
+            calls.append(tuple(item.row_id for item in selection.pending))
+            if len(calls) == 1:
+                started.set()
+                assert release.wait(5)
+                context.run.checkpoint()
+                pytest.fail("pause must leave the first invocation")
+            return original(selection, context, recorder)
+        service._runtime._integrity_deps.runners[IntegrityMode.VERIFY] = gated
+        current = registry.start_inventory_integrity(first.task_id, baseline.request_id,
+            expected_revision=summary["view_revision"], mode="verify", accept_current_evidence=False,
+            command_id="4" * 32, wire_intent=("verify",))
+        try:
+            assert started.wait(5)
+            before = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"]
+            assert before["session_id"] == current.session_id and before["items"] == [] and not before["complete"]
+            with pytest.raises(TaskUnavailableError):
+                registry.control_integrity(first.task_id, baseline.session_id, "cancel")
+            assert registry.control_integrity(first.task_id, current.session_id, "pause").accepted
+            release.set()
+            _wait_for(service._dispatcher, current.session_id, SessionState.PAUSED)
+            assert registry.control_integrity(first.task_id, current.session_id, action).accepted
+            summary = finish(current)
+            result = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"]
+            assert result["complete"] and not result["gap"]
+            assert [item["result"] for item in result["items"]] == (["verified"] if action == "resume" else [])
+            assert len(calls) == (2 if action == "resume" else 1)
+            # An admitted baseline with no eligible unbaselined members replaces all previous outcomes.
+            empty = registry.start_inventory_integrity(first.task_id, current.request_id,
+                expected_revision=summary["view_revision"], mode="baseline", accept_current_evidence=False,
+                command_id="5" * 32, wire_intent=("baseline-again",))
+            summary = finish(empty)
+            result = registry.get_inventory_window(first.task_id, expected_revision=summary["view_revision"], offset=0, limit=256)["integrity"]
+            assert result["session_id"] == empty.session_id and result["items"] == [] and result["complete"]
+            registry.close_task(first.task_id, empty.session_id)
+        finally:
+            release.set()
+
+
+@pytest.mark.parametrize("after_factory", [False, True])
+def test_inventory_ordinary_failed_admission_preserves_publication_and_exact_original(after_factory):
+    registry, service, start, projection = _inventory_refresh_registry()
+    registry.set_inventory_selection(start.task_id, start.request_id, expected_revision=0, node_id=None, selected=True)
+    calls = []
+    def refuse(task_id, request_id, **kwargs):
+        calls.append(kwargs)
+        if after_factory:
+            kwargs["delivery_factory"](task_id)
+        raise RuntimeError("admission unavailable")
+    service.start_task_inventory_integrity = refuse
+    def attempt(revision=1, intent=("ordinary",)):
+        return registry.start_inventory_integrity(start.task_id, start.request_id, expected_revision=revision,
+            mode="verify", accept_current_evidence=False, command_id="a" * 32, wire_intent=intent)
+    with pytest.raises(RuntimeError):
+        attempt()
+    assert len(calls) == 1 and calls[0]["selected_paths"] == (r"folder\one.txt",)
+    assert registry._tasks[start.task_id].session_id == start.session_id
+    assert registry._tasks[start.task_id].session_released
+    assert registry._inventory_views[start.task_id].projection is projection
+    registry.set_inventory_selection(start.task_id, start.request_id, expected_revision=1, node_id=None, selected=False)
+    with pytest.raises(RuntimeError):
+        attempt()
+    assert len(calls) == 1
+    with pytest.raises(TaskIntentConflictError):
+        attempt(intent=("changed",))

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NamiSync</title>
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/components.css">
+  <link rel="stylesheet" href="/app.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <main id="app">
+    <header class="nami-shell__header">
+      <h1>NamiSync</h1>
+      <p id="host-status" role="status" aria-live="polite">Starting...</p>
+    </header>
+    <div class="nami-settings" id="settings-view" hidden>
+      <section class="nami-card nami-settings__card">
+        <h2>Setup defaults</h2>
+        <p>Used for new tasks. Existing tasks keep their choices.</p>
+        <div class="nami-settings__controls" id="setup-defaults-controls"></div>
+        <div class="nami-settings__footer">
+          <p id="setup-defaults-status" role="status" aria-live="polite"></p>
+          <div class="nami-settings__actions">
+            <button id="setup-defaults-refresh" class="nami-button" type="button" hidden>Read current defaults</button>
+            <button id="setup-defaults-save" class="nami-button nami-button--primary" type="button" disabled>Save defaults</button>
+          </div>
+        </div>
+      </section>
+      <section class="nami-card nami-settings__card">
+        <h2>Appearance</h2>
+        <div class="nami-shell__theme">
+          <span class="nami-field__label" id="theme-mode-label">Theme</span>
+          <div class="nami-combobox" data-value="system" id="theme-mode">
+            <button class="nami-combobox__trigger" id="theme-mode-trigger" type="button" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="theme-options" aria-labelledby="theme-mode-label theme-mode-value" disabled>
+              <span id="theme-mode-value">System</span>
+            </button>
+          </div>
+          <p id="theme-outcome-status" role="status" aria-live="polite" hidden></p>
+          <button id="theme-refresh" class="nami-button nami-button--secondary" type="button" hidden>Refresh theme</button>
+        </div>
+      </section>
+      <section class="nami-card nami-settings__card">
+        <h2>About</h2>
+        <p>Version 0.1.0 "Gertrud"</p>
+        <div class="nami-settings__actions">
+          <button id="about-license" class="nami-button nami-hyperlink-button" type="button" title="Read the NamiSync license">License</button>
+          <button id="about-acknowledgements" class="nami-button nami-hyperlink-button" type="button" title="Read open source acknowledgements">Open source acknowledgements</button>
+        </div>
+      </section>
+    </div>
+  </main>
+  <div class="nami-combobox__popup" id="theme-options" role="listbox" aria-labelledby="theme-mode-label" hidden>
+    <div class="nami-combobox__option" id="theme-option-system" role="option" data-value="system" aria-selected="true"><span class="nami-combobox__selection" aria-hidden="true"></span><span>System</span></div>
+    <div class="nami-combobox__option" id="theme-option-light" role="option" data-value="light" aria-selected="false"><span class="nami-combobox__selection" aria-hidden="true"></span><span>Light</span></div>
+    <div class="nami-combobox__option" id="theme-option-dark" role="option" data-value="dark" aria-selected="false"><span class="nami-combobox__selection" aria-hidden="true"></span><span>Dark</span></div>
+  </div>
+</body>
+</html>

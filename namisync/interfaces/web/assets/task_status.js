@@ -1,0 +1,305 @@
+import { formatByteCount, formatLocalDateTime } from "./render.js";
+
+function pathValue(value) {
+  return typeof value === "string" && value.trim() !== "" ? value : "-";
+}
+
+export function projectActiveOperationProgress(presentation, operationId) {
+  const active = presentation?.activeItem;
+  if (active === null || active === undefined || active.item_id !== operationId
+      || !["operation", "integrity"].includes(active.item_type)) {
+    return null;
+  }
+  if (active.item_type === "integrity" || presentation.phase === "verify") {
+    return Object.freeze({
+      verification: true,
+      verificationProgressPercent: presentation.itemPercent ?? undefined,
+    });
+  }
+  return Object.freeze({
+    lifecycleKey: "executing",
+    progressPercent: presentation.itemPercent ?? undefined,
+  });
+}
+
+const CAPACITY_INTEGRITY_RESULTS = new Set(["not-run", "verified", "baselined"]);
+
+export function isCapacityOnlyExecution(execution) {
+  const result = execution?.result ?? null;
+  return result !== null
+    && execution.disk_capacity_failure_count > 0
+    && execution.failed_operation_count === execution.disk_capacity_failure_count
+    && CAPACITY_INTEGRITY_RESULTS.has(result.integrity)
+    && result.recording === "ok"
+    && result.audit === "ok";
+}
+
+const EMPTY_EXECUTION = Object.freeze({
+  session_id: null, result: null, started_at: null, ended_at: null,
+  failed_operation_count: 0, disk_capacity_failure_count: 0,
+  gap: null, trash_location: null,
+});
+
+export function selectTaskExecution(task) {
+  const executionSessionId = task?.executionSessionId ?? task?.sessionId ?? null;
+  const snapshot = task?.executionSnapshot != null
+    && task.executionSnapshot.session_id === executionSessionId
+    ? task.executionSnapshot
+    : task?.sessionKind === "sync-execution" && task?.snapshot?.session_id === executionSessionId
+      ? task.snapshot : null;
+  const retained = task?.review?.window?.execution ?? null;
+  if (!task?.executionStarted) {
+    return { snapshot, sessionState: snapshot?.session_state ?? task?.executionSessionState ?? task?.sessionState ?? null,
+      execution: EMPTY_EXECUTION };
+  }
+  if (snapshot === null) {
+    const execution = retained !== null
+      && (executionSessionId == null || retained.session_id === executionSessionId)
+      ? retained : EMPTY_EXECUTION;
+    return { snapshot: null, sessionState: task?.executionSessionState
+      ?? (task?.sessionKind === "sync-execution" ? task?.sessionState : null) ?? null, execution };
+  }
+  const sameSession = retained?.session_id === snapshot.session_id;
+  const terminalWindow = sameSession && retained.result != null
+    && snapshot.terminal_result !== null;
+  return {
+    snapshot,
+    sessionState: snapshot.session_state,
+    execution: {
+      session_id: snapshot.session_id,
+      result: snapshot.terminal_result,
+      started_at: snapshot.started_at,
+      ended_at: snapshot.ended_at,
+      failed_operation_count: terminalWindow ? retained.failed_operation_count : 0,
+      disk_capacity_failure_count: terminalWindow ? retained.disk_capacity_failure_count : 0,
+      trash_location: terminalWindow ? retained.trash_location ?? null : null,
+      gap: sameSession ? retained.gap ?? null : null,
+    },
+  };
+}
+
+export function executionHeadline(result, capacityOnly = false) {
+  if (result.disposition === "unrun") return "Execution did not start";
+  if (capacityOnly) return "Needs target space";
+  return ({
+    failed: "Execution failed", partial: "Execution needs review",
+    refused: "Execution did not start", mismatch: "Verification mismatch",
+    canceled: "Execution canceled", "verification-incomplete": "Verification incomplete",
+    degraded: "Execution completed with issues", "all-noop": "Execution completed",
+    success: "Execution completed",
+  })[result.headline] ?? "Execution needs review";
+}
+
+function terminalDigest(result, fallbackState, capacityOnly) {
+  if (result === null || typeof result !== "object") return null;
+  if (result.disposition === "unrun") {
+    return { title: executionHeadline(result), state: "error", detail: "Execution did not start. Plan again is available." };
+  }
+  if (capacityOnly) {
+    return {
+      title: executionHeadline(result, capacityOnly),
+      state: "degraded",
+      detail: "Execution stopped: more target space is needed.",
+      fallbackState,
+    };
+  }
+  const labels = {
+    failed: "error", partial: "error", refused: "error", mismatch: "error",
+    canceled: "canceled", "verification-incomplete": "degraded", degraded: "degraded",
+    "all-noop": "completed", success: "completed",
+  };
+  const title = executionHeadline(result);
+  const state = labels[result.headline] ?? "error";
+  const detail = result.error ?? `${title}.`;
+  return { title, state, detail, fallbackState };
+}
+
+export function planReviewRefusal(task) {
+  const fact = task?.snapshot?.terminal_result?.review_refusal;
+  return task?.sessionKind === "sync-plan" && task.snapshot?.session_id === task.sessionId
+    && fact?.tree_kind === "plan" ? fact : null;
+}
+
+function planLimitDetail(fact) {
+  const notices = fact.population === "informational";
+  if (fact.axis === "rows") {
+    return `The review exceeds ${fact.row_limit.toLocaleString("en-US")} ${notices ? "notices" : "plan items"}.`;
+  }
+  if (fact.axis === "logical-bytes") {
+    return `The estimated space required exceeds ${BigInt(fact.byte_limit).toLocaleString("en-US")} bytes.`;
+  }
+  return `The review exceeds ${formatByteCount(fact.byte_limit)} of ${notices ? "notice data" : "plan data"}.`;
+}
+
+function ordinaryTerminalDigest(result, fallbackState, mode) {
+  const label = ({baseline: "Baseline", verify: "Verification", rebaseline: "Rebaseline"})[mode];
+  if (label === undefined || !["completed", "failed", "refused", "canceled"].includes(fallbackState)) return null;
+  if (result?.disposition === "unrun" || fallbackState === "refused") {
+    return {title: `${label} did not start`, state: "error", detail: `${label} did not start.`};
+  }
+  if (fallbackState === "canceled" || result?.headline === "canceled") {
+    return {title: `${label} canceled`, state: "canceled", detail: `${label} canceled.`};
+  }
+  if (fallbackState === "failed" || ["failed", "partial", "mismatch"].includes(result?.headline)) {
+    return {title: `${label} needs review`, state: "error", detail: result?.error ?? `${label} needs review.`};
+  }
+  if (mode === "verify" && result?.headline === "verification-incomplete"
+      && result.integrity === "baselined" && result.recording === "ok" && result.audit === "ok") {
+    return {title: "Baseline created", state: "completed",
+      detail: "Files without prior checksums received new baselines, not verification. Any existing baselines matched."};
+  }
+  if (["verification-incomplete", "degraded"].includes(result?.headline)) {
+    return {title: `${label} incomplete`, state: "degraded", detail: result?.error ?? `${label} incomplete.`};
+  }
+  return {title: `${label} completed`, state: "completed", detail: `${label} completed.`};
+}
+
+export function terminalStatusLine(execution, sessionState = null) {
+  const result = execution.result;
+  if (result === null && !["completed", "failed", "refused", "canceled"].includes(sessionState)) return null;
+  const outcome = result === null
+    ? ({ completed: "Execution completed", failed: "Execution failed",
+      refused: "Execution did not start", canceled: "Execution canceled" })[sessionState]
+    : result.headline === "failed" ? "Execution failed"
+    : result.headline === "partial" || result.headline === "mismatch" ? "Execution needs review"
+      : result.headline === "refused" || result.disposition === "unrun" ? "Execution did not start"
+        : result.headline === "canceled" ? "Execution canceled"
+          : result.recording === "degraded" ? "Recording degraded"
+            : result.headline === "success" || result.headline === "all-noop" ? "Execution OK"
+              : "Execution needs review";
+  const ended = Date.parse(execution.ended_at);
+  const completionTime = formatLocalDateTime(ended);
+  const completed = completionTime === null ? null : `Completed ${completionTime}`;
+  const started = Date.parse(execution.started_at);
+  const elapsed = Number.isFinite(started) && Number.isFinite(ended) && ended >= started
+    ? Math.floor((ended - started) / 1000) : null;
+  const duration = elapsed === null ? null
+    : [elapsed >= 3600 ? `${Math.floor(elapsed / 3600)}h` : null,
+      elapsed >= 60 ? `${Math.floor(elapsed % 3600 / 60)}m` : null,
+      `${elapsed % 60}s`].filter(Boolean).join(" ") + " elapsed";
+  return [outcome, completed, duration].filter(Boolean).join(" · ");
+}
+
+export function taskStatusDigest(task) {
+  const summary = task?.review?.summary ?? null;
+  const refusal = planReviewRefusal(task);
+  const form = task?.form ?? null;
+  const snapshot = task?.snapshot != null && task.snapshot.session_id === task?.sessionId
+    ? task.snapshot : null;
+  const executionState = snapshot?.session_state ?? task?.sessionState ?? null;
+  const currentExecution = task?.sessionKind === "sync-execution";
+  const currentOrdinary = ["baseline", "verify", "rebaseline"].includes(task?.sessionKind)
+    ? task.sessionKind : null;
+  const execution = currentExecution ? selectTaskExecution(task).execution : EMPTY_EXECUTION;
+  const attempt = ["sync-plan", "inventory"].includes(form?.attempt?.kind) ? form.attempt : null;
+  const checkingFolders = attempt?.running === true && !attempt.dispatched;
+  const scanning = task?.inventoryError == null && (task?.sessionKind === "inventory"
+      || (task?.taskKind === "inventory" && task?.sessionKind == null) || attempt?.kind === "inventory")
+    && (executionState === "active"
+      || (attempt?.running === true && attempt.dispatched));
+  // Planning has no item-level progress, but the shell can still tell us that
+  // it is underway. Keep the task rail animated while the start request is
+  // being admitted, while a new plan view is loading, or while an active task
+  // has not produced a plan yet. Once a plan is available, an existing active
+  // session is a ready-to-review plan rather than an indeterminate operation.
+  const planning = task?.error == null && task?.taskKind !== "inventory" && !task?.executionStarted && (
+    task?.reviewLoading === true
+    || (summary === null && executionState === "active")
+    || (["sync-plan", "plan-again"].includes(form?.attempt?.kind)
+      && form.attempt.dispatched === true && form.attempt.running === true)
+  );
+  const progress = checkingFolders || (scanning && snapshot === null) || planning
+    ? { value: 0, determinate: false, indeterminate: true, phase: "plan" }
+    : (summary !== null || task?.error != null) && !task?.executionStarted
+      ? { value: 0, determinate: false, indeterminate: false, phase: null }
+      : snapshot === null
+        ? { value: 0, determinate: false, indeterminate: executionState === "active", phase: null }
+        : {
+          value: snapshot.presentation.value,
+          determinate: snapshot.presentation.determinate,
+          indeterminate: snapshot.presentation.indeterminate,
+          done: snapshot.presentation.items_done,
+          total: snapshot.presentation.items_total,
+          phase: snapshot.phase,
+          throughputBytesPerSecond: snapshot.presentation.throughput_bytes_per_second,
+          etaSeconds: snapshot.presentation.eta_seconds,
+        };
+  const activeTerminalResult = currentExecution ? execution?.result ?? null : null;
+  const terminal = terminalDigest(
+    activeTerminalResult,
+    executionState,
+    currentExecution && isCapacityOnlyExecution(execution),
+  );
+  const ordinaryTerminal = ordinaryTerminalDigest(
+    currentOrdinary === null ? null : snapshot?.terminal_result ?? null,
+    executionState,
+    currentOrdinary,
+  );
+  const planItemCount = summary?.selected_operation_count ?? 0;
+  const planHasItems = (summary?.filter_counts?.all ?? 0) > 0;
+  const releaseMessage = task?.releaseRecovery?.message ?? null;
+  let title = "New task";
+  let state = "new";
+  if (releaseMessage !== null || (task?.error !== null && task?.error !== undefined)) {
+    [title, state] = ["Error", "error"];
+  }
+  else if (refusal !== null) [title, state] = ["Plan limit exceeded", "error"];
+  else if (checkingFolders) [title, state] = ["Checking folders", "planning"];
+  else if (attempt !== null && !attempt.running) [title, state] = ["Outcome unknown", "error"];
+  else if (scanning) [title, state] = ["Scanning", "planning"];
+  else if (planning) [title, state] = ["Planning", "planning"];
+  else if (summary !== null && !task?.executionStarted && task?.sessionKind !== "inventory") [title, state] = ["Plan ready", "plan"];
+  else if (terminal !== null) ({ title, state } = terminal);
+  else if (ordinaryTerminal !== null) ({ title, state } = ordinaryTerminal);
+  else if (["completed", "failed", "refused", "canceled"].includes(executionState)) {
+    const operation = currentExecution ? "Execution" : task?.taskKind === "inventory" ? "Inventory scan" : null;
+    title = operation === null ? ({completed: "Completed", canceled: "Canceled"})[executionState] ?? "Error"
+      : `${operation} ${executionState === "refused" ? "did not start" : executionState}`;
+    state = ({completed: "completed", canceled: "canceled"})[executionState] ?? "error";
+  }
+  else if (task?.executionStarted && currentExecution) {
+    title = ({paused: "Execution paused", pausing: "Pausing execution", canceling: "Canceling execution"})[task.executionControlState]
+      ?? (progress.phase === "verify" ? "Verifying" : "Execution in progress");
+    state = task.executionControlState === "paused" ? "paused" : progress.phase === "verify" ? "verifying" : "executing";
+  } else if (executionState === "active" && ["inventory", "baseline", "verify", "rebaseline"].includes(task?.sessionKind)) {
+    const activeLabel = ({inventory: "Scanning", baseline: "Baselining", verify: "Verifying",
+      rebaseline: "Rebaselining"})[task.sessionKind];
+    title = task.executionControlState === "paused" ? "Paused" : activeLabel;
+    state = title.toLowerCase();
+  } else if (executionState === "active") {
+    title = task?.taskKind === "inventory" ? "Inventory" : "Planning";
+    state = title.toLowerCase();
+  }
+  let detail;
+  if (releaseMessage !== null) detail = releaseMessage;
+  else if (typeof task?.error === "string") detail = task.error;
+  else if (refusal !== null) detail = planLimitDetail(refusal);
+  else if (attempt?.recovery?.message) detail = attempt.recovery.message;
+  else if (checkingFolders) detail = "Checking the selected folders before starting.";
+  else if (scanning) detail = "Inventory scan in progress.";
+  else if (planning) detail = "Planning in progress.";
+  else if (summary !== null && !task?.executionStarted) detail = planItemCount === 0 && !planHasItems ? "Plan is empty."
+    : `${planItemCount} items, ${formatByteCount(summary.required_bytes)} required.`;
+  else if (terminal !== null) detail = terminal.detail;
+  else if (ordinaryTerminal !== null) detail = ordinaryTerminal.detail;
+  else if (["completed", "failed", "refused", "canceled"].includes(executionState)) detail = `${title}.`;
+  else if (summary === null && task?.executionStarted && currentExecution) detail = progress.total == null
+    ? "Execution in progress." : `${progress.done} of ${progress.total} items.`;
+  else if (executionState === "active" && ["inventory", "baseline", "verify", "rebaseline"].includes(task?.sessionKind)) detail = progress.total == null
+    ? "Inventory activity in progress." : `${progress.done} of ${progress.total} items.`;
+  else if (summary === null && executionState === "active") detail = task?.taskKind === "inventory"
+    ? "Inventory in progress." : "Planning in progress.";
+  else if (summary === null) detail = "Choose a source and target.";
+  else if (task?.executionStarted && currentExecution) detail = progress.total == null
+    ? "Execution in progress." : `${progress.done} of ${progress.total} items.`;
+  else detail = "Choose a source and target.";
+  if (snapshot?.progress_inconsistent === true) {
+    detail = `${detail} Some progress updates were inconsistent.`;
+  }
+  return Object.freeze({
+    title, state, detail,
+    sourcePath: pathValue(summary?.source_path ?? form?.source?.text),
+    targetPath: pathValue(summary?.target_path ?? form?.target?.text),
+    progress,
+  });
+}

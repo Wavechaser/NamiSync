@@ -1,201 +1,452 @@
 # History Module
 
-Status: minimal independent sync history storage, observer integration, and CLI
-browsing are implemented for M0. Integrity detail, retention, task
-grouping, replay, discard audit, and export remain later work.
+Status: history schema v8 records exact core-event-v5 reliable receipts in
+bounded, incrementally durable windows and exposes bounded summary, item-page,
+and event-page reads. Retention, export, durable task custody, and execution
+resume remain unrealized.
 
-## Purpose
+## Active Schema-V8 Persistence Boundary
 
-History observes session events and writes an independent append-oriented local
-SQLite database. It records what NamiSync attempted and reported without
-participating in filesystem or ledger transactions. No history failure may roll
-back real file work or ledger truth.
+Status: active beside ledger v4. `DATABASE.md` owns the pair metadata, refusal
+boundary, and reset instructions; there is no in-place migration.
 
-## Implemented M0 Slice
+History v8 accepts only the coordinated exact core-event-v5 receipts, including
+duplicate and bounded rejection receipts; it has no mixed-version page or
+compatibility decoder. The observer stores the canonical envelope and matching
+typed projection from the same admitted snapshot. At admission it projects an
+envelope once, asks core to validate and canonically encode that exact projection,
+and reuses the returned checked bytes for size, payload hash, and retained JSON
+before any flush or queue mutation. A malformed projection therefore breaks the
+audit prefix before any event row, receipt, chain, or watermark mutation.
+`BRIDGE.md` owns the exact event/result shapes, bounds, and codec rules.
 
-`HistoryStore` owns a separate WAL database and returns a `HistoryObserver`
-matching the dispatcher's composition-root protocol: `on_event(envelope)`,
-`finalize(result)`, and `close()`. The dispatcher owns the bounded worker queue,
-timeout, and audit-axis settlement; the history package imports only core and
-never imports dispatcher.
+Reliable item rows retain their accepted recording and omission facts as part
+of receipt identity. Once committed, an item receipt is immutable: later task,
+finalization, or audit failure cannot rewrite it or suppress independent ledger
+evidence.
 
-The observer accepts reliable preterminal envelopes, idempotently detects exact
-duplicate sequence delivery, rejects conflicting or reordered duplicates, and
-persists one actual-time sync envelope, typed summary axes, and ordered
-`ItemOutcome` detail during finalization. Run-token replay with an identical
-payload is a no-op; a different payload raises `TokenConflictError`. A failed
-history transaction propagates to the dispatcher acknowledgement without
-mutating the provisional filesystem or ledger result.
+Finalization continues to consume the dispatcher's full operation result, not
+the bounded live terminal event. It persists the accepted task recording and
+producer-omission facts for authentication and bounded reconstruction; the live
+summary remains a bridge-owned transport contract.
 
-Event/finalization hashes and stored operation-detail JSON keep existing valid
-Unicode bytes/text unchanged and defensively backslash-escape malformed
-surrogate code units. This is not a path-policy relaxation: validated paths
-still reject them, while arbitrary typed detail can no longer crash history
-serialization if one arrives from another boundary.
+The typed review-limit fact is persisted as one all-null-or-complete terminal
+group. Writer and SQL validation reject partial or mismatched groups before
+publication; the group remains independent of audit and participates in
+authentication, repeat equality, reconstruction, bounded summary readback, and
+CLI rendering. Presentation-only omission state never enters history.
+Current producers emit 150,000 for the row axis. Event-v5, history-v8 and
+browser readers also accept the previous exact value of 120,000 and preserve
+which value the producer supplied. Other row limits are invalid.
 
-The M0 outcome vocabulary now includes `BLOCKED` in addition to succeeded,
-skipped, failed, canceled, and deferred. Direct plan blockers use `BLOCKED`;
-safe-subset collateral exclusions remain `DEFERRED` with typed reasons such as
-`blocked-correspondence`, `blocked-dependency`, or `incomplete-scan`. History
-stores each path/reason and a run-level blocked count. Quarantine and withholding
-do not add separate top-level outcome categories.
+Numeric persistence follows `DEFENSE.md` §1.3 and the mapped bridge decision.
+This document owns only the durable consequence: relational values are checked
+before transaction, and envelope readback must agree with its typed projection.
 
-`HistoryRepository` returns immutable typed run and operation snapshots through
-a read-only connection. The M0 CLI reaches these reads through the workflow
-composition root; the database module itself owns no interface policy. No M0
-method implements retention or integrity detail. Recent-run rendering
-derives blocked/deferred exception counts from those typed item rows, while
-detailed rendering lists each path and reason.
+## Purpose And Boundary
 
-## Observer Contract
+History is an independent audit of what NamiSync attempted and reported. It is
+not the filesystem ledger and never participates in a filesystem or ledger
+transaction. An unavailable, conflicting, or unwritable history stream
+degrades the result's `audit` axis; it must not change filesystem, integrity,
+or ledger-recording truth. One otherwise valid oversized event is instead
+retained as a bounded hash-only rejection receipt: audit degrades, but later
+reliable events and terminal truth remain recordable.
 
-The history observer attaches at session admission as the distinguished reliable
-audit subscriber. It creates an activity envelope using session/run token,
-activity kind, actual UTC start, host provenance, subject or source/target
-context, and schema version. It consumes ordered preterminal phase/item events.
-When the runner requests finalization, it drains those events and writes the
-final envelope/summary from the provisional typed result, then acknowledges
-success or failure within the same timeout. It never derives its final state by
-parsing the Terminal that depends on that acknowledgement.
+The dispatcher attaches one distinguished reliable observer at admission.
+Lossy `Progress` events are intentionally absent from durable history. Reliable
+sequence numbers can therefore contain gaps without implying lost audit data.
+The live `Terminal` is also absent: terminal truth is the finalized
+`history_runs` row, written before that live terminal is released.
 
-Its queue is bounded and sized for at least the reliable events emitted between
-adjacent checkpoints. When full, the producer waits at the next safe checkpoint
-boundary instead of dropping audit, capped by an injected generous timeout.
-Drain within that bound guarantees in-process delivery; failure/timeout degrades
-the session's audit axis and stops blocking. Disk durability remains
-best-effort: a process crash may lose at most the bounded in-flight buffer.
+The finalized row copies the workflow result's byte pair without changing its
+meaning. `bytes_done` is attempted-work high-water, not durable successful
+content, and `bytes_total` is the matching final work budget. It can therefore
+include a prefix written to an owned temporary file and removed before a failed
+copy publishes anything. Compound sync keeps each phase's work separate and
+uses execute as the top-level byte domain. History records what NamiSync
+attempted and reported; reliable item receipts and the independent filesystem
+ledger, not this aggregate byte pair, own settlement and publication truth.
 
-Every explicit attempt is recordable: success, partial failure, all-noop,
-blocked, capacity/preflight refusal, cancellation, unexpected exception,
-baseline, verify, maintenance, and later queued discard. Early returns
-must not bypass the envelope.
+## Schema V8 And Reset Boundary
 
-Run-token uniqueness makes repeated delivery idempotent. Sequence gaps,
-duplicate terminal, or payload-version failure are recorded/surfaced as observer
-integrity errors, not silently ignored.
+The current exact marker is
+`contract_id=m1-history-v8-event-v5-recording-v1` with
+`HISTORY_SCHEMA_VERSION = 8` and `data_epoch=8`. The new row-limit constraint
+advances the history schema and shared epoch together.
+NamiSync refuses history v1-v7 and a v8 database with a missing or mismatched
+marker through a read-only connection. Refusal
+must not alter the database or its WAL, SHM, or journal sidecars. This remains
+a pre-release reset-only boundary: close every NamiSync process and archive the
+ledger and history databases together with all SQLite sidecars before starting
+fresh. Startup never deletes either file and
+there is no migration from an older event/evidence epoch.
 
-## Activity Detail
+`history_runs` is created provisionally by the first committed window. It holds
+immutable context, lifecycle and phase, the committed sequence and item
+watermarks, rolling outcome counts, a context hash, the rolling event-chain
+hash, an authenticated prefix-projection hash, and nullable terminal axes.
+The prefix hash binds lifecycle timestamps/state/phase, both watermarks, and
+all item/outcome/duplicate/rejection counts to the context and receipt chain.
+`terminal_payload_hash IS NOT NULL` is the authoritative finalized marker.
+Terminal-only columns become populated as one checked group, so a committed
+prefix cannot impersonate a finalized run. A finalized run is immutable, and
+committed run rows cannot be deleted or replaced.
+`started_at` records an actual start only: a finalized queued cancellation with
+`disposition=unrun` keeps it null and validates its end against `created_at`.
 
-- Sync: immutable reviewed plan/run context, ordered operation id/kind/path,
-  outcome/reason, content bytes, and summary counts, including direct blockers
-  and deferred quarantine/withholding.
-- Integrity: selected scope, typed per-file integrity issues/outcomes, counts,
-  and evidence provenance.
-- Subject-only activities render one location/subject, never `None → None`.
-- No-op/refused/canceled attempts retain an envelope and truthful zero-work
-  detail where applicable.
+`history_events` is the append-only reliable-event receipt journal. Its primary
+key is `(run_id, event_seq)`. Every row retains timestamp, schema/body type,
+the original payload hash, a disposition-bound receipt hash, and exactly one of
+three checked shapes. Duplicate and rejected links are admitted only by the
+retained duplicate-link INSERT guard, which requires a canonical target. The
+append-only UPDATE trigger unconditionally rejects every UPDATE, including a
+duplicate-link rewrite; it therefore subsumes the removed duplicate-link UPDATE
+guard:
 
-M0 stores sync envelopes, summaries, and ordered operations sufficient for CLI
-history. The history schema is version 2; startup transactionally adds
-`blocked_count` when opening a version-1 store and preserves existing runs. M1
-adds generic phase summaries, one ordered phase/item-type-tagged heterogeneous
-result-item stream, integrity detail, and retention.
+- `recorded` retains the canonical envelope and, for a result item, its typed
+  projection plus identity and semantic item hashes;
+- `duplicate` retains the repeated full envelope and links to an earlier
+  recorded or rejected identity receipt with the same identity and semantic
+  hash, but receives no item order and changes no outcome count;
+- `rejected` retains bounded metadata, payload hash, and reason but no
+  oversized envelope body; an oversized result item also retains only its
+  fixed-size identity and semantic hashes so changed reuse is still fatal.
+  Later exact oversized copies remain individually counted rejections and link
+  to the first recorded/rejected identity representative.
+
+Canonical result items receive a dense, immutable, one-based `item_order`; a
+partial unique index preserves one canonical `(run_id, item_type, item_id)`.
+The receipt hash binds sequence, timestamp, schema/body type, disposition,
+payload and item hashes, duplicate link/rejection reason, and canonical item
+order. Typed summary columns are writer-derived immutable projections of the
+retained canonical JSON and are rechecked when an envelope is decoded. The
+strict receipt table uses the composite primary key without
+a hidden SQLite `rowid`; guarded recursive-trigger writers and schema triggers
+make event rows append-only, so indexed classification cannot diverge from the
+authenticated envelope. Run rows separately count
+duplicate and rejected receipts. Separate indexes serve event catch-up, item
+paging, identity-conflict checks, and typed summary aggregates.
+A partial unique index admits exactly one recorded or unlinked-rejected
+representative per item identity; one bulk lookup per window therefore remains
+bounded even if that identity has many linked rejected receipts.
+
+`history_phases` remains a small terminal summary, not an event-detail store.
+Its explicit phase-count ceiling protects summary reads from hostile or broken
+producers. Phase names, terminal failure type names, phase errors, and terminal
+failure messages are each limited to 1,024 UTF-8 bytes. Oversize text rejects history finalization before its transaction,
+degrading audit while leaving any earlier committed prefix incomplete and
+readable. Matching SQLite byte-length checks defend the stored contract. Phase
+detail and terminal axes are written only in the finalization transaction.
+
+## Window Policy
+
+`HistoryWindowPolicy` is the single history-side policy value. Production uses
+these defaults:
+
+- `max_events = 256`
+- `max_bytes = 1_048_576` serialized bytes
+- `max_event_bytes = 1_048_576` serialized bytes
+- `max_age_seconds = 1.0`
+
+An observer validates, serializes, and hashes a reliable envelope before
+retaining it. The production event-v5 hub rejects an envelope over the same
+per-event ceiling before assigning a sequence. History's bounded hash-only
+`event-too-large` receipt remains a defensive observer seam for a v5-valid
+event admitted under a deliberately stricter history policy. Before accepting an
+event that would cross the window byte or count bound, the existing window is
+committed. Reaching either bound commits immediately. `StateChanged(PAUSED)`
+forces a commit after that event is admitted. The audit pump commits by the
+original one-second deadline from the first event even under continuous
+traffic, and performs a final clean flush at shutdown. Finalization commits its
+tail and terminal row together.
+
+Pending objects and their serialized-byte count are cleared only after the
+transaction commits. A failed transaction leaves the complete pending window
+and the previous durable watermark unchanged, then breaks that observer's
+prefix. Earlier windows stay readable. A contained rejection does not enter
+that fail-stop state. A process crash can lose the final uncommitted window but
+cannot expose part of a window.
+
+The generic dispatcher contract is
+`on_event(envelope) -> RecordingStatus`, idempotent `flush()`,
+`finalize(result) -> RecordingStatus`, and exactly-once `close()`. The
+dispatcher owns timing and backpressure; the database observer owns window
+contents and atomicity. `DEGRADED` is a contained status and does not stop the
+pump. An observer exception or flush/write failure breaks the prefix and stops
+further admission/finalization so no unauthenticated tail is recorded.
+Successful durable finalization is settled before cleanup, so a later close
+error cannot rewrite persisted or live terminal truth.
+
+History releases app-owned callback frames at that fail-stop boundary. Event
+admission, window flush, terminal projection, and terminal commit preserve the
+established public exception identity where it already escapes, while clearing
+its traceback, cause, and context before returning control. Replay lookup keeps
+no raw SQLite busy error between attempts; timeout retains only the fixed
+bounded recording detail. If receipt validation is already failing, a
+receipt-reader close failure is retired and cannot replace that initiating
+failure. The pending-window and durable-watermark rules above are unchanged.
+Arbitrary caller-owned exception attributes remain outside history custody.
+Store construction and existing-run reader failures retain their separate
+behavior and are not covered by this callback boundary.
+
+## Admission, Idempotency, And Hashes
+
+History JSON/hash encoding requires Unicode scalar strings and keys and uses
+strict UTF-8; valid-Unicode bytes remain unchanged. Malformed required context
+refuses before observation or persistence. Optional item diagnostics already
+omit invalid Unicode and count the omission before serialization; strict
+encoding does not turn those omissions into lost result items. Event and
+recording-issue readback retains its existing typed Unicode validation.
+
+The source derivation for envelope work is local and finite:
+`HistoryObserver._admit` calls the core checked encoder once, then derives the
+envelope size, payload hash, and retained text from that one result. The
+parameterized history fixture witness counts one checked-envelope encoding for
+each admissible reliable body. Distinct result-item identity and semantic hashes
+remain separate work and are excluded from that count. This is structural
+evidence, not a timing or resource-bound claim.
+
+Result-item projection reuse is likewise local to each admission or readback
+call. Admission hashes the item body already present in the validated envelope
+projection. Readback decodes the retained envelope into its typed canonical
+item once, then reuses that item's complete projection for its semantic hash and
+for the narrower SQL-column projection. The envelope payload, complete item,
+item identity, and disposition-bound receipt remain separate hashes. Detail and
+recording fields omitted from SQL columns remain part of the complete item hash.
+Window commit still projects its owned pending envelope independently; no item
+projection is retained in `_PendingEvent` or cached across calls.
+
+Only hashes for the current window are retained in memory. The observer keeps
+one scalar highest accepted sequence. A sequence within the pending window is
+verified from that bounded map; an older sequence is resolved with an indexed
+`history_events` lookup:
+
+- the same sequence and hash is an idempotent no-op;
+- the same sequence with another hash is an integrity error;
+- an unseen lower sequence is an out-of-order integrity error.
+
+For a new sequence carrying a `ResultItem`, identity and content are separate
+contracts. The canonical hash covers the complete typed item payload while
+excluding envelope sequence, time, and session metadata. Re-emitting the same
+`(item_type, item_id)` with that same semantic hash produces a non-counting
+`duplicate` receipt. Reusing the identity with any changed item field is
+producer corruption and breaks the prefix. These rules apply both within one
+pending window and against an earlier durable window, including when the first
+occurrence was retained only as an oversized rejection receipt.
+
+Each window transaction creates or validates the provisional context, verifies
+any concurrent replay, appends new receipts and projections, advances dense
+canonical item order and rolling counts, and atomically publishes the new
+receipt chain and watermark. The chain advances over each disposition-bound
+receipt hash, including duplicates and rejected events. Exact concurrent replay
+is harmless. A changed context, event, or terminal payload under the same run
+token raises a token conflict.
+`last_committed_at` is sampled only after the serialized writer owns its
+transaction and is clamped to the prior durable value if wall time moves
+backward. Every commit is also clamped to the latest envelope timestamp newly
+made durable, as well as admission and any observed start, so a higher
+watermark never carries an older or impossible commit timestamp.
+
+Every window recomputes the prefix-projection hash from immutable context, the
+committed event-chain hash, lifecycle projections, watermarks, timestamps, and
+all rolling counts. Finalization binds that authenticated prefix, `ended_at`,
+and the terminal result without `result.items`. Item detail is already
+authenticated by the receipt chain; hashing the session-wide terminal tuple
+again would require retaining the whole run and defeat the window bound. A run
+with any rejected receipt finalizes with `audit=DEGRADED`. Identical repeated
+finalization is a no-op. A changed repeat is rejected. Incomplete and finalized
+summary reads validate the context and prefix hashes; finalized reads and
+repeated finalization additionally reconstruct bounded terminal truth from the
+stored axes and ordered phase rows and validate the terminal hash.
+Summary, item-page, event-page, observer-reopen, and writer-admission reads also
+compare the indexed physical event/item tails with the official watermarks in
+the same snapshot. A tail row outside the committed projection is therefore
+rejected rather than influencing classification or later admission.
+
+## Incomplete Runs
+
+A committed row without a terminal payload hash is returned as `incomplete`,
+including after restart. Its committed state, phase, watermarks, counts, and
+pages remain useful, but its terminal axes are absent and its headline is
+`incomplete` even if the last reliable lifecycle event says `COMPLETED`.
+
+NamiSync does not infer that such a run was interrupted, abandoned, or safe to
+resume. Another process may still own it, and M1 has no durable process/session
+lease. Durable custody and automatic interruption classification belong to M2.
+
+## Bounded Readback
+
+`HistoryRepository` provides only these read shapes:
+
+- `list_summaries(limit)` uses a fixed number of queries for run rows, bounded
+  phase rows, and one fixed-size indexed classification aggregate per run. It
+  never selects or decodes event JSON and never calls a full-detail getter per
+  run. Free-form item kinds and reasons cannot create additional summary
+  objects, and phase/error text has the fixed UTF-8 byte ceilings above.
+- `get_summary(run_token)` returns one terminal or incomplete snapshot with
+  context, lifecycle, phase, watermarks, counts, axes, and phase summaries.
+- `get_item_page(run_token, after_order, through_order, limit)` keyset-pages
+  typed items by dense item order.
+- `get_event_page(run_token, after_seq, through_seq, limit)` keyset-pages
+  receipt-aware reliable events by sequence. Recorded and duplicate receipts
+  expose their validated envelope; rejected receipts expose bounded
+  metadata/hash/reason with `envelope=None`.
+
+Read limits are explicit and bounded at 256; invalid limits are rejected rather
+than truncated.
+
+Canonical-item identity-hash lookups partition subjects by
+`connections.QUERY_SUBJECT_BATCH_SIZE` (400). Each statement retains its fixed
+run and sequence bounds, so the subject bound is distinct from the total
+parameter count and is at most the batch size plus two. When a page omits
+`through_order` or `through_seq`, the repository starts a fresh traversal by
+capturing the corresponding durable
+watermark in the same SQLite read transaction as the page. Callers reuse that
+watermark for later pages, so one traversal sees a stable committed prefix even
+while a writer commits newer windows. A caller-supplied event watermark is an
+inclusive sequence bound and may fall on an omitted lossy `Progress` sequence.
+Event reads fetch one indexed lookahead row to determine `has_more`, but return
+and decode no more than the requested limit. The service projects these rows as
+`HistoryEventView`; it does not synthesize a live `SessionEventView` for a
+hash-only rejection receipt.
+
+Every current `HistoryEventView.schema_version` is exactly 5. Recorded and
+duplicate rows authenticate and decode the exact canonical envelope; rejected
+receipts instead expose `body=None`. The coordinated reset makes a mixed-version
+page unrepresentable: old, mixed, markerless, or incomplete database pairs
+refuse before mutating commands. The payload hash remains the identity of the
+retained envelope. Core source contains only the exact v5 decoder; no
+history-v8 row or repository route can select an older event decoder.
+
+Every event-page request verifies that `history_runs.last_committed_seq` is the
+actual maximum durable event sequence in the same read snapshot, including
+requests traversing an older caller-supplied watermark. A missing, trailing, or
+otherwise mismatched official row is history corruption, not an ordinary
+sequence gap. If a fresh traversal's `after_seq` is ahead of current durability,
+the repository returns an empty terminal page with the captured durable
+`through_seq`, the unchanged `after_seq` as `next_after_seq`, and
+`has_more=False`. That page ends the traversal; a later attempt omits
+`through_seq` again to capture newly committed history. An explicit fixed
+watermark below `after_seq` remains an invalid interval. Each request ends its
+read transaction, allowing the same WAL reader to observe the next committed
+window on its next request.
+
+The local workflow runtime reuses one lazily admitted history repository across
+summary and page requests, serializing each complete query and projection with
+its own role lock. Successful requests leave no open read transaction. A query
+failure retires that reader; a failed close quiesces the runtime and retains the
+handle for close retry. Every replacement reader receives full admission. Runtime
+shutdown owns the final close, while an absent history file remains an empty
+listing or unknown run when no reader is owned. `DATABASE.md` owns the complete
+reader-lifetime, reset, and admission-cost boundary and diagnostic fixtures.
+
+Workflow code supplies the finite selection-exclusion/no-op predicates and,
+not SQL, interprets the resulting primitive counts into integrity and headline
+values. The service exposes `list_history()`,
+`get_history_summary()`, `get_history_items()`, and `get_history_events()`.
+There is no unbounded `get_history()` compatibility path. History-detail CLI
+rendering streams item pages without assembling a complete run. A healthy live
+terminal CLI render also replays the fixed finalized item watermark, so a run
+that finishes before observation still has canonical itemized output; a
+degraded audit falls back to the items observed live.
+
+## Subscriber Repair
+
+A subscriber that receives `Gap` keeps the sequence of its last successfully
+applied non-`Gap` envelope, not the sequence carried by the synthetic `Gap`
+itself, requests durable event pages through one captured committed watermark,
+and applies the available recorded/duplicate envelopes in order while
+deduplicating by sequence. A rejected receipt advances authenticated history
+but has no body to replay; the consumer reports the receipt and uses the
+degraded terminal/summary truth rather than inventing an event. Missing
+lossy-progress sequence numbers are expected and are not reported as history
+loss. A live cursor ahead of the committed window produces the empty fresh page
+described above; the next repair attempt starts a new traversal. The subscriber
+then reads the summary to recover finalized terminal truth if the live terminal
+was missed, resubscribes after the committed watermark, and repeats if live
+replay advanced again during repair.
+
+Only the committed prefix can be repaired. If audit degraded before an event
+became durable, history correctly makes no claim that it can recover that tail.
 
 ## Failure Semantics
 
-A history serialization/database failure or backpressure timeout sets
-`OperationResult.audit=DEGRADED` and system health loudly, but never rewrites
-filesystem `status` or ledger `recording`. History may be behind only when that
-axis says so for a delivered terminal; a process crash has no completed result,
-loses at most the bounded buffer, and is surfaced by startup reconciliation. An
-unbounded queue and silent loss are forbidden.
+Observer construction, canonical serialization failure, wrong-session or
+illegal event bodies, ordering/token/item conflicts, SQLite contention
+exhaustion, window writes, and terminal writes are fatal to that audit prefix.
+They remain audit failures only: they never roll back or reinterpret filesystem
+changes or ledger evidence. Replay reads retry only
+SQLite `BUSY`/`LOCKED` within the existing bounded writer budget; exhaustion
+and every non-retryable storage error remain fail-stop.
 
-Finalization is deliberately two phase. The runner first supplies the
-provisional domain/recording result and waits for history to drain and attempt
-its final write. It then settles the audit axis from the acknowledgement and
-releases one immutable Terminal to ordinary subscribers. A timeout is itself a
-failed acknowledgement: blocking ends, `audit=DEGRADED`, and no second
-corrective Terminal exists. The call-driven recorder completes its own terminal
-flush before result assembly and does not participate in this handshake.
+Observer cleanup occurs after durable finalization. A cleanup-only failure
+therefore cannot rewrite persisted or live terminal truth. The pump retains an
+internal degraded cleanup state, but that post-finalization state is not a
+public session-health axis. A persistent dispatcher/store projection is
+unrealized and must be defined and tested before activation.
 
-An unexpected workflow error still emits/finalizes a failed attempt through the
-generic session wrapper. History code catches its own SQLite/serialization
-errors and does not replace the domain result.
+A v5-valid event exceeding a deliberately stricter history
+`max_event_bytes` is the single contained per-event failure. Its bounded
+durable receipt degrades audit, later events and finalization continue, and
+reopening/replay derives the same degraded result from durable rejection count.
+Exact replay of its sequence and payload hash is idempotent; a changed hash is
+fatal.
 
-## Retention
+Finalization remains a two-party ownership decision. If the caller reaches its
+cutoff before the pump owns finalization, both live and any late retained
+terminal truth use `audit=degraded`. If the pump owns first, the caller waits
+for the actual write result. There is no corrective second terminal or mutable
+terminal history row.
 
-Retention can prune old detail by age/count while preserving envelope and
-summary. Timestamps are canonical UTC and compared semantically. Settings are
-history-specific and use a writable connection. Pruning is transactional,
-idempotent, and never runs through a read-only helper.
+## Policy Tuning And Scale Gate
 
-History replay remains available only while required detail exists. Replay
-constructs a `Scope.from_run` and plans fresh; history rows are never direct
-execution instructions.
+The four `HistoryWindowPolicy` fields are the only tuning point. Do not change
+them from anecdotal timing. [PERFORMANCE](PERFORMANCE.md#history-methods-and-observations) owns the
+fixture, profile, collection statistics and historical observations.
+`python -m tools performance history release --json build/history-release.json`
+runs the full named fixture and applies these release criteria. The `smoke`
+case checks a smaller diagnostic fixture and cannot close the release gate.
 
-## Task And Export Provision
+The release gates are at most three seconds for the 50-run summary; 500 ms p95
+and one second maximum for either 256-row page; and no normal window commit at
+or above the five-second audit-offer cutoff during a 100,000-event recording.
+That recording must remain `audit=OK` and never exceed either pending bound.
 
-Future GUI task ids are optional parents; CLI/service sessions remain valid
-without one. Task annotations are trimmed plain text up to 256 characters and
-do not alter results. Restoring setup restores inputs/options only and forces a
-new plan. Export to CSV/JSON is read-only, stable-schema/versioned, and escapes
-spreadsheet formula injection where relevant.
+Increasing a threshold trades crash exposure, memory, and write latency for
+fewer transactions. Decreasing one does the reverse. The one-second maximum
+age is a durability bound, not a debounce interval; continuous events must not
+postpone it.
 
-A queued session discarded before running is retained as
-`CANCELED+Disposition.UNRUN`; a cancellation after work is `CANCELED+RAN` and a
-preflight refusal is `REFUSED+UNRUN`. Dispatcher accomplishes this through
-generic terminal events and waits for observer delivery (or loud audit
-degradation) before dropping the live session record; it never imports/calls
-history or asks history to infer disposition from zero bytes or strings.
+## Regression Contract
 
-## Expectations
+Automated coverage pins count, byte, age, pause, close, and finalization
+flushes; durable oversized-event receipts and continued finalization; same- and
+cross-window duplicate/conflict semantics; atomic visibility and rollback;
+committed-prefix recovery; incomplete-versus-finalized visibility;
+order/token conflicts; dense canonical item order across pause/resume; bounded
+page limits and stable watermarks; receipt/link/hash/counter tamper detection;
+fixed summary query count without event decoding; WAL reader visibility;
+streamed CLI output; subscriber repair; finalization parity; and the relevant
+query plans.
 
-- Dispatcher attaches observer before reliable events begin and supplies gap-free
-  envelopes.
-- Generic session runner guarantees actual start and exactly one terminal.
-- Modules emit typed item outcomes; history does not parse UI strings.
-- Ledger has no foreign key/reference dependency on history.
-- Interfaces render by activity kind and disclose unavailable/pruned detail.
-- One shared clock/host formatter is used across databases.
+Current coverage proves exact event-v5-only persistence, canonical-envelope/
+typed-projection agreement, immutable item recording facts, once-only full-
+result finalization, the all-null-or-complete review-limit group, and bounded
+rejection recovery. Shared event-shape and scalar boundary cases remain with
+the owning [core](CORE.md) and [bridge](BRIDGE.md) authorities rather than
+being cataloged here.
 
-## PoC Hardening
+The structural sequence-admission test must continue to prove that adding an
+event cannot iterate all prior hashes. Wall-clock timing is not an acceptable
+CI assertion for that O(1) property.
 
-- Actual run timestamps replace post-hoc identical start/end values.
-- All-noop, blocked, capacity-refused, canceled, guard-refused, and unexpected
-  exceptions retain history.
-- Integrity detail repository reads match writes.
-- Writable retention and canonical timestamps make pruning effective.
-- Subject-only rendering fixes `None → None`.
-- Partial failure summaries derive from item outcomes, not mutating-op count.
-- Database override plumbing keeps tests/CLI out of real user history.
+## Focused history scale acceptance
 
-## Acceptance Criteria
-
-M0 tests cover sync axis/detail round-trip, ordered outcomes, blocked/no-op/refused
-attempts, exact duplicate delivery, conflicting duplicate diagnosis, idempotent
-run finalization, read-only browsing, and failure isolation. Buffer pressure,
-acknowledgement timeout, and single-terminal settlement are dispatcher tests.
-Integrity renderers, retention, replay, discard audit, and export remain
-future acceptance gates.
-
-- Every terminal path listed above produces exactly one idempotent envelope with
-  actual start/end ordering and activity kind.
-- Duplicate event/run delivery does not duplicate envelopes or detail; conflicting
-  duplicate payload is diagnosed.
-- Reliable item order and sequence round-trip; an injected gap is detected and
-  surfaced.
-- Sync, integrity, maintenance, and subject-only renderers return their
-  typed detail and never invent source/target roles.
-- All-noop and zero-mutation refusal remain browseable.
-- Unexpected SQLite/OS/domain exceptions still attempt truthful failed history
-  without changing the original result.
-- Observer failure degrades the explicit audit result/health signal and never
-  rolls back ledger or filesystem work.
-- A buffer-pressure test proves admitted history events are delivered within
-  the bound while `audit=OK` and no backpressure happens mid-filesystem
-  operation; timeout stops blocking and yields `audit=DEGRADED` rather than
-  silent loss under an OK result.
-- Terminal-finalization fault injection proves success/failure acknowledgement
-  is reflected in the single Terminal delivered to ordinary subscribers; no
-  second corrective Terminal is emitted.
-- Retention on a writable connection prunes eligible detail, preserves envelope
-  and summary, handles timezone/precision boundaries, and is idempotent.
-- Replay is unavailable with an explicit reason after detail pruning and always
-  plans fresh when available.
-- CLI database overrides isolate history; concurrent readonly browsing works
-  during active writes under WAL.
-- Export escapes formula-leading cells and preserves typed/schema-versioned
-  values.
-- Discarding a queued unrun session delivers one discarded audit envelope before
-  its live session record is dropped, typed as `CANCELED+UNRUN` and without a
-  dispatcher/history import.
+Under the [reference profile](PERFORMANCE.md#reference-profile-and-collection), the
+remaining history criteria are a 50-run summary over 1,000,000 retained items,
+including a 100,000-item run, in at most 3 seconds; and a 256-row detail window in
+500 ms p95 / 1 second maximum. These scoped Tier-2 targets remain separate from
+query-boundedness proofs and do not activate the deferred history page.
+[PERFORMANCE](PERFORMANCE.md#history-methods-and-observations) owns raw sample and
+rerun-method recording for these criteria.

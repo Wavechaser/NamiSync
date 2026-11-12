@@ -1,0 +1,16 @@
+/LICENSE text eol=lf
+/tests/interfaces/web/m1_closeout_inventory_cold_20261030_raw.json -text
+/tests/interfaces/web/m1_closeout_inventory_cold_20261030_validation.json -text
+/tests/bridge_transport_custody.py text eol=lf
+/tests/interfaces/web/test_bridge_transport_custody.py text eol=lf
+/tests/interfaces/web/test_bridge_transport_custody_holdout.py text eol=lf
+/tests/interfaces/web/sh_g_8_transport_calibration.json text eol=crlf
+/tests/interfaces/web/sh_g_8_transport_ceiling.json text eol=lf
+/tests/interfaces/web/sh_g_8_transport_holdout.json text eol=crlf
+/tests/interfaces/web/sh_g_8_transport_authority_v2.json text eol=lf
+/tests/assets/identity_epoch5_vectors.json text eol=lf
+/tests/assets/fluent_tokens/* -text
+/namisync/interfaces/web/assets/icons/* -text
+/namisync/interfaces/web/assets/icons.js text eol=lf
+/namisync/interfaces/web/assets/components.css text eol=lf
+/tools/packaging/notices/*.txt -text

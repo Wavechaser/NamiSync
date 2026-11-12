@@ -6,7 +6,8 @@ import os
 import stat as stat_module
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from pathlib import PureWindowsPath
+from itertools import chain
+from pathlib import Path, PureWindowsPath
 from typing import Iterator, Protocol
 
 from namisync.core.models import (
@@ -28,23 +29,95 @@ from namisync.core.models import (
     UnsupportedRecord,
     VolumeEvidence,
     VolumeId,
+    validate_scan_scope,
 )
 from namisync.core.pathing import (
     PathValidationError,
     join_under_root,
+    lexical_absolute_path,
+    logical_error_text,
     normalize_relative_path,
     to_extended_length_path,
     validate_relative_path,
 )
+from namisync.core.file_identity import (
+    file_identity_from_stat,
+    supports_stable_file_identity,
+)
+from namisync.core.root_authority import (
+    FILE_ATTRIBUTE_DIRECTORY,
+    FILE_ATTRIBUTE_OFFLINE,
+    FILE_ATTRIBUTE_REPARSE_POINT,
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    admit_existing_relative_chain,
+    admit_root_chain,
+    current_volume_anchor,
+    is_directory_stat,
+    is_placeholder_stat,
+    is_reparse_stat,
+    observe_native_volume,
+)
+from namisync.core.review import ScanPopulationAdmission
 from namisync.core.session import RunContext
+from namisync.core.scalars import (
+    MAX_SIGNED_64,
+    ScalarDomainError,
+    require_utf16_path,
+)
 
 
-FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
-FILE_ATTRIBUTE_OFFLINE = 0x00001000
-FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x00040000
-FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000
 FILE_NAMED_STREAMS = 0x00040000
 FILE_SUPPORTS_HARD_LINKS = 0x00400000
+
+
+class _ScanCollectors:
+    """Share source-population row gates across one scanner result."""
+
+    __slots__ = ("admission", "domain_count", "informational_count")
+
+    def __init__(self, admission: ScanPopulationAdmission) -> None:
+        self.admission = admission
+        self.domain_count = 0
+        self.informational_count = 0
+
+    def admit_domain(self, value: object) -> None:
+        if type(value) not in (FileRecord, DirRecord, UnsupportedRecord):
+            raise TypeError("scan domain collector received an invalid value")
+        next_count = self.domain_count + 1
+        self.admission.require_source_rows(next_count)
+        self.domain_count = next_count
+
+    def admit_warning(self, value: object) -> None:
+        if type(value) is not ScanWarning:
+            raise TypeError("scan warning collector received an invalid value")
+        next_count = self.informational_count + 1
+        self.admission.require_informational_source_rows(next_count)
+        self.informational_count = next_count
+
+
+class _ScanList(list):
+    """Append-only scanner list that gates its shared population."""
+
+    __slots__ = ("_collectors", "_informational")
+
+    def __init__(
+        self,
+        collectors: _ScanCollectors,
+        *,
+        informational: bool,
+    ) -> None:
+        super().__init__()
+        self._collectors = collectors
+        self._informational = informational
+
+    def append(self, value: object) -> None:
+        if self._informational:
+            self._collectors.admit_warning(value)
+        else:
+            self._collectors.admit_domain(value)
+        super().append(value)
 
 
 @dataclass(frozen=True)
@@ -52,6 +125,38 @@ class VolumeSnapshot:
     volume_id: VolumeId
     evidence: VolumeEvidence
     profile: CapabilityProfile
+
+    def __post_init__(self) -> None:
+        validate_volume_snapshot(self)
+
+
+def validate_volume_snapshot(value: object) -> VolumeSnapshot:
+    """Re-admit exact native volume facts before policy consumes them."""
+
+    if type(value) is not VolumeSnapshot:
+        raise TypeError("volume backend must return VolumeSnapshot")
+    if type(value.volume_id) is not VolumeId:
+        raise TypeError("volume snapshot identity has the wrong type")
+    if type(value.evidence) is not VolumeEvidence:
+        raise TypeError("volume snapshot evidence has the wrong type")
+    if type(value.profile) is not CapabilityProfile:
+        raise TypeError("volume snapshot profile has the wrong type")
+    VolumeId(value.volume_id.serial, value.volume_id.fs_type)
+    VolumeEvidence(
+        value.evidence.label,
+        value.evidence.device_id,
+        value.evidence.clone_ambiguous,
+    )
+    CapabilityProfile(
+        value.profile.fs_type,
+        value.profile.mtime_granularity_ns,
+        value.profile.stable_file_identity,
+        value.profile.incurs_seek_penalty,
+        value.profile.max_path,
+        value.profile.supports_ads,
+        value.profile.supports_hardlinks,
+    )
+    return value
 
 
 class DirectoryEntry(Protocol):
@@ -66,11 +171,15 @@ class DirectoryEntry(Protocol):
 
 
 class ScannerBackend(Protocol):
-    def resolve_root(self, path: str) -> str: ...
+    def resolve_root(
+        self, path: str, *, trusted_anchor: str | None = None
+    ) -> str: ...
 
     def volume_snapshot(self, root: str) -> VolumeSnapshot: ...
 
     def lstat(self, path: str) -> os.stat_result: ...
+
+    def stat(self, path: str) -> os.stat_result: ...
 
     def scandir(self, path: str) -> AbstractContextManager[Iterator[DirectoryEntry]]: ...
 
@@ -86,74 +195,57 @@ def _granularity_for(fs_type: str) -> int:
     return 2_000_000_000
 
 
-def _identity_supported(fs_type: str) -> bool:
-    return fs_type.upper() in {"NTFS", "REFS"}
-
-
 class NativeScannerBackend:
     """Native Windows metadata backend; it never opens ordinary file content."""
 
-    def resolve_root(self, path: str) -> str:
-        resolved = os.path.abspath(path)
-        native = to_extended_length_path(resolved)
-        if not os.path.isdir(native):
-            raise FileNotFoundError(resolved)
-        return resolved
+    def trusted_anchor(self, path: str) -> str:
+        return current_volume_anchor(path)
+
+    def resolve_root(
+        self, path: str, *, trusted_anchor: str | None = None
+    ) -> str:
+        logical = lexical_absolute_path(path)
+        try:
+            authority = RootAuthority(logical, trusted_anchor)
+            admit_root_chain(
+                authority,
+                lstat=self.lstat,
+                anchor_probe=self.trusted_anchor,
+            )
+        except PathValidationError as error:
+            raise OSError(
+                "location volume anchor changed after binding review"
+            ) from error
+        except RootAuthorityError as error:
+            raise _scanner_root_error(error) from error
+        return logical
 
     def volume_snapshot(self, root: str) -> VolumeSnapshot:
-        if os.name != "nt":
-            stat = os.stat(root, follow_symlinks=False)
-            serial = f"{stat.st_dev:x}"
-            fs_type = "UNKNOWN"
-            return VolumeSnapshot(
-                VolumeId(serial, fs_type),
-                VolumeEvidence(device_id=os.path.splitdrive(root)[0] or root),
-                CapabilityProfile(fs_type, _granularity_for(fs_type), False, None, 32767, False, False),
-            )
-
-        import ctypes
-        from ctypes import wintypes
-
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        volume_path = ctypes.create_unicode_buffer(32768)
-        if not kernel32.GetVolumePathNameW(root, volume_path, len(volume_path)):
-            raise OSError(ctypes.get_last_error(), "GetVolumePathNameW failed", root)
-
-        label = ctypes.create_unicode_buffer(261)
-        filesystem = ctypes.create_unicode_buffer(261)
-        serial = wintypes.DWORD()
-        max_component = wintypes.DWORD()
-        flags = wintypes.DWORD()
-        if not kernel32.GetVolumeInformationW(
-            volume_path.value,
-            label,
-            len(label),
-            ctypes.byref(serial),
-            ctypes.byref(max_component),
-            ctypes.byref(flags),
-            filesystem,
-            len(filesystem),
-        ):
-            raise OSError(ctypes.get_last_error(), "GetVolumeInformationW failed", root)
-
-        fs_type = filesystem.value.upper() or "UNKNOWN"
-        volume_id = VolumeId(f"{serial.value:08X}", fs_type)
+        observed = observe_native_volume(root)
+        fs_type = observed.volume_id.fs_type
         return VolumeSnapshot(
-            volume_id,
-            VolumeEvidence(label.value or None, volume_path.value),
+            observed.volume_id,
+            observed.evidence,
             CapabilityProfile(
                 fs_type=fs_type,
                 mtime_granularity_ns=_granularity_for(fs_type),
-                stable_file_identity=_identity_supported(fs_type),
+                stable_file_identity=supports_stable_file_identity(fs_type),
                 incurs_seek_penalty=None,
                 max_path=32767,
-                supports_ads=bool(flags.value & FILE_NAMED_STREAMS),
-                supports_hardlinks=bool(flags.value & FILE_SUPPORTS_HARD_LINKS),
+                supports_ads=bool(
+                    observed.filesystem_flags & FILE_NAMED_STREAMS
+                ),
+                supports_hardlinks=bool(
+                    observed.filesystem_flags & FILE_SUPPORTS_HARD_LINKS
+                ),
             ),
         )
 
     def lstat(self, path: str) -> os.stat_result:
         return os.stat(to_extended_length_path(path), follow_symlinks=False)
+
+    def stat(self, path: str) -> os.stat_result:
+        return os.stat(to_extended_length_path(path), follow_symlinks=True)
 
     def scandir(self, path: str) -> AbstractContextManager[Iterator[DirectoryEntry]]:
         return os.scandir(to_extended_length_path(path))  # type: ignore[return-value]
@@ -163,20 +255,36 @@ def _attributes(stat: os.stat_result) -> int:
     return int(getattr(stat, "st_file_attributes", 0))
 
 
+def _unsupported_observation(
+    rel_path: str,
+    reason: UnsupportedReason,
+    stat: os.stat_result,
+    kind: EntryKind | None,
+) -> UnsupportedRecord:
+    size = getattr(stat, "st_size", None) if kind is EntryKind.FILE else None
+    if type(size) is not int or not 0 <= size <= MAX_SIGNED_64:
+        size = None
+    return UnsupportedRecord(
+        rel_path, normalize_relative_path(rel_path), reason, kind,
+        getattr(stat, "st_file_attributes", None), size,
+    )
+
+
 def _created_ns(stat: os.stat_result) -> int | None:
     value = getattr(stat, "st_birthtime_ns", None)
     if value is None and os.name == "nt":
         value = getattr(stat, "st_ctime_ns", None)
-    return int(value) if value is not None and value >= 0 else None
+    return int(value) if value is not None else None
 
 
 def _file_identity(stat: os.stat_result, volume: VolumeSnapshot) -> FileIdentity | None:
     if not volume.profile.stable_file_identity:
         return None
-    index = getattr(stat, "st_ino", None)
-    if index is None or int(index) <= 0:
-        return None
-    return FileIdentity(volume.volume_id.serial, int(index))
+    return file_identity_from_stat(
+        volume.volume_id.serial,
+        volume.profile.fs_type,
+        getattr(stat, "st_ino", None),
+    )
 
 
 def _to_stat(stat: os.stat_result, kind: EntryKind, volume: VolumeSnapshot) -> FileStat:
@@ -190,17 +298,45 @@ def _to_stat(stat: os.stat_result, kind: EntryKind, volume: VolumeSnapshot) -> F
     )
 
 
-def _is_placeholder(stat: os.stat_result) -> bool:
-    attributes = _attributes(stat)
-    return bool(
-        attributes & FILE_ATTRIBUTE_REPARSE_POINT
-        and attributes
-        & (FILE_ATTRIBUTE_OFFLINE | FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS)
+def _same_logical_path(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
+        os.path.normpath(right)
     )
 
 
-def _is_reparse(stat: os.stat_result) -> bool:
-    return bool(_attributes(stat) & FILE_ATTRIBUTE_REPARSE_POINT or getattr(stat, "st_reparse_tag", 0))
+def _to_stat_or_warning(
+    stat: os.stat_result,
+    kind: EntryKind,
+    volume: VolumeSnapshot,
+    warnings: list[ScanWarning],
+    rel_path: str | None,
+) -> FileStat | None:
+    try:
+        return _to_stat(stat, kind, volume)
+    except ScalarDomainError as error:
+        warnings.append(
+            ScanWarning(
+                ScanWarningCode.SCALAR_UNREPRESENTABLE,
+                rel_path,
+                str(error),
+            )
+        )
+        return None
+
+
+def _scanner_root_error(error: RootAuthorityError) -> OSError:
+    if error.issue is RootAuthorityIssue.ANCHOR_CHANGED:
+        return OSError("location volume anchor changed after binding review")
+    if error.issue in {
+        RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+        RootAuthorityIssue.REPARSE_COMPONENT,
+        RootAuthorityIssue.NON_DIRECTORY_COMPONENT,
+    }:
+        return NotADirectoryError(
+            "location root chain contains a nonordinary directory: "
+            f"{error.logical_path}"
+        )
+    return OSError(logical_error_text(error))
 
 
 def _escaped_path(value: str) -> str:
@@ -226,34 +362,145 @@ class WalkingScanner:
         ignores: IgnoreSet,
         ctx: RunContext,
         scope: ScanScope | None = None,
+        *,
+        trusted_anchor: str | None = None,
+        population_admission: ScanPopulationAdmission | None = None,
     ) -> ScanResult:
-        requested_scope = scope or ScanScope.full()
+        if type(root) is not Root:
+            raise TypeError("scanner root requires Root")
+        root = Root(root.path, root.root_id)
+        if type(ignores) is not IgnoreSet:
+            raise TypeError("scanner ignores require IgnoreSet")
+        requested_scope = (
+            ScanScope.full()
+            if scope is None
+            else validate_scan_scope(scope)
+        )
+        if trusted_anchor is not None:
+            require_utf16_path(trusted_anchor, "trusted scanner anchor")
+            if not trusted_anchor:
+                raise ValueError("trusted scanner anchor is required")
         try:
-            resolved = self._backend.resolve_root(root.path)
+            if trusted_anchor is None:
+                resolved = self._backend.resolve_root(root.path)
+            else:
+                resolved = self._backend.resolve_root(
+                    root.path,
+                    trusted_anchor=trusted_anchor,
+                )
         except (OSError, PermissionError) as error:
-            return self._offline_result(root, ignores, requested_scope, error, ScanWarningCode.ROOT_UNAVAILABLE)
+            return self._offline_result(
+                root,
+                requested_scope,
+                error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+                population_admission=population_admission,
+            )
 
         resolved_root = Root(resolved, root.root_id)
         try:
-            volume = self._backend.volume_snapshot(resolved)
+            reviewed_anchor = self._reviewed_anchor(resolved, trusted_anchor)
+        except (OSError, PathValidationError) as error:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+                population_admission=population_admission,
+            )
+        root_error = self._root_error(resolved, reviewed_anchor)
+        if root_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                root_error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+                population_admission=population_admission,
+            )
+        try:
+            volume = validate_volume_snapshot(
+                self._backend.volume_snapshot(resolved)
+            )
         except (OSError, PermissionError) as error:
             return self._offline_result(
                 resolved_root,
-                ignores,
                 requested_scope,
                 error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
+                population_admission=population_admission,
             )
-
-        files: list[FileRecord] = []
-        directories: list[DirRecord] = []
-        unsupported: list[UnsupportedRecord] = []
-        warnings: list[ScanWarning] = []
-        complete = requested_scope.kind is ScanScopeKind.FULL
-
-        if requested_scope.kind is ScanScopeKind.PATHS:
-            self._scan_selected(
+        root_error = self._root_error(resolved, reviewed_anchor)
+        if root_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                root_error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+                population_admission=population_admission,
+            )
+        binding_error = self._binding_error(
+            resolved,
+            reviewed_anchor,
+            volume.volume_id,
+        )
+        if binding_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                binding_error,
+                ScanWarningCode.VOLUME_UNAVAILABLE,
+                population_admission=population_admission,
+            )
+        device_anchor = volume.evidence.device_id
+        # The reviewed mount may itself be a folder-volume reparse point. A
+        # caller-provided anchor alone is insufficient authority to follow it.
+        trusted_mount_root = (
+            resolved
+            if (
+                os.name == "nt"
+                and device_anchor is not None
+                and _same_logical_path(resolved, reviewed_anchor)
+                and _same_logical_path(resolved, device_anchor)
+            )
+            else None
+        )
+        authority = (
+            None
+            if requested_scope.kind is ScanScopeKind.FULL
+            else RootAuthority(
                 resolved,
+                reviewed_anchor,
+                volume.volume_id,
+            )
+        )
+
+        if population_admission is None:
+            files: list[FileRecord] = []
+            directories: list[DirRecord] = []
+            unsupported: list[UnsupportedRecord] = []
+            warnings: list[ScanWarning] = []
+        else:
+            collectors = _ScanCollectors(population_admission)
+            files = _ScanList(collectors, informational=False)
+            directories = _ScanList(collectors, informational=False)
+            unsupported = _ScanList(collectors, informational=False)
+            warnings = _ScanList(collectors, informational=True)
+        if requested_scope.kind is ScanScopeKind.FULL:
+            complete = self._scan_full(
+                volume,
+                ignores,
+                ctx,
+                files,
+                directories,
+                unsupported,
+                warnings,
+                starting_points=((resolved, ""),),
+                trusted_mount_root=trusted_mount_root,
+            )
+        elif requested_scope.kind is ScanScopeKind.PATHS:
+            assert authority is not None
+            complete = self._scan_selected(
+                authority,
                 volume,
                 ignores,
                 requested_scope,
@@ -263,10 +510,35 @@ class WalkingScanner:
                 unsupported,
                 warnings,
             )
-            complete = False
-        else:
-            complete = self._scan_full(
-                resolved,
+        elif requested_scope.kind is ScanScopeKind.SUBTREES:
+            assert authority is not None
+            selected_complete = self._scan_selected(
+                authority,
+                volume,
+                ignores,
+                requested_scope,
+                ctx,
+                files,
+                directories,
+                unsupported,
+                warnings,
+            )
+            scoped_complete = True
+            starting_points: list[tuple[str, str]] = []
+            for relative in requested_scope.subtree_roots:
+                ctx.checkpoint()
+                touch_leaf, subject_complete = self._admit_scoped_ancestors(
+                    authority,
+                    relative,
+                    unsupported,
+                    warnings,
+                )
+                scoped_complete = scoped_complete and subject_complete
+                if touch_leaf:
+                    starting_points.append(
+                        (join_under_root(resolved, relative), relative)
+                    )
+            recursive_complete = self._scan_full(
                 volume,
                 ignores,
                 ctx,
@@ -274,11 +546,41 @@ class WalkingScanner:
                 directories,
                 unsupported,
                 warnings,
+                starting_points=tuple(starting_points),
             )
+            complete = (
+                selected_complete
+                and scoped_complete
+                and recursive_complete
+            )
+        else:
+            raise ValueError(f"unsupported scan scope: {requested_scope.kind}")
 
         collision_complete = self._append_collision_warnings(files, directories, unsupported, warnings)
         self._append_identity_warnings(files, directories, warnings)
         complete = complete and collision_complete
+        root_error = self._root_error(resolved, reviewed_anchor)
+        if root_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                root_error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+                population_admission=population_admission,
+            )
+        binding_error = self._binding_error(
+            resolved,
+            reviewed_anchor,
+            volume.volume_id,
+        )
+        if binding_error is not None:
+            return self._offline_result(
+                resolved_root,
+                requested_scope,
+                binding_error,
+                ScanWarningCode.VOLUME_UNAVAILABLE,
+                population_admission=population_admission,
+            )
         return ScanResult(
             root=resolved_root,
             volume_id=volume.volume_id,
@@ -288,14 +590,12 @@ class WalkingScanner:
             directories=tuple(sorted(directories, key=lambda item: (item.rel_path_key, item.rel_path))),
             unsupported=tuple(sorted(unsupported, key=lambda item: (item.rel_path_key, item.rel_path))),
             warnings=tuple(sorted(warnings, key=self._warning_sort_key)),
-            ignore_snapshot=ignores,
             scope=requested_scope,
             complete=complete,
         )
 
     def _scan_full(
         self,
-        root: str,
         volume: VolumeSnapshot,
         ignores: IgnoreSet,
         ctx: RunContext,
@@ -303,20 +603,212 @@ class WalkingScanner:
         directories: list[DirRecord],
         unsupported: list[UnsupportedRecord],
         warnings: list[ScanWarning],
+        *,
+        starting_points: tuple[tuple[str, str], ...],
+        trusted_mount_root: str | None = None,
     ) -> bool:
-        try:
-            root_stat = self._backend.lstat(root)
-        except (OSError, PermissionError) as error:
-            warnings.append(ScanWarning(ScanWarningCode.ROOT_UNAVAILABLE, None, str(error)))
-            return False
-
-        root_snapshot = _to_stat(root_stat, EntryKind.DIRECTORY, volume)
-        directories.append(
-            DirRecord("", "", root_snapshot.mtime_ns, root_snapshot.metadata, root_snapshot.file_identity, root_snapshot.nlink)
-        )
-        visited = {root_snapshot.file_identity} if root_snapshot.file_identity is not None else set()
-        pending: list[tuple[str, str]] = [(root, "")]
+        visited: set[FileIdentity] = set()
+        pending: list[tuple[str, str]] = []
         complete = True
+        for absolute_start, relative_start in starting_points:
+            ctx.checkpoint()
+            try:
+                root_stat = self._backend.lstat(absolute_start)
+                if (
+                    not relative_start
+                    and trusted_mount_root is not None
+                    and _same_logical_path(
+                        absolute_start,
+                        trusted_mount_root,
+                    )
+                    and is_directory_stat(root_stat)
+                    and is_reparse_stat(root_stat)
+                    and not is_placeholder_stat(root_stat)
+                ):
+                    # Record the mounted root, not the hosting reparse entry.
+                    root_stat = self._backend.stat(absolute_start)
+            except FileNotFoundError as error:
+                if relative_start:
+                    warnings.append(
+                        ScanWarning(
+                            ScanWarningCode.DISAPPEARED,
+                            relative_start,
+                            logical_error_text(error),
+                        )
+                    )
+                else:
+                    warnings.append(
+                        ScanWarning(
+                            ScanWarningCode.ROOT_UNAVAILABLE,
+                            None,
+                            logical_error_text(error),
+                        )
+                    )
+                    complete = False
+                continue
+            except (OSError, PermissionError) as error:
+                warnings.append(
+                    ScanWarning(
+                        ScanWarningCode.ROOT_UNAVAILABLE,
+                        relative_start or None,
+                        logical_error_text(error),
+                    )
+                )
+                complete = False
+                continue
+
+            if not relative_start:
+                if (
+                    not is_directory_stat(root_stat)
+                    or is_placeholder_stat(root_stat)
+                    or is_reparse_stat(root_stat)
+                ):
+                    warnings.append(
+                        ScanWarning(
+                            ScanWarningCode.ROOT_UNAVAILABLE,
+                            None,
+                            "location root is not an ordinary directory",
+                        )
+                    )
+                    complete = False
+                    continue
+                root_snapshot = _to_stat_or_warning(
+                    root_stat,
+                    EntryKind.DIRECTORY,
+                    volume,
+                    warnings,
+                    None,
+                )
+                if root_snapshot is None:
+                    complete = False
+                    continue
+                directories.append(
+                    DirRecord(
+                        "",
+                        "",
+                        root_snapshot.mtime_ns,
+                        root_snapshot.metadata,
+                        root_snapshot.file_identity,
+                        root_snapshot.nlink,
+                    )
+                )
+                if root_snapshot.file_identity is not None:
+                    visited.add(root_snapshot.file_identity)
+                pending.append((absolute_start, ""))
+                continue
+
+            is_directory = is_directory_stat(root_stat)
+            if is_placeholder_stat(root_stat):
+                kind = (
+                    EntryKind.DIRECTORY if is_directory else EntryKind.FILE
+                )
+                unsupported.append(
+                    _unsupported_observation(
+                        relative_start,
+                        UnsupportedReason.PLACEHOLDER,
+                        root_stat,
+                        kind,
+                    )
+                )
+                warnings.append(
+                    ScanWarning(ScanWarningCode.PLACEHOLDER, relative_start)
+                )
+                if is_directory:
+                    complete = False
+                continue
+            if is_reparse_stat(root_stat):
+                kind = (
+                    EntryKind.DIRECTORY if is_directory else EntryKind.FILE
+                )
+                unsupported.append(
+                    _unsupported_observation(
+                        relative_start,
+                        UnsupportedReason.REPARSE_POINT,
+                        root_stat,
+                        kind,
+                    )
+                )
+                warnings.append(
+                    ScanWarning(ScanWarningCode.REPARSE_POINT, relative_start)
+                )
+                if is_directory:
+                    complete = False
+                continue
+            if is_directory:
+                root_snapshot = _to_stat_or_warning(
+                    root_stat,
+                    EntryKind.DIRECTORY,
+                    volume,
+                    warnings,
+                    relative_start,
+                )
+                if root_snapshot is None:
+                    complete = False
+                    continue
+                directories.append(
+                    DirRecord(
+                        relative_start,
+                        normalize_relative_path(
+                            relative_start, allow_root=True
+                        ),
+                        root_snapshot.mtime_ns,
+                        root_snapshot.metadata,
+                        root_snapshot.file_identity,
+                        root_snapshot.nlink,
+                    )
+                )
+                if (
+                    root_snapshot.file_identity is not None
+                    and root_snapshot.file_identity in visited
+                ):
+                    warnings.append(
+                        ScanWarning(
+                            ScanWarningCode.DUPLICATE_IDENTITY,
+                            relative_start,
+                            "directory identity already visited",
+                        )
+                    )
+                    complete = False
+                    continue
+                if root_snapshot.file_identity is not None:
+                    visited.add(root_snapshot.file_identity)
+                pending.append((absolute_start, relative_start))
+                continue
+            if stat_module.S_ISREG(root_stat.st_mode):
+                root_snapshot = _to_stat_or_warning(
+                    root_stat,
+                    EntryKind.FILE,
+                    volume,
+                    warnings,
+                    relative_start,
+                )
+                if root_snapshot is None:
+                    complete = False
+                    continue
+                files.append(
+                    FileRecord(
+                        relative_start,
+                        normalize_relative_path(relative_start),
+                        root_snapshot.size,
+                        root_snapshot.mtime_ns,
+                        root_snapshot.file_identity,
+                        root_snapshot.nlink,
+                        root_snapshot.metadata,
+                    )
+                )
+                continue
+            unsupported.append(
+                _unsupported_observation(
+                    relative_start,
+                    UnsupportedReason.UNKNOWN_TYPE,
+                    root_stat,
+                    None,
+                )
+            )
+            warnings.append(
+                ScanWarning(ScanWarningCode.UNKNOWN_TYPE, relative_start)
+            )
+            complete = False
 
         while pending:
             absolute_directory, relative_directory = pending.pop()
@@ -334,7 +826,13 @@ class WalkingScanner:
             except (OSError, PermissionError) as error:
                 enumeration_error = error
             if enumeration_error is not None:
-                warnings.append(ScanWarning(ScanWarningCode.ENUMERATION_ERROR, relative_directory, str(enumeration_error)))
+                warnings.append(
+                    ScanWarning(
+                        ScanWarningCode.ENUMERATION_ERROR,
+                        relative_directory,
+                        logical_error_text(enumeration_error),
+                    )
+                )
                 complete = False
             ordered.sort(key=_entry_sort_key)
 
@@ -357,15 +855,35 @@ class WalkingScanner:
                 try:
                     is_directory = entry.is_dir(follow_symlinks=False)
                 except (OSError, PermissionError) as error:
-                    warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
+                    warnings.append(
+                        ScanWarning(
+                            self._error_code(error),
+                            rel_path,
+                            logical_error_text(error),
+                        )
+                    )
                     unsupported.append(
                         UnsupportedRecord(rel_path, normalize_relative_path(rel_path), self._unsupported_error(error))
                     )
                     complete = False
                     continue
-                if ignores.excludes(rel_path, is_directory=is_directory):
+                provisionally_ignored = ignores.excludes(
+                    rel_path, is_directory=is_directory
+                )
+                needs_directory_confirmation = (
+                    provisionally_ignored
+                    and not is_directory
+                    and not ignores.excludes(
+                        rel_path, is_directory=True
+                    )
+                )
+                if (
+                    provisionally_ignored
+                    and not needs_directory_confirmation
+                ):
                     continue
 
+                stat = None
                 try:
                     stat = entry.stat(follow_symlinks=False)
                     if (
@@ -374,31 +892,52 @@ class WalkingScanner:
                     ):
                         stat = self._backend.lstat(entry.path)
                 except (OSError, PermissionError) as error:
-                    warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
-                    unsupported.append(
-                        UnsupportedRecord(
+                    warnings.append(
+                        ScanWarning(
+                            self._error_code(error),
+                            rel_path,
+                            logical_error_text(error),
+                        )
+                    )
+                    if stat is None:
+                        record = UnsupportedRecord(
                             rel_path,
                             normalize_relative_path(rel_path),
                             self._unsupported_error(error),
                             EntryKind.DIRECTORY if is_directory else None,
                         )
-                    )
+                    else:
+                        kind = EntryKind.DIRECTORY if is_directory or is_directory_stat(stat) else (
+                            EntryKind.FILE if stat_module.S_ISREG(stat.st_mode) else None
+                        )
+                        record = _unsupported_observation(
+                            rel_path, self._unsupported_error(error), stat, kind,
+                        )
+                    unsupported.append(record)
                     complete = False
                     continue
 
-                if _is_placeholder(stat):
+                is_directory = is_directory or is_directory_stat(stat)
+                if (
+                    provisionally_ignored
+                    and ignores.excludes(
+                        rel_path, is_directory=is_directory
+                    )
+                ):
+                    continue
+                if is_placeholder_stat(stat):
                     kind = EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                     unsupported.append(
-                        UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.PLACEHOLDER, kind)
+                        _unsupported_observation(rel_path, UnsupportedReason.PLACEHOLDER, stat, kind)
                     )
                     warnings.append(ScanWarning(ScanWarningCode.PLACEHOLDER, rel_path))
                     if is_directory:
                         complete = False
                     continue
-                if _is_reparse(stat):
+                if is_reparse_stat(stat):
                     kind = EntryKind.DIRECTORY if is_directory else EntryKind.FILE
                     unsupported.append(
-                        UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.REPARSE_POINT, kind)
+                        _unsupported_observation(rel_path, UnsupportedReason.REPARSE_POINT, stat, kind)
                     )
                     warnings.append(ScanWarning(ScanWarningCode.REPARSE_POINT, rel_path))
                     if is_directory:
@@ -406,7 +945,16 @@ class WalkingScanner:
                     continue
 
                 if is_directory:
-                    snapshot = _to_stat(stat, EntryKind.DIRECTORY, volume)
+                    snapshot = _to_stat_or_warning(
+                        stat,
+                        EntryKind.DIRECTORY,
+                        volume,
+                        warnings,
+                        rel_path,
+                    )
+                    if snapshot is None:
+                        complete = False
+                        continue
                     directories.append(
                         DirRecord(
                             rel_path,
@@ -431,10 +979,25 @@ class WalkingScanner:
                 try:
                     is_file = entry.is_file(follow_symlinks=False)
                 except (OSError, PermissionError) as error:
-                    warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
+                    warnings.append(
+                        ScanWarning(
+                            self._error_code(error),
+                            rel_path,
+                            logical_error_text(error),
+                        )
+                    )
                     is_file = False
                 if is_file:
-                    snapshot = _to_stat(stat, EntryKind.FILE, volume)
+                    snapshot = _to_stat_or_warning(
+                        stat,
+                        EntryKind.FILE,
+                        volume,
+                        warnings,
+                        rel_path,
+                    )
+                    if snapshot is None:
+                        complete = False
+                        continue
                     files.append(
                         FileRecord(
                             rel_path,
@@ -448,7 +1011,7 @@ class WalkingScanner:
                     )
                 else:
                     unsupported.append(
-                        UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.UNKNOWN_TYPE)
+                        _unsupported_observation(rel_path, UnsupportedReason.UNKNOWN_TYPE, stat, None)
                     )
                     warnings.append(ScanWarning(ScanWarningCode.UNKNOWN_TYPE, rel_path))
                     complete = False
@@ -458,7 +1021,7 @@ class WalkingScanner:
 
     def _scan_selected(
         self,
-        root: str,
+        authority: RootAuthority,
         volume: VolumeSnapshot,
         ignores: IgnoreSet,
         scope: ScanScope,
@@ -467,41 +1030,166 @@ class WalkingScanner:
         directories: list[DirRecord],
         unsupported: list[UnsupportedRecord],
         warnings: list[ScanWarning],
-    ) -> None:
+    ) -> bool:
+        complete = True
         for rel_path in scope.selected_paths:
             ctx.checkpoint()
-            absolute = join_under_root(root, rel_path)
+            touch_leaf, subject_complete = self._admit_scoped_ancestors(
+                authority,
+                rel_path,
+                unsupported,
+                warnings,
+            )
+            complete = complete and subject_complete
+            if not touch_leaf:
+                continue
+            ctx.checkpoint()
+            absolute = join_under_root(authority.logical_root, rel_path)
             try:
                 stat = self._backend.lstat(absolute)
+            except FileNotFoundError as error:
+                warnings.append(
+                    ScanWarning(
+                        ScanWarningCode.DISAPPEARED,
+                        rel_path,
+                        logical_error_text(error),
+                    )
+                )
+                continue
             except (OSError, PermissionError) as error:
-                warnings.append(ScanWarning(self._error_code(error), rel_path, str(error)))
+                warnings.append(
+                    ScanWarning(
+                        self._error_code(error),
+                        rel_path,
+                        logical_error_text(error),
+                    )
+                )
                 unsupported.append(
                     UnsupportedRecord(rel_path, normalize_relative_path(rel_path), self._unsupported_error(error))
                 )
+                complete = False
                 continue
-            is_directory = stat_module.S_ISDIR(stat.st_mode) and not _is_reparse(stat)
+            is_directory = (
+                stat_module.S_ISDIR(stat.st_mode)
+                and not is_reparse_stat(stat)
+            )
             if ignores.excludes(rel_path, is_directory=is_directory):
+                complete = False
                 continue
-            if _is_placeholder(stat):
+            if is_placeholder_stat(stat):
                 unsupported.append(
-                    UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.PLACEHOLDER)
+                    _unsupported_observation(
+                        rel_path, UnsupportedReason.PLACEHOLDER, stat,
+                        EntryKind.DIRECTORY if is_directory_stat(stat) else EntryKind.FILE,
+                    )
                 )
                 warnings.append(ScanWarning(ScanWarningCode.PLACEHOLDER, rel_path))
-            elif _is_reparse(stat):
+            elif is_reparse_stat(stat):
                 unsupported.append(
-                    UnsupportedRecord(rel_path, normalize_relative_path(rel_path), UnsupportedReason.REPARSE_POINT)
+                    _unsupported_observation(
+                        rel_path, UnsupportedReason.REPARSE_POINT, stat,
+                        EntryKind.DIRECTORY if is_directory_stat(stat) else EntryKind.FILE,
+                    )
                 )
                 warnings.append(ScanWarning(ScanWarningCode.REPARSE_POINT, rel_path))
             elif is_directory:
-                snapshot = _to_stat(stat, EntryKind.DIRECTORY, volume)
+                snapshot = _to_stat_or_warning(
+                    stat,
+                    EntryKind.DIRECTORY,
+                    volume,
+                    warnings,
+                    rel_path,
+                )
+                if snapshot is None:
+                    complete = False
+                    continue
                 directories.append(
                     DirRecord(rel_path, normalize_relative_path(rel_path), snapshot.mtime_ns, snapshot.metadata, snapshot.file_identity, snapshot.nlink)
                 )
-            else:
-                snapshot = _to_stat(stat, EntryKind.FILE, volume)
+            elif stat_module.S_ISREG(stat.st_mode):
+                snapshot = _to_stat_or_warning(
+                    stat,
+                    EntryKind.FILE,
+                    volume,
+                    warnings,
+                    rel_path,
+                )
+                if snapshot is None:
+                    complete = False
+                    continue
                 files.append(
                     FileRecord(rel_path, normalize_relative_path(rel_path), snapshot.size, snapshot.mtime_ns, snapshot.file_identity, snapshot.nlink, snapshot.metadata)
                 )
+            else:
+                unsupported.append(
+                    _unsupported_observation(
+                        rel_path,
+                        UnsupportedReason.UNKNOWN_TYPE,
+                        stat,
+                        None,
+                    )
+                )
+                warnings.append(ScanWarning(ScanWarningCode.UNKNOWN_TYPE, rel_path))
+        return complete
+
+    def _admit_scoped_ancestors(
+        self,
+        authority: RootAuthority,
+        rel_path: str,
+        unsupported: list[UnsupportedRecord],
+        warnings: list[ScanWarning],
+    ) -> tuple[bool, bool]:
+        """Admit ancestors while leaving final-subject policy to the scanner."""
+
+        try:
+            ancestors_present = admit_existing_relative_chain(
+                authority,
+                rel_path,
+                lstat=self._backend.lstat,
+                include_leaf=False,
+            )
+        except RootAuthorityError as error:
+            if error.issue is RootAuthorityIssue.PLACEHOLDER_COMPONENT:
+                code = ScanWarningCode.PLACEHOLDER
+                reason = UnsupportedReason.PLACEHOLDER
+            elif error.issue is RootAuthorityIssue.REPARSE_COMPONENT:
+                code = ScanWarningCode.REPARSE_POINT
+                reason = UnsupportedReason.REPARSE_POINT
+            elif error.issue is RootAuthorityIssue.NON_DIRECTORY_COMPONENT:
+                code = ScanWarningCode.UNKNOWN_TYPE
+                reason = UnsupportedReason.UNKNOWN_TYPE
+            elif error.issue is RootAuthorityIssue.COMPONENT_UNAVAILABLE:
+                cause = error.__cause__
+                observed_error = (
+                    cause if isinstance(cause, OSError) else error
+                )
+                code = self._error_code(observed_error)
+                reason = self._unsupported_error(observed_error)
+            else:
+                raise RuntimeError(
+                    "relative admission returned a root-level authority issue"
+                ) from error
+            unsupported.append(
+                UnsupportedRecord(
+                    rel_path,
+                    normalize_relative_path(rel_path),
+                    reason,
+                )
+            )
+            warnings.append(
+                ScanWarning(code, rel_path, logical_error_text(error))
+            )
+            return False, False
+        if not ancestors_present:
+            warnings.append(
+                ScanWarning(
+                    ScanWarningCode.DISAPPEARED,
+                    rel_path,
+                    "an intermediate path component is absent",
+                )
+            )
+            return False, True
+        return True, True
 
     @staticmethod
     def _error_code(error: OSError) -> ScanWarningCode:
@@ -519,6 +1207,71 @@ class WalkingScanner:
             return UnsupportedReason.DISAPPEARED
         return UnsupportedReason.UNKNOWN_TYPE
 
+    def _root_error(
+        self, path: str, trusted_anchor: str | None
+    ) -> OSError | None:
+        anchor_provider = getattr(self._backend, "trusted_anchor", None)
+        find_anchor = (
+            (lambda _path: trusted_anchor)
+            if trusted_anchor is not None
+            else (
+                anchor_provider
+                if callable(anchor_provider)
+                else (lambda _path: Path(path).anchor)
+            )
+        )
+        try:
+            admit_root_chain(
+                RootAuthority(path, trusted_anchor),
+                lstat=self._backend.lstat,
+                anchor_probe=find_anchor,
+            )
+        except RootAuthorityError as error:
+            return _scanner_root_error(error)
+        except (OSError, PathValidationError) as error:
+            return error
+        return None
+
+    def _reviewed_anchor(
+        self,
+        path: str,
+        trusted_anchor: str | None,
+    ) -> str:
+        if trusted_anchor is not None:
+            return lexical_absolute_path(trusted_anchor)
+        anchor_provider = getattr(self._backend, "trusted_anchor", None)
+        if callable(anchor_provider):
+            return lexical_absolute_path(anchor_provider(path))
+        return lexical_absolute_path(Path(path).anchor)
+
+    def _binding_error(
+        self,
+        path: str,
+        reviewed_anchor: str,
+        expected_volume: VolumeId,
+    ) -> OSError | None:
+        anchor_provider = getattr(self._backend, "trusted_anchor", None)
+        if callable(anchor_provider):
+            try:
+                current_anchor = lexical_absolute_path(anchor_provider(path))
+            except (OSError, PathValidationError) as error:
+                return error
+            if not _same_logical_path(current_anchor, reviewed_anchor):
+                return OSError(
+                    "location volume anchor changed after binding review"
+                )
+        try:
+            current_volume = validate_volume_snapshot(
+                self._backend.volume_snapshot(path)
+            )
+        except (OSError, PermissionError) as error:
+            return error
+        if current_volume.volume_id != expected_volume:
+            return OSError(
+                "location volume identity changed during inventory scan"
+            )
+        return None
+
     @staticmethod
     def _append_collision_warnings(
         files: list[FileRecord],
@@ -527,7 +1280,7 @@ class WalkingScanner:
         warnings: list[ScanWarning],
     ) -> bool:
         grouped: dict[str, list[str]] = {}
-        for record in (*files, *directories, *unsupported):
+        for record in chain(files, directories, unsupported):
             if record.rel_path == "":
                 continue
             grouped.setdefault(record.rel_path_key, []).append(record.rel_path)
@@ -536,7 +1289,11 @@ class WalkingScanner:
             distinct = sorted(set(paths))
             if len(distinct) > 1:
                 warnings.append(
-                    ScanWarning(ScanWarningCode.CASE_COLLISION, distinct[0], " | ".join(distinct))
+                    ScanWarning(
+                        ScanWarningCode.CASE_COLLISION,
+                        distinct[0],
+                        " | ".join(distinct),
+                    )
                 )
                 complete = False
         return complete
@@ -546,7 +1303,7 @@ class WalkingScanner:
         files: list[FileRecord], directories: list[DirRecord], warnings: list[ScanWarning]
     ) -> None:
         grouped: dict[FileIdentity, list[str]] = {}
-        for record in (*files, *directories):
+        for record in chain(files, directories):
             if record.file_identity is not None:
                 grouped.setdefault(record.file_identity, []).append(record.rel_path)
             if isinstance(record, FileRecord) and record.nlink > 1:
@@ -555,7 +1312,11 @@ class WalkingScanner:
             if len(paths) > 1:
                 ordered = sorted(paths)
                 warnings.append(
-                    ScanWarning(ScanWarningCode.DUPLICATE_IDENTITY, ordered[0], " | ".join(ordered))
+                    ScanWarning(
+                        ScanWarningCode.DUPLICATE_IDENTITY,
+                        ordered[0],
+                        " | ".join(ordered),
+                    )
                 )
 
     @staticmethod
@@ -566,11 +1327,14 @@ class WalkingScanner:
     @staticmethod
     def _offline_result(
         root: Root,
-        ignores: IgnoreSet,
         scope: ScanScope,
         error: OSError,
         code: ScanWarningCode,
+        *,
+        population_admission: ScanPopulationAdmission | None = None,
     ) -> ScanResult:
+        if population_admission is not None:
+            population_admission.require_informational_source_rows(1)
         return ScanResult(
             root=root,
             volume_id=None,
@@ -579,8 +1343,7 @@ class WalkingScanner:
             files=(),
             directories=(),
             unsupported=(),
-            warnings=(ScanWarning(code, None, str(error)),),
-            ignore_snapshot=ignores,
+            warnings=(ScanWarning(code, None, logical_error_text(error)),),
             scope=scope,
             complete=False,
         )
@@ -591,5 +1354,15 @@ def scan(
     ignores: IgnoreSet,
     ctx: RunContext,
     scope: ScanScope | None = None,
+    *,
+    trusted_anchor: str | None = None,
+    population_admission: ScanPopulationAdmission | None = None,
 ) -> ScanResult:
-    return WalkingScanner().scan(root, ignores, ctx, scope)
+    return WalkingScanner().scan(
+        root,
+        ignores,
+        ctx,
+        scope,
+        trusted_anchor=trusted_anchor,
+        population_admission=population_admission,
+    )

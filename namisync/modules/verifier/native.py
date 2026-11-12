@@ -1,0 +1,566 @@
+"""Windows cache-honest verifier reader and native root adaptation."""
+
+from __future__ import annotations
+
+import ctypes
+import ntpath
+import os
+from ctypes import wintypes
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass
+from pathlib import Path, PureWindowsPath
+from typing import Iterator
+
+from namisync.core.file_identity import file_identity_from_windows_handle
+from namisync.core.integrity import (
+    MAX_VERIFIER_CHUNK_SIZE,
+    ReadStrategy,
+    UnsupportedVerification,
+)
+from namisync.core.models import EntryKind, FileStat, MetadataSnapshot
+from namisync.core.pathing import (
+    lexical_absolute_path,
+    logical_error_text,
+    to_extended_length_path,
+    validate_relative_path,
+)
+from namisync.core.root_authority import (
+    NativeVolumeInfo,
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+    RootHold,
+    admit_root_chain,
+    hold_root,
+    is_reparse_stat,
+)
+
+
+_FILE_ATTRIBUTE_DIRECTORY = 0x00000010
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
+_GENERIC_READ = 0x80000000
+_FILE_SHARE_READ = 0x00000001
+_FILE_SHARE_WRITE = 0x00000002
+_FILE_SHARE_DELETE = 0x00000004
+_OPEN_EXISTING = 3
+_FILE_FLAG_NO_BUFFERING = 0x20000000
+_FILE_FLAG_SEQUENTIAL_SCAN = 0x08000000
+_FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+_FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
+_MEM_COMMIT = 0x00001000
+_MEM_RESERVE = 0x00002000
+_MEM_RELEASE = 0x00008000
+_PAGE_READWRITE = 0x04
+_ERROR_FILE_NOT_FOUND = 2
+_ERROR_PATH_NOT_FOUND = 3
+_ERROR_ACCESS_DENIED = 5
+_ERROR_INVALID_PARAMETER = 87
+_WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
+_FILE_BASIC_INFO_CLASS = 0
+_FILE_STANDARD_INFO_CLASS = 1
+_FILE_STORAGE_INFO_CLASS = 16
+
+
+@dataclass(slots=True)
+class _VerificationInvocation:
+    native_reader: WindowsUnbufferedReader
+    dispatched_reader: object
+    authority: RootAuthority
+    hold: RootHold
+    active: bool = True
+    admitted: NativeVolumeInfo | None = None
+
+    def matches_engine(self, reader: object, authority: RootAuthority) -> bool:
+        return (
+            _ROOT_INVOCATION.get() is self and self.active
+            and self.dispatched_reader is reader and self.authority is authority
+        )
+
+    def matches_native(self, reader: object, authority: RootAuthority) -> bool:
+        return (
+            _ROOT_INVOCATION.get() is self and self.active
+            and self.native_reader is reader and self.authority is authority
+        )
+
+
+_ROOT_INVOCATION: ContextVar[_VerificationInvocation | None] = ContextVar(
+    "verifier_root_invocation", default=None
+)
+
+
+class WindowsUnbufferedReader:
+    """Read one Windows file through ``FILE_FLAG_NO_BUFFERING``.
+
+    There is deliberately no buffered fallback.  A filesystem, subject, or
+    alignment condition that cannot honor the declared strategy produces
+    ``UnsupportedVerification`` and can never be rendered as verified.
+    """
+
+    def __init__(self, root_authority: RootAuthority | None = None) -> None:
+        self._root_authority = root_authority
+
+    @contextmanager
+    def root_scope(
+        self,
+        authority: RootAuthority,
+        *,
+        invocation_owner: object,
+    ) -> Iterator[_VerificationInvocation]:
+        with hold_root(authority) as hold:
+            invocation = _VerificationInvocation(self, invocation_owner, authority, hold)
+            token = _ROOT_INVOCATION.set(invocation)
+            try:
+                yield invocation
+            finally:
+                invocation.active = False
+                invocation.admitted = None
+                _ROOT_INVOCATION.reset(token)
+
+    @contextmanager
+    def open(self, root: Path, relative_path: str) -> Iterator[_WindowsStream]:
+        with self._open_bound(
+            relative_path,
+            self._root_authority,
+            selected_root=root,
+        ) as stream:
+            yield stream
+
+    @contextmanager
+    def open_with_authority(
+        self,
+        relative_path: str,
+        authority: RootAuthority,
+    ) -> Iterator[_WindowsStream]:
+        with self._open_bound(relative_path, authority) as stream:
+            yield stream
+
+    @contextmanager
+    def _open_bound(
+        self,
+        relative_path: str,
+        root_authority: RootAuthority | None,
+        *,
+        selected_root: Path | None = None,
+    ) -> Iterator[_WindowsStream]:
+        if os.name != "nt":
+            raise UnsupportedVerification(
+                "cache-honest verification is implemented only for Windows"
+            )
+
+        normalized = validate_relative_path(relative_path)
+        if selected_root is None:
+            if root_authority is None:  # internal contract; defensive only
+                raise TypeError("authority-bound open requires root authority")
+            logical_root: str | Path = root_authority.logical_root
+        else:
+            logical_root = selected_root
+        root_path = Path(lexical_absolute_path(logical_root))
+        authority = root_authority or RootAuthority(str(root_path))
+        if selected_root is not None and not _same_logical_path(
+            str(root_path), authority.logical_root
+        ):
+            raise UnsupportedVerification(
+                "verification selection root does not match its reviewed root"
+            )
+        candidate = root_path.joinpath(*PureWindowsPath(normalized).parts)
+        invocation = _ROOT_INVOCATION.get()
+        if (
+            type(invocation) is _VerificationInvocation
+            and invocation.matches_native(self, authority)
+            and invocation.admitted is not None
+            and invocation.hold.confirm()
+        ):
+            _reject_reparse_components(authority, normalized, root_hold=invocation.hold)
+        else:
+            _reject_reparse_components(authority, normalized)
+
+        api = _WindowsApi()
+        try:
+            handle = api.open_file(candidate)
+        except OSError:
+            api.sector_size(candidate)  # preserve geometry-refusal precedence
+            raise
+        try:
+            sector_size = api.sector_size_from_handle(handle, candidate)
+            api.require_expected_final_path(root_path, normalized, handle)
+            stream = _WindowsStream(api, handle, sector_size)
+            stream.stat()  # reject directories/reparse points before yielding
+            yield stream
+        finally:
+            api.close(handle)
+
+
+def _reject_reparse_components(
+    authority: RootAuthority,
+    normalized_path: str,
+    *,
+    root_hold: RootHold | None = None,
+) -> None:
+    try:
+        if root_hold is not None:
+            root_hold.require_ordinary()
+        else:
+            admit_root_chain(
+                authority,
+                lstat=_verification_lstat,
+            )
+    except RootAuthorityError as error:
+        _raise_verification_root_admission(error)
+
+    current = Path(authority.logical_root)
+    for component in PureWindowsPath(normalized_path).parts:
+        current = current / component
+        observed = _verification_lstat(str(current))
+        if is_reparse_stat(observed):
+            raise UnsupportedVerification(
+                f"verification refuses reparse component: {component}"
+            )
+
+
+def _verification_lstat(path: str) -> os.stat_result:
+    return os.lstat(to_extended_length_path(path))
+
+
+def _raise_verification_root_admission(error: RootAuthorityError) -> None:
+    if error.issue is RootAuthorityIssue.COMPONENT_UNAVAILABLE:
+        cause = error.__cause__
+        if isinstance(cause, OSError):
+            raise cause from error
+    if error.issue in {
+        RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+        RootAuthorityIssue.REPARSE_COMPONENT,
+    }:
+        raise UnsupportedVerification(
+            "verification refuses a reparse location root chain"
+        ) from error
+    if error.issue is RootAuthorityIssue.NON_DIRECTORY_COMPONENT:
+        raise UnsupportedVerification(
+            "verification location root chain is not an ordinary directory"
+        ) from error
+    raise UnsupportedVerification(logical_error_text(error)) from error
+
+
+def _same_logical_path(left: str, right: str) -> bool:
+    return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
+        os.path.normpath(right)
+    )
+
+
+class _FileBasicInfo(ctypes.Structure):
+    _fields_ = [
+        ("CreationTime", ctypes.c_longlong),
+        ("LastAccessTime", ctypes.c_longlong),
+        ("LastWriteTime", ctypes.c_longlong),
+        ("ChangeTime", ctypes.c_longlong),
+        ("FileAttributes", ctypes.c_uint32),
+    ]
+
+
+class _FileStandardInfo(ctypes.Structure):
+    _fields_ = [
+        ("AllocationSize", ctypes.c_longlong),
+        ("EndOfFile", ctypes.c_longlong),
+        ("NumberOfLinks", ctypes.c_uint32),
+        ("DeletePending", ctypes.c_ubyte),
+        ("Directory", ctypes.c_ubyte),
+    ]
+
+
+class _FileStorageInfo(ctypes.Structure):
+    _fields_ = [
+        ("LogicalBytesPerSector", ctypes.c_uint32),
+        ("PhysicalBytesPerSectorForAtomicity", ctypes.c_uint32),
+        ("PhysicalBytesPerSectorForPerformance", ctypes.c_uint32),
+        ("FileSystemEffectivePhysicalBytesPerSectorForAtomicity", ctypes.c_uint32),
+        ("Flags", ctypes.c_uint32),
+        ("ByteOffsetForSectorAlignment", ctypes.c_uint32),
+        ("ByteOffsetForPartitionAlignment", ctypes.c_uint32),
+    ]
+
+
+class _WindowsApi:
+    def __init__(self) -> None:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        self._kernel32 = kernel32
+        self._configure_signatures()
+
+    def _configure_signatures(self) -> None:
+        k32 = self._kernel32
+        k32.CreateFileW.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+        ]
+        k32.CreateFileW.restype = ctypes.c_void_p
+        k32.CloseHandle.argtypes = [ctypes.c_void_p]
+        k32.CloseHandle.restype = ctypes.c_int
+        k32.GetFileInformationByHandleEx.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+        ]
+        k32.GetFileInformationByHandleEx.restype = ctypes.c_int
+        k32.ReadFile.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.c_void_p,
+        ]
+        k32.ReadFile.restype = ctypes.c_int
+        k32.VirtualAlloc.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_size_t,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+        ]
+        k32.VirtualAlloc.restype = ctypes.c_void_p
+        k32.VirtualFree.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_uint32]
+        k32.VirtualFree.restype = ctypes.c_int
+        k32.GetFinalPathNameByHandleW.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+        ]
+        k32.GetFinalPathNameByHandleW.restype = ctypes.c_uint32
+        k32.GetVolumePathNameW.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+        ]
+        k32.GetVolumePathNameW.restype = ctypes.c_int
+        k32.GetDiskFreeSpaceW.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.POINTER(ctypes.c_uint32),
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
+        k32.GetDiskFreeSpaceW.restype = ctypes.c_int
+
+    def open_file(self, path: Path) -> int:
+        handle = self._kernel32.CreateFileW(
+            _extended_path(path),
+            _GENERIC_READ,
+            # Keep the attested path bound to this subject for the whole read.
+            # Existing or new writers/deleters must not be able to replace the
+            # selected name while this handle still refers to the old file.
+            _FILE_SHARE_READ,
+            None,
+            _OPEN_EXISTING,
+            _FILE_FLAG_NO_BUFFERING
+            | _FILE_FLAG_SEQUENTIAL_SCAN
+            | _FILE_FLAG_OPEN_REPARSE_POINT,
+            None,
+        )
+        if handle == ctypes.c_void_p(-1).value:
+            self._raise_open_error(path)
+        return handle
+
+    def open_directory(self, path: Path) -> int:
+        handle = self._kernel32.CreateFileW(
+            _extended_path(path),
+            0,
+            _FILE_SHARE_READ | _FILE_SHARE_WRITE | _FILE_SHARE_DELETE,
+            None,
+            _OPEN_EXISTING,
+            _FILE_FLAG_BACKUP_SEMANTICS,
+            None,
+        )
+        if handle == ctypes.c_void_p(-1).value:
+            self._raise_open_error(path)
+        return handle
+
+    def _raise_open_error(self, path: Path) -> None:
+        error = ctypes.get_last_error()
+        if error in (_ERROR_FILE_NOT_FOUND, _ERROR_PATH_NOT_FOUND):
+            raise FileNotFoundError(error, os.strerror(error), str(path))
+        if error == _ERROR_ACCESS_DENIED:
+            raise PermissionError(error, os.strerror(error), str(path))
+        raise OSError(error, os.strerror(error), str(path))
+
+    def close(self, handle: int) -> None:
+        self._kernel32.CloseHandle(handle)
+
+    def stat(self, handle: int) -> FileStat:
+        basic = _FileBasicInfo()
+        self._get_file_information(handle, _FILE_BASIC_INFO_CLASS, basic)
+        standard = _FileStandardInfo()
+        self._get_file_information(handle, _FILE_STANDARD_INFO_CLASS, standard)
+        if basic.FileAttributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+            raise UnsupportedVerification("verification refuses a reparse subject")
+        if basic.FileAttributes & _FILE_ATTRIBUTE_DIRECTORY:
+            raise UnsupportedVerification("verification selections must name files")
+
+        identity = file_identity_from_windows_handle(
+            handle,
+            self._kernel32.GetFileInformationByHandleEx,
+        )
+        return FileStat(
+            kind=EntryKind.FILE,
+            size=standard.EndOfFile,
+            mtime_ns=_filetime_to_unix_ns(basic.LastWriteTime),
+            file_identity=identity,
+            nlink=standard.NumberOfLinks,
+            metadata=MetadataSnapshot(
+                attributes=basic.FileAttributes,
+                created_ns=_filetime_to_unix_ns(basic.CreationTime),
+            ),
+        )
+
+    def _get_file_information(
+        self,
+        handle: int,
+        information_class: int,
+        target: ctypes.Structure,
+    ) -> None:
+        if not self._kernel32.GetFileInformationByHandleEx(
+            handle,
+            information_class,
+            ctypes.byref(target),
+            ctypes.sizeof(target),
+        ):
+            error = ctypes.get_last_error()
+            raise OSError(error, os.strerror(error))
+
+    def sector_size_from_handle(self, handle: int, path: Path) -> int:
+        storage = _FileStorageInfo()
+        try:
+            self._get_file_information(handle, _FILE_STORAGE_INFO_CLASS, storage)
+        except OSError:
+            return self.sector_size(path)
+        return storage.LogicalBytesPerSector or self.sector_size(path)
+
+    def sector_size(self, path: Path) -> int:
+        volume_buffer = ctypes.create_unicode_buffer(32768)
+        if not self._kernel32.GetVolumePathNameW(
+            _extended_path(path), volume_buffer, len(volume_buffer)
+        ):
+            error = ctypes.get_last_error()
+            raise UnsupportedVerification(
+                f"cannot identify the verification volume (Windows error {error})"
+            )
+        sectors_per_cluster = ctypes.c_uint32()
+        bytes_per_sector = ctypes.c_uint32()
+        free_clusters = ctypes.c_uint32()
+        total_clusters = ctypes.c_uint32()
+        if not self._kernel32.GetDiskFreeSpaceW(
+            volume_buffer.value,
+            ctypes.byref(sectors_per_cluster),
+            ctypes.byref(bytes_per_sector),
+            ctypes.byref(free_clusters),
+            ctypes.byref(total_clusters),
+        ):
+            error = ctypes.get_last_error()
+            raise UnsupportedVerification(
+                f"cannot determine unbuffered-read alignment (Windows error {error})"
+            )
+        if bytes_per_sector.value <= 0:
+            raise UnsupportedVerification("volume reported an invalid sector size")
+        return bytes_per_sector.value
+
+    def require_expected_final_path(
+        self, root: Path, relative_path: str, file_handle: int
+    ) -> None:
+        root_handle = self.open_directory(root)
+        try:
+            root_final = self.final_path(root_handle).rstrip("\\/")
+        finally:
+            self.close(root_handle)
+        expected = root_final + "\\" + relative_path
+        actual = self.final_path(file_handle)
+        if ntpath.normcase(expected) != ntpath.normcase(actual):
+            raise UnsupportedVerification(
+                "the opened handle does not resolve to the selected root-relative path"
+            )
+
+    def final_path(self, handle: int) -> str:
+        size = 512
+        while True:
+            buffer = ctypes.create_unicode_buffer(size)
+            length = self._kernel32.GetFinalPathNameByHandleW(handle, buffer, size, 0)
+            if length == 0:
+                error = ctypes.get_last_error()
+                raise OSError(error, os.strerror(error))
+            if length < size:
+                return buffer.value
+            size = length + 1
+
+    def read(self, handle: int, address: int, size: int) -> int:
+        bytes_read = ctypes.c_uint32()
+        if not self._kernel32.ReadFile(
+            handle, address, size, ctypes.byref(bytes_read), None
+        ):
+            error = ctypes.get_last_error()
+            if error == _ERROR_INVALID_PARAMETER:
+                raise UnsupportedVerification(
+                    "the volume rejected an aligned unbuffered read"
+                )
+            raise OSError(error, os.strerror(error))
+        return bytes_read.value
+
+    def allocate(self, size: int) -> int:
+        address = self._kernel32.VirtualAlloc(
+            None, size, _MEM_COMMIT | _MEM_RESERVE, _PAGE_READWRITE
+        )
+        if not address:
+            error = ctypes.get_last_error()
+            raise OSError(error, os.strerror(error))
+        return address
+
+    def release(self, address: int) -> None:
+        if not self._kernel32.VirtualFree(address, 0, _MEM_RELEASE):
+            error = ctypes.get_last_error()
+            raise OSError(error, os.strerror(error))
+
+
+class _WindowsStream:
+    strategy = ReadStrategy.WINDOWS_UNBUFFERED
+
+    def __init__(self, api: _WindowsApi, handle: int, sector_size: int) -> None:
+        self._api = api
+        self._handle = handle
+        self._sector_size = sector_size
+
+    def stat(self) -> FileStat:
+        return self._api.stat(self._handle)
+
+    def iter_chunks(self, chunk_size: int) -> Iterator[bytes]:
+        subject_size = self.stat().size
+        if subject_size == 0:
+            return
+        aligned_size = _align_up(chunk_size, self._sector_size)
+        if aligned_size > MAX_VERIFIER_CHUNK_SIZE:
+            raise UnsupportedVerification(
+                "verification alignment exceeds the chunk allocation limit"
+            )
+        address = self._api.allocate(aligned_size)
+        total = 0
+        try:
+            while total < subject_size:
+                count = self._api.read(self._handle, address, aligned_size)
+                if count == 0:
+                    break
+                total += count
+                yield ctypes.string_at(address, count)
+        finally:
+            self._api.release(address)
+
+
+def _align_up(value: int, alignment: int) -> int:
+    return ((value + alignment - 1) // alignment) * alignment
+
+
+def _filetime_to_unix_ns(windows_ticks: int) -> int:
+    return (windows_ticks - _WINDOWS_EPOCH_TICKS) * 100
+
+
+def _extended_path(path: Path) -> str:
+    return to_extended_length_path(str(path))

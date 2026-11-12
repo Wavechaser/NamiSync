@@ -1,22 +1,44 @@
 from __future__ import annotations
 
+import gc
 import os
-from dataclasses import replace
-from datetime import datetime, timezone
+import stat as stat_module
+from dataclasses import fields, replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from weakref import ref
 
 import pytest
 
+import namisync.workflows.sync as sync_workflow
+import namisync.workflows.runtime as runtime_module
+import namisync.workflows.database_pair as database_pair
+import namisync.workflows.selection as selection_module
+import namisync.core.review as review_module
 from namisync.core.events import ItemOutcome
-from namisync.core.evidence import Outcome
+from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import Commitment, ExecutionSet, validated_run_id
-from namisync.core.models import CapabilityProfile, Root
+from namisync.core.integrity import PostCopySelection
+from namisync.core.models import (
+    CapabilityProfile,
+    FileIdentity,
+    FileRecord,
+    MetadataSnapshot,
+    Root,
+    ScanResult,
+    ScanScope,
+    VolumeEvidence,
+    VolumeId,
+)
+from namisync.core.pathing import to_extended_length_path
 from namisync.core.planning import (
     Assignment,
     BlockedReason,
     DeletionPolicy,
     FilterSet,
+    IdentityDestinationPolicy,
+    MappingSnapshot,
     OpId,
     OperationKind,
     OperationReason,
@@ -29,15 +51,609 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.db.connections import connect_ledger_reader
-from namisync.core.session import Disposition, OperationResult, RunContext, SessionState
-from namisync.core.preflight import Refusal, RefusalCode, Verdict
-from namisync.workflows.selection import ExclusionReason, derive_execution_selection
-from namisync.workflows.sync import run_execution
-from namisync.workflows.models import PlanArtifact, PlanRequest
+from namisync.db.contracts import DatabaseConnectionOwner
+from namisync.db.schema import initialize_ledger
+from namisync.core.session import (
+    Canceled,
+    Disposition,
+    OperationResult,
+    PhaseResult,
+    PhaseStatus,
+    RunContext,
+    SessionState,
+)
+from namisync.core.preflight import ObservedWorld, Refusal, RefusalCode, Verdict
+from namisync.core.root_authority import RootAuthorityError, RootAuthorityIssue
+from namisync.workflows.selection import (
+    DestructiveOperationCounts,
+    ExecutionSelection,
+    ExclusionReason,
+    derive_execution_selection,
+)
+from namisync.workflows.sync import run_execution, validate_sync_paths
+from namisync.workflows.models import (
+    ExecuteContinuation,
+    PlanArtifact,
+    PlanRequest,
+    VerifyContinuation,
+)
 from namisync.workflows.runtime import LocalWorkflowRuntime
+from namisync.workflows.inventory import LocationBinding, LocationCandidate
+from namisync.workflows.views import (
+    PreservationSettingsView,
+    SemanticSettingsPatchView,
+    SetupOptionsView,
+)
 
 
 NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("persisted_defaults", (False, True))
+def test_prepare_setup_options_canonicalizes_task_snapshot_without_settings_write(
+    tmp_path: Path,
+    persisted_defaults: bool,
+) -> None:
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        if persisted_defaults:
+            runtime.commit_semantic_settings(
+                SemanticSettingsPatchView(deletion_policy="additive")
+            )
+        assert runtime.settings_path.exists() is persisted_defaults
+        original_bytes = runtime.settings_path.read_bytes() if persisted_defaults else None
+        original_mtime = runtime.settings_path.stat().st_mtime_ns if persisted_defaults else None
+        before = runtime.read_semantic_settings()
+        prepared = runtime.prepare_setup_options(
+            SetupOptionsView(
+                ("b\\*", "a/*", "b/*"), "trash", True,
+                PreservationSettingsView(False, True, True), True, True,
+            )
+        )
+        assert prepared.filters == ("a\\*", "b\\*")
+        assert prepared.preservation == PreservationSettingsView(False, True, True)
+        assert prepared.verify_after_execute is True
+        assert runtime.read_semantic_settings() == before
+        assert runtime.settings_path.exists() is persisted_defaults
+        if persisted_defaults:
+            assert runtime.settings_path.read_bytes() == original_bytes
+            assert runtime.settings_path.stat().st_mtime_ns == original_mtime
+        with pytest.raises(ValueError, match="does not support ADS"):
+            runtime.prepare_setup_options(
+                SetupOptionsView(
+                    (), "trash", False,
+                    PreservationSettingsView(True, False, False), False, False,
+                )
+            )
+    finally:
+        runtime.close()
+
+
+def _empty_world() -> ObservedWorld:
+    return ObservedWorld({}, {}, frozenset({""}), {}, None, 0, None, NOW)
+
+
+def test_plan_domain_contracts_have_no_worker_count() -> None:
+    assert "worker_count" not in {field.name for field in fields(SyncOptions)}
+    assert "worker_count" not in {field.name for field in fields(Plan)}
+    with pytest.raises(TypeError):
+        SyncOptions(worker_count=2)  # type: ignore[call-arg]
+
+
+def test_prepare_plan_rejects_noncanonical_domain_values(tmp_path: Path) -> None:
+    class DerivedPlanRequest(PlanRequest):
+        pass
+
+    class DerivedSyncOptions(SyncOptions):
+        pass
+
+    class OtherPolicy:
+        name = "identity"
+        version = "1"
+
+        def assign(self, records, meta, target):
+            raise AssertionError("rejected policy callback ran")
+
+    def request_with(policy: object) -> PlanRequest:
+        return PlanRequest(
+            "request",
+            r"C:\source",
+            r"D:\target",
+            SyncOptions(destination_policy=policy),  # type: ignore[arg-type]
+        )
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        for request, error, message in (
+            (
+                DerivedPlanRequest("request", r"C:\source", r"D:\target"),
+                TypeError,
+                "requires PlanRequest",
+            ),
+            (
+                PlanRequest(
+                    "request", r"C:\source", r"D:\target", DerivedSyncOptions()
+                ),
+                TypeError,
+                "exact SyncOptions",
+            ),
+            (
+                request_with(IdentityDestinationPolicy("renamed", "1")),
+                ValueError,
+                "fields changed",
+            ),
+            (
+                request_with(IdentityDestinationPolicy("identity", "2")),
+                ValueError,
+                "fields changed",
+            ),
+            (
+                request_with(OtherPolicy()),
+                ValueError,
+                "supports only the identity policy",
+            ),
+        ):
+            with pytest.raises(error, match=message):
+                runtime.prepare_plan(request)
+    finally:
+        runtime.close()
+
+
+def test_prepare_plan_refuses_database_pair_before_resource_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    ledger.touch()
+    history.touch()
+    runtime = LocalWorkflowRuntime(ledger, history)
+    artifacts = tuple(
+        Path(f"{path}{suffix}")
+        for path in (ledger, history)
+        for suffix in ("", "-wal", "-shm", "-journal")
+    )
+    before = {path: path.read_bytes() for path in artifacts if path.exists()}
+    admitted: list[object] = []
+
+    def resources(*paths):
+        admitted.append(paths)
+        pytest.fail("refused database pair must not admit Plan resources")
+
+    monkeypatch.setattr(runtime, "_resources_for_paths", resources)
+    try:
+        with pytest.raises(database_pair.DatabasePairRefusedError) as raised:
+            runtime.prepare_plan(PlanRequest("1" * 32, str(source), str(target)))
+
+        assert raised.value.contract.state is database_pair.DatabasePairState.REFUSED
+        assert raised.value.contract.reason == "ledger-contract"
+        assert raised.value.contract.reset_direction == database_pair.DATABASE_RESET_DIRECTION
+        assert admitted == []
+        assert {path: path.read_bytes() for path in artifacts if path.exists()} == before
+        assert list(source.iterdir()) == list(target.iterdir()) == []
+    finally:
+        runtime.close()
+
+
+def test_prepare_plan_retains_a_detached_identity_checkpoint(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    policy = IdentityDestinationPolicy()
+    options = SyncOptions(destination_policy=policy)
+    request = PlanRequest("1" * 32, str(source), str(target), options)
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        checkpoint = runtime.prepare_plan(request).checkpoint
+
+        assert type(checkpoint) is PlanRequest
+        assert checkpoint is not request
+        assert type(checkpoint.options) is SyncOptions
+        assert checkpoint.options is not options
+        assert (
+            type(checkpoint.options.destination_policy)
+            is IdentityDestinationPolicy
+        )
+        assert checkpoint.options.destination_policy is not policy
+
+        object.__setattr__(policy, "name", "changed")
+        object.__setattr__(options, "trash_on_update", False)
+        object.__setattr__(request, "request_id", "2" * 32)
+        object.__setattr__(request, "source_path", str(tmp_path / "changed"))
+
+        assert checkpoint.request_id == "1" * 32
+        assert checkpoint.source_path == str(source)
+        assert checkpoint.options.trash_on_update is True
+        assert checkpoint.options.destination_policy == IdentityDestinationPolicy()
+        result = runtime.open_plan(checkpoint).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+        assert result.status is SessionState.COMPLETED
+    finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize("changed_volume", (False, True))
+def test_plan_publication_requires_the_admitted_volume_bindings(
+    tmp_path: Path,
+    changed_volume: bool,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        source_binding = runtime.admit_location_candidate(
+            LocationCandidate.literal(str(source))
+        ).binding
+        target_binding = runtime.admit_location_candidate(
+            LocationCandidate.literal(str(target))
+        ).binding
+        assert source_binding is not None and target_binding is not None
+        request = PlanRequest(
+            "c" * 32, str(source), str(target), SyncOptions(),
+            source_binding, target_binding, True,
+        )
+        checkpoint = runtime.prepare_plan(request).checkpoint
+        assert checkpoint.source_binding == source_binding
+        assert checkpoint.target_binding == target_binding
+        assert checkpoint.verify_after_execute is True
+        original_scanner = runtime._deps.scanner
+        scanned: list[str] = []
+
+        def scan(*args, **kwargs):
+            observed = original_scanner(*args, **kwargs)
+            scanned.append(observed.root.path)
+            if changed_volume and observed.root.path == str(source):
+                assert observed.volume_id is not None
+                assert observed.volume_id.serial != "replacement-volume"
+                observed = replace(
+                    observed,
+                    volume_id=VolumeId(
+                        "replacement-volume", observed.volume_id.fs_type
+                    ),
+                )
+            return observed
+
+        runtime._deps = replace(runtime._deps, scanner=scan)
+        if changed_volume:
+            runtime._deps = replace(
+                runtime._deps,
+                planner=lambda *_args, **_kwargs: pytest.fail(
+                    "changed reviewed volume reached planning"
+                ),
+            )
+            with pytest.raises(ValueError, match="changed reviewed location identity"):
+                runtime.open_plan(checkpoint).run(
+                    RunContext(lambda _event: None, lambda: None)
+                )
+            assert scanned == [str(source), str(target)]
+            with pytest.raises(KeyError):
+                runtime.get_plan(request.request_id)
+        else:
+            result = runtime.open_plan(checkpoint).run(
+                RunContext(lambda _event: None, lambda: None)
+            )
+            assert result.status is SessionState.COMPLETED
+            retained = runtime.get_plan(request.request_id).request
+            assert retained.source_binding == source_binding
+            assert retained.target_binding == target_binding
+            assert retained.verify_after_execute is True
+    finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize("case", (
+    "source-only", "target-only", "integer-verify", "null-verify", "wrong-binding",
+))
+def test_direct_plan_rejects_incomplete_setup_contract_before_scanning(case: str) -> None:
+    binding = LocationBinding(VolumeId("source", "NTFS"), "source", "C:\\", ("C:\\",), False)
+    request = PlanRequest(
+        "d" * 32, r"C:\source", r"D:\target", SyncOptions(),
+        object() if case == "wrong-binding" else binding if case == "source-only" else None,
+        binding if case in {"target-only", "wrong-binding"} else None,
+        1 if case == "integer-verify" else None if case == "null-verify" else False,
+    )
+
+    def unreachable(*_args, **_kwargs):
+        pytest.fail("invalid Setup request reached scan or artifact publication")
+
+    error = ValueError if case.endswith("only") else TypeError
+    message = (
+        "bindings must be paired" if case.endswith("only")
+        else "binding must be exact" if case == "wrong-binding"
+        else "verify_after_execute"
+    )
+    with pytest.raises(error, match=message):
+        sync_workflow.run_plan(
+            request,
+            RunContext(unreachable, lambda: None),
+            SimpleNamespace(scanner=unreachable, save_plan=unreachable),
+        )
+
+
+class _PrivatePathFrameValue:
+    pass
+
+
+def test_runtime_derives_correspondence_bounds_only_from_current_file_scans(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_volume = VolumeId("source-serial", "NTFS")
+    target_volume = VolumeId("target-serial", "NTFS")
+    profile = CapabilityProfile("NTFS", 100, True, False, 32_767, True, True)
+
+    def record(path: str, identity: FileIdentity | None) -> FileRecord:
+        return FileRecord(
+            path,
+            path.upper(),
+            1,
+            2,
+            identity,
+            1,
+            MetadataSnapshot(0, None),
+        )
+
+    source = ScanResult(
+        Root(r"C:\source", "source"),
+        source_volume,
+        VolumeEvidence("source", "C:\\"),
+        profile,
+        (
+            record("renamed.bin", FileIdentity("source-serial", 11)),
+            record("identityless.bin", None),
+        ),
+        (),
+        (),
+        (),
+        ScanScope.full(),
+        True,
+    )
+    target = ScanResult(
+        Root(r"D:\target", "target"),
+        target_volume,
+        VolumeEvidence("target", "D:\\"),
+        profile,
+        (
+            record("old.bin", FileIdentity("target-serial", 21)),
+            record("identityless.bin", None),
+        ),
+        (),
+        (),
+        (),
+        ScanScope.full(),
+        True,
+    )
+    expected = MappingSnapshot.empty(source_volume, target_volume)
+    observed: list[tuple[object, ...]] = []
+
+    class Repository:
+        def __init__(self, path: Path, *, database: DatabaseConnectionOwner) -> None:
+            assert isinstance(database, DatabaseConnectionOwner)
+            database.require_role(path, history=False)
+            observed.append(("open", Path(path)))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def find_current_mapping(self, *args, **kwargs):
+            observed.append((args, kwargs))
+            return SimpleNamespace(snapshot=expected)
+
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    initialize_ledger(runtime.ledger_path)
+    monkeypatch.setattr(runtime_module, "LedgerRepository", Repository)
+    try:
+        assert runtime._correspondence(source, target) is expected
+    finally:
+        runtime.close()
+
+    assert observed[1] == (
+        (source_volume, "source", target_volume, "target"),
+        {
+            "target_path_keys": ("OLD.BIN", "IDENTITYLESS.BIN"),
+            "source_identities": frozenset(
+                {FileIdentity("source-serial", 11)}
+            ),
+            "target_identities": frozenset(
+                {FileIdentity("target-serial", 21)}
+            ),
+        },
+    )
+
+
+def test_sync_path_validation_refuses_a_final_root_reparse_without_following_it(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    original_stat = os.stat
+
+    def no_follow_stat(path, *args, **kwargs):
+        if (
+            str(path).endswith(str(source))
+            and kwargs.get("follow_symlinks") is False
+        ):
+            return SimpleNamespace(
+                st_mode=stat_module.S_IFDIR | 0o755,
+                st_file_attributes=0x00000400,
+                st_reparse_tag=1,
+            )
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", no_follow_stat)
+
+    with pytest.raises(ValueError, match="ordinary directory"):
+        validate_sync_paths(str(source), str(target))
+
+
+def test_sync_path_validation_stops_at_an_intermediate_root_reparse(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    parent = tmp_path / "source-parent"
+    source = parent / "source"
+    target = tmp_path / "target"
+    source.mkdir(parents=True)
+    target.mkdir()
+    native_parent = to_extended_length_path(str(parent))
+    native_source = to_extended_length_path(str(source))
+    original_stat = os.stat
+
+    def no_follow_stat(path, *args, **kwargs):
+        if (
+            str(path) == native_parent
+            and kwargs.get("follow_symlinks") is False
+        ):
+            return SimpleNamespace(
+                st_mode=stat_module.S_IFDIR | 0o755,
+                st_file_attributes=0x00000400,
+                st_reparse_tag=1,
+            )
+        if (
+            str(path) == native_source
+            and kwargs.get("follow_symlinks") is False
+        ):
+            raise AssertionError(
+                "sync admission probed through an intermediate reparse"
+            )
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", no_follow_stat)
+
+    with pytest.raises(ValueError, match="root chain"):
+        validate_sync_paths(str(source), str(target))
+
+
+def test_sync_path_validation_uses_physical_paths_only_for_overlap_judgment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source-alias"
+    target = tmp_path / "target-alias"
+    source.mkdir()
+    target.mkdir()
+    physical = tmp_path / "physical"
+
+    monkeypatch.setattr(
+        sync_workflow,
+        "_physical_logical_root",
+        lambda path: (
+            physical
+            if path == source
+            else physical / "nested-target"
+        ),
+    )
+
+    with pytest.raises(ValueError, match="non-nested"):
+        validate_sync_paths(str(source), str(target))
+
+
+def test_sync_path_validation_admits_both_roots_before_physical_overlap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    calls: list[tuple[str, str]] = []
+
+    def admit(authority, *, anchor_probe) -> str:
+        assert anchor_probe is sync_workflow.current_volume_anchor
+        calls.append(("chain", authority.logical_root))
+        return tmp_path.anchor
+
+    def physical(path: Path) -> Path:
+        calls.append(("physical", str(path)))
+        return path
+
+    monkeypatch.setattr(sync_workflow, "admit_root_chain", admit)
+    monkeypatch.setattr(sync_workflow, "_physical_logical_root", physical)
+
+    assert validate_sync_paths(str(source), str(target)) == (source, target)
+    assert calls == [
+        ("chain", str(source)),
+        ("chain", str(target)),
+        ("physical", str(source)),
+        ("physical", str(target)),
+    ]
+
+
+def test_sync_path_validation_retires_root_authority_exception_frames(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    failure = RootAuthorityError(
+        RootAuthorityIssue.ANCHOR_UNAVAILABLE,
+        str(source),
+        "root authority unavailable",
+    )
+    cause = OSError("anchor probe failed")
+    references: list[ref[_PrivatePathFrameValue]] = []
+
+    def fail_admission(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        private = _PrivatePathFrameValue()
+        references.append(ref(private))
+        try:
+            raise cause
+        except OSError:
+            raise failure from cause
+
+    monkeypatch.setattr(sync_workflow, "admit_root_chain", fail_admission)
+
+    with pytest.raises(ValueError, match="^anchor probe failed$") as raised:
+        validate_sync_paths(str(source), str(target))
+
+    assert raised.value.__cause__ is raised.value.__context__ is None
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_sync_path_validation_retires_physical_resolution_frames(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    failure = OSError("physical resolution failed")
+    references: list[ref[_PrivatePathFrameValue]] = []
+
+    monkeypatch.setattr(
+        sync_workflow,
+        "admit_root_chain",
+        lambda *args, **kwargs: None,
+    )
+
+    def fail_resolution(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        private = _PrivatePathFrameValue()
+        references.append(ref(private))
+        raise failure
+
+    monkeypatch.setattr(Path, "resolve", fail_resolution)
+
+    with pytest.raises(ValueError, match="^physical resolution failed$") as raised:
+        validate_sync_paths(str(source), str(target))
+
+    assert raised.value.__cause__ is raised.value.__context__ is None
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
 
 
 def _empty_plan() -> Plan:
@@ -59,8 +675,7 @@ def _empty_plan() -> Plan:
         filter_snapshot=FilterSet(),
         deletion_policy=DeletionPolicy.TRASH,
         trash_on_update=True,
-        policy_fingerprint="p" * 64,
-        worker_count=1,
+        policy_fingerprint="a" * 64,
         required_volumes=frozenset(),
         required_bytes=0,
         fingerprint=PlanFingerprint("0" * 64),
@@ -179,6 +794,27 @@ def test_selection_closes_over_dependencies_of_excluded_operations() -> None:
     assert excluded[dependent.op_id].reason == ExclusionReason.BLOCKED_DEPENDENCY
 
 
+def test_derived_selection_retains_canonical_digest_for_empty_and_changed_scope() -> None:
+    first = _operation(1, OperationKind.NOOP, "first.bin")
+    second = _operation(2, OperationKind.NOOP, "second.bin")
+    plan = _plan_with((first, second))
+    pristine = derive_execution_selection(plan)
+    deselected = derive_execution_selection(
+        plan, user_deselected=frozenset({first.op_id})
+    )
+    empty = derive_execution_selection(
+        plan, user_deselected=frozenset({first.op_id, second.op_id})
+    )
+
+    for decision in (pristine, deselected, empty):
+        assert type(decision.selection_digest) is bytes
+        assert decision.selection_digest == selection_digest(decision.selection)
+        assert runtime_module.execution_selection_digest_hex(decision) == (
+            decision.selection_digest.hex()
+        )
+    assert len({item.selection_digest for item in (pristine, deselected, empty)}) == 3
+
+
 def test_incomplete_scan_keeps_guarded_work_but_withholds_destructive_and_moves() -> None:
     operations = (
         _operation(1, OperationKind.MKDIR, "folder", source="folder"),
@@ -271,7 +907,7 @@ def test_execution_reports_exclusions_without_failing_successful_subset() -> Non
     events: list[object] = []
     saved: list[object] = []
     finished: list[tuple[SessionState, object]] = []
-    world = SimpleNamespace(paths={}, target_parent_paths=frozenset({""}))
+    world = _empty_world()
     cleanup_calls: list[tuple[Path, frozenset[str], object]] = []
 
     class FileSystem:
@@ -304,15 +940,15 @@ def test_execution_reports_exclusions_without_failing_successful_subset() -> Non
             Outcome.SUCCEEDED,
         )
         ctx.emit(item)
-        return OperationResult(SessionState.COMPLETED, operations=(item,))
+        execution_set.status[operation.op_id] = Outcome.SUCCEEDED
+        return OperationResult(SessionState.COMPLETED, items=(item,))
 
     deps = SimpleNamespace(
         save_execution_details=saved.append,
         observer=lambda *args: world,
         observation_fs=object(),
-        settings=lambda value: object(),
         preflight=lambda execution_set, observed: Verdict(True, (), observed),
-        open_recording=lambda execution_set: Recording(),
+        open_recording=lambda _spec: Recording(),
         executor=executor,
         executor_policies=object(),
         executor_fs=FileSystem(),
@@ -321,7 +957,7 @@ def test_execution_reports_exclusions_without_failing_successful_subset() -> Non
     result = run_execution(xset, RunContext(events.append, lambda: None), deps)
 
     assert result.status is SessionState.COMPLETED
-    assert [item.outcome for item in result.operations] == [
+    assert [item.outcome for item in result.items] == [
         Outcome.BLOCKED,
         Outcome.SUCCEEDED,
     ]
@@ -367,8 +1003,8 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
     )
     artifact = PlanArtifact(
         request,
-        SimpleNamespace(warnings=()),
-        SimpleNamespace(warnings=()),
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
         plan,
         Verdict(True, (), world),
     )
@@ -376,7 +1012,8 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
         tmp_path / "ledger.db", tmp_path / "history.db"
     )
     try:
-        runtime._save_plan(artifact)
+        runtime.save_plan(artifact)
+        assert runtime.get_plan(request.request_id) is artifact
 
         review = runtime.get_plan_review(request.request_id)
         execution = runtime.commit_plan(
@@ -384,18 +1021,223 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
             run_id="6" * 32,
             committed_at=NOW,
         )
+        runtime.drop_plan(request.request_id)
+        runtime.drop_plan(request.request_id)
+        with pytest.raises(KeyError):
+            runtime.commit_plan(request.request_id)
     finally:
         runtime.close()
 
     selected = execution.execution_set.selection
     assert selected == frozenset({copied.op_id})
     assert review.selection_digest_hex == selection_digest(selected).hex()
-    assert review.required_bytes == 17
+    assert review.required_bytes == "17"
     assert review.operations[2].prior_target_path == "old.txt"
     assert execution.execution_set.commitment is not None
     assert execution.execution_set.commitment.selection_digest == selection_digest(
         selected
     )
+
+
+def test_commit_rejects_selection_authority_from_an_equal_plan(tmp_path: Path) -> None:
+    plan = _plan_with((_operation(1, OperationKind.NOOP, "same.bin"),))
+    request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
+    artifact = PlanArtifact(
+        request,
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+        replace(plan),
+        Verdict(True, (), SimpleNamespace(paths={}, free_space=1_000, reclaimable_temp_bytes=0)),
+    )
+    decision = derive_execution_selection(plan)
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        runtime.save_plan(artifact)
+        with pytest.raises(ValueError, match="different plan"):
+            runtime.commit_plan(
+                request.request_id,
+                selection_decision=decision,
+            )
+    finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize("drift_side", ("source", "target"))
+def test_plan_review_noop_drift_refuses_execution_before_effects(
+    tmp_path: Path,
+    drift_side: str,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    for root in (source, target):
+        path = root / "same.bin"
+        path.write_bytes(b"same")
+        os.utime(path, ns=(1_700_000_000_000_000_000,) * 2)
+    (source / "copy.bin").write_bytes(b"copy")
+    stale_temp = target / ("old.bin.synctmp-" + "e" * 32 + "-" + "f" * 32)
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    scanner = runtime._deps.scanner
+    executor = runtime._deps.executor
+    executor_calls: list[object] = []
+
+    def scan(*args, **kwargs):
+        value = scanner(*args, **kwargs)
+        if value.root.path == str(target):
+            changed = source if drift_side == "source" else target
+            (changed / "same.bin").write_bytes(b"changed since scan")
+            stale_temp.write_bytes(b"old temporary payload")
+        return value
+
+    def execute(*args, **kwargs):
+        executor_calls.append(args[0])
+        return executor(*args, **kwargs)
+
+    runtime._deps = replace(runtime._deps, scanner=scan, executor=execute)
+    request = PlanRequest("a" * 32, str(source), str(target))
+    context = RunContext(lambda _event: None, lambda: None)
+    try:
+        planned = runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
+        assert planned.status is SessionState.COMPLETED
+        artifact = runtime.get_plan(request.request_id)
+        assert {operation.kind for operation in artifact.plan.operations} == {
+            OperationKind.NOOP, OperationKind.COPY,
+        }
+        assert artifact.verdict.ok
+        before = {path.name: path.read_bytes() for path in target.iterdir()}
+        execution = runtime.commit_plan(
+            request.request_id, run_id="b" * 32, committed_at=NOW,
+        )
+        result = runtime.open_execution(
+            runtime.prepare_execution(execution).checkpoint
+        ).run(context)
+
+        assert result.status is SessionState.REFUSED
+        assert result.disposition is Disposition.UNRUN
+        details = runtime.get_execution_details("b" * 32)
+        assert any(
+            refusal.code == RefusalCode.SIZE_CHANGED.value and refusal.path == "same.bin"
+            for refusal in details.refusals
+        )
+        assert executor_calls == []
+        assert {path.name: path.read_bytes() for path in target.iterdir()} == before
+        assert stale_temp.exists()
+        assert not (target / "copy.bin").exists()
+    finally:
+        runtime.close()
+
+
+def test_commit_reuses_exact_selection_without_deriving_again(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = _operation(1, OperationKind.NOOP, "first.bin")
+    second = _operation(2, OperationKind.NOOP, "second.bin")
+    plan = _plan_with((first, second))
+    request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
+    artifact = PlanArtifact(
+        request,
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+        plan,
+        Verdict(
+            True,
+            (),
+            SimpleNamespace(paths={}, free_space=1_000, reclaimable_temp_bytes=0),
+        ),
+    )
+    user_deselected = frozenset({first.op_id})
+    decision = derive_execution_selection(
+        plan,
+        user_deselected=user_deselected,
+    )
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        runtime.save_plan(artifact)
+        commitment_times = iter((NOW, NOW + timedelta(seconds=1)))
+        runtime.clock = SimpleNamespace(now=lambda: next(commitment_times))
+        monkeypatch.setattr(
+            selection_module,
+            "selection_digest",
+            lambda *_args: pytest.fail("selection digest was hashed twice"),
+        )
+        monkeypatch.setattr(
+            runtime_module,
+            "derive_execution_selection",
+            lambda *_args, **_kwargs: pytest.fail("selection was derived twice"),
+        )
+        execution = runtime.commit_plan(
+            request.request_id,
+            user_deselected=user_deselected,
+            selection_decision=decision,
+        )
+        second_execution = runtime.commit_plan(
+            request.request_id,
+            user_deselected=user_deselected,
+            selection_decision=decision,
+        )
+    finally:
+        runtime.close()
+
+    assert execution.execution_set.selection == frozenset({second.op_id})
+    assert execution.execution_set.commitment.selection_digest is decision.selection_digest
+    assert execution.execution_set.commitment.committed_at == NOW
+    assert second_execution.execution_set.commitment.selection_digest is decision.selection_digest
+    assert second_execution.execution_set.commitment.committed_at == NOW + timedelta(seconds=1)
+
+
+def test_commit_rejects_selection_authority_from_equal_distinct_user_intent(
+    tmp_path: Path,
+) -> None:
+    first = _operation(1, OperationKind.NOOP, "first.bin")
+    second = _operation(2, OperationKind.NOOP, "second.bin")
+    plan = _plan_with((first, second))
+    request = PlanRequest("request", plan.source_root.path, plan.target_root.path)
+    artifact = PlanArtifact(
+        request,
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+        SimpleNamespace(warnings=(), directories=(), files=(), unsupported=()),
+        plan,
+        Verdict(
+            True,
+            (),
+            SimpleNamespace(paths={}, free_space=1_000, reclaimable_temp_bytes=0),
+        ),
+    )
+    original_intent = frozenset({first.op_id})
+    equal_intent = frozenset(set(original_intent))
+    assert equal_intent is not original_intent
+    decision = derive_execution_selection(
+        plan,
+        user_deselected=original_intent,
+    )
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        runtime.save_plan(artifact)
+        with pytest.raises(ValueError, match="different user intent"):
+            runtime.commit_plan(
+                request.request_id,
+                user_deselected=equal_intent,
+                selection_decision=decision,
+            )
+    finally:
+        runtime.close()
+
+
+def test_execution_selection_cannot_be_constructed_as_caller_authority() -> None:
+    plan = _empty_plan()
+    with pytest.raises(TypeError, match="workflow-derived authority"):
+        ExecutionSelection(
+            frozenset(),
+            selection_digest(frozenset()),
+            (),
+            DestructiveOperationCounts(0, 0, 0, 0),
+            0,
+            "0",
+            _authority=object(),
+            _plan=plan,
+            _user_deselected=frozenset(),
+        )
 
 
 def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:
@@ -406,7 +1248,14 @@ def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:
         source="junction",
         blocked_reason=BlockedReason.UNSUPPORTED,
     )
-    plan = _plan_with((blocked,))
+    noop = _operation(
+        2,
+        OperationKind.NOOP,
+        "same.bin",
+        source="same.bin",
+        reason=OperationReason.METADATA_MATCH,
+    )
+    plan = _plan_with((blocked, noop))
     decision = derive_execution_selection(plan)
     xset = ExecutionSet(
         plan,
@@ -418,13 +1267,12 @@ def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:
             NOW,
         ),
     )
-    world = SimpleNamespace(paths={})
+    world = _empty_world()
     events: list[object] = []
     deps = SimpleNamespace(
         save_execution_details=lambda value: None,
         observer=lambda *args: world,
         observation_fs=object(),
-        settings=lambda value: object(),
         preflight=lambda execution_set, observed: Verdict(
             False,
             (Refusal(RefusalCode.ROOT_CHANGED),),
@@ -436,10 +1284,272 @@ def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:
 
     assert result.status is SessionState.REFUSED
     assert result.disposition is Disposition.UNRUN
-    assert [item.outcome for item in result.operations] == [Outcome.BLOCKED]
+    assert [item.outcome for item in result.items] == [Outcome.BLOCKED]
     assert [item.outcome for item in events if isinstance(item, ItemOutcome)] == [
         Outcome.BLOCKED
     ]
+
+
+@pytest.mark.parametrize(
+    "error, expected_status, expected_canceled",
+    [
+        (RuntimeError("preflight failed"), SessionState.FAILED, False),
+        (Canceled("preflight canceled"), SessionState.CANCELED, True),
+    ],
+)
+def test_fresh_preflight_boundary_uses_reviewed_execution_counters(
+    error: Exception,
+    expected_status: SessionState,
+    expected_canceled: bool,
+) -> None:
+    plan = _plan_with(
+        (
+            _operation(
+                1,
+                OperationKind.COPY,
+                "normal.txt",
+                source="normal.txt",
+                content_bytes=17,
+            ),
+        )
+    )
+    selection = frozenset(operation.op_id for operation in plan.operations)
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("9" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    executor_called = False
+
+    def observer(*_args):
+        raise error
+
+    def executor(*_args):
+        nonlocal executor_called
+        executor_called = True
+        raise AssertionError("executor entered after preflight boundary")
+
+    result = run_execution(
+        xset,
+        RunContext(lambda _value: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=lambda _value: None,
+            observer=observer,
+            observation_fs=object(),
+            preflight=lambda *_args: pytest.fail("preflight ran after observation"),
+            executor=executor,
+        ),
+    )
+
+    assert not executor_called
+    assert result.status is expected_status
+    assert result.canceled is expected_canceled
+    assert result.disposition is Disposition.UNRUN
+    assert result.phases == ()
+    assert (result.bytes_done, result.bytes_total) == (0, 17)
+    if expected_status is SessionState.FAILED:
+        assert result.error is not None
+        assert result.error.type_name == "RuntimeError"
+
+
+def test_execution_review_wall_is_an_ordinary_prerun_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        "normal.txt",
+        source="normal.txt",
+        content_bytes=17,
+    )
+    plan = _plan_with((operation,))
+    selection = frozenset({operation.op_id})
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("b" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 0)
+    executor_called = False
+
+    def executor(*_args):
+        nonlocal executor_called
+        executor_called = True
+        raise AssertionError("executor entered after execution review excess")
+
+    result = run_execution(
+        xset,
+        RunContext(lambda _value: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=lambda _value: None,
+            observer=lambda *_args: _empty_world(),
+            observation_fs=object(),
+            preflight=lambda *_args: pytest.fail(
+                "preflight ran after observer-result excess"
+            ),
+            executor=executor,
+        ),
+    )
+
+    assert not executor_called
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.UNRUN
+    assert result.review_fact_limit is None
+    assert result.error is not None
+    assert result.error.message == "review_fact_limit_exceeded"
+    assert result.phases == ()
+    assert (result.bytes_done, result.bytes_total) == (0, 17)
+
+
+@pytest.mark.parametrize("boundary", ["commitment-details", "preflight-details"])
+def test_fresh_detail_save_failure_uses_reviewed_execution_counters(
+    boundary: str,
+) -> None:
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        "normal.txt",
+        source="normal.txt",
+        content_bytes=17,
+    )
+    plan = _plan_with((operation,))
+    selection = frozenset({operation.op_id})
+    commitment = (
+        None
+        if boundary == "commitment-details"
+        else Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        )
+    )
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("a" * 32),
+        commitment=commitment,
+    )
+    executor_called = False
+    world = _empty_world()
+
+    def save_execution_details(_value: object) -> None:
+        raise RuntimeError(f"{boundary} write failed")
+
+    def observer(*_args):
+        assert boundary == "preflight-details"
+        return world
+
+    def executor(*_args):
+        nonlocal executor_called
+        executor_called = True
+        raise AssertionError("executor entered after detail-save failure")
+
+    result = run_execution(
+        xset,
+        RunContext(lambda _value: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=save_execution_details,
+            observer=observer,
+            observation_fs=object(),
+            preflight=lambda execution_set, observed: Verdict(True, (), observed),
+            executor=executor,
+        ),
+    )
+
+    assert not executor_called
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.UNRUN
+    assert result.phases == ()
+    assert (result.bytes_done, result.bytes_total) == (0, 17)
+    assert result.error is not None
+    assert result.error.type_name == "RuntimeError"
+    assert result.error.message == f"{boundary} write failed"
+
+
+def test_undelivered_execution_outcome_does_not_enter_workflow_result() -> None:
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        "normal.txt",
+        source="normal.txt",
+        content_bytes=17,
+    )
+    plan = _plan_with((operation,))
+    selection = frozenset({operation.op_id})
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("b" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    world = _empty_world()
+
+    class Recording:
+        recorder = object()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def finish(self, status, recording) -> None:
+            return None
+
+    class FileSystem:
+        def remove_orphaned_temps(self, target, parents, current_run_id) -> None:
+            return None
+
+    def executor(execution_set, ctx, recorder, policies, fs):
+        del execution_set, recorder, policies, fs
+        item = ItemOutcome(
+            str(operation.op_id),
+            operation.kind.value,
+            operation.target_rel_path,
+            Outcome.SUCCEEDED,
+        )
+        ctx.emit(item)
+        raise AssertionError("unreachable after rejected reliable outcome")
+
+    def emit(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            raise RuntimeError("reliable outcome sink failed")
+
+    result = run_execution(
+        xset,
+        RunContext(emit, lambda: None),
+        SimpleNamespace(
+            save_execution_details=lambda _value: None,
+            observer=lambda *_args: world,
+            observation_fs=object(),
+            preflight=lambda execution_set, observed: Verdict(True, (), observed),
+            open_recording=lambda _spec: Recording(),
+            executor=executor,
+            executor_policies=object(),
+            executor_fs=FileSystem(),
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.items == ()
+    assert xset.status == {}
+    assert result.error is not None
+    assert result.error.type_name == "RuntimeError"
+    assert result.error.message == "reliable outcome sink failed"
 
 
 def test_temp_recovery_failure_stops_before_executor_and_records_failure() -> None:
@@ -460,7 +1570,7 @@ def test_temp_recovery_failure_stops_before_executor_and_records_failure() -> No
     )
     finished: list[SessionState] = []
     executor_called = False
-    world = SimpleNamespace(paths={}, target_parent_paths=frozenset({""}))
+    world = _empty_world()
 
     class Recording:
         recorder = object()
@@ -489,19 +1599,30 @@ def test_temp_recovery_failure_stops_before_executor_and_records_failure() -> No
         save_execution_details=lambda value: None,
         observer=lambda *args: world,
         observation_fs=object(),
-        settings=lambda value: object(),
         preflight=lambda execution_set, observed: Verdict(True, (), observed),
-        open_recording=lambda execution_set: Recording(),
+        open_recording=lambda _spec: Recording(),
         executor=executor,
         executor_policies=object(),
         executor_fs=FileSystem(),
     )
 
-    with pytest.raises(PermissionError, match="orphan is locked"):
-        run_execution(xset, RunContext(lambda value: None, lambda: None), deps)
+    result = run_execution(
+        xset,
+        RunContext(lambda value: None, lambda: None),
+        deps,
+    )
 
     assert not executor_called
     assert finished == [SessionState.FAILED]
+    assert result.status is SessionState.FAILED
+    assert result.phases == ()
+    assert result.bytes_done == 0
+    assert result.bytes_total == sum(
+        operation.content_bytes for operation in plan.operations
+    )
+    assert result.error is not None
+    assert result.error.type_name == "PermissionError"
+    assert result.error.message == "orphan is locked"
 
 
 def test_execution_refuses_uncommitted_set_before_preflight() -> None:
@@ -577,6 +1698,170 @@ def test_execution_refuses_plan_content_that_no_longer_matches_fingerprint() -> 
     assert "plan content" in saved[0].commitment_error
 
 
+def _selection_mismatch_fixture() -> tuple[ExecutionSet, PlanOperation]:
+    folder = _operation(1, OperationKind.MKDIR, "folder", source="folder")
+    child = _operation(
+        2,
+        OperationKind.COPY,
+        r"folder\child.bin",
+        source=r"folder\child.bin",
+        dependencies=(folder.op_id,),
+    )
+    noop = _operation(
+        3,
+        OperationKind.NOOP,
+        "same.bin",
+        source="same.bin",
+        reason=OperationReason.METADATA_MATCH,
+    )
+    plan = _plan_with((folder, child, noop))
+    user_deselected = frozenset({folder.op_id})
+    expected = derive_execution_selection(
+        plan,
+        user_deselected=user_deselected,
+    ).selection
+    tampered = expected | {child.op_id}
+    return (
+        ExecutionSet(
+            plan=plan,
+            selection=tampered,
+            run_id=validated_run_id("9" * 32),
+            commitment=Commitment(
+                plan.fingerprint,
+                selection_digest(tampered),
+                NOW,
+            ),
+            user_deselected=user_deselected,
+        ),
+        child,
+    )
+
+
+def test_execution_refuses_rederived_selection_mismatch_before_preflight() -> None:
+    xset, _ = _selection_mismatch_fixture()
+    saved: list[object] = []
+
+    result = run_execution(
+        xset,
+        RunContext(lambda body: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=saved.append,
+            observer=lambda *args: pytest.fail("preflight observation ran"),
+        ),
+    )
+
+    assert result.status is SessionState.REFUSED
+    assert result.disposition is Disposition.UNRUN
+    assert "derived selection" in saved[0].commitment_error
+
+
+def test_execution_refuses_safety_excluded_user_provenance_before_preflight() -> None:
+    blocked = _operation(
+        1,
+        OperationKind.NOOP,
+        "blocked.bin",
+        source="blocked.bin",
+        blocked_reason=BlockedReason.UNSUPPORTED,
+    )
+    noop = _operation(
+        2,
+        OperationKind.NOOP,
+        "same.bin",
+        source="same.bin",
+        reason=OperationReason.METADATA_MATCH,
+    )
+    plan = _plan_with((blocked, noop))
+    selection = frozenset({noop.op_id})
+    xset = ExecutionSet(
+        plan=plan,
+        selection=selection,
+        run_id=validated_run_id("8" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+        user_deselected=frozenset({blocked.op_id}),
+    )
+    saved: list[object] = []
+
+    result = run_execution(
+        xset,
+        RunContext(lambda body: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=saved.append,
+            observer=lambda *args: pytest.fail("preflight observation ran"),
+        ),
+    )
+
+    assert result.status is SessionState.REFUSED
+    assert result.disposition is Disposition.UNRUN
+    assert "safety-excluded" in saved[0].commitment_error
+
+
+@pytest.mark.parametrize("phase", ["execute", "verify"])
+def test_resumed_execution_settles_selection_mismatch_without_preflight(
+    phase: str,
+) -> None:
+    xset, _ = _selection_mismatch_fixture()
+    finished: list[SessionState] = []
+
+    class Recording:
+        recorder = object()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def finish(self, status, recording) -> None:
+            finished.append(status)
+
+    continuation = (
+        ExecuteContinuation(xset)
+        if phase == "execute"
+        else VerifyContinuation(
+            execution_set=xset,
+            candidates=PostCopySelection(()),
+            filesystem_status=SessionState.COMPLETED,
+            recording=RecordingStatus.OK,
+            execute_phase=PhaseResult(
+                "execute",
+                PhaseStatus.COMPLETED,
+                1,
+                1,
+                0,
+                0,
+            ),
+        )
+    )
+    result = run_execution(
+        continuation,
+        RunContext(lambda body: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=lambda details: None,
+            observer=lambda *args: pytest.fail("preflight observation ran"),
+            open_recording=lambda _spec: Recording(),
+            finish_existing_recording=lambda _spec, status, _recording: finished.append(
+                status
+            ),
+        ),
+        resumed=True,
+    )
+
+    assert result.disposition is Disposition.RAN
+    assert result.error is not None
+    assert "derived selection" in result.error.message
+    if phase == "execute":
+        assert result.status is SessionState.FAILED
+        assert finished == [SessionState.FAILED]
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+        assert finished == [SessionState.COMPLETED]
+
+
 def _real_cycle(
     runtime: LocalWorkflowRuntime,
     source: Path,
@@ -594,12 +1879,189 @@ def _real_cycle(
         options=SyncOptions(propagate_source_casing=True),
     )
     context = RunContext(lambda _: None, lambda: None)
-    plan_result = runtime.open_plan(runtime.prepare_plan(request).payload).run(context)
+    plan_result = runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
     assert plan_result.status is SessionState.COMPLETED
     review = runtime.get_plan_review(request_id)
     execution = runtime.commit_plan(request_id, run_id=run_id, committed_at=NOW)
-    payload = runtime.prepare_execution(execution).payload
-    return review, runtime.open_execution(payload).run(context)
+    checkpoint = runtime.prepare_execution(execution).checkpoint
+    return review, runtime.open_execution(checkpoint).run(context)
+
+
+def test_repeated_source_renames_use_current_scan_identity_for_moves(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "original.bin").write_bytes(b"same content")
+    (target / "original.bin").write_bytes(b"same content")
+    source_stat = os.stat(source / "original.bin")
+    os.utime(
+        target / "original.bin",
+        ns=(source_stat.st_mtime_ns, source_stat.st_mtime_ns),
+    )
+    target_identity = os.stat(target / "original.bin").st_ino
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        review, result = _real_cycle(
+            runtime, source, target, request_id=f"{1:032x}", run_id=f"{2:032x}"
+        )
+        assert [operation.kind for operation in review.operations] == ["noop"]
+        assert result.status is SessionState.COMPLETED
+
+        previous = "original.bin"
+        for index, current in enumerate(("first.bin", "second.bin", "third.bin")):
+            (source / previous).rename(source / current)
+            review, result = _real_cycle(
+                runtime,
+                source,
+                target,
+                request_id=f"{4 * index + 3:032x}",
+                run_id=f"{4 * index + 4:032x}",
+            )
+            assert [operation.kind for operation in review.operations] == ["move"], index
+            assert review.operations[0].prior_target_path == previous
+            assert review.operations[0].target_path == current
+            assert review.operations[0].content_bytes == "0"
+            assert result.status is SessionState.COMPLETED
+            assert result.bytes_total == 0
+            assert [entry.name for entry in target.iterdir()] == [current]
+            assert os.stat(target / current).st_ino == target_identity
+            assert not (target / ".synctrash").exists()
+
+            rerun_review, rerun_result = _real_cycle(
+                runtime,
+                source,
+                target,
+                request_id=f"{4 * index + 5:032x}",
+                run_id=f"{4 * index + 6:032x}",
+            )
+            assert [operation.kind for operation in rerun_review.operations] == ["noop"]
+            assert rerun_result.status is SessionState.COMPLETED
+            previous = current
+
+        connection = connect_ledger_reader(runtime.ledger_path)
+        try:
+            source_location_id = connection.execute(
+                "SELECT source_location_id FROM mappings"
+            ).fetchone()[0]
+            source_rows = connection.execute(
+                """SELECT rel_path, file_identity_file_index, observed_nlink
+                     FROM inventory WHERE location_id = ? ORDER BY rel_path""",
+                (source_location_id,),
+            ).fetchall()
+            assert [row["rel_path"] for row in source_rows] == [
+                "first.bin", "original.bin", "second.bin", "third.bin"
+            ]
+            assert len({row["file_identity_file_index"] for row in source_rows}) == 1
+            assert {row["observed_nlink"] for row in source_rows} == {1}
+        finally:
+            connection.close()
+    finally:
+        runtime.close()
+
+
+def test_past_multilink_observation_does_not_block_fresh_single_link_move(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "original.bin").write_bytes(b"same content")
+    (target / "original.bin").write_bytes(b"same content")
+    source_stat = os.stat(source / "original.bin")
+    os.utime(
+        target / "original.bin",
+        ns=(source_stat.st_mtime_ns, source_stat.st_mtime_ns),
+    )
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        first, result = _real_cycle(
+            runtime, source, target, request_id=f"{1:032x}", run_id=f"{2:032x}"
+        )
+        assert [operation.kind for operation in first.operations] == ["noop"]
+        assert result.status is SessionState.COMPLETED
+
+        outside = tmp_path / "outside.bin"
+        os.link(source / "original.bin", outside)
+        linked, result = _real_cycle(
+            runtime, source, target, request_id=f"{3:032x}", run_id=f"{4:032x}"
+        )
+        assert [operation.kind for operation in linked.operations] == ["noop"]
+        assert result.status is SessionState.COMPLETED
+        outside.unlink()
+        assert os.stat(source / "original.bin").st_nlink == 1
+        (source / "original.bin").rename(source / "renamed.bin")
+
+        moved, result = _real_cycle(
+            runtime, source, target, request_id=f"{5:032x}", run_id=f"{6:032x}"
+        )
+        assert [operation.kind for operation in moved.operations] == ["move"]
+        assert result.status is SessionState.COMPLETED
+        assert result.bytes_total == 0
+    finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize("side", ("source", "target"))
+@pytest.mark.parametrize("link_location", ("outside", "excluded"))
+def test_current_multilink_blocks_move_with_outside_or_excluded_alias(
+    tmp_path: Path, side: str, link_location: str
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "original.bin").write_bytes(b"same content")
+    (target / "original.bin").write_bytes(b"same content")
+    source_stat = os.stat(source / "original.bin")
+    os.utime(
+        target / "original.bin",
+        ns=(source_stat.st_mtime_ns, source_stat.st_mtime_ns),
+    )
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        review, result = _real_cycle(
+            runtime, source, target, request_id=f"{1:032x}", run_id=f"{2:032x}"
+        )
+        assert [operation.kind for operation in review.operations] == ["noop"]
+        assert result.status is SessionState.COMPLETED
+
+        linked_root = source if side == "source" else target
+        if link_location == "outside":
+            link = tmp_path / "outside.bin"
+            filters = FilterSet()
+        else:
+            excluded = linked_root / "excluded"
+            excluded.mkdir()
+            link = excluded / "link.bin"
+            filters = FilterSet(("excluded",))
+        os.link(linked_root / "original.bin", link)
+        (source / "original.bin").rename(source / "renamed.bin")
+        observed = source / "renamed.bin" if side == "source" else target / "original.bin"
+        assert os.stat(observed).st_nlink == 2
+
+        request = PlanRequest(
+            request_id=f"{3:032x}",
+            source_path=str(source),
+            target_path=str(target),
+            options=SyncOptions(filters=filters),
+        )
+        context = RunContext(lambda _: None, lambda: None)
+        planned = runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
+        assert planned.status is SessionState.COMPLETED
+        review = runtime.get_plan_review(request.request_id)
+        assert not any(
+            operation.kind in {"move", "move_update"}
+            for operation in review.operations
+        )
+    finally:
+        runtime.close()
 
 
 def test_opt_in_recase_runs_end_to_end_without_copying_or_trashing(
@@ -626,8 +2088,8 @@ def test_opt_in_recase_runs_end_to_end_without_copying_or_trashing(
         recase = review.operations[0]
         assert recase.prior_target_path == "keep.txt"
         assert recase.target_path == "KEEP.txt"
-        assert recase.content_bytes == 0
-        assert review.required_bytes == 0
+        assert recase.content_bytes == "0"
+        assert review.required_bytes == "0"
 
         # The executor renamed in place: no bytes, no displaced version, same file.
         assert result.status is SessionState.COMPLETED

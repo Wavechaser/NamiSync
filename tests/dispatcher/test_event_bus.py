@@ -1,13 +1,31 @@
 from __future__ import annotations
 
+import gc
 from datetime import datetime, timezone
-from threading import Event, Thread
-from time import monotonic
+from threading import Condition, Event, Thread
+from time import monotonic, sleep
+from weakref import ref
 
-from namisync.core.evidence import RecordingStatus
-from namisync.core.events import Gap, PhaseChanged, Progress, StateChanged, Terminal
+import pytest
+
+from _event_v5_fixtures import (
+    maximum_non_ascii_reliable_envelope,
+    maximum_reliable_envelope,
+)
+import namisync.dispatcher.event_bus as event_bus
+from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.events import (
+    Gap,
+    ItemOutcome,
+    PhaseChanged,
+    Progress,
+    StateChanged,
+    Terminal,
+    TerminalSummary,
+)
+from namisync.core.execution import ItemRecordingReason
 from namisync.core.session import OperationResult, SessionId, SessionState
-from namisync.dispatcher.event_bus import EventHub
+from namisync.dispatcher.event_bus import EventHub, EventHubCloseStatus
 
 
 class FixedClock:
@@ -18,17 +36,25 @@ class FixedClock:
 class Observer:
     def __init__(self) -> None:
         self.events = []
+        self.flushes = 0
         self.results = []
         self.closed = False
+        self.close_count = 0
 
-    def on_event(self, envelope) -> None:
+    def on_event(self, envelope) -> RecordingStatus:
         self.events.append(envelope)
+        return RecordingStatus.OK
 
-    def finalize(self, result) -> None:
+    def flush(self) -> None:
+        self.flushes += 1
+
+    def finalize(self, result) -> RecordingStatus:
         self.results.append(result)
+        return result.audit
 
     def close(self) -> None:
         self.closed = True
+        self.close_count += 1
 
 
 def make_hub(**overrides) -> EventHub:
@@ -41,17 +67,64 @@ def make_hub(**overrides) -> EventHub:
         "subscriber_capacity": 4,
         "audit_capacity": 4,
         "audit_timeout": 0.2,
+        "audit_flush_interval": 1.0,
     }
     options.update(overrides)
+    # Offer backpressure defaults to the finalization bound so existing cases
+    # keep their original single-timeout behavior; tests that care about the
+    # split pass it explicitly.
+    options.setdefault("audit_offer_timeout", options["audit_timeout"])
     return EventHub(**options)
 
 
-def test_progress_flood_is_coalesced_and_never_ejects_slow_stream() -> None:
+def test_audit_flush_interval_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="audit flush interval must be positive"):
+        make_hub(audit_flush_interval=0)
+
+
+@pytest.mark.parametrize(
+    "factory",
+    [maximum_reliable_envelope, maximum_non_ascii_reliable_envelope],
+)
+def test_reliable_oversize_refuses_before_sequence_queue_or_audit_mutation(
+    factory,
+) -> None:
+    raw = factory()["body"]
+    assert isinstance(raw, dict)
+    path = raw["path"]
+    detail = raw["detail"]
+    assert isinstance(path, str)
+    assert isinstance(detail, dict)
+    observer = Observer()
+    hub = make_hub(observer=observer)
+    stream = hub.subscribe(from_seq=1)
+    item = ItemOutcome(
+        item_id=str(raw["item_id"]),
+        kind=str(raw["kind"]),
+        path=path + "x",
+        outcome=Outcome(str(raw["result"])),
+        detail=detail,
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+        recording_detail=str(raw["recording_detail"]),
+    )
+
+    with pytest.raises(ValueError, match="canonical byte ceiling"):
+        hub.emit(item)
+
+    assert hub._seq == 0
+    assert not hub._replay
+    assert not stream._items
+    assert observer.events == []
+    assert hub.close(0.5)
+
+
+def test_br_g_33_progress_flood_is_coalesced_and_never_ejects_slow_stream() -> None:
     hub = make_hub(subscriber_capacity=1)
     stream = hub.subscribe(from_seq=1)
     started = monotonic()
     for index in range(1000):
-        hub.emit(Progress(index, 1000, index, 1000, None))
+        hub.emit(Progress("execute", index, 1000, index, 1000, None))
     elapsed = monotonic() - started
     envelope = stream.next(0.1)
     assert isinstance(envelope.body, Progress)
@@ -61,7 +134,7 @@ def test_progress_flood_is_coalesced_and_never_ejects_slow_stream() -> None:
     assert hub.close(0.5)
 
 
-def test_reliable_overrun_ejects_with_gap_as_first_visible_event() -> None:
+def test_br_g_33_reliable_overrun_ejects_with_gap_as_first_visible_event() -> None:
     hub = make_hub(subscriber_capacity=1)
     stream = hub.subscribe(from_seq=1)
     hub.emit(PhaseChanged("one"))
@@ -70,10 +143,13 @@ def test_reliable_overrun_ejects_with_gap_as_first_visible_event() -> None:
     assert isinstance(envelope.body, Gap)
     assert envelope.body.first_missed_seq == 1
     assert stream.ejected
+    assert hub._subscribers == []
+    stream.close()
+    assert hub._subscribers == []
     assert hub.close(0.5)
 
 
-def test_late_subscriber_gets_current_state_bounded_tail_and_gap() -> None:
+def test_br_g_33_late_subscriber_gets_current_state_bounded_tail_and_gap() -> None:
     hub = make_hub(replay_capacity=2, subscriber_capacity=4)
     hub.emit(StateChanged(SessionState.RUNNING))
     hub.emit(PhaseChanged("one"))
@@ -84,6 +160,135 @@ def test_late_subscriber_gets_current_state_bounded_tail_and_gap() -> None:
     assert isinstance(stream.next(0.1).body, Gap)
     assert stream.next(0.1).body == PhaseChanged("two")
     assert stream.next(0.1).body == PhaseChanged("three")
+    assert hub.close(0.5)
+
+
+def test_br_g_33_truncated_replay_keeps_gap_inside_subscriber_bound() -> None:
+    # A replay buffer larger than one subscriber's bound is the normal
+    # production shape (128 versus 64), so the truncation gap must be counted
+    # against the bound rather than delivered on top of an already full tail.
+    hub = make_hub(replay_capacity=8, subscriber_capacity=4)
+    for index in range(8):
+        hub.emit(PhaseChanged(f"phase-{index}"))
+
+    stream = hub.subscribe(from_seq=1)
+
+    assert len(stream._items) == 4
+    assert isinstance(stream.next(0.1).body, Gap)
+    assert [
+        stream.next(0.1).body for _ in range(3)
+    ] == [PhaseChanged("phase-5"), PhaseChanged("phase-6"), PhaseChanged("phase-7")]
+    assert not stream.ejected
+    assert hub.close(0.5)
+
+
+@pytest.mark.parametrize(
+    ("boundary", "replay_capacity", "subscriber_capacity", "pattern"),
+    [
+        pytest.param("live", 8, 1, "RR", id="live-capacity-1"),
+        pytest.param("live", 8, 2, "PRR", id="live-progress-prefix"),
+        pytest.param("live", 8, 3, "RPRR", id="live-mixed-capacity-3"),
+        pytest.param("live", 8, 4, "RPRPRR", id="live-replaced-progress"),
+        pytest.param("replay", 2, 4, "RRR", id="retention-truncation"),
+        pytest.param("replay", 8, 4, "RRRRRRRR", id="subscriber-truncation"),
+        pytest.param("replay", 4, 3, "PRPRR", id="replay-mixed-pattern"),
+    ],
+)
+def test_br_g_33_gap_covers_earliest_missing_reliable_sequence(
+    boundary: str,
+    replay_capacity: int,
+    subscriber_capacity: int,
+    pattern: str,
+) -> None:
+    hub = make_hub(
+        replay_capacity=replay_capacity,
+        subscriber_capacity=subscriber_capacity,
+    )
+    stream = hub.subscribe(from_seq=1) if boundary == "live" else None
+    emitted = []
+    for index, kind in enumerate(pattern, start=1):
+        body = (
+            PhaseChanged(f"reliable-{index}")
+            if kind == "R"
+            else Progress(
+                "execute", index, len(pattern), index, len(pattern), None
+            )
+        )
+        emitted.append((kind, hub.emit(body)))
+    if stream is None:
+        stream = hub.subscribe(from_seq=1)
+
+    observed = [stream.next(0.1) for _ in range(len(stream._items))]
+    assert observed
+    assert isinstance(observed[0].body, Gap)
+    delivered_sequences = {
+        envelope.seq for envelope in observed if not isinstance(envelope.body, Gap)
+    }
+    missing_reliable = [
+        envelope.seq
+        for kind, envelope in emitted
+        if kind == "R" and envelope.seq not in delivered_sequences
+    ]
+    assert missing_reliable
+    assert observed[0].body.first_missed_seq <= min(missing_reliable)
+    assert stream.ejected is (boundary == "live")
+    assert hub.close(0.5)
+
+
+def test_br_g_33_progress_coalescing_makes_legal_numeric_holes() -> None:
+    hub = make_hub(subscriber_capacity=4)
+    stream = hub.subscribe(from_seq=1)
+    hub.emit(StateChanged(SessionState.RUNNING))
+    hub.emit(
+        Progress(
+            "execute",
+            1,
+            2,
+            1,
+            2,
+            "first.bin",
+            item_id="1" * 32,
+            item_type="operation",
+            item_attempt_id="a" * 32,
+            item_bytes_done=1,
+            item_bytes_total=2,
+        )
+    )
+    newest = Progress(
+        "execute",
+        1,
+        2,
+        2,
+        2,
+        "second.bin",
+        item_id="2" * 32,
+        item_type="operation",
+        item_attempt_id="b" * 32,
+        item_bytes_done=2,
+        item_bytes_total=2,
+    )
+    hub.emit(newest)
+    hub.emit(PhaseChanged("after-progress"))
+
+    observed = [stream.next(0.1) for _ in range(3)]
+
+    assert [envelope.seq for envelope in observed] == [1, 3, 4]
+    assert observed[1].body is newest
+    assert not any(isinstance(envelope.body, Gap) for envelope in observed)
+    assert not stream.ejected
+    assert hub.close(0.5)
+
+
+def test_explicit_stream_close_unsubscribes_immediately_and_idempotently() -> None:
+    hub = make_hub()
+
+    for _ in range(20):
+        stream = hub.subscribe()
+        assert len(hub._subscribers) == 1
+        stream.close()
+        stream.close()
+        assert hub._subscribers == []
+
     assert hub.close(0.5)
 
 
@@ -108,13 +313,517 @@ def test_audit_observer_receives_reliable_preterminal_events_and_finalizes() -> 
     observer = Observer()
     hub = make_hub(observer=observer)
     hub.emit(PhaseChanged("one"))
-    hub.emit(Progress(0, 1, 0, 1, None))
+    hub.emit(Progress("execute", 0, 1, 0, 1, None))
     result = OperationResult(SessionState.COMPLETED)
     assert hub.finalize_audit(result) is RecordingStatus.OK
-    hub.emit(Terminal(result))
+    hub.emit(Terminal(TerminalSummary.from_result(result)))
     assert [type(envelope.body) for envelope in observer.events] == [PhaseChanged]
     assert observer.results == [result]
+    assert observer.flushes == 0
     assert hub.close(0.5)
+
+
+def test_recoverable_audit_degradation_keeps_accepting_and_finalizes_tail() -> None:
+    class RecoverableObserver(Observer):
+        def on_event(self, envelope) -> RecordingStatus:
+            self.events.append(envelope)
+            return (
+                RecordingStatus.DEGRADED
+                if len(self.events) == 1
+                else RecordingStatus.OK
+            )
+
+    observer = RecoverableObserver()
+    hub = make_hub(observer=observer)
+    hub.emit(PhaseChanged("oversized-receipt"))
+    hub.emit(PhaseChanged("later-valid-event"))
+
+    assert (
+        hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        is RecordingStatus.DEGRADED
+    )
+    assert [event.body.phase for event in observer.events] == [
+        "oversized-receipt",
+        "later-valid-event",
+    ]
+    assert observer.results[0].audit is RecordingStatus.DEGRADED
+
+
+def test_none_audit_event_status_breaks_the_prefix() -> None:
+    class MissingStatus(Observer):
+        def on_event(self, envelope):
+            self.events.append(envelope)
+            return None
+
+    observer = MissingStatus()
+    hub = make_hub(observer=observer)
+    hub.emit(PhaseChanged("execute"))
+
+    assert hub._audit._closed.wait(1)
+    assert hub.audit_degraded
+    assert (
+        hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        is RecordingStatus.DEGRADED
+    )
+
+
+def test_none_audit_finalize_status_is_a_failed_finalization() -> None:
+    class MissingStatus(Observer):
+        def finalize(self, result):
+            self.results.append(result)
+            return None
+
+    observer = MissingStatus()
+    hub = make_hub(observer=observer)
+
+    assert (
+        hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        is RecordingStatus.DEGRADED
+    )
+    assert hub.audit_degraded
+    assert hub.close(0.5)
+
+
+def test_audit_flushes_an_idle_window_by_its_original_deadline() -> None:
+    flushed = Event()
+
+    class TrackingObserver(Observer):
+        def flush(self) -> None:
+            super().flush()
+            flushed.set()
+
+    observer = TrackingObserver()
+    hub = make_hub(observer=observer, audit_flush_interval=0.03)
+    hub.emit(PhaseChanged("one"))
+
+    assert flushed.wait(1)
+    assert observer.flushes == 1
+    assert hub.close(0.5)
+    assert observer.close_count == 1
+
+
+def test_continuous_events_do_not_postpone_the_audit_flush_deadline() -> None:
+    flushed = Event()
+
+    class TrackingObserver(Observer):
+        def flush(self) -> None:
+            super().flush()
+            flushed.set()
+
+    observer = TrackingObserver()
+    hub = make_hub(
+        observer=observer,
+        audit_capacity=64,
+        audit_flush_interval=0.04,
+    )
+    deadline = monotonic() + 0.3
+    index = 0
+    while monotonic() < deadline and not flushed.is_set():
+        hub.emit(PhaseChanged(str(index)))
+        index += 1
+        sleep(0.005)
+
+    assert flushed.is_set()
+    assert index > 1
+    assert hub.close(0.5)
+
+
+def test_paused_event_publication_waits_for_the_audit_flush_barrier() -> None:
+    flush_entered = Event()
+    release_flush = Event()
+    emission_complete = Event()
+
+    class BlockingFlush(Observer):
+        def flush(self) -> None:
+            flush_entered.set()
+            assert release_flush.wait(2)
+            super().flush()
+
+    observer = BlockingFlush()
+    hub = make_hub(
+        observer=observer,
+        audit_timeout=1.0,
+        audit_flush_interval=30.0,
+    )
+    stream = hub.subscribe()
+
+    def emit_pause() -> None:
+        hub.emit(StateChanged(SessionState.PAUSED))
+        emission_complete.set()
+
+    thread = Thread(target=emit_pause)
+    thread.start()
+    assert flush_entered.wait(1)
+    assert not emission_complete.wait(0.05)
+    with pytest.raises(TimeoutError):
+        stream.next(0.05)
+
+    release_flush.set()
+    assert emission_complete.wait(1)
+    thread.join(1)
+    assert not thread.is_alive()
+    assert stream.next(0.1).body == StateChanged(SessionState.PAUSED)
+    assert observer.flushes == 1
+    assert hub.close(0.5)
+
+
+def test_failed_paused_flush_degrades_without_hiding_domain_event() -> None:
+    class FailedFlush(Observer):
+        def flush(self) -> None:
+            raise RuntimeError("history window failed")
+
+    hub = make_hub(observer=FailedFlush(), audit_flush_interval=30.0)
+    stream = hub.subscribe()
+
+    envelope = hub.emit(StateChanged(SessionState.PAUSED))
+
+    assert envelope.body == StateChanged(SessionState.PAUSED)
+    assert stream.next(0.1) == envelope
+    assert hub.audit_degraded
+    assert hub.close(0.5)
+
+
+def test_timed_out_paused_flush_never_delivers_a_later_audit_tail() -> None:
+    flush_entered = Event()
+    release_flush = Event()
+
+    class DelayedFlush(Observer):
+        def flush(self) -> None:
+            flush_entered.set()
+            assert release_flush.wait(2)
+            super().flush()
+
+    observer = DelayedFlush()
+    hub = make_hub(
+        observer=observer,
+        audit_timeout=0.1,
+        audit_flush_interval=30.0,
+    )
+
+    paused = hub.emit(StateChanged(SessionState.PAUSED))
+
+    assert flush_entered.is_set()
+    assert paused.body == StateChanged(SessionState.PAUSED)
+    assert hub.audit_degraded
+    hub.emit(PhaseChanged("must-not-be-audited"))
+    assert (
+        hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        is RecordingStatus.DEGRADED
+    )
+
+    release_flush.set()
+    assert hub._audit._closed.wait(1)
+    assert [envelope.body for envelope in observer.events] == [
+        StateChanged(SessionState.PAUSED)
+    ]
+    assert observer.results == []
+    assert hub.close(0.5)
+
+
+def test_timed_out_flush_exits_after_the_inflight_flush_returns() -> None:
+    flush_entered = Event()
+    release_flush = Event()
+
+    class DelayedFlush(Observer):
+        def flush(self) -> None:
+            flush_entered.set()
+            assert release_flush.wait(2)
+
+    hub = make_hub(
+        observer=DelayedFlush(),
+        audit_timeout=0.05,
+        audit_flush_interval=30.0,
+    )
+
+    hub.emit(StateChanged(SessionState.PAUSED))
+    assert flush_entered.is_set()
+    assert hub.audit_degraded
+
+    release_flush.set()
+    assert hub._audit._closed.wait(2)
+    assert hub.close(0.5)
+
+
+def test_external_prefix_break_wakes_an_idle_audit_pump() -> None:
+    hub = make_hub(observer=Observer(), audit_flush_interval=30.0)
+
+    hub._audit._break_prefix()
+
+    assert hub._audit._closed.wait(2)
+    assert hub.audit_degraded
+    assert hub.close(0.5)
+
+
+def test_clean_stop_forces_one_flush_and_closes_exactly_once() -> None:
+    observer = Observer()
+    hub = make_hub(observer=observer)
+
+    assert hub.close(0.5)
+    assert observer.flushes == 1
+    assert observer.close_count == 1
+    assert hub.close(0.5)
+    assert observer.flushes == 1
+    assert observer.close_count == 1
+
+
+def test_flush_failure_degrades_and_closes_without_finalizing_tail() -> None:
+    class FailedFlush(Observer):
+        def flush(self) -> None:
+            raise RuntimeError("history window failed")
+
+    observer = FailedFlush()
+    hub = make_hub(observer=observer, audit_flush_interval=0.02)
+    hub.emit(PhaseChanged("one"))
+
+    assert hub._audit._closed.wait(1)
+    assert hub.audit_degraded
+    assert (
+        hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        is RecordingStatus.DEGRADED
+    )
+    assert observer.results == []
+    assert observer.close_count == 1
+    assert hub.close(0.5)
+
+
+def test_cleanup_failure_does_not_rewrite_successful_finalization() -> None:
+    class FailedClose(Observer):
+        def close(self) -> None:
+            self.close_count += 1
+            raise RuntimeError("history cleanup failed")
+
+    observer = FailedClose()
+    hub = make_hub(observer=observer)
+    result = OperationResult(SessionState.COMPLETED)
+
+    assert hub.finalize_audit(result) is RecordingStatus.OK
+    assert hub._audit._closed.wait(1)
+    assert hub.audit_degraded
+    assert observer.results == [result]
+    assert observer.close_count == 1
+    assert hub.close(0.5)
+
+
+def test_caller_timeout_wins_and_pump_conforms_persisted_result() -> None:
+    release_event = Event()
+    event_entered = Event()
+    finalized = Event()
+
+    class DelayedEvent(Observer):
+        def on_event(self, envelope) -> RecordingStatus:
+            event_entered.set()
+            assert release_event.wait(2)
+            return super().on_event(envelope)
+
+        def finalize(self, result) -> RecordingStatus:
+            status = super().finalize(result)
+            finalized.set()
+            return status
+
+    observer = DelayedEvent()
+    hub = make_hub(observer=observer, audit_timeout=0.05)
+    hub.emit(PhaseChanged("one"))
+    assert event_entered.wait(2)
+
+    status = hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+
+    assert status is RecordingStatus.DEGRADED
+    release_event.set()
+    assert finalized.wait(2)
+    assert observer.results[0].audit is RecordingStatus.DEGRADED
+    assert hub.close(0.5)
+    assert observer.close_count == 1
+
+
+def test_queued_finalize_does_not_write_after_prior_event_failure() -> None:
+    event_entered = Event()
+    release_event = Event()
+    complete = Event()
+    statuses: list[RecordingStatus] = []
+
+    class FailedEvent(Observer):
+        def on_event(self, envelope) -> None:
+            del envelope
+            event_entered.set()
+            assert release_event.wait(2)
+            raise RuntimeError("history event failed")
+
+    observer = FailedEvent()
+    hub = make_hub(observer=observer, audit_timeout=0.5)
+    hub.emit(PhaseChanged("one"))
+    assert event_entered.wait(2)
+
+    def finalize() -> None:
+        statuses.append(
+            hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        )
+        complete.set()
+
+    thread = Thread(target=finalize)
+    thread.start()
+    deadline = monotonic() + 2
+    while hub._audit._queue.empty() and monotonic() < deadline:
+        sleep(0.001)
+    assert not hub._audit._queue.empty()
+    release_event.set()
+    assert complete.wait(2)
+    thread.join()
+
+    assert statuses == [RecordingStatus.DEGRADED]
+    assert observer.results == []
+    assert hub._audit._queue.empty()
+    assert hub._audit._queue.unfinished_tasks == 0
+    assert hub.close(0.5)
+    assert observer.close_count == 1
+
+
+def test_broken_audit_prefix_releases_every_queued_envelope() -> None:
+    event_entered = Event()
+    release_event = Event()
+    close_entered = Event()
+    release_close = Event()
+
+    class FailedEvent(Observer):
+        def on_event(self, envelope) -> None:
+            del envelope
+            event_entered.set()
+            assert release_event.wait(2)
+            raise RuntimeError("history event failed")
+
+        def close(self) -> None:
+            self.close_count += 1
+            close_entered.set()
+            assert release_close.wait(2)
+
+    observer = FailedEvent()
+    hub = make_hub(
+        observer=observer,
+        audit_capacity=3,
+        audit_offer_timeout=0.1,
+    )
+    hub.emit(PhaseChanged("active"))
+    assert event_entered.wait(2)
+    hub.emit(PhaseChanged("queued-1"))
+    hub.emit(PhaseChanged("queued-2"))
+    hub.emit(PhaseChanged("queued-3"))
+    assert hub._audit._queue.full()
+
+    release_event.set()
+    assert close_entered.wait(2)
+
+    assert hub.audit_degraded
+    assert hub._audit._queue.empty()
+    assert hub._audit._queue.unfinished_tasks == 0
+    assert not hub._audit._closed.is_set()
+
+    release_close.set()
+    assert hub._audit._closed.wait(2)
+    assert hub.close(0.5)
+    assert observer.close_count == 1
+
+
+def test_pump_claim_before_deadline_waits_for_late_success() -> None:
+    finalize_entered = Event()
+    release_finalize = Event()
+    complete = Event()
+    statuses: list[RecordingStatus] = []
+
+    class DelayedFinalize(Observer):
+        def finalize(self, result) -> RecordingStatus:
+            finalize_entered.set()
+            assert release_finalize.wait(2)
+            return super().finalize(result)
+
+    observer = DelayedFinalize()
+    hub = make_hub(observer=observer, audit_timeout=0.05)
+
+    def finalize() -> None:
+        statuses.append(
+            hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        )
+        complete.set()
+
+    thread = Thread(target=finalize)
+    thread.start()
+    assert finalize_entered.wait(2)
+    assert not complete.wait(0.1)
+    assert not hub.audit_degraded
+    release_finalize.set()
+    assert complete.wait(2)
+    thread.join()
+
+    assert statuses == [RecordingStatus.OK]
+    assert observer.results[0].audit is RecordingStatus.OK
+    assert hub.close(0.5)
+
+
+def test_pump_claim_before_deadline_reports_late_commit_failure() -> None:
+    finalize_entered = Event()
+    release_finalize = Event()
+    complete = Event()
+    statuses: list[RecordingStatus] = []
+
+    class FailedFinalize(Observer):
+        def finalize(self, result) -> None:
+            del result
+            finalize_entered.set()
+            assert release_finalize.wait(2)
+            raise RuntimeError("history commit failed")
+
+    hub = make_hub(observer=FailedFinalize(), audit_timeout=0.05)
+
+    def finalize() -> None:
+        statuses.append(
+            hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+        )
+        complete.set()
+
+    thread = Thread(target=finalize)
+    thread.start()
+    assert finalize_entered.wait(2)
+    assert not complete.wait(0.1)
+    release_finalize.set()
+    assert complete.wait(2)
+    thread.join()
+
+    assert statuses == [RecordingStatus.DEGRADED]
+    assert hub.audit_degraded
+    assert hub.close(0.5)
+
+
+def test_producer_backpressure_uses_the_offer_bound_not_the_finalization_bound() -> None:
+    """A long finalization cutoff must not stall the emitting workflow thread.
+
+    Finalization has to outlast the history writer's retry bound so a late but
+    legitimate commit is not falsely degraded. Offer is the opposite concern:
+    it exists only so a wedged audit writer degrades quickly instead of
+    freezing live progress. Sharing one knob made raising the former silently
+    multiply the latter.
+    """
+
+    release = Event()
+
+    class Stalled(Observer):
+        def on_event(self, envelope) -> None:
+            del envelope
+            release.wait(5)
+
+    hub = make_hub(
+        observer=Stalled(),
+        audit_capacity=1,
+        audit_timeout=30.0,
+        audit_offer_timeout=0.05,
+    )
+    hub.emit(PhaseChanged("one"))
+    hub.emit(PhaseChanged("two"))
+    started = monotonic()
+    hub.emit(PhaseChanged("three"))
+    elapsed = monotonic() - started
+
+    assert hub.audit_degraded
+    assert elapsed < 1.0
+    release.set()
+    assert hub.close(1.0)
 
 
 def test_stalled_audit_is_timeout_bounded_and_degrades() -> None:
@@ -135,3 +844,303 @@ def test_stalled_audit_is_timeout_bounded_and_degrades() -> None:
     assert hub.finalize_audit(OperationResult(SessionState.COMPLETED)) is RecordingStatus.DEGRADED
     release.set()
     assert hub.close(0.5)
+
+
+def test_close_deadline_includes_waiting_for_the_publication_lock() -> None:
+    hub = make_hub()
+    stream = hub.subscribe()
+    hub.emit(PhaseChanged("retained-until-close"))
+    assert hub._reserve_publication(0.1)
+    try:
+        started = monotonic()
+        assert (
+            hub.close(0.05)
+            is EventHubCloseStatus.PUBLICATION_TIMEOUT
+        )
+        assert monotonic() - started < 0.5
+        assert hub._replay
+        assert hub._subscribers == [stream]
+    finally:
+        hub._release_publication()
+
+    assert hub.close(0.5) is EventHubCloseStatus.COMPLETE
+    assert not hub._replay
+    assert not hub._subscribers
+    assert stream._closed
+
+
+def test_close_detaches_replay_and_subscribers_before_observer_cleanup() -> None:
+    close_entered = Event()
+    release_close = Event()
+
+    class BlockingClose(Observer):
+        def close(self) -> None:
+            close_entered.set()
+            assert release_close.wait(2)
+            super().close()
+
+    hub = make_hub(observer=BlockingClose(), audit_timeout=1.0)
+    stream = hub.subscribe()
+    hub.emit(PhaseChanged("durable"))
+    results: list[EventHubCloseStatus] = []
+    thread = Thread(target=lambda: results.append(hub.close(1.0)))
+    thread.start()
+    assert close_entered.wait(2)
+    try:
+        assert not hub._replay
+        assert not hub._subscribers
+        assert stream._closed
+        with pytest.raises(RuntimeError, match="event hub is closed"):
+            hub.subscribe()
+    finally:
+        release_close.set()
+        thread.join(2)
+
+    assert not thread.is_alive()
+    assert results == [EventHubCloseStatus.COMPLETE]
+
+
+def test_close_reports_pending_audit_after_irreversible_hub_cleanup() -> None:
+    close_entered = Event()
+    release_close = Event()
+
+    class BlockingClose(Observer):
+        def close(self) -> None:
+            close_entered.set()
+            assert release_close.wait(2)
+            super().close()
+
+    hub = make_hub(observer=BlockingClose(), audit_timeout=1.0)
+    stream = hub.subscribe()
+    hub.emit(PhaseChanged("durable"))
+
+    status = hub.close(0.05)
+
+    assert close_entered.is_set()
+    assert status is EventHubCloseStatus.AUDIT_CLEANUP_PENDING
+    assert not hub._replay
+    assert not hub._subscribers
+    assert stream._closed
+    with pytest.raises(RuntimeError, match="event hub is closed"):
+        hub.subscribe()
+
+    release_close.set()
+    assert hub._audit._closed.wait(2)
+    assert hub._reserve_publication(0.1)
+    try:
+        assert (
+            hub.close(0.05)
+            is EventHubCloseStatus.AUDIT_CLEANUP_PENDING
+        )
+    finally:
+        hub._release_publication()
+    assert hub.close(0.5) is EventHubCloseStatus.COMPLETE
+
+
+def test_audit_close_spends_one_deadline_across_enqueue_and_join(
+    monkeypatch,
+) -> None:
+    class QueueProbe:
+        def __init__(self) -> None:
+            self.timeouts: list[float] = []
+
+        def put(self, command, *, timeout: float) -> None:
+            assert isinstance(command, event_bus._Stop)
+            self.timeouts.append(timeout)
+
+    class ThreadProbe:
+        def __init__(self) -> None:
+            self.timeouts: list[float] = []
+
+        def join(self, timeout: float) -> None:
+            self.timeouts.append(timeout)
+
+        def is_alive(self) -> bool:
+            return True
+
+    times = iter((10.0, 10.025, 10.075))
+    monkeypatch.setattr(event_bus, "monotonic", lambda: next(times))
+    pump = object.__new__(event_bus._AuditPump)
+    pump._closed = Event()
+    pump._degraded = Event()
+    pump._queue = QueueProbe()
+    pump._submission_condition = Condition()
+    pump._accepting = True
+    pump._active_submissions = 0
+    pump._thread = ThreadProbe()
+
+    assert not pump.close(0.1)
+    assert pump._queue.timeouts == [pytest.approx(0.075)]
+    assert pump._thread.timeouts == [pytest.approx(0.025)]
+
+
+@pytest.mark.parametrize("stage", ("event", "flush", "finalize", "close"))
+def test_audit_failure_retires_traceback_and_cause_before_public_degradation(
+    stage: str,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+    errors = []
+    failed = Event()
+
+    def fail() -> None:
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        try:
+            cause = LookupError("private audit cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = RuntimeError("audit collaborator failed")
+            errors.append(error)
+            failed.set()
+            raise error from cause
+
+    class FailingObserver(Observer):
+        def on_event(self, envelope) -> RecordingStatus:
+            if stage == "event":
+                fail()
+            return super().on_event(envelope)
+
+        def flush(self) -> None:
+            if stage == "flush":
+                fail()
+            super().flush()
+
+        def finalize(self, result) -> RecordingStatus:
+            if stage == "finalize":
+                fail()
+            return super().finalize(result)
+
+        def close(self) -> None:
+            if stage == "close":
+                fail()
+            super().close()
+
+    gc.collect()
+    collection_was_enabled = gc.isenabled()
+    gc.disable()
+    hub = make_hub(observer=FailingObserver(), audit_timeout=0.5)
+    try:
+        if stage == "event":
+            hub.emit(PhaseChanged("retire-event-error"))
+            assert failed.wait(2)
+            assert (
+                hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+                is RecordingStatus.DEGRADED
+            )
+        elif stage == "flush":
+            hub.emit(StateChanged(SessionState.PAUSED))
+            assert failed.wait(2)
+        elif stage == "finalize":
+            assert (
+                hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+                is RecordingStatus.DEGRADED
+            )
+            assert failed.wait(2)
+        else:
+            assert hub.close(0.5) is EventHubCloseStatus.COMPLETE
+            assert failed.wait(2)
+
+        assert hub.audit_degraded
+        assert len(errors) == 1
+        assert errors[0].__traceback__ is None
+        assert errors[0].__cause__ is None
+        assert errors[0].__context__ is None
+        assert retained[0]() is None
+    finally:
+        hub.close(0.5)
+        if collection_was_enabled:
+            gc.enable()
+
+
+@pytest.mark.parametrize("accepted_before_failure", (False, True))
+def test_audit_thread_start_failure_preserves_actual_start_ownership(
+    monkeypatch,
+    accepted_before_failure: bool,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+    errors = []
+    thread_graph_references = []
+    observer = Observer()
+    original_start = event_bus.Thread.start
+
+    def fail() -> None:
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        try:
+            cause = LookupError("private start cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = OSError("audit thread start failed")
+            errors.append(error)
+            raise error from cause
+
+    def start(thread) -> None:
+        if thread.name == "namisync-audit":
+            thread_graph = PrivateGraph()
+            thread.private_graph = thread_graph
+            thread_graph_references.append(ref(thread_graph))
+            if accepted_before_failure:
+                original_start(thread)
+            fail()
+        original_start(thread)
+
+    monkeypatch.setattr(event_bus.Thread, "start", start)
+    if accepted_before_failure:
+        hub = make_hub(observer=observer)
+        try:
+            assert (
+                hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+                is RecordingStatus.OK
+            )
+            assert hub.close(0.5) is EventHubCloseStatus.COMPLETE
+        finally:
+            hub.close(0.5)
+    else:
+        with pytest.raises(OSError, match="audit thread start failed") as raised:
+            make_hub(observer=observer)
+        assert raised.value is errors[0]
+
+    assert len(errors) == 1
+    assert errors[0].__cause__ is None
+    assert errors[0].__context__ is None
+    assert retained[0]() is None
+    assert observer.close_count == 1
+    if not accepted_before_failure:
+        assert thread_graph_references[0]() is None
+
+
+def test_audit_thread_start_failure_preserves_primary_over_close_failure(
+    monkeypatch,
+) -> None:
+    class FailingCloseObserver(Observer):
+        def close(self) -> None:
+            error = OSError("audit observer close failed")
+            close_errors.append(error)
+            raise error
+
+    primary = OSError("audit thread start failed")
+    close_errors = []
+    original_start = event_bus.Thread.start
+
+    def start(thread) -> None:
+        if thread.name == "namisync-audit":
+            raise primary
+        original_start(thread)
+
+    monkeypatch.setattr(event_bus.Thread, "start", start)
+    with pytest.raises(OSError, match="audit thread start failed") as raised:
+        make_hub(observer=FailingCloseObserver())
+
+    assert raised.value is primary
+    assert len(close_errors) == 1
+    assert close_errors[0].__traceback__ is None
+    assert close_errors[0].__cause__ is None
+    assert close_errors[0].__context__ is None

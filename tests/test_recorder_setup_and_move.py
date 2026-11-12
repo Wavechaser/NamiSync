@@ -1,11 +1,19 @@
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import replace
 from pathlib import Path
 
 import pytest
 
-from namisync.core.models import FileRecord, IgnoreSet, ScanResult, ScanScope, VolumeEvidence, VolumeId
+from namisync.core.models import (
+    FileIdentity,
+    FileRecord,
+    ScanResult,
+    ScanScope,
+    VolumeEvidence,
+    VolumeId,
+)
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, OperationReason, selection_digest
 from namisync.core.recording import (
@@ -19,6 +27,7 @@ from namisync.db.recorder import (
     AmbiguousVolumeError,
     LedgerRecorder,
     MappingValidationError,
+    StaleRecordingError,
     VolumeRebindRequired,
 )
 from namisync.db.writer import TokenConflictError
@@ -49,7 +58,6 @@ def _target_scan(sync_plan, records: tuple[FileRecord, ...]) -> ScanResult:
         (),
         (),
         (),
-        IgnoreSet(),
         ScanScope.full(),
         True,
     )
@@ -105,6 +113,57 @@ def test_mapping_rejects_nested_roots_on_one_physical_volume(tmp_path: Path) -> 
             recorder.ensure_mapping(MappingCommand(outer, inner, NOW))
     finally:
         recorder.close()
+
+
+def test_run_context_reports_missing_joined_location_as_mapping_error(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "ledger.db"
+    source = file_stat()
+    target = file_stat(identity_index=2, volume_serial="target-serial")
+    copy = operation(OperationKind.COPY, source=source, intended=target)
+    sync_plan = plan((copy,))
+    setup = setup_recorder(database, sync_plan)
+    setup.recorder.close()
+
+    connection = sqlite3.connect(database)
+    try:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        connection.execute(
+            "DELETE FROM locations WHERE id = ?",
+            (setup.source_location_id,),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    recorder = LedgerRecorder(database, clock=FakeClock())
+    selection = frozenset({copy.op_id})
+    command = SyncRunCommand(
+        "b" * 32,
+        setup.host_id,
+        setup.mapping_id,
+        setup.source_location_id,
+        setup.target_location_id,
+        sync_plan,
+        selection,
+        selection_digest(selection),
+        NOW,
+    )
+    try:
+        with pytest.raises(MappingValidationError, match="location is unavailable"):
+            recorder.begin_sync_run(command)
+    finally:
+        recorder.close()
+
+    connection = sqlite3.connect(database)
+    try:
+        assert connection.execute(
+            "SELECT count(*) FROM runs WHERE run_token = ?",
+            (command.run_token,),
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()
 
 
 def test_run_token_is_idempotent_and_conflicting_selection_is_rejected(tmp_path: Path) -> None:
@@ -202,7 +261,7 @@ def test_move_reconciles_retained_missing_destination_without_rolling_back_prior
                      FROM inventory WHERE location_id = ? AND rel_path_key = 'NEW.TXT'""",
                 (setup.target_location_id,),
             ).fetchall()
-            assert [tuple(row) for row in moved] == [("new.txt", "present", 21)]
+            assert [tuple(row) for row in moved] == [("new.txt", "present", "21")]
             assert connection.execute(
                 "SELECT count(*) FROM inventory WHERE location_id = ? AND rel_path_key = 'OLD.TXT'",
                 (setup.target_location_id,),
@@ -212,6 +271,102 @@ def test_move_reconciles_retained_missing_destination_without_rolling_back_prior
                 "SELECT count(*) FROM mapping_correspondence WHERE mapping_id = ?",
                 (setup.mapping_id,),
             ).fetchone()[0] == 2
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()
+
+
+def test_move_records_reviewed_target_within_timestamp_granularity(
+    tmp_path: Path,
+) -> None:
+    source = file_stat(mtime_ns=12, identity_index=20)
+    reviewed_target = file_stat(
+        mtime_ns=11,
+        identity_index=21,
+        volume_serial="target-serial",
+    )
+    move = operation(
+        OperationKind.MOVE,
+        source_path="new.txt",
+        target_path="new.txt",
+        source=source,
+        target=reviewed_target,
+        intended=source,
+        prior_target_path="old.txt",
+        reason=OperationReason.IDENTITY_RENAME,
+    )
+    move = replace(move, target_expected=None)
+    sync_plan = plan((move,))
+    setup = setup_recorder(tmp_path / "ledger.db", sync_plan)
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.target_location_id,
+                setup.host_id,
+                _target_scan(
+                    sync_plan,
+                    (_record("old.txt", reviewed_target),),
+                ),
+                "target-1",
+                NOW,
+            )
+        )
+
+        setup.run.record_moved(move.op_id, reviewed_target)
+
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            recorded = connection.execute(
+                """SELECT rel_path, observed_mtime_ns
+                     FROM inventory
+                    WHERE location_id = ? AND rel_path_key = 'NEW.TXT'""",
+                (setup.target_location_id,),
+            ).fetchone()
+            assert tuple(recorded) == ("new.txt", 11)
+            assert connection.execute(
+                "SELECT count(*) FROM mapping_correspondence"
+            ).fetchone()[0] == 1
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()
+
+
+@pytest.mark.parametrize("kind", (OperationKind.MOVE, OperationKind.RECASE))
+@pytest.mark.parametrize("mutation", ("created", "unmanaged", "nlink", "managed"))
+def test_pure_rename_records_post_effect_metadata_drift(tmp_path: Path, kind, mutation) -> None:
+    source = file_stat(identity_index=20)
+    target = file_stat(identity_index=21, volume_serial="target-serial")
+    old_path = "new.txt" if kind is OperationKind.RECASE else "old.txt"
+    op = operation(
+        kind, source_path="NEW.txt", target_path="NEW.txt", source=source,
+        target=target, intended=target, prior_target_path=old_path,
+    )
+    sync_plan = plan((op,))
+    setup = setup_recorder(tmp_path / "ledger.db", sync_plan)
+    changed = (
+        replace(target, nlink=2) if mutation == "nlink" else
+        replace(target, metadata=replace(
+            target.metadata,
+            created_ns=50 if mutation == "created" else target.metadata.created_ns,
+            attributes=0x20 if mutation == "unmanaged" else 2 if mutation == "managed" else 0,
+        ))
+    )
+    try:
+        setup.recorder.record_inventory(InventoryCommand(
+            setup.target_location_id, setup.host_id,
+            _target_scan(sync_plan, (_record(old_path, target),)), "target-1", NOW,
+        ))
+        record = setup.run.record_moved if kind is OperationKind.MOVE else setup.run.record_recased
+        record(op.op_id, changed)
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            row = connection.execute(
+                "SELECT observed_nlink, observed_attributes, observed_created_ns FROM inventory WHERE location_id = ?",
+                (setup.target_location_id,),
+            ).fetchone()
+            assert tuple(row) == (changed.nlink, changed.metadata.attributes, changed.metadata.created_ns)
         finally:
             connection.close()
     finally:
@@ -260,6 +415,102 @@ def test_recase_updates_target_spelling_and_correspondence(tmp_path: Path) -> No
                 "SELECT count(*) FROM mapping_correspondence WHERE mapping_id = ?",
                 (setup.mapping_id,),
             ).fetchone()[0] == 1
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()
+
+
+@pytest.mark.parametrize(
+    ("kind", "source_path", "old_path", "new_path", "reason"),
+    (
+        (
+            OperationKind.MOVE,
+            "new.txt",
+            "old.txt",
+            "new.txt",
+            OperationReason.IDENTITY_RENAME,
+        ),
+        (
+            OperationKind.RECASE,
+            "KEEP.txt",
+            "keep.txt",
+            "KEEP.txt",
+            OperationReason.CASE_MISMATCH,
+        ),
+    ),
+    ids=("move", "recase"),
+)
+def test_pure_rename_recording_rejects_substituted_post_rename_identity(
+    tmp_path: Path,
+    kind: OperationKind,
+    source_path: str,
+    old_path: str,
+    new_path: str,
+    reason: OperationReason,
+) -> None:
+    source = file_stat(identity_index=20)
+    reviewed_target = file_stat(
+        identity_index=21,
+        volume_serial="target-serial",
+    )
+    rename = operation(
+        kind,
+        source_path=source_path,
+        target_path=new_path,
+        source=source,
+        target=reviewed_target,
+        intended=reviewed_target,
+        prior_target_path=old_path,
+        reason=reason,
+    )
+    if kind is OperationKind.MOVE:
+        rename = replace(rename, target_expected=None)
+    sync_plan = plan((rename,))
+    setup = setup_recorder(tmp_path / "ledger.db", sync_plan)
+    substituted = replace(
+        reviewed_target,
+        file_identity=FileIdentity("target-serial", 99),
+    )
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.target_location_id,
+                setup.host_id,
+                _target_scan(
+                    sync_plan,
+                    (_record(old_path, reviewed_target),),
+                ),
+                "target-1",
+                NOW,
+            )
+        )
+
+        record = (
+            setup.run.record_moved
+            if kind is OperationKind.MOVE
+            else setup.run.record_recased
+        )
+        with pytest.raises(
+            StaleRecordingError,
+            match="reviewed target version",
+        ):
+            record(rename.op_id, substituted)
+
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            rows = connection.execute(
+                """SELECT rel_path, file_identity_file_index
+                     FROM inventory WHERE location_id = ?""",
+                (setup.target_location_id,),
+            ).fetchall()
+            assert [tuple(row) for row in rows] == [(old_path, "21")]
+            assert connection.execute(
+                "SELECT count(*) FROM operations"
+            ).fetchone()[0] == 0
+            assert connection.execute(
+                "SELECT count(*) FROM mapping_correspondence"
+            ).fetchone()[0] == 0
         finally:
             connection.close()
     finally:

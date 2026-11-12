@@ -1,0 +1,2599 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { assertSameNode } from "./fake_dom_assertions.mjs";
+import { fakeRecoveryHandle } from "./fake_recovery_handle.mjs";
+
+const ROW_HEIGHT = 24;
+process.env.TZ = "UTC";
+
+class ClassList {
+  constructor(owner) { this.owner = owner; this.values = new Set(); }
+  add(...values) { for (const value of values) this.values.add(value); }
+  toggle(value, force = !this.contains(value)) {
+    if (force) this.add(value);
+    else {
+      this.values.delete(value);
+      this.owner.className = this.owner.className.split(/\s+/).filter((item) => item !== value).join(" ");
+    }
+    return force;
+  }
+  contains(value) {
+    return this.values.has(value) || this.owner.className.split(/\s+/).includes(value);
+  }
+}
+
+class Style {
+  constructor() { this.values = new Map(); }
+  setProperty(name, value) { this.values.set(name, String(value)); }
+  getPropertyValue(name) { return this.values.get(name) ?? ""; }
+}
+
+class ElementFake {
+  [Symbol.for("nodejs.util.inspect.custom")]() {
+    return `ElementFake<${this.tagName.slice(0, 24)}>`;
+  }
+  get textContent() { return this._textContent ?? ""; }
+  set textContent(value) {
+    if (this.ownerDocument?.textWriteTargets?.has(this)) this.ownerDocument.textWriteCount += 1;
+    this._textContent = value;
+    for (const child of this.children ?? []) child.parentElement = null;
+    this.children = [];
+  }
+  constructor(tagName, ownerDocument) {
+    this.tagName = tagName.toUpperCase();
+    this.ownerDocument = ownerDocument;
+    this.children = [];
+    this.parentElement = null;
+    this.className = "";
+    this.classList = new ClassList(this);
+    this.dataset = {};
+    this.style = new Style();
+    this.listeners = new Map();
+    this.attributes = new Map();
+    this.value = "";
+    this.textContent = "";
+    this.hidden = false;
+    this.disabled = false;
+    this.checked = false;
+    this.indeterminate = false;
+    this.scrollTop = 0;
+    this.clientHeight = 0;
+  }
+
+  append(...values) {
+    for (const value of values) {
+      if (value.tagName === "#FRAGMENT") {
+        this.append(...value.children);
+        value.children = [];
+      } else {
+        value.remove?.();
+        value.parentElement = this;
+        this.children.push(value);
+      }
+    }
+  }
+
+  insertBefore(value, reference) {
+    value.remove();
+    const index = reference === null ? this.children.length : this.children.indexOf(reference);
+    assert.ok(index >= 0);
+    this.children.splice(index, 0, value);
+    value.parentElement = this;
+  }
+
+  focus(options) {
+    this.ownerDocument.activeElement = this;
+    this.focusOptions = options;
+    if (this.ownerDocument.focusScrollRoot && !options?.preventScroll) {
+      this.ownerDocument.focusScrollRoot.scrollTop = (Number(this.ariaRowIndex) - 2) * ROW_HEIGHT;
+    }
+  }
+  closest(selector) {
+    for (let value = this; value !== null; value = value.parentElement) {
+      if (value.classList.contains(selector.slice(1))) return value;
+    }
+    return null;
+  }
+  contains(value) { return value === this || this.children.some((child) => child.contains(value)); }
+
+  replaceChildren(...values) {
+    for (const child of this.children) child.parentElement = null;
+    this.children = [];
+    this.append(...values);
+  }
+
+  replaceWith(value) {
+    if (this.parentElement === null) return;
+    const index = this.parentElement.children.indexOf(this);
+    this.parentElement.children[index] = value;
+    value.parentElement = this.parentElement;
+    this.parentElement = null;
+  }
+
+  remove() {
+    if (this.parentElement === null) return;
+    this.detachCount = (this.detachCount ?? 0) + 1;
+    this.parentElement.children = this.parentElement.children.filter((item) => item !== this);
+    const viewport = this.parentElement.scrollClampViewport;
+    if (viewport) {
+      const extent = ROW_HEIGHT + this.parentElement.children.reduce((height, child) => height
+        + (child.dataset.nodeId !== undefined ? ROW_HEIGHT
+          : parseFloat(child.style.getPropertyValue("block-size")) || 0), 0);
+      viewport.scrollTop = Math.min(viewport.scrollTop, Math.max(0, extent - viewport.clientHeight));
+    }
+    this.parentElement = null;
+  }
+
+  addEventListener(name, callback) {
+    const listeners = this.listeners.get(name) ?? [];
+    listeners.push(callback);
+    this.listeners.set(name, listeners);
+  }
+
+  removeEventListener(name, callback) {
+    this.listeners.set(name, (this.listeners.get(name) ?? []).filter((item) => item !== callback));
+  }
+
+  dispatch(name, properties = {}) {
+    const event = { type: name, target: this, currentTarget: this, preventDefault() {}, stopPropagation() {}, ...properties };
+    for (const callback of this.listeners.get(name) ?? []) callback(event);
+  }
+
+  getBoundingClientRect() {
+    const index = this.parentElement?.children.indexOf(this) ?? -1;
+    const widths = [32, 300, 130, 112, 100, 112, 300];
+    return { left: 16, right: 116, height: 32, top: 200, bottom: 232, width: this.classList.contains("nami-file-list__header-cell")
+      ? this.measuredWidth ?? widths[index] : 100 };
+  }
+
+  setAttribute(name, value) { this.attributes.set(name, String(value)); }
+
+  querySelector(selector) {
+    const className = selector.startsWith(".") ? selector.slice(1) : null;
+    for (const child of this.children) {
+      if (className !== null && child.classList.contains(className)) return child;
+      const nested = child.querySelector?.(selector);
+      if (nested !== null && nested !== undefined) return nested;
+    }
+    return null;
+  }
+}
+
+class DocumentFake {
+  elementsCreated = 0;
+
+  constructor() {
+    this.activeElement = null;
+    this.documentElement = new ElementFake("html", this);
+    this.listeners = new Map();
+    this.defaultView = {
+      innerHeight: 800,
+      innerWidth: 1280,
+      frames: [],
+      observers: [],
+      listeners: new Map(),
+      addEventListener(name, callback) {
+        const listeners = this.listeners.get(name) ?? [];
+        listeners.push(callback);
+        this.listeners.set(name, listeners);
+      },
+      removeEventListener(name, callback) {
+        this.listeners.set(name, (this.listeners.get(name) ?? []).filter((item) => item !== callback));
+      },
+      dispatch(name, properties = {}) {
+        for (const callback of this.listeners.get(name) ?? []) callback(properties);
+      },
+      ResizeObserver: class {
+        constructor(callback) {
+          this.callback = callback;
+          this.observeCount = 0;
+          document.defaultView.observers.push(this);
+        }
+        observe(element) { this.observed = element; this.observeCount += 1; }
+        disconnect() { this.observed = null; }
+        trigger() { if (this.observed !== null) this.callback(); }
+      },
+      requestAnimationFrame: (callback) => {
+        this.defaultView.frames.push(callback);
+        return this.defaultView.frames.length;
+      },
+      flushAnimationFrame: () => {
+        const callbacks = this.defaultView.frames.splice(0);
+        for (const callback of callbacks) callback();
+      },
+    };
+  }
+  addEventListener(name, callback) { this.listeners.set(name, [...(this.listeners.get(name) ?? []), callback]); }
+  removeEventListener(name, callback) { this.listeners.set(name, (this.listeners.get(name) ?? []).filter((value) => value !== callback)); }
+  dispatch(name, event = {}) { for (const callback of this.listeners.get(name) ?? []) callback(event); }
+  createElement(tagName) {
+    this.elementsCreated += 1;
+    return new ElementFake(tagName, this);
+  }
+  createDocumentFragment() { return new ElementFake("#fragment", this); }
+}
+
+globalThis.Element = ElementFake;
+globalThis.HTMLElement = ElementFake;
+globalThis.HTMLInputElement = ElementFake;
+globalThis.document = new DocumentFake();
+globalThis.window = document.defaultView;
+globalThis.getComputedStyle = () => ({ fontSize: "16px" });
+
+function moduleUrl(source) {
+  return `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+}
+
+const renderSource = await readFile(process.argv[3], "utf8");
+const renderUrl = moduleUrl(renderSource);
+const iconsUrl = moduleUrl(await readFile(process.argv[4], "utf8"));
+const taskStatusUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "task_status.js"), "utf8"))
+  .replace("./render.js", renderUrl));
+const fileRowUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "file_row.js"), "utf8"))
+  .replace("./render.js", renderUrl));
+const planUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "plan.js"), "utf8"))
+  .replace("./file_row.js", fileRowUrl).replace("./render.js", renderUrl));
+const filterUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "filter_menu.js"), "utf8"))
+  .replace("./icons.js", iconsUrl).replace("./render.js", renderUrl));
+const rowMenuUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "row_menu.js"), "utf8"))
+  .replace("./render.js", renderUrl));
+const tableColumnsUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "table_columns.js"), "utf8"));
+const tableControllerUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "table_controller.js"), "utf8"));
+const highlightUrl = moduleUrl(await readFile(join(dirname(process.argv[2]), "row_highlight.js"), "utf8"));
+const source = (await readFile(process.argv[2], "utf8"))
+  .replace("./row_highlight.js", highlightUrl)
+  .replace("./table_controller.js", tableControllerUrl)
+  .replace("./table_columns.js", tableColumnsUrl)
+  .replace("./filter_menu.js", filterUrl)
+  .replace("./row_menu.js", rowMenuUrl)
+  .replace("./plan.js", planUrl)
+  .replace("./icons.js", iconsUrl)
+  .replace("./task_status.js", taskStatusUrl)
+  .replace("./render.js", renderUrl);
+const { createPlanReviewPanel } = await import(moduleUrl(source));
+
+const calls = [];
+const callbacks = Object.fromEntries([
+  "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl", "onPlanAgain",
+  "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onNavigationInterrupt",
+  "onPaneChange",
+].map((name) => [name, (...args) => calls.push([name, ...args])]));
+const sharedDetailsState = {expanded:false};
+const panel = createPlanReviewPanel(callbacks, sharedDetailsState);
+const initialFilterTrigger = findAction(panel.element, "filter-menu");
+assert.equal(initialFilterTrigger.children[1].textContent, "Filters");
+assert.equal(initialFilterTrigger.children[2].textContent, "");
+assert.equal(initialFilterTrigger.ariaLabel, "Filters");
+const planAgainButton = findAction(panel.element, "plan-again");
+const planAgainIcon = planAgainButton.children[0];
+assert.ok(planAgainIcon?.classList.contains("nami-icon--arrow-reset"));
+for (const action of ["execute", "plan-again", "pause", "cancel"]) {
+  assert.equal(findAction(panel.element, action).disabled, true,
+    `fresh panel must not advertise ${action} before a review loads`);
+}
+const hostile = "<img src=x onerror=alert(1)>\u202e海";
+const row = {
+  node_id: `node-${"1".repeat(32)}`,
+  display: hostile,
+  depth: 1,
+  is_container: true,
+  visible_index: 10,
+  parent_visible_index: 0,
+  first_child_visible_index: 11,
+  position_in_set: 1,
+  set_size: 1,
+  expanded: true,
+  row_kind: "operation-group",
+  operation_id: null,
+  operation_kind: null,
+  presentation_kind: null,
+  prior_name: null,
+  reason: null,
+  blocked_reason: null,
+  selection: "mixed",
+  selectable_operation_count: 2,
+  selected_operation_count: 1,
+  operation_count: 2,
+  size: null,
+  mtime_ns: null,
+  dependency_count: 2,
+  risk: "none",
+  move_peer_id: null,
+  move_group: null,
+  notice: null,
+  selection_exclusion_reason: null,
+  execution: null,
+};
+const summary = {
+  disposition: "opened",
+  task_id: `task-${"2".repeat(32)}`,
+  request_id: "3".repeat(32),
+  view_revision: 0,
+  selection_revision: 0,
+  selection_state: "reviewing",
+  source_path: `C:\\${hostile}`,
+  target_path: "D:\\target",
+  selected_operation_count: 1,
+  selectable_operation_count: 2,
+  operation_count: 2,
+  scope_selected_operation_count: 1,
+  scope_selectable_operation_count: 2,
+  preflight_ready: false,
+  preflight_refusal_count: 1,
+  warning_count: 1,
+  requires_destructive_confirmation: true,
+  destructive_operation_count: 1,
+  destructive_operation_counts: { update: 1, move_update: 0, trash: 0, delete: 0 },
+  irreversible_operation_count: 1,
+  irreversible_update_count: 1,
+  required_bytes: "4096",
+  visible_row_count: 1000,
+  matched_item_count: 180,
+  search_query: "",
+  filters: [],
+  filter_counts: { all: 180, copy: 100, move: 10, update: 5, trash: 2,
+    mkdir: 0, rename: 0, move_update: 0, delete: 0, noop: 0, blocked: 0,
+    error: 0, unsupported: 0, notice: 1 },
+  sort_column: "path",
+  sort_direction: "ascending",
+  collapsed_count: 0,
+};
+const review = {
+  summary,
+  window: {
+    disposition: "current", view_revision: 0, highlight_revision: 0,
+    offset: 10, total: 1000,
+    execution: {
+      execution_revision: 0, session_id: null, result: null,
+      failed_operation_count: null, disk_capacity_failure_count: null,
+      has_successful_copied_files: null,
+      gap: null, trash_location: null,
+    },
+    rows: [row],
+  },
+  pending: null,
+  message: "Inspect the refusal.",
+};
+const task = {
+  review,
+  error: null,
+  canPlanAgain: true,
+  executionStarted: false,
+  sessionState: "completed",
+  executionControlState: "running",
+  closePending: false,
+  executionAttempt: null,
+};
+
+const notice = {
+  ...row,
+  node_id: `node-${"4".repeat(32)}`,
+  display: "Preflight refused",
+  is_container: false,
+  row_kind: "notice",
+  selection: "disabled",
+  selectable_operation_count: 0,
+  selected_operation_count: 0,
+  operation_count: 0,
+  notice: "Partial size: overflow",
+  risk: "irreversible",
+  blocked_reason: "unsupported",
+  selection_exclusion_reason: hostile,
+};
+review.window.rows.push(notice);
+
+panel.render(task);
+assert.equal(panel.element.dataset.pending, "");
+assert.equal(findAction(panel.element, "pane-plan").ariaChecked, "true");
+assert.equal(findAction(panel.element, "pane-plan").disabled, false);
+assert.equal(findAction(panel.element, "pane-verify").ariaChecked, "false");
+assert.equal(findAction(panel.element, "pane-verify").disabled, true,
+  "Verify remains unavailable before an execution exists");
+const tierStatus = findByClass(panel.element, "nami-plan-review__status-title");
+const executeButton = findByClass(panel.element, "nami-button--primary");
+assert.equal(tierStatus.textContent, "Plan ready");
+assert.equal(executeButton.disabled, true);
+review.summary = { ...summary, preflight_ready: true, preflight_refusal_count: 0,
+  selected_operation_count: 0 };
+panel.render(task);
+assert.equal(tierStatus.textContent, "Plan ready");
+assert.equal(executeButton.disabled, true);
+review.summary = { ...summary, preflight_ready: true, preflight_refusal_count: 0 };
+panel.render(task);
+assert.equal(tierStatus.textContent, "Plan ready");
+assert.equal(executeButton.disabled, false);
+const planGap = { session_id: "7".repeat(32), session_state: "completed",
+  gap_first_missed_seq: 4 };
+panel.render({ ...task, sessionId: planGap.session_id, snapshot: planGap });
+assert.doesNotMatch(findByClass(panel.element, "nami-plan-review__status").textContent, /event history has gaps/,
+  "a Plan-session Gap cannot be labeled as execution history loss");
+assert.equal(findByClass(panel.element, "nami-plan-review__execution").hidden, true);
+panel.render({ ...task, review: null, reviewLoading: true });
+for (const action of ["execute", "plan-again", "pause", "cancel"]) {
+  const control = findAction(panel.element, action);
+  assert.equal(control.disabled, true, `loading review must disable ${action}`);
+  const beforeClick = calls.length;
+  control.dispatch("click");
+  assert.equal(calls.length, beforeClick, `null review must not dispatch ${action}`);
+}
+assert.equal(findByClass(panel.element, "nami-plan-review__control-group").hidden, true);
+panel.render({ ...task, review: null, reviewLoading: false, error: "Plan unavailable" });
+assert.equal(executeButton.disabled, true, "failed review cannot leave Execute available");
+for (const [population, axis, row_limit, byte_limit, detail] of [
+  ["domain", "rows", 120000, null, /120,000 plan items/],
+  ["informational", "rows", 120000, null, /120,000 notices/],
+  ["domain", "retained-bytes", null, "134217728", /128.00 MiB of plan data/],
+  ["informational", "retained-bytes", null, "201326592", /192.00 MiB of notice data/],
+  ["domain", "logical-bytes", null, "9223372036854775807", /estimated space required exceeds 9,223,372,036,854,775,807 bytes/],
+]) {
+  panel.render({...task, review: null, sessionKind: "sync-plan", sessionId: planGap.session_id,
+    snapshot: {...planGap, session_state: "refused", presentation: {},
+      terminal_result: {review_refusal: {reason: "review_fact_limit_exceeded", tree_kind: "plan",
+        population, axis, row_limit, byte_limit}}}});
+  assert.equal(tierStatus.textContent, "Plan limit exceeded");
+  assert.match(findByClass(panel.element, "nami-plan-review__status-summary").textContent, detail);
+  assert.match(findByClass(panel.element, "nami-plan-review__status").textContent, /smaller folder pair/);
+  assert.equal(executeButton.disabled, true);
+}
+panel.render(task);
+assert.equal(executeButton.disabled, false, "loaded review restores its allowed action");
+review.summary = summary;
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+assert.ok(findText(panel.element, hostile));
+assert.ok(findText(panel.element, "1 destructive"), "plan diagnostics retain destructive context");
+assert.ok(findText(panel.element, "4.00 KiB required"));
+assert.ok(findText(panel.element, "planning issues"));
+assert.ok(findText(panel.element, "Source:"));
+assert.ok(findText(panel.element, "Target:"));
+assert.ok(findText(panel.element, "Plan ready"));
+assert.ok(findByClass(panel.element, "nami-plan-review__progress"));
+assert.ok(findByClass(panel.element, "nami-plan-review__view-switcher"));
+assert.equal(findText(panel.element, "Plan review"), false);
+assert.equal(findText(panel.element, "Status"), false);
+const grid = findByClass(panel.element, "nami-file-list__grid--plan");
+const sizeResizer = findByDataset(panel.element, "column", "size");
+assert.ok(grid && sizeResizer);
+sizeResizer.dispatch("pointerdown", { clientX: 100 });
+window.dispatch("pointermove", { clientX: 120 });
+assert.equal(grid.style.getPropertyValue("--nami-file-column-size"), "120.000px");
+assert.equal(grid.style.getPropertyValue("--nami-file-column-notes"), "280.000px");
+window.dispatch("pointerup");
+assert.equal(window.listeners.get("pointermove").length, 0);
+sizeResizer.dispatch("keydown", { key: "ArrowRight" });
+assert.equal(grid.style.getPropertyValue("--nami-file-column-size"), "128.000px");
+assert.equal(grid.style.getPropertyValue("--nami-file-column-notes"), "272.000px");
+const actionResizer = findByDataset(panel.element, "column", "primary");
+actionResizer.dispatch("pointerdown", { clientX: 200 });
+window.dispatch("pointermove", { clientX: 0 });
+assert.equal(grid.style.getPropertyValue("--nami-file-column-primary"), "96.000px",
+  "dragging Action respects the same 6rem minimum as its default track");
+window.dispatch("pointerup");
+const renderedRow = findByDataset(panel.element, "nodeId", row.node_id);
+assert.deepEqual(renderedRow.children.map((cell) => cell.dataset.fileColumn),
+  ["selection", "name", "primary", "secondary", "size", "secondary", "notes"]);
+const planCard = findByClass(panel.element, "nami-plan-review__plan");
+const statusCard = findByClass(panel.element, "nami-plan-review__summary");
+const footerMessage = findByClass(panel.element, "nami-plan-review__status");
+assert.equal(footerMessage.hidden, false, "actionable warnings remain visible");
+const statusActions = findByClass(panel.element, "nami-plan-review__actions");
+const statusMeta = findByClass(panel.element, "nami-plan-review__status-meta");
+assert.ok(statusActions.parentElement === statusCard, "actions live in the status card");
+assert.ok(statusMeta.parentElement === statusCard, "facts and feedback live in the status card");
+assert.equal(statusMeta.children.filter(value => value.tagName === "P").length, 2,
+  "only facts and status remain beside Details");
+const planDisclosure = findAction(panel.element, "toggle-execution-details");
+const planDiagnostics = findByClass(panel.element, "nami-plan-review__diagnostics");
+const planItemPane = findByClass(panel.element, "nami-plan-review__detail");
+const cardProgress = findByClass(panel.element, "nami-plan-review__progress");
+assert.ok(planDisclosure.parentElement === statusMeta, "disclosure shares the detailed status line");
+assert.ok(planDiagnostics.parentElement === panel.element && !statusCard.contains(planDiagnostics),
+  "Details spans the central cards as a Plan-root sibling");
+assert.ok(cardProgress.parentElement === statusCard, "progress remains in the central status card");
+planDisclosure.dispatch("click");
+assert.equal(planDiagnostics.hidden, false, "Plan exposes the shared Details area");
+assert.ok(findText(planItemPane, "Highlight an item"), "unfocused Plan has an item placeholder");
+review.summary = { ...summary, highlight_focus_node_id: row.node_id, highlight_revision: 1 };
+panel.render(task);
+assert.ok(findText(planItemPane, "Planned action"), "focused Plan row reveals planned facts");
+row.highlighted = true;
+review.summary = {...review.summary, highlighted_count:2, highlight_revision:2};
+panel.render(task);
+const scopedCheckbox = findByClass(panel.element, "nami-plan-review__rows").children
+  .find(value => value.dataset.nodeId === row.node_id).querySelector(".nami-checkbox");
+assert.equal(scopedCheckbox.ariaLabel, "Select highlighted operations only");
+review.summary = {...review.summary, highlighted_count:1, highlight_revision:3};
+panel.render(task);
+assert.equal(scopedCheckbox.ariaLabel, `Select ${row.display}`, "singleton scope restores the row label");
+row.highlighted = false;
+assert.ok(findText(planItemPane, hostile.replace("\u202e", "⟦U+202E⟧")));
+assert.ok(findText(planItemPane, "Dependencies"));
+assert.ok(findText(planItemPane, "1 of 2 selected"));
+assert.ok(findText(planItemPane, "Operations"));
+assert.ok(findText(findByClass(panel.element, "nami-plan-review__plan-breakdown"), "Copy 100"));
+assert.ok(findText(findByClass(panel.element, "nami-plan-review__global-status"), review.message));
+row.mtime_ns = "0";
+panel.render(task);
+assert.ok(findText(planItemPane, "Modified"));
+assert.ok(findText(planItemPane, "1970-01-01 00:00"));
+row.mtime_ns = null;
+panel.render(task);
+assert.ok(!findText(planItemPane, "Modified"), "missing time has no invented detail");
+planDisclosure.dispatch("click");
+assert.equal(planDiagnostics.hidden, true);
+review.summary = summary;
+panel.render(task);
+assert.equal(planDiagnostics.hidden, true, "highlight updates do not reopen a collapsed card");
+assertSameNode(findAction(panel.element, "plan-again"), planAgainButton);
+assertSameNode(planAgainButton.children[0], planAgainIcon, "normal Plan again keeps its icon");
+assert.equal(planAgainButton.children.length, 1);
+assert.equal(planAgainButton.textContent, "");
+assert.equal(planAgainButton.ariaLabel, "Plan again");
+assert.equal(planAgainButton.title, "Plan again");
+task.sessionState = "active";
+panel.render(task);
+assert.equal(planAgainButton.hidden, false, "a ready Plan retains Plan again before execution");
+task.sessionState = "completed";
+review.pending = "plan-again";
+task.form = { attempt: { recovery: fakeRecoveryHandle({ canCheck: true }) } };
+panel.render(task);
+assertSameNode(planAgainButton.children[0], planAgainIcon, "Check outcome keeps the same icon");
+assert.equal(planAgainButton.children.length, 1);
+assert.equal(planAgainButton.textContent, "");
+assert.equal(planAgainButton.ariaLabel, "Check outcome");
+assert.equal(planAgainButton.title, "Check outcome");
+review.pending = null;
+task.form = null;
+panel.render(task);
+assertSameNode(planAgainButton.children[0], planAgainIcon, "settled Plan again keeps the same icon");
+assert.equal(planAgainButton.children.length, 1);
+assert.equal(planAgainButton.textContent, "");
+assert.equal(planAgainButton.ariaLabel, "Plan again");
+assert.equal(planAgainButton.title, "Plan again");
+const executionRecovery = { state: "fixed-unknown", canCheck: false, checking: false,
+  message: "execution-owner-sentinel", check: () => Promise.resolve(null) };
+const recoveryPanel = createPlanReviewPanel(callbacks);
+const permanentPointerListeners = document.listeners.get("pointerdown").length;
+const recoveryFooter = findByClass(recoveryPanel.element, "nami-plan-review__status");
+task.executionAttempt = { state: "uncertain", recovery: executionRecovery };
+review.pending = "outcome";
+review.message = "review-owner-sentinel";
+recoveryPanel.render(task);
+assert.equal(findAction(recoveryPanel.element, "plan-again").hidden, true,
+  "unsettled execution admission cannot expose Plan again");
+assert.ok(findText(recoveryFooter, "execution-owner-sentinel"),
+  "uncertain Execute shows its own recovery guidance");
+assert.equal(findText(recoveryFooter, "review-owner-sentinel"), false);
+assert.equal(findAction(recoveryPanel.element, "execute").disabled, true);
+const reconstructedReview = { ...review, window: { ...review.window } };
+task.review = reconstructedReview;
+recoveryPanel.render(task);
+assert.ok(findText(recoveryFooter, "execution-owner-sentinel"),
+  "review reconstruction retains the execution owner guidance");
+assert.equal(findAction(recoveryPanel.element, "execute").disabled, true);
+recoveryPanel.dispose();
+task.review = review;
+task.executionAttempt = null;
+review.pending = null;
+review.message = null;
+panel.render(task);
+assert.equal(footerMessage.hidden, false, "idle status keeps review guidance visible");
+assert.equal(footerMessage.textContent, "Review the selected changes before executing.");
+review.message = "Updating this view…";
+panel.render(task);
+assert.equal(footerMessage.hidden, false, "in-flight feedback remains visible");
+panel.render(task);
+assert.ok(findByDataset(panel.element, "nodeId", row.node_id) === renderedRow,
+  "unchanged review rendering preserves row controls and focus");
+review.pending = "view";
+panel.render(task);
+assert.ok(findByDataset(panel.element, "nodeId", row.node_id) === renderedRow,
+  "pending control disable does not rebuild the row window");
+assert.equal(findByClass(renderedRow, "nami-checkbox").disabled, true);
+assert.ok(findByClass(panel.element, "nami-plan-review__plan") === planCard,
+  "pending rendering preserves the Plan card identity");
+assert.ok(findByClass(panel.element, "nami-plan-review__summary") === statusCard,
+  "pending rendering preserves the status card identity");
+review.pending = null;
+panel.render(task);
+assert.ok(findByDataset(panel.element, "nodeId", row.node_id) === renderedRow,
+  "settled rendering preserves the row identity");
+assert.equal(findByClass(renderedRow, "nami-checkbox").disabled, false);
+document.defaultView.flushAnimationFrame();
+assert.equal(renderedRow.dataset.folder, "false", "operation groups remain non-folder rows");
+assert.ok(findText(renderedRow, hostile.replace("\u202e", "⟦U+202E⟧")));
+assert.equal(findText(renderedRow, "Risk: none"), false);
+assert.equal(findText(renderedRow, "deps"), false);
+const renderedNotice = findByDataset(panel.element, "nodeId", notice.node_id);
+assert.equal(renderedNotice.dataset.folder, "false");
+assert.ok(findText(renderedNotice, hostile), "notice context renders as inert text");
+assert.ok(findText(renderedNotice, "Partial size: overflow"), "overflow note remains visible");
+assert.ok(findText(renderedNotice, "Risk: irreversible"));
+assert.ok(findText(renderedNotice, "Unsupported item"), "notices do not hide blockers");
+assert.equal(findByClass(renderedNotice, "nami-file-row__size").textContent, "",
+  "overflow rows do not render a clamped or zero size");
+assertSameNode(
+  findByClass(renderedRow, "nami-plan-review__spacer"),
+  null,
+);
+const groupDisclosure = findByClass(renderedRow, "nami-file-row__disclosure");
+groupDisclosure.dispatch("click");
+assert.deepEqual(calls.at(-1).slice(0, 2), ["onViewChange", review]);
+assert.deepEqual(calls.at(-1)[2], {
+  collapseNodeId: row.node_id,
+  collapsed: true,
+});
+
+renderedRow.dispatch("click", { shiftKey: true });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "extend", row.node_id]);
+assert.equal(renderedRow.dataset.namiFocusOrigin, "pointer");
+renderedRow.dispatch("focusout");
+assert.equal(renderedRow.dataset.namiFocusOrigin, undefined);
+renderedRow.dataset.namiFocusOrigin = "pointer";
+renderedRow.dispatch("focusin");
+assert.equal(renderedRow.dataset.namiFocusOrigin, undefined);
+renderedRow.dispatch("click", { ctrlKey: true });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "toggle", row.node_id]);
+renderedRow.dispatch("click", { ctrlKey: true, shiftKey: true });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "add-range", row.node_id]);
+renderedRow.dispatch("keydown", { key: "ArrowDown", shiftKey: true });
+assert.equal(renderedRow.dataset.namiFocusOrigin, undefined);
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "move_down_extend", null]);
+renderedRow.dispatch("keydown", { key: "Escape" });
+assert.deepEqual(calls.at(-1), ["onHighlight", review, "clear", null]);
+
+const checkbox = findByClass(renderedRow, "nami-checkbox");
+checkbox.checked = false;
+checkbox.dispatch("change");
+assert.deepEqual(calls.at(-1), ["onSelect", review, row, false]);
+
+const scopeCheckbox = findByClass(panel.element, "nami-plan-review__scope-checkbox");
+assert.ok(scopeCheckbox);
+assert.equal(scopeCheckbox.indeterminate, true);
+scopeCheckbox.checked = true;
+scopeCheckbox.dispatch("change");
+assert.deepEqual(calls.at(-1), ["onScopeSelect", review, true]);
+
+const sizeSort = findByDataset(panel.element, "sortColumn", "size");
+const nameSort = findByDataset(panel.element, "sortColumn", "filename");
+assert.ok(sizeSort && nameSort);
+sizeSort.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { sortColumn: "size", sortDirection: "ascending" }]);
+review.summary = { ...review.summary, sort_column: "size", sort_direction: "ascending" };
+panel.render(task);
+sizeSort.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { sortColumn: "size", sortDirection: "descending" }]);
+review.summary = { ...review.summary, sort_direction: "descending" };
+panel.render(task);
+nameSort.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { sortColumn: "filename", sortDirection: "ascending" }]);
+review.summary = { ...review.summary, sort_column: "filename", sort_direction: "ascending" };
+panel.render(task);
+nameSort.dispatch("click");
+review.summary = { ...review.summary, sort_direction: "descending" };
+panel.render(task);
+nameSort.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onViewChange", review,
+  { sortColumn: "path", sortDirection: "ascending" }]);
+
+const filterTrigger = findAction(panel.element, "filter-menu");
+const filterPopup = findByClass(panel.element, "nami-filter-menu__popup");
+const filterItem = (key) => findByDataset(filterPopup, "filter", key);
+const allFilter = filterItem("all");
+assert.equal(allFilter.ariaChecked, "true");
+assert.equal(allFilter.ariaLabel, "All 180");
+assert.equal(filterItem("copy").ariaLabel, "Copy 100");
+assert.equal(filterItem("mkdir").ariaLabel, "Create folder 0");
+assert.equal(filterTrigger.children[2].textContent, "180/180");
+assert.equal(filterTrigger.children[1].textContent, "Filters ·");
+assert.equal(filterTrigger.ariaLabel, "Filters 180 of 180 items");
+assert.ok(filterTrigger.children[0].classList.contains("nami-icon--filter"));
+assert.ok(filterTrigger.children[3].classList.contains("nami-icon--chevron-down"));
+assert.equal(filterTrigger.dataset.active, "false");
+assert.equal(filterPopup.children.length, 15);
+const beforeOpen = calls.length;
+filterTrigger.dispatch("click");
+assert.equal(filterPopup.hidden, false);
+assert.equal(calls.length, beforeOpen, "opening the menu never filters");
+for (const key of ["copy", "mkdir", "move", "rename", "update", "move_update", "trash", "delete",
+  "error", "unsupported", "blocked", "noop", "notice"]) {
+  const item = filterItem(key);
+  item.focus();
+  item.dispatch("click");
+  assert.deepEqual(calls.at(-1)[2].filters, new Set([...review.summary.filters, key]));
+  review.pending = "view";
+  panel.render(task);
+  assert.equal(filterPopup.hidden, false, "pending renders retain the popup");
+  assertSameNode(document.activeElement, item, "pending retains category focus");
+  const beforePendingClick = calls.length;
+  item.dispatch("click");
+  assert.equal(calls.length, beforePendingClick, "pending selection cannot enqueue a request");
+  review.pending = null;
+  review.summary = { ...review.summary, filters: [...review.summary.filters, key] };
+  panel.render(task);
+  assert.equal(filterPopup.hidden, false);
+  assert.equal(item.ariaChecked, "true");
+  assertSameNode(document.activeElement, item, "settlement retains category focus");
+}
+assert.equal(filterTrigger.children[2].textContent, "180/180", "category count never replaces item count");
+assert.equal(filterTrigger.dataset.active, "true");
+filterItem("copy").dispatch("click");
+assert.deepEqual(calls.at(-1)[2].filters, new Set(review.summary.filters.filter((key) => key !== "copy")));
+allFilter.dispatch("click");
+assert.deepEqual(calls.at(-1)[2].filters, new Set());
+assert.equal(filterPopup.hidden, false, "All also keeps the menu open");
+review.summary = { ...summary, search_query: "literal search", filters: [] };
+panel.render(task);
+assert.equal(filterTrigger.children[2].textContent, "180/180", "the accepted summary owns item count");
+filterPopup.dispatch("keydown", { key: "End" });
+assertSameNode(document.activeElement, filterItem("recall"));
+filterPopup.dispatch("keydown", { key: "Home" });
+assertSameNode(document.activeElement, allFilter);
+filterPopup.dispatch("keydown", { key: "ArrowUp" });
+assertSameNode(document.activeElement, filterItem("recall"));
+review.pending = "view";
+panel.render(task);
+assert.equal(filterTrigger.ariaDisabled, "true");
+assert.equal(filterTrigger.disabled, false, "pending trigger remains a valid Escape focus target");
+filterPopup.dispatch("keydown", { key: "Escape" });
+assert.equal(filterPopup.hidden, true);
+assertSameNode(document.activeElement, filterTrigger, "Escape returns trigger focus");
+review.pending = null;
+panel.render(task);
+filterTrigger.dispatch("keydown", { key: "ArrowUp" });
+assertSameNode(document.activeElement, filterItem("recall"));
+document.dispatch("pointerdown", { target: panel.element });
+assert.equal(filterPopup.hidden, true);
+filterTrigger.dispatch("click");
+filterTrigger.parentElement.dispatch("focusout", { relatedTarget: panel.element });
+assert.equal(filterPopup.hidden, true);
+filterTrigger.dispatch("click");
+document.dispatch("scroll", { target: filterPopup });
+assert.equal(filterPopup.hidden, false, "menu scrolling stays usable");
+document.dispatch("scroll", { target: panel.element });
+assert.equal(filterPopup.hidden, true, "outside scrolling dismisses");
+filterTrigger.dispatch("click");
+document.defaultView.dispatch("resize");
+assert.equal(filterPopup.hidden, true, "resizing dismisses the old geometry");
+filterTrigger.dispatch("click");
+document.defaultView.dispatch("blur");
+assert.equal(filterPopup.hidden, true);
+filterTrigger.dispatch("click");
+document.hidden = true;
+document.dispatch("visibilitychange");
+assert.equal(filterPopup.hidden, true);
+document.hidden = false;
+filterTrigger.dispatch("click");
+panel.dispose();
+assert.equal(filterPopup.hidden, true);
+assert.equal(document.listeners.get("pointerdown").length, permanentPointerListeners);
+assert.equal(document.defaultView.listeners.get("blur").length, 0);
+panel.render(task);
+filterTrigger.dispatch("click");
+panel.render({ ...task, taskId: "another-task" });
+assert.equal(filterPopup.hidden, true, "context replacement closes the menu");
+panel.render(task);
+review.summary = summary;
+panel.render(task);
+assert.equal(
+  calls.filter(([name]) => name === "onScopeSelect").length,
+  1,
+  "filter navigation does not imply scoped selection",
+);
+
+const search = findAction(panel.element, "plan-search");
+review.pending = "view";
+panel.render(task);
+assert.equal(search.disabled, false, "a pending view refresh keeps search editable");
+review.pending = null;
+panel.render(task);
+search.value = hostile;
+search.dispatch("input");
+await new Promise((resolve) => setTimeout(resolve, 175));
+assert.deepEqual(calls.at(-1), ["onViewChange", review, { searchQuery: hostile }]);
+search.value = "immediate";
+search.dispatch("input");
+search.dispatch("keydown", { key: "Enter" });
+assert.deepEqual(calls.at(-1), ["onViewChange", review, { searchQuery: "immediate" }]);
+const immediateCount = calls.length;
+findAction(panel.element, "plan-search-submit").dispatch("click");
+search.dispatch("keydown", { key: "Enter" });
+assert.equal(calls.length, immediateCount, "manual search uses one shared repeat guard");
+await new Promise((resolve) => setTimeout(resolve, 175));
+assert.equal(calls.length, immediateCount, "manual search cancels the trailing input timer");
+const clearSearch = findAction(panel.element, "plan-search-clear");
+search.value = "clear this";
+search.dispatch("input");
+assert.equal(clearSearch.hidden, false);
+clearSearch.dispatch("click");
+assert.equal(search.value, "");
+assert.ok(document.activeElement === search, "clearing search returns focus to its input");
+assert.equal(clearSearch.hidden, true);
+assert.deepEqual(calls.at(-1), ["onViewChange", review, { searchQuery: "" }]);
+
+assert.ok(
+  findByDataset(panel.element, "action", "destructive-confirmation") === null,
+  "the stale persistent acknowledgment control is absent",
+);
+const firstExecuteButton = findAction(panel.element, "execute");
+firstExecuteButton.dispatch("click");
+assert.ok(calls.at(-1)[0] === "onExecute" && calls.at(-1)[1] === review
+  && calls.at(-1)[2] === firstExecuteButton, "Execute preserves review and invoker identity");
+
+task.canPlanAgain = false;
+panel.render(task);
+assert.equal(findAction(panel.element, "plan-again").disabled, true);
+task.canPlanAgain = true;
+
+review.summary = {
+  ...summary,
+  request_id: "5".repeat(32),
+  selection_revision: 1,
+  destructive_operation_count: 2,
+  destructive_operation_counts: { update: 1, move_update: 0, trash: 0, delete: 1 },
+  irreversible_operation_count: 2,
+};
+panel.render(task);
+const secondExecuteButton = findAction(panel.element, "execute");
+secondExecuteButton.dispatch("click");
+assert.ok(calls.at(-1)[0] === "onExecute" && calls.at(-1)[1] === review
+  && calls.at(-1)[2] === secondExecuteButton,
+"later Execute preserves review and invoker identity");
+assert.ok(findByDataset(panel.element, "action", "destructive-confirmation") === null, "the destructive acknowledgment control remains absent");
+
+task.executionStarted = true;
+task.sessionKind = "sync-execution";
+task.sessionState = "active";
+panel.render(task);
+assert.equal(planAgainButton.hidden, true, "active execution cannot expose Plan again");
+const beforeHiddenPlanAgain = calls.length;
+planAgainButton.dispatch("click");
+assert.equal(calls.length, beforeHiddenPlanAgain);
+const pauseToggle = findAction(panel.element, "pause");
+assert.ok(pauseToggle.classList.contains("nami-button--secondary"));
+assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, false);
+assert.equal(findByClass(pauseToggle, "nami-icon--play-filled").hidden, true);
+assert.equal(pauseToggle.textContent, "");
+assert.equal(pauseToggle.ariaLabel, "Pause execution");
+assert.equal(pauseToggle.title, "Pause execution");
+pauseToggle.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onControl", review, "pause"]);
+task.executionControlState = "pausing";
+panel.render(task);
+assert.equal(findAction(panel.element, "pause").disabled, true);
+assert.equal(findByDataset(panel.element, "action", "resume"), null);
+assert.equal(findAction(panel.element, "cancel").disabled, false);
+task.executionControlState = "paused";
+panel.render(task);
+assert.equal(statusCard.dataset.status, "paused", "paused execution headline uses the attention color");
+assertSameNode(findAction(panel.element, "resume"), pauseToggle,
+  "authoritative pause retains the toggle and its focus identity");
+assert.ok(pauseToggle.classList.contains("nami-button--primary"));
+assert.equal(pauseToggle.textContent, "");
+assert.equal(pauseToggle.ariaLabel, "Resume execution");
+assert.equal(pauseToggle.title, "Resume execution");
+assert.equal(findByClass(pauseToggle, "nami-icon--play-filled").hidden, false);
+assert.equal(findByClass(pauseToggle, "nami-icon--pause").hidden, true);
+findAction(panel.element, "resume").dispatch("click");
+assert.deepEqual(calls.at(-1), ["onControl", review, "resume"]);
+task.executionControlState = "pending";
+panel.render(task);
+assert.equal(findAction(panel.element, "pause").disabled, true);
+assert.equal(findByDataset(panel.element, "action", "resume"), null);
+assert.equal(findAction(panel.element, "cancel").disabled, false);
+task.executionControlState = "running";
+panel.render(task);
+const cancelButton = findAction(panel.element, "cancel");
+const originalNow = performance.now;
+const originalSetTimeout = globalThis.setTimeout;
+const originalClearTimeout = globalThis.clearTimeout;
+let controlNow = 0;
+let cancelTimeout = null;
+performance.now = () => controlNow;
+globalThis.setTimeout = (callback, delay) => {
+  assert.equal(delay, 5000);
+  cancelTimeout = callback;
+  return callback;
+};
+globalThis.clearTimeout = (callback) => {
+  if (cancelTimeout === callback) cancelTimeout = null;
+};
+const beforeArm = calls.length;
+assert.ok(cancelButton.classList.contains("nami-button--secondary"));
+assert.equal(findByClass(cancelButton, "nami-icon--stop").hidden, false);
+assert.equal(findByClass(cancelButton, "nami-icon--stop-filled").hidden, true);
+cancelButton.dispatch("click");
+assert.equal(calls.length, beforeArm, "first Cancel click arms without a command");
+assert.ok(cancelButton.classList.contains("nami-button--primary"));
+assert.equal(findByClass(cancelButton, "nami-icon--stop-filled").hidden, false);
+controlNow = 4999;
+panel.render(task);
+cancelButton.dispatch("click");
+assert.deepEqual(calls.at(-1), ["onControl", review, "cancel"]);
+assert.equal(cancelButton.ariaPressed, "false", "submission disarms immediately");
+assert.equal(cancelTimeout, null);
+
+cancelButton.dispatch("click");
+const beforeExpiry = calls.length;
+const rowsBeforeExpiry = findByClass(panel.element, "nami-plan-review__rows").children;
+controlNow += 5000;
+cancelTimeout();
+assert.equal(cancelButton.ariaPressed, "false");
+assert.equal(findByClass(panel.element, "nami-plan-review__rows").children, rowsBeforeExpiry,
+  "expiry repaints only the Cancel button");
+assert.equal(calls.length, beforeExpiry);
+cancelButton.dispatch("click");
+controlNow += 4999;
+panel.render(task);
+controlNow += 1;
+cancelButton.dispatch("click");
+assert.equal(calls.length, beforeExpiry,
+  "ordinary renders do not extend the deadline, even when its timer is late");
+assert.equal(cancelButton.ariaPressed, "true", "an expired click starts a fresh arm");
+const taskIdBeforeArm = task.taskId;
+task.taskId = "task-cancel-switch";
+panel.render(task);
+assert.equal(cancelButton.ariaPressed, "false", "switching tasks disarms");
+task.taskId = taskIdBeforeArm;
+panel.render(task);
+cancelButton.dispatch("click");
+const sessionBeforeArm = task.sessionId;
+task.sessionId = "cancel-session-switch";
+panel.render(task);
+assert.equal(cancelButton.ariaPressed, "false", "switching sessions disarms");
+task.sessionId = sessionBeforeArm;
+panel.render(task);
+cancelButton.dispatch("click");
+review.pending = "selection";
+panel.render(task);
+assert.equal(cancelButton.ariaPressed, "false", "unavailable controls disarm");
+review.pending = null;
+panel.render(task);
+cancelButton.dispatch("click");
+task.drainUnavailable = true;
+panel.render(task);
+assert.equal(cancelButton.ariaPressed, "false", "a stopped drain disarms");
+task.drainUnavailable = false;
+const disposalPanel = createPlanReviewPanel(callbacks, sharedDetailsState);
+disposalPanel.render(task);
+assert.equal(findAction(disposalPanel.element, "toggle-execution-details").ariaExpanded, String(sharedDetailsState.expanded));
+const disclosureBeforeDispose = sharedDetailsState.expanded;
+const disposalCancel = findAction(disposalPanel.element, "cancel");
+disposalCancel.dispatch("click");
+disposalPanel.dispose();
+assert.equal(sharedDetailsState.expanded, disclosureBeforeDispose, "disposing a page never closes app-session Details");
+assert.equal(disposalCancel.ariaPressed, "false", "leaving the panel disarms");
+assert.equal(cancelTimeout, null);
+panel.render(task);
+performance.now = originalNow;
+globalThis.setTimeout = originalSetTimeout;
+globalThis.clearTimeout = originalClearTimeout;
+document.defaultView.flushAnimationFrame();
+task.drainUnavailable = true;
+panel.render(task);
+for (const action of ["pause", "cancel"]) {
+  assert.equal(findAction(panel.element, action).disabled, true,
+    "a stopped task drain offers no execution controls");
+}
+task.drainUnavailable = false;
+
+const viewport = findByClass(panel.element, "nami-plan-review__list");
+viewport.clientHeight = 2 * ROW_HEIGHT;
+const interruptsBeforeOutsideInput = calls.filter(([name]) => name === "onNavigationInterrupt").length;
+for (const name of ["pointerdown", "keydown"]) {
+  document.dispatch(name, {target: document.createElement("button"), key: "ArrowDown"});
+}
+assert.equal(calls.filter(([name]) => name === "onNavigationInterrupt").length,
+  interruptsBeforeOutsideInput + 2, "outside pointer and control keys retire navigation");
+document.dispatch("pointerdown", {target: viewport});
+assert.equal(calls.filter(([name]) => name === "onNavigationInterrupt").length,
+  interruptsBeforeOutsideInput + 2, "document capture leaves within-panel gesture ownership to the panel");
+const savedFocusNode = review.summary.highlight_focus_node_id;
+review.summary.highlight_focus_node_id = review.window.rows[0].node_id;
+panel.render(task);
+findByDataset(panel.element, "nodeId", review.window.rows[0].node_id).focus();
+document.focusScrollRoot = viewport;
+viewport.scrollTop = ROW_HEIGHT * 400;
+review.window = { ...review.window };
+panel.render(task);
+assert.equal(viewport.scrollTop, ROW_HEIGHT * 400, "replacing rows restores focus without revealing its offscreen row");
+const actualFocusNode = document.activeElement.dataset.nodeId;
+review.summary.highlight_focus_node_id = review.window.rows[1].node_id;
+review.window = { ...review.window };
+panel.render(task);
+assert.equal(document.activeElement.dataset.nodeId, actualFocusNode,
+  "fresh reconciliation of a retired highlight cannot reclaim focus from a later pointer or checkbox");
+review.summary.highlight_focus_node_id = review.window.rows[0].node_id;
+review.window = { ...review.window };
+review.keyboardRevealWindow = review.window;
+panel.render(task);
+assert.equal(viewport.scrollTop, review.window.rows[0].visible_index * ROW_HEIGHT,
+  "an explicit keyboard response reveals even the same endpoint row");
+assert.equal(review.keyboardRevealWindow, null, "keyboard reveal is consumed by its accepted window");
+document.focusScrollRoot = null;
+review.summary.highlight_focus_node_id = savedFocusNode;
+viewport.clientHeight = (ROW_HEIGHT - 1) + ROW_HEIGHT;
+viewport.scrollTop = ROW_HEIGHT * 10;
+const coveredWindowCallCount = calls.filter(([name]) => name === "onWindow").length;
+viewport.dispatch("scroll");
+viewport.scrollTop = ROW_HEIGHT * 10 + 1;
+viewport.dispatch("scroll");
+assert.equal(document.defaultView.frames.length, 1, "rapid scrolls share one frame");
+document.defaultView.flushAnimationFrame();
+assert.equal(
+  calls.filter(([name]) => name === "onWindow").length,
+  coveredWindowCallCount,
+  "a covered viewport does not refetch",
+);
+
+review.follow = { anchorIndex: 10, hasTarget: true, eligible: true, enabled: true };
+panel.render(task);
+for (const [action, label, glyph] of [
+  ["go-current-operation", "Go to current operation", "navigation-location-target"],
+  ["enable-operation-follow", "Turn on autoscroll", "location-arrow"],
+]) {
+  const control = findAction(panel.element, action);
+  assert.equal(control.textContent, "");
+  assert.equal(control.ariaLabel, label);
+  assert.equal(control.title, label);
+  assert.ok(control.parentElement.classList.contains("nami-plan-review__floating-control"));
+  assert.equal(control.parentElement.hidden, control.hidden);
+  assert.equal(control.classList.contains("nami-button--primary"), action === "enable-operation-follow");
+  assert.equal(findByClass(control, `nami-icon--${glyph}`).ariaHidden, "true");
+}
+const overrideCount = calls.filter(([name]) => name === "onFollowOverride").length;
+for (const reason of ["close", "loading", "view"]) {
+  review.pending = reason === "view" ? "view" : null;
+  panel.render({...task, closePending:reason === "close", reviewLoading:reason === "loading"});
+  const beforeBlocked = calls.filter(([name]) => name === "onNavigateCurrent").length;
+  for (const action of ["go-current-operation", "enable-operation-follow"]) {
+    const control = findAction(panel.element, action);
+    assert.equal(control.disabled, true);
+    control.dispatch("click");
+  }
+  assert.equal(calls.filter(([name]) => name === "onNavigateCurrent").length, beforeBlocked,
+    `${reason} keeps current-operation navigation fenced`);
+}
+review.pending = null;
+panel.render(task);
+assert.equal(findAction(panel.element, "go-current-operation").disabled, false);
+viewport.dispatch("wheel");
+viewport.scrollTop = ROW_HEIGHT * 10 + 1;
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.equal(
+  calls.filter(([name]) => name === "onFollowOverride").length,
+  overrideCount + 1,
+  "the panel reports manual viewport bounds to the shared Follow decision",
+);
+assert.deepEqual(calls.findLast(([name]) => name === "onFollowOverride").slice(2), [10, 10]);
+
+viewport.scrollTop = ROW_HEIGHT * 300;
+viewport.dispatch("scroll");
+viewport.scrollTop = ROW_HEIGHT * 400;
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(calls.at(-1).slice(0, 3), ["onWindow", review, 368]);
+const overlapsMovingViewport = calls.at(-1)[3];
+assert.equal(overlapsMovingViewport({offset: 368, rows: Array(256)}), true);
+assert.equal(overlapsMovingViewport({offset: 0, rows: Array(256)}), false);
+const windowCallCount = calls.filter(([name]) => name === "onWindow").length;
+const settleWindow = calls.at(-1)[4];
+settleWindow?.();
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.equal(
+  calls.filter(([name]) => name === "onWindow").length,
+  windowCallCount,
+  "the same uncovered range is requested once",
+);
+viewport.clientHeight = (0) + ROW_HEIGHT;
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+viewport.clientHeight = (ROW_HEIGHT - 1) + ROW_HEIGHT;
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 1,
+  "a hidden-to-visible viewport retries its dropped offset");
+const newerSettlement = calls.at(-1)[4];
+settleWindow?.();
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 1,
+  "an old completion cannot clear the newer pending request");
+newerSettlement?.("retired");
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 2,
+  "navigation retirement allows the same offset on visible re-entry");
+viewport.clientHeight = (0) + ROW_HEIGHT;
+calls.at(-1)[4]();
+viewport.clientHeight = (ROW_HEIGHT - 1) + ROW_HEIGHT;
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.filter(([name]) => name === "onWindow").length, windowCallCount + 3,
+  "a zero-height settlement retries after restoration before the next frame");
+viewport.scrollTop = ROW_HEIGHT * 10;
+viewport.dispatch("scroll");
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(calls.at(-2), ["onWindow", review, null]);
+assert.equal(calls.at(-1)[2], 0, "reverse travel prefetches toward the beginning");
+
+review.pending = "selection";
+panel.render(task);
+assert.equal(panel.element.dataset.pending, "selection");
+assert.equal(findAction(panel.element, "pause").disabled, true);
+
+task.sessionId = "a".repeat(32);
+task.executionControlAttempt = { sessionId: task.sessionId,
+  recovery: fakeRecoveryHandle({ canCheck: true }) };
+review.pending = "pause";
+panel.render(task);
+const controlCheck = findAction(panel.element, "retry-outcome");
+assert.ok(statusActions.contains(controlCheck), "control recovery stays in the top action row");
+assert.equal(controlCheck.hidden, false);
+assert.equal(controlCheck.disabled, false, "ordinary control Check is available while idle");
+task.executionControlAttempt.recovery.checking = true;
+panel.render(task);
+assert.equal(controlCheck.disabled, true, "ordinary control Check is disabled while running");
+task.executionControlAttempt.recovery.checking = false;
+panel.render(task);
+assert.equal(controlCheck.disabled, false, "ordinary control Check returns after observation");
+task.executionControlAttempt = null;
+task.sessionId = null;
+review.pending = null;
+panel.render(task);
+const beforeDispose = calls.length;
+viewport.scrollTop = ROW_HEIGHT * 400;
+const nextReview = { ...review, window: { ...review.window, offset: 0 } };
+task.review = nextReview;
+panel.render(task);
+assert.equal(viewport.scrollTop, 0, "switching reviews starts within retained rows");
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.length, beforeDispose, "task switch does not fetch the old viewport");
+viewport.clientHeight = (ROW_HEIGHT * 400) + ROW_HEIGHT;
+task.review = { ...nextReview, window: { ...nextReview.window, rows: Array.from({length: 256},
+  (_, index) => ({ ...row, node_id: `node-${String(index).padStart(32, "0")}`, visible_index: index })) } };
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+panel.render(task);
+document.defaultView.flushAnimationFrame();
+assert.equal(calls.length, beforeDispose, "tall viewport does not refetch the same bounded window");
+task.review = { ...review, window: { ...review.window, total: 0, rows: [] },
+  summary: { ...summary, matched_item_count: 0, filter_counts: { ...summary.filter_counts, all: 0 } } };
+panel.render(task);
+assert.ok(findText(panel.element, "Plan is empty"));
+task.review = { ...review, window: { ...review.window, total: 0, rows: [] } };
+panel.render(task);
+assert.ok(findText(panel.element, "No items match these filters."));
+search.value = "stale";
+search.dispatch("input");
+task.review = null;
+panel.render(task);
+assert.equal(findByClass(panel.element, "nami-plan-review__table-card").hidden, false);
+assert.equal(findByClass(panel.element, "nami-plan-review__rows").children.length, 0,
+  "loading cannot retain the previous plan rows");
+assert.equal(findByClass(panel.element, "nami-plan-review__toolbar").hidden, true);
+task.review = review;
+panel.render(task);
+assert.equal(findByClass(panel.element, "nami-plan-review__settings").children.length, 2,
+  "loading must not detach the two semantic-setting rows");
+task.review = null;
+panel.render(task);
+findAction(panel.element, "plan-again").dispatch("click");
+assert.equal(calls.length, beforeDispose, "loading review actions cannot reuse stale review identity");
+panel.dispose();
+await new Promise((resolve) => setTimeout(resolve, 175));
+assert.equal(calls.length, beforeDispose, "disposed debounce cannot target a later task");
+
+function walk(root) {
+  return [root, ...root.children.flatMap(walk)];
+}
+
+function findByClass(root, className) {
+  return walk(root).find((item) => item.classList.contains(className)) ?? null;
+}
+
+function findByDataset(root, name, value) {
+  return walk(root).find((item) => item.dataset[name] === value) ?? null;
+}
+
+function findAction(root, action) {
+  const found = findByDataset(root, "action", action);
+  assert.ok(found, `missing ${action} control`);
+  return found;
+}
+
+function findText(root, text) {
+  return walk(root).some((item) => item.textContent.includes(text));
+}
+
+function detailFact(root, label) {
+  const body = findByClass(root, "nami-plan-review__detail-body");
+  const index = body.children.findIndex((item) => item.tagName === "DT" && item.textContent === label);
+  return index === -1 ? null : body.children[index + 1].textContent;
+}
+
+const terminologyPanel = createPlanReviewPanel(Object.fromEntries([
+  "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onPaneChange",
+].map((name) => [name, () => {}])));
+function terminologyRow(patch) {
+  const specimen = { ...row, row_kind: "operation", operation_id: "5".repeat(32), operation_kind: "noop", presentation_kind: patch.operation_kind ?? "noop", reason: null, ...patch };
+  terminologyPanel.render({ ...task, review: { ...review,
+    window: { ...review.window, rows: [specimen] } } });
+  return findByDataset(terminologyPanel.element, "nodeId", specimen.node_id);
+}
+for (const reason of ["source_only", "metadata_match", "identity_rename", "required_directory"]) {
+  const rendered = terminologyRow({ reason });
+  assert.equal(findByDataset(rendered, "fileColumn", "notes").textContent, "", reason);
+  assert.ok(findText(rendered, "No change"));
+}
+for (const [reason, label] of [
+  ["metadata_changed", "File metadata changed"], ["target_only", "Only in target"],
+  ["directory_cleanup", "Remove unneeded folder"], ["case_collision", "Conflicting name casing"],
+  ["future_reason_unclassified", "future_reason_unclassified"],
+  ["constructor", "constructor"], ["__proto__", "__proto__"],
+]) assert.ok(findText(terminologyRow({ reason }), label), reason);
+assert.ok(findText(terminologyRow({ reason: "source_only", blocked_reason: "blocked_dependency" }), "Required operation is blocked"));
+assert.ok(findText(terminologyRow({ reason: "source_only", blocked_reason: "blocked_dependency" }), "Only in source"));
+assert.ok(findText(terminologyRow({ reason: "metadata_match", risk: "irreversible" }), "Metadata matches"));
+assert.ok(findText(terminologyRow({ selection_exclusion_reason: "incomplete-scan" }), "Scan incomplete"));
+assert.ok(findText(terminologyRow({ notice: "metadata_match" }), "metadata_match"), "free-form notices are never hidden or rewritten");
+assert.ok(findText(terminologyRow({ notice: hostile }), hostile), "unknown notes stay inert and visible");
+assert.ok(findText(terminologyRow({ row_kind: "prior-operation", move_peer_id: row.node_id }), "Previous location"));
+for (const [operation_kind, label] of [["mkdir", "Create folder"],
+  ["trash", "Move to trash"], ["delete", "Delete"], ["move_update", "Move + update"]]) {
+  assert.ok(findText(terminologyRow({ operation_kind }), label));
+}
+for (const operation_kind of ["recase", "move"]) {
+  const renamed = terminologyRow({ operation_kind, presentation_kind: "rename", prior_name: "old-name.txt" });
+  assert.ok(findText(renamed, "Rename"));
+  assert.equal(findByClass(renamed, "nami-plan-row__previous").textContent, "renamed from old-name.txt");
+}
+const moved = terminologyRow({ operation_kind: "move", presentation_kind: "move" });
+assert.equal(findByClass(moved, "nami-plan-row__previous").textContent, "moved from another folder");
+assert.equal(findByClass(moved, "nami-plan-row__previous").title, "moved from another folder");
+const changedMove = terminologyRow({ operation_kind: "move_update", presentation_kind: "move_update" });
+assert.ok(findText(changedMove, "Move + update"));
+assert.equal(findByClass(changedMove, "nami-plan-row__previous").textContent, "previous location available in details");
+terminologyPanel.dispose();
+
+const moveCalls = [];
+const movePanel = createPlanReviewPanel(Object.fromEntries([
+  "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onPaneChange",
+].map((name) => [name, (...args) => moveCalls.push([name, ...args])])));
+const moveRow = { ...row, row_kind: "prior-group", operation_kind: null,
+  selection: "disabled", selectable_operation_count: 0, selected_operation_count: 0,
+  operation_count: 0, display: "2 items moved to destination\\nested",
+  move_peer_id: `node-${"9".repeat(32)}`,
+  move_group: { count: 2, destination_display: "…\\nested" } };
+const moveReview = { ...review, window: { ...review.window, rows: [moveRow] } };
+movePanel.render({ ...task, review: moveReview });
+const moveElement = findByDataset(movePanel.element, "nodeId", moveRow.node_id);
+const movePill = findByClass(moveElement, "nami-plan-move-pill");
+assert.ok(movePill);
+assert.equal(movePill.ariaLabel, moveRow.display);
+assert.equal(movePill.title, moveRow.display);
+assert.equal(findByClass(moveElement, "nami-plan-move-pill__count").textContent, "2 items moved to");
+assertSameNode(findByClass(moveElement, "nami-plan-move-pill__destination").parentElement, findByClass(moveElement, "nami-badge"));
+assert.equal(findByClass(moveElement, "nami-plan-move-pill__destination").textContent, "…\\nested");
+assert.equal(findByClass(moveElement, "nami-checkbox"), null);
+movePill.dispatch("click");
+moveElement.dispatch("click", { target: movePill });
+assert.deepEqual(moveCalls.map(([name]) => name), ["onRevealMove"]);
+assert.equal(moveCalls[0][2], moveRow.node_id);
+findByClass(moveElement, "nami-file-row__disclosure").dispatch("click");
+assert.equal(moveCalls.at(-1)[0], "onViewChange");
+assert.equal(moveCalls.at(-1)[2].collapseNodeId, moveRow.node_id);
+moveReview.pending = "view";
+movePanel.render({ ...task, review: moveReview });
+assert.equal(movePill.disabled, true);
+const moveViewport = findByClass(movePanel.element, "nami-plan-review__list");
+moveViewport.scrollTop = ROW_HEIGHT * 400;
+moveReview.pending = null;
+moveReview.moveScrollOffset = 0;
+movePanel.render({ ...task, review: moveReview });
+assert.equal(moveViewport.scrollTop, 0, "move conflict restores the loaded first window to the viewport");
+assert.equal(moveReview.moveScrollOffset, null, "the move viewport instruction is consumed once");
+movePanel.dispose();
+
+const detailCalls = [], paneCalls = [];
+const executionPanel = createPlanReviewPanel(Object.fromEntries([
+  "onViewChange", "onWindow", "onSelect", "onScopeSelect", "onExecute", "onControl",
+  "onPlanAgain", "onHighlight", "onHighlightedSelect", "onExecutionDetail", "onFollowOverride", "onNavigateCurrent", "onRevealMove", "onPaneChange",
+].map((name) => [name, (...args) => {
+  if (name === "onExecutionDetail") detailCalls.push(args);
+  if (name === "onPaneChange") paneCalls.push(args);
+}])));
+const operationId = "5".repeat(32);
+const terminalResult = {
+  headline: "partial", filesystem: "failed", integrity: "mismatch",
+  recording: "degraded", audit: "degraded", disposition: "ran", canceled: false,
+  phases: [{ phase: "execute", status: "failed", error: hostile }],
+  bytes_done: "0", bytes_total: "0", error: "mixed I/O failure",
+  recording_degraded_items: 1,
+  recording_issues: [{ reason: "final-flush-failed", detail: hostile }],
+  omitted_detail_count: 2, presentation_omitted_detail_count: 3, review_refusal: null,
+};
+const executionSummary = {
+  execution_revision: 9, session_id: "6".repeat(32), result: terminalResult,
+  failed_operation_count: 2, disk_capacity_failure_count: 1,
+  has_successful_copied_files: true,
+  gap: { minimum_first_missed_seq: 4, maximum_first_missed_seq: 8 },
+  trash_location: `D:\\${hostile}`,
+};
+const executionRow = {
+  ...row, node_id: `node-${"7".repeat(32)}`, display: "zero-byte.bin",
+  is_container: true, row_kind: "operation-group", operation_id: operationId,
+  operation_kind: "copy", presentation_kind: "copy", selection: "selected", selectable_operation_count: 1,
+  selected_operation_count: 1, operation_count: 1, size: "0",
+  execution: {
+    operation: { result: "succeeded", reason: null, recording: "degraded",
+      recording_reason: "record-write-failed", detail_omitted_count: 2 },
+    automatic_verification: { result: "mismatched", reason: "hash-mismatch",
+      recording: "ok", record_disposition: "noop", detail_omitted_count: 3 },
+    evidence: { state: "superseded", content: null },
+  },
+};
+const executionReviewState = {
+  ...review, summary: { ...summary, selection_state: "committed",
+    highlight_focus_node_id: executionRow.node_id, highlight_revision: 1 },
+  window: { ...review.window, execution: executionSummary, rows: [executionRow], total: 1 },
+  executionDetail: null,
+  planDetail: { nodeId: executionRow.node_id, state: "current", response: { detail: {
+    path: `Case\\${hostile}`, prior_path: "Previous\\OriginalCase.txt",
+    move_destination_path: null, path_origin: "target", source_path: "SourceCase\\Original.txt", notice: hostile,
+  } } },
+};
+executionPanel.render({ ...task, review: { ...executionReviewState,
+  window: { ...executionReviewState.window, execution: { ...executionSummary, session_id: null } } } });
+assert.ok(findText(executionPanel.element, `D:\\target\\Case\\${hostile.replace("\u202e", "⟦U+202E⟧")}`),
+  "full planned paths remain safely visible before execution");
+assert.ok(findText(executionPanel.element, "D:\\target\\Previous\\OriginalCase.txt"),
+  "planned details retain the complete original-case previous path");
+assert.ok(findText(executionPanel.element, hostile), "full diagnostic text remains inert before execution");
+const targetPlannedDetail = executionReviewState.planDetail;
+for (const [origin, path, expected] of [
+  ["source", "SourceCase\\Notice.txt", `C:\\${hostile.replace("\u202e", "⟦U+202E⟧")}\\SourceCase\\Notice.txt`],
+  ["target", "TargetCase\\Notice.txt", "D:\\target\\TargetCase\\Notice.txt"],
+  ["source", "", `C:\\${hostile.replace("\u202e", "⟦U+202E⟧")}`],
+  ["target", "", "D:\\target"],
+]) {
+  executionReviewState.planDetail = { ...targetPlannedDetail, response: { detail: {
+    path, path_origin: origin, prior_path: "Previous\\OriginalCase.txt",
+    move_destination_path: "", source_path: null, notice: null,
+  } } };
+  executionPanel.render({ ...task, review: { ...executionReviewState,
+    window: { ...executionReviewState.window, execution: { ...executionSummary, session_id: null } } } });
+  assert.equal(detailFact(executionPanel.element, origin === "source" ? "Source path" : "Target path"), expected, `${origin} planned path uses its established root`);
+  assert.equal(detailFact(executionPanel.element, "Previous path"), "D:\\target\\Previous\\OriginalCase.txt");
+  assert.equal(detailFact(executionPanel.element, "Move destination"), "D:\\target", "root destination uses the target root");
+}
+executionReviewState.planDetail = targetPlannedDetail;
+const executionTask = { ...task, review: executionReviewState, executionStarted: true,
+  sessionState: "failed" };
+const paneTask = { ...executionTask, taskKind:"sync-plan", workPane:"plan",
+  executionSessionId:executionSummary.session_id, sessionId:executionSummary.session_id,
+  sessionKind:"sync-execution", sessionReleased:true };
+executionPanel.render(paneTask);
+assert.equal(findAction(executionPanel.element, "plan-again").hidden, false, "terminal execution restores Plan again");
+const paneCallBase = paneCalls.length;
+findAction(executionPanel.element, "pane-verify").dispatch("click");
+assert.deepEqual(paneCalls.slice(paneCallBase), [[paneTask, "verify"]],
+  "an executed Plan exposes one explicit Verify navigation action");
+const liveTerminalReview = { ...executionReviewState, window: {
+  ...executionReviewState.window, execution: { ...executionSummary, result: null,
+    started_at: null, ended_at: null },
+} };
+const terminalPageSnapshot = (result, patch = {}) => ({
+  wire_version: 3, session_id: executionSummary.session_id, session_state: "failed",
+  terminal_result: result, started_at: "2026-09-23T01:00:00+00:00",
+  ended_at: "2026-09-23T01:01:05+00:00",
+  progress_inconsistent: false, phase: null, gap_first_missed_seq: null,
+  presentation: { value: 0, determinate: false, indeterminate: false,
+    items_done: null, items_total: null, throughput_bytes_per_second: null,
+    eta_seconds: null },
+  ...patch,
+});
+executionPanel.render({ ...executionTask, review: liveTerminalReview,
+  sessionId: executionSummary.session_id,
+  snapshot: terminalPageSnapshot(terminalResult, { progress_inconsistent: true }) });
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-summary").textContent,
+  "Execution needs review · Completed 2026-09-23 01:01 · 1m 5s elapsed · Some progress updates were inconsistent.",
+  "terminal snapshot updates the card before retained-window capture");
+assert.ok(findText(executionPanel.element, "Some progress updates were inconsistent."));
+executionPanel.render({ ...executionTask, review: liveTerminalReview,
+  sessionId: executionSummary.session_id, snapshot: null });
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-summary").textContent,
+  "Execution failed",
+  "terminal state remains visible when no result was retained");
+assert.ok(findText(executionPanel.element, "No retained execution result is available."));
+executionPanel.render({ ...executionTask, review: null, error: null });
+const initialDiagnostics = findByClass(executionPanel.element, "nami-plan-review__diagnostics");
+assert.equal(initialDiagnostics.hidden, true, "an initial null review has no diagnostics row");
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__execution-issues").hidden, true);
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__execution-trash").hidden, true);
+executionPanel.render(executionTask);
+const executionContent = findByClass(executionPanel.element, "nami-plan-review__content");
+const executionDiagnostics = findByClass(executionPanel.element, "nami-plan-review__diagnostics");
+const executionIssues = findByClass(executionPanel.element, "nami-plan-review__execution-issues");
+const executionTrash = findByClass(executionPanel.element, "nami-plan-review__execution-trash");
+const globalDiagnostics = findByClass(executionPanel.element, "nami-plan-review__global-diagnostics");
+const executionDetailCard = findByClass(executionPanel.element, "nami-plan-review__detail");
+const executionStatusCard = findByClass(executionPanel.element, "nami-plan-review__summary");
+const detailsToggle = findAction(executionPanel.element, "toggle-execution-details");
+const executionStatus = findByClass(executionPanel.element, "nami-plan-review__status");
+assert.ok(executionContent, "table and diagnostics share one bounded content region");
+assert.ok(executionDiagnostics, "variable diagnostics share one explicit grid row");
+assert.ok(findByClass(executionPanel.element, "nami-plan-review__table-card").parentElement === executionContent,
+  "the table remains in the bounded content region");
+assert.ok(executionDiagnostics.parentElement === executionPanel.element,
+  "the full-height Details pane belongs to the Plan grid");
+assert.ok(globalDiagnostics.parentElement === executionDiagnostics,
+  "global execution facts occupy one Details column");
+assert.ok(executionIssues.parentElement === globalDiagnostics,
+  "global issues remain in the global Details column");
+assert.ok(executionTrash.parentElement === globalDiagnostics,
+  "trash location remains in the global Details column");
+assert.ok(executionDetailCard.parentElement === executionDiagnostics,
+  "operation detail remains in the Details pane");
+assert.equal(detailsToggle.ariaExpanded, "false");
+assert.equal(executionDiagnostics.hidden, true, "Details is folded by default");
+assert.equal(executionStatus.hidden, false, "a compact gap warning remains visible while Details is folded");
+assert.match(executionStatus.textContent, /Execution event history has gaps/);
+assert.ok(executionStatusCard.contains(executionStatus), "gap advice belongs to the folded status card");
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__execution-alert"), null);
+detailsToggle.dispatch("click");
+assert.equal(detailsToggle.ariaExpanded, "true");
+assert.equal(executionDiagnostics.hidden, false);
+assert.equal(executionDetailCard.hidden, false, "expanded Details always includes an item pane");
+assert.equal(executionIssues.tabIndex, 0, "terminal diagnostics remain keyboard-scrollable");
+assert.equal(executionIssues.ariaLabel, "Execution issues");
+assert.equal(executionTrash.tabIndex, 0, "the literal trash location remains keyboard-scrollable");
+assert.equal(executionTrash.ariaLabel, "Trash location");
+assert.equal(executionDetailCard.tabIndex, 0, "operation detail remains keyboard-scrollable");
+assert.equal(executionDetailCard.ariaLabel, "Item details");
+assert.equal(globalDiagnostics.tabIndex, 0, "global card remains keyboard-scrollable");
+assert.equal(globalDiagnostics.ariaLabel, "Task details");
+assert.ok(findText(executionPanel.element, "Execution needs review"));
+assert.ok(findText(executionPanel.element, "Filesystem: Failed"));
+assert.ok(findText(executionPanel.element, "Automatic verification: Mismatch"));
+assert.ok(findText(executionPanel.element, "producer details omitted"));
+assert.ok(findText(executionPanel.element, "presentation details omitted"));
+assert.ok(findText(executionPanel.element, "Gaps observed from event 4 through 8"));
+assert.ok(findText(executionPanel.element, "Trash location:"));
+assert.ok(findText(executionPanel.element, "Operation: Completed"));
+assert.ok(findText(executionPanel.element, "Automatic verification: Mismatch"));
+assert.ok(findText(executionPanel.element, "Stored evidence: Superseded"));
+assertSameNode(findByClass(executionPanel.element, "nami-plan-review__detail-button"), null,
+  "rows use authoritative highlight instead of a separate detail button");
+assert.ok(findText(executionDetailCard, "Operation"));
+assert.ok(findText(executionDetailCard, "zero-byte.bin"));
+assert.equal(detailCalls.length, 0, "rendering a focused row does not bypass the highlight controller");
+executionReviewState.executionDetail = {
+  operationId, executionRevision: 9,
+  state: "current",
+  response: {
+    disposition: "current", execution_revision: 9, operation_id: operationId,
+    operation: {
+      item_type: "operation", phase: "execute", item_id: operationId, kind: "copy",
+      path: `OperationCase\\${hostile}`, result: "succeeded", reason: null,
+      detail: { message: hostile, continued: false,
+        backup_path: ".synctrash\\backup.txt", mutation_destination: "Moved\\Destination.txt",
+        prior_path: "Previous\\Original.txt", published_path: "Published\\Current.txt",
+        trash_path: ".synctrash\\removed.txt" }, recording: "degraded",
+      recording_reason: "record-write-failed", recording_detail: hostile,
+      detail_omitted_count: 1,
+    },
+    automatic_verification: {
+      item_type: "integrity", phase: "verify", item_id: operationId,
+      row_id: null, location_id: null, kind: "integrity", path: `VerificationCase\\${hostile}`,
+      result: "mismatched", reason: "hash-mismatch", detail: hostile,
+      read_strategy: "windows-unbuffered", recording: "ok",
+      record_disposition: "noop", detail_omitted_count: 1,
+    },
+    evidence: { state: "unrecorded", content: null },
+  },
+};
+executionPanel.render(executionTask);
+const detailBody = findByClass(executionPanel.element, "nami-plan-review__detail-body");
+const planLabels = detailBody.children.filter(value => value.tagName === "DT").map(value => value.textContent);
+assert.ok(planLabels.indexOf("Operation recording") < planLabels.indexOf("Target path"));
+assert.ok(planLabels.indexOf("Target path") < planLabels.indexOf("Selection"));
+assert.ok(planLabels.indexOf("Selection") < planLabels.indexOf("Auto verification"));
+assert.ok(planLabels.indexOf("Auto verification") < planLabels.indexOf("Stored evidence"));
+assert.ok(detailBody.children.filter(value => value.classList.contains("nami-detail-divider"))
+  .every(value => value.ariaHidden === "true"));
+assert.equal(detailFact(executionPanel.element, "Execution path"), null);
+for (const [label, path] of [["Verification path", `VerificationCase\\${hostile}`],
+  ["Backup path", ".synctrash\\backup.txt"], ["Mutation destination", "Moved\\Destination.txt"],
+  ["Prior path", "Previous\\Original.txt"], ["Published path", "Published\\Current.txt"],
+  ["Trash path", ".synctrash\\removed.txt"]]) {
+  assert.equal(detailFact(executionPanel.element, label), `D:\\target\\${path.replace("\u202e", "⟦U+202E⟧")}`,
+    "execution path facts belong to the reviewed target");
+}
+assert.ok(findText(detailBody, hostile), "hostile detail remains literal text");
+assert.equal(walk(detailBody).some((item) => item.tagName === "IMG"), false);
+const retainedPlanDetail = executionReviewState.planDetail;
+executionReviewState.planDetail = { nodeId: executionRow.node_id, state: "error",
+  message: "Plan changed. Select Refresh review to read current details." };
+executionPanel.render(executionTask);
+assert.ok(findText(executionDetailCard, "Plan changed. Select Refresh review to read current details."),
+  "planned-detail failures remain visible alongside a current execution detail");
+assert.ok(findText(detailBody, "Operation recording"), "execution facts remain available during planned-detail failure");
+executionReviewState.planDetail = retainedPlanDetail;
+executionPanel.render(executionTask);
+detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, true, "user collapse folds retained detail");
+executionPanel.render(executionTask);
+assert.equal(executionDiagnostics.hidden, true, "routine render preserves collapse");
+executionReviewState.window = { ...executionReviewState.window };
+executionPanel.render(executionTask);
+assert.equal(executionDiagnostics.hidden, true, "window adoption preserves collapse");
+assert.ok(findText(detailBody, hostile), "collapsed detail still refreshes its content");
+detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, false);
+const retainedResponse = executionReviewState.executionDetail.response;
+executionReviewState.executionDetail = null;
+executionPanel.render(executionTask);
+assert.equal(executionDetailCard.hidden, false, "item pane remains with planned facts after detail retirement");
+assert.ok(findText(executionDetailCard, "Operation"));
+
+executionReviewState.executionDetail = {
+  operationId, executionRevision: 9, state: "loading", response: null, message: null,
+};
+executionPanel.render(executionTask);
+assert.equal(executionDiagnostics.hidden, false, "new row Details request opens the pane");
+assert.ok(findText(executionDetailCard, "Loading operation detail"));
+executionReviewState.executionDetail.state = "current";
+executionReviewState.executionDetail.response = retainedResponse;
+executionPanel.render(executionTask);
+assert.ok(findText(detailBody, hostile), "loading-to-result refreshes the same detail");
+const retainedDetailNodes = [...detailBody.children];
+document.textWriteTargets = new Set([detailBody, ...retainedDetailNodes,
+  ...retainedDetailNodes.flatMap(node => node.children)]);
+document.textWriteCount = 0;
+executionPanel.render(executionTask);
+for (const [index, node] of retainedDetailNodes.entries()) assertSameNode(detailBody.children[index], node,
+  "unchanged Plan detail facts retain their nodes");
+assert.equal(document.textWriteCount, 0, "unchanged Plan details retain their text nodes");
+document.textWriteTargets = null;
+const retainedDetailFocus = executionReviewState.summary.highlight_focus_node_id;
+executionReviewState.summary.highlight_focus_node_id = null;
+executionPanel.render(executionTask);
+assert.equal(detailBody.children.length, 0, "clearing detail focus trims all retained facts");
+executionReviewState.summary.highlight_focus_node_id = retainedDetailFocus;
+executionPanel.render(executionTask);
+assert.ok(findText(detailBody, hostile), "restoring detail focus rebuilds current facts");
+detailsToggle.focus();
+detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, true);
+executionReviewState.executionDetail = { ...executionReviewState.executionDetail,
+  response: { ...retainedResponse, operation: { ...retainedResponse.operation, result: "failed" } } };
+executionPanel.render(executionTask);
+assert.equal(executionDiagnostics.hidden, true, "a changed focused detail never reopens deliberate collapse");
+detailsToggle.dispatch("click");
+
+const quietResult = {
+  ...terminalResult,
+  headline: "success", filesystem: "completed", integrity: "verified",
+  recording: "ok", audit: "ok",
+  phases: [{ phase: "execute", status: "completed", error: null }],
+  error: null, recording_degraded_items: 0, recording_issues: [],
+  omitted_detail_count: 0, presentation_omitted_detail_count: 0,
+};
+for (const issuesVisible of [false, true]) {
+  for (const trashVisible of [false, true]) {
+      const visibilityReview = {
+        ...executionReviewState,
+        window: {
+          ...executionReviewState.window,
+          execution: {
+            ...executionSummary,
+            result: { ...quietResult, error: issuesVisible ? hostile : null },
+            failed_operation_count: 0,
+            disk_capacity_failure_count: 0,
+            gap: null,
+            trash_location: trashVisible ? `D:\\${hostile}` : null,
+          },
+        },
+        executionDetail: null,
+      };
+      executionPanel.render({
+        ...executionTask, review: visibilityReview,
+      });
+      assert.equal(executionIssues.hidden, !issuesVisible);
+      assert.equal(executionTrash.hidden, !trashVisible);
+      assert.equal(executionDetailCard.hidden, false, "item pane is present with or without execution facts");
+      assert.equal(globalDiagnostics.hidden, false, "secondary execution facts keep the global column available");
+      if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+      assert.equal(executionDiagnostics.hidden, false);
+      assert.ok(findText(executionDetailCard, "Operation"));
+  }
+}
+
+function assertNullReviewDiagnostics(error) {
+  executionPanel.render({
+    ...executionTask,
+    review: null,
+    error,
+    sessionState: error === null ? "planning" : "failed",
+  });
+  assert.equal(executionDiagnostics.hidden, true);
+  assert.equal(executionDiagnostics.dataset.status, "none");
+  assert.equal(executionIssues.hidden, true);
+  assert.equal(executionIssues.textContent, "");
+  assert.equal(executionTrash.hidden, true);
+  assert.equal(executionTrash.textContent, "");
+  assert.equal(executionDetailCard.parentElement.hidden, true);
+}
+
+executionPanel.render(executionTask);
+if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, false);
+assert.ok(executionIssues.textContent.includes(hostile));
+assert.ok(findText(executionTrash, "Trash location:"));
+assertNullReviewDiagnostics(null);
+executionPanel.render(executionTask);
+if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, false);
+assert.ok(executionIssues.textContent.includes(hostile));
+assert.ok(findText(executionTrash, "Trash location:"));
+assertNullReviewDiagnostics("Different task plan unavailable.");
+executionPanel.render(executionTask);
+if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+assert.equal(executionDiagnostics.hidden, false);
+assert.ok(executionIssues.textContent.includes(hostile));
+assert.ok(findText(executionTrash, "Trash location:"));
+
+const capacityResult = {
+  ...terminalResult,
+  headline: "failed", filesystem: "failed", integrity: "verified",
+  recording: "ok", audit: "ok",
+  phases: [{ phase: "execute", status: "failed", error: "disk capacity" }],
+  error: null, recording_degraded_items: 0, recording_issues: [],
+  omitted_detail_count: 0, presentation_omitted_detail_count: 0,
+};
+const capacityRow = {
+  ...executionRow,
+  display: "capacity.bin",
+  execution: {
+    operation: {
+      result: "failed", reason: "disk-capacity", recording: "ok",
+      recording_reason: null, detail_omitted_count: 0,
+    },
+    automatic_verification: {
+      result: "verified", reason: null, recording: "ok",
+      record_disposition: "noop", detail_omitted_count: 0,
+    },
+    evidence: {
+      state: "recorded-copy",
+      content: { digest: "abcdef0123456789abcdef0123456789" },
+    },
+  },
+};
+const capacityReview = {
+  ...executionReviewState,
+  window: {
+    ...executionReviewState.window,
+    rows: [capacityRow],
+    execution: {
+      ...executionSummary,
+      result: capacityResult,
+      failed_operation_count: 1,
+      disk_capacity_failure_count: 1,
+      has_successful_copied_files: false,
+    },
+  },
+  executionDetail: null,
+};
+executionPanel.render({
+  ...executionTask, review: capacityReview, sessionId: executionSummary.session_id,
+  snapshot: terminalPageSnapshot(capacityResult),
+});
+assert.ok(findText(executionPanel.element, "Needs target space"));
+executionPanel.render({
+  ...executionTask, review: capacityReview, sessionId: "9".repeat(32),
+  snapshot: terminalPageSnapshot(terminalResult, {
+    session_id: "9".repeat(32),
+  }),
+});
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-title").textContent,
+  "Execution needs review",
+  "a different session's capacity counts cannot replace snapshot result");
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__execution-trash").hidden, true,
+  "a different session's trash location is not current guidance");
+executionPanel.render({
+  ...executionTask, review: capacityReview, sessionId: executionSummary.session_id,
+  sessionState: "active",
+  snapshot: terminalPageSnapshot(null, { session_state: "active", started_at: null,
+    ended_at: null }),
+});
+assert.equal(findByClass(executionPanel.element, "nami-plan-review__status-title").textContent,
+  "Execution in progress",
+  "active snapshot does not inherit the retained terminal window result");
+executionPanel.render({
+  ...executionTask, review: capacityReview, sessionId: executionSummary.session_id,
+  snapshot: terminalPageSnapshot(capacityResult),
+});
+const capacityIntent = walk(executionPanel.element).find(
+  (item) => item.dataset?.lifecycle === "capacity",
+);
+assert.ok(capacityIntent, "the exact disk-capacity failure has its closed lifecycle key");
+assert.ok(findText(capacityIntent, "Failed"), "capacity row retains the literal failed result");
+assert.ok(findText(executionPanel.element, "Operation: Failed (Disk capacity)"));
+assert.ok(findText(executionPanel.element, "Automatic verification: Verified"));
+assert.ok(findText(executionPanel.element, "Stored evidence: Recorded copy"),
+  "capacity presentation preserves every independent row axis");
+assert.ok(findText(executionPanel.element, "abcdef01"), "only stored evidence supplies the checksum");
+
+const quietDetailReview = {
+  ...capacityReview,
+  window: {
+    ...capacityReview.window,
+    execution: { ...executionSummary, session_id: null, result: null, gap: null, trash_location: null },
+  },
+  executionDetail: { operationId, state: "loading", response: null, message: null },
+};
+const quietDetailTask = { ...executionTask, review: quietDetailReview };
+executionPanel.render(quietDetailTask);
+if (executionDiagnostics.hidden) detailsToggle.dispatch("click");
+executionDetailCard.focus();
+detailsToggle.dispatch("click");
+assert.ok(document.activeElement === detailsToggle,
+  "whole-pane collapse returns hidden-content focus to its disclosure");
+detailsToggle.dispatch("click");
+executionDetailCard.focus();
+executionPanel.render({ ...quietDetailTask, review: null });
+assert.ok(document.activeElement === findByClass(executionPanel.element, "nami-plan-review__status-title"),
+  "null review returns hidden-detail focus to visible status");
+executionPanel.dispose();
+
+const livePanel = createPlanReviewPanel(callbacks);
+const liveRow = {
+  ...executionRow, execution: null, is_container: false, row_kind: "operation",
+};
+const liveReview = {
+  ...executionReviewState,
+  window: {
+    ...executionReviewState.window,
+    rows: [liveRow], total: 1,
+    execution: { ...executionSummary, session_id: "8".repeat(32), result: null, gap: null, trash_location: null },
+  },
+  executionDetail: null,
+};
+const liveTask = {
+  ...executionTask, review: liveReview, sessionState: "active",
+  sessionId: "8".repeat(32),
+  executionSessionId: "8".repeat(32),
+  reviewSessionId: "8".repeat(32),
+  executionControlState: "running",
+  progressPresentation: {
+    phase: "execute", activeItem: { item_id: operationId, item_type: "operation" },
+    itemPercent: 10,
+  },
+};
+liveTask.executionPresentation = liveTask.progressPresentation;
+// Replay the same eight copy receipts with more unchanged rows in view.
+// Count even transient elements that a final DOM-size check would miss.
+function refreshAllocations(windowSize) {
+  const rows = Array.from({length: windowSize}, (_, index) => {
+    const id = (index + 1).toString(16).padStart(32, "0");
+    return {...liveRow, operation_id: id, node_id: `node-${id}`, display: `file-${index}.bin`};
+  });
+  const review = {...liveReview, planDetail: null, window: {...liveReview.window, rows, total: windowSize}};
+  const task = {...liveTask, review, executionPresentation: null, progressPresentation: null};
+  const panel = createPlanReviewPanel(callbacks);
+  panel.render(task);
+  const allocations = [];
+  for (let index = 0; index < 8; index += 1) {
+    const next = structuredClone(review.window);
+    next.execution.execution_revision += 1;
+    next.rows[index].execution = {operation: executionRow.execution.operation, automatic_verification: null, evidence: null};
+    review.window = next;
+    const before = document.elementsCreated;
+    panel.render(task);
+    allocations.push(document.elementsCreated - before);
+    const rendered = findByDataset(panel.element, "nodeId", rows[index].node_id);
+    assert.equal(findByClass(rendered, "nami-plan-row__intent").dataset.lifecycle, "completed");
+  }
+  panel.dispose();
+  return allocations;
+}
+const narrowRefresh = refreshAllocations(8);
+const wideRefresh = refreshAllocations(64);
+for (const [index, count] of wideRefresh.entries()) {
+  assert.ok(count <= narrowRefresh[index],
+    `copy receipt ${index + 1} created ${count} elements with 64 rows vs ${narrowRefresh[index]} with 8`);
+}
+
+// Retain only the intersection of ordinary Follow/scroll windows, with current
+// row facts in the existing event handlers.
+function overlapAllocations(windowSize) {
+  const makeRow = (index) => ({...liveRow, node_id: `overlap-${index}`,
+    operation_id: (index + 1).toString(16).padStart(32, "0"),
+    display: `overlap-${index}.bin`, visible_index: index});
+  const rows = Array.from({length: windowSize}, (_, index) => makeRow(index));
+  const review = {...liveReview, window: {...liveReview.window, rows, offset: 0, total: 512}};
+  const task = {...liveTask, review, progressPresentation: null, executionPresentation: null};
+  const panel = createPlanReviewPanel(callbacks);
+  panel.render(task);
+  const departing = findByDataset(panel.element, "nodeId", rows[0].node_id);
+  const retained = findByDataset(panel.element, "nodeId", rows[1].node_id);
+  const retainedParent = retained.parentElement;
+  const retainedDetachCount = retained.detachCount ?? 0;
+  retained.focus({preventScroll:true});
+  const listenerCount = [...retained.listeners.values()].reduce((sum, items) => sum + items.length, 0);
+  const nextRows = Array.from({length: windowSize}, (_, index) => makeRow(index + 1));
+  nextRows[0].execution = {operation: executionRow.execution.operation, automatic_verification: null, evidence: null};
+  review.window = {...review.window, offset: 1, rows: nextRows};
+  const before = document.elementsCreated;
+  panel.render(task);
+  const allocations = document.elementsCreated - before;
+  assertSameNode(findByDataset(panel.element, "nodeId", rows[1].node_id), retained);
+  assertSameNode(retained.parentElement, retainedParent);
+  assert.equal(retained.detachCount ?? 0, retainedDetachCount,
+    "overlapping rows stay attached throughout the publication");
+  assertSameNode(document.activeElement, retained, "window advancement preserves retained row focus");
+  assert.deepEqual(retainedParent.children.filter(node => node.dataset.nodeId !== undefined)
+    .map(node => node.dataset.nodeId), nextRows.map(row => row.node_id));
+  assert.equal(findByDataset(panel.element, "nodeId", rows[0].node_id), null);
+  assert.equal([...retained.listeners.values()].reduce((sum, items) => sum + items.length, 0), listenerCount);
+  assert.equal(findByClass(retained, "nami-plan-row__intent").dataset.lifecycle, "completed");
+  const checkbox = findByClass(retained, "nami-checkbox");
+  checkbox.dispatch("change", {currentTarget: {checked: true}});
+  assertSameNode(calls.at(-1)[2], nextRows[0], "retained handler consumes the current row object");
+  review.window = {...review.window, offset: 0, rows};
+  panel.render(task);
+  assert.ok(findByDataset(panel.element, "nodeId", rows[0].node_id) !== departing,
+    "a departed row has no off-window DOM cache");
+  const beforeChange = findByDataset(panel.element, "nodeId", rows[1].node_id);
+  review.window = {...review.window, rows: rows.map((row, index) => index === 1 ? {...row, display: "changed.bin"} : row)};
+  panel.render(task);
+  assert.ok(findByDataset(panel.element, "nodeId", rows[1].node_id) !== beforeChange,
+    "changed static facts rebuild the affected row");
+  panel.dispose();
+  return allocations;
+}
+const overlapCounts = [8, 64, 256].map(overlapAllocations);
+assert.deepEqual(overlapCounts, [overlapCounts[0], overlapCounts[0], overlapCounts[0]],
+  "one entering row and one changed execution row allocate independently of retained window width");
+for (const retainedIndex of [null, 0]) {
+  const rows = Array.from({length:32}, (_, index) => ({...liveRow, node_id:`clamp-${index}`,
+    operation_id:(index + 1).toString(16).padStart(32, "0"), visible_index:index}));
+  const review = {...liveReview, window:{...liveReview.window, rows, total:32, offset:0}};
+  const task = {...liveTask, review, progressPresentation:null, executionPresentation:null};
+  const panel = createPlanReviewPanel(callbacks);
+  panel.render(task);
+  const viewport = findByClass(panel.element, "nami-plan-review__list");
+  const body = findByClass(panel.element, "nami-plan-review__rows");
+  viewport.clientHeight = 9 * ROW_HEIGHT;
+  viewport.scrollTop = 16 * ROW_HEIGHT;
+  body.scrollClampViewport = viewport;
+  review.window = {...review.window, rows:rows.map((row, index) => index === retainedIndex ? row
+    : {...row, display:`replacement-${index}`})};
+  panel.render(task);
+  assert.equal(viewport.scrollTop, 16 * ROW_HEIGHT,
+    "full and sparse-overlap publications restore scroll after transient extent collapse");
+  review.summary = {...review.summary, highlight_focus_node_id:rows[31].node_id};
+  review.window = {...review.window, rows:review.window.rows.map(row => ({...row, display:row.display + "-next"}))};
+  review.keyboardRevealWindow = review.window;
+  findByDataset(panel.element, "nodeId", rows[16].node_id).focus({preventScroll:true});
+  panel.render(task);
+  assert.ok(viewport.scrollTop > 16 * ROW_HEIGHT, "keyboard reveal follows scroll restoration");
+  panel.dispose();
+}
+livePanel.render(liveTask);
+const liveElement = findByDataset(livePanel.element, "nodeId", liveRow.node_id);
+let liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(liveIntent.dataset.lifecycle, "executing",
+  "unsettled operation composes through the real row validator");
+assert.equal(findByClass(liveIntent, "nami-progress").ariaValueNow, "10");
+liveElement.focus();
+liveTask.progressPresentation = { ...liveTask.progressPresentation, itemPercent: 80 };
+liveTask.executionPresentation = liveTask.progressPresentation;
+livePanel.render(liveTask);
+liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(findByClass(liveIntent, "nami-progress").ariaValueNow, "80",
+  "same-window progress updates the visible active row");
+assert.ok(findByDataset(livePanel.element, "nodeId", liveRow.node_id) === liveElement,
+  "progress keeps row identity");
+assert.ok(document.activeElement === liveElement, "progress keeps row focus");
+liveRow.execution = {
+  operation: executionRow.execution.operation,
+  automatic_verification: null, evidence: null,
+};
+liveTask.progressPresentation = {
+  phase: "verify", activeItem: { item_id: operationId, item_type: "operation" },
+  itemPercent: 40,
+};
+liveTask.executionPresentation = liveTask.progressPresentation;
+livePanel.render(liveTask);
+liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(liveIntent.dataset.lifecycle, "completed", "copy outcome survives verification");
+assert.ok(findText(liveIntent, "Completed"));
+assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null,
+  "Plan retains execution results instead of painting live verification");
+const liveFilters = findByClass(livePanel.element, "nami-plan-review__filters");
+const liveFilterTrigger = findAction(liveFilters, "filter-menu");
+liveTask.workPane = "verify";
+liveTask.linkedVerificationStarted = true;
+liveTask.sessionKind = "sync-execution";
+liveTask.sessionReleased = false;
+livePanel.render({...liveTask, executionPresentation: {phase:"verify", activeItem:null, itemPercent:null}});
+assert.equal(findByClass(liveElement, "nami-file-state-label").textContent, "Pending",
+  "Verify shows the pending label for a completed copy awaiting verification");
+livePanel.render(liveTask);
+liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__list").ariaLabel, "Automatic verification");
+assert.equal(liveFilters.hidden, false, "linked Verify retains the Filters slot beside Search");
+assert.equal(liveFilterTrigger.ariaDisabled, "true");
+assert.equal(findAction(livePanel.element, "plan-search").ariaLabel, "Search verification files");
+assert.ok(findText(livePanel.element, "Verification detail"), "Verify has verification columns");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__path--source").hidden, true);
+assert.equal(findAction(livePanel.element, "execute").hidden, true);
+assert.equal(findByClass(liveElement, "nami-checkbox").hidden, true,
+  "linked Verify exposes no file-selection mutation");
+assert.equal(findText(liveIntent, "Completed"), false, "Verify primary state describes verification");
+assert.equal(findByClass(liveIntent, "nami-plan-row__verification")
+  .querySelector(".nami-progress").ariaValueNow, "40");
+assert.ok(findByDataset(livePanel.element, "nodeId", liveRow.node_id) === liveElement,
+  "switching to Verify preserves the bounded tree row");
+const linkedMessageBefore = liveReview.message;
+liveReview.message = "Execution running.";
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Verifying");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes("Verification running."), true);
+liveTask.executionControlState = "paused";
+liveReview.message = "Execution paused. Resume available.";
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Verification paused");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes("Verification paused. Resume available."), true);
+liveReview.recovery = {message:"Original control outcome is pending."};
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes("Original control outcome is pending."), true,
+  "phase wording preserves authoritative recovery feedback");
+liveReview.recovery = null;
+const linkedSnapshotBefore = liveTask.snapshot;
+for (const [phaseStatus, integrity, title] of [
+  ["completed", "verified", "Verification completed"], ["completed", "mismatch", "Verification mismatch"],
+  ["incomplete", "incomplete", "Verification incomplete"], ["failed", "incomplete", "Verification failed"],
+  ["canceled", "incomplete", "Verification canceled"],
+]) {
+  liveTask.snapshot = {session_id:liveTask.sessionId, session_state:"completed", phase:null,
+    presentation:{value:0, determinate:false, indeterminate:false},
+    terminal_result:{...terminalResult, integrity, error:"verification-error-sentinel",
+      phases:[{phase:"execute", status:"completed", items_done:42, items_total:42, error:null},
+        {phase:"verify", status:phaseStatus, items_done:1, items_total:3, error:null}]}};
+  livePanel.render(liveTask);
+  assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, title);
+  assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent,
+    `1 of 3 verification items · ${phaseStatus[0].toUpperCase()}${phaseStatus.slice(1)}`,
+    "terminal-before-release Verify uses verification phase counters");
+  const linkedAdvice = findByClass(livePanel.element, "nami-plan-review__status").textContent;
+  assert.equal(linkedAdvice.includes("verification-error-sentinel"), true);
+  assert.equal(linkedAdvice.includes("Execution running."), false);
+}
+liveTask.snapshot = {session_id:liveTask.sessionId, session_state:"completed", phase:null,
+  presentation:{value:0, determinate:false, indeterminate:false},
+  terminal_result:{...terminalResult, headline:"degraded", filesystem:"completed", integrity:"verified", error:null,
+    recording:"degraded", audit:"degraded",
+    recording_issues:[{reason:"final-flush-failed", detail:"history-recording-warning"}],
+    phases:[{phase:"execute", status:"completed", items_done:3, items_total:3, error:null},
+      {phase:"verify", status:"completed", items_done:3, items_total:3, error:null}]}};
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Verification completed");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__summary").dataset.status, "attention",
+  "a verified hash preserves attention for independent recording and audit warnings");
+const completedWarningAdvice = findByClass(livePanel.element, "nami-plan-review__status").textContent;
+for (const warning of ["Item recording: Degraded", "Audit: Degraded", "history-recording-warning",
+  "2 producer details omitted", "3 presentation details omitted"]) {
+  assert.equal(completedWarningAdvice.includes(warning), true, `Verify discloses ${warning} without a result or phase error`);
+}
+liveTask.snapshot.terminal_result.integrity = "mismatch";
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__summary").dataset.status, "error",
+  "independent warnings do not downgrade a verification mismatch");
+liveTask.snapshot = linkedSnapshotBefore;
+liveTask.executionControlState = "running";
+liveReview.message = linkedMessageBefore;
+liveRow.execution.automatic_verification = {result:"verified", reason:null, recording:"ok", detail_omitted_count:0};
+liveTask.executionPresentation = {phase:"verify", activeItem:null, itemPercent:null};
+livePanel.render(liveTask);
+assert.equal(findText(findByClass(liveElement, "nami-plan-row__intent"), "Verified"), true,
+  "Verify rows replace live progress with the actual verification result");
+liveRow.execution.automatic_verification = null;
+liveTask.workPane = "plan";
+liveTask.progressPresentation = { phase: "verify", activeItem: null, itemPercent: null };
+liveTask.executionPresentation = liveTask.progressPresentation;
+livePanel.render(liveTask);
+assert.equal(liveFilterTrigger.ariaDisabled, "false", "returning to Plan restores its filter menu");
+liveIntent = findByClass(liveElement, "nami-plan-row__intent");
+assert.equal(liveIntent.dataset.lifecycle, "completed", "retirement keeps copy outcome");
+assertSameNode(findByClass(liveIntent, "nami-plan-row__verification"), null);
+assert.ok(document.activeElement === liveElement, "retirement keeps row focus");
+liveTask.linkedVerificationStarted = false;
+const priorIntent = liveIntent;
+const refreshedWindow = { ...liveReview.window,
+  rows: structuredClone(liveReview.window.rows) };
+liveReview.window = refreshedWindow;
+livePanel.render(liveTask);
+assertSameNode(findByClass(liveElement, "nami-plan-row__intent"), priorIntent,
+  "an unchanged execution overlay retains the operation cells");
+liveReview.window = { ...refreshedWindow, rows: [{...liveRow, execution: null}] };
+livePanel.render(liveTask);
+assertSameNode(findByDataset(livePanel.element, "nodeId", liveRow.node_id), liveElement);
+assert.notEqual(findByClass(liveElement, "nami-plan-row__intent").dataset.lifecycle, "completed");
+assert.ok(document.activeElement === liveElement, "a changed execution overlay retains focus");
+const liveFilterPopup = findByClass(liveFilters, "nami-filter-menu__popup");
+liveFilterTrigger.dispatch("click");
+assert.equal(liveFilterPopup.hidden, false);
+livePanel.render({ ...liveTask, workPane: "verify", linkedVerificationStarted: true });
+assert.equal(liveFilterPopup.hidden, true, "entering linked Verify closes Plan's filter menu");
+liveFilterTrigger.dispatch("click");
+assert.equal(liveFilterPopup.hidden, true, "linked Verify cannot open Plan's filter menu");
+livePanel.render(liveTask);
+liveTask.snapshot = {
+  session_id: liveTask.sessionId, session_state: "active", phase: "execute", terminal_result: null,
+  presentation: {
+    value: 0, determinate: false, indeterminate: true,
+    items_done: 0, items_total: 1,
+    throughput_bytes_per_second: 18014398509481984, eta_seconds: 12.4,
+  },
+};
+livePanel.render(liveTask);
+const liveFacts = findByClass(livePanel.element, "nami-plan-review__status-summary");
+const liveProgressFacts = "Executing · 0 of 1 items · 16.00 PiB/s";
+for (const [etaSeconds, remaining] of [
+  [0, "0 seconds remaining"], [1, "1 second remaining"], [12.4, "13 seconds remaining"],
+  [40, "40 seconds remaining"], [59, "59 seconds remaining"], [60, "1 minute remaining"],
+  [61, "1 minute 1 second remaining"], [130, "2 minutes 10 seconds remaining"],
+  [179, "2 minutes 59 seconds remaining"], [180, "3 minutes remaining"], [181, "3 minutes remaining"],
+  [1920, "32 minutes remaining"], [3599, "59 minutes remaining"], [3600, "1 hour remaining"],
+  [3660, "1 hour 1 minute remaining"], [11700, "3 hours 15 minutes remaining"], [null, null],
+]) {
+  const snapshot = {...liveTask.snapshot,
+    presentation: {...liveTask.snapshot.presentation, eta_seconds: etaSeconds}};
+  livePanel.render({...liveTask, snapshot});
+  assert.equal(liveFacts.textContent, [liveProgressFacts, remaining].filter(Boolean).join(" · "),
+    `phase progress facts with ${etaSeconds} seconds of estimated time remaining`);
+}
+liveTask.linkedVerificationStarted = true;
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Execution phase finished");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__progress").hidden, true,
+  "a lossy partial execution sample cannot be presented as final execution progress");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent,
+  "Execution phase finished. Final counts follow verification.");
+const beforeFinalSnapshot = liveTask.snapshot;
+liveTask.snapshot = {...beforeFinalSnapshot, session_state:"completed", phase:null,
+  terminal_result:{...terminalResult, phases:[{phase:"execute", status:"completed", items_done:2, items_total:2,
+    bytes_done:"80", bytes_total:"80", error:null}]}};
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, "Execution completed");
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent,
+  "2 of 2 execution items · Completed", "Plan uses terminal execute-phase counters");
+liveTask.snapshot = beforeFinalSnapshot;
+liveTask.linkedVerificationStarted = false;
+livePanel.render(liveTask);
+assert.equal(findByClass(livePanel.element, "nami-plan-review__status-summary").textContent.includes("estimate"), false,
+  "throughput and ETA omit redundant estimate suffixes");
+findAction(livePanel.element, "pause").dispatch("click");
+assert.deepEqual(calls.at(-1), ["onControl", liveReview, "pause"],
+  "real composed row leaves controls dispatchable");
+for (const [controlState, headline, advisory] of [
+  ["paused", "Execution paused", "Execution is paused. Resume when ready."],
+  ["pausing", "Pausing execution", "Pausing at the next safe checkpoint."],
+  ["canceling", "Canceling execution", "Canceling at the next safe checkpoint."],
+]) {
+  livePanel.render({...liveTask, executionControlState: controlState});
+  assert.equal(findByClass(livePanel.element, "nami-plan-review__status-title").textContent, headline);
+  assert.ok(findByClass(livePanel.element, "nami-plan-review__status").textContent.includes(advisory));
+}
+livePanel.render(liveTask);
+assert.doesNotMatch(findByClass(livePanel.element, "nami-plan-review__status").textContent, /paused|Pausing|Canceling/);
+livePanel.dispose();
+
+{
+  const edgeCalls = [];
+  const edgePanel = createPlanReviewPanel({...callbacks,
+    onWindow: (...args) => edgeCalls.push(args)});
+  const edgeBody = findByClass(edgePanel.element, "nami-plan-review__list");
+  edgeBody.clientHeight = (16 * ROW_HEIGHT) + ROW_HEIGHT;
+  const edgeWindow = (offset, count = 256) => ({...review.window, offset, total: 1000,
+    rows: Array.from({length: count}, (_, index) => ({...row,
+      node_id: `node-${(index + 1).toString(16).padStart(32, "0")}`,
+      visible_index: offset + index}))});
+  const edgeReview = {...review, window: edgeWindow(0), follow: null};
+  const edgeTask = {...task, review: edgeReview};
+  edgePanel.render(edgeTask);
+  document.defaultView.flushAnimationFrame();
+  const scroll = (index) => {
+    edgeBody.scrollTop = index * ROW_HEIGHT;
+    edgeBody.dispatch("scroll");
+    document.defaultView.flushAnimationFrame();
+  };
+  scroll(175);
+  assert.equal(edgeCalls.length, 0);
+  scroll(176);
+  assert.equal(edgeCalls.at(-1)[1], 144, "Plan prefetch starts with 64 rows ahead");
+  const settled = edgeCalls.at(-1)[3];
+  scroll(180);
+  assert.equal(edgeCalls.length, 1, "covered movement retains the early read");
+  edgeReview.window = edgeWindow(144);
+  edgePanel.render(edgeTask);
+  settled();
+  document.defaultView.flushAnimationFrame();
+  assert.equal(edgeCalls.length, 1, "32 trailing rows never trigger reverse prefetch");
+  scroll(179);
+  assert.equal(edgeCalls.at(-1)[1], 0, "upward placement puts 32 rows behind travel");
+  scroll(330);
+  assert.equal(edgeCalls.at(-2)[1], null, "reversal retires the old request first");
+  assert.equal(edgeCalls.at(-1)[1], 298);
+  edgeCalls.at(-1)[3]();
+  const failedCount = edgeCalls.length;
+  scroll(330);
+  assert.equal(edgeCalls.length, failedCount, "settled read cannot loop at rest");
+  scroll(331);
+  const shortSettled = edgeCalls.at(-1)[3];
+  edgeReview.window = edgeWindow(320, 12);
+  edgePanel.render(edgeTask);
+  shortSettled();
+  document.defaultView.flushAnimationFrame();
+  const shortCount = edgeCalls.length;
+  scroll(331);
+  assert.equal(edgeCalls.length, shortCount, "short reply does not refill at rest");
+  edgeReview.window = {...edgeWindow(100), view_revision: 1};
+  edgePanel.render(edgeTask);
+  document.defaultView.flushAnimationFrame();
+  assert.equal(edgeCalls.length, shortCount, "a changed view does not inherit downward edge intent");
+  scroll(332);
+  assert.equal(edgeCalls.at(-1)[1], 300, "new user travel resumes prefetch in the replacement view");
+  edgeCalls.at(-1)[3]();
+  edgeReview.window = {...edgeWindow(744, 12), view_revision: 2};
+  edgePanel.render(edgeTask);
+  scroll(984);
+  assert.equal(edgeCalls.at(-1)[1], 952, "short tail page cannot pin requests to total minus 256");
+  const tailSettled = edgeCalls.at(-1)[3];
+  edgeReview.window = {...edgeWindow(952, 48), view_revision: 2};
+  edgePanel.render(edgeTask);
+  tailSettled();
+  document.defaultView.flushAnimationFrame();
+  const tailCount = edgeCalls.length;
+  scroll(984);
+  assert.equal(edgeCalls.length, tailCount, "settled tail coverage does not loop");
+  scroll(985);
+  assert.equal(edgeCalls.length, tailCount, "complete tail does not prefetch beyond the sequence");
+  edgePanel.dispose();
+}
+
+const resizeCalls = [];
+const resizePanel = createPlanReviewPanel({
+  ...callbacks, onWindow: (_review, offset) => resizeCalls.push(offset),
+});
+const resizeBody = findByClass(resizePanel.element, "nami-plan-review__list");
+const resizeGrid = findByClass(resizePanel.element, "nami-file-list__grid");
+const resizeHeader = findByClass(resizePanel.element, "nami-file-list__header");
+const resizeObserver = document.defaultView.observers.at(-1);
+const triggerResize = () => {
+  for (const observer of document.defaultView.observers) {
+    if (observer.observed === resizeBody) observer.trigger();
+  }
+};
+const resizeTask = { ...task, review };
+for (const cell of resizeHeader.children) cell.measuredWidth = 0;
+resizePanel.render(resizeTask);
+document.defaultView.flushAnimationFrame();
+assert.equal(resizeGrid.dataset.columnsFrozen, undefined,
+  "an unlaid-out table does not retain zero column widths");
+const fittedWidths = [32, 320, 128, 112, 100, 112, 256];
+resizeHeader.children.forEach((cell, index) => { cell.measuredWidth = fittedWidths[index]; });
+triggerResize();
+document.defaultView.flushAnimationFrame();
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
+  "first visible layout freezes fitted non-filename widths without a gesture");
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-notes"), "256.000px");
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-name"), "",
+  "Filename retains its flexible track");
+resizeHeader.children[4].measuredWidth = 180;
+resizePanel.render(resizeTask);
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
+  "ordinary renders retain the first fitted layout");
+resizePanel.dispose();
+resizePanel.render(resizeTask);
+document.defaultView.flushAnimationFrame();
+assert.equal(resizeGrid.style.getPropertyValue("--nami-file-column-size"), "100.000px",
+  "a reused panel retains its column widths");
+resizeBody.clientHeight = (700) + ROW_HEIGHT;
+triggerResize();
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeCalls, [0], "reused review observes newly visible rows after resize");
+assertSameNode(resizeObserver.observed, resizeBody, "reused review observes its current body");
+const observedAfterReuse = resizeObserver.observeCount;
+resizePanel.render(resizeTask);
+assert.equal(resizeObserver.observeCount, observedAfterReuse,
+  "re-rendering one active review does not add another observation");
+resizeBody.clientHeight = (0) + ROW_HEIGHT;
+resizePanel.dispose();
+resizePanel.render(resizeTask);
+document.defaultView.flushAnimationFrame();
+resizeBody.clientHeight = (700) + ROW_HEIGHT;
+triggerResize();
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeCalls, [0, 0], "another reuse responds to the next viewport resize");
+triggerResize();
+document.defaultView.flushAnimationFrame();
+assert.deepEqual(resizeCalls, [0, 0], "one settled resize does not duplicate the window read");
+resizePanel.dispose();
+const timePanel = createPlanReviewPanel(callbacks);
+const timeReview = { ...review,
+  summary: { ...summary, highlight_focus_node_id: row.node_id, highlight_revision: 1 },
+};
+const timeTask = { ...task, review: timeReview };
+for (const [mtime, expected] of [["0", "1970-01-01 00:00"],
+  ["9223372019999999999", "2262-04-11 23:46"],
+  ["9223372036854775807", "2262-04-11 23:47"], [null, ""]]) {
+  timeReview.window = { ...review.window, rows: [{ ...row, mtime_ns: mtime }] };
+  timePanel.render(timeTask);
+  assert.equal(findByClass(timePanel.element, "nami-plan-row__modified").textContent, expected);
+  const timeDetails = findByClass(timePanel.element, "nami-plan-review__detail");
+  if (mtime === null) assert.ok(!findText(timeDetails, "Modified"));
+  else assert.ok(findText(timeDetails, expected));
+}
+timePanel.dispose();
+const contextCalls = [];
+const contextPanel = createPlanReviewPanel(Object.fromEntries(Object.keys(callbacks)
+  .map((name) => [name, (...args) => contextCalls.push([name, ...args])])));
+const contextReview = { ...review, pending: null,
+  summary: { ...summary, selection_state: "reviewing", highlight_focus_node_id: null },
+  window: { ...review.window, rows: [row, notice] } };
+const contextTask = { ...task, review: contextReview, executionAttempt: null, closePending: false, closeRecovery: null };
+contextPanel.render(contextTask);
+const contextRow = () => findByDataset(contextPanel.element, "nodeId", row.node_id);
+const contextPopup = findByClass(contextPanel.element, "nami-row-menu");
+function ownedContext(target, type, fields = {}) {
+  let prevented = false, stopped = false;
+  target.dispatch(type, {...fields,
+    preventDefault() { prevented = true; }, stopPropagation() { stopped = true; }});
+  assert.equal(prevented, true, "owned context gestures suppress browser fallback");
+  assert.equal(stopped, true, "owned context gestures do not reach another owner");
+}
+const pointerMenu = () => ownedContext(contextRow(), "contextmenu", {clientX: 1279, clientY: 799});
+pointerMenu();
+assert.equal(contextCalls.length, 0, "opening a row menu sends no command");
+assert.deepEqual(contextPopup.children.map((item) => item.textContent), ["Show details", "Select", "Collapse"]);
+assert.equal(contextPopup.style.getPropertyValue("left"), "1172px");
+assert.equal(contextPopup.style.getPropertyValue("top"), "760px");
+contextPopup.dispatch("keydown", {key: "End"});
+assertSameNode(document.activeElement, contextPopup.children[2]);
+contextPopup.dispatch("keydown", {key: "ArrowDown"});
+assertSameNode(document.activeElement, contextPopup.children[0]);
+contextPopup.dispatch("keydown", {key: "Home"});
+contextPopup.children[1].dispatch("click");
+assert.deepEqual(contextCalls.at(-1), ["onSelect", contextReview, row, true]);
+assert.equal(contextPopup.hidden, true);
+pointerMenu();
+contextPopup.children[0].dispatch("click");
+assert.deepEqual(contextCalls.at(-1), ["onHighlight", contextReview, "replace", row.node_id]);
+assert.equal(findByClass(contextPanel.element, "nami-plan-review__diagnostics").hidden, false);
+contextRow().dispatch("keydown", {key: "F10", shiftKey: true});
+contextPopup.dispatch("keydown", {key: "Escape"});
+assert.equal(contextPopup.hidden, true);
+assertSameNode(document.activeElement, contextRow());
+contextRow().dispatch("keydown", {key: "ContextMenu"});
+let trappedTab = false;
+contextPopup.dispatch("keydown", {key: "Tab", preventDefault() { trappedTab = true; }});
+assert.equal(trappedTab, false, "Tab closes the menu without trapping navigation");
+assert.equal(contextPopup.hidden, true);
+pointerMenu();
+const staleSelect = contextPopup.children[1];
+contextTask.closePending = true;
+contextPanel.render(contextTask);
+const beforeStale = contextCalls.length;
+pointerMenu();
+ownedContext(contextRow(), "keydown", {key: "ContextMenu"});
+assert.equal(contextPopup.hidden, true);
+staleSelect.dispatch("click");
+assert.equal(contextCalls.length, beforeStale, "retired menu buttons cannot dispatch");
+assert.equal(contextPopup.hidden, true);
+contextTask.closePending = false;
+contextReview.summary.selection_state = "committed";
+contextPanel.render(contextTask);
+pointerMenu();
+assert.equal(contextPopup.children.some((item) => item.dataset.action === "row-selection"), false);
+contextPopup.dispatch("keydown", {key: "Escape"});
+const noticeElement = findByDataset(contextPanel.element, "nodeId", notice.node_id);
+noticeElement.dispatch("contextmenu", {clientX: 200, clientY: 200});
+assert.deepEqual(contextPopup.children.map((item) => item.textContent), ["Show details"]);
+contextPopup.children[0].dispatch("click");
+assert.deepEqual(contextCalls.at(-1), ["onHighlight", contextReview, "replace", notice.node_id]);
+for (const dismissal of ["scroll", "pointerdown", "visibilitychange", "blur", "resize", "focusout"]) {
+  pointerMenu();
+  const focus = document.activeElement;
+  if (dismissal === "focusout") contextPopup.dispatch(dismissal, {relatedTarget: null});
+  else if (["blur", "resize"].includes(dismissal)) document.defaultView.dispatch(dismissal);
+  else {
+    document.hidden = dismissal === "visibilitychange";
+    document.dispatch(dismissal, {target: contextPanel.element});
+    document.hidden = false;
+  }
+  assert.equal(contextPopup.hidden, true, `${dismissal} dismisses the context menu`);
+  assertSameNode(document.activeElement, focus, "external dismissal does not steal focus");
+}
+pointerMenu();
+const retiredContextRow = contextRow();
+contextReview.window = { ...contextReview.window };
+contextPanel.render(contextTask);
+assert.equal(contextPopup.hidden, true, "window replacement retires the menu");
+const beforeRetired = contextCalls.length;
+ownedContext(retiredContextRow, "contextmenu", {clientX: 200, clientY: 200});
+assert.equal(contextPopup.hidden, true);
+assert.equal(contextCalls.length, beforeRetired);
+pointerMenu();
+const menuFocus = document.activeElement;
+const menuPosition = [contextPopup.style.getPropertyValue("left"), contextPopup.style.getPropertyValue("top")];
+ownedContext(contextPopup, "contextmenu", {clientX: 0, clientY: 0});
+assertSameNode(document.activeElement, menuFocus);
+assert.deepEqual([contextPopup.style.getPropertyValue("left"), contextPopup.style.getPropertyValue("top")], menuPosition);
+assert.equal(contextCalls.length, beforeRetired);
+contextPanel.dispose();
+const { createRowMenu } = await import(rowMenuUrl);
+const emptyOwner = document.createElement("div");
+const emptyMenu = createRowMenu(emptyOwner);
+for (const [actions, isCurrent] of [[[], () => true],
+    [[{id: "never", label: "Never", run() { throw new Error("stale action ran"); }}], () => false]]) {
+  for (const type of ["contextmenu", "keydown"]) {
+    let prevented = false, stopped = false;
+    emptyMenu.open({type, preventDefault() { prevented = true; }, stopPropagation() { stopped = true; }},
+      emptyOwner, emptyOwner, actions, isCurrent);
+    assert.equal(prevented, true);
+    assert.equal(stopped, true);
+    assert.equal(findByClass(emptyOwner, "nami-row-menu").hidden, true);
+  }
+}
+emptyMenu.dispose();
+
+// Exercise real input capture, viewport admission and app adoption together.
+const shellNodes = new Map();
+document.querySelector = (key) => {
+  if (!shellNodes.has(key)) shellNodes.set(key, document.createElement("div"));
+  return shellNodes.get(key);
+};
+document.body = document.createElement("body");
+globalThis.window = { ...document.defaultView, chrome: { webview: {} } };
+const scrollSummary = {...summary, highlight_revision: 0,
+  highlight_focus_node_id: null, highlight_focus_visible_index: null,
+  execution: review.window.execution};
+const scrollWindow = (offset) => ({...review.window, disposition: "current",
+  view_revision: 0, highlight_revision: 0, offset, total: 1000,
+  rows: Array.from({length: 256}, (_, index) => ({...row,
+    node_id: `node-${(offset + index).toString(16).padStart(32, "0")}`,
+    visible_index: offset + index, is_container: false, row_kind: "operation", expanded: null,
+  })),
+});
+let scrollReply = null;
+let highlightReply = null;
+const scrollReads = [];
+const inputHighlights = [];
+let acceptSetup, acceptStart, loadingStarts = 0;
+globalThis.planScrollHarness = {
+  prepareSetup: () => new Promise((resolve) => { acceptSetup = resolve; }),
+  startPlan: () => { loadingStarts += 1; return new Promise((resolve) => { acceptStart = resolve; }); },
+  openPlanView: () => Promise.resolve(scrollSummary),
+  getPlanWindow: (...args) => {
+    scrollReads.push(args);
+    return scrollReply?.promise ?? Promise.resolve(scrollWindow(0));
+  },
+  mutatePlanHighlight: (...args) => {
+    inputHighlights.push(args);
+    return highlightReply.promise;
+  },
+};
+let scrollAppSource = await readFile(join(dirname(process.argv[2]), "app.js"), "utf8");
+const bridgeNames = scrollAppSource.match(/import \{([\s\S]*?)\} from "\.\/bridge\.js";/)[1]
+  .split(",").map((name) => name.trim()).filter(Boolean);
+const bridgeFunctions = {whenBridgeApiReady: "() => new Promise(() => {})",
+  readSetup: "() => new Promise(() => {})", startTaskDrain: "() => () => {}"};
+const scrollBridgeUrl = moduleUrl(bridgeNames.map((name) => /^[A-Z]/.test(name)
+  ? `export class ${name} extends Error {}`
+  : `export const ${name} = ${bridgeFunctions[name] ?? (name in globalThis.planScrollHarness
+    ? `(...args) => globalThis.planScrollHarness.${name}(...args)`
+    : "() => Promise.reject(new Error('unused bridge command'))")};`).join("\n"));
+const unusedPanelUrl = moduleUrl("export const createSetupPanel = () => ({ element: document.createElement('div'), render() {} }); export const createInventoryReviewPanel = () => ({ element: document.createElement('div'), dispose() {} });");
+const scrollPanelsUrl = moduleUrl((await readFile(join(dirname(process.argv[2]), "panels.js"), "utf8"))
+  .replace("./render.js", renderUrl).replace("./plan_review.js", moduleUrl(source))
+  .replace("./setup.js", unusedPanelUrl).replace("./inventory_review.js", unusedPanelUrl));
+for (const [key, value] of Object.entries({
+  "./bridge.js": scrollBridgeUrl, "./render.js": renderUrl, "./panels.js": scrollPanelsUrl,
+  "./task_status.js": taskStatusUrl,
+  "./readiness.js": moduleUrl("export const installReadinessReceiver = () => ({ revision: () => 0 });"),
+  "./appearance.js": moduleUrl("export const installAppearanceReceiver = () => {};"),
+  "./theme.js": moduleUrl("export const installThemeCombobox = () => ({}); export const installThemeSelector = () => ({ refresh() {} });"),
+  "./settings.js": moduleUrl("export const installSetupDefaults = () => ({ open() {} });"),
+  "./about.js": moduleUrl("export const installAboutNotices = () => ({ element: document.createElement('dialog') });"),
+  "./execution_confirmation.js": moduleUrl("export const createExecutionConfirmation = () => ({ element: document.createElement('dialog') });"),
+  "./rail.js": moduleUrl("export const createTaskRail = () => ({ element: document.createElement('nav'), render() {} });"),
+})) scrollAppSource = scrollAppSource.replace(key, value);
+scrollAppSource += "\nexport { adoptTask, selectTask, panel, startCurrentPlan };";
+const scrollApp = await import(moduleUrl(scrollAppSource));
+// Hold the real start path at setup admission, then at the original start
+// receipt. The packaged router and renderer must show the same blank shell.
+const loadingTask = scrollApp.adoptTask({task_id: "task-" + "9".repeat(32), session_id: null,
+  session_state: null, session_released: false, task_kind: null, request_id: null,
+  plan_request_id: null, session_kind: null});
+const loadingOptions = { deletion_policy: "trash", preservation: {}, filters: [] };
+loadingTask.form = { editable: true, mode: "sync-plan", revision: 0, attempt: null, options: loadingOptions,
+  source: { text: "C:\\source", pending: false, admissionPromise: null, location: {purpose: "source", choice_id: "source"} },
+  target: { text: "D:\\target", pending: false, admissionPromise: null, location: {purpose: "target", choice_id: "target"} } };
+scrollApp.selectTask(loadingTask.taskId);
+const loadingStart = scrollApp.startCurrentPlan();
+const loadingPane = () => findByClass(scrollApp.panel.element, "nami-plan-review");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__status-title").textContent, "Checking folders");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__rows").children.length, 0);
+assert.equal(findByClass(loadingPane(), "nami-plan-review__table-card").hidden, false);
+assert.equal(findByClass(loadingPane(), "nami-plan-review__progress").classList.contains("nami-progress--indeterminate"), true);
+assert.equal(findAction(loadingPane(), "execute").disabled, true);
+for (let count = 0; count < 20 && typeof acceptSetup !== "function"; count += 1) await Promise.resolve();
+assert.equal(typeof acceptSetup, "function", "the loading attempt reaches setup preparation");
+acceptSetup(loadingOptions);
+for (let index = 0; index < 12; index += 1) await Promise.resolve();
+assert.equal(findByClass(loadingPane(), "nami-plan-review__status-title").textContent, "Planning");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__rows").children.length, 0);
+let loadingChecks = 0;
+loadingTask.form.attempt.recovery = {canCheck: true, checking: false, message: "Original start delayed", check: async () => {
+  loadingChecks += 1;
+  acceptStart({task_id: loadingTask.taskId, request_id: summary.request_id, session_id: "9".repeat(32)});
+}};
+loadingTask.form.attempt.running = false;
+scrollApp.panel.render(loadingTask);
+assert.equal(findByClass(loadingPane(), "nami-plan-review__status-title").textContent, "Outcome unknown");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__progress").classList.contains("nami-progress--indeterminate"), false);
+assert.equal(findAction(loadingPane(), "retry-outcome").disabled, true);
+loadingTask.form.attempt.running = true;
+scrollApp.panel.render(loadingTask);
+findAction(loadingPane(), "retry-outcome").dispatch("click");
+await loadingStart;
+assert.equal(loadingChecks, 1);
+assert.equal(loadingStarts, 1, "Check outcome never resubmits the start");
+assert.equal(loadingTask.planRequestId, summary.request_id);
+assert.ok(loadingTask.review, "only the complete review publishes rows");
+assert.equal(findByClass(loadingPane(), "nami-plan-review__rows").children.length > 0, true);
+const scrollTask = scrollApp.adoptTask({task_id: summary.task_id, session_id: "4".repeat(32),
+  session_state: "completed", session_released: true, task_kind: "sync-plan", request_id: summary.request_id,
+  plan_request_id: summary.request_id, session_kind: "sync-plan"});
+const settleScroll = async () => { for (let index = 0; index < 20; index += 1) await Promise.resolve(); };
+scrollApp.selectTask(scrollTask.taskId);
+await settleScroll();
+assert.ok(scrollTask.review, "the real app must open the Plan review before input");
+const scrollReview = scrollTask.review;
+const scrollPane = findByClass(scrollApp.panel.element, "nami-plan-review");
+const scrollViewport = findByClass(scrollPane, "nami-plan-review__list");
+scrollViewport.clientHeight = (16 * ROW_HEIGHT) + ROW_HEIGHT;
+const inputScroll = (name, index) => {
+  const event = {target: scrollViewport};
+  document.dispatch(name, event);
+  scrollPane.dispatch(name, event);
+  scrollViewport.dispatch(name, event);
+  scrollViewport.scrollTop = index * ROW_HEIGHT;
+  scrollViewport.dispatch("scroll");
+  document.defaultView.flushAnimationFrame();
+};
+for (const name of ["wheel", "pointerdown", "touchstart"]) {
+  scrollViewport.scrollTop = 0;
+  scrollViewport.dispatch("scroll");
+  scrollReview.window = scrollWindow(0);
+  scrollApp.panel.render(scrollTask);
+  document.defaultView.flushAnimationFrame();
+  let resolve;
+  scrollReply = {promise: new Promise((accept) => { resolve = accept; })};
+  const readsBefore = scrollReads.length;
+  for (const index of [176, 180, 184, 188, 192]) inputScroll(name, index);
+  assert.equal(scrollReads.length, readsBefore + 1, `${name} retains one physical read`);
+  const response = scrollWindow(144);
+  resolve(response);
+  await settleScroll();
+  assert.equal(scrollReview.window, response, `${name} accepts the useful delayed window during input`);
+  assert.equal(scrollViewport.scrollTop, 192 * ROW_HEIGHT);
+  assert.equal(scrollReview.keyboardRevealWindow, null);
+  document.defaultView.flushAnimationFrame();
+  assert.equal(scrollReads.length, readsBefore + 1, `${name} does not replace an accepted covering read`);
+  scrollReply = null;
+  const highlightBefore = inputHighlights.length;
+  let resolveHighlight;
+  highlightReply = {promise: new Promise((accept) => { resolveHighlight = accept; })};
+  const keyRow = findByDataset(scrollPane, "nodeId", response.rows[0].node_id);
+  keyRow.dispatch("keydown", {key: "ArrowDown"});
+  await settleScroll();
+  assert.equal(inputHighlights.length, highlightBefore + 1);
+  for (let index = 0; index < 10; index += 1) keyRow.dispatch("keydown", {key: "ArrowDown"});
+  const focusBefore = document.activeElement;
+  inputScroll(name, 192);
+  assert.equal(scrollReview.highlightNavigation, null, `${name} retires pending keyboard targets immediately`);
+  const receipt = {...scrollSummary, disposition: "applied", highlight_revision: 1,
+    highlight_focus_node_id: response.rows[0].node_id, highlight_focus_visible_index: 144};
+  resolveHighlight(receipt);
+  await settleScroll();
+  assert.equal(scrollReview.highlightReceipt, receipt, "an admitted mutation keeps custody after interruption");
+  assert.equal(scrollReview.summary, scrollSummary, "the retired highlight does not paint");
+  assert.equal(inputHighlights.length, highlightBefore + 1, "interruption retires the held repeat tail");
+  assert.equal(scrollReads.length, readsBefore + 1, "the retired highlight never reads to reclaim focus");
+  assertSameNode(document.activeElement, focusBefore, "input interruption prevents stale focus adoption");
+}
+if (process.argv[5] === "--sort-fixture") {
+  const receipts = JSON.parse(await readFile(process.argv[6], "utf8"));
+  const sortReview = { ...receipts[0], pending: null, message: "" };
+  const sortTask = { review: sortReview, error: null, canPlanAgain: true,
+    executionStarted: false, sessionState: "completed", executionControlState: "running",
+    closePending: false, executionAttempt: null };
+  const sortCalls = [];
+  const sortPanel = createPlanReviewPanel({ ...callbacks,
+    onViewChange: (owner, patch) => sortCalls.push([owner, patch]),
+  });
+  const states = [
+    ["path", "ascending", ["alpha", "mu", "zeta"]],
+    ["filename", "ascending", ["alpha", "mu", "zeta"]],
+    ["filename", "descending", ["zeta", "mu", "alpha"]],
+    ["size", "ascending", ["mu", "zeta", "alpha"]],
+    ["size", "descending", ["alpha", "zeta", "mu"]],
+    ["path", "ascending", ["alpha", "mu", "zeta"]],
+  ];
+  assert.equal(receipts.length, states.length);
+  sortPanel.render(sortTask);
+  for (const [index, [column, direction, order]] of states.entries()) {
+    if (index > 0) {
+      const clickedColumn = column === "path" ? "size" : column;
+      findByDataset(sortPanel.element, "sortColumn", clickedColumn).dispatch("click");
+      assert.equal(sortCalls.length, index, "each header click emits one view change");
+      assertSameNode(sortCalls.at(-1)[0], sortReview, "sort callback keeps review identity");
+      assert.deepEqual(sortCalls.at(-1)[1], { sortColumn: column, sortDirection: direction });
+      Object.assign(sortReview, receipts[index]);
+      sortPanel.render(sortTask);
+    }
+    assert.equal(sortReview.summary.view_revision, index);
+    assert.equal(sortReview.window.view_revision, index);
+    assert.deepEqual(walk(sortPanel.element).filter((element) => element.dataset.nodeId !== undefined)
+      .map((element) => element.dataset.nodeId), order, `${column} ${direction} renders server order`);
+    for (const name of ["filename", "size", "mtime"]) {
+      const header = findByDataset(sortPanel.element, "sortColumn", name);
+      const active = name === column;
+      assert.equal(header.parentElement.ariaSort, active ? direction : "none");
+      assert.equal(findByClass(header, "nami-icon--chevron-up").hidden, !active || direction !== "ascending");
+      assert.equal(findByClass(header, "nami-icon--chevron-down").hidden, !active || direction !== "descending");
+    }
+  }
+  sortPanel.dispose();
+}
+const recallRequests = [];
+const recallPanel = createPlanReviewPanel({ ...callbacks,
+  onViewChange: (_owner, patch) => recallRequests.push(patch),
+});
+const recallTask = { ...task, executionStarted: false, executionAttempt: null, closePending: false,
+  review: { ...review, pending: null, summary: { ...summary, filters: [], selection_state: "reviewing",
+    filter_counts: { ...summary.filter_counts, recall: 1 } },
+    window: { ...review.window, offset: 0, total: 1, rows: [{ ...row, recall: true, visible_index: 0 }] } },
+};
+recallPanel.render(recallTask);
+const recallIndicator = findByClass(recallPanel.element, "nami-file-row__availability");
+assert.equal(recallIndicator.attributes.get("role"), "img");
+assert.equal(recallIndicator.ariaLabel, "Not fully available locally. Access may retrieve content through your provider.");
+assert.equal(recallIndicator.title, recallIndicator.ariaLabel);
+assert.equal(findByClass(recallIndicator, "nami-icon--cloud").ariaHidden, "true");
+findByDataset(recallPanel.element, "action", "filter-menu").dispatch("click");
+assert.equal(findByDataset(recallPanel.element, "filter", "recall").children[1].textContent, "Remote files");
+findByDataset(recallPanel.element, "filter", "recall").dispatch("click");
+assert.deepEqual(recallRequests.at(-1), {filters: new Set(["recall"])});
+assert.equal(findByClass(recallPanel.element, "nami-plan-review__cloud-advisory"), null);
+assert.ok(!findByClass(recallPanel.element, "nami-plan-review__plan-breakdown").textContent.includes("Not fully"));
+recallPanel.render(recallTask);
+assert.equal(walk(recallPanel.element).filter((item) => item.classList.contains("nami-file-row__availability")).length, 1);
+recallTask.review.window = { ...recallTask.review.window,
+  rows: recallTask.review.window.rows.map((item) => ({ ...item, recall: false })) };
+recallPanel.render(recallTask);
+assert.equal(walk(recallPanel.element).filter((item) => item.classList.contains("nami-file-row__availability")).length, 0);
+recallPanel.dispose();
+process.stdout.write("ok");

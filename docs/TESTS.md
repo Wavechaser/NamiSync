@@ -1,0 +1,524 @@
+# Tests
+
+NamiSync uses pytest for behavioral verification and import-linter for package
+boundaries. Test modules have one primary architectural owner recorded in
+`tests/_departments.py`. That executable manifest, not this document, is the
+authority for exact module membership.
+
+Departments route routine verification. They do not claim that a change can
+affect only its primary owner. Changes to public contracts add the affected
+consumer departments explicitly; uncertain or broad changes use the ordinary
+repository suite.
+
+Packaging tests cover clean-commit admission (including untracked inputs),
+canonical source bytes across checkout newline policies, exact build dependency
+versions and stable archive order/timestamps. Actual isolated builds and hosted
+CI provide composition evidence; these unit cases do not certify a portable
+release or the serviced Windows runner image.
+Wheel identity and license declarations are checked in METADATA headers;
+the README description may contain the product's display nickname.
+Packaging checks also preserve exact notice bytes through source archives,
+export existing About attribution, and reject unexpected native origins or
+collected bytes that differ from their inputs. An actual ZIP census and isolated
+native launch verify the integrated distribution; R4 owns candidate acceptance.
+
+## Run levels
+
+### 1. Focused
+
+The web drain tests allow five seconds for dispatcher terminal settlement. This
+is a test-containment deadline, not a product latency requirement; all terminal
+and subsequent delivery assertions remain required.
+
+Use an exact node or file while editing and diagnosing a failure.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests\test_executor_runtime.py::test_executor_rejects_a_nonpositive_maximum_chunk
+.\.venv\Scripts\python.exe -m pytest -q tests\test_executor_runtime.py
+```
+
+Run focused verification after each local change. It is not handoff evidence
+when the change affects a wider component.
+
+### 2. Department
+
+Run the primary owning department before handing off or committing a local
+change.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --dept executor
+```
+
+`--department` is the equivalent long spelling of `--dept`.
+When combined with explicit files or nodes, the department remains a filter;
+items owned by other departments are deselected.
+
+### 3. Cross-department neighborhood
+
+Name both producers and consumers when a public contract crosses ownership
+boundaries. Repeated department options form a union.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --dept executor --dept workflows
+.\.venv\Scripts\python.exe -m pytest -q --dept workflows --dept interfaces
+```
+
+Use an explicit neighborhood for shared payloads, views, events, persistence
+contracts, or composition behavior. Selection never expands dependencies
+automatically.
+
+### 4. Ordinary repository
+
+Create the project `.venv` with the exact Windows x64 release interpreter in
+[TOOLS](TOOLS.md#portable-build-preparation) for both ordinary and release
+checks. The configured default runs every ordinary test and excludes tests marked
+`headed`.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+Run it for phase integration, global fixtures or pytest configuration, the
+department manifest, broad shared contracts, uncertain blast radius, and before
+considering a non-headed phase complete.
+
+The session-scoped wheel fixture enumerates Git tracked and nonignored `namisync`
+paths plus `pyproject.toml`, `README.md`, and `LICENSE`, copies their physical
+bytes into a clean staging tree, and builds from that tree. It rejects source
+or staging drift around the build, duplicate ZIP members, and any missing,
+extra, or changed package file in the wheel or installed environment before
+yielding an installed fixture. Canonical identity records beside the temporary
+wheel and installations bind later evidence to the source manifest and artifact
+hash without making generated build or cache files package inputs.
+Verify populations at build/install boundaries and revalidate recorded artifacts
+on reuse; identity-record serialization does not require a second population scan.
+
+Required ordinary JavaScript tests are unmarked and non-skippable. They execute
+the packaged public event consumers, original-command result observation and interactive
+bridge wrappers, and the production drain-manager live-event
+transport/replay and task-snapshot adoption. Node.js must be available through
+`NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
+precedence. A missing or unusable executable fails these gates rather than
+silently reducing the ordinary suite to source-text inspection.
+
+Mutation transport cases use controlled delay, admission/completion loss and
+cleanup failure. Verify one original submission/effect, bounded read-only result
+observation, truthful healthy-pending/lost-direct-delivery feedback, unavailable
+communication versus unreadable matching response, automatic late-result adoption
+where delivery remains live, and true worker settlement. Page recovery cases use
+the same stable handle across notifications and checks; workflow owner and stale
+response guards remain independently asserted. Page doubles supply explicit
+handle fields and Check spies, not copies of bridge state rules or recovery prose.
+Assert handle ownership, routing of sentinel messages and control wiring there;
+the production bridge probe owns recovery policy, diagnostic wording and cleanup.
+Current-state cases cover authoritative
+refresh, deliberate folder replacement and stale-response rejection without
+retaining an original outcome. Check never resubmits a mutation. A removed replay expectation is not a regression by
+itself; retained identity, state, effect and ownership guarantees decide it.
+Keep read/drain/startup/lifecycle/resource deadline cases separate.
+Test ownership follows the guarantee: runtime probes own browser behavior,
+native boundary tests own wire shapes, and the installed delivery-loss witness
+owns the real post-effect failure/recovery path. Source helper names, copied
+predicates, timer-allocation counts and duplicate envelope checks are not
+additional product guarantees. Keep accessible markup and security-boundary
+checks, plus the native/browser command-policy mirror. Optional Plan-again
+tracing records the product's eligibility decision without reproducing it.
+
+Frontend static Node probes use `run_node_probe`: a prelaunch Windows Job caps
+their process tree at 512 MiB, keeps the caller's timeout and bounds file-backed
+diagnostic reads. Native headed launches retain their own defaults. Fake-DOM
+identity assertions use a shared exact-reference helper with scalar diagnostics;
+custom inspection also keeps ordinary object inspection concise. Keep graph fields
+enumerable so structural comparisons retain their meaning. Node's assertion
+formatter can bypass custom inspection, so it is not a substitute for the helper.
+Use these automatic safeguards, not routine memory polling or a watching agent.
+Inspect resource evidence when diagnosing a failure or running a named resource
+gate. This probe limit is neither whole-suite nor product memory acceptance.
+
+The drain probe executes packaged transport and snapshot admission. Invalid
+wrappers, identity, version, revision, scalar/shape, order or lifecycle cannot
+partially deliver co-batched updates or advance the cursor. Clean replay,
+numeric holes, Gap recovery, callback failure, terminal-presentation retry,
+release and Close retain their transport witnesses.
+
+Python task-snapshot tests own phase/attempt transitions, aggregate and item
+high water, exact large-byte arithmetic, monotonic rate/ETA, Gap uncertainty
+and terminal precedence. A real executor deferred-directory fixture crosses
+the lossy event subscriber and service event projection into the native snapshot,
+then the packaged page consumer. Independent expected facts establish that
+directory-to-child activity handoff is not settlement. Page probes test supplied
+snapshot adoption, formatting, follow, window/detail invalidation and local
+interaction fences; they do not recreate the semantic reducer as a fake.
+Prefix tests preserve one-time capture, complete byte bounds and custody on
+failure. Lost-response replay must preserve newer native presentation while
+terminal release still requires the actual terminal delivery path.
+Page transition cases carry a completed Plan snapshot into execution admission,
+then adopt the execution's lower independent revision and failed terminal result.
+They also retain current control feedback after observation recovery. Native
+aggregate sampling cases cover ordinary file handoff as well as same-item retry.
+Delayed-drain/coalescing cases exercise rate timestamps through the real adapter
+sink; presentation-conflict cases retain later terminal delivery and strict
+record validation. Page cases distinguish matching snapshot terminal facts from
+retained-window fallback and qualify window-only counts by execution identity.
+
+Current boundary guards divide responsibilities instead of running one event
+graph through duplicate semantic validators. Persistence-decoder tests reject
+wrong-version, noncanonical `Scalar64`, Boolean-as-integer, exact-shape, and
+cross-field corruption before returning a stored value. Producer tests pin the
+exact reliable-envelope maximum and first excess before `EventHub` mutation;
+the exact maximum event drains alone. Browser tests admit all seven canonical
+producer projections, then atomically reject invalid transport version,
+session, sequence, tag, body-object, lifecycle, or snapshot input without
+advancing the cursor; clean replay remains exact. History-v8 pages cannot carry
+a prior event version. The consolidation closeout search found no downstream
+event-body certifier; retained core guards pin prior, future, and coercive
+version rejection through the public validator/decoder and require the exact
+persisted shape. Private helper names are not test authority.
+
+```powershell
+$env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
+### 5. Complete and headed release
+
+Headed acceptance requires an interactive supported Windows desktop and the
+real WebView2 host. Run the interface-owned headed gate when desktop behavior,
+packaging, or headed harnesses change.
+The shell tree's native Tab witness mounts its production-rendered fixture in
+the exclusive work body and enters from the rail's Settings control. The
+separate Theme witness tabs through Settings until the exact Theme control
+has focus, with traversal bounded by the number of form controls. Create
+focus is checked independently.
+The live host cancellation witness keeps its whole-scenario containment while
+allowing correlated native completion to arrive after cancellation is observed.
+Its waits are test containment, not a product latency criterion; cancellation,
+completion identity, event ordering and post-cancellation transport assertions
+remain required.
+For checks that send native keyboard/mouse input, announce the brief input
+interval and leave the owned test window in front until it ends. Verify the
+foreground/focused window and mouse hit target belong to the test process tree
+before sending input. A user focus change makes that attempt incomplete; it is
+not evidence that a gesture is disabled. Keep the failed receipt, restore any
+temporary window/cursor state and rerun after the interference ends. This does
+not require attendance for ordinary tests or probes that do not send input.
+The execution review, task shell and Inventory journeys direct their mouse and
+key events to the owned WebView2 page through its native CDP interface. CDP
+focus emulation lets the page process keyboard gestures. Each journey checks
+the DOM hit target, the trusted event and the resulting application behavior.
+The Inventory journey settles a preparatory row gesture's committed highlight
+publication before arming the next stage. Trusted-input witnesses attach to a
+stable ancestor and match node/action identity, since accepted window publication
+may replace row elements. Post-gesture settlement uses the actual trusted event
+target, not an earlier checked element. The existing failure hook records the
+pending page-wait label, checked-element connectivity and popup open/close counts;
+parent timeout must not erase which page wait was pending.
+The native folder-picker journey opens an installed row menu before the
+dialog, observes a trusted window blur and checks that the menu was dismissed.
+It runs on the input desktop alongside real Windows activation/refusal and
+startup-error dialogs. Tests sharing the picker scenario have the same
+`native_desktop` marker.
+The optional Plan-again trace suppresses repeated identical eligibility/projection
+observations within each phase while retaining transitions and every event. Its
+48-entry bound and strict overflow rejection remain unchanged. The shell's
+Plan-again preselection diagnostic describes that earlier snapshot only.
+The transport folder-picker helper verifies the Unicode edit value and posts
+one confirmation. Its `dialog_closed` receipt describes only that observation;
+the fixture must separately verify the returned source/target paths. A delayed
+or still-open dialog is not a reason to post another confirmation.
+Readiness changes require focused coverage of the order-independent gate,
+queued document-currentness check, exact bootstrap command policy, browser
+initial retry and replacement retirement, and both degradable and unsafe native-surface
+outcomes. Every headed page that performs startup must complete the neutral
+challenge/echo protocol; an appearance envelope is not a substitute witness.
+Reload containment must distinguish actual new content from canceled navigation
+and fragment history. Hold an admitted command across a forced document load,
+verify one effect and actual worker settlement, reject replacement-page commands,
+observe actionable restart guidance, and close through the normal host path.
+Same-document task/setup journeys retain navigation, independent selection,
+mutation races and Retry updates; page reconstruction is no longer their gate.
+Positive custom pages use `bootstrapTestBridge()` from
+`tests/assets/bootstrap_test_bridge.js`; positive host seams use
+`drive_startup_handshake()` from
+`tests/interfaces/web/_startup_test_support.py` and its test document channel.
+Keep negative or renderer-only fault seams explicit so a helper cannot
+manufacture their readiness evidence. Headed command additions use that
+module's shared immutable, collision-refusing `headed_command_extension()`
+rather than rebuilding production rows.
+
+Headed subprocesses publish lifecycle evidence through the tests-only immutable
+milestone protocol owned by `tests/interfaces/web/_headed_evidence.py` and its
+`EvidencePublisher`/`EvidenceReader`. A child may publish one `ready.json` or
+`failure.json`, then one `final.json`; each is canonical JSON written completely
+to a private same-directory temporary and published without replacement.
+Parents poll names,
+read each published milestone once, cache it, and reject contradictions, late
+milestone names after an observed final, noncanonical records, or orphan
+protocol temporaries. Final-only evidence requires an explicit reader opt-in
+and is reserved for completion or expected-refusal witnesses that have no
+interactive ready phase. The
+1 MiB record ceiling is a tests-only anti-runaway ingress bound, not a product
+request or acceptance limit. Benchmark reports remain separate atomic
+per-invocation measurement artifacts; retained baseline sidecars are distinct
+input evidence. Neither is a live child-to-parent snapshot or part of the
+milestone state machine. The tree-window fixture likewise remains a one-shot
+parent-created input.
+
+For the gallery's execution layout matrix, the page observes, the child checks
+bounded transport and drives native input/capture, and the parent owns the
+independent layout verdict. Harmless layout recipes are not acceptance criteria.
+Visual checks prefer the installed gallery's computed styles and observed
+interaction over duplicate CSS declarations, source occurrence counts or a
+second catalog parsed from the gallery script. Retain static checks for safe
+sinks, imports/packaging, explicit token provenance and contracts without an
+equivalent behavioral detector. A lexical color-ownership scan may accept a
+numeric dimension fallback without treating its comma as a color-list separator;
+literal color fallbacks still fail. Validate retirements against the surviving
+detector and a concrete harmless or adverse control where practical, rather than
+replacing every removed source assertion with a new test.
+The short execution journey uses coherent settled receipts and stable visible
+identity across capture, rather than a fixed detail-read count or permanent
+revision. Its real-copy endpoint remains distinct from the legacy journey's
+navigation, modal, control and recovery coverage.
+
+Shared CDP captures retain the raw browser-surface PNG and neighboring capture
+provenance. The observed page theme/material and sampled alpha describe that
+surface; they do not certify the native DWM/Mica composition. Transparent white
+pixels are not opaque white cards. Use existing opaque/forced-color scenarios
+for their named appearance outcomes, and a native composited observation before
+attributing a Mica contrast defect to product tokens. Preserve earlier raw
+captures; correct their interpretation rather than rewriting historical evidence.
+
+`tools/gui.ps1 gallery` reuses the child and milestone format for an editable
+manual preview, but its GUID-named output is diagnostic only. It is not produced
+from the clean installed wheel, is not parent-validated as an acceptance run,
+and cannot satisfy a headed gate. A normal preview removes only its
+ownership-marked, exact ready/final diagnostic set after revalidation; abnormal,
+changed, or unknown output is retained for operator inspection.
+
+A green headed result proves only its declared NamiSync/page contract; it is not
+evidence that the surrounding Windows compositor remained healthy. External
+focus changes and DWM failures are environmental limitations, not NamiSync bug
+classifications merely because they affect a test. The 2026-09-27 disposition
+retires the unrealized DWM sentinel proposal; no automatic environment monitor
+or new focus-recovery mechanism is required. Existing ownership checks before
+sending native input remain necessary to avoid interacting with another window.
+
+AB-7's default-shell Plan Again succeeded: Task 53 was created/selected/rendered;
+the later keyboard focus re-entry-ring wait observed `document_has_focus: false`.
+The actor is unknown; do not diagnose failed Plan Again from the last checkpoint
+label. Original mapping (including CDP lines 9/490) and receipts:
+`build/trace-20260927/scripts/plan-again/` and
+`build/post-m1-8-ablation-20260925/ab7-final-evidence/`.
+
+The notice-filter helper still waits for expected notice text, no pending review
+action and enabled Plan Again before one click. This prerequisite does not fix
+historical focus loss or justify product button/icon changes. The August 17
+18:29:25 compositor overlap (Application Error 63156, Dwminit 63157, WER
+`854b76c5-b80c-4127-acc8-404d18814e0d`) established no NamiSync causality,
+environment-detection requirement or compositor-health claim.
+
+AB-8's larger-shell stack/wrap failure remains deferred/unconfirmed. Its witness
+writes live status/hidden, narrows summary to 650px and waits one frame; a live
+`plan_review.js` render could replace/hide the status and invalidate geometry
+without a CSS regression. This is a candidate, not a captured interleaving.
+On recurrence inspect before/after node connection, text, visibility, rectangles
+and live render; preserve the check/CSS until reproduction and authorization.
+Evidence: `build/ab8-20260926/installed-native-evidence/`,
+`build/ab8-resume-20260926/verification.md`,
+`build/incident-trace-20260927/native_trace.py`. AB-7's later larger-shell failure
+is not a proven second reproduction: its intermediate script was not preserved,
+preventing exact line attribution.
+
+#### Execution review completion trace
+
+When the installed execution review fails its final host receipt check,
+retain `completion-receipt-trace.json` alongside `completion-checks.json`,
+`execution-review-driver.json` and the failure/final milestones from the
+same scenario's `evidence/` directory. The summary identifies the branch
+(`exact` exercises Verify copied files, `blocked` exercises Verify selected
+after Refresh). The trace identifies individual host conditions at the final
+decision. Both window sizes use the same trace.
+
+The latest current Inventory slice must attach one verified result per returned
+eligible row and no others, with the ordinary Verify request and session IDs.
+A complete verification session can serve a partial page. Separately, the
+ordinary release receipt captures the retained terminal result before Close
+retires it. The result must name the exact task, request and session and contain
+one verified outcome for each fixture path, including paths outside the page.
+The trace distinguishes slice coverage and retained fixture coverage failures.
+For an ordering or release mismatch, inspect the corresponding command and
+release receipts. Preserve the first failure before retrying.
+
+#### Running installed journeys
+
+For unattended page journeys, run the following from the Windows workspace:
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.headed_background
+```
+
+The launcher creates a uniquely named private Win32 desktop in the current
+interactive session. It starts pytest suspended, admits it to a kill-on-close
+Job before resuming, and returns its exit code. The user's input desktop stays
+selected. The `background_headed` marker selects both task-shell and execution
+review sizes, Inventory, Setup, the keyboard tree, and the component gallery.
+Invoking pytest with the marker alone still creates windows on the caller's
+desktop. This route was exercised in a signed-in interactive session. The
+ordinary non-headed default is unchanged.
+
+Reserve the input desktop for `-m native_desktop` (real activation, native
+dialogs and the shared picker scenario). The complete headed command also runs
+material, startup, transport and host checks outside those targeted selections:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed
+```
+
+Release evidence clears the configured ordinary-only default and runs every
+collected test without a department filter.
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -o "addopts="
+.\.venv\Scripts\lint-imports.exe
+```
+
+Use a checkout with complete Git history for the SH-G-8 authority and drift
+checks. The ordinary suite authenticates the original v1 holdout and the active
+v2 verifier blobs. Run the live custody child with the selected release Python
+and a temporary directory outside the source tree. A new verifier authority
+must be committed in its isolated candidate before these checks can pass.
+
+## Accepted-target verification
+
+Accepted but unrealized M1 Stage 6 contracts are neither current behavior nor
+acceptance evidence. `M1_PLAN.md` owns remaining delivery; `BRIDGE.md`, `PRESENTATION.md`, and `INTERFACES.md` own subject criteria. Do not reproduce delivery, command,
+module, or case catalogs here.
+
+While implementing an accepted target, run focused tests, every affected
+producer and consumer department, and the ordinary suite when a public contract
+crosses departments. Exact primary ownership remains only in
+`tests/_departments.py`. Surface work also runs the real installed WebView2
+witnesses with default addopts cleared. Quantitative evidence authority follows
+`DEFENSE.md`; `PERFORMANCE.md` owns measurement methods, fixture/profile,
+aggregation and recorded results. A benchmark is not acceptance merely because
+it ran. Selected measurement drivers live under `tools/performance/` and run
+through `python -m tools performance`; methods and commands belong in
+[PERFORMANCE](PERFORMANCE.md). Ordinary pytest does not collect demoted Plan/UI
+latency or empirical representation-memory benchmarks, require their historical
+certificates, or replay retired validators. It retains independent fixture,
+action, failure and scale-behavior checks. Frozen transport custody, SH-G-15,
+history write/readback and release limits, lifecycle/resource containment and
+executor settlement are not demoted by moving measurement tools.
+
+For reduction work, a failing test may describe a deliberately retired mechanism;
+classify its observable guarantee before changing or deleting it. Passing tests
+alone do not establish that no guarantee was lost. Review the affected producer,
+consumer and failure seams as well as the retained tests.
+
+Keep deterministic state/population/race coverage in owning module probes or
+composition tests when native input is not part of the guarantee. Installed
+journeys retain the input-to-handler-to-effect seam, focus/scroll/accessibility,
+packaging and native-only checks. Relocate assertions only with an explicit
+equivalent witness; shortening a journey cannot silently retire coverage.
+Plan's sort probe composes real server view receipts with header callbacks and
+rendered rows, using independent expected Filename/Size/canonical orders. The
+installed shell retains the Size ascending/descending/reset cycle and chevron
+observation; the two Filename click/wait stages belong to that composed probe.
+Gallery panels may share fixture producers with probes, while their visual and
+behavioral assertions remain independent. Shared fixture code belongs in
+underscore-prefixed support modules, never imported collected tests.
+Inventory probes and gallery use `_review_fixtures.py` to emit real projection
+summaries, rows and details. Gallery-only appearance overlays and paging remain
+local. The common gallery child assembles that data for installed tests and manual
+preview without adding the checkout root to product imports.
+Keep one independently specified expected command catalog for exposure/policy
+checks; consumers reuse it or derive operational lists from production specs.
+Derivation must not make unintended command exposure self-accepting.
+The literal oracle lives in `tests/interfaces/web/_command_catalog.py`; its
+ordered names and complete policy facts feed the native, browser, installed-host
+and benchmark checks. Browser/native agreement alone is insufficient. Keep
+unknown, missing and wrong-policy controls, explicit test-command extensions,
+immutable production specs and test-support exclusion from the wheel.
+Optional measurement runs are not automatic gates. Known direct consumer breaks
+still need migration or an explicit disposition. Evidence retention follows
+[PERFORMANCE](PERFORMANCE.md#evidence-retention).
+
+## Departments
+
+| Department | Primary ownership |
+|---|---|
+| `core` | Shared contracts, protocols, path safety, evidence, and session state |
+| `scanner` | Filesystem discovery and scan completeness |
+| `planner` | Plan derivation and operation ordering |
+| `preflight` | Pre-execution admission and refreshed safety checks |
+| `executor` | Native mutation, pipeline, runtime, and settlement |
+| `verifier` | Integrity classification and cache-honest native reading |
+| `database` | Schema, repositories, recorder, and settings persistence |
+| `workflows` | Cross-component sync and integrity coordination |
+| `dispatcher` | Admission, custody, control, and event fan-out |
+| `interfaces` | CLI, service, launcher, packaging, and desktop adapters |
+| `tools` | Repository diagnostics, audits, corpora, development launchers, and test infrastructure |
+
+When adding, moving, or deleting a collected test module, update
+`tests/_departments.py` in the same change. Shared test support belongs in a
+non-collected underscore-prefixed module rather than another collected test
+module. No Python source under `tests/` may import a collected test module.
+
+Tests that isolate `NamiSyncService` with explicit runtime, dispatcher, or
+observer collaborators use `tests/_service_fixtures.py` to construct the real
+service at the existing composition points. Constructor-owned state is not
+copied into test helpers; scenario-specific lifecycle and malformed-boundary
+state remains explicit.
+
+## Markers and skips
+
+- `headed` requires the real interactive desktop host. It is excluded by the
+  configured `-m "not headed"` ordinary default. A filename containing
+  `headed` does not determine marker behavior; some headed-harness modules also
+  contain ordinary contract tests.
+- `supplemental_node` identifies optional deterministic
+  JavaScript probes. They may skip when Node.js is unavailable and do not
+  replace native or headed acceptance evidence. They use the same
+  `NAMISYNC_TEST_NODE`-then-`PATH` resolution as the required ordinary tests,
+  which are deliberately unmarked and cannot skip.
+- Other skips must name a concrete unavailable platform capability. Review
+  skip reasons in verification output; a skipped required gate cannot sign off
+  that gate.
+
+## Diagnostics
+
+The reviewed app ICO is checked for valid Windows decoding and its declared
+frame sizes in host tests. Do not render the SVG during tests or compare the
+ICO with newly generated bytes. Renderer-dependent antialiasing is artwork
+review, not regression authority. Portable builds additionally check x64 PE
+GUI/console subsystem classification and run the frozen console entry point;
+native packaged startup/close evidence remains distinct from wheel tests.
+The Setup journey samples Plan-again visibility before its click. Successful
+launch can select a new task and hide the original button; inspecting that
+retired surface afterward is not evidence that the action was unavailable.
+The existing readiness, new-task identity and frozen-option assertions remain.
+
+Rerun prior failures first:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --lf
+.\.venv\Scripts\python.exe -m pytest -q --ff
+```
+
+Inspect collection or collect timing evidence without turning it into an
+acceptance threshold:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest --collect-only -q
+.\.venv\Scripts\python.exe -m pytest -q --durations=25 --durations-min=0.05
+```
+
+Show skip reasons for a selected run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q -rs --dept tools
+```
+
+The suite remains serial by default. Do not introduce a default xdist worker
+count without a separate benchmark and native-resource collision review.
