@@ -598,8 +598,8 @@ explicit ordinary fallback. Final lifecycle acceptance and beta packaging remain
   it absent. Native appearance v3 follows the window display's state, and dark
   flyouts suppress CSS elevation shadows on Advanced Color displays. The
   underlying compositor behavior remains deferred. Focused, installed gallery,
-  interface and import gates passed; evidence is retained under
-  `build/wcg-review-20260924/`.
+  interface and import gates passed. The review captures were not retained;
+  BUGS records how to reproduce the halo.
 
 #### Complete M1-8 execution review and task recovery (2026-09-20 – 2026-09-24)
 

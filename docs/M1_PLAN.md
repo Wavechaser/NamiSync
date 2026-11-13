@@ -75,23 +75,27 @@ independently rerunning all 24 focused tests. This is a separate reviewed
 checkpoint following documentation c27da6aa, including the requested small TOOLS
 headed-harness heading for discoverability.
 
-Artifact cleanup is paused at the user's direction: last census 4.80 GiB /
-99,527 build files. Evidence retention/storage restructuring remains undecided.
-Keep `F:\NamiSyncExecutorBenchSource`, the user's `H:\test_dir\source` and
-`target` play directories including their trash, all three secondary worktrees,
-their required runtime, R5 delivery and retained evidence/reconstruction assets.
-Worktree removal (Tier C) has not been authorized. Some old sandbox-owned
-deletion candidates remain access-denied; no retry is part of this checkpoint.
+2026-11-14: the user ratified kind-based retention (`build/` is scratch;
+validated records are promoted to tracked `evidence/` at session closeout) and
+authorized removing the three secondary worktrees, R5 packages, the
+`m1-token-audit-*` files and gui-tuning HDR captures, then everything not cited
+by a lasting document. M1_PLAN-cited text records stay as early-M2 reference.
+Round 7 left 1.21 GiB / 20,122 build files, most of it lasting-cited study
+material still awaiting review or compaction before promotion. Keep
+`F:\NamiSyncExecutorBenchSource`, the user's `H:\test_dir\source` and `target`
+play directories including their trash, and `dist/v0.1.0/`. Some old
+sandbox-owned deletion candidates remain access-denied pending an elevated rerun.
 
 Completed cleanup removed six local codex branches without preserving superseded
 recoveries, as explicitly directed by the user, and 61 external resource roots
 (934,265 files / 21.37 GiB logical size). That decision supersedes prior retention
 directions for recovery tips `7b0744d4`, `987cba84`, `ce09180e` and `ed18ad3e`.
-The acceptance worktree remains detached at `cfeac2d9`. Build rounds removed
+Build rounds removed
 uncited/obsolete-only entries, disposable environments/pytest/SQLite state,
 ZIP-matched extractions, PyInstaller intermediates, Git-reconstructible byte
-copies and synthetic payloads. Exact plans, holds, denied rows and verification:
-`build/mop-up-survey-20261111/{cleanup.md,build-report.md,round6-result.json}`.
+copies, synthetic payloads and, in round 7, all material outside the retention
+policy. Exact plans, holds, denied rows and verification:
+`build/mop-up-survey-20261111/{cleanup.md,build-report.md,round7-result.json}`.
 These receipts own chronology; historical size figures are not current usage.
 
 ## M1-Release — authorized 2026-11-04

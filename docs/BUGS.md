@@ -1509,8 +1509,9 @@ entries to fit a batch; use explicit record offsets/limits.
   Chromium flags, alpha-zero RGB and scRGB output are rejected (scRGB lightens
   translucency and grays HDR). GUI-W1 mitigates, not fixes: dark flyouts drop
   CSS elevation shadows when native appearance reports Advanced Color.
-  Translucent fills remain slightly miscomposited. Reopen on a Windows fix;
-  evidence and reproducer: `build/gui-tuning/halo-10bit/`.
+  Translucent fills remain slightly miscomposited. Reopen on a Windows fix by
+  rerunning the raw Win32 FP16-versus-8-bit capture comparison; captures were
+  not retained (reproducer working copy: `build/gui-tuning/halo-10bit/`).
 
 ### Application task lifecycle
 

@@ -17,13 +17,12 @@ on selected Python 3.15.2. Independent diff review found no actionable issues.
 
 ## Retained operational context
 
-Further build cleanup is paused at its last 4.80 GiB / 99,527-file census;
-do not retry denied rows or remove worktrees. Evidence-storage/retention design
-is undecided. Keep F:\NamiSyncExecutorBenchSource, the user's H:\test_dir\source
-and target play directories including trash, all three detached worktrees and
-their runtime, reconstruction assets, release evidence and tester material.
-Six codex branches and 61 external resource roots were already cleared; worktree
-removal (Tier C) was not authorized.
+2026-11-14: retention policy ratified (PERFORMANCE "Evidence retention").
+Round 7 removed the three secondary worktrees, R5 packages, token-audit files,
+HDR captures and all build material outside the policy; build is 1.21 GiB /
+20,122 files. Keep F:\NamiSyncExecutorBenchSource, the user's
+H:\test_dir\source and target play directories including trash, and
+dist/v0.1.0. 1,347 old sandbox-owned rows still need an elevated rerun.
 
 Final candidate b0a3fe13 / Package05, ZIP SHA-256
 652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc.
