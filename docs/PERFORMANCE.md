@@ -15,16 +15,33 @@ its runtime, observer, source or workload qualifications.
 
 ## Evidence retention
 
-After acceptance and recovery accounting, keep raw results, manifests, exact
-source/producer/checker identities, runtime/profile facts, review decisions and
-bounded failed-run diagnostics. Regenerable pytest fixture trees and installed
-environments may be removed after their required receipts/captures have been
-preserved and checked. Inventory exact task-owned paths before cleanup; retain
-inputs needed to investigate unexplained failures and anything whose provenance
-cannot otherwise be reconstructed. No unresolved recovery work or user data is
-eligible. Historical observations remain bound to their measured dependencies.
-Methods and current result summaries belong here; detailed investigation
-chronology belongs in the named evidence root or archived historical material.
+Ignored `build/` must be clearable at any time without lasting consequence.
+Measurements, studies, packages and other work may run and write there, and
+documents may name it as a working location or leave temporary pointers (for
+example work-in-progress context in HANDOFF). No lasting document rests a claim
+on anything in `build/`.
+
+Retention is decided by kind, not age. Promote to tracked `evidence/` only
+results that were validated and whose work unit finished — a checkpoint,
+consolidation run or longer effort, not necessarily one commit:
+
+| Kind | Disposition |
+| --- | --- |
+| Measurement record | Promote the summary or report, exact source/producer/checker/runtime/profile/fixture identities, review decisions, validator output, and raw samples a Tier 2/3 claim needs. |
+| Large raw dumps | Not promoted once the owning document holds the numbers; the record's identities let the method be rerun. |
+| Study workspaces | Ablation, consolidation, refinement and optimization trees, candidate/baseline copies, installs and packages are deleted after the outcome is recorded. |
+| Release evidence | Promote gate counts, identities and reconciliation; delivered files belong in `dist/`. |
+| Bug reproducers | Promote only when small and hard to recreate; otherwise the bug entry carries a recipe. |
+
+At each session closeout, clean the session's `build/` output or promote it,
+in compacted or recipe form where that suffices. Output too large to promote is
+decided with the user during that closeout. Citations from transient documents
+(HANDOFF, delivery registers, archived material) confer no retention. Promoted
+files keep their original bytes; a compaction is a new summary that names what
+it condenses. Failed and superseded runs a lasting document still cites are
+records like any other. Historical observations remain
+bound to their measured dependencies. Methods and current result summaries
+belong here; detailed investigation chronology belongs in the evidence record.
 
 ## Reference profile and collection
 

@@ -51,7 +51,8 @@ with matching tests and documentation:
 | `namisync/dispatcher/` | Domain-blind admission, custody, control and event fan-out; imports core only. |
 | `namisync/interfaces/` | CLI/API/desktop adapters; access workflows and dispatcher through composition; no domain policy. `branding/` holds the app icon's SVG masters as package data. |
 | `tests/` | Pytest coverage following package boundaries. |
-| `tools/` | Development utilities; temporary fixtures, archives and evidence go in ignored `build/`. |
+| `tools/` | Development utilities; their fixtures, archives and run output go in ignored `build/`, which must stay clearable at any time. |
+| `evidence/` | Tracked, validated records promoted at session closeout under [PERFORMANCE](docs/PERFORMANCE.md#evidence-retention)'s retention policy. |
 
 Use the relevant routes below, not a mandatory full-document reading sequence:
 
@@ -219,8 +220,10 @@ recurrence and recovery rules below always apply.
   before committing; stale behavior documentation blocks readiness.
 - Update M1_PLAN when scope, decisions or checkpoint status changes, and at
   session/stop boundaries; it is not a per-commit transcript. Replace HANDOFF at
-  session/stop boundaries. Atomic commits still carry matching subject docs;
-  CHANGELOG records task delivery. Keep command chronology in evidence.
+  session/stop boundaries, after cleaning or promoting the session's `build/`
+  output under PERFORMANCE's retention policy. Atomic commits still carry
+  matching subject docs; CHANGELOG records task delivery. Keep command
+  chronology in evidence.
 - Review each atomic outcome independently. After corrections, review the changed
   delta and affected dependencies against the prior review; do not repeat
   unchanged reviews or gates without a dependency reason.
