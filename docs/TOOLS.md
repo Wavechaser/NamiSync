@@ -50,6 +50,36 @@ before any output file is opened and rejects malformed headers, unanchored or
 duplicate records, orphan anchors and unexplained text inside owner sections.
 This is a retrieval tool, not a semantic classifier or a second bug authority.
 
+## Evidence records
+
+Tracked `evidence/` holds records promoted under
+[PERFORMANCE](PERFORMANCE.md#evidence-retention)'s retention policy. Each record
+is a folder `evidence/EV-NNNN/` listed in `evidence/manifest.json` with its
+title, date, origin (the working location and source identity it came from) and
+every file's path, size and SHA-256. The manifest's `next_id` only grows, so
+IDs are not reused unless it is hand-edited. `python -m
+tools.evidence` maintains that manifest; choosing, compacting and copying files
+stays a deliberate closeout step, not something the tool infers from `build/`.
+
+```powershell
+python -m tools.evidence add --title "Post-M1 build cleanup receipts" --origin "build/mop-up-survey-20261111 at 051e8d98"
+python -m tools.evidence seal EV-NNNN
+python -m tools.evidence check
+python -m tools.evidence list --format jsonl
+```
+
+`add` allocates the next ID and creates an empty folder; copy the chosen files
+in unchanged, then `seal` records them. `seal` refuses links, an empty record,
+files over 1 MiB, records over 16 MiB and changed or missing files it already
+sealed; it may add new files. Output too large for those caps is a separate
+closeout decision. `check` exits 1 on drift: changed, missing or unlisted files,
+stray entries, a non-canonical manifest, or an `EV-NNNN` or
+`evidence/EV-NNNN/<path>` reference in root or `docs/` Markdown (archived
+`docs/obsolete/` excluded) that names no record or file. `list` prints each
+record with the documents citing it; it does not judge whether a citer is lasting.
+Malformed manifests stop every command with exit 2 before any write.
+`.gitattributes` keeps `evidence/` byte-exact so hashes match every checkout.
+
 ## Portable build preparation
 
 `tools/packaging/` owns Windows portable-build inputs: Python entry shims,

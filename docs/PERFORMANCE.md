@@ -35,7 +35,8 @@ consolidation run or longer effort, not necessarily one commit:
 
 At each session closeout, clean the session's `build/` output or promote it,
 in compacted or recipe form where that suffices. Output too large to promote is
-decided with the user during that closeout. Citations from transient documents
+decided with the user during that closeout. [TOOLS](TOOLS.md#evidence-records)
+documents record IDs and manifest checks. Citations from transient documents
 (HANDOFF, delivery registers, archived material) confer no retention. Promoted
 files keep their original bytes; a compaction is a new summary that names what
 it condenses. Failed and superseded runs a lasting document still cites are
