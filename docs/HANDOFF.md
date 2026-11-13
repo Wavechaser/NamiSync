@@ -1,30 +1,35 @@
-# Latest session — hosted CI terminal wait, 2026-11-12
+# Latest session — retention policy and evidence records, 2026-11-14
 
-PR #5's ordinary job (run 43054819649, job 130641477993) finished with
-6,567 passes and one failure: linked Copy/Verify did not settle within the
-web drain helper's two-second wait. This was not the GitHub job timeout.
-Runner slowness is plausible but unproven; no worker stacks were captured.
+The user ratified kind-based retention (PERFORMANCE "Evidence retention",
+AGENTS structure table and closeout rule, DEFENSE Tier 2 wording): `build/`
+must be clearable at any time; validated records are promoted to tracked
+`evidence/` at session closeout. `python -m tools.evidence` (TOOLS "Evidence
+records") allocates IDs, seals file hashes and checks the manifest and EV
+citations. A fresh Opus review found two blockers (doc example breaking
+`check`, unsorted/duplicate file lists passing); both were fixed and the delta
+re-reviewed clean. Tools department: 504 passed, 3 skipped; 12 import
+contracts kept; `tools.evidence check` clean with two records.
 
-The user authorized five seconds first. Changed only that test helper's deadline,
-with matching TESTS, CHANGELOG and M1_PLAN context. Product timing, polling and
-behavioral assertions are unchanged. PR #5 is already open; push updates it
-without a close/reopen cycle. The connector token expired; GitHub CLI works.
+Round 7 removed the three secondary worktrees (HEADs on main), R5 packages,
+`m1-token-audit-*`, gui-tuning HDR captures and everything not cited by a
+lasting document, keeping M1_PLAN-cited text records as early-M2 reference.
+Build is 1.21 GiB / 20,122 files. Promoted: EV-0001 cleanup receipts and
+EV-0002 documentation-compaction verification.
 
-Verification before the change: all 12 parameter variants and all 295 owning
-module tests passed on selected Python 3.15.2. Post-change interfaces department:
-2,313 passed / 4,290 deselected in 184.20s
-on selected Python 3.15.2. Independent diff review found no actionable issues.
+## Open items
 
-## Retained operational context
+- Elevated rerun for 1,347 Codex-sandbox-denied files (temporary pointer; the
+  manifests and executor stay in `build/mop-up-survey-20261111/` until done):
+  `.venv\Scripts\python.exe -I build\mop-up-survey-20261111\execute_tiers_ab.py hdr-capture r5-package m1plan-workspace unretained`,
+  then the same with `--verify` first.
+- Not promoted, user decision: EV-0002's full disposition ledger
+  `documentation-dispositions.jsonl` (1.6 MiB, over the 1 MiB file cap).
+- Promotion backlog: remaining lasting-cited study folders (PERFORMANCE, BUGS,
+  TOOLS, TESTS citations, ~0.9 GiB) need review/compaction before promotion;
+  the BUGS stable-ID checkpoint receipts remain only in the survey folder.
 
-2026-11-14: retention policy ratified (PERFORMANCE "Evidence retention").
-Round 7 removed the three secondary worktrees, R5 packages, token-audit files,
-HDR captures and all build material outside the policy; build is 1.21 GiB /
-20,122 files. Keep F:\NamiSyncExecutorBenchSource, the user's
-H:\test_dir\source and target play directories including trash, and
-dist/v0.1.0. 1,347 old sandbox-owned rows still need an elevated rerun.
-
-Final candidate b0a3fe13 / Package05, ZIP SHA-256
-652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc.
-Keep dist/v0.1.0 and R5 delivery. M1 headings remain pending external delivery;
-Microsoft terms remain maintainer wording without legal review.
+Keep F:\NamiSyncExecutorBenchSource, the user's H:\test_dir\source and target
+play directories including trash, and `dist/v0.1.0/`. Final candidate
+b0a3fe13 / Package05, ZIP SHA-256
+652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc. M1 headings
+remain pending external delivery.

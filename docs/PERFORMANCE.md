@@ -9,7 +9,8 @@ Inventory cold construction, custody and release resources.
 
 Methods precede results. Historical observations certify their recorded inputs,
 not the current checkout. The pre-compaction narrative is in Git at `f80773b5`;
-the before-text and disposition ledger are in `build/mop-up-survey-20261111/`.
+the compaction's disposition totals, checks and review are
+[EV-0002](../evidence/EV-0002/README.md).
 Condensing a study does not turn an incomplete receipt into a pass or discard
 its runtime, observer, source or workload qualifications.
 

@@ -1,0 +1,27 @@
+{
+  "rules": {
+    "hdr-capture": {
+      "files": 33,
+      "bytes": 413397436
+    },
+    "m1plan-workspace": {
+      "files": 21371,
+      "bytes": 1359981934
+    },
+    "r5-package": {
+      "files": 29,
+      "bytes": 76506959
+    },
+    "unretained": {
+      "files": 44217,
+      "bytes": 2339717271
+    }
+  },
+  "kept_files": {
+    "lasting": 13825,
+    "m1plan": 4804,
+    "survey": 144
+  },
+  "held": {},
+  "workspace_roots": 528
+}

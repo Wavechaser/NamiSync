@@ -1,0 +1,23 @@
+{
+  "completed": "2026-11-11",
+  "authorization": "User selected Tiers A and B, then 'Run A+B with SQLite'.",
+  "head": "41ce4e89f177c1c5457e2c631f513c338b5b49b0",
+  "planned_rows": 152618,
+  "removed_rows": 151537,
+  "removed_files": 151464,
+  "removed_links": 73,
+  "removed_bytes": 11127786835,
+  "removed_empty_dirs": 27261,
+  "changed_or_absent": 0,
+  "denied_remaining": {"rows": 1081, "winerror": 5, "by_rule": {"obsolete-only": 831, "uncited": 208, "venv": 42},
+    "cause": "Codex-sandbox-owned trees (owner PULSAR\\CodexSandboxOnline); user token has read-only access",
+    "remedy": "From an elevated PowerShell, rerun execute_tiers_ab.py obsolete-only uncited venv; absent rows are skipped and every remaining row is rechecked."},
+  "census": {"before": {"entries": 433, "files": 331152, "bytes": 18294493674, "reparse": 579},
+             "after": {"entries": 242, "files": 179688, "bytes": 7166706839, "reparse": 506},
+             "reconciliation": "file drop 151,464 + 73 links = removed rows; byte drop equals removed_bytes exactly"},
+  "holds_verified": ["three worktrees present with clean status; R5 and acceptance venvs start (3.15.2)",
+                     "m1-r5-20261111 delivery 13 files and delivery-package04-draft 11 files",
+                     "18 build_cleanup_* files", "gui-tuning 265 files", "21/21 frozen-proof ZIPs",
+                     "24/24 receipt-cited uncited entries", "removed rows still present: 0"],
+  "receipts": ["tierab-manifest.csv", "tierab-plan.json", "tierab-journal.jsonl", "build-census-before.csv", "build-census.csv"]
+}

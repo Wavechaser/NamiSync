@@ -1,0 +1,15 @@
+{
+  "date": "2026-11-11",
+  "authorized": "user: 'step 1 could be applied now' (round-5 deletions only; archiving not authorized)",
+  "plan": "plan_round5.py -> round5-manifest.csv (adds exactly-cited hold; 0 rows dropped)",
+  "rules": {
+    "pyi-work": {"files": 161, "mib": 853.8, "proof": "PyInstaller work\\namisync intermediates (.pkg, PYZ, pre-collect exe, base_library.zip); dist, ZIP and text build logs kept"},
+    "frozen2": {"files": 1554, "mib": 247.2, "proof": "every file matches a retained ZIP elsewhere in build by path, size, CRC32; 5 unmatched trees kept"},
+    "git-copy": {"files": 46215, "mib": 298.8, "proof": "Git blob id reachable from refs; no zero-length files"}
+  },
+  "execution": {"planned": 47930, "removed": 47590, "bytes": 1466976007, "removed_dirs": 1094, "changed": 0,
+                "denied": 340, "denied_note": "Codex-sandbox ACL, all under *-temp\\wheel0\\source; elevated rerun"},
+  "census_after": {"entries": 196, "files": 131126, "bytes": 5779757053, "reparse": 456},
+  "holds_verified": "verify_round5.ps1: three worktrees clean; delivery 13, draft 11, gui-tuning 265, build_cleanup_* 18, frozen2 proof ZIPs 2/2",
+  "closed_root_breakdown": "measure_closed_roots.py, measure_closed_detail.py, measure_closed_classes.py, measure_closed_classes2.py -> closed-roots-*.csv"
+}

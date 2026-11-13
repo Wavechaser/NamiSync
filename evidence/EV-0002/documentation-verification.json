@@ -1,0 +1,192 @@
+{
+  "metrics": {
+    "docs/M1_PLAN.md": {
+      "before_lines": 2763,
+      "after_lines": 348,
+      "before_words": 28705,
+      "after_words": 3828
+    },
+    "docs/PERFORMANCE.md": {
+      "before_lines": 5134,
+      "after_lines": 1411,
+      "before_words": 46512,
+      "after_words": 12722
+    },
+    "CHANGELOG.md": {
+      "before_lines": 1879,
+      "after_lines": 725,
+      "before_words": 16391,
+      "after_words": 5078
+    },
+    "docs/DESKTOP_UI.md": {
+      "before_lines": 2619,
+      "after_lines": 1075,
+      "before_words": 24711,
+      "after_words": 9046
+    }
+  },
+  "markdown_links_checked": 496,
+  "baseline_link_issues": [
+    {
+      "source": "docs/PERFORMANCE.md",
+      "line": 152,
+      "destination": "#full-resource-schedule-on-733f0cb1--2026-110708",
+      "reason": "missing-anchor"
+    },
+    {
+      "source": "docs/PERFORMANCE.md",
+      "line": 357,
+      "destination": "#full-resource-schedule-on-733f0cb1--2026-110708",
+      "reason": "missing-anchor"
+    },
+    {
+      "source": "docs/PERFORMANCE.md",
+      "line": 745,
+      "destination": "#full-resource-schedule-on-b6a4fefe--2026-110607",
+      "reason": "missing-anchor"
+    }
+  ],
+  "remaining_link_issues": [],
+  "introduced_link_issues": [],
+  "subject_link_issues": [],
+  "preserved_methods": [
+    {
+      "fragment": "retention",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "reference",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "r3_method",
+      "ok": true,
+      "check": "numeric-sequence-preserved; editorial delta separately reviewed"
+    },
+    {
+      "fragment": "r3_renewal",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "r3_final",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "inventory_method",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "table_method",
+      "ok": true,
+      "check": "numeric-sequence-preserved; editorial delta separately reviewed"
+    },
+    {
+      "fragment": "scroll_method",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "optional_method",
+      "ok": true,
+      "check": "numeric-sequence-preserved; editorial delta separately reviewed"
+    },
+    {
+      "fragment": "executor_method",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "report_method",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "verifier_method",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "sidecars",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "hash_cost",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "cache",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "corpus",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "measurement_boundary",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "history_method",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "bridge_method",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "resource_final",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "resource_attempt",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "resource_r4",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "historical_authorities",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    },
+    {
+      "fragment": "direct_write_final",
+      "ok": true,
+      "check": "complete-text-preserved-except-heading-or-link-destination"
+    }
+  ],
+  "ui_tables_preserved": [
+    true,
+    true,
+    true,
+    true,
+    true
+  ],
+  "ui_palette_preserved": true,
+  "ui_acceptance_preserved_except_retired_exact_manual_label": true,
+  "ui_gate_count_before": 13,
+  "ui_gate_count_after": 13,
+  "changelog_tasks_preserved": true,
+  "changelog_task_count": 68,
+  "newest_first": true,
+  "readme_phase_alignment": true,
+  "novel_evidence_roots": [],
+  "only_markdown_changed": true,
+  "passed": true
+}

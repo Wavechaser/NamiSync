@@ -1,0 +1,41 @@
+{
+  "docs/M1_PLAN.md": {
+    "blocks": 340,
+    "dispositions": {
+      "verbatim-retained-or-moved": 9,
+      "condensed-or-superseded-history": 330,
+      "retained-with-heading-whitespace-or-link-repair": 1
+    },
+    "before_sha256": "64a4b94ec957a3427e86c2661732571c251c05f287dedbc1a922148788d30862",
+    "after_sha256": "6f49591ea8567060def689ab9ec093695b43708c664ec600bdf56f5924ecfe66"
+  },
+  "docs/PERFORMANCE.md": {
+    "blocks": 659,
+    "dispositions": {
+      "verbatim-retained-or-moved": 140,
+      "condensed-or-superseded-history": 518,
+      "retained-with-heading-whitespace-or-link-repair": 1
+    },
+    "before_sha256": "305b3c6f70bd7c6a38b7463bbd5bea51f357704e4999884ea348339a61eba944",
+    "after_sha256": "9432f168eec944848dc19f6d24709a9379de1876b763cb11c041faa7e8ae7c7d"
+  },
+  "CHANGELOG.md": {
+    "blocks": 172,
+    "dispositions": {
+      "verbatim-retained-or-moved": 117,
+      "condensed-or-superseded-history": 55
+    },
+    "before_sha256": "295c08303100fdc9781c72a4287fcf6ae9a1579e9e44f0591aeaec30c2b8a43f",
+    "after_sha256": "beb37ad4d297415bb1a48df1331a062e13153851b92867b6c2ccc4ff54e80298"
+  },
+  "docs/DESKTOP_UI.md": {
+    "blocks": 185,
+    "dispositions": {
+      "verbatim-retained-or-moved": 16,
+      "condensed-or-superseded-history": 168,
+      "retained-with-heading-whitespace-or-link-repair": 1
+    },
+    "before_sha256": "1ca872dd42c20f14ef56c361767f08febc77e3be6ad938c0ee789e72418d69b2",
+    "after_sha256": "93e6d0a71e35ffab273ef12b0b781217894d6fd00187c1c5f857abf9127b615c"
+  }
+}

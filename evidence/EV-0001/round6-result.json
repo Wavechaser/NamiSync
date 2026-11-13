@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-11",
+  "authorized": "user: 'clean the leftover test files first' (closed roots only; archiving not authorized)",
+  "plan": "plan_round6.py -> round6-manifest.csv / round6-plan.json; 256 basetemps, all named *temp*/tmp*/pytest*",
+  "rules": {
+    "pytest-left": {"files": 8113, "bytes": 556976453, "proof": "pytest basetemp file without a receipt/capture extension; includes 144 MiB of rebuilt wheels"},
+    "synth-data": {"files": 23946, "bytes": 142575113, "proof": "synthetic .bin/.original/.restored payload outside pytest temp"}
+  },
+  "execution": {"planned": 32059, "removed": 31604, "bytes": 632408067, "removed_dirs": 7537, "changed": 0,
+                "denied": 455, "denied_note": "WinError 5 Codex-sandbox ACL (root-admission-optimization 258, m1-9 69, m1-7 33, others); elevated rerun"},
+  "census_after": {"entries": 196, "files": 99527, "bytes": 5158377554, "reparse": 456},
+  "holds_verified": "verify_round5.ps1 rerun: three worktrees clean; delivery 13, draft 11, gui-tuning 265, build_cleanup_* 18, frozen2 proof ZIPs 2/2"
+}

@@ -1,0 +1,16 @@
+{
+  "local_links_checked": 479,
+  "issues": [],
+  "current_state_words_before": 574,
+  "current_state_words_after": 77,
+  "readme_lines_before": 382,
+  "readme_lines_after": 372,
+  "reviewed_against": [
+    "INVENTORY",
+    "FEATURES",
+    "ARCHITECTURE",
+    "PERFORMANCE",
+    "M1_PLAN"
+  ],
+  "claims_review": "No exclusive-market claim, guaranteed RAM ceiling, 8GB qualification, cloud-upload verification, restart resume or cryptographic hash claim."
+}

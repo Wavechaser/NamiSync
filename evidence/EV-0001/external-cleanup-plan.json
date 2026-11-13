@@ -1,0 +1,429 @@
+[
+  {
+    "Path": "F:\\NamiSync-resource-r4w01-54b6e617",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-r4w02-0871d012",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-r4w03-b4ed5ca2",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-r4w04-aa4c4115",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-r4w05-212aec07",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-r4w06-207c3521",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-r4w07-792a4725",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-r4w08-7bef64dd",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-repair-witness-20261110-01-7ebf87ab",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-repair-witness-20261111-01-d4ea4b42",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "F:\\NamiSync-resource-scale-100k-1b1a76fc",
+    "Present": true,
+    "Files": 100000,
+    "Bytes": 3200000,
+    "Directories": 1002
+  },
+  {
+    "Path": "F:\\NamiSync-resource-scale-100k-78fc0950",
+    "Present": true,
+    "Files": 100000,
+    "Bytes": 3200000,
+    "Directories": 1002
+  },
+  {
+    "Path": "F:\\NamiSync-resource-scale-10k-5c97dfaa",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "F:\\NamiSync-resource-scale-10k-c9c56982",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "F:\\NamiSync-resource-scale-10k-d856da4f",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "F:\\NamiSync-resource-soak-01-f22fd417",
+    "Present": true,
+    "Files": 1000,
+    "Bytes": 4096000,
+    "Directories": 12
+  },
+  {
+    "Path": "F:\\NamiSync-resource-soak-01-f9aebf7e",
+    "Present": true,
+    "Files": 1000,
+    "Bytes": 4096000,
+    "Directories": 12
+  },
+  {
+    "Path": "F:\\NamiSync-resource-soak-02-1fddfeff",
+    "Present": true,
+    "Files": 1000,
+    "Bytes": 4096000,
+    "Directories": 12
+  },
+  {
+    "Path": "F:\\NamiSync-resource-soak-02-efa36adb",
+    "Present": true,
+    "Files": 1000,
+    "Bytes": 4096000,
+    "Directories": 12
+  },
+  {
+    "Path": "F:\\NamiSync-resource-soak-03-63026321",
+    "Present": true,
+    "Files": 1000,
+    "Bytes": 4096000,
+    "Directories": 12
+  },
+  {
+    "Path": "F:\\NamiSync-resource-soak-03-d4831ea5",
+    "Present": true,
+    "Files": 1000,
+    "Bytes": 4096000,
+    "Directories": 12
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-idle-open-01-10c7d80a",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-idle-open-01-801e6656",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-1x4GiB-32d82212",
+    "Present": true,
+    "Files": 1,
+    "Bytes": 4294967296,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-1x4GiB-4988f01c",
+    "Present": true,
+    "Files": 1,
+    "Bytes": 4294967296,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-1x4GiB-8e6d96c3",
+    "Present": true,
+    "Files": 1,
+    "Bytes": 4294967296,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-1x4GiB-ed678765",
+    "Present": true,
+    "Files": 1,
+    "Bytes": 4294967296,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-1x4GiB-f0d09b1d",
+    "Present": true,
+    "Files": 1,
+    "Bytes": 4294967296,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-64x4MiB-05bdec1f",
+    "Present": true,
+    "Files": 64,
+    "Bytes": 268435456,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-64x4MiB-2c5fd567",
+    "Present": true,
+    "Files": 64,
+    "Bytes": 268435456,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-64x4MiB-4b3d0497",
+    "Present": true,
+    "Files": 64,
+    "Bytes": 268435456,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-64x4MiB-790aaba8",
+    "Present": true,
+    "Files": 64,
+    "Bytes": 268435456,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-payload-01-64x4MiB-b2f9d958",
+    "Present": true,
+    "Files": 64,
+    "Bytes": 268435456,
+    "Directories": 2
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-r4w01-0c78143d",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-r4w02-f2c61656",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-r4w03-a8d4bbe6",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-r4w04-1fb9bf20",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-r4w05-75fc7e6e",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-r4w06-545d6546",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-r4w07-5a33eec6",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-r4w08-9cae8822",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-repair-witness-20261110-01-451d3062",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-repair-witness-20261111-01-2f706228",
+    "Present": true,
+    "Files": 300,
+    "Bytes": 1228800,
+    "Directories": 8
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-100k-01-15114ac2",
+    "Present": true,
+    "Files": 100000,
+    "Bytes": 3200000,
+    "Directories": 1002
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-100k-01-ebf9500f",
+    "Present": true,
+    "Files": 100000,
+    "Bytes": 3200000,
+    "Directories": 1002
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-100k-02-6048cf67",
+    "Present": true,
+    "Files": 100000,
+    "Bytes": 3200000,
+    "Directories": 1002
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-100k-02-dac9ff6e",
+    "Present": true,
+    "Files": 100000,
+    "Bytes": 3200000,
+    "Directories": 1002
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-100k-03-10e44762",
+    "Present": true,
+    "Files": 100000,
+    "Bytes": 3200000,
+    "Directories": 1002
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-100k-03-26339ec0",
+    "Present": true,
+    "Files": 100000,
+    "Bytes": 3200000,
+    "Directories": 1002
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-10k-01-6b200f2c",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-10k-01-d0181f7f",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-10k-02-13e2b13e",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-10k-02-feef38df",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-10k-03-91e99bf9",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-scale-10k-03-a0203391",
+    "Present": true,
+    "Files": 10000,
+    "Bytes": 320000,
+    "Directories": 102
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-soak-01-35cc56db",
+    "Present": true,
+    "Files": 1990,
+    "Bytes": 8151040,
+    "Directories": 211
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-soak-01-6dcb2388",
+    "Present": true,
+    "Files": 1990,
+    "Bytes": 8151040,
+    "Directories": 211
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-soak-02-491cb69f",
+    "Present": true,
+    "Files": 1990,
+    "Bytes": 8151040,
+    "Directories": 211
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-soak-02-ce240a64",
+    "Present": true,
+    "Files": 1990,
+    "Bytes": 8151040,
+    "Directories": 211
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-soak-03-d15da746",
+    "Present": true,
+    "Files": 1990,
+    "Bytes": 8151040,
+    "Directories": 211
+  },
+  {
+    "Path": "H:\\test_dir\\NamiSync-resource-soak-03-d9107c02",
+    "Present": true,
+    "Files": 1990,
+    "Bytes": 8151040,
+    "Directories": 211
+  }
+]

@@ -1,0 +1,60 @@
+[
+  {
+    "Branch": "codex/m1-12-verification-recovery-20261030",
+    "Tip": "7b0744d4ed2a6a67f5038105e112f45bf4a7927a",
+    "HeadLeftBranchRight": "102\t1",
+    "UniqueCommits": [
+      "7b0744d4 wip: preserve paused M1-12 verification"
+    ],
+    "PatchComparison": [
+      "+ 7b0744d4ed2a6a67f5038105e112f45bf4a7927a wip: preserve paused M1-12 verification"
+    ]
+  },
+  {
+    "Branch": "codex/m1-release-repeatable",
+    "Tip": "b3095886f0d4c3d1f10e243e800d69235a6e01f0",
+    "HeadLeftBranchRight": "81\t0",
+    "UniqueCommits": [],
+    "PatchComparison": []
+  },
+  {
+    "Branch": "codex/m1-release-repeatable-recovery-20261105",
+    "Tip": "987cba84a093e95cc874db77ba817379480ad82a",
+    "HeadLeftBranchRight": "82\t1",
+    "UniqueCommits": [
+      "987cba84 wip: preserve repeatable build and CI preparation"
+    ],
+    "PatchComparison": [
+      "+ 987cba84a093e95cc874db77ba817379480ad82a wip: preserve repeatable build and CI preparation"
+    ]
+  },
+  {
+    "Branch": "codex/release-repair-authority-v2",
+    "Tip": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+    "HeadLeftBranchRight": "7\t0",
+    "UniqueCommits": [],
+    "PatchComparison": []
+  },
+  {
+    "Branch": "codex/wip-20261109-0022-table-cadence",
+    "Tip": "ce09180edef6a35be4507010c1af02d7656c75b9",
+    "HeadLeftBranchRight": "33\t1",
+    "UniqueCommits": [
+      "ce09180e wip(interfaces): preserve cadence candidate pending read-policy decision"
+    ],
+    "PatchComparison": [
+      "+ ce09180edef6a35be4507010c1af02d7656c75b9 wip(interfaces): preserve cadence candidate pending read-policy decision"
+    ]
+  },
+  {
+    "Branch": "codex/wip-20261110-release-repair",
+    "Tip": "ed18ad3e69c95069cc4544ef53f0ccd2e310827b",
+    "HeadLeftBranchRight": "11\t1",
+    "UniqueCommits": [
+      "ed18ad3e wip(release): preserve blocked runtime repair"
+    ],
+    "PatchComparison": [
+      "+ ed18ad3e69c95069cc4544ef53f0ccd2e310827b wip(release): preserve blocked runtime repair"
+    ]
+  }
+]

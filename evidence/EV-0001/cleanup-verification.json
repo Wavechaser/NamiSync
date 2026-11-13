@@ -1,0 +1,47 @@
+{
+  "Verified": "2026-11-11T14:23:26.2014747+08:00",
+  "RemovedRoots": 61,
+  "RemainingCodexBranches": 0,
+  "RemainingExternalResourceRoots": 0,
+  "Retained": [
+    {
+      "Path": "F:\\NamiSyncExecutorBenchSource",
+      "Present": true,
+      "BaselineFileCountAndBytesMatch": true,
+      "Files": 1582,
+      "Bytes": 5171478579
+    },
+    {
+      "Path": "H:\\test_dir\\source",
+      "Present": true,
+      "BaselineFileCountAndBytesMatch": true,
+      "Files": 164,
+      "Bytes": 23836464560
+    },
+    {
+      "Path": "H:\\test_dir\\target",
+      "Present": true,
+      "BaselineFileCountAndBytesMatch": true,
+      "Files": 205,
+      "Bytes": 25214861761
+    }
+  ],
+  "Worktrees": [
+    "worktree F:/GitHubRepositories/NamiSync",
+    "HEAD 41ce4e89f177c1c5457e2c631f513c338b5b49b0",
+    "branch refs/heads/milestone1",
+    "",
+    "worktree F:/GitHubRepositories/NamiSync/build/m1-r5-20261111/checkout",
+    "HEAD b0a3fe133745b2212b8c7d1254c317879e980f90",
+    "detached",
+    "",
+    "worktree F:/GitHubRepositories/NamiSync/build/m1-release-repair-20261110/acceptance-checkout",
+    "HEAD cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+    "detached",
+    "",
+    "worktree F:/GitHubRepositories/NamiSync/build/m1-release-repair-20261110/idle-followup-checkout",
+    "HEAD 1d93687638562dbed776f116da37504c9e3a1d08",
+    "detached",
+    ""
+  ]
+}

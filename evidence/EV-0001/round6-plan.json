@@ -1,0 +1,42 @@
+{
+  "summary": {
+    "pytest-left": {
+      "files": 8113,
+      "bytes": 556976453
+    },
+    "synth-data": {
+      "files": 23946,
+      "bytes": 142575113
+    }
+  },
+  "held": {},
+  "basetemps": 256,
+  "keep_ext": [
+    ".bmp",
+    ".bundle",
+    ".csv",
+    ".diff",
+    ".dmp",
+    ".err",
+    ".etl",
+    ".gif",
+    ".har",
+    ".heapsnapshot",
+    ".html",
+    ".jpeg",
+    ".jpg",
+    ".json",
+    ".jsonl",
+    ".log",
+    ".md",
+    ".mp4",
+    ".out",
+    ".patch",
+    ".png",
+    ".tsv",
+    ".txt",
+    ".webm",
+    ".xml",
+    ".zip"
+  ]
+}

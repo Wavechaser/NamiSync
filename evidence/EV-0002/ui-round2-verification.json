@@ -1,0 +1,12 @@
+{
+  "source_blocks_accounted": 215,
+  "source_sections_accounted": 56,
+  "specification_tables_unchanged": true,
+  "color_literals_unchanged": true,
+  "palette_unchanged": true,
+  "acceptance_unchanged": true,
+  "bugs_unchanged": true,
+  "bug_record_coverage_complete": true,
+  "bug_records": 319,
+  "passed": true
+}

@@ -1,5 +1,247 @@
 {
   "format": 1,
-  "next_id": 1,
-  "records": []
+  "next_id": 3,
+  "records": [
+    {
+      "id": "EV-0001",
+      "title": "Post-M1 build and external cleanup receipts",
+      "date": "2026-11-14",
+      "origin": "build/mop-up-survey-20261111 at 94f3daef",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1310,
+          "sha256": "4caf250772a30c09c5e65fb6e58f4f824a2fff46cd4199c259ba74e7415a2d48"
+        },
+        {
+          "path": "branch-audit.json",
+          "bytes": 2024,
+          "sha256": "24fffd103cad39d323beeee31a343e54127386823d270de5a8fa179fc011e9a9"
+        },
+        {
+          "path": "build-report.md",
+          "bytes": 6982,
+          "sha256": "abb5a59c03e46dcef4c104d9d9c05315b39bc09d300b41cbe9625fa8df16726c"
+        },
+        {
+          "path": "cleanup-verification.json",
+          "bytes": 1401,
+          "sha256": "ee3929c0b2197d80ae38df800b94bc3021dabb516d2fb705eb5e0eaf9a4abe4a"
+        },
+        {
+          "path": "cleanup.md",
+          "bytes": 4635,
+          "sha256": "1ee4ee423f0ddd425e3a0e0ba40be7b07f6462801a2e14fa0703cf67669f924b"
+        },
+        {
+          "path": "clear-external-roots.ps1",
+          "bytes": 3690,
+          "sha256": "bad0bdc59ccdb2513eef96ee66e014175e27bde163bd37ce0a6b7e194118e81e"
+        },
+        {
+          "path": "execute_tiers_ab.py",
+          "bytes": 4623,
+          "sha256": "98a81b7cb3469e363a9275be5eaf8c6010bd8c3574f3a377c7bc68be92ac544c"
+        },
+        {
+          "path": "external-cleanup-plan.json",
+          "bytes": 10035,
+          "sha256": "d29175c80639a1950d4f681233db16ef2ca3ac5e967e14a9ce932d0de71ebd25"
+        },
+        {
+          "path": "external-cleanup-result.json",
+          "bytes": 254,
+          "sha256": "558f729a74770b09646e9fa7eb6da550110e71ed9921e670bfe0f62d872e730c"
+        },
+        {
+          "path": "measure_policy.py",
+          "bytes": 4174,
+          "sha256": "83bf7f24f20a9e44b4b046d0a3e642ceb9923840e80046350a1e34330d0ca7e5"
+        },
+        {
+          "path": "measure_round5.py",
+          "bytes": 4408,
+          "sha256": "74be718a879fda5b284f32647a1a9bc8dcb8bd00024eb8bfdd61c1ec559367e1"
+        },
+        {
+          "path": "plan_round5.py",
+          "bytes": 2712,
+          "sha256": "de084012b4b7f0df197ccf2296be9e8241ea8be4cc187f1c3e466eecd592ef7f"
+        },
+        {
+          "path": "plan_round6.py",
+          "bytes": 3924,
+          "sha256": "4b6a611492b49d93c62b9833f718b0afcffbb3099248f27286cdf51530037dcb"
+        },
+        {
+          "path": "plan_round7.py",
+          "bytes": 4809,
+          "sha256": "228fd7016b5bd05a6f220f7c340f9aff0528c214b7276ac801edbc190bdc3438"
+        },
+        {
+          "path": "plan_tiers_ab.py",
+          "bytes": 9018,
+          "sha256": "e089363ab1040067e7105979a89db3804d1e42211a549b1aa179b19c8b0f4b24"
+        },
+        {
+          "path": "policy-cited.csv",
+          "bytes": 19304,
+          "sha256": "d9ed452f1ac76f8706b8fcbdc0c08d5f0e9a4dd8237b217c0fc1de93651e2425"
+        },
+        {
+          "path": "report.md",
+          "bytes": 5901,
+          "sha256": "60c2ade2454c4a65013a07cdf08a13a506668d5cea65f404de12c9829f0a944a"
+        },
+        {
+          "path": "round5-result.json",
+          "bytes": 1316,
+          "sha256": "ddc26893fd999fb203116a44cb6d71192ed968c5c9e24c9fba2878a25fba43f5"
+        },
+        {
+          "path": "round6-plan.json",
+          "bytes": 596,
+          "sha256": "93a5e9bb1fced78cf1ec80f836df57dfb5c2bed692861fe6e9915a59817ba1a2"
+        },
+        {
+          "path": "round6-result.json",
+          "bytes": 1066,
+          "sha256": "eb47e02cac766d3b9345422975ac31da4b91650c0a3527638743115603d98c90"
+        },
+        {
+          "path": "round7-plan.json",
+          "bytes": 468,
+          "sha256": "42c37184fd569467661f3e14570337f05836d1890f09228ce5215e73aae1565b"
+        },
+        {
+          "path": "round7-result.json",
+          "bytes": 1967,
+          "sha256": "fcbbf789bdf5a66259d521f65c3c50c63b50e2effabb2e4ed81ca1a5d44e9c89"
+        },
+        {
+          "path": "survey-summary.json",
+          "bytes": 400,
+          "sha256": "4bd1be72de4c43c41b4e0d539c9cdb7468e59fc043c723de449972982c4bb677"
+        },
+        {
+          "path": "survey.ps1",
+          "bytes": 3327,
+          "sha256": "9c381737f54eccadb2cd175201e092aaadfd14fe18e02128bbd92f4909946b07"
+        },
+        {
+          "path": "tierab-plan.json",
+          "bytes": 6004,
+          "sha256": "4be0d154bf9cb232a806404840a24de2b8a665637ead0868e491b3c76de3d7b4"
+        },
+        {
+          "path": "tierab-result.json",
+          "bytes": 1578,
+          "sha256": "58294ce2db5d7e37c246b63e16fcc993d161c25e14c4bde83cee8df59fdc2d52"
+        },
+        {
+          "path": "verify-cleanup.ps1",
+          "bytes": 2324,
+          "sha256": "be96c40b266d84b0f16ebc505080930485e7a4c7935e053be1a4044e2e1badfb"
+        },
+        {
+          "path": "verify_round5.ps1",
+          "bytes": 1069,
+          "sha256": "575cecf9637622df4bb426f230f250202e2e852d704ba42c424bb7108d0701cb"
+        }
+      ]
+    },
+    {
+      "id": "EV-0002",
+      "title": "M1 documentation compaction verification",
+      "date": "2026-11-11",
+      "origin": "build/mop-up-survey-20261111 for c27da6aa",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1194,
+          "sha256": "c984857ca1ccf3edb01ca06a61ca93405e1580e770308a0aea565466dfb19607"
+        },
+        {
+          "path": "docs-before-hashes.json",
+          "bytes": 1227,
+          "sha256": "52b38a4e54180f6866e52700576cbb566442e7f8df2b4ef74daf5920b12fb5ab"
+        },
+        {
+          "path": "documentation-disposition-summary.json",
+          "bytes": 1574,
+          "sha256": "963111eaf91d35a45fcc54528a4c00e2ab24eb086061979b840f5ae247fd075a"
+        },
+        {
+          "path": "documentation-final-link-delta.json",
+          "bytes": 10752,
+          "sha256": "b218b0d575668e22709456607b640bc9325885eaf998d147e606af5359717646"
+        },
+        {
+          "path": "documentation-link-changes.json",
+          "bytes": 218,
+          "sha256": "2454c764fddfa6977cc1a5e4c42049473fbe9416248d5dd7fd1b10cb1704c25e"
+        },
+        {
+          "path": "documentation-review.md",
+          "bytes": 4773,
+          "sha256": "d4b91dff793d84745f4ac7b263a4b899afe41a9ef1ec72c5976cb5a761d0d6a5"
+        },
+        {
+          "path": "documentation-survey.md",
+          "bytes": 12210,
+          "sha256": "d18f35948e3b5cc3496b292cff2597a8aacf5c351b2da778a219dcaf85ba4e92"
+        },
+        {
+          "path": "documentation-verification.json",
+          "bytes": 5358,
+          "sha256": "4de2bcc0120d20cb4c1ce8db3e04716a21e2084b346b670951aefa76f4e096f4"
+        },
+        {
+          "path": "preserved-performance-ranges.json",
+          "bytes": 5520,
+          "sha256": "ef51091af976b60f61d10d85b069c72500f4854233f077db558851f475860d48"
+        },
+        {
+          "path": "readme-verification.json",
+          "bytes": 472,
+          "sha256": "0c8b006028878c4bc39a853f428d592adc6c4b52509339ee0ab6dd5dbe493eb5"
+        },
+        {
+          "path": "record_document_dispositions.py",
+          "bytes": 4692,
+          "sha256": "33692a6d350115d437b2505d449579a6ebeff92e0e59e9d047ded360d3152618"
+        },
+        {
+          "path": "ui-round2-composition.json",
+          "bytes": 395,
+          "sha256": "4429fede3d9b776b9245cda847e0780188ead3a1abc5591a51645c48383a8efd"
+        },
+        {
+          "path": "ui-round2-dispositions.jsonl",
+          "bytes": 237213,
+          "sha256": "bf0564c0828cdf010302defb15be38120c6846249989ffe2c9b0136a939fd074"
+        },
+        {
+          "path": "ui-round2-review.md",
+          "bytes": 2557,
+          "sha256": "119729560ac479d8517d2d160e385a28b076304cd683b76ed2121cc9a205c287"
+        },
+        {
+          "path": "ui-round2-verification.json",
+          "bytes": 327,
+          "sha256": "fe8324301fc6e3b4fa19b50877991b9a2424589aff55ee0d4d93d8cfbb375d5c"
+        },
+        {
+          "path": "verify_documentation.py",
+          "bytes": 8194,
+          "sha256": "45f776a356861eb474017285919ece287d79fd1bc1150fb892a29b9f8f4fa647"
+        },
+        {
+          "path": "verify_ui_round2.py",
+          "bytes": 5262,
+          "sha256": "cd1c33b797fc52f65c1701ec2d67d74407a707448f59cefb830d384fd7ceafc0"
+        }
+      ]
+    }
+  ]
 }

@@ -1,0 +1,198 @@
+{
+  "head": "41ce4e89f177c1c5457e2c631f513c338b5b49b0",
+  "holds": [
+    "mop-up-survey-20261111",
+    "gui-tuning",
+    "m1-r5-20261111\\checkout",
+    "m1-release-repair-20261110\\acceptance-checkout",
+    "m1-release-repair-20261110\\idle-followup-checkout",
+    "m1-r5-20261111\\delivery",
+    "m1-r5-20261111\\delivery-package04-draft",
+    "build_cleanup_* files",
+    "exactly cited file paths"
+  ],
+  "summary": {
+    "A:uncited": {
+      "entries": 6116,
+      "bytes": 195697007
+    },
+    "A:obsolete-only": {
+      "entries": 23327,
+      "bytes": 728181176
+    },
+    "B:pytest": {
+      "entries": 22206,
+      "bytes": 2111677888
+    },
+    "B:frozen": {
+      "entries": 12370,
+      "bytes": 1180533263
+    },
+    "B:venv": {
+      "entries": 79155,
+      "bytes": 917602035
+    },
+    "B:runtime": {
+      "entries": 3433,
+      "bytes": 153936781
+    },
+    "B:sqlite": {
+      "entries": 6011,
+      "bytes": 5877417843
+    }
+  },
+  "skipped": [
+    {
+      "path": "ab6-browser-ordinary-20260925-2",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "ab6-browser-ordinary-20260925-4",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "ab6-browser-transport-ordinary-20260925-1",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "ablation-m1-9-10-20261015",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "cli-installed-integrated-20261104.xml",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "cli-integrated-department-20261104.xml",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "cli-safe-department-20261104.xml",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "m1-5-design",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "m1-8-p2-headed-02.log",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "m1-8-u-headed-04-packet",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "m1-8-u-headed-05.log",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "m1-8-u-short-review-closeout",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "m1-procedures",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "perf-probe-20261106",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "planning-optimization-proposal-20261019",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "r0-a1scalar08",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "r0-investigation-20260923",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "r0-opus55-review-20260923",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "r0-report09",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "review-bash-lv552se0",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "review-rv1-rv2b-20261016",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "review-rv2-rv3-20261017",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "scale-headroom-20261106",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "scale-headroom-retry-20261106",
+      "reason": "uncited but named by a retained evidence receipt"
+    },
+    {
+      "path": "memory-probe-20261107\\bundles\\candidate\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "memory-probe-20261107\\bundles\\baseline\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "m1-release-repair-20261110\\runtime\\python",
+      "reason": "home of a retained venv"
+    },
+    {
+      "path": "m1-release-repair-20261110\\runtime\\freezer-probe-02\\dist\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "m1-release-repair-20261110\\runtime\\freezer-probe-01\\dist\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "m1-release-repair-20261110\\portable\\rail-fix-native-20261110-02\\extracted\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "m1-release-repair-20261110\\portable\\rail-fix-native-20261110-01\\extracted\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "close-probe-20261108\\pkg\\old-3\\app\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "close-probe-20261108\\pkg\\old-2\\app\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "close-probe-20261108\\pkg\\old-1\\app\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "close-probe-20261108\\pkg\\new-3\\app\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "close-probe-20261108\\pkg\\new-2\\app\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    },
+    {
+      "path": "close-probe-20261108\\pkg\\new-1\\app\\NamiSync",
+      "reason": "no retained ZIP matches every file"
+    }
+  ],
+  "total": {
+    "entries": 152618,
+    "bytes": 11165045993
+  }
+}

@@ -8,9 +8,9 @@ documents own current contracts. [AGENTS](../AGENTS.md) owns execution boundarie
 Historical evidence certifies its recorded source, producer, checker, driver,
 runtime and profile; a pass at one revision is not current-checkout acceptance.
 
-The pre-compaction narrative is available in Git at `f80773b5`; the immediately
-preceding working text and dispositions are recorded under
-`build/mop-up-survey-20261111/`. Earlier registers are historical:
+The pre-compaction narrative is available in Git at `f80773b5`; the compaction's
+dispositions, checks and review are [EV-0002](../evidence/EV-0002/README.md).
+Earlier registers are historical:
 [M1-8](obsolete/M1_8_DELIVERY.md),
 [post-M1-8 study](obsolete/POST_M1_8_ABLATION.md), and the
 [earlier M1 plan](obsolete/M1_PLAN.md). Their unimplemented recipes do not grant
@@ -95,7 +95,7 @@ uncited/obsolete-only entries, disposable environments/pytest/SQLite state,
 ZIP-matched extractions, PyInstaller intermediates, Git-reconstructible byte
 copies, synthetic payloads and, in round 7, all material outside the retention
 policy. Exact plans, holds, denied rows and verification:
-`build/mop-up-survey-20261111/{cleanup.md,build-report.md,round7-result.json}`.
+[EV-0001](../evidence/EV-0001/cleanup.md).
 These receipts own chronology; historical size figures are not current usage.
 
 ## M1-Release — authorized 2026-11-04

@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-14",
+  "authorized": "user: remove the extra worktrees, R5 packages and m1-token-audit-* files; remove gui-tuning HDR captures (keep gui-tuning); keep M1_PLAN-cited material at least partially; clear everything not cited by persistent docs or excepted",
+  "worktrees": {"removed": ["m1-r5-20261111/checkout (b0a3fe13)", "m1-release-repair-20261110/acceptance-checkout (cfeac2d9)", "m1-release-repair-20261110/idle-followup-checkout (1d936876)"],
+                "proof": "git status --porcelain empty in each; all three HEADs are ancestors of main; git worktree remove (no --force), then prune"},
+  "plan": "measure_policy.py -> policy-files.csv; plan_round7.py -> round7-manifest.csv / round7-plan.json; 528 workspace roots by marker (.git, pyvenv.cfg, python.exe, site-packages, *.toc, *tmp*/*temp* names); no fresh (>= 2026-11-13) or reparse rows",
+  "rules": {
+    "hdr-capture": {"files": 33, "bytes": 413397436, "proof": "gui-tuning .bmp/.rgbaf16 full-resolution captures"},
+    "r5-package": {"files": 29, "bytes": 76506959, "proof": "m1-r5-20261111 delivery, delivery-package04-draft, github-release; tester set remains in dist/v0.1.0"},
+    "m1plan-workspace": {"files": 21371, "bytes": 1359981934, "proof": "M1_PLAN-only coverage: non-record file or inside a workspace tree"},
+    "unretained": {"files": 44217, "bytes": 2339717271, "proof": "cited only by CHANGELOG (wcg-review), HANDOFF, obsolete docs, code, or uncited; includes m1-token-audit-* and build_cleanup_*"}
+  },
+  "kept": {"lasting_files": 13825, "m1plan_record_files": 4804, "survey_files": 144},
+  "execution": {"planned": 65650, "removed": 64303, "bytes": 4175011772, "removed_dirs": 24282, "changed": 0,
+                "denied": 1347, "denied_note": "WinError 5 Codex-sandbox ACL (move-history 566, m1-7 424, m1-8-archive 207, post-m1-8-ablation 42, others); elevated rerun"},
+  "census_after": {"entries": 103, "files": 20122, "bytes": 1296885948, "reparse": 456}
+}

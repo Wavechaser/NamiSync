@@ -1,0 +1,12 @@
+{
+  "before_lines": 2481,
+  "after_lines": 1075,
+  "before_words": 22913,
+  "after_words": 9046,
+  "preserved_tables": 5,
+  "exact_palette": true,
+  "preserved_hex_literals": 33,
+  "acceptance_unchanged": true,
+  "before_sha256": "3ad12e8492ba5e518ce4c8f18ac0bb3a290a74e31e319ad178f82b47befd0369",
+  "after_sha256": "93e6d0a71e35ffab273ef12b0b781217894d6fd00187c1c5f857abf9127b615c"
+}
