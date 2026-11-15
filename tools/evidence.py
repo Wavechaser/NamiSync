@@ -15,8 +15,9 @@ import sys
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = "manifest.json"
-FILE_CAP = 1 << 20
-RECORD_CAP = 16 << 20
+FILE_CAP = 256 << 10
+RECORD_CAP = 1 << 20
+FILE_LIMIT = 24
 ID = re.compile(r"EV-([0-9]{4,})")
 CITATION = re.compile(r"\bEV-[0-9]{4,}\b")
 PATH_CITATION = re.compile(r"(?:(?<=[^\w/.-])|^)(?:\.{1,2}/)*evidence/(EV-[0-9]{4,})/([^\s`)>\]\"'<|*#?]*)")
@@ -101,6 +102,8 @@ def scan(folder: Path) -> list[dict]:
     files.sort(key=lambda entry: entry["path"])
     if not files:
         raise ValueError(f"{folder.name}: record has no files")
+    if len(files) > FILE_LIMIT:
+        raise ValueError(f"{folder.name}: {len(files)} files; limit is {FILE_LIMIT} (compact before promoting)")
     if sum(entry["bytes"] for entry in files) > RECORD_CAP:
         raise ValueError(f"{folder.name}: record exceeds {RECORD_CAP} bytes")
     return files

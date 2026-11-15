@@ -70,9 +70,11 @@ python -m tools.evidence list --format jsonl
 
 `add` allocates the next ID and creates an empty folder; copy the chosen files
 in unchanged, then `seal` records them. `seal` refuses links, an empty record,
-files over 1 MiB, records over 16 MiB and changed or missing files it already
-sealed; it may add new files. Output too large for those caps is a separate
-closeout decision. `check` exits 1 on drift: changed, missing or unlisted files,
+files over 256 KiB, records over 1 MiB or 24 files, and changed or missing
+files it already sealed; it may add new files. The caps exist to force
+compaction: what does not fit is summarized, reduced to a recipe or decided
+with the user at closeout, not split across records. Pruning a sealed record
+is a deliberate manifest edit followed by `check`. `check` exits 1 on drift: changed, missing or unlisted files,
 stray entries, a non-canonical manifest, or an `EV-NNNN` or
 `evidence/EV-NNNN/<path>` reference in root or `docs/` Markdown (archived
 `docs/obsolete/` excluded) that names no record or file. `list` prints each

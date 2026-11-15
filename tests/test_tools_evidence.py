@@ -152,6 +152,11 @@ def test_seal_refuses_oversize_empty_and_altered_records_without_writing(tmp_pat
     monkeypatch.setattr(evidence, "RECORD_CAP", 10)
     assert "record exceeds 10 bytes" in _refused(capsys, root, "seal", "EV-0001")
     monkeypatch.undo()
+    for index in range(evidence.FILE_LIMIT - 1):
+        (root / "evidence" / "EV-0001" / f"run-{index:02d}.json").write_bytes(b"{}")
+    assert f"limit is {evidence.FILE_LIMIT}" in _refused(capsys, root, "seal", "EV-0001")
+    for index in range(evidence.FILE_LIMIT - 1):
+        (root / "evidence" / "EV-0001" / f"run-{index:02d}.json").unlink()
     summary = root / "evidence" / "EV-0001" / "summary.md"
     summary.write_bytes(b"tampered")
     assert "sealed files changed or missing (summary.md)" in _refused(capsys, root, "seal", "EV-0001")
