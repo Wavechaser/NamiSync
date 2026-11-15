@@ -25,10 +25,13 @@ Evidence tests: 31 passed; `tools.evidence check` clean.
 
 ## Open items
 
-- Promotion backlog: the remaining lasting-cited study folders (PERFORMANCE,
-  BUGS, TOOLS, TESTS citations) are mostly per-run records, differentials and
-  temporary source copies. Promote only their aggregates and identities, then
-  repoint the citing docs and delete the folders.
+- Promotion backlog, staged 2026-11-15 and not promoted (user: "don't promote
+  any yet"): `build/evidence-candidates/INDEX.md` (working pointer) lists 36
+  compacted candidates, 314 files / 1.91 MiB, from the lasting-cited study
+  folders (~950 MiB, untouched). `spec.py` holds each pick; `build_candidates.py`
+  rebuilds them and checks `seal`'s caps. Its open decisions: the 274 KB cited
+  `failure.png`, and per-claim adequacy review before each promotion. Promotion
+  then repoints the citing lines and deletes the source folder.
 - 55 empty folders under `build/move-history-20260925/` stay locked by old
   Codex-sandbox ACLs; an elevated `Remove-Item -Recurse` clears them.
 

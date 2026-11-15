@@ -84,7 +84,8 @@ The user's elevated rerun removed the 1,347 sandbox-locked files; 55 empty
 locked folders remain. On 2026-11-15 the user added the per-run/ledger rule; the
 records were compacted and the survey folder removed, leaving 1.00 GiB / 18,627
 build files of lasting-cited study material awaiting review or compaction
-before promotion. Keep `F:\NamiSyncExecutorBenchSource`, the user's
+before promotion. The user then asked for compaction without promotion: 36
+candidates (1.91 MiB) are staged in `build/evidence-candidates/` for review. Keep `F:\NamiSyncExecutorBenchSource`, the user's
 `H:\test_dir\source` and `target` play directories including their trash, and
 `dist/v0.1.0/`.
 
