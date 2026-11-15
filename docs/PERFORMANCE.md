@@ -30,6 +30,7 @@ consolidation run or longer effort, not necessarily one commit:
 | --- | --- |
 | Measurement record | Promote the summary or report, exact source/producer/checker/runtime/profile/fixture identities, review decisions, validator output, and raw samples a Tier 2/3 claim needs. |
 | Large raw dumps | Not promoted once the owning document holds the numbers; the record's identities let the method be rerun. |
+| Per-run records, differentials, ledgers and copies | Not promoted, however small each file is: promote the aggregate (statistic, counts, verdict) instead of each run's record, a per-item diff or disposition ledger, or a copy of source or documents that Git can reproduce. Many files in one record usually means it was not compacted. |
 | Study workspaces | Ablation, consolidation, refinement and optimization trees, candidate/baseline copies, installs and packages are deleted after the outcome is recorded. |
 | Release evidence | Promote gate counts, identities and reconciliation; delivered files belong in `dist/`. |
 | Bug reproducers | Promote only when small and hard to recreate; otherwise the bug entry carries a recipe. |
