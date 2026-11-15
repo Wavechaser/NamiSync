@@ -19,9 +19,17 @@ question is whether NamiSync should present it the same way.
 
 ## User Goal
 
-The goal is not a pie chart. Users ask **“what is using space here, and where
-do I go to act on it?”** Inside NamiSync the question also comes up without
-being asked:
+The page answers **“what exists here, and what is taking up space?”** Each
+page answers a different question:
+
+| Page | Question |
+| --- | --- |
+| Plan / execution | What will change on the target? Rows describe operations, mostly from the target's side, so it is a poor view of what simply exists. |
+| Inventory | What evidence do we hold for a tracked location? |
+| **This page** | What exists in one folder or volume, and how big is it? |
+| Compare (proposed) | What exists in A and B, and how do they differ? |
+
+Inside NamiSync the question also comes up without being asked:
 
 - Plan review reports a capacity shortfall on the target, and the user needs to
   know what to clear.
@@ -30,26 +38,23 @@ being asked:
   ([FEATURES → Trash Retention Policy](FEATURES.md#data-protection)).
 - Before a first sync, the user wants to see the shape of a source tree.
 
-A disk-usage view that answers these questions supports the product's
-existing purpose. As a standalone utility it would be scope drift.
-
 ## Decisions (2026-11-15)
 
 | Question | User direction | Consequence |
 | --- | --- | --- |
-| Placement | A new page. It may share a proposed two-pane “compare” page: the sunburst takes one table's space and a file table sits beside it. | See [Page](#page). Only the layout is shared, so the space view does not wait for compare semantics to be designed. |
-| Size meaning | Prioritize space on disk. | On-disk size drives the sort and the chart; logical size is secondary. This needs a new enumeration backend; see [Size](#size). |
-| Shape and scale | Spaceketeer-like: one flat level of files and folders, and a few-ring sunburst of folders with a segment cap. | The whole tree is still walked, but only directory aggregates are retained, so the 150,000-row inventory wall stops mattering; see [Scale](#scale). |
+| Placement | A new page that answers “what exists here.” A compare page (“what exists in A and B and how they differ”) is a separate future page that may share the two-pane layout. | See [Page](#page). Only the layout is shared, so neither feature blocks the other. |
+| Size meaning | Logical (end-of-file) size from `os.scandir`. The small difference from allocated size is tolerated; Properties shows the exact on-disk figure. Probe the known divergent cases before implementation, for rigor. | No new enumeration backend; see [Size](#size). |
+| Shape and scale | Spaceketeer-like: one flat level of files and folders, and a few-ring sunburst of folders. | The whole tree is still walked, but only directory aggregates are retained; see [Scale](#scale). |
 | Volume custody | Wait. Say so visibly, so the user can choose to pause a sync on that volume. | No new dispatcher custody mode; see [Session behavior](#session-behavior). |
-| Chart | Sunburst; drawing it is cheap. | Agreed for rendering. The remaining cost is layout bounds, accessibility and palette; see [Chart](#chart). |
-| Copy Path, Open in Explorer, Properties | Wanted on every page regardless of this feature; click-through integration is nice to have. | Moved to a separate proposal ([M2_PROPOSAL → Shell actions](M2_PROPOSAL.md)). Cost notes are under [Shell actions](#shell-actions). |
+| Chart | Sunburst. Each ring shows only the largest few child folders above a size threshold, so it stays readable. | Parent totals come from the aggregate tree, so no separate slice-merging pass is needed; see [Chart](#chart). |
+| Copy Path, Open in Explorer, Properties | Wanted on every page regardless of this feature. Click-through is nice to have. Plan prefers the target side, but copies and updates point naturally at the source. Missing items get no item actions; their folder can still open if it exists. | Separate proposal ([M2_PROPOSAL → Shell actions](M2_PROPOSAL.md)). Side policy is under [Shell actions](#shell-actions). |
 
 ## What Exists Today
 
 | Spaceketeer capability | NamiSync now | Gap |
 | --- | --- | --- |
-| Recursive walk of a folder or whole drive | Scanner FULL scan. Volume roots are admissible locations (displayed as “Volume root”). | Records only logical size. |
-| Per-folder total size | Inventory projection rolls up complete file bytes. Overflow and unknown bytes are explicit, never clamped ([INVENTORY](INVENTORY.md#stage-6-desktop-contracts-protocol-subset-active)). | Logical bytes only. Requires a ledger-backed inventory. |
+| Recursive walk of a folder or whole drive | Scanner FULL scan. Volume roots are admissible locations (displayed as “Volume root”). | The sync scanner opens every entry on NTFS to read file identity; see [Size](#size). |
+| Per-folder total size | Inventory projection rolls up complete file bytes. Overflow and unknown bytes are explicit, never clamped ([INVENTORY](INVENTORY.md#stage-6-desktop-contracts-protocol-subset-active)). | Requires a ledger-backed inventory. |
 | Contents (“N files, M folders”) | Rollup counters already include descendant row and file counts (`inventory_projection._row_counters`). | No column. |
 | Largest-first table | Server-owned sibling sort on Size ([PRESENTATION](PRESENTATION.md#search-filters-sorting-and-follow)). | **Folders cannot be ranked by total.** `sibling_order.sorted_siblings` sorts files first, then folders by their own size, not their aggregate bytes. |
 | Flat one-level list with drill-down | Bounded tree with expand and collapse. | No flat “focus folder” list or breadcrumb. |
@@ -88,53 +93,56 @@ Inventory too, but that is a separate change to the DR-BR-15 sort contract.
 
 ## Page
 
-The page has two panes with the same frame as the proposed compare page:
+The page has two panes, a frame the compare page may reuse:
 
 - **Left:** the sunburst, centered on the focused folder. A breadcrumb above it
   re-roots the view. Clicking a segment focuses that folder.
-- **Right:** a flat table of the focused folder's direct children (folders
-  first by default, or mixed when sorted by size). Columns: Name, Contents,
-  On disk (with a “% of parent” bar), Size, Modified. Double-clicking a folder
-  focuses it, as Explorer does.
+- **Right:** a flat table of the focused folder's direct children. Folders are
+  listed first by default, or mixed with files when sorted by size. Columns:
+  Name, Contents, Size (with a “% of parent” bar), Modified. Double-clicking a
+  folder focuses it, as Explorer does.
 
 Hovering a segment highlights its table row, and the reverse. The table is the
 accessible source of truth; the chart is a navigator.
 
-The compare page's own purpose (two folders side by side? two scans of one
-folder over time?) is undefined. The space view should share only its layout,
-so neither feature blocks the other.
-
 ## Size
 
-On-disk size is the primary measure. The current scanner uses `os.scandir`,
-which exposes only logical size.
+Size is logical (end-of-file) size, the figure Explorer's Properties dialog
+shows as “Size”. The Properties action gives the exact “Size on disk” when a
+user needs it.
 
-- **Backend.** Enumerate each directory through its handle with
-  `GetFileInformationByHandleEx(FileIdBothDirectoryInfo)` or the equivalent
-  `NtQueryDirectoryFile` class. Each entry then carries `AllocationSize`,
-  `EndOfFile`, attributes and file ID without opening the file. That avoids
-  per-file opens and the cloud-recall risk that comes with them
+- **No per-file opens.** On Windows, `os.scandir` returns size, modification
+  time and attributes from the directory listing itself; `DirEntry.stat()`
+  needs no extra call for them. File identity and link count are not in the
+  listing. On NTFS the sync scanner therefore calls `lstat` for every entry,
+  which opens each one (`modules/scanner.py`, the `entry.stat` /
+  `self._backend.lstat` fallback). A space walk needs no file identity, so it
+  reads listing data only. Directories still get identity for loop defense:
+  about 46,000 opens on `F:` instead of about 468,000. Skipping file opens also
+  avoids the per-file cloud-recall question
   ([SCANNER → Cloud availability](SCANNER.md#cloud-availability-and-hydration-boundary)).
-  It is a new native backend with its own containment, long-path and
-  no-follow evidence. Sync scans keep `os.scandir` until that backend is
-  separately measured and accepted for them.
-- **Known inaccuracies, to be disclosed rather than hidden:**
-  - NTFS updates directory-entry sizes lazily, so a file being written can
-    show stale sizes.
-  - Files compressed with NTFS or WOF can report allocation that differs
-    from their true physical usage. An optional second pass could use
-    `GetCompressedFileSizeW`, but it opens each file by path.
-  - Block-cloned (ReFS) and deduplicated files share extents, so per-file
-    allocation overcounts.
-  - Tiny files stored inside the MFT report zero allocation.
-- **Hard links** are counted once per file ID and disclosed as “N hard-linked
-  files counted once”.
-- **Cloud placeholders** show their real local allocation, which is often zero.
-  This is the honest answer for disk usage.
-- **Reconciliation.** For a volume root, the page shows used space from
-  `GetDiskFreeSpaceExW` next to the known on-disk total. The difference is shown
-  as “not accounted for”: unreadable folders, metadata, shadow copies and
-  similar.
+  Whether this is a scanner mode or a separate walk is an implementation
+  choice. The sync scanner's behavior does not change.
+- **Accepted consequences:**
+  - Hard links are counted once per path, as in Explorer's “Size”.
+  - Online-only cloud files show their full logical size. Their row already
+    carries the cloud indicator.
+- **Probe before implementation.** For rigor, measure logical size against
+  allocated size, and check that directory-listing sizes match `lstat`, on
+  these cases:
+  - a file being written (NTFS updates directory-entry sizes lazily);
+  - NTFS- and WOF-compressed files;
+  - sparse files;
+  - block-cloned (ReFS) or deduplicated files;
+  - tiny files stored inside the MFT;
+  - hard links;
+  - online-only cloud placeholders.
+
+  Record results in PERFORMANCE. A surprising divergence reopens this decision.
+- **Volume summary.** For a volume root, the page shows used space from
+  `GetDiskFreeSpaceExW` next to the scanned total. The two use different units
+  (allocated versus logical), so the difference is described as “not accounted
+  for” rather than computed as an exact remainder.
 
 ## Scale
 
@@ -144,37 +152,39 @@ Store app would not have had. Spaceketeer almost certainly walked too. The walk
 is unavoidable; what matters is what gets retained.
 
 - **Retain directories only.** Keep a compact aggregate tree: one entry per
-  directory with its parent, name, and the subtree totals for files, folders,
-  on-disk bytes and logical bytes. Also keep each directory's direct-file count
-  and bytes. Memory then grows with the number of directories (about 46,000 on
-  `F:`), not the number of files. The sunburst needs only this tree.
+  directory with its parent, name, and subtree totals for files, folders and
+  bytes. Also keep each directory's direct-file count and bytes. Memory then
+  grows with the number of directories (about 46,000 on `F:`), not the number
+  of files. The sunburst needs only this tree.
 - **Read files when a folder is focused.** The flat table re-enumerates the
-  focused directory's direct entries using the same backend. Its folder rows
-  come from the aggregate tree. If the fresh direct-file total differs from the
-  scanned one, the header says “Changed since scan” and offers Rescan for that
-  folder, instead of silently mixing two snapshots.
+  focused directory's direct entries. Its folder rows come from the aggregate
+  tree. If the fresh direct-file total differs from the scanned one, the header
+  says “Changed since scan” and offers Rescan for that folder, instead of
+  silently mixing two snapshots.
 - **Bounds.** Directory count and direct entries per directory each need a
   wall, sized from measurement (directory-heavy shapes such as `node_modules`
   matter). The table still serves 1..256-row windows over a server-sorted
   directory.
-- **Measurement first.** PERFORMANCE should record walk time and peak memory
-  on a large real volume (the screenshot's `F:` is a good profile) for the new
-  backend against `os.scandir`, before any wall value is chosen.
+- **Measurement first.** PERFORMANCE should record walk time and peak memory on
+  a large real volume (the screenshot's `F:` is a good profile), comparing the
+  listing-only walk with the sync scanner's per-entry `lstat`.
 
 ## Chart
 
 Drawing a sunburst is cheap: hand-written SVG arc paths, with no third-party
 chart library. That keeps the packaged-document and closed-asset rules intact.
-The remaining work is elsewhere:
 
-- **Server layout.** Compute the layout on the server from the focus folder.
-  - Use folders only, about 4 rings deep.
-  - Merge segments below a minimum angle into “N smaller folders”.
-  - Cap the total segment count (a few hundred).
-  - Leave a parent's direct-file bytes as visible unfilled arc, as Spaceketeer
-    did.
+- **Server layout, top children only.** Lay the chart out on the server from
+  the focus folder, about 4 rings deep.
+  - In each ring, draw only the largest *N* child folders (about 5) whose share
+    passes a threshold (for example 2% of the focus folder).
+  - Each parent's total comes from the aggregate tree, so everything not drawn
+    is simply parent total minus drawn children. That remainder includes the
+    parent's direct files and every small or unranked folder, and it appears as
+    a neutral arc, much as Spaceketeer left it unfilled.
 
-  The payload is bounded like any other bridge response.
+  No separate merge pass exists, and the payload size is fixed by
+  *N* × depth.
 - **Accessibility.** The chart is `aria-hidden` and supplementary. The table,
   breadcrumb and keyboard focus carry the same navigation. Forced colors use
   system colors with outlines.
@@ -203,33 +213,40 @@ The remaining work is elsewhere:
 ## Shell actions
 
 These are now a separate cross-page proposal ([M2_PROPOSAL → Shell
-actions](M2_PROPOSAL.md)). The space view consumes them. Code has not been
-built or measured, but inspection suggests moderate cost:
+actions](M2_PROPOSAL.md)), which the space view consumes. The remaining work is
+mostly policy. The plumbing is modest.
 
-- **Pattern exists.** The folder picker is a host-side callable injected into
-  the web adapter and bound to the window. Shell actions would follow the same
-  pattern: a bridge command carries a server-owned node id, the server resolves
-  it to an absolute path, and an injected host callable performs the action.
-  The browser never supplies path text.
-- **Per-page work.** Each page needs node-to-path resolution:
-  - Plan rows have a source and a target side, and prior-path rows, so the
-    action needs a side choice.
-  - Missing Inventory rows open the parent folder instead.
-  - Each command also needs BRIDGE ingress bounds and DEFENSE notes for the
-    new external effect.
-- **Primitives.**
-  - Copy Path uses the host clipboard (`SetClipboardData`), so the browser
-    never needs the full path.
-  - Open in Explorer uses `SHOpenFolderAndSelectItems`. That avoids command-line
-    quoting and Explorer's weak handling of `\\?\` paths.
-  - Properties uses `SHObjectProperties` on the host window. It needs a
-    COM-initialized (STA) thread.
-  - Never use `ShellExecute` “open” on a file: that would launch it.
+- **Plumbing.** The folder picker is already a host-side callable injected into
+  the web adapter. Each action follows the same pattern: a bridge command
+  carries a server-owned node id, the server resolves it to a path, and a host
+  callable acts. The browser never supplies path text. Primitives:
+  - Copy Path: host clipboard.
+  - Open in Explorer: `SHOpenFolderAndSelectItems`.
+  - Properties: `SHObjectProperties` on a COM-initialized (STA) host thread.
+  - Never `ShellExecute` “open” on a file: that would launch it.
+
+  Each command needs BRIDGE ingress bounds and a DEFENSE note for the new
+  external effect.
+- **Plan side policy (proposed).** Plan rows can describe two paths. A silent
+  default makes copies point at the source and everything else at the target,
+  and that is the confusion to avoid. The proposal is to never choose
+  implicitly:
+  - The row menu shows explicitly labelled actions, “Source: Open in Explorer”
+    and “Target: Open in Explorer”.
+  - Each label is offered only when that side's path exists now. For example,
+    a planned copy has no target file yet, so it gets “Target: Open folder” if
+    the parent exists.
+  - Move rows label the previous and new paths the same way.
+  - Plan has no double-click shell default. One-sided pages (Inventory, this
+    page, the compare page's per-side tables) may use double-click, because
+    the side is unambiguous.
+- **Missing items.** Missing items get no Open or Properties actions; “Open
+  containing folder” appears when the parent exists. Copy Path stays available,
+  because the text is harmless and useful for finding the file. This is a
+  proposed refinement of the user's rule.
 - **Mutation boundary.** Explorer and the Properties dialog let the user change
   files outside NamiSync. That is the user's own action, as with any Explorer
   use. NamiSync performs none itself and adds no delete, move or cleanup path.
-- **Click-through** (double-click or context menu on any row) is mostly
-  presentation once the commands exist. Plan rows need the side choice.
 
 ## Non-Goals
 
@@ -242,19 +259,27 @@ built or measured, but inspection suggests moderate cost:
 - No duplicate finder (content dedup belongs to ingest) and no network shares
   (remote roots are refused by admission).
 
+## Related Proposals
+
+- **Compare page** ([M2_PROPOSAL](M2_PROPOSAL.md)). “What exists in A and B,
+  and how do they differ”. It still needs its own outcome definition.
+- **Checksum adoption** ([M2_PROPOSAL](M2_PROPOSAL.md)). It can be run from the
+  compare page or from sync execution. It does not belong on this page, which
+  writes no ledger state.
+
 ## Open Questions
 
-1. The compare page's purpose, if it should become its own proposal.
-2. Sunburst palette: depth ramp (proposed) or a categorical palette.
-3. Whether the Plan capacity link (“See what's using target space”, opening
+1. Sunburst palette: depth ramp (proposed) or a categorical palette.
+2. Whether the Plan capacity link (“See what's using target space”, opening
    this page on the target with `.synctrash` highlighted) belongs in the first
    slice or later.
+3. Ring count, *N* and the threshold. Tune these on real volumes.
 4. Wall values, after measurement.
 
 ## Suggested Slices (Not Commitments)
 
-1. Native directory-handle enumeration with on-disk size, plus PERFORMANCE
-   measurement on a large real volume.
+1. Size-case probes and the walk measurement (listing-only versus per-entry
+   `lstat`), recorded in PERFORMANCE.
 2. Read-only space workflow, aggregate tree and page:
    - flat table and breadcrumb;
    - trash and temps visible and labelled;
