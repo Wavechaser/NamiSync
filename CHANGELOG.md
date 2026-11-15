@@ -162,7 +162,7 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
-#### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-14)
+#### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-15)
 
 - Clear six local codex branches under the user's superseded-recovery disposal
   decision. Delete 61 registered external test roots (21.37 GiB logical),
@@ -171,8 +171,10 @@ behavioral evidence.
 - Ratify kind-based retention: `build/` is clearable scratch and validated
   records are promoted to tracked `evidence/` at session closeout. Add
   `python -m tools.evidence` for record IDs, sealed file hashes and citation
-  checks. Remove the secondary worktrees, R5 packages and everything outside
-  the policy, leaving 1.21 GiB / 20,122 build files of lasting-cited material
+  checks; per-run records, differentials, ledgers and Git-reproducible copies
+  are not promoted, and records are capped at 1 MiB / 24 files. Remove the
+  secondary worktrees, R5 packages, the survey folder and everything outside
+  the policy, leaving 1.00 GiB / 18,627 build files of lasting-cited material
   pending review; receipts are [EV-0001](evidence/EV-0001/cleanup.md).
 - Compact M1_PLAN/PERFORMANCE/CHANGELOG by outcome and service DESKTOP_UI's
   structure and stale ownership prose. Preserve methods, qualifications,

@@ -1,4 +1,4 @@
-# Latest session — retention policy and evidence records, 2026-11-14
+# Latest session — retention policy and evidence records, 2026-11-14 – 2026-11-15
 
 The user ratified kind-based retention (PERFORMANCE "Evidence retention",
 AGENTS structure table and closeout rule, DEFENSE Tier 2 wording): `build/`
@@ -7,26 +7,30 @@ must be clearable at any time; validated records are promoted to tracked
 records") allocates IDs, seals file hashes and checks the manifest and EV
 citations. A fresh Opus review found two blockers (doc example breaking
 `check`, unsorted/duplicate file lists passing); both were fixed and the delta
-re-reviewed clean. Tools department: 504 passed, 3 skipped; 12 import
-contracts kept; `tools.evidence check` clean with two records.
+re-reviewed clean.
 
 Round 7 removed the three secondary worktrees (HEADs on main), R5 packages,
 `m1-token-audit-*`, gui-tuning HDR captures and everything not cited by a
 lasting document, keeping M1_PLAN-cited text records as early-M2 reference.
-Build is 1.21 GiB / 20,122 files. Promoted: EV-0001 cleanup receipts and
-EV-0002 documentation-compaction verification.
+The user's elevated rerun then removed all 1,347 sandbox-locked files.
+
+2026-11-15 pilot compaction: the user added the rule that per-run records,
+differentials, ledgers and Git-reproducible copies are not promoted however
+small. EV-0001 (cleanup receipts) and EV-0002 (documentation compaction
+checks) were pruned from 45 files / 411 KB to 20 files / 57 KB; both disposition
+ledgers were dropped (one fixed reason per disposition; Git reproduces the
+block map). `seal` now caps records at 256 KiB per file, 1 MiB and 24 files.
+The survey working folder was deleted; build is 1.00 GiB / 18,627 files.
+Evidence tests: 31 passed; `tools.evidence check` clean.
 
 ## Open items
 
-- Elevated rerun for 1,347 Codex-sandbox-denied files (temporary pointer; the
-  manifests and executor stay in `build/mop-up-survey-20261111/` until done):
-  `.venv\Scripts\python.exe -I build\mop-up-survey-20261111\execute_tiers_ab.py hdr-capture r5-package m1plan-workspace unretained`,
-  then the same with `--verify` first.
-- Not promoted, user decision: EV-0002's full disposition ledger
-  `documentation-dispositions.jsonl` (1.6 MiB, over the 1 MiB file cap).
-- Promotion backlog: remaining lasting-cited study folders (PERFORMANCE, BUGS,
-  TOOLS, TESTS citations, ~0.9 GiB) need review/compaction before promotion;
-  the BUGS stable-ID checkpoint receipts remain only in the survey folder.
+- Promotion backlog: the remaining lasting-cited study folders (PERFORMANCE,
+  BUGS, TOOLS, TESTS citations) are mostly per-run records, differentials and
+  temporary source copies. Promote only their aggregates and identities, then
+  repoint the citing docs and delete the folders.
+- 55 empty folders under `build/move-history-20260925/` stay locked by old
+  Codex-sandbox ACLs; an elevated `Remove-Item -Recurse` clears them.
 
 Keep F:\NamiSyncExecutorBenchSource, the user's H:\test_dir\source and target
 play directories including trash, and `dist/v0.1.0/`. Final candidate

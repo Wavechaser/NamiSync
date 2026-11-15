@@ -43,16 +43,16 @@ No code, tests, frozen evidence, budgets or build cleanup are included.
 
 Completed 2026-11-11: outcome/method compaction, Release phase reassignment,
 DESKTOP_UI structure/current-owner reconciliation and direct link repairs.
-Disposition ledger, retained-method/visual checks, link and diff verification,
-and adversarial editorial review are in the survey directory's
-`documentation-{dispositions.jsonl,verification.json,review.md}`. No product
-tests were needed for this documentation-only checkpoint.
+Disposition totals, retained-method/visual checks, link and diff verification,
+and adversarial editorial review are [EV-0002](../evidence/EV-0002/README.md);
+the per-block ledger was not retained (Git reproduces it). No product tests were
+needed for this documentation-only checkpoint.
 
 The approved follow-up further condenses DESKTOP_UI's remaining duplicated
 behavior/source/test descriptions while retaining its visual/interaction contract.
 BUGS was surveyed read-only for future access and cross-module causal analysis.
-Follow-up dispositions and verification: `ui-round2-review.md` and `bugs-access-review.md`
-in the same evidence directory. Build cleanup remains paused.
+Follow-up verification and review are in EV-0002; the read-only BUGS survey
+was not retained.
 
 The user subsequently approved the BUGS access layer: assign stable IDs to all
 319 existing records without changing their paragraphs or metadata, and add a
@@ -68,10 +68,10 @@ Completed: all 319 original paragraphs/metadata and original log structure are
 preserved, IDs are unique, and 498 local links resolve. Final access tests: 24
 passes. Ordinary coverage after correcting the test-temp location: 6,564 passes,
 four symlink-privilege skips; unaffected passes reused and all 95 affected nodes
-rerun, with no remaining failures. Detailed accounting and same-agent adversarial
-review: `bug-access-verification.json` and `bug-access-review.md` under the survey
-directory. A fresh subagent passed the tool and final phrase-search delta review,
-independently rerunning all 24 focused tests. This is a separate reviewed
+rerun, with no remaining failures. Its working accounting and review were not
+retained; commit `a9933f98` and its focused tests are the record. A fresh
+subagent passed the tool and final phrase-search delta review, independently
+rerunning all 24 focused tests. This is a separate reviewed
 checkpoint following documentation c27da6aa, including the requested small TOOLS
 headed-harness heading for discoverability.
 
@@ -80,11 +80,13 @@ validated records are promoted to tracked `evidence/` at session closeout) and
 authorized removing the three secondary worktrees, R5 packages, the
 `m1-token-audit-*` files and gui-tuning HDR captures, then everything not cited
 by a lasting document. M1_PLAN-cited text records stay as early-M2 reference.
-Round 7 left 1.21 GiB / 20,122 build files, most of it lasting-cited study
-material still awaiting review or compaction before promotion. Keep
-`F:\NamiSyncExecutorBenchSource`, the user's `H:\test_dir\source` and `target`
-play directories including their trash, and `dist/v0.1.0/`. Some old
-sandbox-owned deletion candidates remain access-denied pending an elevated rerun.
+The user's elevated rerun removed the 1,347 sandbox-locked files; 55 empty
+locked folders remain. On 2026-11-15 the user added the per-run/ledger rule; the
+records were compacted and the survey folder removed, leaving 1.00 GiB / 18,627
+build files of lasting-cited study material awaiting review or compaction
+before promotion. Keep `F:\NamiSyncExecutorBenchSource`, the user's
+`H:\test_dir\source` and `target` play directories including their trash, and
+`dist/v0.1.0/`.
 
 Completed cleanup removed six local codex branches without preserving superseded
 recoveries, as explicitly directed by the user, and 61 external resource roots
