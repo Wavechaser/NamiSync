@@ -24,8 +24,8 @@ profile/output got no record (user decisions).
 
 ## Open items
 
-- Pending the user's decision: delete the 36 promoted source folders under
-  `build/` (listed in each record's manifest `origin`) and the finished
+- Pending the user's decision: delete the 42 promoted source folders under
+  `build/` (listed in the records' manifest `origin`) and the finished
   `build/evidence-candidates/` working folder.
 - At the later `build/` cleanup, keep `build/inventory-cold/` and other
   likely-regenerated working inputs such as the icon archive. M1_PLAN-cited
