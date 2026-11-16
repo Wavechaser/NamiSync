@@ -162,7 +162,7 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
-#### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-15)
+#### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-16)
 
 - Clear six local codex branches under the user's superseded-recovery disposal
   decision. Delete 61 registered external test roots (21.37 GiB logical),
@@ -176,6 +176,9 @@ behavioral evidence.
   secondary worktrees, R5 packages, the survey folder and everything outside
   the policy, leaving 1.00 GiB / 18,627 build files of lasting-cited material
   pending review; receipts are [EV-0001](evidence/EV-0001/cleanup.md).
+  Define what belongs in `build/` (including unfinished work, which no
+  schedule clears), place authored studies in `docs/` and work files nowhere
+  else, and give failed or superseded runs failure records apart from acceptance.
 - Compact M1_PLAN/PERFORMANCE/CHANGELOG by outcome and service DESKTOP_UI's
   structure and stale ownership prose. Preserve methods, qualifications,
   deferrals, unresolved observations and source-linked evidence; repair links.
