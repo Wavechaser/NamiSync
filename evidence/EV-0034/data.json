@@ -1,0 +1,848 @@
+{
+ "root-admission-optimization-20260928/core/hold-final-paths-comparisons.json": {
+  "bytes": 2298,
+  "sha256": "e8400bd8af6635e620e3de95b609f0d4c36faf66f2c2b36cc6c44ac8d34f2ee7",
+  "content": {
+   "source_receipt": "hold-final-paths.json",
+   "comparisons": [
+    {
+     "step": "direct-after-admission",
+     "native_final_path": "\\\\?\\F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\direct\\managed",
+     "logical_root": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\direct\\managed",
+     "exact_equal": true,
+     "drive_letter_only_equal": true
+    },
+    {
+     "step": "alias-after-acquisition",
+     "native_final_path": "\\\\?\\F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\old-target\\managed",
+     "logical_root": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\link\\managed",
+     "exact_equal": false,
+     "drive_letter_only_equal": false
+    },
+    {
+     "step": "alias-after-ordinary-admission",
+     "native_final_path": "\\\\?\\F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\old-target\\managed",
+     "logical_root": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\link\\managed",
+     "exact_equal": false,
+     "drive_letter_only_equal": false
+    },
+    {
+     "step": "alias-after-second-swap-before-confirmation",
+     "native_final_path": "\\\\?\\F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\old-target\\managed",
+     "logical_root": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\link\\managed",
+     "exact_equal": false,
+     "drive_letter_only_equal": false
+    },
+    {
+     "step": "alias-after-identity-confirmation",
+     "native_final_path": "\\\\?\\F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\old-target\\managed",
+     "logical_root": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\core\\hold-final-paths-001\\link\\managed",
+     "exact_equal": false,
+     "drive_letter_only_equal": false
+    }
+   ]
+  }
+ },
+ "root-admission-optimization-20260928/preflight/inplace-root-reparse-first-receipt.json": {
+  "bytes": 1250,
+  "sha256": "cbd42f5726d51f3d402b6efc61cb1764c1907562fa94122b3c38b2a57ebee249",
+  "content": {
+   "probe": "probe_inplace_root_reparse.py",
+   "command": ".\\.venv\\Scripts\\python.exe build/root-admission-optimization-20260928/preflight/probe_inplace_root_reparse.py",
+   "scope": "Owned ignored scratch only; native metadata conversion and read-only resolve/existence observation; no product source changes or user-data effects",
+   "fixture": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\preflight\\inplace-root-reparse-7bf0321ce0244d6fa09c858f179631e4",
+   "confirmed": true,
+   "converted": true,
+   "set_error": null,
+   "resolved_root": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\preflight\\inplace-root-reparse-7bf0321ce0244d6fa09c858f179631e4\\outside",
+   "outside_visible": true,
+   "restored": true,
+   "restore_error": null,
+   "native_access": {
+    "write_handle_access": 1073741824,
+    "write_handle_share": 7,
+    "creation_disposition": 3,
+    "write_handle_flags": 35651584,
+    "set_control": 589988,
+    "delete_control": 589996,
+    "reparse_tag": 2684354563
+   },
+   "receipt_origin": "Exact stdout values from first native run copied into an append-only receipt; fixture reparse metadata was restored by the original script before the finding was delivered"
+  }
+ },
+ "root-admission-optimization-20260928/preflight/review-token-query-receipt.json": {
+  "bytes": 479,
+  "sha256": "91acbdd39417ba14ca63f22c8243d0ef4c36c486289b2e964ec29d511ab0bf63",
+  "content": {
+   "command": ".\\.venv\\Scripts\\python.exe build/root-admission-optimization-20260928/preflight/query_review_token.py",
+   "provenance": "Subsequent read-only process launched through the same default exec_command mechanism; original probe did not query its token and requested no elevation",
+   "elevated": 0,
+   "elevation_type": 1,
+   "integrity_rid": 8192,
+   "integrity_name": "medium",
+   "receipt_origin": "Exact stdout from read-only token query; no mutation repro rerun"
+  }
+ },
+ "root-admission-optimization-20260928/resume/executor-descendant-stat-profile-summary.json": {
+  "bytes": 3264,
+  "sha256": "1f846c06c8f2b58eac2cad3bc8fc5422a7a751b952ab7b67733b2ef215e30fe8",
+  "content": {
+   "profile": "build/root-admission-optimization-20260928/resume/executor-descendant-stat-profile.prof",
+   "acceptance": false,
+   "scope": "caller thread; overlapping inclusive times",
+   "rows": [
+    {
+     "file": "~",
+     "name": "<built-in method nt._path_lexists>",
+     "calls": 3000,
+     "self_seconds": 0.07307820000000001,
+     "inclusive_seconds": 0.07307820000000001
+    },
+    {
+     "file": "~",
+     "name": "<built-in method nt.stat>",
+     "calls": 23006,
+     "self_seconds": 0.7520615,
+     "inclusive_seconds": 0.9145403000000001
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_lexical_logical_path",
+     "calls": 61004,
+     "self_seconds": 0.0648763,
+     "inclusive_seconds": 2.1201907
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_observe_root_volume",
+     "calls": 6000,
+     "self_seconds": 1.8428039,
+     "inclusive_seconds": 3.8220080000000003
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_reject_reparse",
+     "calls": 23003,
+     "self_seconds": 0.047943000000000006,
+     "inclusive_seconds": 1.3717831
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_resolved_logical_path",
+     "calls": 26000,
+     "self_seconds": 0.08235740000000001,
+     "inclusive_seconds": 4.3264712
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_stat_path",
+     "calls": 9000,
+     "self_seconds": 0.0406279,
+     "inclusive_seconds": 4.7384421
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\pathing.py",
+     "name": "_validate_absolute_path_spelling",
+     "calls": 90074,
+     "self_seconds": 0.29292480000000004,
+     "inclusive_seconds": 3.6100849000000004
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_validate_existing_chain",
+     "calls": 13000,
+     "self_seconds": 0.0358734,
+     "inclusive_seconds": 2.9656872
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_volume_id",
+     "calls": 6000,
+     "self_seconds": 0.016040600000000002,
+     "inclusive_seconds": 3.8495757000000004
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_win32_path",
+     "calls": 92010,
+     "self_seconds": 0.1072496,
+     "inclusive_seconds": 3.217267
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\pathing.py",
+     "name": "lexical_absolute_path",
+     "calls": 8018,
+     "self_seconds": 0.0074318000000000006,
+     "inclusive_seconds": 1.3037577
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\pathing.py",
+     "name": "to_extended_length_path",
+     "calls": 22025,
+     "self_seconds": 0.0700888,
+     "inclusive_seconds": 2.5809495
+    }
+   ]
+  }
+ },
+ "root-admission-optimization-20260928/resume/executor-path-cache-profile-summary.json": {
+  "bytes": 3260,
+  "sha256": "2ea9c26e5fb21f22d643459899728ce3520318dac11c68f56043f8f5dcb9407e",
+  "content": {
+   "profile": "build/root-admission-optimization-20260928/resume/executor-path-cache-profile.prof",
+   "acceptance": false,
+   "scope": "caller thread; overlapping inclusive times",
+   "rows": [
+    {
+     "file": "~",
+     "name": "<built-in method nt._path_lexists>",
+     "calls": 16000,
+     "self_seconds": 0.5383878000000001,
+     "inclusive_seconds": 0.5383878000000001
+    },
+    {
+     "file": "~",
+     "name": "<built-in method nt.stat>",
+     "calls": 17006,
+     "self_seconds": 0.5773653000000001,
+     "inclusive_seconds": 0.7012398000000001
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_lexical_logical_path",
+     "calls": 61004,
+     "self_seconds": 0.06573470000000001,
+     "inclusive_seconds": 2.1690708
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_observe_root_volume",
+     "calls": 6000,
+     "self_seconds": 2.1086787,
+     "inclusive_seconds": 4.170575
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_reject_reparse",
+     "calls": 17003,
+     "self_seconds": 0.042403,
+     "inclusive_seconds": 1.0726094000000002
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_resolved_logical_path",
+     "calls": 26000,
+     "self_seconds": 0.0859814,
+     "inclusive_seconds": 4.6385510000000005
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_stat_path",
+     "calls": 9000,
+     "self_seconds": 0.0436298,
+     "inclusive_seconds": 5.1359445
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\pathing.py",
+     "name": "_validate_absolute_path_spelling",
+     "calls": 90074,
+     "self_seconds": 0.2960661,
+     "inclusive_seconds": 3.6566311000000002
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_validate_existing_chain",
+     "calls": 13000,
+     "self_seconds": 0.0348932,
+     "inclusive_seconds": 3.1335293
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_volume_id",
+     "calls": 6000,
+     "self_seconds": 0.0161666,
+     "inclusive_seconds": 4.198212300000001
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\modules\\executor\\native.py",
+     "name": "_win32_path",
+     "calls": 86010,
+     "self_seconds": 0.1059379,
+     "inclusive_seconds": 3.2343473
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\pathing.py",
+     "name": "lexical_absolute_path",
+     "calls": 8018,
+     "self_seconds": 0.007529900000000001,
+     "inclusive_seconds": 1.3198048
+    },
+    {
+     "file": "F:\\GitHubRepositories\\NamiSync\\namisync\\core\\pathing.py",
+     "name": "to_extended_length_path",
+     "calls": 22025,
+     "self_seconds": 0.07061930000000001,
+     "inclusive_seconds": 2.6233204000000003
+    }
+   ]
+  }
+ },
+ "root-admission-optimization-20260928/rootguard/exfat-held-attributes-first.json": {
+  "bytes": 504,
+  "sha256": "311de708e743a0d604d9c928b1452bcf726a9fc5d88a17feaee00501d81c1d01",
+  "content": {
+   "path": "K:\\NamiSyncExecutorHoldWitness-20260928-diagnostic\\test_execute_held_root_blocks_0\\source",
+   "queries": [
+    {
+     "class": 9,
+     "size": 8,
+     "succeeded": false,
+     "winerror": 87,
+     "attributes": 0
+    },
+    {
+     "class": 0,
+     "size": 40,
+     "succeeded": true,
+     "winerror": 0,
+     "attributes": 16
+    }
+   ],
+   "volume": {
+    "serial": "BA1F1F45",
+    "filesystem": "EXFAT"
+   },
+   "confirmed": true,
+   "hold_closed": true
+  }
+ },
+ "root-admission-optimization-20260928/rootguard/native-basic-first.json": {
+  "bytes": 5172,
+  "sha256": "6dee9f746f37eac9d29ebb662f047603fd594c029633fa89562c22287fa6dedf",
+  "content": {
+   "fixture": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-7d5bda6962474ec79059c8bdae72e8d7",
+   "results": [
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-7d5bda6962474ec79059c8bdae72e8d7\\attribute-only-empty",
+     "access": 256,
+     "share": 7,
+     "nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_before": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "converted": true,
+     "set_error": 0,
+     "nofollow_after": {
+      "attributes": 1040,
+      "reparse_tag": 2684354563
+     },
+     "held_after": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 1040
+     },
+     "core_refusal": "reparse_component",
+     "executor_refusal": "UnsafeExecutionPath",
+     "restored": true,
+     "write_handle_closed": true,
+     "nofollow_restored": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_restored": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "filesystem": "NTFS",
+     "confirmed": true,
+     "root_flush_after_restore": true,
+     "ordinary_descendants": true,
+     "hold_closed": true
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-7d5bda6962474ec79059c8bdae72e8d7\\generic-write-empty",
+     "access": 1073741824,
+     "share": 7,
+     "nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_before": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "converted": true,
+     "set_error": 0,
+     "nofollow_after": {
+      "attributes": 1040,
+      "reparse_tag": 2684354563
+     },
+     "held_after": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 1040
+     },
+     "core_refusal": "reparse_component",
+     "executor_refusal": "UnsafeExecutionPath",
+     "restored": true,
+     "write_handle_closed": true,
+     "nofollow_restored": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_restored": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "filesystem": "NTFS",
+     "confirmed": true,
+     "root_flush_after_restore": true,
+     "ordinary_descendants": true,
+     "hold_closed": true
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-7d5bda6962474ec79059c8bdae72e8d7\\attribute-only-nonempty",
+     "access": 256,
+     "share": 7,
+     "nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_before": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "converted": false,
+     "set_error": 145,
+     "nofollow_after": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_after": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "write_handle_closed": true,
+     "nofollow_restored": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_restored": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "filesystem": "NTFS",
+     "confirmed": true,
+     "root_flush_after_restore": true,
+     "ordinary_descendants": true,
+     "hold_closed": true
+    },
+    {
+     "root_nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_child_removal_error": 32,
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-7d5bda6962474ec79059c8bdae72e8d7\\ancestor",
+     "access": 256,
+     "share": 7,
+     "nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_before": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "converted": false,
+     "set_error": 145,
+     "nofollow_after": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_after": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "write_handle_closed": true,
+     "nofollow_restored": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_restored": {
+      "class": 0,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16
+     },
+     "root_nofollow_after": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "filesystem": "NTFS",
+     "confirmed": true,
+     "hold_closed": true
+    }
+   ]
+  }
+ },
+ "root-admission-optimization-20260928/rootguard/native-first.json": {
+  "bytes": 5514,
+  "sha256": "1084ea21b2e983d5155e6a4b48ca3e84993ebe5eff4d674400dc574a65524918",
+  "content": {
+   "fixture": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-28abea387f4240238178fab6457d037a",
+   "results": [
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-28abea387f4240238178fab6457d037a\\attribute-only-empty",
+     "access": 256,
+     "share": 7,
+     "nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_before": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "converted": true,
+     "set_error": 0,
+     "nofollow_after": {
+      "attributes": 1040,
+      "reparse_tag": 2684354563
+     },
+     "held_after": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 1040,
+      "reparse_tag": 2684354563
+     },
+     "core_refusal": "reparse_component",
+     "executor_refusal": "UnsafeExecutionPath",
+     "restored": true,
+     "write_handle_closed": true,
+     "nofollow_restored": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_restored": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "filesystem": "NTFS",
+     "confirmed": true,
+     "root_flush_after_restore": true,
+     "ordinary_descendants": true,
+     "hold_closed": true
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-28abea387f4240238178fab6457d037a\\generic-write-empty",
+     "access": 1073741824,
+     "share": 7,
+     "nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_before": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "converted": true,
+     "set_error": 0,
+     "nofollow_after": {
+      "attributes": 1040,
+      "reparse_tag": 2684354563
+     },
+     "held_after": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 1040,
+      "reparse_tag": 2684354563
+     },
+     "core_refusal": "reparse_component",
+     "executor_refusal": "UnsafeExecutionPath",
+     "restored": true,
+     "write_handle_closed": true,
+     "nofollow_restored": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_restored": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "filesystem": "NTFS",
+     "confirmed": true,
+     "root_flush_after_restore": true,
+     "ordinary_descendants": true,
+     "hold_closed": true
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-28abea387f4240238178fab6457d037a\\attribute-only-nonempty",
+     "access": 256,
+     "share": 7,
+     "nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_before": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "converted": false,
+     "set_error": 145,
+     "nofollow_after": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_after": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "write_handle_closed": true,
+     "nofollow_restored": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_restored": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "filesystem": "NTFS",
+     "confirmed": true,
+     "root_flush_after_restore": true,
+     "ordinary_descendants": true,
+     "hold_closed": true
+    },
+    {
+     "root_nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_child_removal_error": 32,
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\rootguard\\native-28abea387f4240238178fab6457d037a\\ancestor",
+     "access": 256,
+     "share": 7,
+     "nofollow_before": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_before": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "converted": false,
+     "set_error": 145,
+     "nofollow_after": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_after": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "write_handle_closed": true,
+     "nofollow_restored": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "held_restored": {
+      "class": 9,
+      "succeeded": true,
+      "winerror": 0,
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "root_nofollow_after": {
+      "attributes": 16,
+      "reparse_tag": 0
+     },
+     "filesystem": "NTFS",
+     "confirmed": true,
+     "hold_closed": true
+    }
+   ]
+  }
+ },
+ "root-admission-optimization-20260928/verifier/baseline-verify-counts.json": {
+  "bytes": 1530,
+  "sha256": "d7247f74761daed282bdafb29eb6c3cc068642936f408552b86da33286311a54",
+  "content": {
+   "cwd": "C:\\Users\\Spectrum\\.codex\\worktrees\\root-admission-baseline\\NamiSync",
+   "driver_sha256": "8724a779994c4562c8b8fce9efeb44fa02a812eb544fb197e1522aa88f6dc31c",
+   "measurement_driver_sha256": "dab676bb6fa1ed489445156df136f7c94a2858c223ab15fe6d58bb75bf677e7f",
+   "product_import": "C:\\Users\\Spectrum\\.codex\\worktrees\\root-admission-baseline\\NamiSync\\tools\\verifier_rig.py",
+   "arguments": [
+    "--output",
+    "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\verifier\\baseline-verify-counted.json"
+   ],
+   "samples": [
+    {
+     "calls": {
+      "GetVolumePathNameW": 4000,
+      "GetVolumeInformationW": 1000,
+      "CreateFileW": 2000,
+      "CloseHandle": 2000,
+      "GetFinalPathNameByHandleW": 2000,
+      "GetFileInformationByHandleEx": 12000,
+      "GetDriveTypeW": 0,
+      "GetDiskFreeSpaceW": 1000,
+      "ReadFile": 1000,
+      "VirtualAlloc": 1000,
+      "VirtualFree": 1000
+     },
+     "file_information_classes": {
+      "0": 4000,
+      "1": 4000,
+      "18": 4000
+     },
+     "basic_information_calls_by_module": {
+      "namisync.modules.verifier.native": 4000
+     }
+    }
+   ],
+   "scope": "project ctypes bindings during rig.RUNNERS[VERIFY] only; excludes scans/context/priming",
+   "timing_authority": "instrumented diagnostic only",
+   "measurement_receipt": "F:\\GitHubRepositories\\NamiSync\\build\\root-admission-optimization-20260928\\verifier\\baseline-verify-counted.json"
+  }
+ },
+ "root-admission-optimization-20260928/verifier/candidate-verify-counts.json": {
+  "bytes": 1420,
+  "sha256": "6be1b702d11ac75f7c2cbbccbe84dbc35ddfdd6c0d9a27f82c7ff4de49c9b06d",
+  "content": {
+   "cwd": "F:\\GitHubRepositories\\NamiSync",
+   "driver_sha256": "8724a779994c4562c8b8fce9efeb44fa02a812eb544fb197e1522aa88f6dc31c",
+   "measurement_driver_sha256": "dab676bb6fa1ed489445156df136f7c94a2858c223ab15fe6d58bb75bf677e7f",
+   "product_import": "F:\\GitHubRepositories\\NamiSync\\tools\\verifier_rig.py",
+   "arguments": [
+    "--output",
+    "build/root-admission-optimization-20260928/verifier/candidate-verify-counted.json"
+   ],
+   "samples": [
+    {
+     "calls": {
+      "GetVolumePathNameW": 1001,
+      "GetVolumeInformationW": 1,
+      "CreateFileW": 2001,
+      "CloseHandle": 2001,
+      "GetFinalPathNameByHandleW": 2001,
+      "GetFileInformationByHandleEx": 13999,
+      "GetDriveTypeW": 1,
+      "GetDiskFreeSpaceW": 1000,
+      "ReadFile": 1000,
+      "VirtualAlloc": 1000,
+      "VirtualFree": 1000
+     },
+     "file_information_classes": {
+      "0": 5999,
+      "1": 4000,
+      "18": 4000
+     },
+     "basic_information_calls_by_module": {
+      "namisync.core.root_authority": 1999,
+      "namisync.modules.verifier.native": 4000
+     }
+    }
+   ],
+   "scope": "project ctypes bindings during rig.RUNNERS[VERIFY] only; excludes scans/context/priming",
+   "timing_authority": "instrumented diagnostic only",
+   "measurement_receipt": "build/root-admission-optimization-20260928/verifier/candidate-verify-counted.json"
+  }
+ },
+ "root-admission-optimization-20260928/verifier/geometry-verify-counts.json": {
+  "bytes": 1433,
+  "sha256": "3656c41cc0094bdbe4e97a15faf3a299ed83540259f385d5fbd3b8e97acdbe6a",
+  "content": {
+   "cwd": "F:\\GitHubRepositories\\NamiSync",
+   "driver_sha256": "8724a779994c4562c8b8fce9efeb44fa02a812eb544fb197e1522aa88f6dc31c",
+   "measurement_driver_sha256": "dab676bb6fa1ed489445156df136f7c94a2858c223ab15fe6d58bb75bf677e7f",
+   "product_import": "F:\\GitHubRepositories\\NamiSync\\tools\\verifier_rig.py",
+   "arguments": [
+    "--output",
+    "build/root-admission-optimization-20260928/verifier/geometry-verify-counted.json"
+   ],
+   "samples": [
+    {
+     "calls": {
+      "GetVolumePathNameW": 1,
+      "GetVolumeInformationW": 1,
+      "CreateFileW": 2001,
+      "CloseHandle": 2001,
+      "GetFinalPathNameByHandleW": 2001,
+      "GetFileInformationByHandleEx": 14999,
+      "GetDriveTypeW": 1,
+      "GetDiskFreeSpaceW": 0,
+      "ReadFile": 1000,
+      "VirtualAlloc": 1000,
+      "VirtualFree": 1000
+     },
+     "file_information_classes": {
+      "0": 5999,
+      "16": 1000,
+      "1": 4000,
+      "18": 4000
+     },
+     "basic_information_calls_by_module": {
+      "namisync.core.root_authority": 1999,
+      "namisync.modules.verifier.native": 4000
+     }
+    }
+   ],
+   "scope": "project ctypes bindings during rig.RUNNERS[VERIFY] only; excludes scans/context/priming",
+   "timing_authority": "instrumented diagnostic only",
+   "measurement_receipt": "build/root-admission-optimization-20260928/verifier/geometry-verify-counted.json"
+  }
+ }
+}

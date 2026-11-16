@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 3,
+  "next_id": 39,
   "records": [
     {
       "id": "EV-0001",
@@ -115,6 +115,834 @@
           "path": "ui-round2-verification.json",
           "bytes": 327,
           "sha256": "fe8324301fc6e3b4fa19b50877991b9a2424589aff55ee0d4d93d8cfbb375d5c"
+        }
+      ]
+    },
+    {
+      "id": "EV-0003",
+      "title": "AB-7 final evidence for the Plan Again investigation (2026-09-25)",
+      "date": "2026-11-17",
+      "origin": "build/post-m1-8-ablation-20260925 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 2097,
+          "sha256": "6bb0939517324867aa084dfbd112c575c9323ae18b9f5cbe7bea644b9960da5b"
+        },
+        {
+          "path": "data.json",
+          "bytes": 4035,
+          "sha256": "be3cd4b87d3b3b3e716cca8a8f0e14b3f4cb8101b2dc683feeb95d986a7a3e4f"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 2408,
+          "sha256": "d72bb27ff18aeddf5e5f4ecc2f96c17bb960ba2535d5b616576235bc01341793"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 5224,
+          "sha256": "8e02d4e3f17eefbabe3ee34427701231076984839eb1e8c95758b23b69bb0e9d"
+        }
+      ]
+    },
+    {
+      "id": "EV-0004",
+      "title": "AB-8 installed native shell evidence (2026-09-26)",
+      "date": "2026-11-17",
+      "origin": "build/ab8-20260926, build/ab8-resume-20260926 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1657,
+          "sha256": "8ef732f5ba627aead15cf6ed3ccbac5bc99a328d57c4217ef133abaf7fe33ed1"
+        },
+        {
+          "path": "data.json",
+          "bytes": 3793,
+          "sha256": "a0ed776ac4039f063232ac26e49c0326be58b8ab875f5fa3ae6c5802b34f8173"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 12079,
+          "sha256": "369e39e6f0fb491d79e10453f6a0ccf452b816457203b0748c4aa4a6641eaa2e"
+        }
+      ]
+    },
+    {
+      "id": "EV-0005",
+      "title": "Admission and bridge closeout (2026-09-27)",
+      "date": "2026-11-17",
+      "origin": "build/admission-bridge-closeout-20260927 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1439,
+          "sha256": "a651c5650188c7c65a457eb6c5f2f461f881b7680a752d431fc32356f7e0822c"
+        },
+        {
+          "path": "data.json",
+          "bytes": 14031,
+          "sha256": "65869d2263750898fac64d114827f46053beb74ca96e1e51f3a1561b595bff43"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 12227,
+          "sha256": "232a15f5ac116103fcdd6688b7e9e83ed0ff918facd2f63708e862db65e74a57"
+        }
+      ]
+    },
+    {
+      "id": "EV-0006",
+      "title": "Response/snapshot copy allocation (2026-11-07)",
+      "date": "2026-11-17",
+      "origin": "build/allocation-20261107 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1171,
+          "sha256": "8001ba9b867d24819f6b58e6e63694581f05e5e649a4f6260a52ba2bf15fa721"
+        },
+        {
+          "path": "data.json",
+          "bytes": 4501,
+          "sha256": "ab4bceef7dfa9c04a0e1d1896ae86b7ead5d474a3d2ef1d292d3a619dbbf0b33"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 3516,
+          "sha256": "d6c4047741de97537b4981b4f0fa51935260fb775316dad73fefe17a1707ab9f"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 5598,
+          "sha256": "071fc4619cdf225badc3f77038af3180d3ee67725956aefa2410ca77c3da3781"
+        }
+      ]
+    },
+    {
+      "id": "EV-0007",
+      "title": "Bridge command-catalog repair (2026-10-04)",
+      "date": "2026-11-17",
+      "origin": "build/bridge-catalog-20261004, build/gui-refinements-20261004 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1026,
+          "sha256": "6bbe931724097811544eacdf4a55d53a5b2c6e9fa2da9c3dca485b770a84bd61"
+        },
+        {
+          "path": "data.json",
+          "bytes": 14777,
+          "sha256": "7527a5216d9531c9aa04da7fc62e3f3bd28dcb1907db14ad2ff5798d989b9862"
+        }
+      ]
+    },
+    {
+      "id": "EV-0008",
+      "title": "Bridge counter study BC1-BC5 (2026-10-07)",
+      "date": "2026-11-17",
+      "origin": "build/bridge-counter-study-20261007 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1479,
+          "sha256": "538094cc072b0d9a8511fd3d5300aaa41fb2932c5ce6f9be94843cf0bea785b0"
+        },
+        {
+          "path": "data.json",
+          "bytes": 80228,
+          "sha256": "526b124bf8ad3ec72ea29eec11b08edd24c18e48c42fa70f4a230f9052a2d73d"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 27575,
+          "sha256": "06c69f0a761828e9cfe811c3dd80173b9c042ec0ff280f51bc2abfda7a0d6716"
+        }
+      ]
+    },
+    {
+      "id": "EV-0009",
+      "title": "November bug hunt: GUI ingress and CLI encoding fixes (2026-11-04)",
+      "date": "2026-11-17",
+      "origin": "build/bughunt-20261104 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1144,
+          "sha256": "90684dc54fc8afccbe05eef5978cb2bf68cc4c8e63c9e4e4eaf3cf45c4218407"
+        },
+        {
+          "path": "data.json",
+          "bytes": 13568,
+          "sha256": "429e344a1def0d3085fdcc04f021bb1b3b7e84ca640da34e9fe696d9942930a3"
+        }
+      ]
+    },
+    {
+      "id": "EV-0010",
+      "title": "Refresh/read cadence measurement (2026-11-08)",
+      "date": "2026-11-17",
+      "origin": "build/cadence-measurement-20261108 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1440,
+          "sha256": "f23d207ce8cad8730131ea16acdd33b7b7649b88f3e169e6f0cfedfff82bf71e"
+        },
+        {
+          "path": "data.json",
+          "bytes": 30785,
+          "sha256": "e1b500b6d0dc97b6a48a6ea909310d9662d809834797fc89415b5f367120f47f"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 20896,
+          "sha256": "b26a833efe1a27d467ddeee2e5918d4b134c40b8fad6f63dcb6f8e484d3d15ea"
+        }
+      ]
+    },
+    {
+      "id": "EV-0011",
+      "title": "Cold admission follow-up (2026-09-27)",
+      "date": "2026-11-17",
+      "origin": "build/cold-admission-followup-20260927 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 671,
+          "sha256": "b49495478719ed0501603892d8ba78f3b1f67055f222ac2d7ba555b9035dd21e"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 5033,
+          "sha256": "d642973aed2fa0a728cc5777c97524e91838d8fc60d275ee8ccaa8b0453ea3bc"
+        }
+      ]
+    },
+    {
+      "id": "EV-0012",
+      "title": "Copy/verification/host-retention investigation (2026-11-06)",
+      "date": "2026-11-17",
+      "origin": "build/copyonly-20261106 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1412,
+          "sha256": "dac773b8ab60efe5e8c9102fe784a430e6730442a2a7752b4477cdc0309da3c8"
+        },
+        {
+          "path": "data.json",
+          "bytes": 9268,
+          "sha256": "878d4bb3463f358f7a03ff9c2884d3fd03326f4ab6e5cefd1415eafaa6147163"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 1544,
+          "sha256": "aa0046ddb19dac4739c016684c91e6f6b883a92d5aa0a56922bc3b20139f9ad1"
+        }
+      ]
+    },
+    {
+      "id": "EV-0013",
+      "title": "Plan coverage refusal study (2026-11-06)",
+      "date": "2026-11-17",
+      "origin": "build/coverage-study-20261106 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 541,
+          "sha256": "db0165ebbb932e5ff83c24cb759cbc7e02efd2c509cb0e048f723eb9d9cbc636"
+        },
+        {
+          "path": "data.json",
+          "bytes": 2084,
+          "sha256": "29a4497403df39737ddde898e61c829d9d810c0c13d5e52e115ec6dd16091642"
+        }
+      ]
+    },
+    {
+      "id": "EV-0014",
+      "title": "DOM mutation cost follow-up (2026-11-09)",
+      "date": "2026-11-17",
+      "origin": "build/dom-costs-20261109 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1579,
+          "sha256": "8189e99accbbb276cf5a512d0d7e027654261d5bd8eb8dfafb4b1b5c1e0e3dce"
+        },
+        {
+          "path": "data.json",
+          "bytes": 22273,
+          "sha256": "3548ce572e586afa77f5b59682c148cc48875027df593539be9a454ca35be4db"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 22478,
+          "sha256": "5cb6de7a2fe1c5532102194765881de116b1b00f2639b4ad2f1f2bd04ecf205b"
+        }
+      ]
+    },
+    {
+      "id": "EV-0015",
+      "title": "GUI execution-time trials (2026-11-09)",
+      "date": "2026-11-17",
+      "origin": "build/exec-time-20261109 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1618,
+          "sha256": "c2a226d7fd7b33acaf3cb26f945dede5da40098e2c8d029104d7fd955f8bf944"
+        },
+        {
+          "path": "data.json",
+          "bytes": 13367,
+          "sha256": "7995e4c02c632240f7b18be5eeb32f940b6757f9ecc101fb810cfe56027c9385"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 2154,
+          "sha256": "d3c79d9add693d661ce9e6c2000539846393f87825e937de323fd59024eabc7e"
+        }
+      ]
+    },
+    {
+      "id": "EV-0016",
+      "title": "Initial executor/verifier assessment at 0e4595e (2026-09-27)",
+      "date": "2026-11-17",
+      "origin": "build/executor-assessment-20260927 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1844,
+          "sha256": "c7a8c688837bf1d436595a024192eb79b2c0796058a3c2b9f6486e010d007a11"
+        },
+        {
+          "path": "data.json",
+          "bytes": 55494,
+          "sha256": "f46fcc52d216a3060005d506e5903be5014e22595267de923f4dab4601cea10e"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 2700,
+          "sha256": "20def859248680194d7b7cf5337485a196f28cb0eba58a7fa68c51606dd9a39a"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 14437,
+          "sha256": "aafee2e0a9f57af2dba68b2ad257ca80998a38a81f60c32b5a38f0f1f32fe3e2"
+        }
+      ]
+    },
+    {
+      "id": "EV-0017",
+      "title": "Executor simplification, differential and direct-write measurements (2026-09-29)",
+      "date": "2026-11-17",
+      "origin": "build/executor-simplification-20260929 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 4319,
+          "sha256": "8810c22084d53bfd0568069abf4f1f7f2f64317af460afec5d1a01b8d4334304"
+        },
+        {
+          "path": "data.json",
+          "bytes": 69716,
+          "sha256": "ffebce0eb76c0130ef6a003058e206848bb1eb4f63930201113efa1976b91665"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 20865,
+          "sha256": "a1113c28c7601af979c6f096b39ee710e6c316f071035044f7ec30bfcc8a132e"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 4101,
+          "sha256": "8e7ec8efa33782388eda73e825d87982b1220ec9621fb40b2a15ecef0be2298d"
+        }
+      ]
+    },
+    {
+      "id": "EV-0018",
+      "title": "Follow-mode allocation reduction (2026-11-08)",
+      "date": "2026-11-17",
+      "origin": "build/follow-allocation-20261108, build/follow-memory-20261108 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1313,
+          "sha256": "2557853feb503be5e9e1b96a41b163cb940c4779ff31c4ac716d3eb7b3170bdf"
+        },
+        {
+          "path": "data.json",
+          "bytes": 8602,
+          "sha256": "e711fbf513d5d25c6f800441235de004b8fcaaa400a13beac437371d8658edce"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 17218,
+          "sha256": "fe2af490b8d65e3dc495d9eae046dc3988f6cc6a3cf9146bc20c72a641168e54"
+        }
+      ]
+    },
+    {
+      "id": "EV-0019",
+      "title": "Inventory row envelope proof and correction (2026-10-05)",
+      "date": "2026-11-17",
+      "origin": "build/gui-followup-20261005, build/gui-inventory-refinement-20261005 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1654,
+          "sha256": "9fee1dbe9fc8c22344eb882dbe17c09f2743cad9431e127fa610e304980d3cb4"
+        },
+        {
+          "path": "data.json",
+          "bytes": 12448,
+          "sha256": "73d19d6847802b0b17442a667ec7ddab7f58694071e31ae0849176d931fe82b6"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 14441,
+          "sha256": "005f6c0f731b990b88eb657aaf479dd590d7cd0c70071be682dc746edf98fa5c"
+        }
+      ]
+    },
+    {
+      "id": "EV-0020",
+      "title": "Handle-relative compatibility investigation (2026-10-21)",
+      "date": "2026-11-17",
+      "origin": "build/handle-relative-investigation-20261021 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1298,
+          "sha256": "8894098a7ee6ea0054fba139294ee48ccb264ff5b2a3c7d8561f625e94f9cb66"
+        },
+        {
+          "path": "data.json",
+          "bytes": 8230,
+          "sha256": "85dd16fc087a60a68416b942fb2a3bb4f5c3635f5b445af27d627fd2fb2a7d7b"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 22033,
+          "sha256": "7ac57607f71ad805104623164dd320b264c67e0ef2092dacc73bb60e1ddea4fa"
+        }
+      ]
+    },
+    {
+      "id": "EV-0021",
+      "title": "AB-2/AB-10 incident trace (2026-09-27)",
+      "date": "2026-11-17",
+      "origin": "build/incident-trace-20260927, build/trace-20260927 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 2402,
+          "sha256": "88be75343aab53babf35e96d24eb45e33c3b7c7daa7b8a52d4d8763252c0c17b"
+        },
+        {
+          "path": "data.json",
+          "bytes": 21149,
+          "sha256": "e5838a09147cf27b8041fb6d08550857099c3b4948021959dcfdafb5963b9216"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 21407,
+          "sha256": "35ba27295e54a2b33337499fbdd61a6460e100fa4d9035bfb7b4273b37fcae50"
+        }
+      ]
+    },
+    {
+      "id": "EV-0022",
+      "title": "M1-9 Inventory cold measurement receipts (2026-10-01 to 2026-11-09)",
+      "date": "2026-11-17",
+      "origin": "build/m1-9-20261001 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1237,
+          "sha256": "501a8467c7ee9b9ce434e503d00702abab59d9375ee73aa9f8fc98eb8b41c65a"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 3845,
+          "sha256": "ba8431b0e2550d9901aa5318a6067919a7eac5824f29a45cb9d3b17b05f257e4"
+        }
+      ]
+    },
+    {
+      "id": "EV-0023",
+      "title": "R2 distribution census, attempt 04 (2026-11-09)",
+      "date": "2026-11-17",
+      "origin": "build/m1-r2-20261109 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 2347,
+          "sha256": "134057e450fa4779b8a796ec7786754ae331997fc0e826e0af01039306f69b6b"
+        },
+        {
+          "path": "data.json",
+          "bytes": 25078,
+          "sha256": "8d0c2ea6d1cfba6dc2e7c78421e05b1e795c6a3ad3909474a734ff65bf1472cf"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 1216,
+          "sha256": "76a3b8b50fb701aed9da1a05249a7858540cceb2f63562c2066bd580f51afdbe"
+        }
+      ]
+    },
+    {
+      "id": "EV-0024",
+      "title": "Release distribution census at b3095886 (2026-11-04)",
+      "date": "2026-11-17",
+      "origin": "build/m1-release-20261104 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1061,
+          "sha256": "1739c4d2a28021cae59d086bd18cecb574f5ae5a007ec9bc16b58c2fedf0c8a9"
+        },
+        {
+          "path": "data.json",
+          "bytes": 5297,
+          "sha256": "d2e9f738cb7859ae6dd210c34c2c502a9d4bf1e0614517c00af8a6187d65acd4"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 4828,
+          "sha256": "621d67cd5a29fe1a22fcb94aedf7d777d47ba2d6f7f7c5410f2b4a073c23c3a0"
+        }
+      ]
+    },
+    {
+      "id": "EV-0025",
+      "title": "Open-bug sweep (2026-10-01)",
+      "date": "2026-11-17",
+      "origin": "build/open-bugs-20261001 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1155,
+          "sha256": "0626b286a6414e588ff5ecbcdab8e59b0d207f7144a96d23f3e7326f2fd7fa65"
+        },
+        {
+          "path": "data.json",
+          "bytes": 11142,
+          "sha256": "3c7445007167d150833399fb47359a8db8a89fc7dfaf4efcbdbaacb8eae91653"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 1469,
+          "sha256": "4ef8c70c97e3a479f3097196ad0aad97f6c8c92583f77434f0ae24b6078ecc4d"
+        }
+      ]
+    },
+    {
+      "id": "EV-0026",
+      "title": "Path consolidation (2026-11-07)",
+      "date": "2026-11-17",
+      "origin": "build/path-consolidation-20261107 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 890,
+          "sha256": "0605dc417323a1f65752c79304d1559f7600eeeebfdfb8276bbdcf14a8cee967"
+        },
+        {
+          "path": "data.json",
+          "bytes": 7110,
+          "sha256": "1c73c12fa79b334cf701b7d599922d67b102e1534be91664937c592a91abfc63"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 10717,
+          "sha256": "be721c6329646bb492a5f32be6f64b169352bb7c1f22fee3169fbde1573b3120"
+        }
+      ]
+    },
+    {
+      "id": "EV-0027",
+      "title": "Planning optimization PO3-PO5 (2026-10-19)",
+      "date": "2026-11-17",
+      "origin": "build/planning-optimization-next-20261019 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1846,
+          "sha256": "eed95241bc97df5c5d31b35a7872eea625a28a2d6a5789f837b1d43c26e29eaa"
+        },
+        {
+          "path": "data.json",
+          "bytes": 9550,
+          "sha256": "1612d3f5125ad5075065d3aad2af6b10d65004513ce6a90719b23adab33375e5"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 4356,
+          "sha256": "dbe5b2f0a89aa133ae6ccda7e45136ed08d2a2062c4781fd58b4efc79983c98a"
+        }
+      ]
+    },
+    {
+      "id": "EV-0028",
+      "title": "Projection tuning (2026-11-09)",
+      "date": "2026-11-17",
+      "origin": "build/projection-tuning-20261109 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1389,
+          "sha256": "f44c4f73397f34e3272083bac20a8969a61ca4eab87d0a0d5beba94133cfc154"
+        },
+        {
+          "path": "data.json",
+          "bytes": 28316,
+          "sha256": "a545d42fb17f5adfecc787fb6d6f3a296f9944ff01455bc5942472b7af68bd8f"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 5550,
+          "sha256": "541ed0b9680d7c7b512d463a9e5d39cdbe3784856a2bb22cbe93b46c15c275b2"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 2176,
+          "sha256": "79bea4634633015dc46c86b4ada16848e2676c8d13152d0b8b4932310e2d35ea"
+        }
+      ]
+    },
+    {
+      "id": "EV-0029",
+      "title": "R2 third-party notice inputs (2026-11-09)",
+      "date": "2026-11-17",
+      "origin": "build/r2-notices-20261109 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1418,
+          "sha256": "e9c28aaaf9b9c63d1ade03ead3af7508c4a59e2d2062317c0f1eb1be8196758c"
+        },
+        {
+          "path": "data.json",
+          "bytes": 539,
+          "sha256": "661ed9d5df3a839a4002b36e3935000a8444385179671b18826a8be71917dfb3"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 5071,
+          "sha256": "4cb0bdbdabd03449e58420bdc9b5796ec331c296feca193064375bf2fcfca668"
+        }
+      ]
+    },
+    {
+      "id": "EV-0030",
+      "title": "R3 timing acceptance (2026-11-09)",
+      "date": "2026-11-17",
+      "origin": "build/r3-acceptance-20261109 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1059,
+          "sha256": "1ea4fbd3d5c806798aba6b0433af38d965b0ed290878d741916eca7fbba68fd4"
+        },
+        {
+          "path": "data.json",
+          "bytes": 5065,
+          "sha256": "9aebb9dc48d07a782692b8775139854a9b061245212c77cbcaf196bb68a08376"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 1407,
+          "sha256": "93f431b77f49f0d8e66acd7181727e85bd4aaad30762fa49147d00270ce064b3"
+        }
+      ]
+    },
+    {
+      "id": "EV-0031",
+      "title": "Refusal UI private-desktop witness (2026-11-06)",
+      "date": "2026-11-17",
+      "origin": "build/refusal-ui-20261106 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 502,
+          "sha256": "2b48cfece8b216170ec034dea3873135f006dc502dc2383d9722f84f01a9f181"
+        },
+        {
+          "path": "data.json",
+          "bytes": 826,
+          "sha256": "213ad7db1b98873957183d9c61a1382623969bb20c28912b07744533c135da08"
+        }
+      ]
+    },
+    {
+      "id": "EV-0032",
+      "title": "Release repair R3 renewal, resource collections and package 04 at cfeac2d9 (2026-11-10)",
+      "date": "2026-11-17",
+      "origin": "build/m1-release-repair-20261110 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 3397,
+          "sha256": "97af0c012e80f95f84ccf421afac4b1bfc58ea077db4297c7cdaf9e32f6eeccf"
+        },
+        {
+          "path": "data.json",
+          "bytes": 66755,
+          "sha256": "0d4f06e4dca3b90c59ef89cd48af560d18896dea28da726eb29eb69d6bef3f73"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 18857,
+          "sha256": "e7dc49cdf90076e1fead4df2023efae61c58faf95a28c4096ef66885c0fd0f48"
+        }
+      ]
+    },
+    {
+      "id": "EV-0033",
+      "title": "November resource schedule studies (2026-11-06 and 2026-11-08)",
+      "date": "2026-11-17",
+      "origin": "build/resource-study-20261106c, build/resource-study-20261108 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 2619,
+          "sha256": "563b1b46477646e511f7f7940b289a269f8719e6ac82875be8b1715ff92dcf53"
+        },
+        {
+          "path": "data.json",
+          "bytes": 34770,
+          "sha256": "aa1afa15e2c71ddabcdfaddd1292bbc95c926f5bd8103fd0a81633d1b9eac0f2"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 6532,
+          "sha256": "22cbc272a91eb2130eb9d5a69523ff4da36a28e1130f349f33785d3345c7bc41"
+        }
+      ]
+    },
+    {
+      "id": "EV-0034",
+      "title": "Root admission optimization (2026-09-28)",
+      "date": "2026-11-17",
+      "origin": "build/root-admission-optimization-20260928 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 2780,
+          "sha256": "eafcf0932f64edf38101d3a0ef9f7b729e17053fd83fc691f334f4169603e652"
+        },
+        {
+          "path": "data.json",
+          "bytes": 27672,
+          "sha256": "cca816632c5c7e011c6fa88e70784b944ddfe31fee43514a19da150978761827"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 2607,
+          "sha256": "84e3cb0192ec39ae59393be07e26ba75731cba7f50891a46ab2f0998ff625fae"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 30514,
+          "sha256": "7d798b51fb178ecf5f5f60537384fa020f04e935f101d7afe520779898ceeb67"
+        }
+      ]
+    },
+    {
+      "id": "EV-0035",
+      "title": "Scroll navigation SN1-SN3 (2026-10-11)",
+      "date": "2026-11-17",
+      "origin": "build/scroll-navigation-20261011 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1557,
+          "sha256": "370096f554515f5041d4bc37675996828f7c973aaca2a27125461db614364681"
+        },
+        {
+          "path": "data.json",
+          "bytes": 66112,
+          "sha256": "a024c52fca857b3977c14984e392a619cd08ba830964930634a837772cb5ad80"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 4209,
+          "sha256": "35a6c7d095cc870a4c21d50ff281daf74a33d0d6add008b9ce78d4519004da6b"
+        }
+      ]
+    },
+    {
+      "id": "EV-0036",
+      "title": "Continuous-scroll window study SW (2026-10-09)",
+      "date": "2026-11-17",
+      "origin": "build/scroll-window-study-20261009 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1492,
+          "sha256": "9037abf281e33a5b291f7b9c7029eb90c3274e931bfe9618aedbe827e5eb0944"
+        },
+        {
+          "path": "data.json",
+          "bytes": 57966,
+          "sha256": "fbd8f4928706c84ced7e04b9f6d1b682cb7554ae4b962003716aaafb459d1713"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 3193,
+          "sha256": "69889d05983750ce47e09770b249ffc0921761ee7ebe493b63c1f40049d4e3b1"
+        }
+      ]
+    },
+    {
+      "id": "EV-0037",
+      "title": "Test refinement ST-H descendant reaping probe",
+      "date": "2026-11-17",
+      "origin": "build/test-refinement at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1423,
+          "sha256": "30ecf326c7a0100470d3f82f4547a6fa291a11f3e1d0f6dbf354569bafc044d4"
+        },
+        {
+          "path": "data.json",
+          "bytes": 7388,
+          "sha256": "b142f4e19238ba028f36b46ab2fd95f3d318c73084f091b3da470a89a634f82f"
+        },
+        {
+          "path": "summary.md",
+          "bytes": 1015,
+          "sha256": "b5069487bf017effc5544af656844f68d09c97d8f049fe542cf38caf6f66e0ad"
+        }
+      ]
+    },
+    {
+      "id": "EV-0038",
+      "title": "Verify follow scheduling (2026-11-07)",
+      "date": "2026-11-17",
+      "origin": "build/verify-follow-20261107 at 6feb9a36",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1042,
+          "sha256": "dad14c93bd903b9743cd75aeec920aa065e36e5409b33ffd53cb86e6c282bde2"
+        },
+        {
+          "path": "data.json",
+          "bytes": 327,
+          "sha256": "9e0eec403ccb4831a8f566b850d3902eec06940a34a02d83e8140bd2a4b3ebc1"
+        },
+        {
+          "path": "notes.md",
+          "bytes": 2611,
+          "sha256": "955a78e24a7fc464ef6d27059002d0e6f175059b5ef0a7f1fba22174ca6d5390"
         }
       ]
     }

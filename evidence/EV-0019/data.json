@@ -1,0 +1,355 @@
+{
+ "gui-followup-20261005/b2-design-inventory-envelope.json": {
+  "bytes": 5235,
+  "sha256": "f0d49b74293816da49464af3f7f1b2e5c61079e49de0e2e53ce6804bc0fd737c",
+  "content": {
+   "path_utf16_units": 25112,
+   "absolute_path_utf16_units": 25120,
+   "path_utf8_bytes": 75112,
+   "max_component_utf16_units": 250,
+   "response_wall_bytes": 8388608,
+   "observations": [
+    {
+     "case": "domain-current",
+     "canonical_envelope_bytes": 19426765,
+     "bridge_admission": "BridgeResponseTooLargeError: structured bridge response exceeds its JSON byte ceiling",
+     "row_count": 256,
+     "field_bytes": {
+      "node_id": 9984,
+      "display": 19254784,
+      "depth": 768,
+      "is_container": 1280,
+      "visible_index": 768,
+      "parent_visible_index": 512,
+      "first_child_visible_index": 1024,
+      "position_in_set": 660,
+      "set_size": 768,
+      "expanded": 1024,
+      "row_kind": 2304,
+      "row_id": 1172,
+      "presence": 2304,
+      "verification_state": 3072,
+      "has_baseline": 1280,
+      "recorded_checksum": 1024,
+      "acknowledged": 1280,
+      "reappeared": 1280,
+      "size": 768,
+      "mtime_ns": 1024,
+      "rollup": 55040,
+      "warning": 1024
+     }
+    },
+    {
+     "case": "domain-basename-only",
+     "canonical_envelope_bytes": 175565,
+     "bridge_admission": "accepted",
+     "row_count": 256,
+     "field_bytes": {
+      "node_id": 9984,
+      "display": 3584,
+      "depth": 768,
+      "is_container": 1280,
+      "visible_index": 768,
+      "parent_visible_index": 512,
+      "first_child_visible_index": 1024,
+      "position_in_set": 660,
+      "set_size": 768,
+      "expanded": 1024,
+      "row_kind": 2304,
+      "row_id": 1172,
+      "presence": 2304,
+      "verification_state": 3072,
+      "has_baseline": 1280,
+      "recorded_checksum": 1024,
+      "acknowledged": 1280,
+      "reappeared": 1280,
+      "size": 768,
+      "mtime_ns": 1024,
+      "rollup": 55040,
+      "warning": 1024
+     }
+    },
+    {
+     "case": "domain-ancestor-search",
+     "visible_rows": 356
+    },
+    {
+     "case": "notices-current",
+     "canonical_envelope_bytes": 38691017,
+     "bridge_admission": "BridgeResponseTooLargeError: structured bridge response exceeds its JSON byte ceiling",
+     "row_count": 256,
+     "field_bytes": {
+      "node_id": 9984,
+      "display": 19254784,
+      "depth": 256,
+      "is_container": 1280,
+      "visible_index": 658,
+      "parent_visible_index": 1024,
+      "first_child_visible_index": 1024,
+      "position_in_set": 660,
+      "set_size": 768,
+      "expanded": 1024,
+      "row_kind": 2048,
+      "row_id": 1024,
+      "presence": 1024,
+      "verification_state": 1024,
+      "has_baseline": 1280,
+      "recorded_checksum": 1024,
+      "acknowledged": 1280,
+      "reappeared": 1280,
+      "size": 1024,
+      "mtime_ns": 1024,
+      "rollup": 55040,
+      "warning": 19268864
+     }
+    },
+    {
+     "case": "notices-basename-only",
+     "canonical_envelope_bytes": 19439817,
+     "bridge_admission": "BridgeResponseTooLargeError: structured bridge response exceeds its JSON byte ceiling",
+     "row_count": 256,
+     "field_bytes": {
+      "node_id": 9984,
+      "display": 3584,
+      "depth": 256,
+      "is_container": 1280,
+      "visible_index": 658,
+      "parent_visible_index": 1024,
+      "first_child_visible_index": 1024,
+      "position_in_set": 660,
+      "set_size": 768,
+      "expanded": 1024,
+      "row_kind": 2048,
+      "row_id": 1024,
+      "presence": 1024,
+      "verification_state": 1024,
+      "has_baseline": 1280,
+      "recorded_checksum": 1024,
+      "acknowledged": 1280,
+      "reappeared": 1280,
+      "size": 1024,
+      "mtime_ns": 1024,
+      "rollup": 55040,
+      "warning": 19268864
+     }
+    },
+    {
+     "case": "notices-basename-and-no-window-warning-path",
+     "canonical_envelope_bytes": 186057,
+     "bridge_admission": "accepted",
+     "row_count": 256,
+     "field_bytes": {
+      "node_id": 9984,
+      "display": 3584,
+      "depth": 256,
+      "is_container": 1280,
+      "visible_index": 658,
+      "parent_visible_index": 1024,
+      "first_child_visible_index": 1024,
+      "position_in_set": 660,
+      "set_size": 768,
+      "expanded": 1024,
+      "row_kind": 2048,
+      "row_id": 1024,
+      "presence": 1024,
+      "verification_state": 1024,
+      "has_baseline": 1280,
+      "recorded_checksum": 1024,
+      "acknowledged": 1280,
+      "reappeared": 1280,
+      "size": 1024,
+      "mtime_ns": 1024,
+      "rollup": 55040,
+      "warning": 15104
+     }
+    },
+    {
+     "case": "notices-ancestor-search",
+     "visible_rows": 256
+    }
+   ],
+   "source_hashes": {
+    "namisync\\interfaces\\web\\inventory_review.py": "fcf5b0f87581798a519f71622d27b4e4099999ee75920752f65281595510cd38",
+    "namisync\\interfaces\\web\\bridge.py": "6a0ff18ea672daf6ddb3b713bcab1ce2027c13c589eb80a44660804cdd9e3bc9",
+    "namisync\\workflows\\inventory_projection.py": "a91fc2427d28c950072e5202e9988da6058d178ebfb72d8574ee5ac56ab9f428"
+   }
+  }
+ },
+ "gui-inventory-refinement-20261005/c1-envelope-proof.json": {
+  "bytes": 1747,
+  "sha256": "db6876d90fc644a0ca7e0880b9293decd5b2eb43bee5c7f14ae522fa933131aa",
+  "content": {
+   "observations": [
+    {
+     "test": "test_complete_inventory_256_row_envelope_has_margin_under_response_wall",
+     "actual_envelope_bytes": 835017,
+     "conservative_complete_envelope_bytes": 1193678,
+     "response_wall_bytes": 8388608,
+     "superrow_is_analytical_upper_bound_not_supported_semantic_combination": true
+    },
+    {
+     "test": "test_complete_plan_256_row_envelope_including_execution_has_response_margin",
+     "actual_envelope_bytes": 179280,
+     "conservative_complete_envelope_bytes": 2395485,
+     "response_wall_bytes": 8388608,
+     "superrow_is_analytical_upper_bound_not_supported_semantic_combination": true
+    }
+   ],
+   "source_hashes": {
+    "namisync/interfaces/web/inventory_review.py": "b5d666c5d207fea66984835676b98d26b426205841b94b57f14f4b950d61c647",
+    "namisync/interfaces/web/plan_review.py": "cfd1201931340c302e3c35e2a7e110f6bbaa06465582397d0d52280e1f3671fb",
+    "namisync/interfaces/web/drain.py": "2b1ff699e201366008f2b16dc8fcd97454ab246642bae7627a399063c5177fa5",
+    "namisync/interfaces/web/bridge.py": "6a0ff18ea672daf6ddb3b713bcab1ce2027c13c589eb80a44660804cdd9e3bc9",
+    "namisync/interfaces/web/assets/bridge.js": "a2f90b877b8a070b924adb0f69f774f4e98fa36b270e8e0ca227a97b252dd5da",
+    "namisync/workflows/plan_projection.py": "de68f636343d70132cb702ed14a51b5804e62103c765083850f0a57a874f91de",
+    "tests/interfaces/web/test_inventory_review.py": "0d0fa1ee098b4c210271ad43672ec79b375580a4640f3553c506670a1e2579aa",
+    "tests/interfaces/web/test_plan_review.py": "96fc50550f43aa512413d9a17895b839c45b180c9e8b6c0c0891cb67aeb4bca7",
+    "tests/interfaces/web/test_drain.py": "59bdb95ad315c8065dd07aef1fc80afe2120f9e3dea5b83f61d419acc94da317"
+   }
+  }
+ },
+ "gui-inventory-refinement-20261005/c1-final-binding.json": {
+  "bytes": 3986,
+  "sha256": "421a5858db54b31fd9185c7daf40e64646d3b8c4e5e6b72a73dc52a9e5792ec4",
+  "content": {
+   "base": "614cd194e35d0cde2aee2e2aa9ccdd0f5a167935",
+   "verdict": "Approved after native03; all gates complete",
+   "source": [
+    {
+     "sha256": "C2475ADA1A68C5F3CC1996D615E4182824EF5486934B7A7FE58087E6F6E97461",
+     "path": "CHANGELOG.md"
+    },
+    {
+     "sha256": "7B27510E16472105D20C52D156B6F4B05768CAC7C38FC58B55FAE0DAADAB209E",
+     "path": "docs/BRIDGE.md"
+    },
+    {
+     "sha256": "30371F1EE9D626D452E93FFDFAA1400D9DFA7BFB2472A77E3DD1E591C8047545",
+     "path": "docs/BUGS.md"
+    },
+    {
+     "sha256": "BBDEC88BBBE9C5FFF77C772871F41ECD5DA397741A252090471DEC85A50AD64E",
+     "path": "docs/DESKTOP_UI.md"
+    },
+    {
+     "sha256": "BD7F1F9C430C6417D7E0CBB0EC363F777F43DF160FCF585B6C1FEC55D00373FB",
+     "path": "docs/HANDOFF.md"
+    },
+    {
+     "sha256": "19FD61BE6A11E6A62433599A26CD337C42953E79DACA8DB0BA8B0505ADC1E65E",
+     "path": "docs/INVENTORY.md"
+    },
+    {
+     "sha256": "0D2E4D2B58BC12D6B5D8C629FEAEE6D9C9F199A062AD3FBB1BDEE6ACAAA90F33",
+     "path": "docs/M1_PLAN.md"
+    },
+    {
+     "sha256": "7EDB34B7358FDE6AF026A9E9B9ECA2F418002B8A7A6241206410BCFCDB9ED4D6",
+     "path": "docs/PRESENTATION.md"
+    },
+    {
+     "sha256": "F3B6667E1021964C36BBA1C857F82AD91B07C8DCB8E6D35F4040D1097A31322F",
+     "path": "namisync/interfaces/web/assets/app.js"
+    },
+    {
+     "sha256": "A2F90B877B8A070B924ADB0F69F774F4E98FA36B270E8E0CA227A97B252DD5DA",
+     "path": "namisync/interfaces/web/assets/bridge.js"
+    },
+    {
+     "sha256": "B2E46BEF7B39F2035CC89D66494C60BF3FD359859A532DA37316523D783F528A",
+     "path": "namisync/interfaces/web/assets/inventory_review.js"
+    },
+    {
+     "sha256": "2B1FF699E201366008F2B16DC8FCD97454AB246642BAE7627A399063C5177FA5",
+     "path": "namisync/interfaces/web/drain.py"
+    },
+    {
+     "sha256": "B5D666C5D207FEA66984835676B98D26B426205841B94B57F14F4B950D61C647",
+     "path": "namisync/interfaces/web/inventory_review.py"
+    },
+    {
+     "sha256": "CFD1201931340C302E3C35E2A7E110F6BBAA06465582397D0D52280E1F3671FB",
+     "path": "namisync/interfaces/web/plan_review.py"
+    },
+    {
+     "sha256": "DE68F636343D70132CB702ED14A51B5804E62103C765083850F0A57A874F91DE",
+     "path": "namisync/workflows/plan_projection.py"
+    },
+    {
+     "sha256": "124993CD0B32C2432603465174033B808157400618E3A333FAD847F6736D7C8E",
+     "path": "tests/assets/inventory_app_probe.mjs"
+    },
+    {
+     "sha256": "52D23591A51539E72A744E29B1302C6423446E1925F541833220BDDD6F32CE85",
+     "path": "tests/assets/inventory_review_probe.mjs"
+    },
+    {
+     "sha256": "CAE90F0B0BD19F58B8A86610914E3AD3B60F2747D0B3506783BD030BB0F716FF",
+     "path": "tests/assets/inventory_window_bridge_probe.mjs"
+    },
+    {
+     "sha256": "F92436D35E8D22B2E752089596D94D6A8402E14131F3D627DE38B003AF0EB557",
+     "path": "tests/assets/plan_window_bridge_probe.mjs"
+    },
+    {
+     "sha256": "59BDB95AD315C8065DD07AEF1FC80AFE2120F9E3DEA5B83F61D419ACC94DA317",
+     "path": "tests/interfaces/web/test_drain.py"
+    },
+    {
+     "sha256": "605112C86C7A65954D48813082A55252062395E9548CEF35BC60D9DC88FF3C70",
+     "path": "tests/interfaces/web/test_frontend_static.py"
+    },
+    {
+     "sha256": "D3B3E2586149513CFB33D1F381C7DCED7066A16C3A1F68DDD176F3EECBD6ECF5",
+     "path": "tests/interfaces/web/test_inventory_frontend.py"
+    },
+    {
+     "sha256": "0D0FA1EE098B4C210271AD43672EC79B375580A4640F3553C506670A1E2579AA",
+     "path": "tests/interfaces/web/test_inventory_review.py"
+    },
+    {
+     "sha256": "96FC50550F43AA512413D9A17895B839C45B180C9E8B6C0C0891CB67AEB4BCA7",
+     "path": "tests/interfaces/web/test_plan_review.py"
+    },
+    {
+     "sha256": "870EDC23C7BB83B1D594BDFED84CFD1D8936A0D8E0C2A0184C3B9FEB7ADE90B0",
+     "path": "tests/test_plan_projection.py"
+    }
+   ],
+   "reviewer": "/root/c1_envelope_review",
+   "native_receipt": "c1-native-inventory-03.xml"
+  }
+ },
+ "gui-inventory-refinement-20261005/c5-host-profile.json": {
+  "bytes": 1026,
+  "sha256": "386df221f5f79c07ccb03011842fd7b91111ba3e234d74168c74e4a132f8ec3c",
+  "content": {
+   "os": {
+    "name": "Microsoft Windows 11 Pro",
+    "build": "26200",
+    "version": "10.0.26200"
+   },
+   "repository_device": {
+    "bytes": 4000787030016,
+    "drive": "F:",
+    "bus": "NVMe",
+    "model": "WD_BLACK SN850X 4000GB"
+   },
+   "unrelated_sustained_workload": "not independently verified",
+   "memory_gib": 63.69148635864258,
+   "power_status": "not observed",
+   "method": "Read-only OS, CPU, F: disk queries and Python version; each child records actual viewport, DPI, theme, motion and loaded runtime. Previous profile retained separately.",
+   "session_date": "2026-10-07",
+   "source": "6c6e10f400d63a1d3adfa7be63b70befa7fa36fb",
+   "captured_at": "2026-10-07 07:00:15 UTC",
+   "authority": "diagnostic only; not cold-projection acceptance",
+   "cpu": {
+    "cores": 16,
+    "name": "13th Gen Intel(R) Core(TM) i7-13700K",
+    "logical_processors": 24
+   },
+   "desktop_context": "User previously offered to leave desktop idle and foreground test windows",
+   "python": "Python 3.13.14"
+  }
+ }
+}

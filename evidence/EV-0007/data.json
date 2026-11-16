@@ -1,0 +1,523 @@
+{
+ "bridge-catalog-20261004/installed.json": {
+  "bytes": 3241857,
+  "sha256": "13dabf16d4fe040e284c99b636e190a6231bd270c1aa116bafd59898bc3d666a",
+  "content": {
+   "case": "installed",
+   "environment": {
+    "driver_source": {
+     "dirty": true,
+     "revision": "5b62ee583563556b8c62025b89668907dcd84915"
+    },
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]"
+   },
+   "family": "bridge-event",
+   "observation": {
+    "aggregate_progress_rate_per_second": 100.0654815168987,
+    "aggregate_reliable_rate_per_second": 10.00654815168987,
+    "archive_scope_clean": false,
+    "browser_failure": null,
+    "browser_report": {
+     "gap_events": [],
+     "progress_monotonic": true,
+     "session_ids": [
+      "cb4238365f5b4f4f86af782b3be16b3e",
+      "12a1e84dcaca40bbad06db2fad622225",
+      "c87b5c6df47049d3b8e00c4a1d84779c",
+      "bfc90f5cf2064b909036e9e13112fb24"
+     ],
+     "task_count": 4,
+     "terminal_event_latencies_ms": [
+      13,
+      12,
+      12,
+      11
+     ],
+     "terminal_record_count": 4,
+     "terminal_record_latencies_ms": [
+      13,
+      12,
+      12,
+      11
+     ]
+    },
+    "clr_runtime": "Runtime: .NET Framework\n=============\n  Version:      <undefined>\n  Initialized:  True\n  Shut down:    False\n  Properties:\n    domain = \n    config_file = None",
+    "driver_source": {
+     "checkout_dirty": true,
+     "kind": "working-tree",
+     "path": "tools/performance/bridge_event"
+    },
+    "emission_window_seconds": 59.96073679999972,
+    "event_passed": false,
+    "fixture": {
+     "progress_emissions": 6000,
+     "reliable_emissions": 600,
+     "seed": 0,
+     "task_count": 4,
+     "wall_seconds": 60
+    },
+    "gaps": [],
+    "gate": "SH-G-8 event limb / BR-G-42 bridge event envelope",
+    "machine": {
+     "logical_cpu_count": 24,
+     "machine": "AMD64",
+     "on_ac_power": true,
+     "operating_system": {
+      "BuildNumber": "26200",
+      "Caption": "Microsoft Windows 11 Pro",
+      "OSArchitecture": "64-bit",
+      "Version": "10.0.26200"
+     },
+     "physical_memory_bytes": 68388212736,
+     "platform": "Windows-11-10.0.26200-SP0",
+     "processor": {
+      "Manufacturer": "GenuineIntel",
+      "Name": "13th Gen Intel(R) Core(TM) i7-13700K",
+      "NumberOfCores": 16,
+      "NumberOfLogicalProcessors": 24
+     },
+     "processor_signature": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+     "reference_profile_match": true,
+     "repository_drive": "F",
+     "repository_storage": {
+      "BusType": "NVMe",
+      "FriendlyName": "WD_BLACK SN850X 4000GB",
+      "Model": "WD_BLACK SN850X 4000GB",
+      "Number": 3,
+      "Size": 4000787030016
+     },
+     "system_power_status": {
+      "ac_line_status": 1,
+      "battery_flag": 128,
+      "battery_life_percent": 255
+     }
+    },
+    "measurement_valid": true,
+    "memory": {
+     "job_private_memory": {
+      "all_samples_complete": true,
+      "baseline_sample_count": 50,
+      "diagnostic_errors": [],
+      "fixture_ended_at_seconds": 63.11576079999941,
+      "fixture_sample_count": 3005,
+      "fixture_sample_span_seconds": 60.08005689999845,
+      "idle_baseline_private_bytes": 285319168,
+      "incremental_peak_private_bytes": 37924864,
+      "max_sample_interval_seconds": 0.06818779999957769,
+      "processes": {
+       "10756": {
+        "command_role": "python-child",
+        "creation_time_100ns": 134355848162417255,
+        "image_name": "python.exe",
+        "process_id": 10756
+       },
+       "10888": {
+        "command_role": "webview2-gpu-process",
+        "creation_time_100ns": 134355848178981784,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 10888
+       },
+       "33684": {
+        "command_role": "webview2-crashpad-handler",
+        "creation_time_100ns": 134355848178347242,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 33684
+       },
+       "34252": {
+        "command_role": "webview2-browser",
+        "creation_time_100ns": 134355848178156577,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 34252
+       },
+       "36040": {
+        "command_role": "webview2-utility:network.mojom.NetworkService",
+        "creation_time_100ns": 134355848179004417,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 36040
+       },
+       "36116": {
+        "command_role": "python-host",
+        "creation_time_100ns": 134355848162355568,
+        "image_name": "python.exe",
+        "process_id": 36116
+       },
+       "37456": {
+        "command_role": "webview2-renderer",
+        "creation_time_100ns": 134355848179710694,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 37456
+       },
+       "8388": {
+        "command_role": "webview2-utility:storage.mojom.StorageService",
+        "creation_time_100ns": 134355848179183658,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 8388
+       }
+      },
+      "resource_samples": {
+       "_summary": {
+        "type": "list",
+        "bytes": 29876,
+        "sha256": "39574adfe5f116894d98cb0ee24e3c11a0fff45b2970959f5b8f8635355ff4cc",
+        "count": 61,
+        "fields": {
+         "elapsed_seconds": {
+          "min": 2.0334073999983957,
+          "median": 32.295563600000605,
+          "max": 62.575339999999414
+         },
+         "phase": {
+          "values": {
+           "baseline": 1,
+           "fixture": 60
+          }
+         },
+         "processes": {
+          "nested": [
+           "dict"
+          ]
+         }
+        }
+       }
+      },
+      "root_process_id": 36116,
+      "sampled_peak_private_bytes": 323244032,
+      "samples": {
+       "_summary": {
+        "type": "list",
+        "bytes": 1195591,
+        "sha256": "46f9e942c1218b35b3bbf6060b2b0bb109227257930e4a63858c03a9febc3c13",
+        "count": 3055,
+        "fields": {
+         "diagnostic_error": {
+          "n": 0
+         },
+         "elapsed_seconds": {
+          "min": 2.0334073999983957,
+          "median": 32.57520160000058,
+          "max": 63.115194999998494
+         },
+         "missing_process_ids": {
+          "nested": [
+           "list"
+          ]
+         },
+         "phase": {
+          "values": {
+           "baseline": 50,
+           "fixture": 3005
+          }
+         },
+         "private_bytes": {
+          "min": 285319168,
+          "median": 314970112,
+          "max": 323244032
+         },
+         "private_bytes_by_process": {
+          "nested": [
+           "dict"
+          ]
+         },
+         "process_ids": {
+          "nested": [
+           "list"
+          ]
+         }
+        }
+       }
+      },
+      "target_sample_interval_seconds": 0.02,
+      "topology_transitions": [
+       {
+        "elapsed_seconds": 2.0334073999983957,
+        "exited_process_ids": [],
+        "joined_process_ids": [
+         8388,
+         10756,
+         10888,
+         33684,
+         34252,
+         36040,
+         36116,
+         37456
+        ]
+       }
+      ]
+     },
+     "whole_runtime_acceptance": "not-defined",
+     "whole_runtime_diagnostics_complete": true
+    },
+    "passed": false,
+    "producer_timing": [
+     {
+      "progress_schedule_delay": {
+       "count": 1500,
+       "maximum_ms": 4.186599998356577,
+       "p95_ms": 1.0833350008399023
+      },
+      "reliable_schedule_delay": {
+       "count": 150,
+       "maximum_ms": 4.216599997598713,
+       "p95_ms": 1.45556499878019
+      },
+      "task_index": 0
+     },
+     {
+      "progress_schedule_delay": {
+       "count": 1500,
+       "maximum_ms": 4.6251999991362425,
+       "p95_ms": 0.9616200007295239
+      },
+      "reliable_schedule_delay": {
+       "count": 150,
+       "maximum_ms": 4.1467000001285115,
+       "p95_ms": 1.2259400003089116
+      },
+      "task_index": 1
+     },
+     {
+      "progress_schedule_delay": {
+       "count": 1500,
+       "maximum_ms": 4.013500000874082,
+       "p95_ms": 1.020515000264055
+      },
+      "reliable_schedule_delay": {
+       "count": 150,
+       "maximum_ms": 4.062600000033889,
+       "p95_ms": 1.2793749992646486
+      },
+      "task_index": 2
+     },
+     {
+      "progress_schedule_delay": {
+       "count": 1500,
+       "maximum_ms": 4.092999999411262,
+       "p95_ms": 1.0842100005540978
+      },
+      "reliable_schedule_delay": {
+       "count": 150,
+       "maximum_ms": 3.9212000001862535,
+       "p95_ms": 1.4871800001117208
+      },
+      "task_index": 3
+     }
+    ],
+    "producers": {
+     "_summary": {
+      "type": "list",
+      "bytes": 129824,
+      "sha256": "990e787c32b9f265619ebdb9d005b729672d101051a7c9005e83953cf86b780f",
+      "count": 4,
+      "fields": {
+       "elapsed_seconds": {
+        "min": 59.96450659999755,
+        "median": 59.96654009999838,
+        "max": 59.966817500000616
+       },
+       "first_emission_offset_seconds": {
+        "min": 7.669999831705354e-05,
+        "median": 0.0005694999981642468,
+        "max": 0.000650499998300802
+       },
+       "last_emission_offset_seconds": {
+        "min": 59.960277099999075,
+        "median": 59.960576699999365,
+        "max": 59.96081349999804
+       },
+       "progress_emission_offsets_seconds": {
+        "nested": [
+         "list"
+        ]
+       },
+       "progress_emissions": {
+        "min": 1500,
+        "median": 1500.0,
+        "max": 1500
+       },
+       "reliable_by_second": {
+        "nested": [
+         "list"
+        ]
+       },
+       "reliable_emission_offsets_seconds": {
+        "nested": [
+         "list"
+        ]
+       },
+       "reliable_emissions": {
+        "min": 150,
+        "median": 150.0,
+        "max": 150
+       }
+      }
+     }
+    },
+    "product_source": {
+     "kind": "git-archive-head",
+     "revision": "5b62ee583563556b8c62025b89668907dcd84915"
+    },
+    "progress": {
+     "count": 1479,
+     "maximum_ms": 45.0,
+     "p95_ms": 41.0
+    },
+    "progress_monotonic": true,
+    "raw_samples": {
+     "_summary": {
+      "type": "list",
+      "bytes": 498224,
+      "sha256": "58c3e12297628355054dc129b1d2367533da63a386a5e94de1c0c835528d7c8c",
+      "count": 2099,
+      "fields": {
+       "class": {
+        "values": {
+         "reliable": 612,
+         "progress": 1479,
+         "terminal_event": 4,
+         "terminal_record": 4
+        }
+       },
+       "event_id": {
+        "distinct": 604
+       },
+       "event_result": {
+        "n": 620,
+        "nested": [
+         "dict",
+         "str"
+        ]
+       },
+       "latency_ms": {
+        "min": 1,
+        "median": 4,
+        "max": 53
+       },
+       "observed_offset_ms": {
+        "min": 67.40000000223517,
+        "median": 30027.10000000149,
+        "max": 60042.5
+       },
+       "position": {
+        "n": 1479,
+        "min": 1,
+        "median": 750,
+        "max": 1500
+       },
+       "record_state": {
+        "n": 4,
+        "values": {
+         "completed": 4
+        }
+       },
+       "sequence": {
+        "n": 2095,
+        "min": 1,
+        "median": 827,
+        "max": 1654
+       },
+       "session_id": {
+        "values": {
+         "cb4238365f5b4f4f86af782b3be16b3e": 525,
+         "12a1e84dcaca40bbad06db2fad622225": 524,
+         "c87b5c6df47049d3b8e00c4a1d84779c": 523,
+         "bfc90f5cf2064b909036e9e13112fb24": 527
+        }
+       }
+      }
+     }
+    },
+    "reliable_and_terminal": {
+     "count": 620,
+     "maximum_ms": 53.0,
+     "p95_ms": 6.0
+    },
+    "runtime": {
+     "packages": {
+      "bottle": "0.13.4",
+      "namisync": "0.1.0",
+      "pythonnet": "3.1.0",
+      "pywebview": "6.2.1"
+     },
+     "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+     "sqlite": "3.50.4"
+    },
+    "runtime_profile_match": true,
+    "schema_version": 1,
+    "sessions": [
+     {
+      "final_progress": 1500,
+      "progress_sample_count": 370,
+      "reliable_count": 150,
+      "session_id": "cb4238365f5b4f4f86af782b3be16b3e",
+      "terminal_event_count": 1,
+      "terminal_record_count": 1,
+      "valid": true
+     },
+     {
+      "final_progress": 1500,
+      "progress_sample_count": 369,
+      "reliable_count": 150,
+      "session_id": "12a1e84dcaca40bbad06db2fad622225",
+      "terminal_event_count": 1,
+      "terminal_record_count": 1,
+      "valid": true
+     },
+     {
+      "final_progress": 1500,
+      "progress_sample_count": 368,
+      "reliable_count": 150,
+      "session_id": "c87b5c6df47049d3b8e00c4a1d84779c",
+      "terminal_event_count": 1,
+      "terminal_record_count": 1,
+      "valid": true
+     },
+     {
+      "final_progress": 1500,
+      "progress_sample_count": 372,
+      "reliable_count": 150,
+      "session_id": "bfc90f5cf2064b909036e9e13112fb24",
+      "terminal_event_count": 1,
+      "terminal_record_count": 1,
+      "valid": true
+     }
+    ],
+    "sh_g_8_acceptance": "incomplete-without-custody",
+    "startup_errors": [],
+    "status": "complete",
+    "tested_commit": "5b62ee583563556b8c62025b89668907dcd84915",
+    "webview2": "154.0.4258.53",
+    "worktree_status": [
+     "M tests/interfaces/web/test_bridge_event_benchmark.py",
+     " M tools/performance/bridge_event/__init__.py"
+    ]
+   },
+   "schema": "namisync-performance-case-v1",
+   "status": "complete"
+  }
+ },
+ "gui-refinements-20261004/rf2-command-catalog-audit.json": {
+  "bytes": 881,
+  "sha256": "a65f3dd72112b525364e4d8bd135332af0b3c75e2b95e224fe81e77c2ed201b6",
+  "content": {
+   "baseline": "1865d665fe0fa058292be9c863603b8e4394d28f",
+   "method": "git show baseline; AST extract exact catalog constants; trace full composition producer",
+   "full_catalog_source": "tests/interfaces/web/test_component_gallery_headed.py",
+   "benchmark_validator_source": "tools/performance/bridge_event/__init__.py",
+   "benchmark_producer_source": "tools/performance/bridge_event/child.py",
+   "full_count": 35,
+   "benchmark_count": 28,
+   "missing": [
+    "acknowledge_inventory",
+    "get_inventory_detail",
+    "get_inventory_window",
+    "open_inventory_view",
+    "refresh_inventory",
+    "restore_inventory",
+    "update_inventory_view"
+   ],
+   "consumer_consequence": "exact full composition receipt cannot equal benchmark validator catalog",
+   "rf2_scope": "add reveal_plan_move only; defer prior inventory omissions; no new benchmark run claimed"
+  }
+ }
+}

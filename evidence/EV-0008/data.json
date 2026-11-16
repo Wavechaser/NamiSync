@@ -1,0 +1,3177 @@
+{
+ "bridge-counter-study-20261007/baseline-summary.json": {
+  "bytes": 5359,
+  "sha256": "9e7bb945a9e92d630d47124180c969838f51d3247d1f9b103628219094aa8ff6",
+  "content": {
+   "baseline-plan": {
+    "burst": {
+     "covered": 120.6,
+     "paint_opportunity": 133.8,
+     "uncovered": 113.3,
+     "capture": 18.796,
+     "projection": 3.224,
+     "registry": 1.357,
+     "window_build": 1.242,
+     "native_json_encode": 0.613,
+     "round_trip": 29.8,
+     "dom": 5.6,
+     "bytes": 198466,
+     "requests": 27,
+     "discarded": 18,
+     "coverage_range_ms": [
+      116.3,
+      125.6
+     ]
+    },
+    "covered-return": {
+     "covered": 16.4,
+     "paint_opportunity": 24.7,
+     "uncovered": 8.2,
+     "capture": 18.619,
+     "projection": 3.18,
+     "registry": 1.39,
+     "window_build": 1.272,
+     "native_json_encode": 0.605,
+     "round_trip": 28.9,
+     "dom": null,
+     "bytes": 198470,
+     "requests": 9,
+     "discarded": 9,
+     "coverage_range_ms": [
+      11.5,
+      16.7
+     ]
+    },
+    "initial": {
+     "covered": 89.3,
+     "paint_opportunity": 101.4,
+     "uncovered": 87.3,
+     "capture": 21.538,
+     "projection": 3.213,
+     "registry": 1.332,
+     "window_build": 1.177,
+     "native_json_encode": 0.73,
+     "round_trip": 33.8,
+     "dom": 5.6,
+     "bytes": 197835,
+     "requests": 3,
+     "discarded": 0,
+     "coverage_range_ms": [
+      88.0,
+      95.6
+     ]
+    },
+    "jump": {
+     "covered": 57.6,
+     "paint_opportunity": 71.2,
+     "uncovered": 54.3,
+     "capture": 18.505,
+     "projection": 3.174,
+     "registry": 1.353,
+     "window_build": 1.238,
+     "native_json_encode": 0.593,
+     "round_trip": 29.0,
+     "dom": 6.1,
+     "bytes": 198624,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      53.8,
+      61.3
+     ]
+    },
+    "keyboard": {
+     "covered": 60.3,
+     "paint_opportunity": 73.5,
+     "uncovered": 0.0,
+     "capture": 18.998,
+     "projection": 3.423,
+     "registry": 1.515,
+     "window_build": 1.342,
+     "native_json_encode": 0.635,
+     "round_trip": 30.3,
+     "dom": 20.4,
+     "bytes": 198676,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      57.9,
+      62.8
+     ]
+    },
+    "sequential": {
+     "covered": 64.3,
+     "paint_opportunity": 79.1,
+     "uncovered": 56.6,
+     "capture": 18.71,
+     "projection": 3.274,
+     "registry": 1.406,
+     "window_build": 1.293,
+     "native_json_encode": 0.6,
+     "round_trip": 29.9,
+     "dom": 6.5,
+     "bytes": 198097,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      59.6,
+      103.1
+     ]
+    }
+   },
+   "baseline-inventory": {
+    "burst": {
+     "covered": 144.7,
+     "paint_opportunity": 155.9,
+     "uncovered": 137.1,
+     "capture": 16.922,
+     "projection": 3.577,
+     "registry": 1.898,
+     "window_build": 1.889,
+     "native_json_encode": 0.61,
+     "round_trip": 28.45,
+     "dom": 19.9,
+     "bytes": 176320.0,
+     "requests": 34,
+     "discarded": 25,
+     "coverage_range_ms": [
+      116.2,
+      148.7
+     ]
+    },
+    "covered-return": {
+     "covered": 16.5,
+     "paint_opportunity": 24.7,
+     "uncovered": 8.1,
+     "capture": 16.985,
+     "projection": 3.603,
+     "registry": 1.888,
+     "window_build": 1.879,
+     "native_json_encode": 0.594,
+     "round_trip": 28.3,
+     "dom": null,
+     "bytes": 176066,
+     "requests": 9,
+     "discarded": 9,
+     "coverage_range_ms": [
+      13.4,
+      16.7
+     ]
+    },
+    "initial": {
+     "covered": 80.8,
+     "paint_opportunity": 92.7,
+     "uncovered": 77.2,
+     "capture": 16.324,
+     "projection": 3.624,
+     "registry": 2.033,
+     "window_build": 2.021,
+     "native_json_encode": 0.925,
+     "round_trip": 30.4,
+     "dom": 30.1,
+     "bytes": 174466,
+     "requests": 3,
+     "discarded": 0,
+     "coverage_range_ms": [
+      78.1,
+      81.3
+     ]
+    },
+    "jump": {
+     "covered": 57.3,
+     "paint_opportunity": 68.3,
+     "uncovered": 51.7,
+     "capture": 17.07,
+     "projection": 3.579,
+     "registry": 1.896,
+     "window_build": 1.886,
+     "native_json_encode": 0.617,
+     "round_trip": 28.5,
+     "dom": 22.1,
+     "bytes": 176388,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      52.4,
+      60.3
+     ]
+    },
+    "keyboard": {
+     "covered": 49.3,
+     "paint_opportunity": 59.9,
+     "uncovered": 0.0,
+     "capture": 17.134,
+     "projection": 3.593,
+     "registry": 1.881,
+     "window_build": 1.871,
+     "native_json_encode": 0.604,
+     "round_trip": 28.2,
+     "dom": 19.6,
+     "bytes": 176347,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      48.1,
+      51.6
+     ]
+    },
+    "sequential": {
+     "covered": 61.7,
+     "paint_opportunity": 73.5,
+     "uncovered": 54.5,
+     "capture": 17.366,
+     "projection": 3.629,
+     "registry": 1.893,
+     "window_build": 1.884,
+     "native_json_encode": 0.621,
+     "round_trip": 28.8,
+     "dom": 23.0,
+     "bytes": 174782,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      56.2,
+      70.8
+     ]
+    }
+   }
+  }
+ },
+ "bridge-counter-study-20261007/bc25-field-proposals.json": {
+  "bytes": 5212,
+  "sha256": "7190c664428054e55f7b42aee7e48347e2b48cb90f0557fbff026ed6658de311",
+  "content": {
+   "plan": {
+    "rows": 256,
+    "containers": 43,
+    "original_result_bytes": 198429,
+    "proposed_result_bytes": 156768,
+    "removed_bytes": 41661,
+    "reduction_percent": 21.0,
+    "proposed_removed_fields_bytes_with_commas": {
+     "parent_visible_index": 7381,
+     "first_child_visible_index": 8491,
+     "position_in_set": 5249,
+     "set_size": 3500,
+     "operation_count": 4260,
+     "selected_operation_count": 6177,
+     "selectable_operation_count": 6603
+    },
+    "profiled_calls_not_unprofiled_latency": {
+     "C:\\Users\\Spectrum\\AppData\\Local\\Python\\pythoncore-3.13-64\\Lib\\json\\__init__.py:185:dumps": {
+      "calls_per_capture": 11230.0,
+      "self_ms_per_capture": 7.047296666666667,
+      "inclusive_ms_per_capture": 13.145176666666666
+     },
+     "C:\\Users\\Spectrum\\AppData\\Local\\Python\\pythoncore-3.13-64\\Lib\\json\\encoder.py:105:__init__": {
+      "calls_per_capture": 11230.0,
+      "self_ms_per_capture": 0.9676533333333334,
+      "inclusive_ms_per_capture": 0.9676533333333334
+     },
+     "F:\\GitHubRepositories\\NamiSync\\build\\bridge-counter-study-20261007\\bc1-install-candidate-01\\venv\\Lib\\site-packages\\namisync\\interfaces\\web\\bridge.py:2004:_consume_canonical_json_string": {
+      "calls_per_capture": 11230.0,
+      "self_ms_per_capture": 11.343166666666667,
+      "inclusive_ms_per_capture": 32.87858666666667
+     },
+     "F:\\GitHubRepositories\\NamiSync\\build\\bridge-counter-study-20261007\\bc1-install-candidate-01\\venv\\Lib\\site-packages\\namisync\\interfaces\\web\\bridge.py:1754:_snapshot_response_value": {
+      "calls_per_capture": 8849.0,
+      "self_ms_per_capture": 10.439713333333334,
+      "inclusive_ms_per_capture": 50.003710000000005
+     },
+     "F:\\GitHubRepositories\\NamiSync\\build\\bridge-counter-study-20261007\\bc1-install-candidate-01\\venv\\Lib\\site-packages\\namisync\\interfaces\\web\\bridge.py:176:consume": {
+      "calls_per_capture": 45640.0,
+      "self_ms_per_capture": 3.7920533333333335,
+      "inclusive_ms_per_capture": 3.7920533333333335
+     },
+     "F:\\GitHubRepositories\\NamiSync\\build\\bridge-counter-study-20261007\\bc1-install-candidate-01\\venv\\Lib\\site-packages\\namisync\\interfaces\\web\\bridge.py:1999:_consume_json_bytes": {
+      "calls_per_capture": 45639.0,
+      "self_ms_per_capture": 7.274636666666667,
+      "inclusive_ms_per_capture": 11.06654666666667
+     },
+     "<string>:2:__init__": {
+      "calls_per_capture": 1.0,
+      "self_ms_per_capture": 0.0005466666666666668,
+      "inclusive_ms_per_capture": 0.0005466666666666668
+     }
+    }
+   },
+   "inventory": {
+    "rows": 256,
+    "containers": 43,
+    "original_result_bytes": 176302,
+    "proposed_result_bytes": 113488,
+    "removed_bytes": 62814,
+    "reduction_percent": 35.63,
+    "proposed_removed_fields_bytes_with_commas": {
+     "has_baseline": 5333,
+     "row_kind": 5333,
+     "row_id": 4223,
+     "rollup": 47925
+    },
+    "profiled_calls_not_unprofiled_latency": {
+     "C:\\Users\\Spectrum\\AppData\\Local\\Python\\pythoncore-3.13-64\\Lib\\json\\__init__.py:185:dumps": {
+      "calls_per_capture": 11354.0,
+      "self_ms_per_capture": 7.3422566666666675,
+      "inclusive_ms_per_capture": 13.470390000000002
+     },
+     "C:\\Users\\Spectrum\\AppData\\Local\\Python\\pythoncore-3.13-64\\Lib\\json\\encoder.py:105:__init__": {
+      "calls_per_capture": 11354.0,
+      "self_ms_per_capture": 0.99733,
+      "inclusive_ms_per_capture": 0.99733
+     },
+     "F:\\GitHubRepositories\\NamiSync\\build\\bridge-counter-study-20261007\\bc1-install-candidate-01\\venv\\Lib\\site-packages\\namisync\\interfaces\\web\\bridge.py:2004:_consume_canonical_json_string": {
+      "calls_per_capture": 11354.0,
+      "self_ms_per_capture": 11.6981,
+      "inclusive_ms_per_capture": 33.60501
+     },
+     "F:\\GitHubRepositories\\NamiSync\\build\\bridge-counter-study-20261007\\bc1-install-candidate-01\\venv\\Lib\\site-packages\\namisync\\interfaces\\web\\bridge.py:1754:_snapshot_response_value": {
+      "calls_per_capture": 9478.0,
+      "self_ms_per_capture": 11.847526666666669,
+      "inclusive_ms_per_capture": 52.80999
+     },
+     "F:\\GitHubRepositories\\NamiSync\\build\\bridge-counter-study-20261007\\bc1-install-candidate-01\\venv\\Lib\\site-packages\\namisync\\interfaces\\web\\bridge.py:176:consume": {
+      "calls_per_capture": 48238.0,
+      "self_ms_per_capture": 3.6737533333333334,
+      "inclusive_ms_per_capture": 3.6737533333333334
+     },
+     "F:\\GitHubRepositories\\NamiSync\\build\\bridge-counter-study-20261007\\bc1-install-candidate-01\\venv\\Lib\\site-packages\\namisync\\interfaces\\web\\bridge.py:1999:_consume_json_bytes": {
+      "calls_per_capture": 48237.0,
+      "self_ms_per_capture": 7.80666,
+      "inclusive_ms_per_capture": 11.480253333333335
+     },
+     "<string>:2:__init__": {
+      "calls_per_capture": 1.0,
+      "self_ms_per_capture": 0.0005733333333333334,
+      "inclusive_ms_per_capture": 0.0005733333333333334
+     }
+    }
+   }
+  }
+ },
+ "bridge-counter-study-20261007/bc25-review-compatibility-01.json": {
+  "bytes": 2447,
+  "sha256": "518460a9bdd03d839d219506658a93b3fcf9ddd3d4f0f9c3b7a3cf49e03a5103",
+  "content": {
+   "authority": "offline sampled compatibility check; no new measurements",
+   "method": "For every discarded steady-240 response, compare its validated returned offset/count with the saved viewport first/last immediately before and after validation. Require current response, 256 rows, successful settlement, and unchanged recorded task/session/publication/navigation/view ownership. Do not interpolate frames or claim continuous/native/compositor coverage.",
+   "inputs_sha256": {
+    "bc25-dom-steady-plan-01.json": "d62483f5983e1f8ef5c1c00b53f0f75fea226f7fcc590764fe94493bef5a2a56",
+    "bc25-dom-steady-inventory-01.json": "502273eac141ae45aa4a3d8d98bc0c214808ad9c662fece3f7b0dc44837c7323",
+    "bc25-natural-plan-01.json": "1ad762b758c4d8ef78ce98c0e5ff25e67a7c5a0a85a2bfbff67609eb18e46114",
+    "bc25-natural-inventory-01.json": "ce1a53334d7e9e833028a5b68644440a91e054e5ecb184c69ad0dc776a63365f"
+   },
+   "checks": [
+    {
+     "receipt": "bc25-dom-steady-plan-01.json",
+     "child": 1,
+     "discarded_requests": 453,
+     "covers_previous_frame": 453,
+     "covers_next_frame": 453
+    },
+    {
+     "receipt": "bc25-dom-steady-plan-01.json",
+     "child": 2,
+     "discarded_requests": 458,
+     "covers_previous_frame": 458,
+     "covers_next_frame": 458
+    },
+    {
+     "receipt": "bc25-dom-steady-plan-01.json",
+     "child": 3,
+     "discarded_requests": 454,
+     "covers_previous_frame": 454,
+     "covers_next_frame": 454
+    },
+    {
+     "receipt": "bc25-dom-steady-inventory-01.json",
+     "child": 1,
+     "discarded_requests": 431,
+     "covers_previous_frame": 431,
+     "covers_next_frame": 431
+    },
+    {
+     "receipt": "bc25-dom-steady-inventory-01.json",
+     "child": 2,
+     "discarded_requests": 436,
+     "covers_previous_frame": 436,
+     "covers_next_frame": 436
+    },
+    {
+     "receipt": "bc25-dom-steady-inventory-01.json",
+     "child": 3,
+     "discarded_requests": 435,
+     "covers_previous_frame": 435,
+     "covers_next_frame": 435
+    },
+    {
+     "receipt": "bc25-natural-plan-01.json",
+     "child": 1,
+     "discarded_requests": 452,
+     "covers_previous_frame": 452,
+     "covers_next_frame": 452
+    },
+    {
+     "receipt": "bc25-natural-inventory-01.json",
+     "child": 1,
+     "discarded_requests": 429,
+     "covers_previous_frame": 429,
+     "covers_next_frame": 429
+    }
+   ]
+  }
+ },
+ "bridge-counter-study-20261007/bc25-summary-01.json": {
+  "bytes": 35291,
+  "sha256": "4e090f0bece2921da06fa875a60708e2ffa38d51613c6536478ffe602bfb3040",
+  "content": {
+   "authority": "diagnostic; no p95 or latency gate",
+   "groups": {
+    "candidate:plan:0:capture": {
+     "raw_ns": [
+      12390900,
+      12167000,
+      12889800,
+      13036600,
+      12952000,
+      13561200,
+      12790700,
+      12842400,
+      12405500,
+      12263300,
+      12743200,
+      12145500,
+      12540900,
+      12259100,
+      13190600,
+      12749300,
+      13544800,
+      12856000,
+      12880700,
+      12788900,
+      12268900,
+      12703300,
+      12843600,
+      12960200,
+      12662300,
+      12223200,
+      12511100,
+      13446500,
+      12874700,
+      12882600
+     ],
+     "profiled_30_calls_ns": [
+      1490441000
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-capture-candidate-01.json"
+     ],
+     "raw_ns_summary": {
+      "count": 30,
+      "median": 12789800.0,
+      "minimum": 12145500,
+      "maximum": 13561200
+     },
+     "profiled_30_calls_ns_summary": {
+      "count": 1,
+      "median": 1490441000,
+      "minimum": 1490441000,
+      "maximum": 1490441000
+     }
+    },
+    "candidate:plan:0:capture_projection": {
+     "raw_ns": [
+      14414100,
+      13507900,
+      13481100,
+      13652600,
+      14462200,
+      13241000,
+      13958700,
+      14008900,
+      13851100,
+      13640600,
+      14049900,
+      13601500,
+      13401700,
+      13476700,
+      13315400,
+      13617500,
+      13695900,
+      13371100,
+      15000200,
+      13735900,
+      14505200,
+      13517100,
+      15731800,
+      14160700,
+      13920800,
+      13822900,
+      14112400,
+      13334200,
+      13878300,
+      13600300
+     ],
+     "profiled_30_calls_ns": [
+      1617845500
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-capture-candidate-01.json"
+     ],
+     "raw_ns_summary": {
+      "count": 30,
+      "median": 13715900.0,
+      "minimum": 13241000,
+      "maximum": 15731800
+     },
+     "profiled_30_calls_ns_summary": {
+      "count": 1,
+      "median": 1617845500,
+      "minimum": 1617845500,
+      "maximum": 1617845500
+     }
+    },
+    "candidate:plan:60000:capture": {
+     "raw_ns": [
+      12370300,
+      12576700,
+      12545600,
+      12257300,
+      12303000,
+      12204500,
+      12525800,
+      12378400,
+      12406100,
+      12427800,
+      12420900,
+      12611300,
+      13251700,
+      12423700,
+      12672400,
+      12407400,
+      12491500,
+      12526000,
+      12928200,
+      12388900,
+      12778500,
+      12345400,
+      12601300,
+      12311500,
+      13177100,
+      12618900,
+      13067400,
+      12697400,
+      12744700,
+      12707600
+     ],
+     "profiled_30_calls_ns": [
+      1501994400
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-capture-candidate-01.json"
+     ],
+     "raw_ns_summary": {
+      "count": 30,
+      "median": 12525900.0,
+      "minimum": 12204500,
+      "maximum": 13251700
+     },
+     "profiled_30_calls_ns_summary": {
+      "count": 1,
+      "median": 1501994400,
+      "minimum": 1501994400,
+      "maximum": 1501994400
+     }
+    },
+    "candidate:plan:60000:capture_projection": {
+     "raw_ns": [
+      13353000,
+      14092000,
+      13518000,
+      13740800,
+      14160100,
+      13417500,
+      14036500,
+      13976000,
+      14275600,
+      13452200,
+      14457700,
+      13911200,
+      13681700,
+      14339200,
+      16610800,
+      15675400,
+      14187700,
+      13715100,
+      14128900,
+      15652200,
+      14174700,
+      13836100,
+      14263800,
+      17395800,
+      14382100,
+      15058000,
+      13467400,
+      13689500,
+      13367100,
+      13541600
+     ],
+     "profiled_30_calls_ns": [
+      1629097100
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-capture-candidate-01.json"
+     ],
+     "raw_ns_summary": {
+      "count": 30,
+      "median": 14064250.0,
+      "minimum": 13353000,
+      "maximum": 17395800
+     },
+     "profiled_30_calls_ns_summary": {
+      "count": 1,
+      "median": 1629097100,
+      "minimum": 1629097100,
+      "maximum": 1629097100
+     }
+    },
+    "candidate:inventory:0:capture": {
+     "raw_ns": [
+      12822400,
+      14109400,
+      12886100,
+      12638800,
+      13226900,
+      13391200,
+      13151600,
+      13257400,
+      13075400,
+      12890600,
+      13347500,
+      13244900,
+      13259600,
+      12949900,
+      13637500,
+      13144600,
+      13851800,
+      13821500,
+      12987400,
+      13390600,
+      12899100,
+      13407100,
+      13022300,
+      13254600,
+      13234700,
+      12678400,
+      12975300,
+      12670900,
+      12969400,
+      12929100
+     ],
+     "profiled_30_calls_ns": [
+      1549663200
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-capture-candidate-01.json"
+     ],
+     "raw_ns_summary": {
+      "count": 30,
+      "median": 13148100.0,
+      "minimum": 12638800,
+      "maximum": 14109400
+     },
+     "profiled_30_calls_ns_summary": {
+      "count": 1,
+      "median": 1549663200,
+      "minimum": 1549663200,
+      "maximum": 1549663200
+     }
+    },
+    "candidate:inventory:0:capture_projection": {
+     "raw_ns": [
+      13924900,
+      14864600,
+      14529700,
+      14431200,
+      13988900,
+      14065500,
+      14332400,
+      14313300,
+      14099300,
+      16377000,
+      14476700,
+      14563600,
+      14488600,
+      14368300,
+      14737000,
+      14302600,
+      13979300,
+      14114100,
+      14304900,
+      14694200,
+      14749500,
+      14335900,
+      14080700,
+      14454900,
+      13753400,
+      13979800,
+      13872800,
+      13874100,
+      13823000,
+      14225400
+     ],
+     "profiled_30_calls_ns": [
+      1658672400
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-capture-candidate-01.json"
+     ],
+     "raw_ns_summary": {
+      "count": 30,
+      "median": 14309100.0,
+      "minimum": 13753400,
+      "maximum": 16377000
+     },
+     "profiled_30_calls_ns_summary": {
+      "count": 1,
+      "median": 1658672400,
+      "minimum": 1658672400,
+      "maximum": 1658672400
+     }
+    },
+    "candidate:inventory:60000:capture": {
+     "raw_ns": [
+      12796300,
+      13056900,
+      13310400,
+      13136200,
+      12904200,
+      12997100,
+      13118700,
+      12876500,
+      12721200,
+      12771800,
+      13198600,
+      12703200,
+      12847400,
+      13783600,
+      13171500,
+      13162600,
+      13379600,
+      13245800,
+      13035300,
+      13186400,
+      12778500,
+      12962700,
+      13056400,
+      13038300,
+      13333000,
+      12888600,
+      13590700,
+      13365500,
+      13170200,
+      13231400
+     ],
+     "profiled_30_calls_ns": [
+      1586641800
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-capture-candidate-01.json"
+     ],
+     "raw_ns_summary": {
+      "count": 30,
+      "median": 13087800.0,
+      "minimum": 12703200,
+      "maximum": 13783600
+     },
+     "profiled_30_calls_ns_summary": {
+      "count": 1,
+      "median": 1586641800,
+      "minimum": 1586641800,
+      "maximum": 1586641800
+     }
+    },
+    "candidate:inventory:60000:capture_projection": {
+     "raw_ns": [
+      14273200,
+      14816700,
+      13853400,
+      13918000,
+      14239400,
+      14102500,
+      14511800,
+      14098500,
+      14011600,
+      13896600,
+      13958400,
+      14397500,
+      14114200,
+      14439900,
+      14370000,
+      14872900,
+      14145000,
+      14436500,
+      14414000,
+      13926600,
+      13822300,
+      13996300,
+      13784400,
+      14390600,
+      14460400,
+      14340900,
+      15007500,
+      14601000,
+      14542500,
+      14481300
+     ],
+     "profiled_30_calls_ns": [
+      1677386700
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-capture-candidate-01.json"
+     ],
+     "raw_ns_summary": {
+      "count": 30,
+      "median": 14307050.0,
+      "minimum": 13784400,
+      "maximum": 15007500
+     },
+     "profiled_30_calls_ns_summary": {
+      "count": 1,
+      "median": 1677386700,
+      "minimum": 1677386700,
+      "maximum": 1677386700
+     }
+    },
+    "plan-base:dom:initial": {
+     "build_ns": [
+      5600000,
+      5300000,
+      5100000
+     ],
+     "replace_ns": [
+      300000,
+      300000,
+      300000
+     ],
+     "post_ns": [
+      0,
+      0,
+      100000
+     ],
+     "forced_geometry_ns": [
+      22100000,
+      20900000,
+      20800000
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 3,
+      "median": 5300000,
+      "minimum": 5100000,
+      "maximum": 5600000
+     },
+     "replace_ns_summary": {
+      "count": 3,
+      "median": 300000,
+      "minimum": 300000,
+      "maximum": 300000
+     },
+     "post_ns_summary": {
+      "count": 3,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 100000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 3,
+      "median": 20900000,
+      "minimum": 20800000,
+      "maximum": 22100000
+     }
+    },
+    "plan-base:dom:sequential": {
+     "build_ns": [
+      4900000,
+      3900000,
+      4000000,
+      4700000,
+      3700000,
+      3800000,
+      4900000,
+      4100000,
+      3900000
+     ],
+     "replace_ns": [
+      2000000,
+      2100000,
+      2500000,
+      2100000,
+      2100000,
+      2400000,
+      2000000,
+      2000000,
+      2500000
+     ],
+     "post_ns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      100000,
+      0,
+      0,
+      0
+     ],
+     "forced_geometry_ns": [
+      17800000,
+      20100000,
+      15800000,
+      17000000,
+      18300000,
+      15300000,
+      15600000,
+      18500000,
+      16100000
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 9,
+      "median": 4000000,
+      "minimum": 3700000,
+      "maximum": 4900000
+     },
+     "replace_ns_summary": {
+      "count": 9,
+      "median": 2100000,
+      "minimum": 2000000,
+      "maximum": 2500000
+     },
+     "post_ns_summary": {
+      "count": 9,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 100000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 9,
+      "median": 17000000,
+      "minimum": 15300000,
+      "maximum": 20100000
+     }
+    },
+    "plan-base:dom:setup": {
+     "build_ns": [
+      4000000,
+      3600000,
+      3700000,
+      4300000,
+      3600000,
+      3800000,
+      3600000,
+      3300000,
+      3900000,
+      4100000,
+      3500000,
+      4300000,
+      4500000,
+      5300000,
+      3500000,
+      4000000,
+      3500000,
+      3500000,
+      3900000,
+      3500000,
+      3600000,
+      3800000,
+      3700000,
+      4300000,
+      3700000,
+      3500000,
+      3600000,
+      3700000,
+      3700000,
+      3600000,
+      3900000,
+      3700000,
+      3800000,
+      4200000,
+      4100000,
+      3600000,
+      4100000,
+      3500000,
+      3700000,
+      3800000,
+      3400000,
+      3500000,
+      3600000,
+      3700000,
+      3500000,
+      4100000,
+      3600000,
+      3800000,
+      4000000,
+      3400000,
+      3600000,
+      4000000,
+      4000000,
+      3900000
+     ],
+     "replace_ns": [
+      2100000,
+      2000000,
+      2700000,
+      2100000,
+      2100000,
+      2300000,
+      2100000,
+      1900000,
+      2200000,
+      2500000,
+      3400000,
+      3000000,
+      2000000,
+      3100000,
+      2600000,
+      1900000,
+      2800000,
+      1900000,
+      2000000,
+      2000000,
+      2600000,
+      2100000,
+      2100000,
+      2300000,
+      2100000,
+      2000000,
+      2100000,
+      1900000,
+      2800000,
+      2800000,
+      2000000,
+      3100000,
+      2700000,
+      1900000,
+      2600000,
+      2200000,
+      2000000,
+      1900000,
+      2600000,
+      2100000,
+      2000000,
+      2300000,
+      2000000,
+      2000000,
+      2300000,
+      2000000,
+      2700000,
+      2800000,
+      2100000,
+      3300000,
+      2700000,
+      2000000,
+      2700000,
+      2200000
+     ],
+     "post_ns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      14000000,
+      100000,
+      0,
+      17100000,
+      300000,
+      0,
+      14300000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      13500000,
+      200000,
+      0,
+      13900000,
+      300000,
+      0,
+      15300000,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      13600000,
+      200000,
+      0,
+      13600000,
+      200000,
+      0,
+      15100000,
+      0
+     ],
+     "forced_geometry_ns": [],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 54,
+      "median": 3700000.0,
+      "minimum": 3300000,
+      "maximum": 5300000
+     },
+     "replace_ns_summary": {
+      "count": 54,
+      "median": 2100000.0,
+      "minimum": 1900000,
+      "maximum": 3400000
+     },
+     "post_ns_summary": {
+      "count": 54,
+      "median": 0.0,
+      "minimum": 0,
+      "maximum": 17100000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 0,
+      "median": null,
+      "minimum": null,
+      "maximum": null
+     }
+    },
+    "plan-base:dom:jump": {
+     "build_ns": [
+      4400000,
+      4400000,
+      3800000,
+      3900000,
+      3900000,
+      3900000,
+      4200000,
+      4300000,
+      3500000
+     ],
+     "replace_ns": [
+      2200000,
+      2000000,
+      2200000,
+      2100000,
+      2000000,
+      2200000,
+      2100000,
+      2100000,
+      2100000
+     ],
+     "post_ns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "forced_geometry_ns": [
+      16800000,
+      19800000,
+      15000000,
+      15800000,
+      18900000,
+      14500000,
+      16300000,
+      19100000,
+      15000000
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 9,
+      "median": 3900000,
+      "minimum": 3500000,
+      "maximum": 4400000
+     },
+     "replace_ns_summary": {
+      "count": 9,
+      "median": 2100000,
+      "minimum": 2000000,
+      "maximum": 2200000
+     },
+     "post_ns_summary": {
+      "count": 9,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 0
+     },
+     "forced_geometry_ns_summary": {
+      "count": 9,
+      "median": 16300000,
+      "minimum": 14500000,
+      "maximum": 19800000
+     }
+    },
+    "plan-base:dom:burst": {
+     "build_ns": [
+      3300000,
+      3300000,
+      3400000,
+      3700000,
+      3300000,
+      3300000,
+      3400000,
+      3300000,
+      3400000
+     ],
+     "replace_ns": [
+      2600000,
+      2300000,
+      2000000,
+      2300000,
+      2000000,
+      2400000,
+      2600000,
+      2000000,
+      2300000
+     ],
+     "post_ns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "forced_geometry_ns": [
+      14100000,
+      16300000,
+      14100000,
+      14800000,
+      13900000,
+      13500000,
+      14400000,
+      13700000,
+      14400000
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 9,
+      "median": 3300000,
+      "minimum": 3300000,
+      "maximum": 3700000
+     },
+     "replace_ns_summary": {
+      "count": 9,
+      "median": 2300000,
+      "minimum": 2000000,
+      "maximum": 2600000
+     },
+     "post_ns_summary": {
+      "count": 9,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 0
+     },
+     "forced_geometry_ns_summary": {
+      "count": 9,
+      "median": 14100000,
+      "minimum": 13500000,
+      "maximum": 16300000
+     }
+    },
+    "plan-base:dom:keyboard": {
+     "build_ns": [
+      3500000,
+      3500000,
+      3300000,
+      3600000,
+      3700000,
+      3600000,
+      3400000,
+      3600000,
+      3400000
+     ],
+     "replace_ns": [
+      2800000,
+      3100000,
+      2900000,
+      2800000,
+      2800000,
+      2600000,
+      2800000,
+      2800000,
+      2900000
+     ],
+     "post_ns": [
+      15000000,
+      14100000,
+      14300000,
+      14000000,
+      13600000,
+      13300000,
+      13500000,
+      13600000,
+      13800000
+     ],
+     "forced_geometry_ns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 9,
+      "median": 3500000,
+      "minimum": 3300000,
+      "maximum": 3700000
+     },
+     "replace_ns_summary": {
+      "count": 9,
+      "median": 2800000,
+      "minimum": 2600000,
+      "maximum": 3100000
+     },
+     "post_ns_summary": {
+      "count": 9,
+      "median": 13800000,
+      "minimum": 13300000,
+      "maximum": 15000000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 9,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 0
+     }
+    },
+    "plan-base:dom:steady-60": {
+     "build_ns": [
+      3500000,
+      3400000,
+      3700000,
+      3500000,
+      3900000
+     ],
+     "replace_ns": [
+      2800000,
+      2900000,
+      2100000,
+      3000000,
+      2100000
+     ],
+     "post_ns": [
+      200000,
+      200000,
+      0,
+      200000,
+      0
+     ],
+     "forced_geometry_ns": [],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 5,
+      "median": 3500000,
+      "minimum": 3400000,
+      "maximum": 3900000
+     },
+     "replace_ns_summary": {
+      "count": 5,
+      "median": 2800000,
+      "minimum": 2100000,
+      "maximum": 3000000
+     },
+     "post_ns_summary": {
+      "count": 5,
+      "median": 200000,
+      "minimum": 0,
+      "maximum": 200000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 0,
+      "median": null,
+      "minimum": null,
+      "maximum": null
+     }
+    },
+    "plan-base:dom:steady-240": {
+     "build_ns": [
+      3700000,
+      3600000,
+      3400000
+     ],
+     "replace_ns": [
+      2100000,
+      2200000,
+      2100000
+     ],
+     "post_ns": [
+      0,
+      0,
+      0
+     ],
+     "forced_geometry_ns": [],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 3,
+      "median": 3600000,
+      "minimum": 3400000,
+      "maximum": 3700000
+     },
+     "replace_ns_summary": {
+      "count": 3,
+      "median": 2100000,
+      "minimum": 2100000,
+      "maximum": 2200000
+     },
+     "post_ns_summary": {
+      "count": 3,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 0
+     },
+     "forced_geometry_ns_summary": {
+      "count": 0,
+      "median": null,
+      "minimum": null,
+      "maximum": null
+     }
+    },
+    "plan-base:steady:60": {
+     "uncovered_ns": [
+      8508300000.0,
+      8006100000.0,
+      2630900000.0
+     ],
+     "longest_gap_ns": [
+      8508300000.0,
+      4814300000.0,
+      1872500000
+     ],
+     "request_count": [
+      347,
+      329,
+      108
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "uncovered_ns_summary": {
+      "count": 3,
+      "median": 8006100000.0,
+      "minimum": 2630900000.0,
+      "maximum": 8508300000.0
+     },
+     "longest_gap_ns_summary": {
+      "count": 3,
+      "median": 4814300000.0,
+      "minimum": 1872500000,
+      "maximum": 8508300000.0
+     },
+     "request_count_summary": {
+      "count": 3,
+      "median": 329,
+      "minimum": 108,
+      "maximum": 347
+     }
+    },
+    "plan-base:steady:240": {
+     "uncovered_ns": [
+      11116500000.0,
+      11116700000.0,
+      11116700000.0
+     ],
+     "longest_gap_ns": [
+      11116500000.0,
+      11116700000.0,
+      11116700000.0
+     ],
+     "request_count": [
+      454,
+      459,
+      455
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-plan-01.json"
+     ],
+     "uncovered_ns_summary": {
+      "count": 3,
+      "median": 11116700000.0,
+      "minimum": 11116500000.0,
+      "maximum": 11116700000.0
+     },
+     "longest_gap_ns_summary": {
+      "count": 3,
+      "median": 11116700000.0,
+      "minimum": 11116500000.0,
+      "maximum": 11116700000.0
+     },
+     "request_count_summary": {
+      "count": 3,
+      "median": 455,
+      "minimum": 454,
+      "maximum": 459
+     }
+    },
+    "inventory-base:dom:initial": {
+     "build_ns": [
+      8500000,
+      9100000,
+      8500000
+     ],
+     "replace_ns": [
+      200000,
+      200000,
+      200000
+     ],
+     "post_ns": [
+      21000000,
+      21500000,
+      21200000
+     ],
+     "forced_geometry_ns": [
+      200000,
+      200000,
+      200000
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 3,
+      "median": 8500000,
+      "minimum": 8500000,
+      "maximum": 9100000
+     },
+     "replace_ns_summary": {
+      "count": 3,
+      "median": 200000,
+      "minimum": 200000,
+      "maximum": 200000
+     },
+     "post_ns_summary": {
+      "count": 3,
+      "median": 21200000,
+      "minimum": 21000000,
+      "maximum": 21500000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 3,
+      "median": 200000,
+      "minimum": 200000,
+      "maximum": 200000
+     }
+    },
+    "inventory-base:dom:sequential": {
+     "build_ns": [
+      4200000,
+      4400000,
+      4200000,
+      4500000,
+      4400000,
+      4300000,
+      4400000,
+      3800000,
+      3900000
+     ],
+     "replace_ns": [
+      1900000,
+      2000000,
+      2300000,
+      2000000,
+      1900000,
+      2100000,
+      1800000,
+      2300000,
+      2300000
+     ],
+     "post_ns": [
+      16000000,
+      19500000,
+      15400000,
+      15600000,
+      19800000,
+      16200000,
+      16000000,
+      19200000,
+      16100000
+     ],
+     "forced_geometry_ns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 9,
+      "median": 4300000,
+      "minimum": 3800000,
+      "maximum": 4500000
+     },
+     "replace_ns_summary": {
+      "count": 9,
+      "median": 2000000,
+      "minimum": 1800000,
+      "maximum": 2300000
+     },
+     "post_ns_summary": {
+      "count": 9,
+      "median": 16100000,
+      "minimum": 15400000,
+      "maximum": 19800000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 9,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 0
+     }
+    },
+    "inventory-base:dom:setup": {
+     "build_ns": [
+      3600000,
+      3500000,
+      3600000,
+      4200000,
+      4000000,
+      3400000,
+      3400000,
+      3500000,
+      3500000,
+      3600000,
+      3400000,
+      3600000,
+      3700000,
+      3700000,
+      3600000,
+      3800000,
+      3700000,
+      3500000,
+      3800000,
+      3900000,
+      3300000,
+      3600000,
+      3500000,
+      3200000,
+      3900000,
+      3700000,
+      3700000,
+      4300000,
+      3600000,
+      3500000,
+      4000000,
+      3400000,
+      3700000,
+      4000000,
+      3700000,
+      3300000,
+      3600000,
+      3700000,
+      3300000,
+      3600000,
+      3500000,
+      3400000,
+      4000000,
+      3700000,
+      3600000
+     ],
+     "replace_ns": [
+      2000000,
+      1800000,
+      2400000,
+      1900000,
+      2000000,
+      1900000,
+      2300000,
+      1800000,
+      2000000,
+      1900000,
+      2000000,
+      1900000,
+      2000000,
+      2000000,
+      2000000,
+      2000000,
+      1900000,
+      2700000,
+      2000000,
+      2100000,
+      2000000,
+      1900000,
+      2200000,
+      2200000,
+      2000000,
+      2100000,
+      2000000,
+      2200000,
+      2100000,
+      1800000,
+      1800000,
+      1900000,
+      2500000,
+      1900000,
+      2400000,
+      2000000,
+      2400000,
+      2300000,
+      2100000,
+      1900000,
+      2100000,
+      1900000,
+      2000000,
+      2100000,
+      1900000
+     ],
+     "post_ns": [
+      16000000,
+      14900000,
+      15000000,
+      16100000,
+      18500000,
+      13900000,
+      13800000,
+      13600000,
+      14300000,
+      14200000,
+      13800000,
+      14500000,
+      14400000,
+      14100000,
+      14500000,
+      15100000,
+      14600000,
+      15000000,
+      15700000,
+      18800000,
+      14700000,
+      14100000,
+      13800000,
+      13700000,
+      15000000,
+      15600000,
+      14200000,
+      14200000,
+      14000000,
+      14600000,
+      15300000,
+      14200000,
+      15000000,
+      15600000,
+      18400000,
+      14200000,
+      14200000,
+      15000000,
+      13800000,
+      13900000,
+      13800000,
+      14100000,
+      14200000,
+      13900000,
+      14000000
+     ],
+     "forced_geometry_ns": [],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 45,
+      "median": 3600000,
+      "minimum": 3200000,
+      "maximum": 4300000
+     },
+     "replace_ns_summary": {
+      "count": 45,
+      "median": 2000000,
+      "minimum": 1800000,
+      "maximum": 2700000
+     },
+     "post_ns_summary": {
+      "count": 45,
+      "median": 14300000,
+      "minimum": 13600000,
+      "maximum": 18800000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 0,
+      "median": null,
+      "minimum": null,
+      "maximum": null
+     }
+    },
+    "inventory-base:dom:jump": {
+     "build_ns": [
+      3900000,
+      3800000,
+      3500000,
+      4000000,
+      3900000,
+      3400000,
+      3800000,
+      4100000,
+      3500000
+     ],
+     "replace_ns": [
+      1900000,
+      1900000,
+      1800000,
+      1900000,
+      1900000,
+      2000000,
+      1900000,
+      2000000,
+      1900000
+     ],
+     "post_ns": [
+      16400000,
+      15900000,
+      13700000,
+      16000000,
+      15800000,
+      14000000,
+      17100000,
+      16100000,
+      14000000
+     ],
+     "forced_geometry_ns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 9,
+      "median": 3800000,
+      "minimum": 3400000,
+      "maximum": 4100000
+     },
+     "replace_ns_summary": {
+      "count": 9,
+      "median": 1900000,
+      "minimum": 1800000,
+      "maximum": 2000000
+     },
+     "post_ns_summary": {
+      "count": 9,
+      "median": 15900000,
+      "minimum": 13700000,
+      "maximum": 17100000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 9,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 0
+     }
+    },
+    "inventory-base:dom:burst": {
+     "build_ns": [
+      3600000,
+      3500000,
+      3400000,
+      3600000,
+      3600000,
+      3400000,
+      3600000,
+      3900000,
+      3600000
+     ],
+     "replace_ns": [
+      2000000,
+      1900000,
+      1800000,
+      2000000,
+      2000000,
+      2100000,
+      1900000,
+      2100000,
+      2000000
+     ],
+     "post_ns": [
+      15300000,
+      13600000,
+      14200000,
+      14800000,
+      14000000,
+      15300000,
+      15100000,
+      14600000,
+      15000000
+     ],
+     "forced_geometry_ns": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 9,
+      "median": 3600000,
+      "minimum": 3400000,
+      "maximum": 3900000
+     },
+     "replace_ns_summary": {
+      "count": 9,
+      "median": 2000000,
+      "minimum": 1800000,
+      "maximum": 2100000
+     },
+     "post_ns_summary": {
+      "count": 9,
+      "median": 14800000,
+      "minimum": 13600000,
+      "maximum": 15300000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 9,
+      "median": 0,
+      "minimum": 0,
+      "maximum": 0
+     }
+    },
+    "inventory-base:dom:keyboard": {
+     "build_ns": [
+      3400000,
+      3900000,
+      3900000,
+      3700000,
+      3600000,
+      3900000,
+      4000000,
+      3600000,
+      3600000
+     ],
+     "replace_ns": [
+      2100000,
+      2000000,
+      2000000,
+      2200000,
+      2200000,
+      1900000,
+      2200000,
+      1800000,
+      2100000
+     ],
+     "post_ns": [
+      14100000,
+      13900000,
+      13500000,
+      14400000,
+      15200000,
+      14400000,
+      14300000,
+      14200000,
+      13600000
+     ],
+     "forced_geometry_ns": [
+      200000,
+      100000,
+      0,
+      100000,
+      200000,
+      200000,
+      100000,
+      100000,
+      200000
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 9,
+      "median": 3700000,
+      "minimum": 3400000,
+      "maximum": 4000000
+     },
+     "replace_ns_summary": {
+      "count": 9,
+      "median": 2100000,
+      "minimum": 1800000,
+      "maximum": 2200000
+     },
+     "post_ns_summary": {
+      "count": 9,
+      "median": 14200000,
+      "minimum": 13500000,
+      "maximum": 15200000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 9,
+      "median": 100000,
+      "minimum": 0,
+      "maximum": 200000
+     }
+    },
+    "inventory-base:dom:steady-60": {
+     "build_ns": [
+      3800000,
+      3800000,
+      3700000
+     ],
+     "replace_ns": [
+      2000000,
+      2000000,
+      1800000
+     ],
+     "post_ns": [
+      14000000,
+      14600000,
+      14000000
+     ],
+     "forced_geometry_ns": [],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 3,
+      "median": 3800000,
+      "minimum": 3700000,
+      "maximum": 3800000
+     },
+     "replace_ns_summary": {
+      "count": 3,
+      "median": 2000000,
+      "minimum": 1800000,
+      "maximum": 2000000
+     },
+     "post_ns_summary": {
+      "count": 3,
+      "median": 14000000,
+      "minimum": 14000000,
+      "maximum": 14600000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 0,
+      "median": null,
+      "minimum": null,
+      "maximum": null
+     }
+    },
+    "inventory-base:dom:steady-240": {
+     "build_ns": [
+      3800000,
+      3700000,
+      3700000
+     ],
+     "replace_ns": [
+      1900000,
+      1900000,
+      1900000
+     ],
+     "post_ns": [
+      14100000,
+      14400000,
+      14900000
+     ],
+     "forced_geometry_ns": [],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "build_ns_summary": {
+      "count": 3,
+      "median": 3700000,
+      "minimum": 3700000,
+      "maximum": 3800000
+     },
+     "replace_ns_summary": {
+      "count": 3,
+      "median": 1900000,
+      "minimum": 1900000,
+      "maximum": 1900000
+     },
+     "post_ns_summary": {
+      "count": 3,
+      "median": 14400000,
+      "minimum": 14100000,
+      "maximum": 14900000
+     },
+     "forced_geometry_ns_summary": {
+      "count": 0,
+      "median": null,
+      "minimum": null,
+      "maximum": null
+     }
+    },
+    "inventory-base:steady:60": {
+     "uncovered_ns": [
+      8274900000.0,
+      8268200000.0,
+      8274800000.0
+     ],
+     "longest_gap_ns": [
+      8274900000.0,
+      8268200000.0,
+      8274800000.0
+     ],
+     "request_count": [
+      325,
+      325,
+      327
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "uncovered_ns_summary": {
+      "count": 3,
+      "median": 8274800000.0,
+      "minimum": 8268200000.0,
+      "maximum": 8274900000.0
+     },
+     "longest_gap_ns_summary": {
+      "count": 3,
+      "median": 8274800000.0,
+      "minimum": 8268200000.0,
+      "maximum": 8274900000.0
+     },
+     "request_count_summary": {
+      "count": 3,
+      "median": 325,
+      "minimum": 325,
+      "maximum": 327
+     }
+    },
+    "inventory-base:steady:240": {
+     "uncovered_ns": [
+      11107800000.0,
+      11108200000.0,
+      11109600000.0
+     ],
+     "longest_gap_ns": [
+      11107800000.0,
+      11108200000.0,
+      11109600000.0
+     ],
+     "request_count": [
+      432,
+      437,
+      436
+     ],
+     "inputs": [
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json",
+      "build\\bridge-counter-study-20261007\\bc25-dom-steady-inventory-01.json"
+     ],
+     "uncovered_ns_summary": {
+      "count": 3,
+      "median": 11108200000.0,
+      "minimum": 11107800000.0,
+      "maximum": 11109600000.0
+     },
+     "longest_gap_ns_summary": {
+      "count": 3,
+      "median": 11108200000.0,
+      "minimum": 11107800000.0,
+      "maximum": 11109600000.0
+     },
+     "request_count_summary": {
+      "count": 3,
+      "median": 436,
+      "minimum": 432,
+      "maximum": 437
+     }
+    }
+   }
+  }
+ },
+ "bridge-counter-study-20261007/c5-host-profile.json": {
+  "bytes": 1015,
+  "sha256": "1bd2fc21f9dc3e75417b0cf3b2b58be6c13e88b142feedd65c333a29e9fe97bf",
+  "content": {
+   "desktop_context": "not independently observed by profile collector",
+   "authority": "diagnostic only; not cold-projection acceptance",
+   "cpu": {
+    "name": "13th Gen Intel(R) Core(TM) i7-13700K",
+    "cores": 16,
+    "logical_processors": 24
+   },
+   "session_date": "2026-10-07",
+   "unrelated_sustained_workload": "not independently verified",
+   "captured_at": "2026-10-07 15:08:33 UTC",
+   "memory_gib": 63.69148635864258,
+   "os": {
+    "name": "Microsoft Windows 11 Pro",
+    "build": "26200",
+    "version": "10.0.26200"
+   },
+   "method": "Current read-only OS, CPU, repository disk and Python queries; each child records actual viewport, DPI, theme, motion and loaded runtime. Power and unrelated workload remain unknown.",
+   "python": "Python 3.13.14",
+   "source": "706be4bd698b841e51a7a55a163d7ce6137964ac",
+   "repository_device": {
+    "bytes": 4000787030016,
+    "model": "WD_BLACK SN850X 4000GB",
+    "bus": "NVMe",
+    "drive": "F:"
+   },
+   "power_status": "not observed"
+  }
+ },
+ "bridge-counter-study-20261007/comparison-summary.json": {
+  "bytes": 10714,
+  "sha256": "de57151b425ea15c0f4323efeb627baf8b2ed5c4368c5f2f8ae6c2b493440789",
+  "content": {
+   "baseline-plan": {
+    "burst": {
+     "covered": 120.6,
+     "paint_opportunity": 133.8,
+     "uncovered": 113.3,
+     "capture": 18.796,
+     "projection": 3.224,
+     "registry": 1.357,
+     "window_build": 1.242,
+     "native_json_encode": 0.613,
+     "round_trip": 29.8,
+     "dom": 5.6,
+     "bytes": 198466,
+     "requests": 27,
+     "discarded": 18,
+     "coverage_range_ms": [
+      116.3,
+      125.6
+     ]
+    },
+    "covered-return": {
+     "covered": 16.4,
+     "paint_opportunity": 24.7,
+     "uncovered": 8.2,
+     "capture": 18.619,
+     "projection": 3.18,
+     "registry": 1.39,
+     "window_build": 1.272,
+     "native_json_encode": 0.605,
+     "round_trip": 28.9,
+     "dom": null,
+     "bytes": 198470,
+     "requests": 9,
+     "discarded": 9,
+     "coverage_range_ms": [
+      11.5,
+      16.7
+     ]
+    },
+    "initial": {
+     "covered": 89.3,
+     "paint_opportunity": 101.4,
+     "uncovered": 87.3,
+     "capture": 21.538,
+     "projection": 3.213,
+     "registry": 1.332,
+     "window_build": 1.177,
+     "native_json_encode": 0.73,
+     "round_trip": 33.8,
+     "dom": 5.6,
+     "bytes": 197835,
+     "requests": 3,
+     "discarded": 0,
+     "coverage_range_ms": [
+      88.0,
+      95.6
+     ]
+    },
+    "jump": {
+     "covered": 57.6,
+     "paint_opportunity": 71.2,
+     "uncovered": 54.3,
+     "capture": 18.505,
+     "projection": 3.174,
+     "registry": 1.353,
+     "window_build": 1.238,
+     "native_json_encode": 0.593,
+     "round_trip": 29.0,
+     "dom": 6.1,
+     "bytes": 198624,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      53.8,
+      61.3
+     ]
+    },
+    "keyboard": {
+     "covered": 60.3,
+     "paint_opportunity": 73.5,
+     "uncovered": 0.0,
+     "capture": 18.998,
+     "projection": 3.423,
+     "registry": 1.515,
+     "window_build": 1.342,
+     "native_json_encode": 0.635,
+     "round_trip": 30.3,
+     "dom": 20.4,
+     "bytes": 198676,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      57.9,
+      62.8
+     ]
+    },
+    "sequential": {
+     "covered": 64.3,
+     "paint_opportunity": 79.1,
+     "uncovered": 56.6,
+     "capture": 18.71,
+     "projection": 3.274,
+     "registry": 1.406,
+     "window_build": 1.293,
+     "native_json_encode": 0.6,
+     "round_trip": 29.9,
+     "dom": 6.5,
+     "bytes": 198097,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      59.6,
+      103.1
+     ]
+    }
+   },
+   "baseline-inventory": {
+    "burst": {
+     "covered": 144.7,
+     "paint_opportunity": 155.9,
+     "uncovered": 137.1,
+     "capture": 16.922,
+     "projection": 3.577,
+     "registry": 1.898,
+     "window_build": 1.889,
+     "native_json_encode": 0.61,
+     "round_trip": 28.45,
+     "dom": 19.9,
+     "bytes": 176320.0,
+     "requests": 34,
+     "discarded": 25,
+     "coverage_range_ms": [
+      116.2,
+      148.7
+     ]
+    },
+    "covered-return": {
+     "covered": 16.5,
+     "paint_opportunity": 24.7,
+     "uncovered": 8.1,
+     "capture": 16.985,
+     "projection": 3.603,
+     "registry": 1.888,
+     "window_build": 1.879,
+     "native_json_encode": 0.594,
+     "round_trip": 28.3,
+     "dom": null,
+     "bytes": 176066,
+     "requests": 9,
+     "discarded": 9,
+     "coverage_range_ms": [
+      13.4,
+      16.7
+     ]
+    },
+    "initial": {
+     "covered": 80.8,
+     "paint_opportunity": 92.7,
+     "uncovered": 77.2,
+     "capture": 16.324,
+     "projection": 3.624,
+     "registry": 2.033,
+     "window_build": 2.021,
+     "native_json_encode": 0.925,
+     "round_trip": 30.4,
+     "dom": 30.1,
+     "bytes": 174466,
+     "requests": 3,
+     "discarded": 0,
+     "coverage_range_ms": [
+      78.1,
+      81.3
+     ]
+    },
+    "jump": {
+     "covered": 57.3,
+     "paint_opportunity": 68.3,
+     "uncovered": 51.7,
+     "capture": 17.07,
+     "projection": 3.579,
+     "registry": 1.896,
+     "window_build": 1.886,
+     "native_json_encode": 0.617,
+     "round_trip": 28.5,
+     "dom": 22.1,
+     "bytes": 176388,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      52.4,
+      60.3
+     ]
+    },
+    "keyboard": {
+     "covered": 49.3,
+     "paint_opportunity": 59.9,
+     "uncovered": 0.0,
+     "capture": 17.134,
+     "projection": 3.593,
+     "registry": 1.881,
+     "window_build": 1.871,
+     "native_json_encode": 0.604,
+     "round_trip": 28.2,
+     "dom": 19.6,
+     "bytes": 176347,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      48.1,
+      51.6
+     ]
+    },
+    "sequential": {
+     "covered": 61.7,
+     "paint_opportunity": 73.5,
+     "uncovered": 54.5,
+     "capture": 17.366,
+     "projection": 3.629,
+     "registry": 1.893,
+     "window_build": 1.884,
+     "native_json_encode": 0.621,
+     "round_trip": 28.8,
+     "dom": 23.0,
+     "bytes": 174782,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      56.2,
+      70.8
+     ]
+    }
+   },
+   "candidate-plan": {
+    "burst": {
+     "covered": 120.6,
+     "paint_opportunity": 133.3,
+     "uncovered": 117.6,
+     "capture": 12.419,
+     "projection": 3.354,
+     "registry": 1.457,
+     "window_build": 1.322,
+     "native_json_encode": 0.636,
+     "round_trip": 23.3,
+     "dom": 5.6,
+     "bytes": 198565.5,
+     "requests": 36,
+     "discarded": 27,
+     "coverage_range_ms": [
+      118.4,
+      127.2
+     ]
+    },
+    "covered-return": {
+     "covered": 16.7,
+     "paint_opportunity": 24.8,
+     "uncovered": 8.6,
+     "capture": 12.682,
+     "projection": 3.35,
+     "registry": 1.454,
+     "window_build": 1.336,
+     "native_json_encode": 0.628,
+     "round_trip": 23.2,
+     "dom": null,
+     "bytes": 198470,
+     "requests": 9,
+     "discarded": 9,
+     "coverage_range_ms": [
+      9.1,
+      17.6
+     ]
+    },
+    "initial": {
+     "covered": 81.8,
+     "paint_opportunity": 94.7,
+     "uncovered": 78.2,
+     "capture": 12.575,
+     "projection": 3.357,
+     "registry": 1.528,
+     "window_build": 1.372,
+     "native_json_encode": 0.68,
+     "round_trip": 26.3,
+     "dom": 5.7,
+     "bytes": 197835,
+     "requests": 3,
+     "discarded": 0,
+     "coverage_range_ms": [
+      75.2,
+      83.8
+     ]
+    },
+    "jump": {
+     "covered": 50.2,
+     "paint_opportunity": 64.1,
+     "uncovered": 48.9,
+     "capture": 12.477,
+     "projection": 3.321,
+     "registry": 1.369,
+     "window_build": 1.249,
+     "native_json_encode": 0.61,
+     "round_trip": 23.3,
+     "dom": 6.0,
+     "bytes": 198624,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      45.9,
+      52.0
+     ]
+    },
+    "keyboard": {
+     "covered": 52.7,
+     "paint_opportunity": 66.2,
+     "uncovered": 0.0,
+     "capture": 12.623,
+     "projection": 3.236,
+     "registry": 1.36,
+     "window_build": 1.244,
+     "native_json_encode": 0.596,
+     "round_trip": 23.4,
+     "dom": 20.3,
+     "bytes": 198676,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      52.0,
+      58.3
+     ]
+    },
+    "sequential": {
+     "covered": 56.4,
+     "paint_opportunity": 70.8,
+     "uncovered": 49.0,
+     "capture": 12.587,
+     "projection": 3.347,
+     "registry": 1.368,
+     "window_build": 1.245,
+     "native_json_encode": 0.622,
+     "round_trip": 23.4,
+     "dom": 6.2,
+     "bytes": 198097,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      52.3,
+      95.4
+     ]
+    }
+   },
+   "candidate-inventory": {
+    "burst": {
+     "covered": 128.0,
+     "paint_opportunity": 138.1,
+     "uncovered": 122.2,
+     "capture": 12.907,
+     "projection": 3.64,
+     "registry": 1.882,
+     "window_build": 1.873,
+     "native_json_encode": 0.602,
+     "round_trip": 24.55,
+     "dom": 19.9,
+     "bytes": 176333.5,
+     "requests": 36,
+     "discarded": 27,
+     "coverage_range_ms": [
+      123.5,
+      132.2
+     ]
+    },
+    "covered-return": {
+     "covered": 15.8,
+     "paint_opportunity": 24.1,
+     "uncovered": 8.1,
+     "capture": 13.119,
+     "projection": 3.76,
+     "registry": 1.916,
+     "window_build": 1.906,
+     "native_json_encode": 0.616,
+     "round_trip": 24.3,
+     "dom": null,
+     "bytes": 176066,
+     "requests": 9,
+     "discarded": 9,
+     "coverage_range_ms": [
+      10.9,
+      16.6
+     ]
+    },
+    "initial": {
+     "covered": 81.7,
+     "paint_opportunity": 93.0,
+     "uncovered": 81.0,
+     "capture": 13.813,
+     "projection": 3.795,
+     "registry": 2.473,
+     "window_build": 2.458,
+     "native_json_encode": 0.612,
+     "round_trip": 27.8,
+     "dom": 29.3,
+     "bytes": 174466,
+     "requests": 3,
+     "discarded": 0,
+     "coverage_range_ms": [
+      80.4,
+      90.5
+     ]
+    },
+    "jump": {
+     "covered": 56.3,
+     "paint_opportunity": 67.6,
+     "uncovered": 48.0,
+     "capture": 13.568,
+     "projection": 3.594,
+     "registry": 1.916,
+     "window_build": 1.905,
+     "native_json_encode": 0.644,
+     "round_trip": 25.1,
+     "dom": 22.4,
+     "bytes": 176388,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      49.8,
+      59.1
+     ]
+    },
+    "keyboard": {
+     "covered": 47.0,
+     "paint_opportunity": 57.1,
+     "uncovered": 0.0,
+     "capture": 13.96,
+     "projection": 3.573,
+     "registry": 1.947,
+     "window_build": 1.938,
+     "native_json_encode": 0.615,
+     "round_trip": 25.0,
+     "dom": 19.3,
+     "bytes": 176347,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      44.6,
+      48.8
+     ]
+    },
+    "sequential": {
+     "covered": 57.1,
+     "paint_opportunity": 69.1,
+     "uncovered": 50.3,
+     "capture": 13.121,
+     "projection": 3.665,
+     "registry": 1.893,
+     "window_build": 1.88,
+     "native_json_encode": 0.601,
+     "round_trip": 24.9,
+     "dom": 23.5,
+     "bytes": 174782,
+     "requests": 9,
+     "discarded": 0,
+     "coverage_range_ms": [
+      53.9,
+      88.0
+     ]
+    }
+   }
+  }
+ },
+ "bridge-counter-study-20261007/design-counter-probe.json": {
+  "bytes": 6527,
+  "sha256": "a75ed9e8419fb2e976007003e7e9c4efe257ecee7a14ee55250a43c3e87c00f0",
+  "content": {
+   "inspected_revision": "706be4bd698b841e51a7a55a163d7ce6137964ac",
+   "counter_sha256": "6a0ff18ea672daf6ddb3b713bcab1ce2027c13c589eb80a44660804cdd9e3bc9",
+   "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+   "sizes": [
+    1024,
+    4096,
+    16384
+   ],
+   "comparisons": 78054,
+   "valid_exact_checks": 117,
+   "bounded_early_reject": true,
+   "timing_authority": "diagnostic sequential microbench only; no product acceptance or headline loading claim",
+   "timings": {
+    "public_view_witness_strings": {
+     "occurrences": 1073,
+     "length_min": 1,
+     "length_max": 64,
+     "timings": {
+      "old": {
+       "ns_per_string_samples": [
+        1403.58807082945,
+        1382.0712954333644,
+        1380.34715750233,
+        1370.363466915191,
+        1369.5479962721342
+       ],
+       "median_ns": 1380.34715750233
+      },
+      "1024": {
+       "ns_per_string_samples": [
+        898.1360671015843,
+        892.5093196644921,
+        894.2334575955266,
+        906.5936626281454,
+        901.0135135135135
+       ],
+       "median_ns": 898.1360671015843
+      },
+      "4096": {
+       "ns_per_string_samples": [
+        943.3946877912396,
+        901.6425908667288,
+        899.2078285181733,
+        911.8126747437092,
+        900.4193849021435
+       ],
+       "median_ns": 901.6425908667288
+      },
+      "16384": {
+       "ns_per_string_samples": [
+        903.7861136999068,
+        914.5736253494874,
+        903.5181733457596,
+        937.6863932898416,
+        933.8653308480895
+       ],
+       "median_ns": 914.5736253494874
+      }
+     }
+    },
+    "window_field_length_sweep": {
+     "occurrences": 288,
+     "length_min": 0,
+     "length_max": 300,
+     "timings": {
+      "old": {
+       "ns_per_string_samples": [
+        9070.486111111111,
+        8939.236111111111,
+        9076.258680555555,
+        8844.401041666666,
+        8834.418402777777
+       ],
+       "median_ns": 8939.236111111111
+      },
+      "1024": {
+       "ns_per_string_samples": [
+        1001.2152777777778,
+        1001.3888888888889,
+        995.1822916666666,
+        997.1788194444445,
+        1009.8958333333334
+       ],
+       "median_ns": 1001.2152777777778
+      },
+      "4096": {
+       "ns_per_string_samples": [
+        1000.9114583333334,
+        994.2708333333334,
+        1006.5972222222222,
+        1005.7725694444445,
+        996.1371527777778
+       ],
+       "median_ns": 1000.9114583333334
+      },
+      "16384": {
+       "ns_per_string_samples": [
+        992.2309027777778,
+        990.5815972222222,
+        997.7430555555555,
+        996.0069444444445,
+        996.2239583333334
+       ],
+       "median_ns": 996.0069444444445
+      }
+     }
+    },
+    "mixed_window_fields": {
+     "occurrences": 128,
+     "length_min": 280,
+     "length_max": 280,
+     "timings": {
+      "old": {
+       "ns_per_string_samples": [
+        31694.43359375,
+        31728.22265625,
+        32413.8671875,
+        31819.62890625,
+        31790.72265625
+       ],
+       "median_ns": 31790.72265625
+      },
+      "1024": {
+       "ns_per_string_samples": [
+        2451.5625,
+        2342.08984375,
+        2295.80078125,
+        2265.8203125,
+        2266.015625
+       ],
+       "median_ns": 2295.80078125
+      },
+      "4096": {
+       "ns_per_string_samples": [
+        2243.359375,
+        2252.34375,
+        2234.27734375,
+        2235.7421875,
+        2229.39453125
+       ],
+       "median_ns": 2235.7421875
+      },
+      "16384": {
+       "ns_per_string_samples": [
+        2239.94140625,
+        2249.4140625,
+        2251.5625,
+        2288.37890625,
+        2413.28125
+       ],
+       "median_ns": 2251.5625
+      }
+     }
+    },
+    "long_path_32767": {
+     "occurrences": 1,
+     "length_min": 32767,
+     "length_max": 32767,
+     "timings": {
+      "old": {
+       "ns_per_string_samples": [
+        3187980.0,
+        3213860.0,
+        3230620.0,
+        3141240.0,
+        3229220.0
+       ],
+       "median_ns": 3213860.0
+      },
+      "1024": {
+       "ns_per_string_samples": [
+        91980.0,
+        89140.0,
+        89500.0,
+        90300.0,
+        90300.0
+       ],
+       "median_ns": 90300.0
+      },
+      "4096": {
+       "ns_per_string_samples": [
+        74120.0,
+        73060.0,
+        72260.0,
+        72840.0,
+        72080.0
+       ],
+       "median_ns": 72840.0
+      },
+      "16384": {
+       "ns_per_string_samples": [
+        68700.0,
+        68340.0,
+        68160.0,
+        80260.0,
+        68120.0
+       ],
+       "median_ns": 68340.0
+      }
+     }
+    },
+    "large_string_131072": {
+     "occurrences": 1,
+     "length_min": 131072,
+     "length_max": 131072,
+     "timings": {
+      "old": {
+       "ns_per_string_samples": [
+        12742600.0,
+        12891500.0,
+        12816966.666666666,
+        13199900.0,
+        12722000.0
+       ],
+       "median_ns": 12816966.666666666
+      },
+      "1024": {
+       "ns_per_string_samples": [
+        378300.0,
+        359966.6666666667,
+        356033.3333333333,
+        357800.0,
+        354733.3333333333
+       ],
+       "median_ns": 357800.0
+      },
+      "4096": {
+       "ns_per_string_samples": [
+        289233.3333333333,
+        287200.0,
+        288800.0,
+        299866.6666666667,
+        288400.0
+       ],
+       "median_ns": 288800.0
+      },
+      "16384": {
+       "ns_per_string_samples": [
+        274933.3333333333,
+        271533.3333333333,
+        271366.6666666667,
+        272666.6666666667,
+        275633.3333333333
+       ],
+       "median_ns": 272666.6666666667
+      }
+     }
+    }
+   }
+  }
+ }
+}

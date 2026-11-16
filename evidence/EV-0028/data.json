@@ -1,0 +1,1073 @@
+{
+ "projection-tuning-20261109/baseline-fingerprint.json": {
+  "bytes": 528,
+  "sha256": "f97b60f4d0736a4dc7737304848feb077414a3170185b6c59b0dbf034170b29f",
+  "content": {
+   "rows": [
+    {
+     "heavy": false,
+     "nodes": 120000,
+     "sha256": "e199ea240c54c273d929881adaca5aa7613982e3ad3a02657348494b150e511c"
+    },
+    {
+     "heavy": true,
+     "nodes": 240000,
+     "sha256": "b459e02f597cedc6992b3cf67a3007d56f88f02e33ab1ed091cae564d3175898"
+    }
+   ],
+   "package_file": "F:\\GitHubRepositories\\NamiSync\\build\\projection-tuning-20261109\\baseline\\namisync\\__init__.py",
+   "python": "3.13.17",
+   "raw_log": "F:\\GitHubRepositories\\NamiSync\\build\\projection-tuning-20261109\\baseline-fingerprint-99b47a615bde4487bc208815eda1b22a-raw\\child.log"
+  }
+ },
+ "projection-tuning-20261109/comparison-baseline-sharing.json": {
+  "bytes": 29604,
+  "sha256": "992e7687e09af5b8849803b1474bf2792a558890b2697e435882b9aec6133ed4",
+  "content": [
+   {
+    "arm": "baseline",
+    "metric": "projection_cold_base",
+    "repetition": 1,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 120000,
+       "operations": 100000,
+       "path_depth": 32,
+       "dependency_depth": 32
+      },
+      "elapsed_ns": 2263203500,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_cold_base",
+    "repetition": 1,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 120000,
+       "operations": 100000,
+       "path_depth": 32,
+       "dependency_depth": 32
+      },
+      "elapsed_ns": 2169232400,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "baseline",
+    "metric": "projection_cold_information_heavy",
+    "repetition": 1,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 240000,
+       "operations": 100000,
+       "warnings": 120000
+      },
+      "elapsed_ns": 3289212600,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_cold_information_heavy",
+    "repetition": 1,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 240000,
+       "operations": 100000,
+       "warnings": 120000
+      },
+      "elapsed_ns": 3384109900,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "baseline",
+    "metric": "projection_incremental_retained_memory_staging_overlap",
+    "repetition": 1,
+    "samples": [
+     {
+      "correctness": {
+       "base": {
+        "projection_rows": 120000,
+        "window_rows": 256,
+        "window_total": 119999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "sibling_ordinals": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         }
+        }
+       },
+       "staged": {
+        "projection_rows": 240000,
+        "window_rows": 256,
+        "window_total": 239999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "sibling_ordinals": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         }
+        }
+       },
+       "simultaneously_retained": true,
+       "distinct_projections": true,
+       "no_cross_state_buffer_sharing": true,
+       "final_witness_accessed": true
+      },
+      "elapsed_ns": null,
+      "iteration": 1,
+      "retained_bytes": 324644864
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_incremental_retained_memory_staging_overlap",
+    "repetition": 1,
+    "samples": [
+     {
+      "correctness": {
+       "base": {
+        "projection_rows": 120000,
+        "window_rows": 256,
+        "window_total": 119999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "sibling_ordinals": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         }
+        }
+       },
+       "staged": {
+        "projection_rows": 240000,
+        "window_rows": 256,
+        "window_total": 239999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "sibling_ordinals": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         }
+        }
+       },
+       "simultaneously_retained": true,
+       "distinct_projections": true,
+       "no_cross_state_buffer_sharing": true,
+       "final_witness_accessed": true
+      },
+      "elapsed_ns": null,
+      "iteration": 1,
+      "retained_bytes": 310128640
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_cold_base",
+    "repetition": 2,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 120000,
+       "operations": 100000,
+       "path_depth": 32,
+       "dependency_depth": 32
+      },
+      "elapsed_ns": 2127587700,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "baseline",
+    "metric": "projection_cold_base",
+    "repetition": 2,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 120000,
+       "operations": 100000,
+       "path_depth": 32,
+       "dependency_depth": 32
+      },
+      "elapsed_ns": 2200540400,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_cold_information_heavy",
+    "repetition": 2,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 240000,
+       "operations": 100000,
+       "warnings": 120000
+      },
+      "elapsed_ns": 3176658900,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "baseline",
+    "metric": "projection_cold_information_heavy",
+    "repetition": 2,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 240000,
+       "operations": 100000,
+       "warnings": 120000
+      },
+      "elapsed_ns": 3124397300,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_incremental_retained_memory_staging_overlap",
+    "repetition": 2,
+    "samples": [
+     {
+      "correctness": {
+       "base": {
+        "projection_rows": 120000,
+        "window_rows": 256,
+        "window_total": 119999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "sibling_ordinals": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         }
+        }
+       },
+       "staged": {
+        "projection_rows": 240000,
+        "window_rows": 256,
+        "window_total": 239999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "sibling_ordinals": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         }
+        }
+       },
+       "simultaneously_retained": true,
+       "distinct_projections": true,
+       "no_cross_state_buffer_sharing": true,
+       "final_witness_accessed": true
+      },
+      "elapsed_ns": null,
+      "iteration": 1,
+      "retained_bytes": 306835456
+     }
+    ]
+   },
+   {
+    "arm": "baseline",
+    "metric": "projection_incremental_retained_memory_staging_overlap",
+    "repetition": 2,
+    "samples": [
+     {
+      "correctness": {
+       "base": {
+        "projection_rows": 120000,
+        "window_rows": 256,
+        "window_total": 119999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "sibling_ordinals": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         }
+        }
+       },
+       "staged": {
+        "projection_rows": 240000,
+        "window_rows": 256,
+        "window_total": 239999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "sibling_ordinals": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         }
+        }
+       },
+       "simultaneously_retained": true,
+       "distinct_projections": true,
+       "no_cross_state_buffer_sharing": true,
+       "final_witness_accessed": true
+      },
+      "elapsed_ns": null,
+      "iteration": 1,
+      "retained_bytes": 324018176
+     }
+    ]
+   },
+   {
+    "arm": "baseline",
+    "metric": "projection_cold_base",
+    "repetition": 3,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 120000,
+       "operations": 100000,
+       "path_depth": 32,
+       "dependency_depth": 32
+      },
+      "elapsed_ns": 2189903000,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_cold_base",
+    "repetition": 3,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 120000,
+       "operations": 100000,
+       "path_depth": 32,
+       "dependency_depth": 32
+      },
+      "elapsed_ns": 2225641200,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "baseline",
+    "metric": "projection_cold_information_heavy",
+    "repetition": 3,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 240000,
+       "operations": 100000,
+       "warnings": 120000
+      },
+      "elapsed_ns": 3329213400,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_cold_information_heavy",
+    "repetition": 3,
+    "samples": [
+     {
+      "correctness": {
+       "projection_rows": 240000,
+       "operations": 100000,
+       "warnings": 120000
+      },
+      "elapsed_ns": 3097075900,
+      "iteration": 1,
+      "retained_bytes": null
+     }
+    ]
+   },
+   {
+    "arm": "baseline",
+    "metric": "projection_incremental_retained_memory_staging_overlap",
+    "repetition": 3,
+    "samples": [
+     {
+      "correctness": {
+       "base": {
+        "projection_rows": 120000,
+        "window_rows": 256,
+        "window_total": 119999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "sibling_ordinals": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         }
+        }
+       },
+       "staged": {
+        "projection_rows": 240000,
+        "window_rows": 256,
+        "window_total": 239999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "sibling_ordinals": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         }
+        }
+       },
+       "simultaneously_retained": true,
+       "distinct_projections": true,
+       "no_cross_state_buffer_sharing": true,
+       "final_witness_accessed": true
+      },
+      "elapsed_ns": null,
+      "iteration": 1,
+      "retained_bytes": 324440064
+     }
+    ]
+   },
+   {
+    "arm": "sharing",
+    "metric": "projection_incremental_retained_memory_staging_overlap",
+    "repetition": 3,
+    "samples": [
+     {
+      "correctness": {
+       "base": {
+        "projection_rows": 120000,
+        "window_rows": 256,
+        "window_total": 119999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 480000,
+          "byte_width": 4,
+          "count": 120000
+         },
+         "sibling_ordinals": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 240000,
+          "byte_width": 2,
+          "count": 120000
+         }
+        }
+       },
+       "staged": {
+        "projection_rows": 240000,
+        "window_rows": 256,
+        "window_total": 239999,
+        "window_revision": 1,
+        "state_revision": 1,
+        "state_projection_identity": true,
+        "distinct_canonical_current_orders": true,
+        "canonical_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "current_order": {
+         "ordered": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "inverse_valid": true
+        },
+        "visible_buffers": {
+         "visible_source_positions": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "visible_index_by_source_position": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "sibling_ordinals": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         },
+         "retained_direct_child_counts": {
+          "byte_length": 960000,
+          "byte_width": 4,
+          "count": 240000
+         }
+        }
+       },
+       "simultaneously_retained": true,
+       "distinct_projections": true,
+       "no_cross_state_buffer_sharing": true,
+       "final_witness_accessed": true
+      },
+      "elapsed_ns": null,
+      "iteration": 1,
+      "retained_bytes": 309129216
+     }
+    ]
+   }
+  ]
+ },
+ "projection-tuning-20261109/descriptor-trial-fingerprint.json": {
+  "bytes": 544,
+  "sha256": "a5681b69881f81230224d53a4453b3c0ac163fed46d8460697f673293a8c9840",
+  "content": {
+   "rows": [
+    {
+     "heavy": false,
+     "nodes": 120000,
+     "sha256": "e199ea240c54c273d929881adaca5aa7613982e3ad3a02657348494b150e511c"
+    },
+    {
+     "heavy": true,
+     "nodes": 240000,
+     "sha256": "b459e02f597cedc6992b3cf67a3007d56f88f02e33ab1ed091cae564d3175898"
+    }
+   ],
+   "package_file": "F:\\GitHubRepositories\\NamiSync\\build\\projection-tuning-20261109\\descriptor-trial\\namisync\\__init__.py",
+   "python": "3.13.17",
+   "raw_log": "F:\\GitHubRepositories\\NamiSync\\build\\projection-tuning-20261109\\descriptor-trial-fingerprint-d995843e4e874580a9229123910f22a4-raw\\child.log"
+  }
+ },
+ "projection-tuning-20261109/sharing-fingerprint.json": {
+  "bytes": 526,
+  "sha256": "12108b8672b41d1c6314c8b08afbe030ebbed75931314a647cc16adc8e374923",
+  "content": {
+   "rows": [
+    {
+     "heavy": false,
+     "nodes": 120000,
+     "sha256": "e199ea240c54c273d929881adaca5aa7613982e3ad3a02657348494b150e511c"
+    },
+    {
+     "heavy": true,
+     "nodes": 240000,
+     "sha256": "b459e02f597cedc6992b3cf67a3007d56f88f02e33ab1ed091cae564d3175898"
+    }
+   ],
+   "package_file": "F:\\GitHubRepositories\\NamiSync\\build\\projection-tuning-20261109\\sharing\\namisync\\__init__.py",
+   "python": "3.13.17",
+   "raw_log": "F:\\GitHubRepositories\\NamiSync\\build\\projection-tuning-20261109\\sharing-fingerprint-f72b2671dfa040e599d6b25e36bdb993-raw\\child.log"
+  }
+ }
+}

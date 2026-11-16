@@ -1,0 +1,654 @@
+{
+ "dom-costs-20261109/commit-verification.json": {
+  "bytes": 1394,
+  "sha256": "2b3df49517f6e10383533b8602dbfc4951412eed7062de1d1c8e53f44b98bf9d",
+  "content": {
+   "commit": "ddf1afe92d5ec324d2fa962cb5e1886724cd2c1e",
+   "matched_package_files": 303,
+   "newline_normalized": [
+    "namisync/db/history.py",
+    "namisync/db/repositories.py",
+    "namisync/interfaces/branding/namisync_icon_color.svg",
+    "namisync/interfaces/branding/namisync_icon_mono.svg",
+    "namisync/interfaces/branding/namisync_icon_two_tone.svg",
+    "namisync/interfaces/cli.py",
+    "namisync/interfaces/command_ingress.py",
+    "namisync/interfaces/task_lifecycle.py",
+    "namisync/interfaces/task_port.py",
+    "namisync/interfaces/web/assets/about.js",
+    "namisync/interfaces/web/assets/index.html",
+    "namisync/interfaces/web/assets/legal_content.js",
+    "namisync/interfaces/web/assets/rail.js",
+    "namisync/interfaces/web/assets/row_menu.js",
+    "namisync/interfaces/web/assets/settings.js",
+    "namisync/interfaces/web/assets/setup.js",
+    "namisync/interfaces/web/assets/table_columns.js",
+    "namisync/interfaces/web/assets/task_status.js",
+    "namisync/interfaces/web/assets/theme.js",
+    "namisync/interfaces/web/bridge.py",
+    "namisync/interfaces/web/readiness.py",
+    "namisync/interfaces/web/review_view.py",
+    "namisync/interfaces/web/task_snapshot.py",
+    "namisync/workflows/models.py",
+    "namisync/workflows/recall.py",
+    "namisync/workflows/runtime.py",
+    "namisync/workflows/sibling_order.py"
+   ]
+  }
+ },
+ "dom-costs-20261109/measurement/candidate-identity.json": {
+  "bytes": 2112,
+  "sha256": "1a04e688cf584159f37e919def2f7c7acb9c2e747a8684b55e987e3a03276b22",
+  "content": {
+   "package_files": 303,
+   "raw_changes": [
+    "namisync/db/history.py",
+    "namisync/db/repositories.py",
+    "namisync/interfaces/branding/namisync_icon_color.svg",
+    "namisync/interfaces/branding/namisync_icon_mono.svg",
+    "namisync/interfaces/branding/namisync_icon_two_tone.svg",
+    "namisync/interfaces/cli.py",
+    "namisync/interfaces/command_ingress.py",
+    "namisync/interfaces/task_lifecycle.py",
+    "namisync/interfaces/task_port.py",
+    "namisync/interfaces/web/assets/about.js",
+    "namisync/interfaces/web/assets/app.js",
+    "namisync/interfaces/web/assets/index.html",
+    "namisync/interfaces/web/assets/legal_content.js",
+    "namisync/interfaces/web/assets/plan_review.js",
+    "namisync/interfaces/web/assets/rail.js",
+    "namisync/interfaces/web/assets/row_menu.js",
+    "namisync/interfaces/web/assets/settings.js",
+    "namisync/interfaces/web/assets/setup.js",
+    "namisync/interfaces/web/assets/table_columns.js",
+    "namisync/interfaces/web/assets/table_controller.js",
+    "namisync/interfaces/web/assets/task_status.js",
+    "namisync/interfaces/web/assets/theme.js",
+    "namisync/interfaces/web/assets/tree.js",
+    "namisync/interfaces/web/bridge.py",
+    "namisync/interfaces/web/readiness.py",
+    "namisync/interfaces/web/review_view.py",
+    "namisync/interfaces/web/task_snapshot.py",
+    "namisync/workflows/models.py",
+    "namisync/workflows/recall.py",
+    "namisync/workflows/runtime.py",
+    "namisync/workflows/sibling_order.py"
+   ],
+   "normalized_changes": [
+    "namisync/interfaces/web/assets/app.js",
+    "namisync/interfaces/web/assets/plan_review.js",
+    "namisync/interfaces/web/assets/table_controller.js",
+    "namisync/interfaces/web/assets/tree.js"
+   ],
+   "prior_manifest_sha256": "29225c80ef4c9b2d11f814b214653fdd01350ecdc74998fa3c102c69af8ef23c",
+   "manifest_sha256": "25494fef720c2d36d46bbbe2ba33fbac20571e837a48608f0e9cdfc086b82277",
+   "freeze_producer_sha256": "f89948e74560e9c6ca38fc8390395b5388e6854cf69f4587b107c4c002ccc68b",
+   "exact_checkout_match": true,
+   "helpers_unchanged": true
+  }
+ },
+ "dom-costs-20261109/measurement/collection/ack-summary.json": {
+  "bytes": 10731,
+  "sha256": "7b2093cfdf505c8d41cc9d86196c2c1751a77e29123873498a8ec3d58bad1ab6",
+  "content": {
+   "rows": {
+    "linger25-plan-01": {
+     "linger_seconds": 0.025,
+     "execution": {
+      "seconds": 113.447,
+      "created": {
+       "elements": 204828,
+       "listeners": 98890
+      },
+      "commands": {
+       "next_events": 3207,
+       "get_plan_window": 218,
+       "get_plan_anchor": 64
+      },
+      "command_handler_seconds": {
+       "get_plan_anchor": 0.0015682987868785858,
+       "get_plan_window": 0.3547686953097582,
+       "next_events": 99.12440060265362
+      },
+      "returned_window_rows": 55391,
+      "sampled_cpu_seconds": {
+       "webview2-browser": 3.84375,
+       "webview2-utility:storage.mojom.StorageService": 0.0,
+       "webview2-renderer": 31.953125,
+       "webview2-utility:network.mojom.NetworkService": 0.0625,
+       "webview2-gpu-process": 12.265625,
+       "host": 80.34375,
+       "webview2-crashpad-handler": 0.046875
+      },
+      "same_window_intervals": {
+       "count": 154,
+       "min_ms": 115.85929989814758,
+       "median_ms": 505.63965016044676,
+       "max_ms": 2971.9867003150284,
+       "below_200ms": 1
+      },
+      "shifted_window_intervals": {
+       "count": 63,
+       "min_ms": 507.0217000320554,
+       "median_ms": 515.0951999239624,
+       "max_ms": 1204.6293001621962,
+       "below_200ms": 0
+      },
+      "whole_private_peak_MiB": 1121.05859375,
+      "renderer_private_peak_MiB": 659.22265625,
+      "heap_max": {
+       "nodes": 49313,
+       "jsEventListeners": 15649,
+       "usedSize": 242722456,
+       "totalSize": 282025984,
+       "embedderHeapUsedSize": 236335656
+      },
+      "heap_first": {
+       "t": 7.12830420024693,
+       "phase": "task-execute",
+       "usedSize": 3274732,
+       "totalSize": 5419008,
+       "embedderHeapUsedSize": 29505840,
+       "backingStorageSize": 793369,
+       "documents": 18,
+       "nodes": 5379,
+       "jsEventListeners": 1802
+      },
+      "heap_last": {
+       "t": 120.54646079987288,
+       "phase": "task-execute",
+       "usedSize": 3105956,
+       "totalSize": 3932160,
+       "embedderHeapUsedSize": 11212360,
+       "backingStorageSize": 793347,
+       "documents": 9,
+       "nodes": 3839,
+       "jsEventListeners": 1385
+      }
+     },
+     "whole_run_process_cpu_seconds": 88.984375,
+     "whole_run_bridge_threads": 7052,
+     "whole_run_bridge_thread_cpu_seconds": 12.265625,
+     "whole_run_thread_buckets": {
+      "other-thread": {
+       "count": 54,
+       "cpu_seconds": 0.109375,
+       "wall_seconds_sum": 258.0394398001954
+      },
+      "bridge-other-command": {
+       "count": 25,
+       "cpu_seconds": 0.6875,
+       "wall_seconds_sum": 1.2844280991703272
+      },
+      "bridge-ack": {
+       "count": 3523,
+       "cpu_seconds": 1.453125,
+       "wall_seconds_sum": 13.294412288814783
+      },
+      "BridgeDispatcher._start_async_command.<locals>.run": {
+       "count": 6,
+       "cpu_seconds": 0.109375,
+       "wall_seconds_sum": 0.25249520037323236
+      },
+      "bridge-completion-ack": {
+       "count": 6,
+       "cpu_seconds": 0.0,
+       "wall_seconds_sum": 0.19701119931414723
+      },
+      "bridge-next-events": {
+       "count": 3214,
+       "cpu_seconds": 5.4375,
+       "wall_seconds_sum": 116.42495699971914
+      },
+      "_AuditPump._run": {
+       "count": 2,
+       "cpu_seconds": 4.125,
+       "wall_seconds_sum": 117.50339169986546
+      },
+      "Dispatcher._run_worker": {
+       "count": 2,
+       "cpu_seconds": 58.90625,
+       "wall_seconds_sum": 117.57974909991026
+      },
+      "SessionObserver._run": {
+       "count": 2,
+       "cpu_seconds": 1.203125,
+       "wall_seconds_sum": 117.5215031998232
+      },
+      "bridge-window": {
+       "count": 220,
+       "cpu_seconds": 4.640625,
+       "wall_seconds_sum": 8.013016099110246
+      },
+      "bridge-anchor": {
+       "count": 64,
+       "cpu_seconds": 0.046875,
+       "wall_seconds_sum": 0.7058226014487445
+      }
+     },
+     "classified_commands_match_independent_handler_counts": {
+      "bridge-next-events": true,
+      "bridge-window": true,
+      "bridge-anchor": true,
+      "bridge-detail": true,
+      "bridge-other-command": true
+     },
+     "result_sha256": "4708f952a5cfa53937f727571b510f05c8900b25c618c47caf5ddd662ff4e4d0",
+     "audit_sha256": "47580056aedb9e3e9beebe8ad5bea956c49b71629df755a33d929d923ca7c5c4",
+     "threads_sha256": "5ce3125e5f1c56d35f60d38fe1cfe416678443038692141f407f6ff724f22419"
+    },
+    "linger200-plan-01": {
+     "linger_seconds": 0.2,
+     "execution": {
+      "seconds": 112.176,
+      "created": {
+       "elements": 216544,
+       "listeners": 101695
+      },
+      "commands": {
+       "next_events": 562,
+       "get_plan_window": 215,
+       "get_plan_anchor": 66
+      },
+      "command_handler_seconds": {
+       "get_plan_anchor": 0.0015075020492076874,
+       "get_plan_window": 0.35143309785053134,
+       "next_events": 108.11193359876052
+      },
+      "returned_window_rows": 54618,
+      "sampled_cpu_seconds": {
+       "host": 69.8125,
+       "webview2-utility:storage.mojom.StorageService": 0.0,
+       "webview2-renderer": 32.0,
+       "webview2-gpu-process": 13.46875,
+       "webview2-utility:network.mojom.NetworkService": 0.09375,
+       "webview2-browser": 2.390625,
+       "webview2-crashpad-handler": 0.046875
+      },
+      "same_window_intervals": {
+       "count": 149,
+       "min_ms": 112.67339996993542,
+       "median_ms": 506.5356004051864,
+       "max_ms": 3010.700900107622,
+       "below_200ms": 1
+      },
+      "shifted_window_intervals": {
+       "count": 65,
+       "min_ms": 507.3738000355661,
+       "median_ms": 516.1649999208748,
+       "max_ms": 1127.3972997441888,
+       "below_200ms": 0
+      },
+      "whole_private_peak_MiB": 1039.0390625,
+      "renderer_private_peak_MiB": 590.7890625,
+      "heap_max": {
+       "nodes": 38170,
+       "jsEventListeners": 12554,
+       "usedSize": 229397524,
+       "totalSize": 262860800,
+       "embedderHeapUsedSize": 179180424
+      },
+      "heap_first": {
+       "t": 7.136048600077629,
+       "phase": "task-execute",
+       "usedSize": 3273924,
+       "totalSize": 5419008,
+       "embedderHeapUsedSize": 29499976,
+       "backingStorageSize": 793374,
+       "documents": 18,
+       "nodes": 5373,
+       "jsEventListeners": 1802
+      },
+      "heap_last": {
+       "t": 119.26750099984929,
+       "phase": "task-execute",
+       "usedSize": 229397524,
+       "totalSize": 262860800,
+       "embedderHeapUsedSize": 138323000,
+       "backingStorageSize": 850768,
+       "documents": 9,
+       "nodes": 3442,
+       "jsEventListeners": 1230
+      }
+     },
+     "whole_run_process_cpu_seconds": 78.203125,
+     "whole_run_bridge_threads": 1758,
+     "whole_run_bridge_thread_cpu_seconds": 8.96875,
+     "whole_run_thread_buckets": {
+      "other-thread": {
+       "count": 54,
+       "cpu_seconds": 0.171875,
+       "wall_seconds_sum": 253.12164659798145
+      },
+      "bridge-other-command": {
+       "count": 24,
+       "cpu_seconds": 0.703125,
+       "wall_seconds_sum": 1.2384794014506042
+      },
+      "bridge-ack": {
+       "count": 876,
+       "cpu_seconds": 0.25,
+       "wall_seconds_sum": 6.9858472044579685
+      },
+      "BridgeDispatcher._start_async_command.<locals>.run": {
+       "count": 6,
+       "cpu_seconds": 0.109375,
+       "wall_seconds_sum": 0.2739573996514082
+      },
+      "bridge-completion-ack": {
+       "count": 6,
+       "cpu_seconds": 0.0,
+       "wall_seconds_sum": 0.2361061000265181
+      },
+      "bridge-next-events": {
+       "count": 569,
+       "cpu_seconds": 3.46875,
+       "wall_seconds_sum": 115.98584350151941
+      },
+      "_AuditPump._run": {
+       "count": 2,
+       "cpu_seconds": 4.4375,
+       "wall_seconds_sum": 116.25263569969684
+      },
+      "Dispatcher._run_worker": {
+       "count": 2,
+       "cpu_seconds": 58.234375,
+       "wall_seconds_sum": 116.32440390018746
+      },
+      "SessionObserver._run": {
+       "count": 2,
+       "cpu_seconds": 1.203125,
+       "wall_seconds_sum": 116.27584180003032
+      },
+      "bridge-window": {
+       "count": 217,
+       "cpu_seconds": 4.5,
+       "wall_seconds_sum": 8.226032904814929
+      },
+      "bridge-anchor": {
+       "count": 66,
+       "cpu_seconds": 0.046875,
+       "wall_seconds_sum": 0.4351729992777109
+      }
+     },
+     "classified_commands_match_independent_handler_counts": {
+      "bridge-next-events": true,
+      "bridge-window": true,
+      "bridge-anchor": true,
+      "bridge-detail": true,
+      "bridge-other-command": true
+     },
+     "result_sha256": "9b35a5770dd0439715aebb00f4bcfe0c9a731de6ff1bc31932d5ee98454fe0f5",
+     "audit_sha256": "31c2b88df173d14810ead177b3e36cfa0273d672bb3e71b4492a7268ac19b245",
+     "threads_sha256": "2af884bc466d194d60983b9505fe9d24fd89c856e839468e0d7da845f472557b"
+    }
+   },
+   "report_sha256": "69a560782d0898938b8492ca5aeca0875c6374899b0bc7ddc41ed09a0d7520f1",
+   "summary_sha256": "ed81ecd07a3d7dd6a5ed4350781fddb16a11dbe1cbfb3b694ce6df645b50eb40",
+   "manifest_sha256": "d7543d5c062b5b40fd12955280f196c09885b43a2ab4c7a9eeaf119613acdf4a",
+   "limits": [
+    "One ordered pair, no stable wall-time claim.",
+    "Thread CPU includes original call body, serialization and native return; excludes caller-side thread creation and teardown.",
+    "ACK CPU is not predicted savings: piggyback/batching still executes custody cleanup in another call, while omitted caller-side creation may also shrink.",
+    "Whole-run buckets include startup, planning and close; execution resource metrics cover the marked phase only.",
+    "Ended-only snapshots do not double-count live threads; phase boundaries can include crossing threads, so bucket claims use whole run.",
+    "Summed per-thread wall seconds overlap and cannot be added to elapsed time."
+   ]
+  }
+ },
+ "dom-costs-20261109/measurement/collection/summary.json": {
+  "bytes": 6924,
+  "sha256": "ed81ecd07a3d7dd6a5ed4350781fddb16a11dbe1cbfb3b694ce6df645b50eb40",
+  "content": {
+   "linger200-plan-01": {
+    "phases": {
+     "task-execute": {
+      "seconds": 112.176,
+      "created": {
+       "elements": 216544,
+       "listeners": 101695
+      },
+      "commands": {
+       "next_events": 562,
+       "get_plan_window": 215,
+       "get_plan_anchor": 66
+      },
+      "command_handler_seconds": {
+       "get_plan_anchor": 0.0015075020492076874,
+       "get_plan_window": 0.35143309785053134,
+       "next_events": 108.11193359876052
+      },
+      "returned_window_rows": 54618,
+      "sampled_cpu_seconds": {
+       "host": 69.8125,
+       "webview2-utility:storage.mojom.StorageService": 0.0,
+       "webview2-renderer": 32.0,
+       "webview2-gpu-process": 13.46875,
+       "webview2-utility:network.mojom.NetworkService": 0.09375,
+       "webview2-browser": 2.390625,
+       "webview2-crashpad-handler": 0.046875
+      },
+      "same_window_intervals": {
+       "count": 149,
+       "min_ms": 112.67339996993542,
+       "median_ms": 506.5356004051864,
+       "max_ms": 3010.700900107622,
+       "below_200ms": 1
+      },
+      "shifted_window_intervals": {
+       "count": 65,
+       "min_ms": 507.3738000355661,
+       "median_ms": 516.1649999208748,
+       "max_ms": 1127.3972997441888,
+       "below_200ms": 0
+      },
+      "whole_private_peak_MiB": 1039.0390625,
+      "renderer_private_peak_MiB": 590.7890625,
+      "heap_max": {
+       "nodes": 38170,
+       "jsEventListeners": 12554,
+       "usedSize": 229397524,
+       "totalSize": 262860800,
+       "embedderHeapUsedSize": 179180424
+      },
+      "heap_first": {
+       "t": 7.136048600077629,
+       "phase": "task-execute",
+       "usedSize": 3273924,
+       "totalSize": 5419008,
+       "embedderHeapUsedSize": 29499976,
+       "backingStorageSize": 793374,
+       "documents": 18,
+       "nodes": 5373,
+       "jsEventListeners": 1802
+      },
+      "heap_last": {
+       "t": 119.26750099984929,
+       "phase": "task-execute",
+       "usedSize": 229397524,
+       "totalSize": 262860800,
+       "embedderHeapUsedSize": 138323000,
+       "backingStorageSize": 850768,
+       "documents": 9,
+       "nodes": 3442,
+       "jsEventListeners": 1230
+      }
+     }
+    },
+    "commands_total": {
+     "shell_ready": 1,
+     "readiness_echo": 1,
+     "list_tasks": 2,
+     "read_setup": 5,
+     "read_cosmetic_section": 1,
+     "create_task": 1,
+     "admit_location": 2,
+     "prepare_setup": 1,
+     "start_plan": 1,
+     "open_plan_view": 4,
+     "next_events": 569,
+     "release_terminal_session": 2,
+     "get_plan_window": 216,
+     "start_execution": 1,
+     "get_plan_anchor": 66,
+     "open_inventory_view": 1,
+     "get_inventory_window": 1,
+     "close_task": 1
+    },
+    "close": {
+     "window_found": true,
+     "exit_code": 0,
+     "remaining_pids": []
+    },
+    "browser": {
+     "product": "Edg/157.0.4341.42",
+     "protocolVersion": "1.3",
+     "jsVersion": "15.7.11.4",
+     "revision": "@7b1486be4607d53d9f93841b7c776bc525ca74b7"
+    },
+    "receipt_sha256": "9b35a5770dd0439715aebb00f4bcfe0c9a731de6ff1bc31932d5ee98454fe0f5",
+    "audit_sha256": "31c2b88df173d14810ead177b3e36cfa0273d672bb3e71b4492a7268ac19b245"
+   },
+   "linger25-plan-01": {
+    "phases": {
+     "task-execute": {
+      "seconds": 113.447,
+      "created": {
+       "elements": 204828,
+       "listeners": 98890
+      },
+      "commands": {
+       "next_events": 3207,
+       "get_plan_window": 218,
+       "get_plan_anchor": 64
+      },
+      "command_handler_seconds": {
+       "get_plan_anchor": 0.0015682987868785858,
+       "get_plan_window": 0.3547686953097582,
+       "next_events": 99.12440060265362
+      },
+      "returned_window_rows": 55391,
+      "sampled_cpu_seconds": {
+       "webview2-browser": 3.84375,
+       "webview2-utility:storage.mojom.StorageService": 0.0,
+       "webview2-renderer": 31.953125,
+       "webview2-utility:network.mojom.NetworkService": 0.0625,
+       "webview2-gpu-process": 12.265625,
+       "host": 80.34375,
+       "webview2-crashpad-handler": 0.046875
+      },
+      "same_window_intervals": {
+       "count": 154,
+       "min_ms": 115.85929989814758,
+       "median_ms": 505.63965016044676,
+       "max_ms": 2971.9867003150284,
+       "below_200ms": 1
+      },
+      "shifted_window_intervals": {
+       "count": 63,
+       "min_ms": 507.0217000320554,
+       "median_ms": 515.0951999239624,
+       "max_ms": 1204.6293001621962,
+       "below_200ms": 0
+      },
+      "whole_private_peak_MiB": 1121.05859375,
+      "renderer_private_peak_MiB": 659.22265625,
+      "heap_max": {
+       "nodes": 49313,
+       "jsEventListeners": 15649,
+       "usedSize": 242722456,
+       "totalSize": 282025984,
+       "embedderHeapUsedSize": 236335656
+      },
+      "heap_first": {
+       "t": 7.12830420024693,
+       "phase": "task-execute",
+       "usedSize": 3274732,
+       "totalSize": 5419008,
+       "embedderHeapUsedSize": 29505840,
+       "backingStorageSize": 793369,
+       "documents": 18,
+       "nodes": 5379,
+       "jsEventListeners": 1802
+      },
+      "heap_last": {
+       "t": 120.54646079987288,
+       "phase": "task-execute",
+       "usedSize": 3105956,
+       "totalSize": 3932160,
+       "embedderHeapUsedSize": 11212360,
+       "backingStorageSize": 793347,
+       "documents": 9,
+       "nodes": 3839,
+       "jsEventListeners": 1385
+      }
+     }
+    },
+    "commands_total": {
+     "shell_ready": 1,
+     "readiness_echo": 1,
+     "list_tasks": 2,
+     "read_setup": 5,
+     "read_cosmetic_section": 1,
+     "create_task": 1,
+     "admit_location": 3,
+     "prepare_setup": 1,
+     "start_plan": 1,
+     "open_plan_view": 4,
+     "next_events": 3214,
+     "release_terminal_session": 2,
+     "get_plan_window": 219,
+     "start_execution": 1,
+     "get_plan_anchor": 64,
+     "open_inventory_view": 1,
+     "get_inventory_window": 1,
+     "close_task": 1
+    },
+    "close": {
+     "window_found": true,
+     "exit_code": 0,
+     "remaining_pids": []
+    },
+    "browser": {
+     "product": "Edg/157.0.4341.42",
+     "protocolVersion": "1.3",
+     "jsVersion": "15.7.11.4",
+     "revision": "@7b1486be4607d53d9f93841b7c776bc525ca74b7"
+    },
+    "receipt_sha256": "4708f952a5cfa53937f727571b510f05c8900b25c618c47caf5ddd662ff4e4d0",
+    "audit_sha256": "47580056aedb9e3e9beebe8ad5bea956c49b71629df755a33d929d923ca7c5c4"
+   }
+  }
+ },
+ "dom-costs-20261109/review/source-gates-identity.json": {
+  "bytes": 1321,
+  "sha256": "40aa8937fc607f57695c418ced3a2e53acb4efc1370959c275ea26a27a660f64",
+  "content": {
+   "checked": {
+    "namisync/interfaces/web/assets/app.js": "ba66c75dabdd8c91611838e0817bd0acfdda92d6920720c51a7600b91c9ea641",
+    "namisync/interfaces/web/assets/tree.js": "9a0abe67f30fb64c81aa88da7f0a48ac0f28ee15fa38e4a59a864815aee2e007",
+    "namisync/interfaces/web/assets/plan_review.js": "0e7474e4973e250deabed96282c3da476e9ef91830638f96eddaef6a3cee7372",
+    "namisync/interfaces/web/assets/table_controller.js": "83d529ecc63db5ec6a7f9d482b5749a7956a8a430713acd055a1914133692e75",
+    "tests/assets/plan_review_probe.mjs": "d7e9e86739848642d39ee7c783b97ec53dabd69fd9ac4425f0f47a4157221b05",
+    "tests/assets/tree_probe.mjs": "7448eaad3bbc1dcf94932a27289bcfdaeb9b4218e63efd5fa2795bcb86cb972a",
+    "tests/assets/inventory_review_probe.mjs": "b94205e6887f1f3e39a74185b6353eee9be4bb27d41fe30eecbc61d5fe60f583",
+    "tests/assets/task_shell_probe.mjs": "8f84187011189e6c0802a4f2c7766c4700945a46d261616c4916d7d4b6439920",
+    "tests/assets/inventory_app_probe.mjs": "faabc29ccc3c8b0affed24ece0af63ea17a63cf9d446df838cdbcbf899985633"
+   },
+   "gates": {
+    "interfaces-final.xml": {
+     "tests": 2289,
+     "failures": 0,
+     "errors": 0,
+     "skipped": 0
+    },
+    "builder/native-02.xml": {
+     "tests": 6,
+     "failures": 0,
+     "errors": 0,
+     "skipped": 0
+    }
+   }
+  }
+ }
+}

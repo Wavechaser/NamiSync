@@ -1,0 +1,331 @@
+{
+ "open-bugs-20261001/current.json": {
+  "bytes": 6934,
+  "sha256": "f86b34fc5fc76cde4067efba4e7c8794374944f518aaac50c38b9402648b0050",
+  "content": {
+   "cli": {
+    "code": 2,
+    "stderr": "error: refusing to replace existing performance report without --replace-report: F:\\GitHubRepositories\\NamiSync\\build\\open-bugs-20261001\\fixture-existing.json\n",
+    "unchanged": true
+   },
+   "cli_replace": {
+    "code": 2,
+    "stderr": "usage: python -m tools [-h] {verifier,executor,performance,generate,clean} ...\npython -m tools: error: unrecognized arguments: --replace-report\n",
+    "unchanged": true
+   },
+   "host_retention": {
+    "alive_with_returned_error": true,
+    "frames": [
+     "_finalize_primary",
+     "fail_close"
+    ],
+    "alive_after_retirement": false
+   },
+   "copies": [
+    {
+     "label": "ntfs-ntfs",
+     "status": "completed",
+     "bytes_done": 8,
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null,
+       "detail": "DetailProjection(entries=())"
+      }
+     ],
+     "source_profile": "CapabilityProfile(fs_type='NTFS', mtime_granularity_ns=100, stable_file_identity=True, incurs_seek_penalty=None, max_path=32767, supports_ads=True, supports_hardlinks=True)",
+     "target_profile": "CapabilityProfile(fs_type='NTFS', mtime_granularity_ns=100, stable_file_identity=True, incurs_seek_penalty=None, max_path=32767, supports_ads=True, supports_hardlinks=True)",
+     "target_exists": true,
+     "target_matches": true,
+     "source_matches": true,
+     "root_holds": [
+      "RootAdmissionDiagnostic(role='target', logical_root='F:\\\\GitHubRepositories\\\\NamiSync\\\\build\\\\open-bugs-20261001\\\\fixture-af6301baaa4f4b0e8dcae7d701b6b50e\\\\ntfs-ntfs-target', held=True, fallback_reason=None)",
+      "RootAdmissionDiagnostic(role='source', logical_root='F:\\\\GitHubRepositories\\\\NamiSync\\\\build\\\\open-bugs-20261001\\\\fixture-af6301baaa4f4b0e8dcae7d701b6b50e\\\\ntfs-ntfs-source', held=True, fallback_reason=None)"
+     ],
+     "identity_errors": []
+    },
+    {
+     "label": "ntfs-exfat",
+     "status": "failed",
+     "bytes_done": 8,
+     "items": [
+      {
+       "outcome": "failed",
+       "reason": "io-error",
+       "detail": "DetailProjection(entries=(('error_type', 'OSError'), ('message', '[WinError 87] The parameter is incorrect.')))"
+      }
+     ],
+     "source_profile": "CapabilityProfile(fs_type='NTFS', mtime_granularity_ns=100, stable_file_identity=True, incurs_seek_penalty=None, max_path=32767, supports_ads=True, supports_hardlinks=True)",
+     "target_profile": "CapabilityProfile(fs_type='EXFAT', mtime_granularity_ns=10000000, stable_file_identity=False, incurs_seek_penalty=None, max_path=32767, supports_ads=False, supports_hardlinks=False)",
+     "target_exists": false,
+     "target_matches": false,
+     "source_matches": true,
+     "root_holds": [
+      "RootAdmissionDiagnostic(role='target', logical_root='K:\\\\NamiSyncOpenBugs-20261001-19344bdcd1d041c3a66027fae168cf88\\\\ntfs-exfat-target', held=True, fallback_reason=None)",
+      "RootAdmissionDiagnostic(role='source', logical_root='F:\\\\GitHubRepositories\\\\NamiSync\\\\build\\\\open-bugs-20261001\\\\fixture-af6301baaa4f4b0e8dcae7d701b6b50e\\\\ntfs-exfat-source', held=True, fallback_reason=None)"
+     ],
+     "identity_errors": [
+      {
+       "winerror": 87,
+       "stack": [
+        "<module>:97",
+        "execute:909",
+        "_execute:1044",
+        "_execute_operation:1568",
+        "_copy:2045",
+        "_prepare_copy:1724",
+        "finalize_temp:1157",
+        "_stat_handle:1566",
+        "file_identity_from_windows_handle:75"
+       ]
+      }
+     ]
+    },
+    {
+     "label": "exfat-ntfs",
+     "status": "completed",
+     "bytes_done": 8,
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null,
+       "detail": "DetailProjection(entries=())"
+      }
+     ],
+     "source_profile": "CapabilityProfile(fs_type='EXFAT', mtime_granularity_ns=10000000, stable_file_identity=False, incurs_seek_penalty=None, max_path=32767, supports_ads=False, supports_hardlinks=False)",
+     "target_profile": "CapabilityProfile(fs_type='NTFS', mtime_granularity_ns=100, stable_file_identity=True, incurs_seek_penalty=None, max_path=32767, supports_ads=True, supports_hardlinks=True)",
+     "target_exists": true,
+     "target_matches": true,
+     "source_matches": true,
+     "root_holds": [
+      "RootAdmissionDiagnostic(role='target', logical_root='F:\\\\GitHubRepositories\\\\NamiSync\\\\build\\\\open-bugs-20261001\\\\fixture-af6301baaa4f4b0e8dcae7d701b6b50e\\\\exfat-ntfs-target', held=True, fallback_reason=None)",
+      "RootAdmissionDiagnostic(role='source', logical_root='K:\\\\NamiSyncOpenBugs-20261001-19344bdcd1d041c3a66027fae168cf88\\\\exfat-ntfs-source', held=True, fallback_reason=None)"
+     ],
+     "identity_errors": []
+    },
+    {
+     "label": "exfat-exfat",
+     "status": "failed",
+     "bytes_done": 8,
+     "items": [
+      {
+       "outcome": "failed",
+       "reason": "io-error",
+       "detail": "DetailProjection(entries=(('error_type', 'OSError'), ('message', '[WinError 87] The parameter is incorrect.')))"
+      }
+     ],
+     "source_profile": "CapabilityProfile(fs_type='EXFAT', mtime_granularity_ns=10000000, stable_file_identity=False, incurs_seek_penalty=None, max_path=32767, supports_ads=False, supports_hardlinks=False)",
+     "target_profile": "CapabilityProfile(fs_type='EXFAT', mtime_granularity_ns=10000000, stable_file_identity=False, incurs_seek_penalty=None, max_path=32767, supports_ads=False, supports_hardlinks=False)",
+     "target_exists": false,
+     "target_matches": false,
+     "source_matches": true,
+     "root_holds": [
+      "RootAdmissionDiagnostic(role='target', logical_root='K:\\\\NamiSyncOpenBugs-20261001-19344bdcd1d041c3a66027fae168cf88\\\\exfat-exfat-target', held=True, fallback_reason=None)",
+      "RootAdmissionDiagnostic(role='source', logical_root='K:\\\\NamiSyncOpenBugs-20261001-19344bdcd1d041c3a66027fae168cf88\\\\exfat-exfat-source', held=True, fallback_reason=None)"
+     ],
+     "identity_errors": [
+      {
+       "winerror": 87,
+       "stack": [
+        "<module>:97",
+        "execute:909",
+        "_execute:1044",
+        "_execute_operation:1568",
+        "_copy:2045",
+        "_prepare_copy:1724",
+        "finalize_temp:1157",
+        "_stat_handle:1566",
+        "file_identity_from_windows_handle:75"
+       ]
+      }
+     ]
+    }
+   ],
+   "fixtures_removed": [
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\open-bugs-20261001\\fixture-af6301baaa4f4b0e8dcae7d701b6b50e",
+     "absent": true
+    },
+    {
+     "path": "K:\\NamiSyncOpenBugs-20261001-19344bdcd1d041c3a66027fae168cf88",
+     "absent": true
+    }
+   ]
+  }
+ },
+ "open-bugs-20261001/exclusions.json": {
+  "bytes": 83,
+  "sha256": "d29058d9b73b94c0ce6054ae02a818ae7816d2a3e72b29f86bb694c3f47cfda4",
+  "content": {
+   "response_copy_entry_unchanged": true,
+   "settlement_tool_unchanged": true
+  }
+ },
+ "open-bugs-20261001/identity-fix.json": {
+  "bytes": 2952,
+  "sha256": "7c4eee233f3fd33b22df576a8cd78ed70c4b835a4ca5d49761f8ca9fa8ffd8c7",
+  "content": {
+   "cases": [
+    {
+     "label": "ntfs-ntfs",
+     "action": "copy",
+     "status": "completed",
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null
+      }
+     ],
+     "readback_identity": "FileIdentity(volume_serial='AC4C5542', file_index=844424931016905)",
+     "rerun_kinds": [
+      "noop"
+     ]
+    },
+    {
+     "label": "ntfs-ntfs",
+     "action": "update",
+     "status": "completed",
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null
+      }
+     ],
+     "readback_identity": "FileIdentity(volume_serial='AC4C5542', file_index=1688849861148888)",
+     "rerun_kinds": [
+      "noop"
+     ]
+    },
+    {
+     "label": "ntfs-exfat",
+     "action": "copy",
+     "status": "completed",
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null
+      }
+     ],
+     "readback_identity": "None",
+     "rerun_kinds": [
+      "noop"
+     ]
+    },
+    {
+     "label": "ntfs-exfat",
+     "action": "update",
+     "status": "completed",
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null
+      }
+     ],
+     "readback_identity": "None",
+     "rerun_kinds": [
+      "noop"
+     ]
+    },
+    {
+     "label": "exfat-ntfs",
+     "action": "copy",
+     "status": "completed",
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null
+      }
+     ],
+     "readback_identity": "FileIdentity(volume_serial='AC4C5542', file_index=844424931016926)",
+     "rerun_kinds": [
+      "noop"
+     ]
+    },
+    {
+     "label": "exfat-ntfs",
+     "action": "update",
+     "status": "completed",
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null
+      }
+     ],
+     "readback_identity": "FileIdentity(volume_serial='AC4C5542', file_index=844424931016927)",
+     "rerun_kinds": [
+      "noop"
+     ]
+    },
+    {
+     "label": "exfat-exfat",
+     "action": "copy",
+     "status": "completed",
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null
+      }
+     ],
+     "readback_identity": "None",
+     "rerun_kinds": [
+      "noop"
+     ]
+    },
+    {
+     "label": "exfat-exfat",
+     "action": "update",
+     "status": "completed",
+     "items": [
+      {
+       "outcome": "succeeded",
+       "reason": null
+      }
+     ],
+     "readback_identity": "None",
+     "rerun_kinds": [
+      "noop"
+     ]
+    }
+   ],
+   "fixtures_removed": [
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\open-bugs-20261001\\fixture-2f256f63fe6e40bbb79d740ce3b63dcc",
+     "absent": true
+    },
+    {
+     "path": "K:\\NamiSyncOpenBugs-20261001-c9ece87dd2d74e39a79321236f2fff20",
+     "absent": true
+    }
+   ]
+  }
+ },
+ "open-bugs-20261001/reader.json": {
+  "bytes": 902,
+  "sha256": "7dc3b1de91ae4d2e1cb1017c02958786b1c78f06f02c035403b899a4ed99116e",
+  "content": [
+   {
+    "root": "F:\\GitHubRepositories\\NamiSync\\build\\open-bugs-20261001\\fixture-a23a4fa4434d44f38222b42c76518a4f",
+    "opened": true,
+    "stat": "FileStat(kind=<EntryKind.FILE: 'file'>, size=8, mtime_ns=1790792803108535700, file_identity=FileIdentity(volume_serial='AC4C5542', file_index=844424931016869), nlink=1, metadata=MetadataSnapshot(attributes=32, created_ns=1790792803108535700))",
+    "read_matches": true,
+    "fixture_removed": true
+   },
+   {
+    "root": "K:\\NamiSyncOpenBugs-20261001-7126f4ca88de46ac9cdc2361582a3969",
+    "error_type": "OSError",
+    "message": "[WinError 87] The parameter is incorrect.",
+    "frames": [
+     "<module>:19",
+     "__enter__:141",
+     "open:122",
+     "__enter__:141",
+     "_open_bound:188",
+     "stat:533",
+     "stat:402",
+     "file_identity_from_windows_handle:75"
+    ],
+    "fixture_removed": true
+   }
+  ]
+ }
+}

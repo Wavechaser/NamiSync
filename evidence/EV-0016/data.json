@@ -1,0 +1,1901 @@
+{
+ "executor-assessment-20260927/cpu.json": {
+  "bytes": 116,
+  "sha256": "62ffdf50d45490d604d7be49e85346b706f7b1d031b71b5d78b3d25f5d641561",
+  "content": {
+   "Name": "13th Gen Intel(R) Core(TM) i7-13700K",
+   "NumberOfCores": 16,
+   "NumberOfLogicalProcessors": 24
+  }
+ },
+ "executor-assessment-20260927/disks.json": {
+  "bytes": 259,
+  "sha256": "2fc64f39a6d33dc79bc21016dd6996d05409d46e25bb9ab8b42c07242d1508d3",
+  "content": [
+   {
+    "Number": 5,
+    "FriendlyName": "WD_BLACK SN850X 4000GB",
+    "BusType": "NVMe",
+    "Size": 4000787030016
+   },
+   {
+    "Number": 3,
+    "FriendlyName": "WD_BLACK SN850X 4000GB",
+    "BusType": "NVMe",
+    "Size": 4000787030016
+   }
+  ]
+ },
+ "executor-assessment-20260927/drive-map.json": {
+  "bytes": 173,
+  "sha256": "7ea72edd722d244d88be63aa71032fcc506cc1fe026f2eea5a50f4cefb834616",
+  "content": [
+   {
+    "DriveLetter": "F",
+    "DiskNumber": 3,
+    "PartitionNumber": 2
+   },
+   {
+    "DriveLetter": "G",
+    "DiskNumber": 5,
+    "PartitionNumber": 2
+   }
+  ]
+ },
+ "executor-assessment-20260927/fg-1000x4KiB.json": {
+  "bytes": 9263,
+  "sha256": "c713e8228fa1bf39c9efe2bed043b16aa57b382aa73fee22781cb320481d4dc8",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.05975749995559454,
+    "preflight_seconds": 1.9820848999661393,
+    "scan_seconds": 0.09925010002916679
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.0691091000335291
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "36e3de56aebde572a69ab0aad8db8d67840093b5cdb98639b30e6a3dc963b243",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+    "target": "G:\\NamiSyncExecutorAssessment-20260927-1000x4KiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "samples": [
+    {
+     "bytes": 4096000,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 29.744654599984642,
+     "iteration": 1,
+     "operations": {
+      "copy": 1000
+     },
+     "outcomes": {
+      "succeeded": 1000
+     },
+     "pipeline": {
+      "bytes": 4096000,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 1000,
+      "payload_high_water": 266240,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.5144365003798157,
+      "writer_starved_seconds": 0.11340099945664406
+     },
+     "plan_fingerprint": "36e3de56aebde572a69ab0aad8db8d67840093b5cdb98639b30e6a3dc963b243",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4096000,
+      "candidates": 1000,
+      "expected_bytes": 4096000,
+      "expected_candidates": 1000,
+      "recording": "ok",
+      "results": {
+       "verified": 1000
+      },
+      "seconds": 3.161383200029377,
+      "throughput_mib_s": 1.2356142083514905
+     },
+     "recorder_calls": {
+      "copied": 1000
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1000x4KiB",
+     "throughput_mib_s": 0.13132611733208752
+    },
+    {
+     "bytes": 4096000,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 28.545511599979363,
+     "iteration": 2,
+     "operations": {
+      "copy": 1000
+     },
+     "outcomes": {
+      "succeeded": 1000
+     },
+     "pipeline": {
+      "bytes": 4096000,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 1000,
+      "payload_high_water": 266240,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.5123479998437688,
+      "writer_starved_seconds": 0.11418850079644471
+     },
+     "plan_fingerprint": "36e3de56aebde572a69ab0aad8db8d67840093b5cdb98639b30e6a3dc963b243",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4096000,
+      "candidates": 1000,
+      "expected_bytes": 4096000,
+      "expected_candidates": 1000,
+      "recording": "ok",
+      "results": {
+       "verified": 1000
+      },
+      "seconds": 2.92854360002093,
+      "throughput_mib_s": 1.3338541382727176
+     },
+     "recorder_calls": {
+      "copied": 1000
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1000x4KiB",
+     "throughput_mib_s": 0.13684287935490438
+    },
+    {
+     "bytes": 4096000,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 27.36744100000942,
+     "iteration": 3,
+     "operations": {
+      "copy": 1000
+     },
+     "outcomes": {
+      "succeeded": 1000
+     },
+     "pipeline": {
+      "bytes": 4096000,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 1000,
+      "payload_high_water": 266240,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.5250475005013868,
+      "writer_starved_seconds": 0.12219859880860895
+     },
+     "plan_fingerprint": "36e3de56aebde572a69ab0aad8db8d67840093b5cdb98639b30e6a3dc963b243",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4096000,
+      "candidates": 1000,
+      "expected_bytes": 4096000,
+      "expected_candidates": 1000,
+      "recording": "ok",
+      "results": {
+       "verified": 1000
+      },
+      "seconds": 2.83127099997364,
+      "throughput_mib_s": 1.3796807158468294
+     },
+     "recorder_calls": {
+      "copied": 1000
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1000x4KiB",
+     "throughput_mib_s": 0.14273347661546637
+    },
+    {
+     "bytes": 4096000,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 28.248379099997692,
+     "iteration": 4,
+     "operations": {
+      "copy": 1000
+     },
+     "outcomes": {
+      "succeeded": 1000
+     },
+     "pipeline": {
+      "bytes": 4096000,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 1000,
+      "payload_high_water": 266240,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.5095381998689845,
+      "writer_starved_seconds": 0.11320769984740764
+     },
+     "plan_fingerprint": "36e3de56aebde572a69ab0aad8db8d67840093b5cdb98639b30e6a3dc963b243",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4096000,
+      "candidates": 1000,
+      "expected_bytes": 4096000,
+      "expected_candidates": 1000,
+      "recording": "ok",
+      "results": {
+       "verified": 1000
+      },
+      "seconds": 2.836146400019061,
+      "throughput_mib_s": 1.3773090133759482
+     },
+     "recorder_calls": {
+      "copied": 1000
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1000x4KiB",
+     "throughput_mib_s": 0.1382822705038081
+    },
+    {
+     "bytes": 4096000,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 27.58461660001194,
+     "iteration": 5,
+     "operations": {
+      "copy": 1000
+     },
+     "outcomes": {
+      "succeeded": 1000
+     },
+     "pipeline": {
+      "bytes": 4096000,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 1000,
+      "payload_high_water": 266240,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.5080991991562769,
+      "writer_starved_seconds": 0.11553019942948595
+     },
+     "plan_fingerprint": "36e3de56aebde572a69ab0aad8db8d67840093b5cdb98639b30e6a3dc963b243",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4096000,
+      "candidates": 1000,
+      "expected_bytes": 4096000,
+      "expected_candidates": 1000,
+      "recording": "ok",
+      "results": {
+       "verified": 1000
+      },
+      "seconds": 2.8400898999534547,
+      "throughput_mib_s": 1.3753966027850097
+     },
+     "recorder_calls": {
+      "copied": 1000
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1000x4KiB",
+     "throughput_mib_s": 0.14160972605282862
+    }
+   ],
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 29.744655,
+     "median": 28.248379,
+     "minimum": 27.367441
+    },
+    "throughput_mib_s": {
+     "median": 0.138
+    }
+   }
+  }
+ },
+ "executor-assessment-20260927/fg-1x4GiB.json": {
+  "bytes": 9256,
+  "sha256": "c811ed1a7073ef43530d040ac820e014c21045e49c0d71b5ab35d3171a08a546",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.00036479998379945755,
+    "preflight_seconds": 0.004644000029657036,
+    "scan_seconds": 0.006164600024931133
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.004010499978903681
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "22165bcd95478382e7f1da9edb00bac3cdfa970e4ea6a7f59fac332cc887b987",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+    "target": "G:\\NamiSyncExecutorAssessment-20260927-1x4GiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "samples": [
+    {
+     "bytes": 4294967296,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.3854040000005625,
+     "iteration": 1,
+     "operations": {
+      "copy": 1
+     },
+     "outcomes": {
+      "succeeded": 1
+     },
+     "pipeline": {
+      "bytes": 4294967296,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 1,
+      "payload_high_water": 16777216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 1.5915062999702059,
+      "writer_starved_seconds": 0.5544032008037902
+     },
+     "plan_fingerprint": "22165bcd95478382e7f1da9edb00bac3cdfa970e4ea6a7f59fac332cc887b987",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4294967296,
+      "candidates": 1,
+      "expected_bytes": 4294967296,
+      "expected_candidates": 1,
+      "recording": "ok",
+      "results": {
+       "verified": 1
+      },
+      "seconds": 2.1088348000193946,
+      "throughput_mib_s": 1942.3048215831461
+     },
+     "recorder_calls": {
+      "copied": 1
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1x4GiB",
+     "throughput_mib_s": 1717.1095546075358
+    },
+    {
+     "bytes": 4294967296,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.18411059997743,
+     "iteration": 2,
+     "operations": {
+      "copy": 1
+     },
+     "outcomes": {
+      "succeeded": 1
+     },
+     "pipeline": {
+      "bytes": 4294967296,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 1,
+      "payload_high_water": 33554432,
+      "reader_blocked_seconds": 0.05158959998516366,
+      "reserved_bytes": 0,
+      "seconds": 1.4670670999912545,
+      "writer_starved_seconds": 0.13456240034429356
+     },
+     "plan_fingerprint": "22165bcd95478382e7f1da9edb00bac3cdfa970e4ea6a7f59fac332cc887b987",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4294967296,
+      "candidates": 1,
+      "expected_bytes": 4294967296,
+      "expected_candidates": 1,
+      "recording": "ok",
+      "results": {
+       "verified": 1
+      },
+      "seconds": 2.1787238999968395,
+      "throughput_mib_s": 1879.999572229387
+     },
+     "recorder_calls": {
+      "copied": 1
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1x4GiB",
+     "throughput_mib_s": 1875.3629051762887
+    },
+    {
+     "bytes": 4294967296,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.379161400021985,
+     "iteration": 3,
+     "operations": {
+      "copy": 1
+     },
+     "outcomes": {
+      "succeeded": 1
+     },
+     "pipeline": {
+      "bytes": 4294967296,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 1,
+      "payload_high_water": 33554432,
+      "reader_blocked_seconds": 0.0838903000112623,
+      "reserved_bytes": 0,
+      "seconds": 1.646215500019025,
+      "writer_starved_seconds": 0.1171510003041476
+     },
+     "plan_fingerprint": "22165bcd95478382e7f1da9edb00bac3cdfa970e4ea6a7f59fac332cc887b987",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4294967296,
+      "candidates": 1,
+      "expected_bytes": 4294967296,
+      "expected_candidates": 1,
+      "recording": "ok",
+      "results": {
+       "verified": 1
+      },
+      "seconds": 2.2957988000125624,
+      "throughput_mib_s": 1784.128469784716
+     },
+     "recorder_calls": {
+      "copied": 1
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1x4GiB",
+     "throughput_mib_s": 1721.6150194611218
+    },
+    {
+     "bytes": 4294967296,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.28664150001714,
+     "iteration": 4,
+     "operations": {
+      "copy": 1
+     },
+     "outcomes": {
+      "succeeded": 1
+     },
+     "pipeline": {
+      "bytes": 4294967296,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 1,
+      "payload_high_water": 33554432,
+      "reader_blocked_seconds": 0.062166000076103956,
+      "reserved_bytes": 0,
+      "seconds": 1.490565299987793,
+      "writer_starved_seconds": 0.2022940000751987
+     },
+     "plan_fingerprint": "22165bcd95478382e7f1da9edb00bac3cdfa970e4ea6a7f59fac332cc887b987",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4294967296,
+      "candidates": 1,
+      "expected_bytes": 4294967296,
+      "expected_candidates": 1,
+      "recording": "ok",
+      "results": {
+       "verified": 1
+      },
+      "seconds": 2.2654343000031076,
+      "throughput_mib_s": 1808.0418399219882
+     },
+     "recorder_calls": {
+      "copied": 1
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1x4GiB",
+     "throughput_mib_s": 1791.2733587531309
+    },
+    {
+     "bytes": 4294967296,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.103930399985984,
+     "iteration": 5,
+     "operations": {
+      "copy": 1
+     },
+     "outcomes": {
+      "succeeded": 1
+     },
+     "pipeline": {
+      "bytes": 4294967296,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 1,
+      "payload_high_water": 33554432,
+      "reader_blocked_seconds": 0.09348889999091625,
+      "reserved_bytes": 0,
+      "seconds": 1.5957413000287488,
+      "writer_starved_seconds": 0.10825890034902841
+     },
+     "plan_fingerprint": "22165bcd95478382e7f1da9edb00bac3cdfa970e4ea6a7f59fac332cc887b987",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4294967296,
+      "candidates": 1,
+      "expected_bytes": 4294967296,
+      "expected_candidates": 1,
+      "recording": "ok",
+      "results": {
+       "verified": 1
+      },
+      "seconds": 2.160749000031501,
+      "throughput_mib_s": 1895.6389659050105
+     },
+     "recorder_calls": {
+      "copied": 1
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-1x4GiB",
+     "throughput_mib_s": 1946.83246177121
+    }
+   ],
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 2.385404,
+     "median": 2.286642,
+     "minimum": 2.10393
+    },
+    "throughput_mib_s": {
+     "median": 1791.273
+    }
+   }
+  }
+ },
+ "executor-assessment-20260927/fg-4x128MiB.json": {
+  "bytes": 9218,
+  "sha256": "a70d31cdc9ed6d6d00d9d84bb7d62d584120051c94b5573ed8138c347b526024",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.0005865000421181321,
+    "preflight_seconds": 0.010411700000986457,
+    "scan_seconds": 0.006090299983043224
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.004332800046540797
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "93780bf2516d177195e38c9d45de834b69f5192ad8a53a64b4d01966545b6895",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+    "target": "G:\\NamiSyncExecutorAssessment-20260927-4x128MiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "samples": [
+    {
+     "bytes": 536870912,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 0.4448774000047706,
+     "iteration": 1,
+     "operations": {
+      "copy": 4
+     },
+     "outcomes": {
+      "succeeded": 4
+     },
+     "pipeline": {
+      "bytes": 536870912,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 4,
+      "payload_high_water": 16777216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.20101419993443415,
+      "writer_starved_seconds": 0.06204149959376082
+     },
+     "plan_fingerprint": "93780bf2516d177195e38c9d45de834b69f5192ad8a53a64b4d01966545b6895",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 536870912,
+      "candidates": 4,
+      "expected_bytes": 536870912,
+      "expected_candidates": 4,
+      "recording": "ok",
+      "results": {
+       "verified": 4
+      },
+      "seconds": 0.3149517999845557,
+      "throughput_mib_s": 1625.6455750534112
+     },
+     "recorder_calls": {
+      "copied": 4
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-4x128MiB",
+     "throughput_mib_s": 1150.8788713351355
+    },
+    {
+     "bytes": 536870912,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 0.41358940000645816,
+     "iteration": 2,
+     "operations": {
+      "copy": 4
+     },
+     "outcomes": {
+      "succeeded": 4
+     },
+     "pipeline": {
+      "bytes": 536870912,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 4,
+      "payload_high_water": 12582912,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.1852193999220617,
+      "writer_starved_seconds": 0.04696940031135455
+     },
+     "plan_fingerprint": "93780bf2516d177195e38c9d45de834b69f5192ad8a53a64b4d01966545b6895",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 536870912,
+      "candidates": 4,
+      "expected_bytes": 536870912,
+      "expected_candidates": 4,
+      "recording": "ok",
+      "results": {
+       "verified": 4
+      },
+      "seconds": 0.3132451999699697,
+      "throughput_mib_s": 1634.5023005909895
+     },
+     "recorder_calls": {
+      "copied": 4
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-4x128MiB",
+     "throughput_mib_s": 1237.9427518983928
+    },
+    {
+     "bytes": 536870912,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 0.424064599967096,
+     "iteration": 3,
+     "operations": {
+      "copy": 4
+     },
+     "outcomes": {
+      "succeeded": 4
+     },
+     "pipeline": {
+      "bytes": 536870912,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 4,
+      "payload_high_water": 16777216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.18466950004221871,
+      "writer_starved_seconds": 0.04762919986387715
+     },
+     "plan_fingerprint": "93780bf2516d177195e38c9d45de834b69f5192ad8a53a64b4d01966545b6895",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 536870912,
+      "candidates": 4,
+      "expected_bytes": 536870912,
+      "expected_candidates": 4,
+      "recording": "ok",
+      "results": {
+       "verified": 4
+      },
+      "seconds": 0.3146817000233568,
+      "throughput_mib_s": 1627.0409113780606
+     },
+     "recorder_calls": {
+      "copied": 4
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-4x128MiB",
+     "throughput_mib_s": 1207.3632178675775
+    },
+    {
+     "bytes": 536870912,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 0.4161300000268966,
+     "iteration": 4,
+     "operations": {
+      "copy": 4
+     },
+     "outcomes": {
+      "succeeded": 4
+     },
+     "pipeline": {
+      "bytes": 536870912,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 4,
+      "payload_high_water": 12582912,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.19105849997140467,
+      "writer_starved_seconds": 0.05386139964684844
+     },
+     "plan_fingerprint": "93780bf2516d177195e38c9d45de834b69f5192ad8a53a64b4d01966545b6895",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 536870912,
+      "candidates": 4,
+      "expected_bytes": 536870912,
+      "expected_candidates": 4,
+      "recording": "ok",
+      "results": {
+       "verified": 4
+      },
+      "seconds": 0.31563699996331707,
+      "throughput_mib_s": 1622.1165454604625
+     },
+     "recorder_calls": {
+      "copied": 4
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-4x128MiB",
+     "throughput_mib_s": 1230.3847354598488
+    },
+    {
+     "bytes": 536870912,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 0.44937170000048354,
+     "iteration": 5,
+     "operations": {
+      "copy": 4
+     },
+     "outcomes": {
+      "succeeded": 4
+     },
+     "pipeline": {
+      "bytes": 536870912,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 4,
+      "payload_high_water": 16777216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.19286600005580112,
+      "writer_starved_seconds": 0.04613839974626899
+     },
+     "plan_fingerprint": "93780bf2516d177195e38c9d45de834b69f5192ad8a53a64b4d01966545b6895",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 536870912,
+      "candidates": 4,
+      "expected_bytes": 536870912,
+      "expected_candidates": 4,
+      "recording": "ok",
+      "results": {
+       "verified": 4
+      },
+      "seconds": 0.33351859997492284,
+      "throughput_mib_s": 1535.1467655432025
+     },
+     "recorder_calls": {
+      "copied": 4
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-4x128MiB",
+     "throughput_mib_s": 1139.368589520544
+    }
+   ],
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 0.449372,
+     "median": 0.424065,
+     "minimum": 0.413589
+    },
+    "throughput_mib_s": {
+     "median": 1207.363
+    }
+   }
+  }
+ },
+ "executor-assessment-20260927/fg-512x128KiB.json": {
+  "bytes": 9260,
+  "sha256": "b3d3540202d1a054d84904a317868674b445b432acd31cfccc7b7a1f29daa7ea",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.031025199976284057,
+    "preflight_seconds": 0.9934934000484645,
+    "scan_seconds": 0.056249700020998716
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.03821840003365651
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "1b89cd70986ab5e4ebf14a8b9df90d1ee0484929d37501cdc2b715bd2ef7dc88",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+    "target": "G:\\NamiSyncExecutorAssessment-20260927-512x128KiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "samples": [
+    {
+     "bytes": 67108864,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 16.095696899981704,
+     "iteration": 1,
+     "operations": {
+      "copy": 512
+     },
+     "outcomes": {
+      "succeeded": 512
+     },
+     "pipeline": {
+      "bytes": 67108864,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 512,
+      "payload_high_water": 393216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.2917502004420385,
+      "writer_starved_seconds": 0.07467079855268821
+     },
+     "plan_fingerprint": "1b89cd70986ab5e4ebf14a8b9df90d1ee0484929d37501cdc2b715bd2ef7dc88",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 67108864,
+      "candidates": 512,
+      "expected_bytes": 67108864,
+      "expected_candidates": 512,
+      "recording": "ok",
+      "results": {
+       "verified": 512
+      },
+      "seconds": 3.2203993999864906,
+      "throughput_mib_s": 19.873311366369176
+     },
+     "recorder_calls": {
+      "copied": 512
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-512x128KiB",
+     "throughput_mib_s": 3.976218016386277
+    },
+    {
+     "bytes": 67108864,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 13.982539899996482,
+     "iteration": 2,
+     "operations": {
+      "copy": 512
+     },
+     "outcomes": {
+      "succeeded": 512
+     },
+     "pipeline": {
+      "bytes": 67108864,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 512,
+      "payload_high_water": 393216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.2906524002319202,
+      "writer_starved_seconds": 0.07417380006518215
+     },
+     "plan_fingerprint": "1b89cd70986ab5e4ebf14a8b9df90d1ee0484929d37501cdc2b715bd2ef7dc88",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 67108864,
+      "candidates": 512,
+      "expected_bytes": 67108864,
+      "expected_candidates": 512,
+      "recording": "ok",
+      "results": {
+       "verified": 512
+      },
+      "seconds": 3.23758389998693,
+      "throughput_mib_s": 19.767827484025467
+     },
+     "recorder_calls": {
+      "copied": 512
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-512x128KiB",
+     "throughput_mib_s": 4.577136947774139
+    },
+    {
+     "bytes": 67108864,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 14.095790999999736,
+     "iteration": 3,
+     "operations": {
+      "copy": 512
+     },
+     "outcomes": {
+      "succeeded": 512
+     },
+     "pipeline": {
+      "bytes": 67108864,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 512,
+      "payload_high_water": 393216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.29022249986883253,
+      "writer_starved_seconds": 0.0743676014826633
+     },
+     "plan_fingerprint": "1b89cd70986ab5e4ebf14a8b9df90d1ee0484929d37501cdc2b715bd2ef7dc88",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 67108864,
+      "candidates": 512,
+      "expected_bytes": 67108864,
+      "expected_candidates": 512,
+      "recording": "ok",
+      "results": {
+       "verified": 512
+      },
+      "seconds": 3.1947745999787003,
+      "throughput_mib_s": 20.032712167057635
+     },
+     "recorder_calls": {
+      "copied": 512
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-512x128KiB",
+     "throughput_mib_s": 4.540362438688343
+    },
+    {
+     "bytes": 67108864,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 14.067709300026763,
+     "iteration": 4,
+     "operations": {
+      "copy": 512
+     },
+     "outcomes": {
+      "succeeded": 512
+     },
+     "pipeline": {
+      "bytes": 67108864,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 512,
+      "payload_high_water": 393216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.2930975002818741,
+      "writer_starved_seconds": 0.07539600116433576
+     },
+     "plan_fingerprint": "1b89cd70986ab5e4ebf14a8b9df90d1ee0484929d37501cdc2b715bd2ef7dc88",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 67108864,
+      "candidates": 512,
+      "expected_bytes": 67108864,
+      "expected_candidates": 512,
+      "recording": "ok",
+      "results": {
+       "verified": 512
+      },
+      "seconds": 3.1957644000067376,
+      "throughput_mib_s": 20.026507586061435
+     },
+     "recorder_calls": {
+      "copied": 512
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-512x128KiB",
+     "throughput_mib_s": 4.5494258258434614
+    },
+    {
+     "bytes": 67108864,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 14.033000600000378,
+     "iteration": 5,
+     "operations": {
+      "copy": 512
+     },
+     "outcomes": {
+      "succeeded": 512
+     },
+     "pipeline": {
+      "bytes": 67108864,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 512,
+      "payload_high_water": 393216,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.28827910003019497,
+      "writer_starved_seconds": 0.07364659890299663
+     },
+     "plan_fingerprint": "1b89cd70986ab5e4ebf14a8b9df90d1ee0484929d37501cdc2b715bd2ef7dc88",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 67108864,
+      "candidates": 512,
+      "expected_bytes": 67108864,
+      "expected_candidates": 512,
+      "recording": "ok",
+      "results": {
+       "verified": 512
+      },
+      "seconds": 3.2136966999969445,
+      "throughput_mib_s": 19.91476046885845
+     },
+     "recorder_calls": {
+      "copied": 512
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-512x128KiB",
+     "throughput_mib_s": 4.560678205914014
+    }
+   ],
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 16.095697,
+     "median": 14.067709,
+     "minimum": 13.98254
+    },
+    "throughput_mib_s": {
+     "median": 4.549
+    }
+   }
+  }
+ },
+ "executor-assessment-20260927/fg-64x4MiB.json": {
+  "bytes": 9220,
+  "sha256": "d0e7d6d3c4e77d016007c60e768987d326f78b792036aeb975bb5ac06e29df35",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.004191799962427467,
+    "preflight_seconds": 0.12436389998765662,
+    "scan_seconds": 0.01259210001444444
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.008332199999131262
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "6e8f29c5b3ca6c311f4ba191274fe570fd48915efa2eb39b0ea51f0ba2274a76",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+    "target": "G:\\NamiSyncExecutorAssessment-20260927-64x4MiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "samples": [
+    {
+     "bytes": 268435456,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.1065520999836735,
+     "iteration": 1,
+     "operations": {
+      "copy": 64
+     },
+     "outcomes": {
+      "succeeded": 64
+     },
+     "pipeline": {
+      "bytes": 268435456,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 64,
+      "payload_high_water": 2097152,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.10867369984043762,
+      "writer_starved_seconds": 0.013677199836820364
+     },
+     "plan_fingerprint": "6e8f29c5b3ca6c311f4ba191274fe570fd48915efa2eb39b0ea51f0ba2274a76",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 268435456,
+      "candidates": 64,
+      "expected_bytes": 268435456,
+      "expected_candidates": 64,
+      "recording": "ok",
+      "results": {
+       "verified": 64
+      },
+      "seconds": 0.5543860999750905,
+      "throughput_mib_s": 461.77203939908037
+     },
+     "recorder_calls": {
+      "copied": 64
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-64x4MiB",
+     "throughput_mib_s": 121.5255962584472
+    },
+    {
+     "bytes": 268435456,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.0507359000039287,
+     "iteration": 2,
+     "operations": {
+      "copy": 64
+     },
+     "outcomes": {
+      "succeeded": 64
+     },
+     "pipeline": {
+      "bytes": 268435456,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 64,
+      "payload_high_water": 1835008,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.2042589001939632,
+      "writer_starved_seconds": 0.10341650096233934
+     },
+     "plan_fingerprint": "6e8f29c5b3ca6c311f4ba191274fe570fd48915efa2eb39b0ea51f0ba2274a76",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 268435456,
+      "candidates": 64,
+      "expected_bytes": 268435456,
+      "expected_candidates": 64,
+      "recording": "ok",
+      "results": {
+       "verified": 64
+      },
+      "seconds": 0.5443674999987707,
+      "throughput_mib_s": 470.27054333805404
+     },
+     "recorder_calls": {
+      "copied": 64
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-64x4MiB",
+     "throughput_mib_s": 124.83323669298888
+    },
+    {
+     "bytes": 268435456,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.0191944000544026,
+     "iteration": 3,
+     "operations": {
+      "copy": 64
+     },
+     "outcomes": {
+      "succeeded": 64
+     },
+     "pipeline": {
+      "bytes": 268435456,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 64,
+      "payload_high_water": 2883584,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.2030129000195302,
+      "writer_starved_seconds": 0.10340860049473122
+     },
+     "plan_fingerprint": "6e8f29c5b3ca6c311f4ba191274fe570fd48915efa2eb39b0ea51f0ba2274a76",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 268435456,
+      "candidates": 64,
+      "expected_bytes": 268435456,
+      "expected_candidates": 64,
+      "recording": "ok",
+      "results": {
+       "verified": 64
+      },
+      "seconds": 0.6072956999996677,
+      "throughput_mib_s": 421.5409396116918
+     },
+     "recorder_calls": {
+      "copied": 64
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-64x4MiB",
+     "throughput_mib_s": 126.78323592473447
+    },
+    {
+     "bytes": 268435456,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.038804000010714,
+     "iteration": 4,
+     "operations": {
+      "copy": 64
+     },
+     "outcomes": {
+      "succeeded": 64
+     },
+     "pipeline": {
+      "bytes": 268435456,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 64,
+      "payload_high_water": 1572864,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.20916710002347827,
+      "writer_starved_seconds": 0.1086986007867381
+     },
+     "plan_fingerprint": "6e8f29c5b3ca6c311f4ba191274fe570fd48915efa2eb39b0ea51f0ba2274a76",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 268435456,
+      "candidates": 64,
+      "expected_bytes": 268435456,
+      "expected_candidates": 64,
+      "recording": "ok",
+      "results": {
+       "verified": 64
+      },
+      "seconds": 0.5629713000380434,
+      "throughput_mib_s": 454.73010788063357
+     },
+     "recorder_calls": {
+      "copied": 64
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-64x4MiB",
+     "throughput_mib_s": 125.56381093947958
+    },
+    {
+     "bytes": 268435456,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.0528954000328667,
+     "iteration": 5,
+     "operations": {
+      "copy": 64
+     },
+     "outcomes": {
+      "succeeded": 64
+     },
+     "pipeline": {
+      "bytes": 268435456,
+      "chunk_sizes": [
+       262144
+      ],
+      "copies": 64,
+      "payload_high_water": 2097152,
+      "reader_blocked_seconds": 0.0,
+      "reserved_bytes": 0,
+      "seconds": 0.21161350019974634,
+      "writer_starved_seconds": 0.11122100130887702
+     },
+     "plan_fingerprint": "6e8f29c5b3ca6c311f4ba191274fe570fd48915efa2eb39b0ea51f0ba2274a76",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 268435456,
+      "candidates": 64,
+      "expected_bytes": 268435456,
+      "expected_candidates": 64,
+      "recording": "ok",
+      "results": {
+       "verified": 64
+      },
+      "seconds": 0.565860100032296,
+      "throughput_mib_s": 452.40864302923814
+     },
+     "recorder_calls": {
+      "copied": 64
+     },
+     "recording": "ok",
+     "repeat": 5,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+     "status": "completed",
+     "target": "G:\\NamiSyncExecutorAssessment-20260927-64x4MiB",
+     "throughput_mib_s": 124.70192100186958
+    }
+   ],
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 2.106552,
+     "median": 2.050736,
+     "minimum": 2.019194
+    },
+    "throughput_mib_s": {
+     "median": 124.833
+    }
+   }
+  }
+ },
+ "executor-assessment-20260927/gf-1x4GiB.json": {
+  "bytes": 6096,
+  "sha256": "050f61e9de498ce5bbb37309b7e11aa6c5940dadf65ca29014de5e22a3f108cd",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.000345699954777956,
+    "preflight_seconds": 0.004658400022890419,
+    "scan_seconds": 0.0045396999921649694
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.003767700050957501
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "0f21ade99336c0c3ee8dd325a681e669cdddefcd5adc3ec3068018728b6b35d3",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 3,
+    "source": "G:\\NamiSyncExecutorAssessment-20260927-reverse-source",
+    "target": "F:\\NamiSyncExecutorAssessment-20260927-reverse-target",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "samples": [
+    {
+     "bytes": 4294967296,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 1.817670700023882,
+     "iteration": 1,
+     "operations": {
+      "copy": 1
+     },
+     "outcomes": {
+      "succeeded": 1
+     },
+     "pipeline": {
+      "bytes": 4294967296,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 1,
+      "payload_high_water": 33554432,
+      "reader_blocked_seconds": 0.031217200041282922,
+      "reserved_bytes": 0,
+      "seconds": 1.3175903999945149,
+      "writer_starved_seconds": 0.20301219960674644
+     },
+     "plan_fingerprint": "0f21ade99336c0c3ee8dd325a681e669cdddefcd5adc3ec3068018728b6b35d3",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4294967296,
+      "candidates": 1,
+      "expected_bytes": 4294967296,
+      "expected_candidates": 1,
+      "recording": "ok",
+      "results": {
+       "verified": 1
+      },
+      "seconds": 2.067836200003512,
+      "throughput_mib_s": 1980.814534532785
+     },
+     "recorder_calls": {
+      "copied": 1
+     },
+     "recording": "ok",
+     "repeat": 3,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "G:\\NamiSyncExecutorAssessment-20260927-reverse-source",
+     "status": "completed",
+     "target": "F:\\NamiSyncExecutorAssessment-20260927-reverse-target",
+     "throughput_mib_s": 2253.4334739214223
+    },
+    {
+     "bytes": 4294967296,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 2.0286402000347152,
+     "iteration": 2,
+     "operations": {
+      "copy": 1
+     },
+     "outcomes": {
+      "succeeded": 1
+     },
+     "pipeline": {
+      "bytes": 4294967296,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 1,
+      "payload_high_water": 33554432,
+      "reader_blocked_seconds": 0.05118640000000596,
+      "reserved_bytes": 0,
+      "seconds": 1.3785187000175938,
+      "writer_starved_seconds": 0.13683139893691987
+     },
+     "plan_fingerprint": "0f21ade99336c0c3ee8dd325a681e669cdddefcd5adc3ec3068018728b6b35d3",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4294967296,
+      "candidates": 1,
+      "expected_bytes": 4294967296,
+      "expected_candidates": 1,
+      "recording": "ok",
+      "results": {
+       "verified": 1
+      },
+      "seconds": 2.0718842999776825,
+      "throughput_mib_s": 1976.9443689708544
+     },
+     "recorder_calls": {
+      "copied": 1
+     },
+     "recording": "ok",
+     "repeat": 3,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "G:\\NamiSyncExecutorAssessment-20260927-reverse-source",
+     "status": "completed",
+     "target": "F:\\NamiSyncExecutorAssessment-20260927-reverse-target",
+     "throughput_mib_s": 2019.0864796674673
+    },
+    {
+     "bytes": 4294967296,
+     "command": "executor",
+     "correspondence": "empty",
+     "deletion_policy": "trash",
+     "diagnostics": true,
+     "execute_seconds": 1.9868234999594279,
+     "iteration": 3,
+     "operations": {
+      "copy": 1
+     },
+     "outcomes": {
+      "succeeded": 1
+     },
+     "pipeline": {
+      "bytes": 4294967296,
+      "chunk_sizes": [
+       4194304
+      ],
+      "copies": 1,
+      "payload_high_water": 33554432,
+      "reader_blocked_seconds": 0.05125349998706952,
+      "reserved_bytes": 0,
+      "seconds": 1.3937267000437714,
+      "writer_starved_seconds": 0.1834582007722929
+     },
+     "plan_fingerprint": "0f21ade99336c0c3ee8dd325a681e669cdddefcd5adc3ec3068018728b6b35d3",
+     "plan_seconds": null,
+     "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+     "preflight_seconds": null,
+     "preparation": "once",
+     "readback": {
+      "bytes": 4294967296,
+      "candidates": 1,
+      "expected_bytes": 4294967296,
+      "expected_candidates": 1,
+      "recording": "ok",
+      "results": {
+       "verified": 1
+      },
+      "seconds": 2.103907800046727,
+      "throughput_mib_s": 1946.853374424977
+     },
+     "recorder_calls": {
+      "copied": 1
+     },
+     "recording": "ok",
+     "repeat": 3,
+     "scan_seconds": null,
+     "setup_seconds": 0.0,
+     "source": "G:\\NamiSyncExecutorAssessment-20260927-reverse-source",
+     "status": "completed",
+     "target": "F:\\NamiSyncExecutorAssessment-20260927-reverse-target",
+     "throughput_mib_s": 2061.5822190967856
+    }
+   ],
+   "summary": {
+    "n": 3,
+    "seconds": {
+     "maximum": 2.02864,
+     "median": 1.986823,
+     "minimum": 1.817671
+    },
+    "throughput_mib_s": {
+     "median": 2061.582
+    }
+   }
+  }
+ },
+ "executor-assessment-20260927/os.json": {
+  "bytes": 141,
+  "sha256": "6fa96902986effa0cd6babca84ba6faf9e16ef2fabf099bac4c30ae3974efc1a",
+  "content": {
+   "Caption": "Microsoft Windows 11 Pro",
+   "Version": "10.0.26200",
+   "BuildNumber": "26200",
+   "TotalVisibleMemorySize": 66785364
+  }
+ },
+ "executor-assessment-20260927/root-probe-review.json": {
+  "bytes": 958,
+  "sha256": "68abb75f80c9c5a813ba9ea0866dfb8d4943abaf3941443f8ec833ff0e79f0a5",
+  "content": {
+   "root": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+   "profile": "one process, 1000 repetitions per probe; no depth sweep",
+   "st_dev_hex": "0x98ac4c7aac4c5542",
+   "volume_id_serial": "AC4C5542",
+   "handle_volume_serial_hex": "0x98ac4c7aac4c5542",
+   "file_id_hex": "0xe00000005cb8b",
+   "full_admission": {
+    "calls": 1000,
+    "median_us": 1083.0,
+    "min_us": 918.2,
+    "max_us": 3859.8,
+    "sum_seconds": 1.1313413
+   },
+   "native_api": {
+    "get_volume_path": {
+     "calls": 2000,
+     "median_us": 269.6,
+     "min_us": 225.9,
+     "max_us": 1493.9,
+     "sum_seconds": 0.5772999
+    },
+    "get_volume_information": {
+     "calls": 1000,
+     "median_us": 28.3,
+     "min_us": 21.9,
+     "max_us": 166.7,
+     "sum_seconds": 0.0317181
+    }
+   },
+   "open_id_attributes_close": {
+    "calls": 1000,
+    "median_us": 30.4,
+    "min_us": 26.9,
+    "max_us": 289.4,
+    "sum_seconds": 0.032315
+   }
+  }
+ }
+}

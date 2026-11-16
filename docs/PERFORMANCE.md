@@ -185,9 +185,9 @@ are never retried. `python -m tools.performance.br_g_42 validate DIR` is the
 separate checker: it requires exactly five complete children per case, the
 collection revision with a clean tree in every report, and recomputes each
 statistic from the raw reports. Any invalid child or exceeded limit fails R3;
-a rerun needs a recorded cause and a new collection directory. Raw reports
-stay in ignored `build/r3-acceptance-20261109/` (Inventory child logs in the
-collector's `build/inventory-cold/` root); the validation JSON, with
+a rerun needs a recorded cause and a new collection directory. Raw reports and
+Inventory child logs are working output under ignored `build/` and are not
+retained; the validation JSON, with
 each report's SHA-256, and the Inventory compact raw/validation JSON are
 committed under `tests/interfaces/web/`.
 
@@ -236,10 +236,9 @@ events / 109,568 bytes, with recording and audit assertions satisfied.
 Committed receipts: [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261110_raw.json),
 [Inventory verdict](../tests/interfaces/web/r3_inventory_cold_20261110_validation.json)
 and [History/bridge verdict](../tests/interfaces/web/r3_br_g_42_validation_20261110.json).
-Full reports, profile and logs remain in
-`build/m1-release-repair-20261110/acceptance/20261110-03/r3/`; the Inventory
-raw path is recorded in its `identity.json`. Independent review is in
-`build/m1-release-repair-20261110/renewal/r3-review.md`.
+[EV-0032](../evidence/EV-0032/README.md) keeps the collection's identity,
+profile, commands, index, validation and independent review; full reports and
+logs were not retained.
 These results renew the named timing gates only, not SH-G-15 or a universal
 speed claim. Historical receipts and their scope remain unchanged.
 
@@ -257,9 +256,9 @@ The original clean `cbb07d5f` five-child collections passed without retries;
 the profile and metrics are summarized above. [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261109_raw.json),
 [validation](../tests/interfaces/web/r3_inventory_cold_20261109_validation.json)
 and [History/bridge validation](../tests/interfaces/web/r3_br_g_42_validation_20261109.json)
-bind the original source/runtime/hash population. Raw collection:
-`build/r3-acceptance-20261109/collection/`; Inventory child logs were
-collector working output and are not retained.
+bind the original source/runtime/hash population. [EV-0030](../evidence/EV-0030/README.md)
+keeps the collection's profile, run log, index and validation; raw reports and
+Inventory child logs were not retained.
 Relevant source/profile changes require renewal; those original passes remain
 scoped rather than silently authenticating the current checkout.
 
@@ -350,8 +349,8 @@ uninstrumented loop's cost by an uncalibrated amount. Preserve those raw results
 as original-method diagnostics. BC1 observes the actual budget at capture scope,
 without wrapping consume, and recollects the unchanged-product baseline before
 the bounded bulk counter comparison. Both use the same six-child corpus below,
-same pinned runtime/profile and same corrected observer. Evidence uses
-`build/bridge-counter-study-20261007/`. No new latency gate is introduced; the
+same pinned runtime/profile and same corrected observer. Evidence:
+[EV-0008](../evidence/EV-0008/README.md). No new latency gate is introduced; the
 suggested 40 ms jumps and 100 ms bursts are hypotheses, not acceptance criteria.
 Remaining-capture, row-field, DOM-stage and steady-scroll profiling is separate
 from these headline timings and authorizes no additional product optimization.
@@ -487,9 +486,9 @@ Commands, run only after inputs freeze and headed coordination:
 
 ```powershell
 .\.venv\Scripts\python.exe -m tools.performance.table_loading --check
-# Use the fresh installed interpreter for the probe and baseline; its output
-# directory already contains c5-host-profile.json.
-$evidenceRoot = (Resolve-Path build/gui-inventory-refinement-20261005).Path
+# Use the fresh installed interpreter for the probe and baseline; the fresh
+# study folder must already contain c5-host-profile.json.
+$evidenceRoot = (Resolve-Path build/<study-folder>).Path
 python -m tools.performance.table_loading --probe plan-base --installed-root SITE_PACKAGES --output "$evidenceRoot/c5-representative-plan.json"
 python -m tools performance table-loading plan-base --installed-root SITE_PACKAGES --json "$evidenceRoot/c5-baseline-plan.json"
 python -m tools performance table-loading inventory-base --installed-root SITE_PACKAGES --json "$evidenceRoot/c5-baseline-inventory.json"
@@ -503,7 +502,9 @@ coalescing/prefetch results below do not prescribe another product change.
 
 ### SW continuous-scroll follow-up method — 2026-10-09
 
-Evidence belongs in `build/scroll-window-study-20261009/`. Compare the BC1
+Retained evidence: [EV-0036](../evidence/EV-0036/README.md), as per-workload
+statistics; the raw frames, requests and manifests preserved below during the
+study were not retained. Compare the BC1
 bulk-counter product baseline with compatible-scroll adoption using the same
 updated collector, installed fixture, profile and dependency pins. Freeze inputs
 and serialize timings after functional checks; preserve raw frames, requests,
@@ -936,13 +937,13 @@ transport correctness or the frozen SH-G-8 custody claim. Use the unchanged
 custody tests and their authority below for that gate.
 
 The 2026-10-04 command-catalog repair run used archived product `5b62ee5` and
-the corrected working-tree driver. `build/bridge-catalog-20261004/installed.json`
+the corrected working-tree driver. `installed.json` ([EV-0007](../evidence/EV-0007/README.md))
 records `status=complete`, `measurement_valid=true`, four valid sessions and
 complete runtime diagnostics. `event_passed` and `passed` remain false; this
 verifies receipt compatibility, not new timing, memory or custody acceptance.
 
 The 2026-09-27 repair verification used archived product `639b2ea` and the
-IR-BRIDGE working-tree driver. `build/admission-bridge-closeout-20260927/bridge-full-final.json`
+IR-BRIDGE working-tree driver. `bridge-full-final.json` ([EV-0005](../evidence/EV-0005/README.md))
 records `status=complete`, `measurement_valid=true`, four valid sessions with
 150 ordered reliable outcomes each, and no gaps or browser failures. Historical
 `passed`/`event_passed` are false; this is endpoint completion, not new timing or
@@ -1001,9 +1002,10 @@ verified the supplied corpus metadata and extracted bundle were unchanged.
 The original timeout's exact input ordering remains unproven; these results
 verify the corrected package's requested paths, not universal leak freedom.
 
-Evidence: `build/m1-release-repair-20261110/acceptance/20261110-04/`, with
+Evidence: [EV-0032](../evidence/EV-0032/README.md) keeps attempt 04's
 `package/independent-comparison-02.json`, `package/artifact-comparison-review.md`,
-and `resources/{identity.json,validation.json,schedule/}`. The raw schedule
+`resources/identity.json` and `resources/validation.json` as a failure record;
+schedule samples were not retained. The raw schedule
 validator correctly reports FAIL because the other 15 profiles were deliberately
 not repeated. Its two present run rows are valid with no failed predicates.
 Do not relabel this partial collection a complete 17-run pass or rewrite the
@@ -1072,10 +1074,10 @@ post-stop checks also confirm all 65 supplied-corpus sizes/timestamps and all
 341 extracted bundle paths/hashes remain unchanged. They do not repair the
 incomplete collector receipt or supply missing observation windows.
 
-Raw evidence: `build/m1-release-repair-20261110/acceptance/20261110-03/resources/`,
-including `validation.json`, `schedule/runs/payload-01/failure.png` and
-`payload-failure-mirror.json`. Independent reconciliation and comparison:
-`build/m1-release-repair-20261110/renewal/resources-review.md`.
+Evidence: [EV-0032](../evidence/EV-0032/README.md) keeps attempt 03's resource
+identity, `validation.json` as a failure record, `payload-failure-mirror.json`
+and the independent reconciliation and comparison `resources-review.md`.
+Schedule samples and the payload failure screenshot were not retained.
 The user's non-blocking disposition does not turn missing observations into
 measurements or establish universal leak freedom. Preserve the original raw
 verdict and distinguish the Close investigation from resource optimization.
@@ -1091,7 +1093,7 @@ lost and the browser emits no click. Close's callback is never invoked.
 This demonstrates a product input defect, without filesystem effects or a
 soak. It does not prove that this ordering caused the original untraced timeout.
 
-Evidence: `build/m1-release-repair-20261110/portable/rail-click-probe-20261110-02/`.
+Evidence: the rail-click probe result in [EV-0032](../evidence/EV-0032/README.md).
 The follow-up correction leaves correctly positioned rows attached. The
 ordinary regression fails on the old renderer and passes after correction;
 the native trusted down/render/up diagnostic now retains focus and invokes
@@ -1154,8 +1156,9 @@ validator report is `soak-validation.json`.
 | `733f0cb1`, WebView2 157 | 1,101–1,224 / 527–540 | 3,298–3,674 / 689–793 | Same schedule; lower settled memory, higher execution allocation; runtime/product both changed. |
 | R4 `1f632b13` / `3ece185f` | 964–1,111 / 501–558 | 2,316–2,404 / 719–726 | User accepts measured schedule; raw failed predicates retained above. |
 
-`build/resource-study-20261106c/` and `build/resource-study-20261108/` retain
-original schedule identities and samples. The first schedule's soak slopes were
+[EV-0033](../evidence/EV-0033/README.md) keeps both schedules' package/tool
+identities and failure records (each run's checks, failed predicates and
+invalid runs); the original samples were not retained. The first schedule's soak slopes were
 +0.14/−0.02/+0.30 MiB per cycle; the second +0.28/+0.27/+0.17. Those figures
 describe renderer sawtooth and modest host/GPU contributions, not universal
 graph-release or leak conclusions. Handle plateaus must not be relabeled
@@ -1185,7 +1188,8 @@ GC left 764 MiB; closing all left 660 MiB, with about 285 MiB in the host.
 Renderer garbage was reused, while host high-water retention followed prior
 peak use. Same-volume work was serialized by admission: a concurrent Plan took
 87 seconds rather than its normal five. Disjoint-volume concurrent executions
-were not measured. Evidence: `build/resource-study-20261106c/{multi,profiling}/`.
+were not measured. Evidence: the multi-task result, host timers and top profile
+frames and allocators in [EV-0033](../evidence/EV-0033/README.md).
 
 Source-service timers on the same 10k corpus found about 43.5 seconds in Execute
 and 52.8 in Verify. Freshly written files' first data opens cost 3.3–3.7 ms;
@@ -1202,7 +1206,9 @@ settlement on control; review earlier observation/sharing-lock timing before
 adopting lookahead. Serial fresh-file timing is not evidence that concurrency
 will help. [M2_PROPOSAL](M2_PROPOSAL.md) owns the unactivated proposal;
 VERIFIER/WORKFLOWS own any eventual behavior. The copy/verification/host-retention
-investigation is `build/copyonly-20261106/` and the November resource study roots.
+investigation is [EV-0012](../evidence/EV-0012/README.md) and
+[EV-0033](../evidence/EV-0033/README.md); copyonly's original source snapshots
+were not retained, so its timings remain diagnostic history.
 
 ## Rendering and copy-cost comparisons
 
@@ -1212,14 +1218,14 @@ metrics. Keep original/failed runs and order/observer limits when comparing.
 
 | Family | Qualified observation | Disposition / provenance |
 | --- | --- | --- |
-| Response/snapshot copy removal | Sampled execution allocation fell 15.8%; peak/closed memory was higher. | No footprint/throughput improvement claim. `build/allocation-20261107/`; interfaces/transport and 40 repeated-use mirrors passed. |
+| Response/snapshot copy removal | Sampled execution allocation fell 15.8%; peak/closed memory was higher. | No footprint/throughput improvement claim. [EV-0006](../evidence/EV-0006/README.md) (whole-app aggregate recovered from Git `cbf3f090`; probe workspace not retained); interfaces/transport and 40 repeated-use mirrors passed. |
 | Renderer reclamation / idle collection | Forced GC returned retained 10k/100k JS heaps to about 3–5 MiB; native Low-memory target affected working set/GPU more than JS heap. | Diagnostic source and boundary-only policy remain distinct; Normal restoration and responsiveness checked. No heap cap or execute-time GC. |
 | Host after Close | Python/task objects and native allocator retention were investigated separately from renderer state. | Stable object release is not identical to returning private pages to Windows; no unbounded-cache conclusion from high-water retention alone. |
 | Root spelling / small-file copy | Reuse admitted immutable spelling; consolidate adjacent checks without omitting fresh effect admission. | Correctness/differential and real seam checks separate from timing. No batching/verification concurrency change. |
 | Plan Follow reuse | Compatible overlapping row reuse reduces churn at current window. | Preserve focus/selection/identity and exact one-window bounds. See the dated summary below. |
 | Inventory Follow reuse | Created elements fell 81–91% in bounded 10k comparisons, while final memory peaks rose. | No footprint/throughput claim. Initial loaded-target shortcut deferred after drain amplification; later cadence owns its reintroduction. |
-| Refresh/read cadence | Final Plan 135.68 versus 157.98 s; renderer peak 644 versus 840 MiB; Inventory peaks lower 73–75%. Plan renderer CPU remained 12.2% higher. | 250 ms local / 500 ms routine full reads and existing 25 ms integrity-result collection; immediate urgent paths retained. `build/cadence-measurement-20261108/`. |
-| DOM mutation follow-up | Quiet opposite-order Plan pairs establish no stable CPU/speed benefit; Inventory elapsed/CPU effectively unchanged with modest sampled peak reduction. | Four externally disturbed pre-idle Plan runs excluded; resize/scroll-collapse corrections verified. `build/dom-costs-20261109/`. |
+| Refresh/read cadence | Final Plan 135.68 versus 157.98 s; renderer peak 644 versus 840 MiB; Inventory peaks lower 73–75%. Plan renderer CPU remained 12.2% higher. | 250 ms local / 500 ms routine full reads and existing 25 ms integrity-result collection; immediate urgent paths retained. [EV-0010](../evidence/EV-0010/README.md). |
+| DOM mutation follow-up | Quiet opposite-order Plan pairs establish no stable CPU/speed benefit; Inventory elapsed/CPU effectively unchanged with modest sampled peak reduction. | Four externally disturbed pre-idle Plan runs excluded; resize/scroll-collapse corrections verified. [EV-0014](../evidence/EV-0014/README.md). |
 | 200 ms / ACK diagnostic | About 75% fewer bridge threads and 13% less host CPU for only 1.27 s elapsed saving in final-source comparison. | Discussion only. ACK call-body CPU excludes caller thread creation and cleanup remains necessary; no protocol change. |
 
 ### Plan Follow allocation reduction — 2026-11-08
@@ -1227,7 +1233,7 @@ metrics. Keep original/failed runs and order/observer limits when comparing.
 Compatible rows remain attached as the window moves; compatible detail facts
 update without rebuilding unchanged cells. The measured reduction addresses
 allocation churn, not a new retained window or looser identity fence. Evidence:
-`build/follow-allocation-20261108/` and `build/follow-memory-20261108/`.
+[EV-0018](../evidence/EV-0018/README.md).
 PRESENTATION owns current behavior and the one-window/focus/selection contracts.
 
 ### Inventory Follow allocation investigation — 2026-11-08
@@ -1235,10 +1241,12 @@ PRESENTATION owns current behavior and the one-window/focus/selection contracts.
 Initial row/cell reuse and loaded-target shortcuts were evaluated separately.
 The shortcut removed a foreground-read lifetime that incidentally coalesced
 overlay refreshes; native diagnostics exposed amplified drain work. The user
-shipped row reuse alone, then approved the later scheduler. Evidence retains
-the failed/intermediate variant; final lower element counts are not lower
-private-memory evidence. `build/verify-follow-20261107/` and the November
-follow/read/refresh-cadence roots retain the separate inputs and comparisons.
+shipped row reuse alone, then approved the later scheduler. Final lower element
+counts are not lower private-memory evidence. [EV-0018](../evidence/EV-0018/README.md)
+and [EV-0010](../evidence/EV-0010/README.md) record the failed/intermediate
+variant and the comparisons; [EV-0038](../evidence/EV-0038/README.md) keeps the
+verify-follow integration identity and reviews. Inputs and per-run samples were
+not retained.
 
 ### Execution time: GUI versus headless — 2026-11-09
 
@@ -1250,7 +1258,9 @@ did not remove the difference; sampled worker calls rarely used efficiency cores
 Minimizing recovered about half the GUI excess, leaving in-process bridge/drain
 work. A source move outside the GUI interpreter would be a separate architecture
 decision. One minimized efficiency-core outlier remained unexplained. Evidence:
-`build/exec-time-20261109/`; no product scheduling change follows these trials.
+per-batch aggregates in [EV-0015](../evidence/EV-0015/README.md), without the
+individual trial rows or a recovered per-trial source freeze; no product
+scheduling change follows these trials.
 
 ### Post-allocation reclamation probes — 2026-11-07
 
@@ -1275,7 +1285,7 @@ product/runtime pairing.
 Shared admitted spelling and direct consumers were consolidated without lending
 one consumer's root hold to another. Source/native/differential witnesses preserve
 fresh held attributes, descendants and fallback. Evidence:
-`build/path-consolidation-20261107/`; EXECUTOR/CORE own the mechanism and policy.
+[EV-0026](../evidence/EV-0026/README.md); EXECUTOR/CORE own the mechanism and policy.
 
 ### Copy paths, verification overlap and host retention — 2026-11-07
 
@@ -1296,13 +1306,13 @@ remedy instructions; original raw measurements retain their endpoints.
 
 | Family | Conclusion and retained limitation | Evidence |
 | --- | --- | --- |
-| LS1 / PO1–PO5 | Filesystem observation and lexical derivation dominate some real-tree starts; no backend speed claim from table-loading timing. NOOP direct checks omitted during review only; later PO4 accepts observation timing/logical spelling explicitly. | `build/planning-optimization-next-20261019/` and `build/handle-relative-investigation-20261021/`; PREFLIGHT owns final policy. |
-| Handle-relative compatibility | Real native profile/candidate controls bound compatibility; no plan executed in final-profile observation. | `build/handle-relative-investigation-20261021/final-profile/`; no blanket guard replacement. |
+| LS1 / PO1–PO5 | Filesystem observation and lexical derivation dominate some real-tree starts; no backend speed claim from table-loading timing. NOOP direct checks omitted during review only; later PO4 accepts observation timing/logical spelling explicitly. | [EV-0027](../evidence/EV-0027/README.md) and [EV-0020](../evidence/EV-0020/README.md); PREFLIGHT owns final policy. |
+| Handle-relative compatibility | Real native profile/candidate controls bound compatibility; no plan executed in final-profile observation. | Final-profile report and analysis in [EV-0020](../evidence/EV-0020/README.md); no blanket guard replacement. |
 | AX1 axis switching | 80 valid installed browser wheel trials did not reproduce the physical lock; Windows input stopped before ownership admission. | Original physical-device report unresolved; source/control/geometry differences are not a product diagnosis. |
-| BC1 byte counting | Corrected capture-scope observer avoids per-consume overhead; canonical 4,096-character chunk counter preserves exact Unicode/byte refusal and ordering. | `build/bridge-counter-study-20261007/`; old observer overstates capture cost by an uncalibrated amount. |
-| BC2–5 / SW | Remaining capture/row-field/DOM/scroll stages were investigated without treating different Plan/Inventory endpoints as equivalent. | Correctness, per-stage counts and raw intervals survive; partial controls do not authorize speculative payload or renderer redesign. |
-| Continuous-scroll adoption / SN2 | Bounded compatible response adoption and directional prefetch retain one outstanding read, current owner and exact keyboard target. | `build/scroll-window-study-20261009/`, `build/scroll-navigation-20261011/`; no artificial-delay performance evidence. |
-| GUI-C5 coalescing/keyboard | Installed six-child before/after method retains fixture/actions, full coverage, asset restoration and request accounting. | `build/gui-inventory-refinement-20261005/`; baseline/variants remain diagnostic, not a new SLO. |
+| BC1 byte counting | Corrected capture-scope observer avoids per-consume overhead; canonical 4,096-character chunk counter preserves exact Unicode/byte refusal and ordering. | [EV-0008](../evidence/EV-0008/README.md); old observer overstates capture cost by an uncalibrated amount. |
+| BC2–5 / SW | Remaining capture/row-field/DOM/scroll stages were investigated without treating different Plan/Inventory endpoints as equivalent. | Correctness and per-stage summaries survive in [EV-0008](../evidence/EV-0008/README.md) and [EV-0036](../evidence/EV-0036/README.md); raw intervals were not retained. Partial controls do not authorize speculative payload or renderer redesign. |
+| Continuous-scroll adoption / SN2 | Bounded compatible response adoption and directional prefetch retain one outstanding read, current owner and exact keyboard target. | [EV-0036](../evidence/EV-0036/README.md), [EV-0035](../evidence/EV-0035/README.md) (per-workload statistics, not frame vectors); no artificial-delay performance evidence. |
+| GUI-C5 coalescing/keyboard | Installed six-child before/after method retains fixture/actions, full coverage, asset restoration and request accounting. | Method summary and reviews in [EV-0019](../evidence/EV-0019/README.md); baseline/variants remain diagnostic, not a new SLO. |
 
 PO3/PO5's two 8,000-file mixes used one excluded warmup, three fresh-process
 light samples and one separately counted sample per mix; 90% and 10% NOOP
@@ -1334,8 +1344,9 @@ the construction-overlap peak. Slot growth does not itself decompose private
 memory. Final equal-key/basename sharing reduces diagnostic overlap peak about
 14–16 MiB in three matched pairs; cold timing ranges overlap. Sparse-record
 materialization, field mapping and combined projection builders remain unshipped.
-`build/projection-tuning-20261109/` retains source manifests, fingerprints,
-comparisons and failures; no broader memory/speed acceptance follows.
+[EV-0028](../evidence/EV-0028/README.md) keeps the findings (including failures),
+source fingerprints and comparisons; source manifests and per-run reports were
+not retained. No broader memory/speed acceptance follows.
 
 ### Current-source BR-G-42 diagnostics — 2026-11-09
 
@@ -1388,14 +1399,14 @@ metrics/readback, preparation and storage contention differ across studies.
 
 | Study / mechanism | Qualified conclusion | Historical evidence |
 | --- | --- | --- |
-| Initial assessment `0e4595e` | 4 KiB band 28.248 s median; 4 GiB 2.287 s. Root admission dominated instrumented small-file wall time. Old hash-refactor ratios are context, not a causal regression measurement. | `build/executor-assessment-20260927/`; separate 4 TB SN850X F:/G:, CPython 3.13.14 / xxhash 3.8.1. |
-| Root admission holds, 2026-09-28 | Immutable root evidence and invocation holds reduce repeated admission; exact final-path corroboration and current held attributes remain required. | `build/root-admission-optimization-20260928/`; fallback/native swap and differential controls separate from throughput. |
+| Initial assessment `0e4595e` | 4 KiB band 28.248 s median; 4 GiB 2.287 s. Root admission dominated instrumented small-file wall time. Old hash-refactor ratios are context, not a causal regression measurement. | [EV-0016](../evidence/EV-0016/README.md); separate 4 TB SN850X F:/G:, CPython 3.13.14 / xxhash 3.8.1. |
+| Root admission holds, 2026-09-28 | Immutable root evidence and invocation holds reduce repeated admission; exact final-path corroboration and current held attributes remain required. | [EV-0034](../evidence/EV-0034/README.md); fallback/native swap and differential controls separate from throughput. |
 | Verifier/preflight holds | Candidate geometry and admitted root resolution reuse have consumer-specific scopes. Scanner's bracketed enumeration is not permission to cache preflight subject admission. | Same root, verifier/resume subtrees; source-derived call counts are not timings. |
-| Planner-used drift facts / own-effect version | Reviewed planner facts and actual published metadata remain stable on immediate rerun. | `build/executor-simplification-20260929/measurements/`; exact readback/recording/source checks, not relaxed source drift. |
+| Planner-used drift facts / own-effect version | Reviewed planner facts and actual published metadata remain stable on immediate rerun. | Result-8 measurements in [EV-0017](../evidence/EV-0017/README.md); exact readback/recording/source checks, not relaxed source drift. |
 | Handle continuity / adjacent native checks | Consolidated derivation and retained published-file handle avoid duplicate work while preserving explicit access guards. | Same evidence root; ranges frequently overlap, so no per-commit causal speedup. |
 | Direct target writes | Final eligible local direct-write bands passed exact readback; small files retain buffered behavior, source reads remain buffered. | Final result-8/ceilings receipts below; no device ceiling from buffered repeated-source throughput. |
 | Source-drive contention | Retain the contended receipt and user-cleared rerun separately. | No hidden outlier deletion or claim that unchanged product explains environmental shifts. |
-| Verifier admission assessment | Retained full-read and tap/no-tap observations check evidence/outcome membership. Null-hasher comparison remains a rerun control, not a retained observation. | `build/executor-assessment-20260927/`; open/read costs and hashing are distinct. |
+| Verifier admission assessment | Retained full-read and tap/no-tap observations check evidence/outcome membership. Null-hasher comparison remains a rerun control, not a retained observation. | [EV-0016](../evidence/EV-0016/README.md); open/read costs and hashing are distinct. |
 
 ### Integrated direct target writes — 2026-09-30
 
@@ -1423,16 +1434,18 @@ but these sequential historical endpoints do not isolate causality. All five
 samples remain, including the 1.135 s large-file tail. Repeated-source results
 are not cold-cache ceilings, other-device throughput, SQLite or GUI measurements.
 
-Evidence prefix: `build/executor-simplification-20260929/measurements/`
-`result8-b9c4ad3e-20260930-201114-989e90d9`. Before/after physical hashes bind the
-uncommitted candidate on `b9c4ad3`; predecessor receipts separately identify
+Evidence: [EV-0017](../evidence/EV-0017/README.md) keeps run
+`result8-b9c4ad3e-20260930-201114-989e90d9`'s comparison, band summaries,
+commands and host identities. Before/after physical hashes bind the
+uncommitted candidate on `b9c4ad3`; predecessor receipts separately identified
 accepted result 7 (`878f15e`). The task's `five_band_result8.ps1` and
-`five_band_result8_receipt.py` retain the original five-band procedure and add
-mode/fallback checks. The earlier threshold sweep below remains diagnostic;
+`five_band_result8_receipt.py` kept the original five-band procedure and added
+mode/fallback checks; the scripts were not retained beyond their recorded
+commands. The earlier threshold sweep below remains diagnostic;
 it does not select device-specific shipping policy.
 
-Intermediate Result 3–7 tables remain recoverable from the source revision and
-named reports. Stable
+Intermediate Result 3–7 tables remain recoverable from the source revision's
+documentation; their reports were not retained. Stable
 metadata, all-copy readback, source/dependency rechecks, zero reservations and
 manifest-scoped cleanup are validity conditions, not optional timing overhead.
 Independent backend/outside medians need not sum to executor medians, and

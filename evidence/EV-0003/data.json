@@ -1,0 +1,161 @@
+{
+ "post-m1-8-ablation-20260925/ab7-final-evidence/test_m1_4_installed_task_shell0/evidence/execution-confirmation-driver.json": {
+  "bytes": 1089,
+  "sha256": "21cc2b29144adc6b30291e1c9e2d7d142866dfc5909a6a6d42b7447bb58ea1ca",
+  "content": {
+   "active_element": "other",
+   "actual_control_checkpoint": "plan_again",
+   "authoritative_selection_state": "reviewing",
+   "browser_async_error": null,
+   "cdp_canceled": false,
+   "cdp_faulted": false,
+   "controls_hidden": true,
+   "dialog_open": false,
+   "document_has_focus": false,
+   "execute_disabled": false,
+   "execute_focused": false,
+   "execute_hidden": false,
+   "last_driver_step": "wait_execute",
+   "last_method": "Runtime.evaluate",
+   "live_service_state": null,
+   "page_confirmation_stage": "starting",
+   "pause_disabled": false,
+   "pause_hidden": false,
+   "preflight_hook_count": 1,
+   "resume_hidden": true,
+   "review_pending": "",
+   "runtime_has_exception_details": true,
+   "runtime_result_type": "object",
+   "service_session_state": "retired",
+   "task_delivery_active_drain_present": false,
+   "task_delivery_session_changed": false,
+   "task_delivery_session_released": true,
+   "task_delivery_session_state": "completed",
+   "task_delivery_start_identity_count": 1,
+   "task_delivery_terminal_delivered": true,
+   "task_delivery_terminal_record_present": true,
+   "trusted_click_count": 0,
+   "trusted_keydown_count": 1,
+   "trusted_keyup_count": 0
+  }
+ },
+ "post-m1-8-ablation-20260925/ab7-final-evidence/test_m1_4_installed_task_shell0/evidence/failure.json": {
+  "bytes": 147,
+  "sha256": "0198d20de69e4673dec9c06a48cb5813d0dc2c218db2498da5609e364fcdd2ca",
+  "content": {
+   "milestone": "failure",
+   "payload": {
+    "failure": {
+     "stage": "page_plan_review_plan_again",
+     "type": "RuntimeError"
+    }
+   },
+   "schema": "namisync-headed-evidence-v1"
+  }
+ },
+ "post-m1-8-ablation-20260925/ab7-final-evidence/test_m1_4_installed_task_shell0/evidence/final.json": {
+  "bytes": 108,
+  "sha256": "9a249bfef641b8ab8814acd558df8e9e9e333445c8ff4e436b1e432d699abd3a",
+  "content": {
+   "milestone": "final",
+   "payload": {
+    "exit_code": 0,
+    "host_returned": true
+   },
+   "schema": "namisync-headed-evidence-v1"
+  }
+ },
+ "post-m1-8-ablation-20260925/ab7-final-evidence/test_m1_4_installed_task_shell0/evidence/runtime-failure-site.json": {
+  "bytes": 41,
+  "sha256": "f9b75ad790233bdac2ee4197e3eb58c3e699d4e6aad195fccfdebaceab001ca6",
+  "content": {
+   "exception": "Error",
+   "lines": [
+    9,
+    490
+   ]
+  }
+ },
+ "post-m1-8-ablation-20260925/ab7-final-evidence/test_m1_4_installed_task_shell0/evidence/runtime-thread-sites.json": {
+  "bytes": 751,
+  "sha256": "258e1df70e4bc1c0452b34ddd058becbf78871511858fa63760075cef61059c5",
+  "content": [
+   [
+    {
+     "file": "_task_shell_headed_child.py",
+     "line": 2161
+    },
+    {
+     "file": "_task_shell_headed_child.py",
+     "line": 2208
+    },
+    {
+     "file": "winforms.py",
+     "line": 808
+    }
+   ],
+   [
+    {
+     "file": "threading.py",
+     "line": 995
+    },
+    {
+     "file": "threading.py",
+     "line": 1044
+    },
+    {
+     "file": "threading.py",
+     "line": 1015
+    }
+   ],
+   [
+    {
+     "file": "threading.py",
+     "line": 359
+    },
+    {
+     "file": "dispatcher.py",
+     "line": 1243
+    },
+    {
+     "file": "threading.py",
+     "line": 995
+    },
+    {
+     "file": "threading.py",
+     "line": 1044
+    },
+    {
+     "file": "threading.py",
+     "line": 1015
+    }
+   ],
+   [
+    {
+     "file": "winforms.py",
+     "line": 834
+    },
+    {
+     "file": "__init__.py",
+     "line": 303
+    },
+    {
+     "file": "bridge.py",
+     "line": 668
+    },
+    {
+     "file": "_task_shell_headed_child.py",
+     "line": 2330
+    },
+    {
+     "file": "_task_shell_headed_child.py",
+     "line": 2352
+    },
+    {
+     "file": "_task_shell_headed_child.py",
+     "line": 2360
+    }
+   ]
+  ]
+ }
+}

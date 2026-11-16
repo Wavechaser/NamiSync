@@ -1,0 +1,1987 @@
+{
+ "m1-release-repair-20261110/acceptance/20261110-03/r3/before-collection.json": {
+  "bytes": 1264,
+  "sha256": "9bebecadb94ba94791f1f023720693755b2b0b1986e228b84a34187260fb8176",
+  "content": {
+   "stage": "R3",
+   "attempt": "20261110-03",
+   "commit": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+   "checkout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout",
+   "started_utc": "2026-11-10T07:03:19.5893638Z",
+   "runner_sha256": "F033EC04A6A4CBC5E7E3F1CD703FCF9D4CD1FE870946DB1EE97279F95FB89F42",
+   "token": "(0, 'S-1-16-8192')",
+   "runtime_archive_sha256": "D6DA9C33A32CF111E1D52B91392C83EA6A808545B646E0557F66CB6D9EE76785",
+   "runtime_executable_sha256": "D4E19E9A33268FB0CE575A24AB2D4B85972524F1933DF008A6BEFC14DCE19FBD",
+   "node": "C:\\Users\\Spectrum\\AppData\\Local\\Programs\\Node.js\\node-v24.22.1-win-x64\\node.exe",
+   "node_version": "v24.22.1",
+   "node_sha256": "D702DAA815EABBFF763C7D3808E235CF031CF2CA70211B56847BC72F51E240E5",
+   "bootstrap_sha256": "7B18FE8B89A584C90B2D126873B0406887AD8A61F2450B5348CFC05BD7BD4E60",
+   "requirements_sha256": "9D1466CD994BA3A14BEB23CFF5559469CAD8D515462F01BD0891D2F71FB643BD",
+   "dev_lock_sha256": "F2578934CA3F2D7C6458AAB55FA28808B2E227EE38B186C9FFFD52F32B405444",
+   "profile_sha256": "CD04571CAC8A339078B2C972EB8548BE117BDC74CD7D3C17F8F7C5A16CF18CFE",
+   "profile_driver_sha256": "81518DD8414C081DC2F5F4C6F6B5FE6BA98A45DB7C4657A5D59D3A5484229E07"
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-03/r3/br-g-42/index.json": {
+  "bytes": 2182,
+  "sha256": "2605e93b7b0d91e682fc00553f452b04b2693ebbbea01d35d16a0285e4d862b4",
+  "content": {
+   "schema": "namisync-br-g-42-collection-v1",
+   "revision": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+   "children": 5,
+   "python": "3.15.2 (tags/v3.15.2:5e58eaa, Oct 25 2026, 17:27:03) [MSC v.1951 64 bit (AMD64)]",
+   "started": "2026-11-10T15:03:58+0800",
+   "runs": [
+    {
+     "family": "history",
+     "case": "release",
+     "child": 1,
+     "exit_code": 0,
+     "report": "history/release-01.json",
+     "seconds": 114.9
+    },
+    {
+     "family": "history",
+     "case": "release",
+     "child": 2,
+     "exit_code": 0,
+     "report": "history/release-02.json",
+     "seconds": 114.7
+    },
+    {
+     "family": "history",
+     "case": "release",
+     "child": 3,
+     "exit_code": 0,
+     "report": "history/release-03.json",
+     "seconds": 115.5
+    },
+    {
+     "family": "history",
+     "case": "release",
+     "child": 4,
+     "exit_code": 0,
+     "report": "history/release-04.json",
+     "seconds": 115.5
+    },
+    {
+     "family": "history",
+     "case": "release",
+     "child": 5,
+     "exit_code": 0,
+     "report": "history/release-05.json",
+     "seconds": 116.1
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 1,
+     "exit_code": 0,
+     "report": "bridge-event/installed-01.json",
+     "seconds": 83.9
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 2,
+     "exit_code": 0,
+     "report": "bridge-event/installed-02.json",
+     "seconds": 82.5
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 3,
+     "exit_code": 0,
+     "report": "bridge-event/installed-03.json",
+     "seconds": 82.8
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 4,
+     "exit_code": 0,
+     "report": "bridge-event/installed-04.json",
+     "seconds": 82.6
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 5,
+     "exit_code": 0,
+     "report": "bridge-event/installed-05.json",
+     "seconds": 82.6
+    }
+   ],
+   "finished": "2026-11-10T15:20:29+0800"
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-03/r3/br-g-42/validation.json": {
+  "bytes": 1869,
+  "sha256": "cb7fc756bea868f3d2df9c0ef57b4c0a829fad2640c41fe55990276ade9a6b2f",
+  "content": {
+   "schema": "namisync-br-g-42-validation-v1",
+   "revision": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+   "python": "3.15.2 (tags/v3.15.2:5e58eaa, Oct 25 2026, 17:27:03) [MSC v.1951 64 bit (AMD64)]",
+   "complete": true,
+   "passed": true,
+   "metrics": {
+    "history/release": {
+     "summary_max_s": 1.6812297999858856,
+     "item_page_samples": 200,
+     "event_page_samples": 200,
+     "item_page_p95_ms": 18.92910012975335,
+     "item_page_max_ms": 33.82419981062412,
+     "event_page_p95_ms": 19.304899964481592,
+     "event_page_max_ms": 29.808100312948227,
+     "children": 5,
+     "report_sha256": [
+      "db199da837375aa29f922e9f90be16bbaf445381b831810f4c1d3b99e8019755",
+      "8de14818fc2eed518d2dd022353cba6558d510ec772ef9d04e3cd3556b280865",
+      "d5ff9b7a2c91fc21823a1307cb84010f7ed3a0a753a9238d6425ddf69ca696ee",
+      "169923afcb7be2a2102b2e5a874f7fe03689e6fa4d9de979e5a2d8300bbfb63e",
+      "b2774875f772ede38a11c9e84375fe950690a377b14028e7bd3279b86d4b71e2"
+     ],
+     "passed": true,
+     "problems": []
+    },
+    "bridge-event/installed": {
+     "reliable_and_terminal": {
+      "events": 3100,
+      "worst_child_p95_ms": 6.0,
+      "maximum_ms": 51.0
+     },
+     "progress": {
+      "events": 7490,
+      "worst_child_p95_ms": 42.0,
+      "maximum_ms": 47.0
+     },
+     "children": 5,
+     "report_sha256": [
+      "a30e2765c62f72885254a7c25446b27cb03ac5093a42a9831c6319003ec96f14",
+      "33c31c5b6d9f4b7ba60b5f7d56c9a48a4169153301f5c2a3a3519e75ac90e093",
+      "8432d0bdbe41e6508363cba06ac975fa756d901f0919bc52a596cd5e4616a8be",
+      "91cb41be7dabb21eb5438ad5645a911039dbed83b47ff92103cc639342e4ec2d",
+      "78fa2cc792671a6464d84849aa256f027f07dfba584402f2b805b83ba628d8ae"
+     ],
+     "passed": true,
+     "problems": []
+    }
+   }
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-03/r3/commands.jsonl": {
+  "bytes": 4494,
+  "sha256": "04e17da92574edd1f25bd4e759567439085927efae4d08a232be282892ad5ce1",
+  "content": [
+   {
+    "name": "runtime",
+    "program": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout\\.venv\\Scripts\\python.exe",
+    "arguments": [
+     "-c",
+     "import sys,sqlite3,xxhash; from importlib.metadata import version; assert sys.version_info[:3] == (3,15,2) and sqlite3.sqlite_version == \"3.53.4\" and (xxhash.VERSION,xxhash.XXHASH_VERSION) == (\"4.1.0\",\"0.8.4\") and version(\"pythonnet\") == \"3.2.1\", (sys.version,sqlite3.sqlite_version,xxhash.VERSION,xxhash.XXHASH_VERSION); print(sys.executable,sys.base_prefix,sys.version,sqlite3.sqlite_version,xxhash.VERSION,xxhash.XXHASH_VERSION,sep=\"\\n\")"
+    ],
+    "started_utc": "2026-11-10T07:03:19.9560623Z",
+    "finished_utc": "2026-11-10T07:03:20.0804242Z",
+    "exit_code": 0,
+    "stdout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\runtime.stdout.log",
+    "stderr": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\runtime.stderr.log"
+   },
+   {
+    "name": "inventory-check",
+    "program": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout\\.venv\\Scripts\\python.exe",
+    "arguments": [
+     "-m",
+     "tools.performance.inventory",
+     "--check"
+    ],
+    "started_utc": "2026-11-10T07:03:27.4579660Z",
+    "finished_utc": "2026-11-10T07:03:32.1812261Z",
+    "exit_code": 0,
+    "stdout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\inventory-check.stdout.log",
+    "stderr": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\inventory-check.stderr.log"
+   },
+   {
+    "name": "inventory-collect",
+    "program": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout\\.venv\\Scripts\\python.exe",
+    "arguments": [
+     "-m",
+     "tools.performance.inventory",
+     "--collect",
+     "--profile",
+     "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\reference-profile.json"
+    ],
+    "started_utc": "2026-11-10T07:03:32.1827095Z",
+    "finished_utc": "2026-11-10T07:03:58.0375646Z",
+    "exit_code": 0,
+    "stdout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\inventory-collect.stdout.log",
+    "stderr": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\inventory-collect.stderr.log"
+   },
+   {
+    "name": "inventory-validate",
+    "program": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout\\.venv\\Scripts\\python.exe",
+    "arguments": [
+     "-m",
+     "tools.performance.validate_inventory",
+     "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout\\build\\m1-9-20261001\\measurement-inventory-cold-20261110T070332Z-148ef4e1\\raw.json"
+    ],
+    "started_utc": "2026-11-10T07:03:58.0471172Z",
+    "finished_utc": "2026-11-10T07:03:58.1446628Z",
+    "exit_code": 0,
+    "stdout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\inventory-validate.stdout.log",
+    "stderr": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\inventory-validate.stderr.log"
+   },
+   {
+    "name": "br-g-42-collect",
+    "program": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout\\.venv\\Scripts\\python.exe",
+    "arguments": [
+     "-m",
+     "tools.performance.br_g_42",
+     "collect",
+     "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\br-g-42"
+    ],
+    "started_utc": "2026-11-10T07:03:58.1455791Z",
+    "finished_utc": "2026-11-10T07:20:29.3153704Z",
+    "exit_code": 0,
+    "stdout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\br-g-42-collect.stdout.log",
+    "stderr": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\br-g-42-collect.stderr.log"
+   },
+   {
+    "name": "br-g-42-validate",
+    "program": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout\\.venv\\Scripts\\python.exe",
+    "arguments": [
+     "-m",
+     "tools.performance.br_g_42",
+     "validate",
+     "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\br-g-42"
+    ],
+    "started_utc": "2026-11-10T07:20:29.3161956Z",
+    "finished_utc": "2026-11-10T07:20:29.5394589Z",
+    "exit_code": 0,
+    "stdout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\br-g-42-validate.stdout.log",
+    "stderr": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\r3\\br-g-42-validate.stderr.log"
+   }
+  ]
+ },
+ "m1-release-repair-20261110/acceptance/20261110-03/r3/identity.json": {
+  "bytes": 1532,
+  "sha256": "9f30d9980b4da162618ac1ce9f92397a485a952a5a2497458196deea5302fa0c",
+  "content": {
+   "stage": "R3",
+   "attempt": "20261110-03",
+   "commit": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+   "checkout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout",
+   "started_utc": "2026-11-10T07:03:19.5893638Z",
+   "runner_sha256": "F033EC04A6A4CBC5E7E3F1CD703FCF9D4CD1FE870946DB1EE97279F95FB89F42",
+   "token": "(0, 'S-1-16-8192')",
+   "runtime_archive_sha256": "D6DA9C33A32CF111E1D52B91392C83EA6A808545B646E0557F66CB6D9EE76785",
+   "runtime_executable_sha256": "D4E19E9A33268FB0CE575A24AB2D4B85972524F1933DF008A6BEFC14DCE19FBD",
+   "node": "C:\\Users\\Spectrum\\AppData\\Local\\Programs\\Node.js\\node-v24.22.1-win-x64\\node.exe",
+   "node_version": "v24.22.1",
+   "node_sha256": "D702DAA815EABBFF763C7D3808E235CF031CF2CA70211B56847BC72F51E240E5",
+   "bootstrap_sha256": "7B18FE8B89A584C90B2D126873B0406887AD8A61F2450B5348CFC05BD7BD4E60",
+   "requirements_sha256": "9D1466CD994BA3A14BEB23CFF5559469CAD8D515462F01BD0891D2F71FB643BD",
+   "dev_lock_sha256": "F2578934CA3F2D7C6458AAB55FA28808B2E227EE38B186C9FFFD52F32B405444",
+   "profile_sha256": "CD04571CAC8A339078B2C972EB8548BE117BDC74CD7D3C17F8F7C5A16CF18CFE",
+   "profile_driver_sha256": "81518DD8414C081DC2F5F4C6F6B5FE6BA98A45DB7C4657A5D59D3A5484229E07",
+   "inventory_raw": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout\\build\\m1-9-20261001\\measurement-inventory-cold-20261110T070332Z-148ef4e1\\raw.json",
+   "exit_code": 0,
+   "finished_utc": "2026-11-10T07:20:29.6096946Z"
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-03/r3/reference-profile.json": {
+  "bytes": 1412,
+  "sha256": "cd04571cac8a339078b2c972eb8548be117bdc74cd7d3c17f8f7c5a16cf18cfe",
+  "content": {
+   "captured_at": "2026-11-10T07:03:27.4399778Z",
+   "os_name": "Microsoft Windows 11 Pro",
+   "os_build": "26200",
+   "os_ubr": 9711,
+   "os_display_version": "25H2",
+   "os_edition": "Professional",
+   "cpu": "13th Gen Intel(R) Core(TM) i7-13700K",
+   "physical_cores": 16,
+   "logical_processors": 24,
+   "memory_gib": 63.7,
+   "repository_device": "WD_BLACK SN850X 4000GB",
+   "repository_bus": "NVMe",
+   "volumes": [
+    {
+     "drive": "F",
+     "model": "WD_BLACK SN850X 4000GB",
+     "bus": "NVMe",
+     "file_system": "NTFS",
+     "size": 4000768323584,
+     "free": 1745965023232
+    },
+    {
+     "drive": "H",
+     "model": "WDC WDS100T2B0C-00PXH0",
+     "bus": "NVMe",
+     "file_system": "NTFS",
+     "size": 1000186310656,
+     "free": 423178481664
+    }
+   ],
+   "ac_power": true,
+   "pre_run_cpu_percent": [
+    12.46,
+    6.92,
+    4.3
+   ],
+   "webview2_registry": [
+    {
+     "registry_path": "HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+     "version": "157.0.4341.42"
+    }
+   ],
+   "netfx_release": 533509,
+   "netfx_version": "4.8.09221",
+   "clr_x64_version": "4.8.9363.0",
+   "no_unrelated_sustained_workload": true,
+   "workload_basis": "Operator confirmed the quiet unlocked window. Short pre-run CPU observations are recorded separately.",
+   "reference_profile_confirmed": true
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-03/resources/identity.json": {
+  "bytes": 1887,
+  "sha256": "e018f73af08d667106bf2ff910f92f7a26fc0c3b45aa2a51311ad81d4cd341a5",
+  "content": {
+   "stage": "Resources",
+   "attempt": "20261110-03",
+   "commit": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+   "checkout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance-checkout",
+   "started_utc": "2026-11-10T07:29:56.0698394Z",
+   "runner_sha256": "F033EC04A6A4CBC5E7E3F1CD703FCF9D4CD1FE870946DB1EE97279F95FB89F42",
+   "token": "(0, 'S-1-16-8192')",
+   "runtime_archive_sha256": "D6DA9C33A32CF111E1D52B91392C83EA6A808545B646E0557F66CB6D9EE76785",
+   "runtime_executable_sha256": "D4E19E9A33268FB0CE575A24AB2D4B85972524F1933DF008A6BEFC14DCE19FBD",
+   "node": "C:\\Users\\Spectrum\\AppData\\Local\\Programs\\Node.js\\node-v24.22.1-win-x64\\node.exe",
+   "node_version": "v24.22.1",
+   "node_sha256": "D702DAA815EABBFF763C7D3808E235CF031CF2CA70211B56847BC72F51E240E5",
+   "bootstrap_sha256": "7B18FE8B89A584C90B2D126873B0406887AD8A61F2450B5348CFC05BD7BD4E60",
+   "requirements_sha256": "9D1466CD994BA3A14BEB23CFF5559469CAD8D515462F01BD0891D2F71FB643BD",
+   "dev_lock_sha256": "F2578934CA3F2D7C6458AAB55FA28808B2E227EE38B186C9FFFD52F32B405444",
+   "profile_sha256": "BF73DBC5D6F5CD1621B6F8501CCCEEC1A672E28C3E2D2F0BAE62A902CBC98108",
+   "profile_driver_sha256": "81518DD8414C081DC2F5F4C6F6B5FE6BA98A45DB7C4657A5D59D3A5484229E07",
+   "archive": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\package\\output\\NamiSync-windows-x64-dev.zip",
+   "archive_sha256": "a840c9b0fedc31a442e677cb81c7281d5901ed9eafa1e1d25f31c991d9ceff5a",
+   "resources_sha256": "0041EA7B1DDF46AF33B165B35A3BF1F0C9D34DDB1865EF8C62E6A3B3943A4AA2",
+   "validate_resources_sha256": "07D1B1C7D638560D33BF47AA0515E397D1C855051DEC314C155E1D1EB5CA6806",
+   "error": "Resource collection status 1, validator status 1. Inspect the raw receipt before disposition.",
+   "exit_code": 1,
+   "finished_utc": "2026-11-10T11:12:46.9332084Z"
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-03/resources/payload-failure-mirror.json": {
+  "bytes": 11886,
+  "sha256": "1c00f2fa5625929d862eb6d63226973db750f63ca342794cbb9536059946ada3",
+  "content": {
+   "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+   "target": "H:\\test_dir\\NamiSync-resource-payload-01-64x4MiB-4b3d0497\\target",
+   "source_files": 64,
+   "target_files": 64,
+   "exact_mirror": true,
+   "source_hashes": {
+    "file-0000.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0001.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0002.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0003.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0004.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0005.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0006.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0007.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0008.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0009.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0010.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0011.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0012.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0013.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0014.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0015.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0016.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0017.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0018.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0019.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0020.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0021.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0022.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0023.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0024.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0025.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0026.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0027.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0028.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0029.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0030.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0031.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0032.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0033.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0034.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0035.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0036.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0037.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0038.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0039.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0040.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0041.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0042.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0043.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0044.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0045.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0046.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0047.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0048.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0049.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0050.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0051.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0052.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0053.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0054.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0055.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0056.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0057.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0058.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0059.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0060.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0061.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0062.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0063.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea"
+   },
+   "target_hashes": {
+    "file-0000.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0001.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0002.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0003.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0004.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0005.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0006.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0007.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0008.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0009.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0010.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0011.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0012.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0013.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0014.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0015.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0016.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0017.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0018.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0019.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0020.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0021.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0022.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0023.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0024.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0025.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0026.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0027.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0028.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0029.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0030.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0031.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0032.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0033.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0034.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0035.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0036.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0037.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0038.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0039.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0040.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0041.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0042.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0043.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0044.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0045.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0046.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0047.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0048.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0049.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0050.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0051.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0052.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0053.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0054.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0055.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0056.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0057.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0058.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0059.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0060.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0061.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0062.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea",
+    "file-0063.bin": "78ceedb7c58363bec178a62171622add56ed8b602ce8181ad6b6d07f0c0185ea"
+   },
+   "scope": "Read-only post-failure audit; does not repair the incomplete collector receipt."
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-03/resources/validation.json": {
+  "bytes": 86239,
+  "sha256": "7b0cf59af94c28ddffdd8efedc8a14e1ad90ffa5ae8e9b53ea31d5d5dfd3f2b5",
+  "content": {
+   "declaration": "SH-G-15 v1",
+   "verdict": "FAIL",
+   "budgets": {
+    "startup_settled_mib": 450.0,
+    "startup_peak_mib": 600.0,
+    "startup_idle_cpu_percent": 1.0,
+    "work_peak_mib": 2048.0,
+    "closed_settled_mib": 1024.0,
+    "soak_slope_mib_per_cycle": 0.2,
+    "soak_shift_mib": 20.0,
+    "soak_handle_slope_per_cycle": 1.0,
+    "soak_gui_object_growth": 10.0,
+    "idle_slope_mib_per_10min": 2.0
+   },
+   "missing_runs": [
+    "idle-open-01"
+   ],
+   "devtools_overhead_settled_mib": -8.643,
+   "failed_predicates": [
+    {
+     "run": "soak-01",
+     "check": "soak_slope_mib_per_cycle",
+     "value": 0.366,
+     "budget": 0.2
+    },
+    {
+     "run": "soak-01",
+     "check": "soak_shift_mib",
+     "value": 24.129,
+     "budget": 20.0
+    },
+    {
+     "run": "soak-01",
+     "check": "soak_handle_slope_per_cycle",
+     "value": 2.699,
+     "budget": 1.0
+    },
+    {
+     "run": "soak-02",
+     "check": "soak_slope_mib_per_cycle",
+     "value": 0.448,
+     "budget": 0.2
+    },
+    {
+     "run": "soak-02",
+     "check": "soak_shift_mib",
+     "value": 28.631,
+     "budget": 20.0
+    },
+    {
+     "run": "soak-03",
+     "check": "soak_slope_mib_per_cycle",
+     "value": 0.347,
+     "budget": 0.2
+    },
+    {
+     "run": "soak-03",
+     "check": "soak_shift_mib",
+     "value": 20.109,
+     "budget": 20.0
+    },
+    {
+     "run": "soak-03",
+     "check": "soak_handle_slope_per_cycle",
+     "value": 2.575,
+     "budget": 1.0
+    },
+    {
+     "run": "scale-100k-01",
+     "check": "work_peak_mib",
+     "value": 2309.039,
+     "budget": 2048.0
+    },
+    {
+     "run": "scale-100k-02",
+     "check": "work_peak_mib",
+     "value": 2348.285,
+     "budget": 2048.0
+    },
+    {
+     "run": "scale-100k-03",
+     "check": "work_peak_mib",
+     "value": 2346.273,
+     "budget": 2048.0
+    }
+   ],
+   "invalid_runs": [
+    {
+     "run": "payload-01",
+     "reasons": [
+      "collection incomplete: TimeoutError: timed out waiting for task closed",
+      "missing final-idle window"
+     ]
+    }
+   ],
+   "runs": [
+    {
+     "name": "startup-01",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 348.619,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 353.027,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.344,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 353.027,
+      "idle_cpu_percent": 0.3442
+     }
+    },
+    {
+     "name": "startup-02",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 355.133,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 365.605,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.662,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 365.605,
+      "idle_cpu_percent": 0.662
+     }
+    },
+    {
+     "name": "startup-03",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 353.979,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 359.176,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.503,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 359.176,
+      "idle_cpu_percent": 0.5032
+     }
+    },
+    {
+     "name": "startup-cdp-01",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 348.504,
+      "idle_cpu_percent": 0.3443
+     }
+    },
+    {
+     "name": "startup-cdp-02",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 360.051,
+      "idle_cpu_percent": 0.3177
+     }
+    },
+    {
+     "name": "startup-cdp-03",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 351.188,
+      "idle_cpu_percent": 0.5561
+     }
+    },
+    {
+     "name": "soak-01",
+     "profile": "soak",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 626.074,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 544.797,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": 0.366,
+       "budget": 0.2,
+       "pass": false
+      },
+      "soak_shift_mib": {
+       "value": 24.129,
+       "budget": 20.0,
+       "pass": false
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": 2.699,
+       "budget": 1.0,
+       "pass": false
+      },
+      "soak_gui_object_growth": {
+       "value": 0.5,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 626.074
+     }
+    },
+    {
+     "name": "soak-02",
+     "profile": "soak",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 628.25,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 549.363,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": 0.448,
+       "budget": 0.2,
+       "pass": false
+      },
+      "soak_shift_mib": {
+       "value": 28.631,
+       "budget": 20.0,
+       "pass": false
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": -1.78,
+       "budget": 1.0,
+       "pass": true
+      },
+      "soak_gui_object_growth": {
+       "value": -1.5,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 628.25
+     }
+    },
+    {
+     "name": "soak-03",
+     "profile": "soak",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 623.824,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 541.277,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": 0.347,
+       "budget": 0.2,
+       "pass": false
+      },
+      "soak_shift_mib": {
+       "value": 20.109,
+       "budget": 20.0,
+       "pass": false
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": 2.575,
+       "budget": 1.0,
+       "pass": false
+      },
+      "soak_gui_object_growth": {
+       "value": -0.5,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 623.824
+     }
+    },
+    {
+     "name": "scale-10k-01",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 1085.902,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 542.223,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 1085.902
+     }
+    },
+    {
+     "name": "scale-100k-01",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 2309.039,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 708.125,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 2309.039
+     }
+    },
+    {
+     "name": "scale-10k-02",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 1018.93,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 532.59,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 1018.93
+     }
+    },
+    {
+     "name": "scale-100k-02",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 2348.285,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 703.098,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 2348.285
+     }
+    },
+    {
+     "name": "scale-10k-03",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 991.633,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 551.77,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 991.633
+     }
+    },
+    {
+     "name": "scale-100k-03",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 2346.273,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 717.77,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 2346.273
+     }
+    },
+    {
+     "name": "payload-01",
+     "profile": "payload",
+     "valid": false,
+     "invalid": [
+      "collection incomplete: TimeoutError: timed out waiting for task closed",
+      "missing final-idle window"
+     ],
+     "checks": {
+      "work_peak_mib": {
+       "value": 453.559,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 365.115,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 453.559
+     }
+    }
+   ]
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-04/package/identity.json": {
+  "bytes": 848,
+  "sha256": "c88c42b040b0f2460e608ac7630e3f2ebedfc3470ec6b6a9bfd9953a002d803b",
+  "content": {
+   "stage": "Package",
+   "attempt": "20261110-04",
+   "commit": "1d93687638562dbed776f116da37504c9e3a1d08",
+   "checkout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\idle-followup-checkout",
+   "started_utc": "2026-11-10T15:02:20.5695981Z",
+   "runner_sha256": "3EE5929A7F4EE0DC80775605937593F328A19046AA3811773EABD3705DC2D02B",
+   "token": "(0, 'S-1-16-8192')",
+   "runtime_archive_sha256": "D6DA9C33A32CF111E1D52B91392C83EA6A808545B646E0557F66CB6D9EE76785",
+   "runtime_executable_sha256": "D4E19E9A33268FB0CE575A24AB2D4B85972524F1933DF008A6BEFC14DCE19FBD",
+   "bootstrap_sha256": "7B18FE8B89A584C90B2D126873B0406887AD8A61F2450B5348CFC05BD7BD4E60",
+   "requirements_sha256": "9D1466CD994BA3A14BEB23CFF5559469CAD8D515462F01BD0891D2F71FB643BD",
+   "exit_code": 0,
+   "finished_utc": "2026-11-10T15:03:16.0205564Z"
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-04/package/independent-comparison-02.json": {
+  "bytes": 3916,
+  "sha256": "63767d7b23b3bc8f7ef4fee1d5291d267bcbac076543ce136ef733dfd9425a0c",
+  "content": {
+   "passed": true,
+   "commit": "1d93687638562dbed776f116da37504c9e3a1d08",
+   "attempt": "20261110-04",
+   "driver_sha256": "632db76f2055f165c029ee8d536a694d8015fd90bf35c4e7ec5579f5ecdb8492",
+   "census_driver_sha256": "ce88f7bf00972ce27723bea28d3ac3dde36cce8363fd37265217c525948d950f",
+   "archive_sha256": {
+    "NamiSync-windows-x64-dev.zip": "fca5c839cb9e4fb7a47e343656b08a9587961e2cdf2ccf8a920652875970311f",
+    "wheel/namisync-0.1.0-py3-none-any.whl": "58f12dca899e90bd07422f975824e423d800b86769a346e7832a6588dd18ccb4",
+    "NamiSync-source-dev.zip": "66564901ebf4db11041123c1309b6e7f352d47b2e2859ff1b75f8cc04166cedc"
+   },
+   "source_changed": [
+    "README.md",
+    "namisync/interfaces/web/assets/rail.js"
+   ],
+   "source_members": 352,
+   "wheel_members": {
+    "package": 303,
+    "metadata": 6,
+    "total": 309
+   },
+   "wheel_changed": [
+    "namisync-0.1.0.dist-info/METADATA",
+    "namisync-0.1.0.dist-info/RECORD",
+    "namisync/interfaces/web/assets/rail.js"
+   ],
+   "bundle": {
+    "files": 341,
+    "canonical_app_assets": 211,
+    "collect": {
+     "BINARY": 17,
+     "EXTENSION": 21,
+     "DATA": 297,
+     "EXECUTABLE": 2
+    },
+    "builder_appended": 4,
+    "native": {
+     "BINARY": 17,
+     "EXTENSION": 21
+    },
+    "origin_counts": {
+     "PSF": 26,
+     "package-env": 12
+    },
+    "pe": {
+     "namisync.exe": {
+      "machine": "AMD64",
+      "optional_header": "PE32+",
+      "subsystem": 3,
+      "certificate_table": "empty"
+     },
+     "namisync-gui.exe": {
+      "machine": "AMD64",
+      "optional_header": "PE32+",
+      "subsystem": 2,
+      "certificate_table": "empty"
+     }
+    }
+   },
+   "notices": {
+    "about": 19,
+    "supplements": 33,
+    "total": 52
+   },
+   "exe_origins": {
+    "namisync.exe": {
+     "exe_toc_sha256": "00f74c783c50651eb01faa805c9e706abb5b57290a97f1e1cce557c83e97bbb6",
+     "bootloader_wheel_member": "PyInstaller/bootloader/Windows-64bit-intel/run.exe",
+     "bootloader_sha256": "581ea23eb35cee8f9df8835c892e91416df95ca629b1a6050289aea19390e08d",
+     "shim": "tools/packaging/console.py",
+     "shim_sha256": "683e9b97cbfbec26abbb793fa5fb0ec3ea41467f1e6a76675b97d6e33e1ee314"
+    },
+    "namisync-gui.exe": {
+     "exe_toc_sha256": "fda6cdbe60eb4bf296423b0b61db6935879f6ea656c192c1887b714caca5d6e9",
+     "bootloader_wheel_member": "PyInstaller/bootloader/Windows-64bit-intel/runw.exe",
+     "bootloader_sha256": "2291f269c3a3804fde1079462239e09a8b32fffbeeaa8f628a531faf5be77d41",
+     "shim": "tools/packaging/desktop.py",
+     "shim_sha256": "8346568a9871a25684972ea7c75d2bffb0d0ac8e254872eab6e4ee4583008b26"
+    }
+   },
+   "bundle_changed": [
+    "NamiSync/_internal/bottle-0.13.4.dist-info/RECORD",
+    "NamiSync/_internal/cffi-2.1.0.dist-info/RECORD",
+    "NamiSync/_internal/namisync-0.1.0.dist-info/METADATA",
+    "NamiSync/_internal/namisync-0.1.0.dist-info/RECORD",
+    "NamiSync/_internal/namisync-0.1.0.dist-info/direct_url.json",
+    "NamiSync/_internal/namisync/interfaces/web/assets/rail.js",
+    "NamiSync/namisync-gui.exe",
+    "NamiSync/namisync.exe"
+   ],
+   "installed_record_changes": {
+    "bottle-0.13.4.dist-info/RECORD": [
+     "../../Scripts/bottle.exe",
+     "../../Scripts/bottle.py"
+    ],
+    "cffi-2.1.0.dist-info/RECORD": [
+     "../../Scripts/cffi-gen-src.exe"
+    ],
+    "namisync-0.1.0.dist-info/RECORD": [
+     "../../Scripts/namisync-gui.exe",
+     "../../Scripts/namisync.exe",
+     "namisync-0.1.0.dist-info/METADATA",
+     "namisync-0.1.0.dist-info/direct_url.json",
+     "namisync/interfaces/web/assets/rail.js"
+    ]
+   },
+   "executable_comparison": {
+    "namisync.exe": {
+     "changed_archives": [],
+     "unchanged_payload_count": 12
+    },
+    "namisync-gui.exe": {
+     "changed_archives": [],
+     "unchanged_payload_count": 12
+    }
+   }
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-04/resources/identity.json": {
+  "bytes": 5544,
+  "sha256": "e4f6db261ab019b4622fd96e73dd8ab9bbf9683e218a076562cc6076184ca43e",
+  "content": {
+   "stage": "Resources",
+   "attempt": "20261110-04",
+   "commit": "1d93687638562dbed776f116da37504c9e3a1d08",
+   "checkout": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\idle-followup-checkout",
+   "started_utc": "2026-11-10T15:05:49.6132266Z",
+   "runner_sha256": "3EE5929A7F4EE0DC80775605937593F328A19046AA3811773EABD3705DC2D02B",
+   "token": "(0, 'S-1-16-8192')",
+   "runtime_archive_sha256": "D6DA9C33A32CF111E1D52B91392C83EA6A808545B646E0557F66CB6D9EE76785",
+   "runtime_executable_sha256": "D4E19E9A33268FB0CE575A24AB2D4B85972524F1933DF008A6BEFC14DCE19FBD",
+   "bootstrap_sha256": "7B18FE8B89A584C90B2D126873B0406887AD8A61F2450B5348CFC05BD7BD4E60",
+   "requirements_sha256": "9D1466CD994BA3A14BEB23CFF5559469CAD8D515462F01BD0891D2F71FB643BD",
+   "partial_collection": true,
+   "requested_runs": [
+    "idle-open-01",
+    "payload-01"
+   ],
+   "archive": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-04\\package\\output\\NamiSync-windows-x64-dev.zip",
+   "archive_sha256": "fca5c839cb9e4fb7a47e343656b08a9587961e2cdf2ccf8a920652875970311f",
+   "tools": {
+    "tools/performance/resources.py": "0041EA7B1DDF46AF33B165B35A3BF1F0C9D34DDB1865EF8C62E6A3B3943A4AA2",
+    "tools/performance/_cdp.py": "C58D032B3535727FC3ADD62F70592D8E8F98EFA4B41C9F62B2F210B57677954D",
+    "tests/interfaces/web/_headed_native.py": "A817439B1AC1B81F8635E3CE341551821FCB094FADA85884E1E35A19C779F75C",
+    "tests/interfaces/web/_headed_host_child.py": "AEA6C7322BB245B8BB424F4D27CB4872C7A5348F26ACB4D69CDB31BE4E228F55",
+    "tools/performance/bridge_event/__init__.py": "41AD41DDBA5FCCBFD39B82E3198D75C78E9AA9565CEC5CB56D28359197F4FB0C",
+    "tools/performance/validate_resources.py": "07D1B1C7D638560D33BF47AA0515E397D1C855051DEC314C155E1D1EB5CA6806"
+   },
+   "profile_sha256": "8A45AB1EE594FCD7DBF65A44EBB817D4770B90B724ECF2549AE39B30EA240642",
+   "profile_driver_sha256": "81518DD8414C081DC2F5F4C6F6B5FE6BA98A45DB7C4657A5D59D3A5484229E07",
+   "collector_exit_code": 0,
+   "validator_exit_code": 1,
+   "schedule_verdict": "FAIL",
+   "missing_schedule_runs": [
+    "startup-01",
+    "startup-02",
+    "startup-03",
+    "startup-cdp-01",
+    "startup-cdp-02",
+    "startup-cdp-03",
+    "soak-01",
+    "soak-02",
+    "soak-03",
+    "scale-10k-01",
+    "scale-100k-01",
+    "scale-10k-02",
+    "scale-100k-02",
+    "scale-10k-03",
+    "scale-100k-03"
+   ],
+   "observed_runs": [
+    {
+     "name": "payload-01",
+     "profile": "payload",
+     "valid": true,
+     "invalid": [],
+     "checks": {
+      "work_peak_mib": {
+       "value": 442.828,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 405.535,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 442.828,
+      "windows": {
+       "initial-idle": {
+        "private_mib": 366.098,
+        "host": 102.051,
+        "renderer": 32.336,
+        "gpu": 164.523,
+        "other": 67.18,
+        "handles": 3764.5,
+        "gui_objects": 148.0
+       },
+       "group-1x4GiB-closed": {
+        "private_mib": 359.598,
+        "host": 105.98,
+        "renderer": 42.066,
+        "gpu": 146.719,
+        "other": 64.832,
+        "handles": 4254.0,
+        "gui_objects": 147.0
+       },
+       "group-64x4MiB-closed": {
+        "private_mib": 405.535,
+        "host": 110.477,
+        "renderer": 49.91,
+        "gpu": 179.016,
+        "other": 66.047,
+        "handles": 3864.0,
+        "gui_objects": 147.0
+       },
+       "final-idle": {
+        "private_mib": 404.104,
+        "host": 110.477,
+        "renderer": 49.879,
+        "gpu": 178.957,
+        "other": 64.793,
+        "handles": 3840.0,
+        "gui_objects": 147.0
+       }
+      }
+     }
+    },
+    {
+     "name": "idle-open-01",
+     "profile": "idle_open",
+     "valid": true,
+     "invalid": [],
+     "checks": {
+      "work_peak_mib": {
+       "value": 1129.746,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 551.262,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "idle_slope_mib_per_10min": {
+       "value": 0.001,
+       "budget": 2.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 1129.746,
+      "windows": {
+       "initial-idle": {
+        "private_mib": 366.582,
+        "host": 99.828,
+        "renderer": 33.086,
+        "gpu": 169.156,
+        "other": 64.512,
+        "handles": 3748.0,
+        "gui_objects": 148.0
+       },
+       "long-idle-open": {
+        "private_mib": 554.715,
+        "host": 187.832,
+        "renderer": 98.109,
+        "gpu": 206.246,
+        "other": 62.551,
+        "handles": 3670.0,
+        "gui_objects": 143.0
+       },
+       "final-idle": {
+        "private_mib": 551.262,
+        "host": 175.633,
+        "renderer": 97.484,
+        "gpu": 215.348,
+        "other": 62.795,
+        "handles": 3691.0,
+        "gui_objects": 143.0
+       }
+      }
+     }
+    }
+   ],
+   "exit_code": 0,
+   "finished_utc": "2026-11-10T16:13:41.7813316Z"
+  }
+ },
+ "m1-release-repair-20261110/acceptance/20261110-04/resources/validation.json": {
+  "bytes": 3215,
+  "sha256": "5016624f352d49b55947c662cff3c2b03fec2638a62e17cbfbcfae82abf5e38e",
+  "content": {
+   "declaration": "SH-G-15 v1",
+   "verdict": "FAIL",
+   "budgets": {
+    "startup_settled_mib": 450.0,
+    "startup_peak_mib": 600.0,
+    "startup_idle_cpu_percent": 1.0,
+    "work_peak_mib": 2048.0,
+    "closed_settled_mib": 1024.0,
+    "soak_slope_mib_per_cycle": 0.2,
+    "soak_shift_mib": 20.0,
+    "soak_handle_slope_per_cycle": 1.0,
+    "soak_gui_object_growth": 10.0,
+    "idle_slope_mib_per_10min": 2.0
+   },
+   "missing_runs": [
+    "startup-01",
+    "startup-02",
+    "startup-03",
+    "startup-cdp-01",
+    "startup-cdp-02",
+    "startup-cdp-03",
+    "soak-01",
+    "soak-02",
+    "soak-03",
+    "scale-10k-01",
+    "scale-100k-01",
+    "scale-10k-02",
+    "scale-100k-02",
+    "scale-10k-03",
+    "scale-100k-03"
+   ],
+   "devtools_overhead_settled_mib": null,
+   "failed_predicates": [],
+   "invalid_runs": [],
+   "runs": [
+    {
+     "name": "payload-01",
+     "profile": "payload",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 442.828,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 405.535,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 442.828
+     }
+    },
+    {
+     "name": "idle-open-01",
+     "profile": "idle_open",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 1129.746,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 551.262,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "idle_slope_mib_per_10min": {
+       "value": 0.001,
+       "budget": 2.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 1129.746
+     }
+    }
+   ]
+  }
+ },
+ "m1-release-repair-20261110/portable/rail-click-probe-20261110-02/probe-result.json": {
+  "bytes": 16439,
+  "sha256": "dfd305426ea07080a3d0973e11564a39ba903f61c9b92511c3ccab0a1e00e142",
+  "content": {
+   "kind": "diagnostic only",
+   "arms": [
+    {
+     "label": "control",
+     "before": {
+      "point": [
+       350.2857360839844,
+       88
+      ],
+      "hit": true,
+      "connected": true,
+      "enabled": true,
+      "focused": false,
+      "sameRow": true,
+      "sameButton": true
+     },
+     "pressed": {
+      "state": {
+       "point": [
+        350.2857360839844,
+        88
+       ],
+       "hit": true,
+       "connected": true,
+       "enabled": true,
+       "focused": true,
+       "sameRow": true,
+       "sameButton": true
+      },
+      "events": [
+       {
+        "type": "pointermove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousemove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "pointerdown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousedown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       }
+      ],
+      "moves": [],
+      "calls": []
+     },
+     "between": {
+      "point": [
+       350.2857360839844,
+       88
+      ],
+      "hit": true,
+      "connected": true,
+      "enabled": true,
+      "focused": true,
+      "sameRow": true,
+      "sameButton": true
+     },
+     "after": {
+      "state": {
+       "point": [
+        350.2857360839844,
+        88
+       ],
+       "hit": true,
+       "connected": true,
+       "enabled": true,
+       "focused": true,
+       "sameRow": true,
+       "sameButton": true
+      },
+      "events": [
+       {
+        "type": "pointermove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousemove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "pointerdown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousedown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "pointerup",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 0
+       },
+       {
+        "type": "mouseup",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 0
+       },
+       {
+        "type": "click",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 0
+       }
+      ],
+      "moves": [],
+      "calls": [
+       "rail-input-fixture"
+      ]
+     }
+    },
+    {
+     "label": "render-while-pressed",
+     "before": {
+      "point": [
+       350.2857360839844,
+       88
+      ],
+      "hit": true,
+      "connected": true,
+      "enabled": true,
+      "focused": true,
+      "sameRow": true,
+      "sameButton": true
+     },
+     "pressed": {
+      "state": {
+       "point": [
+        350.2857360839844,
+        88
+       ],
+       "hit": true,
+       "connected": true,
+       "enabled": true,
+       "focused": true,
+       "sameRow": true,
+       "sameButton": true
+      },
+      "events": [
+       {
+        "type": "pointermove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousemove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "pointerdown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousedown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       }
+      ],
+      "moves": [],
+      "calls": []
+     },
+     "between": {
+      "point": [
+       350.2857360839844,
+       88
+      ],
+      "hit": true,
+      "connected": true,
+      "enabled": true,
+      "focused": false,
+      "sameRow": true,
+      "sameButton": true
+     },
+     "after": {
+      "state": {
+       "point": [
+        350.2857360839844,
+        88
+       ],
+       "hit": true,
+       "connected": true,
+       "enabled": true,
+       "focused": false,
+       "sameRow": true,
+       "sameButton": true
+      },
+      "events": [
+       {
+        "type": "pointermove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousemove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "pointerdown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousedown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "blur",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "button",
+        "buttons": null
+       },
+       {
+        "type": "pointerup",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 0
+       },
+       {
+        "type": "mouseup",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 0
+       }
+      ],
+      "moves": [
+       {
+        "added": false,
+        "removed": true
+       },
+       {
+        "added": true,
+        "removed": false
+       }
+      ],
+      "calls": []
+     }
+    },
+    {
+     "label": "control-after",
+     "before": {
+      "point": [
+       350.2857360839844,
+       88
+      ],
+      "hit": true,
+      "connected": true,
+      "enabled": true,
+      "focused": false,
+      "sameRow": true,
+      "sameButton": true
+     },
+     "pressed": {
+      "state": {
+       "point": [
+        350.2857360839844,
+        88
+       ],
+       "hit": true,
+       "connected": true,
+       "enabled": true,
+       "focused": true,
+       "sameRow": true,
+       "sameButton": true
+      },
+      "events": [
+       {
+        "type": "pointermove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousemove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "pointerdown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousedown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       }
+      ],
+      "moves": [],
+      "calls": []
+     },
+     "between": {
+      "point": [
+       350.2857360839844,
+       88
+      ],
+      "hit": true,
+      "connected": true,
+      "enabled": true,
+      "focused": true,
+      "sameRow": true,
+      "sameButton": true
+     },
+     "after": {
+      "state": {
+       "point": [
+        350.2857360839844,
+        88
+       ],
+       "hit": true,
+       "connected": true,
+       "enabled": true,
+       "focused": true,
+       "sameRow": true,
+       "sameButton": true
+      },
+      "events": [
+       {
+        "type": "pointermove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousemove",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "pointerdown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "mousedown",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 1
+       },
+       {
+        "type": "pointerup",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 0
+       },
+       {
+        "type": "mouseup",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 0
+       },
+       {
+        "type": "click",
+        "trusted": true,
+        "onButton": true,
+        "onRow": true,
+        "target": "span",
+        "buttons": 0
+       }
+      ],
+      "moves": [],
+      "calls": [
+       "rail-input-fixture"
+      ]
+     }
+    }
+   ],
+   "parent_token": {
+    "pid": 76676,
+    "image": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\runtime\\python\\python.exe",
+    "elevated": 0,
+    "integrity_sid": "S-1-16-8192"
+   },
+   "clean_checkout_commit": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+   "frozen_helper_sha256": {
+    "tests/interfaces/web/_headed_native.py": "a817439b1ac1b81f8635e3ce341551821fcb094fada85884e1e35a19c779f75c",
+    "tests/interfaces/web/_headed_host_child.py": "aea6c7322bb245b8bb424f4d27cb4872c7a5348f26acb4d69cdb31be4e228f55",
+    "tests/interfaces/web/_headed_evidence.py": "d45086ed52f8b43091e0f79b3f89a12b11fe7f99c169fbba0f57aa1903964bdb",
+    "tests/interfaces/web/_command_catalog.py": "cf76807d2fd5bfc683b17c3dec7d3e6dc3bacecdc78db22a3b2fa6649e09cb6c",
+    "tools/__init__.py": "c2a391e562b4a82ada13c9dc880fd4786501a8b3e431b6d157d1b183808e754e",
+    "tools/performance/__init__.py": "1a3b2f9a73f7600f1aab6984a11ea72e5444a23dbaccd6f46f6d1d18ee3137bd",
+    "tools/performance/_cdp.py": "c58d032b3535727fc3add62f70592d8e8f98efa4b41c9f62b2f210b57677954d",
+    "tools/performance/bridge_event/__init__.py": "41ad41ddba5fccbfd39b82e3198d75c78e9aa9565cec5cb56d28359197f4fb0c",
+    "tools/performance/resources.py": "0041ea7b1ddf46af33b165b35a3bf1f0c9d34ddb1865ef8c62e6a3b3943a4aa2"
+   },
+   "archive": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\acceptance\\20261110-03\\package\\output\\NamiSync-windows-x64-dev.zip",
+   "expected_sha256": "a840c9b0fedc31a442e677cb81c7281d5901ed9eafa1e1d25f31c991d9ceff5a",
+   "archive_sha256": "a840c9b0fedc31a442e677cb81c7281d5901ed9eafa1e1d25f31c991d9ceff5a",
+   "source_commit": "cfeac2d95a6db83107854d17d9e6c4e9a774b77e",
+   "package_dependencies": {
+    "pythonnet": "3.2.1",
+    "xxhash": "4.1.0",
+    "setuptools": "84.1.0",
+    "cffi": "2.1.0"
+   },
+   "exe": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\portable\\rail-click-probe-20261110-02\\extracted\\NamiSync\\namisync-gui.exe",
+   "exe_sha256": "f77e41796419d60531a04f7553f96f916f0201a54e7dd38824c00774c16129a6",
+   "console_sha256": "e6825a99d333c14af8e530246b1a65d4efa1e3e58259294565c6a0eae78630b0",
+   "entry_points": {
+    "namisync-gui.exe": {
+     "machine": "AMD64",
+     "optional_header": "PE32+",
+     "subsystem": 2
+    },
+    "namisync.exe": {
+     "machine": "AMD64",
+     "optional_header": "PE32+",
+     "subsystem": 3
+    }
+   },
+   "shipped_files": 341,
+   "native": {
+    "python315.dll": {
+     "version_from_reviewed_input": "CPython 3.15.2 / zlib-ng 2.2.4",
+     "sha256": "9862572fd449f32a62c1eaec2c6750a9c9fa512f4c9c2ea0e66776cf9212b7c2"
+    },
+    "sqlite3.dll": {
+     "version_from_reviewed_input": "SQLite 3.53.4",
+     "sha256": "73530e8f4555605d716352ee98fe0ce205a09e5eec57e7e6360d4c915efcacd8"
+    },
+    "libcrypto-3.dll": {
+     "version_from_reviewed_input": "OpenSSL 3.5.9",
+     "sha256": "75495fe0e079ab00d49be740d3c710a0b94e3f74f9648cb7cc9f768fc7f52319"
+    },
+    "libssl-3.dll": {
+     "version_from_reviewed_input": "OpenSSL 3.5.9",
+     "sha256": "8957182a9c385bfd9f3f790921de2ddc614cf91f99edbed4e9e5446a46504e32"
+    },
+    "pyexpat.pyd": {
+     "version_from_reviewed_input": "Expat 2.9.0",
+     "sha256": "2970cef7642e14721b4791bf40720d25f5c9fb8df4d78c725bd859391d6dec51"
+    },
+    "_lzma.pyd": {
+     "version_from_reviewed_input": "XZ 5.8.1 / CPython xz-5.8.1.1",
+     "sha256": "d9033e94387aa70777d23514263d342486899256ffc14478be6bb1e6a0b05683"
+    },
+    "_zstd.pyd": {
+     "version_from_reviewed_input": "Zstandard 1.5.7",
+     "sha256": "a977471edf7b6712a9e89ada98b79b1973c79740632f820b67365f242b5e05cc"
+    },
+    "pythonnet/runtime/Python.Runtime.dll": {
+     "version_from_reviewed_input": "pythonnet 3.2.1",
+     "sha256": "2ebd4492e28442ef1f1af587afe5b3a090c2ebfa220758ded4f1450f2a27f13a"
+    },
+    "xxhash/_xxhash.cp315-win_amd64.pyd": {
+     "version_from_reviewed_input": "xxhash 4.1.0 / xxHash 0.8.4",
+     "sha256": "368d979c3ed71b8ba7c797d0bb460ca2d023a2d95ed4d548efc6bc8038c5d6fe"
+    },
+    "_cffi_backend.cp315-win_amd64.pyd": {
+     "version_from_reviewed_input": "cffi 2.1.0",
+     "sha256": "7a534f571459a0cf6e7046c9f0fa7a4c4ffd7860c7854ff61be7332b9d709f33"
+    }
+   },
+   "shipped_notice_count": 52,
+   "driver_sha256": {
+    "rail-click-probe.py": "1b6325813164149210050904d19d7fc82d5e72d2d86d2255d3501a7a94db8989",
+    "rail-click-probe.js": "39f7b03f73bf66b5133be746b5150669479bc5d0e9127a16b5beffd8aba7a811"
+   },
+   "gui_token": {
+    "pid": 162544,
+    "image": "F:\\GitHubRepositories\\NamiSync\\build\\m1-release-repair-20261110\\portable\\rail-click-probe-20261110-02\\extracted\\NamiSync\\namisync-gui.exe",
+    "elevated": 0,
+    "integrity_sid": "S-1-16-8192",
+    "sha256": "f77e41796419d60531a04f7553f96f916f0201a54e7dd38824c00774c16129a6"
+   },
+   "mount": {
+    "point": [
+     350.2857360839844,
+     88
+    ],
+    "hit": true,
+    "connected": true,
+    "enabled": true,
+    "focused": false,
+    "sameRow": true,
+    "sameButton": true
+   },
+   "close": {
+    "window_found": true,
+    "exit_code": 0,
+    "remaining_pids": [
+     113048,
+     180036
+    ]
+   }
+  }
+ }
+}

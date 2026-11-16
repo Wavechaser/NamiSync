@@ -1,0 +1,539 @@
+{
+ "incident-trace-20260927/evidence-summary.json": {
+  "bytes": 19610,
+  "sha256": "ba942294eaeefe601a40c2c6f77ba5c249f7b6b918b2623b1b713dffb4f5ceb4",
+  "content": {
+   "revision": "25514f12f4dfee3600ee79e6ba2594787af22854",
+   "sample_validator_control": {
+    "current_wire": {
+     "position_type": "str",
+     "result": "CommandPayloadError: benchmark sample is invalid"
+    },
+    "numeric_control": {
+     "position_type": "int",
+     "result": "accepted"
+    }
+   },
+   "input_hashes": {
+    "tools/performance/bridge_event/child.py": "e8fbe533918fc22ac150f8dec1d24dc703384471d721aa388a2d640e5d23897b",
+    "tools/performance/bridge_event/assets/benchmark.js": "630b8cd9119fe81170d628947a1df961ee057943ab68b20248167cd3cdd0816d",
+    "namisync/interfaces/web/drain.py": "eeaa973b0461b6f004aadee80dc75a54e64e40bc0023bad05f45b80da21a0b90",
+    "namisync/interfaces/service.py": "05468aee7d9ae2aa9bda4e05d3642cca4ce14bb4f57655f93a8fdb5358e22519",
+    "namisync/interfaces/web/host.py": "9114aaaca270a14abd1b84f8022b7d8387012166ef475b5b585c09d2be621e3f",
+    "namisync/interfaces/web/assets/bridge.js": "79d84a08215a78632d0d29c0dd84872cda3d5dca9a24def474f6e3264cc052a7",
+    "namisync/interfaces/web/assets/app.css": "9a3d52a5005d4d692c27a35f52a656dd0ff3cd3c39bf5fcf5156d098d21abcf4",
+    "namisync/interfaces/web/assets/plan_review.js": "9fd8c986898430de165dde99a707bf41dcafc1327b86901e0c89012e0560c242",
+    "tests/interfaces/web/_setup_headed_child.py": "dd054c0479f54e66fc8ab63c9f71aa13dff2db035f7911a1e7ca47038d7182d6",
+    "tests/interfaces/web/_task_shell_headed_child.py": "4e10b98349b0830d637ba997de09aab402a010572d5e6b64b604ba896a61137e"
+   },
+   "bridge": {
+    "AB10": {
+     "failure": {
+      "exception_type": "AssertionError",
+      "message": "headed child 58880 did not exit before the scenario deadline"
+     },
+     "producer_count": 4,
+     "producer_progress_counts": [
+      1500,
+      1500,
+      1500,
+      1500
+     ]
+    },
+    "01": {
+     "failure": {
+      "exception_type": "AssertionError",
+      "message": "headed child 56324 did not exit before the scenario deadline"
+     },
+     "producer_count": 4,
+     "producer_progress_counts": [
+      1500,
+      1500,
+      1500,
+      1500
+     ],
+     "browser": {
+      "schema_version": 1,
+      "complete": false,
+      "producer_streams": {},
+      "startup_errors": [],
+      "runtime": {
+       "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+       "sqlite": "3.50.4",
+       "packages": {
+        "bottle": "0.13.4",
+        "namisync": "0.1.0",
+        "pywebview": "6.2.1",
+        "pythonnet": "3.1.0"
+       }
+      },
+      "production_command_names": [
+       "admit_location",
+       "close_task",
+       "control_execution",
+       "create_task",
+       "get_execution_detail",
+       "get_plan_anchor",
+       "get_plan_window",
+       "list_tasks",
+       "mutate_plan_highlight",
+       "mutate_plan_highlighted_selection",
+       "mutate_plan_scope",
+       "mutate_plan_selection",
+       "next_events",
+       "open_plan_view",
+       "pick_folder",
+       "plan_again",
+       "prepare_setup",
+       "probe_recent_pairs",
+       "read_cosmetic_section",
+       "read_setup",
+       "readiness_echo",
+       "release_terminal_session",
+       "replace_cosmetic_section",
+       "shell_ready",
+       "start_execution",
+       "start_inventory",
+       "start_plan",
+       "update_plan_view"
+      ],
+      "combined_command_names": [
+       "admit_location",
+       "benchmark_report",
+       "benchmark_start",
+       "close_task",
+       "control_execution",
+       "create_task",
+       "get_execution_detail",
+       "get_plan_anchor",
+       "get_plan_window",
+       "list_tasks",
+       "mutate_plan_highlight",
+       "mutate_plan_highlighted_selection",
+       "mutate_plan_scope",
+       "mutate_plan_selection",
+       "next_events",
+       "open_plan_view",
+       "pick_folder",
+       "plan_again",
+       "prepare_setup",
+       "probe_recent_pairs",
+       "read_cosmetic_section",
+       "read_setup",
+       "readiness_echo",
+       "release_terminal_session",
+       "replace_cosmetic_section",
+       "shell_ready",
+       "start_execution",
+       "start_inventory",
+       "start_plan",
+       "update_plan_view"
+      ],
+      "clr_runtime": "Runtime: .NET Framework\n=============\n  Version:      <undefined>\n  Initialized:  True\n  Shut down:    False\n  Properties:\n    domain = \n    config_file = None",
+      "webview2": "153.0.4234.48",
+      "browser_ready": true,
+      "browser": {
+       "failure": "BridgeTransportError",
+       "diagnostic_message": "The desktop update could not be applied.",
+       "diagnostic_stack": "BridgeTransportError: The desktop update could not be applied.\n    at deliverTaskUpdate (http://127.0.0.1:19267/bridge.js:2025:7)\n    at settleTaskDrain (http://127.0.0.1:19267/bridge.js:1895:10)\n    at http://127.0.0.1:19267/bridge.js:1836:17",
+       "failure_source": "task:task-01743f0ebc9841818f8816086138822a",
+       "active_report": null,
+       "report_queued": 5,
+       "report_completed": 0,
+       "buffered_sample_count": 0,
+       "gap_events": [],
+       "progress_monotonic": false,
+       "session_ids": [
+        "9e68a20f9b68411cbed601eaba8bee06",
+        "b65812e8bb7949d1ba531be75b29523b",
+        "9832e6044b164a66a209ece106ef56a3",
+        "89df6049fe9e4a13b3ecf1c82043074d"
+       ],
+       "task_count": 4,
+       "terminal_event_latencies_ms": [],
+       "terminal_record_latencies_ms": [],
+       "terminal_record_count": 0
+      },
+      "browser_report_received": true,
+      "sample_stream": {
+       "batch_count": 0,
+       "sample_count": 0,
+       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+     }
+    },
+    "02": {
+     "failure": {
+      "exception_type": "AssertionError",
+      "message": "headed child 60296 did not exit before the scenario deadline"
+     },
+     "producer_count": 4,
+     "producer_progress_counts": [
+      1500,
+      1500,
+      1500,
+      1500
+     ],
+     "browser": {
+      "schema_version": 1,
+      "complete": false,
+      "producer_streams": {},
+      "startup_errors": [],
+      "runtime": {
+       "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+       "sqlite": "3.50.4",
+       "packages": {
+        "bottle": "0.13.4",
+        "namisync": "0.1.0",
+        "pywebview": "6.2.1",
+        "pythonnet": "3.1.0"
+       }
+      },
+      "production_command_names": [
+       "admit_location",
+       "close_task",
+       "control_execution",
+       "create_task",
+       "get_execution_detail",
+       "get_plan_anchor",
+       "get_plan_window",
+       "list_tasks",
+       "mutate_plan_highlight",
+       "mutate_plan_highlighted_selection",
+       "mutate_plan_scope",
+       "mutate_plan_selection",
+       "next_events",
+       "open_plan_view",
+       "pick_folder",
+       "plan_again",
+       "prepare_setup",
+       "probe_recent_pairs",
+       "read_cosmetic_section",
+       "read_setup",
+       "readiness_echo",
+       "release_terminal_session",
+       "replace_cosmetic_section",
+       "shell_ready",
+       "start_execution",
+       "start_inventory",
+       "start_plan",
+       "update_plan_view"
+      ],
+      "combined_command_names": [
+       "admit_location",
+       "benchmark_report",
+       "benchmark_start",
+       "close_task",
+       "control_execution",
+       "create_task",
+       "get_execution_detail",
+       "get_plan_anchor",
+       "get_plan_window",
+       "list_tasks",
+       "mutate_plan_highlight",
+       "mutate_plan_highlighted_selection",
+       "mutate_plan_scope",
+       "mutate_plan_selection",
+       "next_events",
+       "open_plan_view",
+       "pick_folder",
+       "plan_again",
+       "prepare_setup",
+       "probe_recent_pairs",
+       "read_cosmetic_section",
+       "read_setup",
+       "readiness_echo",
+       "release_terminal_session",
+       "replace_cosmetic_section",
+       "shell_ready",
+       "start_execution",
+       "start_inventory",
+       "start_plan",
+       "update_plan_view"
+      ],
+      "clr_runtime": "Runtime: .NET Framework\n=============\n  Version:      <undefined>\n  Initialized:  True\n  Shut down:    False\n  Properties:\n    domain = \n    config_file = None",
+      "webview2": "153.0.4234.48",
+      "browser_ready": true,
+      "diagnostic_sample_types": [
+       {
+        "class": "str",
+        "event_id": "str",
+        "event_result": "dict",
+        "latency_ms": "int",
+        "observed_offset_ms": "float",
+        "position": "NoneType",
+        "record_state": "NoneType",
+        "session_id": "str",
+        "sequence": "int"
+       },
+       {
+        "class": "str",
+        "event_id": "str",
+        "event_result": "dict",
+        "latency_ms": "int",
+        "observed_offset_ms": "float",
+        "position": "NoneType",
+        "record_state": "NoneType",
+        "session_id": "str",
+        "sequence": "int"
+       }
+      ],
+      "browser": {
+       "failure": "Error",
+       "first_report_error": {
+        "name": "BridgeCommandError",
+        "message": "The desktop action contains invalid data.",
+        "kind": "samples"
+       },
+       "diagnostic_message": "benchmark sample reporting is saturated",
+       "diagnostic_stack": "Error: benchmark sample reporting is saturated\n    at enqueueReport (http://127.0.0.1:52937/benchmark.js:54:21)\n    at flushSamples (http://127.0.0.1:52937/benchmark.js:101:3)\n    at recordSample (http://127.0.0.1:52937/benchmark.js:203:5)\n    at acceptUpdate (http://127.0.0.1:52937/benchmark.js:251:5)\n    at Object.acceptUpdate (http://127.0.0.1:52937/benchmark.js:334:22)\n    at deliverTaskUpdate (http://127.0.0.1:52937/bridge.js:2018:10)\n    at settleTaskDrain (http://127.0.0.1:52937/bridge.js:1895:10)\n    at http://127.0.0.1:52937/bridge.js:1836:17",
+       "failure_source": "report:samples:capacity",
+       "active_report": null,
+       "report_queued": 5,
+       "report_completed": 0,
+       "buffered_sample_count": 0,
+       "gap_events": [],
+       "progress_monotonic": false,
+       "session_ids": [
+        "d661626d3bfb43a8bfdcc69feff4b2c5",
+        "bf2be3dfe32c4b4c8671aa9369619235",
+        "cc7e5f94ddca4c3880bb167363621ba8",
+        "e08c81a5dddb4ecdacf2a1b08a0abcad"
+       ],
+       "task_count": 4,
+       "terminal_event_latencies_ms": [],
+       "terminal_record_latencies_ms": [],
+       "terminal_record_count": 0
+      },
+      "browser_report_received": true,
+      "sample_stream": {
+       "batch_count": 0,
+       "sample_count": 0,
+       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+     },
+     "close": {
+      "complete": false,
+      "unfinished_count": 4,
+      "custody_released": false
+     }
+    }
+   },
+   "copied_evidence": {
+    "count": 22,
+    "records_sha256": "cbc2b0a944dbfa720b3acc14541b5f19dc8d1aad057aa448128f56a857d50627"
+   }
+  }
+ },
+ "incident-trace-20260927/report-verification.json": {
+  "bytes": 137,
+  "sha256": "544f8748ea037050b05a44fd7c41e0def3dddfae8de3de707588537f52f2010a",
+  "content": {
+   "source_hashes_unchanged": 10,
+   "retained_receipts_verified": 22,
+   "installed_case_passes": 6,
+   "relative_links_checked": 2
+  }
+ },
+ "incident-trace-20260927/windows-events.json": {
+  "bytes": 2272,
+  "sha256": "41c4cb1a3e438821bc8c011c290067543df3de79001f24d9ef576dca06ee2c89",
+  "content": [
+   {
+    "truncated": false,
+    "events": [
+     {
+      "TimeCreated": "2026-09-25T19:21:42.6408032+08:00",
+      "Id": 1000,
+      "ProviderName": "Application Error",
+      "Message": "Faulting application name: ra3ep1_1.0.game, version: 1.0.3313.38400, time stamp: 0x501884b6\r\nFaulting module name: ra3ep1_1.0.game, version: 1.0.3313.38400, time stamp: 0x501884b6\r\nException code: 0xc0000005\r\nFault offset: 0x003e10ff\r\nFaulting process id: 0x8938\r\nFaulting application start time: 0x1DD4CDA86195B2C\r\nFaulting application path: F:\\SteamLibrary\\steamapps\\common\\Command and Conquer Red Alert 3 Uprising\\Data\\ra3ep1_1.0.game\r\nFaulting module path: F:\\SteamLibrary\\steamapps\\common\\Command and Conquer Red Alert 3 Uprising\\Data\\ra3ep1_1.0.game\r\nReport Id: 3844e226-4d2a-425f-a21c-27b6150588ae\r\nFaulting package full name: \r\nFaulting package-relative application ID: "
+     },
+     {
+      "TimeCreated": "2026-09-25T03:34:40.7242839+08:00",
+      "Id": 0,
+      "ProviderName": "Dwminit",
+      "Message": "The Desktop Window Manager process has exited. (Process exit code: 0x00000001, Restart count: 1, Primary display device ID: NVIDIA GeForce RTX 3090)"
+     },
+     {
+      "TimeCreated": "2026-09-25T01:21:53.1393933+08:00",
+      "Id": 1000,
+      "ProviderName": "Application Error",
+      "Message": "Faulting application name: ra3ep1_1.0.game, version: 1.0.3313.38400, time stamp: 0x501884b6\r\nFaulting module name: ra3ep1_1.0.game, version: 1.0.3313.38400, time stamp: 0x501884b6\r\nException code: 0xc0000005\r\nFault offset: 0x003e10ff\r\nFaulting process id: 0xC174\r\nFaulting application start time: 0x1DD4C4729ABA37C\r\nFaulting application path: F:\\SteamLibrary\\steamapps\\common\\Command and Conquer Red Alert 3 Uprising\\Data\\ra3ep1_1.0.game\r\nFaulting module path: F:\\SteamLibrary\\steamapps\\common\\Command and Conquer Red Alert 3 Uprising\\Data\\ra3ep1_1.0.game\r\nReport Id: 02eaeef9-5544-4f7f-aced-1bb9cfa0f730\r\nFaulting package full name: \r\nFaulting package-relative application ID: "
+     }
+    ],
+    "log": "Application",
+    "scanned": 18
+   },
+   {
+    "truncated": false,
+    "events": [],
+    "log": "System",
+    "scanned": 23
+   }
+  ]
+ },
+ "trace-20260927/setup-trace-60.json": {
+  "bytes": 17273,
+  "sha256": "10a8a08f5dd300349a87e3f93bb9a251c23e76d8450122b91b93ad3810238339",
+  "content": {
+   "iterations": 60,
+   "iterations_with_failures": 0,
+   "stuck_drains": 0,
+   "drain_errors": 0,
+   "captures": 0,
+   "all_shutdowns_complete": true,
+   "session_state_sets": {
+    "[\"completed\", \"completed\", \"completed\", \"completed\", \"completed\", \"completed\", \"completed\"]": 60
+   },
+   "failing_iterations": []
+  }
+ },
+ "trace-20260927/setup-trace-noise-60.json": {
+  "bytes": 21409,
+  "sha256": "6ae9e74585a1786dc1a975a73177a23717ec771eaa8264e9ac03d1b010b96125",
+  "content": {
+   "iterations": 60,
+   "iterations_with_failures": 5,
+   "stuck_drains": 0,
+   "drain_errors": 4,
+   "captures": 1,
+   "all_shutdowns_complete": true,
+   "session_state_sets": {
+    "[\"completed\", \"completed\", \"completed\", \"completed\", \"completed\", \"completed\", \"completed\"]": 59,
+    "[\"completed\", \"completed\", \"completed\", \"completed\", null, \"completed\", \"completed\"]": 1
+   },
+   "failing_iterations": [
+    {
+     "iteration": 6,
+     "failures": [],
+     "stuck_drains": 0,
+     "session_states": [
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed"
+     ],
+     "shutdown_complete": true,
+     "drain_errors": [
+      [
+       "noise_error",
+       "971c32",
+       "RuntimeError",
+       "workflow runtime is closed"
+      ]
+     ],
+     "captures": []
+    },
+    {
+     "iteration": 13,
+     "failures": [],
+     "stuck_drains": 0,
+     "session_states": [
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed"
+     ],
+     "shutdown_complete": true,
+     "drain_errors": [
+      [
+       "noise_error",
+       "5fc89a",
+       "RuntimeError",
+       "workflow runtime is closed"
+      ]
+     ],
+     "captures": []
+    },
+    {
+     "iteration": 36,
+     "failures": [],
+     "stuck_drains": 0,
+     "session_states": [
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed"
+     ],
+     "shutdown_complete": true,
+     "drain_errors": [
+      [
+       "noise_error",
+       "d5735d",
+       "RuntimeError",
+       "workflow runtime is closed"
+      ]
+     ],
+     "captures": []
+    },
+    {
+     "iteration": 41,
+     "failures": [],
+     "stuck_drains": 0,
+     "session_states": [
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      "completed"
+     ],
+     "shutdown_complete": true,
+     "drain_errors": [
+      [
+       "noise_error",
+       "0d9cb9",
+       "RuntimeError",
+       "workflow runtime is closed"
+      ]
+     ],
+     "captures": []
+    },
+    {
+     "iteration": 50,
+     "failures": [
+      {
+       "row": "row4",
+       "type": "RuntimeError",
+       "message": "task start failed",
+       "at": 290407.7652939
+      }
+     ],
+     "stuck_drains": 0,
+     "session_states": [
+      "completed",
+      "completed",
+      "completed",
+      "completed",
+      null,
+      "completed",
+      "completed"
+     ],
+     "shutdown_complete": true,
+     "drain_errors": [],
+     "captures": [
+      {
+       "site": "drain",
+       "type": "DatabasePairRefusedError",
+       "message": "database pair refused (ledger-contract). Close every NamiSync process, then archive or delete both database main files and all of their -wal, -shm, and -journal sidecars together before restarting NamiSync.",
+       "traceback": "Traceback (most recent call last):\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\web\\drain.py\", line 1835, in _start_existing_task\n    candidate = starter(delivery_factory)\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\web\\drain.py\", line 817, in <lambda>\n    lambda factory: self._lifecycle.start_task_setup_plan(\n                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^\n        task_id,\n        ^^^^^^^^\n    ...<5 lines>...\n        delivery_factory=factory,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^\n    ),\n    ^\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\service.py\", line 459, in start_task_setup_plan\n    session_id, receipt = self._submit_session(\n                          ~~~~~~~~~~~~~~~~~~~~^\n        PLAN_KIND,\n        ^^^^^^^^^^\n    ...<6 lines>...\n        task_id=task_id,\n        ^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\service.py\", line 2095, in _submit_session\n    session_id = self._dispatcher.submit(\n        kind,\n        request,\n        attach=AdmissionAttachment(attach, rollback),\n    )\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\dispatcher\\dispatcher.py\", line 331, in submit\n    return self._admit(\n           ~~~~~~~~~~~^\n        kind,\n        ^^^^^\n    ...<3 lines>...\n        attachment_rollback=attachment_rollback,\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\dispatcher\\dispatcher.py\", line 357, in _admit\n    prepared = registration.prepare(request)\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\service.py\", line 2752, in prepare_session\n    prepared = prepare(request)\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\workflows\\runtime.py\", line 590, in prepare_plan\n    raise DatabasePairRefusedError(contract)\nnamisync.workflows.database_pair.DatabasePairRefusedError: database pair refused (ledger-contract). Close every NamiSync process, then archive or delete both database main files and all of their -wal, -shm, and -journal sidecars together before restarting NamiSync.\n",
+       "retire_stack": "  File \"C:\\Users\\Spectrum\\AppData\\Local\\Temp\\claude\\F--GitHubRepositories-NamiSync\\00e78f90-cadb-4955-b114-8e86e99331a9\\scratchpad\\setup_start_trace_noise.py\", line 206, in <module>\n    result = run_iteration(index)\n  File \"C:\\Users\\Spectrum\\AppData\\Local\\Temp\\claude\\F--GitHubRepositories-NamiSync\\00e78f90-cadb-4955-b114-8e86e99331a9\\scratchpad\\setup_start_trace_noise.py\", line 175, in run_iteration\n    start_plan(f\"row{row}\")\n  File \"C:\\Users\\Spectrum\\AppData\\Local\\Temp\\claude\\F--GitHubRepositories-NamiSync\\00e78f90-cadb-4955-b114-8e86e99331a9\\scratchpad\\setup_start_trace_noise.py\", line 135, in start_plan\n    start = registry.start_setup_plan(\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\web\\drain.py\", line 813, in start_setup_plan\n    return self._start_existing_task(\n  File \"F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\web\\drain.py\", line 1841, in _start_existing_task\n    _retire_exception_graph(error)\n",
+       "thread": "MainThread",
+       "at": 290407.7652476
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

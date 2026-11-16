@@ -1,0 +1,959 @@
+{
+ "cadence-measurement-20261108/comparison-final.json": {
+  "bytes": 22710,
+  "sha256": "2e283b3ac9846a47c9ee3134c10d15fc0e11a7436bf40530a29cc1fa18cf10eb",
+  "content": {
+   "inventory:baseline": {
+    "baseline": {
+     "seconds": 38.135,
+     "elements": 168707,
+     "listeners": 74263,
+     "windows": 434,
+     "anchors": 421,
+     "drains": 844,
+     "returned_rows": 105321,
+     "renderer_MiB": 1367.41015625,
+     "whole_MiB": 1797.27734375,
+     "V8_MiB": 315.78691482543945,
+     "embedder_MiB": 737.1492614746094,
+     "nodes": 66601,
+     "sampled_cpu_seconds": {
+      "webview2-crashpad-handler": 0.015625,
+      "webview2-renderer": 37.578125,
+      "webview2-gpu-process": 9.671875,
+      "webview2-utility:network.mojom.NetworkService": 0.0,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-browser": 2.25,
+      "host": 40.828125
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.010489499662071466,
+      "get_inventory_window": 1.0731577987316996,
+      "next_events": 3.1468224979471415,
+      "start_inventory_integrity": 0.21798110008239746
+     },
+     "same_window_intervals": {
+      "count": 8,
+      "min_ms": 2.52739991992712,
+      "median_ms": 43.143599992617965,
+      "max_ms": 1719.7178998030722,
+      "below_200ms": 6
+     },
+     "shifted_window_intervals": {
+      "count": 425,
+      "min_ms": 4.774699918925762,
+      "median_ms": 79.27599991671741,
+      "max_ms": 490.2629000134766,
+      "below_200ms": 424
+     }
+    },
+    "candidate": {
+     "seconds": 54.887,
+     "elements": 133376,
+     "listeners": 60466,
+     "windows": 190,
+     "anchors": 26,
+     "drains": 8244,
+     "returned_rows": 47348,
+     "renderer_MiB": 761.453125,
+     "whole_MiB": 1206.6796875,
+     "V8_MiB": 218.05304718017578,
+     "embedder_MiB": 368.31615447998047,
+     "nodes": 44368,
+     "sampled_cpu_seconds": {
+      "webview2-gpu-process": 8.953125,
+      "webview2-renderer": 27.8125,
+      "host": 76.53125,
+      "webview2-browser": 4.921875,
+      "webview2-crashpad-handler": 0.03125,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-utility:network.mojom.NetworkService": 0.0
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.0007731996010988951,
+      "get_inventory_window": 0.5690541001968086,
+      "next_events": 19.243048411095515,
+      "start_inventory_integrity": 0.3056316999718547
+     },
+     "same_window_intervals": {
+      "count": 155,
+      "min_ms": 2.8377999551594257,
+      "median_ms": 250.697499839589,
+      "max_ms": 2586.318700108677,
+      "below_200ms": 4
+     },
+     "shifted_window_intervals": {
+      "count": 34,
+      "min_ms": 10.177399963140488,
+      "median_ms": 510.5710499919951,
+      "max_ms": 797.2887000069022,
+      "below_200ms": 7
+     }
+    },
+    "integrated": {
+     "seconds": 44.859,
+     "elements": 118957,
+     "listeners": 56336,
+     "windows": 143,
+     "anchors": 25,
+     "drains": 1021,
+     "returned_rows": 35396,
+     "renderer_MiB": 567.26171875,
+     "whole_MiB": 1003.33203125,
+     "V8_MiB": 143.23318481445312,
+     "embedder_MiB": 250.080810546875,
+     "nodes": 45174,
+     "sampled_cpu_seconds": {
+      "webview2-renderer": 18.796875,
+      "webview2-utility:network.mojom.NetworkService": 0.015625,
+      "webview2-crashpad-handler": 0.015625,
+      "webview2-gpu-process": 7.640625,
+      "webview2-browser": 1.5625,
+      "host": 45.9375,
+      "webview2-utility:storage.mojom.StorageService": 0.0
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.0008389998693019152,
+      "get_inventory_window": 0.5074905985966325,
+      "next_events": 34.44217799929902,
+      "start_inventory_integrity": 0.34332079999148846
+     },
+     "same_window_intervals": {
+      "count": 111,
+      "min_ms": 2.8127001132816076,
+      "median_ms": 255.11979986913502,
+      "max_ms": 3130.978500004858,
+      "below_200ms": 5
+     },
+     "shifted_window_intervals": {
+      "count": 31,
+      "min_ms": 34.67029985040426,
+      "median_ms": 519.6064000483602,
+      "max_ms": 773.850099882111,
+      "below_200ms": 5
+     }
+    },
+    "final": {
+     "seconds": 33.367,
+     "elements": 115236,
+     "listeners": 55902,
+     "windows": 72,
+     "anchors": 26,
+     "drains": 838,
+     "returned_rows": 16895,
+     "renderer_MiB": 356.95703125,
+     "whole_MiB": 804.51953125,
+     "V8_MiB": 76.96144104003906,
+     "embedder_MiB": 162.02254486083984,
+     "nodes": 32734,
+     "sampled_cpu_seconds": {
+      "webview2-crashpad-handler": 0.015625,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-utility:network.mojom.NetworkService": 0.03125,
+      "host": 33.453125,
+      "webview2-gpu-process": 3.125,
+      "webview2-browser": 0.953125,
+      "webview2-renderer": 10.796875
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.0007012996356934309,
+      "get_inventory_window": 0.19603579957038164,
+      "next_events": 27.043852098751813,
+      "start_inventory_integrity": 0.3647764001507312
+     },
+     "same_window_intervals": {
+      "count": 37,
+      "min_ms": 2.1232999861240387,
+      "median_ms": 504.4680000282824,
+      "max_ms": 2647.4251998588443,
+      "below_200ms": 5
+     },
+     "shifted_window_intervals": {
+      "count": 34,
+      "min_ms": 3.6458999384194613,
+      "median_ms": 512.5208500539884,
+      "max_ms": 521.5177000500262,
+      "below_200ms": 2
+     }
+    }
+   },
+   "inventory:verify": {
+    "baseline": {
+     "seconds": 40.059000000000005,
+     "elements": 174437,
+     "listeners": 77168,
+     "windows": 371,
+     "anchors": 357,
+     "drains": 713,
+     "returned_rows": 89912,
+     "renderer_MiB": 1284.55859375,
+     "whole_MiB": 1758.328125,
+     "V8_MiB": 286.9393005371094,
+     "embedder_MiB": 708.8552093505859,
+     "nodes": 73856,
+     "sampled_cpu_seconds": {
+      "webview2-crashpad-handler": 0.0,
+      "webview2-renderer": 37.78125,
+      "webview2-gpu-process": 8.59375,
+      "webview2-utility:network.mojom.NetworkService": 0.03125,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-browser": 1.921875,
+      "host": 42.640625
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.011007700813934207,
+      "get_inventory_window": 1.0410867994651198,
+      "next_events": 4.3910646985750645,
+      "start_inventory_integrity": 0.28071429999545217
+     },
+     "same_window_intervals": {
+      "count": 6,
+      "min_ms": 2.1703001111745834,
+      "median_ms": 43.42979995999485,
+      "max_ms": 130.97679987549782,
+      "below_200ms": 6
+     },
+     "shifted_window_intervals": {
+      "count": 364,
+      "min_ms": 2.5929000694304705,
+      "median_ms": 94.38110014889389,
+      "max_ms": 2638.067099964246,
+      "below_200ms": 361
+     }
+    },
+    "candidate": {
+     "seconds": 61.36600000000001,
+     "elements": 136090,
+     "listeners": 62034,
+     "windows": 218,
+     "anchors": 23,
+     "drains": 8282,
+     "returned_rows": 53899,
+     "renderer_MiB": 984.89453125,
+     "whole_MiB": 1463.62890625,
+     "V8_MiB": 241.14742279052734,
+     "embedder_MiB": 527.4669418334961,
+     "nodes": 52874,
+     "sampled_cpu_seconds": {
+      "webview2-gpu-process": 9.546875,
+      "webview2-renderer": 28.859375,
+      "host": 84.859375,
+      "webview2-browser": 5.625,
+      "webview2-crashpad-handler": 0.0,
+      "webview2-utility:storage.mojom.StorageService": 0.015625,
+      "webview2-utility:network.mojom.NetworkService": 0.078125
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.0008363996166735888,
+      "get_inventory_window": 0.7668683012016118,
+      "next_events": 19.474556491710246,
+      "start_inventory_integrity": 0.4149543000385165
+     },
+     "same_window_intervals": {
+      "count": 180,
+      "min_ms": 3.4014000557363033,
+      "median_ms": 250.94584992621094,
+      "max_ms": 3632.6089000795037,
+      "below_200ms": 4
+     },
+     "shifted_window_intervals": {
+      "count": 37,
+      "min_ms": 31.07220004312694,
+      "median_ms": 511.97750004939735,
+      "max_ms": 955.3328000474721,
+      "below_200ms": 13
+     }
+    },
+    "integrated": {
+     "seconds": 41.285,
+     "elements": 108290,
+     "listeners": 51282,
+     "windows": 126,
+     "anchors": 26,
+     "drains": 951,
+     "returned_rows": 30020,
+     "renderer_MiB": 538.1953125,
+     "whole_MiB": 997.890625,
+     "V8_MiB": 120.80143737792969,
+     "embedder_MiB": 275.4857635498047,
+     "nodes": 44216,
+     "sampled_cpu_seconds": {
+      "webview2-renderer": 13.75,
+      "webview2-utility:network.mojom.NetworkService": 0.078125,
+      "webview2-crashpad-handler": 0.0,
+      "webview2-gpu-process": 5.609375,
+      "webview2-browser": 1.671875,
+      "host": 42.65625,
+      "webview2-utility:storage.mojom.StorageService": 0.0
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.0012985998764634132,
+      "get_inventory_window": 0.42477510077878833,
+      "next_events": 32.09251509886235,
+      "start_inventory_integrity": 0.40830709994770586
+     },
+     "same_window_intervals": {
+      "count": 95,
+      "min_ms": 4.072099924087524,
+      "median_ms": 253.93030000850558,
+      "max_ms": 3240.0214998051524,
+      "below_200ms": 4
+     },
+     "shifted_window_intervals": {
+      "count": 30,
+      "min_ms": 32.39140007644892,
+      "median_ms": 514.8331999080256,
+      "max_ms": 884.350199950859,
+      "below_200ms": 3
+     }
+    },
+    "final": {
+     "seconds": 29.842000000000006,
+     "elements": 98501,
+     "listeners": 47943,
+     "windows": 62,
+     "anchors": 25,
+     "drains": 746,
+     "returned_rows": 13335,
+     "renderer_MiB": 326.984375,
+     "whole_MiB": 780.87890625,
+     "V8_MiB": 68.81018829345703,
+     "embedder_MiB": 156.9577407836914,
+     "nodes": 37769,
+     "sampled_cpu_seconds": {
+      "webview2-crashpad-handler": 0.0,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-utility:network.mojom.NetworkService": 0.0,
+      "host": 30.421875,
+      "webview2-gpu-process": 4.5,
+      "webview2-browser": 0.78125,
+      "webview2-renderer": 11.0625
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.0006203986704349518,
+      "get_inventory_window": 0.15425879997201264,
+      "next_events": 24.376663998467848,
+      "start_inventory_integrity": 0.2781841999385506
+     },
+     "same_window_intervals": {
+      "count": 31,
+      "min_ms": 2.572100143879652,
+      "median_ms": 504.29209996946156,
+      "max_ms": 2774.1736001335084,
+      "below_200ms": 5
+     },
+     "shifted_window_intervals": {
+      "count": 30,
+      "min_ms": 1.2932000681757927,
+      "median_ms": 512.9341499414295,
+      "max_ms": 524.1471999324858,
+      "below_200ms": 3
+     }
+    }
+   },
+   "inventory:rebaseline": {
+    "baseline": {
+     "seconds": 41.004999999999995,
+     "elements": 168380,
+     "listeners": 74143,
+     "windows": 368,
+     "anchors": 356,
+     "drains": 713,
+     "returned_rows": 88411,
+     "renderer_MiB": 1245.90625,
+     "whole_MiB": 1709.6953125,
+     "V8_MiB": 288.05970001220703,
+     "embedder_MiB": 670.7194747924805,
+     "nodes": 69265,
+     "sampled_cpu_seconds": {
+      "webview2-crashpad-handler": 0.0,
+      "webview2-renderer": 39.359375,
+      "webview2-gpu-process": 10.015625,
+      "webview2-utility:network.mojom.NetworkService": 0.0,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-browser": 2.203125,
+      "host": 43.359375
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.010484898462891579,
+      "get_inventory_window": 1.1166382988449186,
+      "next_events": 4.869292496005073,
+      "start_inventory_integrity": 0.32673450000584126
+     },
+     "same_window_intervals": {
+      "count": 5,
+      "min_ms": 4.396500065922737,
+      "median_ms": 112.44129994884133,
+      "max_ms": 3236.485900124535,
+      "below_200ms": 3
+     },
+     "shifted_window_intervals": {
+      "count": 362,
+      "min_ms": 7.631200132891536,
+      "median_ms": 99.61709997151047,
+      "max_ms": 452.7102999854833,
+      "below_200ms": 360
+     }
+    },
+    "candidate": {
+     "seconds": 61.334999999999994,
+     "elements": 127255,
+     "listeners": 58274,
+     "windows": 200,
+     "anchors": 30,
+     "drains": 8511,
+     "returned_rows": 49184,
+     "renderer_MiB": 855.81640625,
+     "whole_MiB": 1333.04296875,
+     "V8_MiB": 227.50804901123047,
+     "embedder_MiB": 440.3728332519531,
+     "nodes": 61456,
+     "sampled_cpu_seconds": {
+      "webview2-gpu-process": 10.3125,
+      "webview2-renderer": 26.71875,
+      "host": 86.984375,
+      "webview2-browser": 5.734375,
+      "webview2-crashpad-handler": 0.0,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-utility:network.mojom.NetworkService": 0.015625
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.0010954001918435097,
+      "get_inventory_window": 0.7453284002840519,
+      "next_events": 19.25711770611815,
+      "start_inventory_integrity": 0.41819969983771443
+     },
+     "same_window_intervals": {
+      "count": 166,
+      "min_ms": 3.2140000257641077,
+      "median_ms": 250.75475010089576,
+      "max_ms": 3615.6421001069248,
+      "below_200ms": 5
+     },
+     "shifted_window_intervals": {
+      "count": 33,
+      "min_ms": 37.62060008011758,
+      "median_ms": 511.01829996332526,
+      "max_ms": 976.9615000113845,
+      "below_200ms": 2
+     }
+    },
+    "integrated": {
+     "seconds": 40.792,
+     "elements": 107399,
+     "listeners": 51316,
+     "windows": 125,
+     "anchors": 26,
+     "drains": 952,
+     "returned_rows": 30148,
+     "renderer_MiB": 468.81640625,
+     "whole_MiB": 940.65625,
+     "V8_MiB": 129.0524139404297,
+     "embedder_MiB": 206.84439086914062,
+     "nodes": 39852,
+     "sampled_cpu_seconds": {
+      "webview2-renderer": 14.515625,
+      "webview2-utility:network.mojom.NetworkService": 0.0,
+      "webview2-crashpad-handler": 0.0,
+      "webview2-gpu-process": 6.890625,
+      "webview2-browser": 1.609375,
+      "host": 42.78125,
+      "webview2-utility:storage.mojom.StorageService": 0.0
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.0008868998847901821,
+      "get_inventory_window": 0.43496169918216765,
+      "next_events": 31.727779601933435,
+      "start_inventory_integrity": 0.3502448999788612
+     },
+     "same_window_intervals": {
+      "count": 95,
+      "min_ms": 2.506899880245328,
+      "median_ms": 254.69399988651276,
+      "max_ms": 3049.873400013894,
+      "below_200ms": 5
+     },
+     "shifted_window_intervals": {
+      "count": 29,
+      "min_ms": 39.026200072839856,
+      "median_ms": 514.9022000841796,
+      "max_ms": 647.5027999840677,
+      "below_200ms": 2
+     }
+    },
+    "final": {
+     "seconds": 28.909999999999997,
+     "elements": 92925,
+     "listeners": 44862,
+     "windows": 57,
+     "anchors": 24,
+     "drains": 734,
+     "returned_rows": 12628,
+     "renderer_MiB": 334.20703125,
+     "whole_MiB": 793.26953125,
+     "V8_MiB": 72.17586517333984,
+     "embedder_MiB": 160.7707290649414,
+     "nodes": 34019,
+     "sampled_cpu_seconds": {
+      "webview2-crashpad-handler": 0.0,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-utility:network.mojom.NetworkService": 0.03125,
+      "host": 28.9375,
+      "webview2-gpu-process": 4.046875,
+      "webview2-browser": 0.59375,
+      "webview2-renderer": 8.6875
+     },
+     "command_handler_seconds": {
+      "get_inventory_anchor": 0.000639000441879034,
+      "get_inventory_window": 0.15119479945860803,
+      "next_events": 23.828920701052994,
+      "start_inventory_integrity": 0.301867299946025
+     },
+     "same_window_intervals": {
+      "count": 30,
+      "min_ms": 2.1136999130249023,
+      "median_ms": 504.8235999420285,
+      "max_ms": 2684.439100092277,
+      "below_200ms": 4
+     },
+     "shifted_window_intervals": {
+      "count": 26,
+      "min_ms": 256.8524000234902,
+      "median_ms": 513.2724500726908,
+      "max_ms": 742.4546000547707,
+      "below_200ms": 0
+     }
+    }
+   },
+   "plan:task-execute": {
+    "baseline": {
+     "seconds": 157.98499999999999,
+     "elements": 361809,
+     "listeners": 111679,
+     "windows": 320,
+     "anchors": 64,
+     "drains": 11634,
+     "returned_rows": 81404,
+     "renderer_MiB": 840.0859375,
+     "whole_MiB": 1295.40625,
+     "V8_MiB": 374.7774887084961,
+     "embedder_MiB": 226.4977264404297,
+     "nodes": 64526,
+     "sampled_cpu_seconds": {
+      "webview2-renderer": 38.78125,
+      "webview2-utility:network.mojom.NetworkService": 0.03125,
+      "host": 141.484375,
+      "webview2-browser": 9.265625,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-gpu-process": 12.78125,
+      "webview2-crashpad-handler": 0.046875
+     },
+     "command_handler_seconds": {
+      "get_plan_anchor": 0.00178050110116601,
+      "get_plan_window": 0.7127842002082616,
+      "next_events": 116.20407221629284
+     },
+     "same_window_intervals": {
+      "count": 246,
+      "min_ms": 32.24760014563799,
+      "median_ms": 530.1245499867946,
+      "max_ms": 5985.502900090069,
+      "below_200ms": 28
+     },
+     "shifted_window_intervals": {
+      "count": 73,
+      "min_ms": 22.268599830567837,
+      "median_ms": 544.398499885574,
+      "max_ms": 580.3241000976413,
+      "below_200ms": 10
+     }
+    },
+    "candidate": {
+     "seconds": 199.95499999999998,
+     "elements": 223957,
+     "listeners": 104289,
+     "windows": 697,
+     "anchors": 68,
+     "drains": 11882,
+     "returned_rows": 177157,
+     "renderer_MiB": 1462.6015625,
+     "whole_MiB": 1904.0234375,
+     "V8_MiB": 659.622371673584,
+     "embedder_MiB": 310.03971099853516,
+     "nodes": 55457,
+     "sampled_cpu_seconds": {
+      "webview2-utility:network.mojom.NetworkService": 0.21875,
+      "webview2-renderer": 74.515625,
+      "host": 182.890625,
+      "webview2-crashpad-handler": 0.03125,
+      "webview2-browser": 11.265625,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-gpu-process": 26.59375
+     },
+     "command_handler_seconds": {
+      "get_plan_anchor": 0.002317899838089943,
+      "get_plan_window": 1.799461998976767,
+      "next_events": 145.73661510040984
+     },
+     "same_window_intervals": {
+      "count": 628,
+      "min_ms": 149.76980001665652,
+      "median_ms": 252.8236999642104,
+      "max_ms": 4687.151200138032,
+      "below_200ms": 2
+     },
+     "shifted_window_intervals": {
+      "count": 68,
+      "min_ms": 503.9502000436187,
+      "median_ms": 511.0354999778792,
+      "max_ms": 522.0236999448389,
+      "below_200ms": 0
+     }
+    },
+    "integrated": {
+     "seconds": 199.48399999999998,
+     "elements": 231255,
+     "listeners": 108642,
+     "windows": 684,
+     "anchors": 69,
+     "drains": 4729,
+     "returned_rows": 174386,
+     "renderer_MiB": 1304.5078125,
+     "whole_MiB": 1754.46484375,
+     "V8_MiB": 602.1408882141113,
+     "embedder_MiB": 293.11743927001953,
+     "nodes": 54185,
+     "sampled_cpu_seconds": {
+      "host": 159.8125,
+      "webview2-crashpad-handler": 0.015625,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-utility:network.mojom.NetworkService": 0.09375,
+      "webview2-renderer": 65.4375,
+      "webview2-gpu-process": 25.0625,
+      "webview2-browser": 7.953125
+     },
+     "command_handler_seconds": {
+      "get_plan_anchor": 0.0025400009471923113,
+      "get_plan_window": 1.8890648966189474,
+      "next_events": 166.88286310713738
+     },
+     "same_window_intervals": {
+      "count": 612,
+      "min_ms": 152.01050019823015,
+      "median_ms": 255.78799983486533,
+      "max_ms": 6022.809199988842,
+      "below_200ms": 2
+     },
+     "shifted_window_intervals": {
+      "count": 71,
+      "min_ms": 12.641699984669685,
+      "median_ms": 514.6149999927729,
+      "max_ms": 761.6615002043545,
+      "below_200ms": 2
+     }
+    },
+    "final": {
+     "seconds": 135.68200000000002,
+     "elements": 226288,
+     "listeners": 109871,
+     "windows": 260,
+     "anchors": 72,
+     "drains": 3590,
+     "returned_rows": 65560,
+     "renderer_MiB": 643.72265625,
+     "whole_MiB": 1112.79296875,
+     "V8_MiB": 270.56663513183594,
+     "embedder_MiB": 166.39291381835938,
+     "nodes": 36208,
+     "sampled_cpu_seconds": {
+      "webview2-renderer": 43.53125,
+      "webview2-browser": 3.921875,
+      "webview2-utility:network.mojom.NetworkService": 0.0625,
+      "webview2-utility:storage.mojom.StorageService": 0.0,
+      "webview2-gpu-process": 16.921875,
+      "host": 104.328125,
+      "webview2-crashpad-handler": 0.0
+     },
+     "command_handler_seconds": {
+      "get_plan_anchor": 0.0021769008599221706,
+      "get_plan_window": 0.5730449988041073,
+      "next_events": 116.73434879956767
+     },
+     "same_window_intervals": {
+      "count": 188,
+      "min_ms": 15.539600048214197,
+      "median_ms": 507.22984992899,
+      "max_ms": 4013.6245999019593,
+      "below_200ms": 3
+     },
+     "shifted_window_intervals": {
+      "count": 71,
+      "min_ms": 501.64339994080365,
+      "median_ms": 514.9546999018639,
+      "max_ms": 1206.4157000277191,
+      "below_200ms": 0
+     }
+    }
+   }
+  }
+ },
+ "cadence-measurement-20261108/final-identity-check.json": {
+  "bytes": 3123,
+  "sha256": "3507dfe27d8c7b00328902462965b0d3462c276e6aaffd945d40a18c62ebab66",
+  "content": {
+   "package_files": 303,
+   "raw_changes": {
+    "baseline": [
+     "namisync/db/history.py",
+     "namisync/db/repositories.py",
+     "namisync/interfaces/branding/namisync_icon_color.svg",
+     "namisync/interfaces/branding/namisync_icon_mono.svg",
+     "namisync/interfaces/branding/namisync_icon_two_tone.svg",
+     "namisync/interfaces/cli.py",
+     "namisync/interfaces/command_ingress.py",
+     "namisync/interfaces/task_lifecycle.py",
+     "namisync/interfaces/task_port.py",
+     "namisync/interfaces/web/assets/about.js",
+     "namisync/interfaces/web/assets/app.js",
+     "namisync/interfaces/web/assets/index.html",
+     "namisync/interfaces/web/assets/inventory_review.js",
+     "namisync/interfaces/web/assets/legal_content.js",
+     "namisync/interfaces/web/assets/plan.js",
+     "namisync/interfaces/web/assets/plan_review.js",
+     "namisync/interfaces/web/assets/rail.js",
+     "namisync/interfaces/web/assets/row_menu.js",
+     "namisync/interfaces/web/assets/settings.js",
+     "namisync/interfaces/web/assets/setup.js",
+     "namisync/interfaces/web/assets/table_columns.js",
+     "namisync/interfaces/web/assets/table_controller.js",
+     "namisync/interfaces/web/assets/task_status.js",
+     "namisync/interfaces/web/assets/theme.js",
+     "namisync/interfaces/web/assets/tree.js",
+     "namisync/interfaces/web/bridge.py",
+     "namisync/interfaces/web/drain.py",
+     "namisync/interfaces/web/readiness.py",
+     "namisync/interfaces/web/review_view.py",
+     "namisync/interfaces/web/task_snapshot.py",
+     "namisync/workflows/models.py",
+     "namisync/workflows/recall.py",
+     "namisync/workflows/runtime.py",
+     "namisync/workflows/sibling_order.py"
+    ],
+    "candidate": [
+     "namisync/interfaces/web/assets/app.js",
+     "namisync/interfaces/web/assets/plan.js",
+     "namisync/interfaces/web/drain.py"
+    ],
+    "integrated": [
+     "namisync/interfaces/web/assets/app.js",
+     "namisync/interfaces/web/assets/plan.js"
+    ]
+   },
+   "normalized_changes": {
+    "baseline": [
+     "namisync/interfaces/web/assets/app.js",
+     "namisync/interfaces/web/assets/inventory_review.js",
+     "namisync/interfaces/web/assets/plan.js",
+     "namisync/interfaces/web/assets/plan_review.js",
+     "namisync/interfaces/web/assets/table_controller.js",
+     "namisync/interfaces/web/assets/tree.js",
+     "namisync/interfaces/web/drain.py"
+    ],
+    "candidate": [
+     "namisync/interfaces/web/assets/app.js",
+     "namisync/interfaces/web/drain.py"
+    ],
+    "integrated": [
+     "namisync/interfaces/web/assets/app.js"
+    ]
+   },
+   "prior_manifest_sha256": "779426dbffbf337fbe87281619ba779098685ab874f5907a0789a39c2ce08470",
+   "manifest_sha256": "4918efc924ce90609dab5aa82f752b5f7a8cfc94ee9f3e63ffe7696b028cdeaa",
+   "freeze_producer_sha256": "d5b44cc583560aeda605b92ef9b5d3d03b72acebcdea99ddacf59dcc08c98820",
+   "performance_helpers_unchanged": true,
+   "exact_checkout_match": true,
+   "app_sha256": "ed0273ddb1ebe6234b7065d6c58099222decaef67cd7831252877105f3ecbc39"
+  }
+ },
+ "cadence-measurement-20261108/history-durations.json": {
+  "bytes": 4451,
+  "sha256": "81b3d229a74ea70741272d64d393c600497d2d7123be63f944df8acbc573faf3",
+  "content": {
+   "baseline-inventory-01": [
+    {
+     "kind": "inventory",
+     "state": "completed",
+     "recorded_seconds": 0.777616,
+     "started_at": "2026-11-08T15:17:43.406636Z",
+     "ended_at": "2026-11-08T15:17:44.184252Z"
+    },
+    {
+     "kind": "baseline",
+     "state": "completed",
+     "recorded_seconds": 36.474331,
+     "started_at": "2026-11-08T15:17:45.117027Z",
+     "ended_at": "2026-11-08T15:18:21.591358Z"
+    },
+    {
+     "kind": "verify",
+     "state": "completed",
+     "recorded_seconds": 38.564521,
+     "started_at": "2026-11-08T15:18:25.319915Z",
+     "ended_at": "2026-11-08T15:19:03.884436Z"
+    },
+    {
+     "kind": "rebaseline",
+     "state": "completed",
+     "recorded_seconds": 39.581559,
+     "started_at": "2026-11-08T15:19:07.503799Z",
+     "ended_at": "2026-11-08T15:19:47.085358Z"
+    }
+   ],
+   "baseline-plan-01": [
+    {
+     "kind": "sync",
+     "state": "completed",
+     "recorded_seconds": 157.610292,
+     "started_at": "2026-11-08T15:20:30.498507Z",
+     "ended_at": "2026-11-08T15:23:08.108799Z"
+    }
+   ],
+   "candidate-inventory-01": [
+    {
+     "kind": "inventory",
+     "state": "completed",
+     "recorded_seconds": 1.107188,
+     "started_at": "2026-11-08T15:43:58.839275Z",
+     "ended_at": "2026-11-08T15:43:59.946463Z"
+    },
+    {
+     "kind": "baseline",
+     "state": "completed",
+     "recorded_seconds": 53.563605,
+     "started_at": "2026-11-08T15:44:01.140510Z",
+     "ended_at": "2026-11-08T15:44:54.704115Z"
+    },
+    {
+     "kind": "verify",
+     "state": "completed",
+     "recorded_seconds": 59.565143,
+     "started_at": "2026-11-08T15:44:58.124686Z",
+     "ended_at": "2026-11-08T15:45:57.689829Z"
+    },
+    {
+     "kind": "rebaseline",
+     "state": "completed",
+     "recorded_seconds": 59.341933,
+     "started_at": "2026-11-08T15:46:01.520739Z",
+     "ended_at": "2026-11-08T15:47:00.862672Z"
+    }
+   ],
+   "candidate-plan-01": [
+    {
+     "kind": "sync",
+     "state": "completed",
+     "recorded_seconds": 199.808505,
+     "started_at": "2026-11-08T15:48:15.751383Z",
+     "ended_at": "2026-11-08T15:51:35.559888Z"
+    }
+   ],
+   "final-inventory-01": [
+    {
+     "kind": "inventory",
+     "state": "completed",
+     "recorded_seconds": 0.812879,
+     "started_at": "2026-11-08T16:35:26.361927Z",
+     "ended_at": "2026-11-08T16:35:27.174806Z"
+    },
+    {
+     "kind": "baseline",
+     "state": "completed",
+     "recorded_seconds": 31.734599,
+     "started_at": "2026-11-08T16:35:28.222201Z",
+     "ended_at": "2026-11-08T16:35:59.956800Z"
+    },
+    {
+     "kind": "verify",
+     "state": "completed",
+     "recorded_seconds": 28.419701,
+     "started_at": "2026-11-08T16:36:03.494867Z",
+     "ended_at": "2026-11-08T16:36:31.914568Z"
+    },
+    {
+     "kind": "rebaseline",
+     "state": "completed",
+     "recorded_seconds": 27.734707,
+     "started_at": "2026-11-08T16:36:35.387139Z",
+     "ended_at": "2026-11-08T16:37:03.121846Z"
+    }
+   ],
+   "final-plan-01": [
+    {
+     "kind": "sync",
+     "state": "completed",
+     "recorded_seconds": 135.241732,
+     "started_at": "2026-11-08T16:37:49.940610Z",
+     "ended_at": "2026-11-08T16:40:05.182342Z"
+    }
+   ],
+   "integrated-inventory-01": [
+    {
+     "kind": "inventory",
+     "state": "completed",
+     "recorded_seconds": 1.156252,
+     "started_at": "2026-11-08T16:10:37.285127Z",
+     "ended_at": "2026-11-08T16:10:38.441379Z"
+    },
+    {
+     "kind": "baseline",
+     "state": "completed",
+     "recorded_seconds": 43.060302,
+     "started_at": "2026-11-08T16:10:39.623461Z",
+     "ended_at": "2026-11-08T16:11:22.683763Z"
+    },
+    {
+     "kind": "verify",
+     "state": "completed",
+     "recorded_seconds": 39.754985,
+     "started_at": "2026-11-08T16:11:26.534637Z",
+     "ended_at": "2026-11-08T16:12:06.289622Z"
+    },
+    {
+     "kind": "rebaseline",
+     "state": "completed",
+     "recorded_seconds": 39.272445,
+     "started_at": "2026-11-08T16:12:09.785043Z",
+     "ended_at": "2026-11-08T16:12:49.057488Z"
+    }
+   ],
+   "integrated-plan-01": [
+    {
+     "kind": "sync",
+     "state": "completed",
+     "recorded_seconds": 199.234931,
+     "started_at": "2026-11-08T16:13:51.820705Z",
+     "ended_at": "2026-11-08T16:17:11.055636Z"
+    }
+   ]
+  }
+ },
+ "cadence-measurement-20261108/producer-provenance.json": {
+  "bytes": 864,
+  "sha256": "0b94c1675f7d27ef4e29b37141b149660a0770bc6ecb1fd042f79fb06f0c4028",
+  "content": {
+   "base": "39255ca30672a0d978a9e8ad423b389cbbd27244",
+   "baseline_exact_git_archive": true,
+   "package_files": 303,
+   "manifest_sha256": "4918efc924ce90609dab5aa82f752b5f7a8cfc94ee9f3e63ffe7696b028cdeaa",
+   "producers": {
+    "probe.py": "7966e8865d753bd41f7d55399adf98db583ee9a7313922e582e839ca599fddb9",
+    "wrapper.py": "10a66e2a5417e6b76527dda24f62c6dc843aa5110ff16951061b491233a82a25",
+    "audit_inventory.py": "41e1abb0e3ff922259e70168411959b45017c52a0d4119c237e5d63f8f649349",
+    "audit_plan.py": "aeeb4ca7545a6db4da1cfee2046dfdcf185d7f7e3485207439b483c8a8cc6dd1",
+    "report.py": "bc6de1b145a7928d5fa64d7411d2df025663a391bb9aae165628f294f305ac4a",
+    "freeze_candidate.py": "5730a45ed7e2385e8649b9a61371acd06a5541226268e7f5acc6eea5910b05a2",
+    "provenance.py": "b9c920ccc097abd9bf71e1a8d29ccca25cc7a8f962edb9665bca5b3974a2455e"
+   }
+  }
+ }
+}

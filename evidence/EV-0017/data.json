@@ -1,0 +1,1826 @@
+{
+ "executor-simplification-20260929/ceilings/threshold-device-profile-20260930.json": {
+  "bytes": 718,
+  "sha256": "cbff491b2609bd20394717111d068ff2f39dbbcbc99b791be63eff35356d1749",
+  "content": [
+   {
+    "DriveLetter": "E",
+    "DiskNumber": 6,
+    "Model": "INTEL SSDPE21D015TA",
+    "BusType": "NVMe"
+   },
+   {
+    "DriveLetter": "F",
+    "DiskNumber": 3,
+    "Model": "WD_BLACK SN850X 4000GB",
+    "BusType": "NVMe"
+   },
+   {
+    "DriveLetter": "G",
+    "DiskNumber": 5,
+    "Model": "WD_BLACK SN850X 4000GB",
+    "BusType": "NVMe"
+   },
+   {
+    "DriveLetter": "H",
+    "DiskNumber": 4,
+    "Model": "WDC WDS100T2B0C-00PXH0",
+    "BusType": "NVMe"
+   },
+   {
+    "DriveLetter": "L",
+    "DiskNumber": 8,
+    "Model": "Samsung PSSD T7",
+    "BusType": "USB"
+   },
+   {
+    "DriveLetter": "J",
+    "DiskNumber": 0,
+    "Model": "WDC  WUH721816ALE6L4",
+    "BusType": "SATA"
+   }
+  ]
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-commands.json": {
+  "bytes": 4520,
+  "sha256": "a7e8819391b46eefa3b8ec6940053d8dc1caf749595fa9ba6c97174f8937039f",
+  "content": [
+   {
+    "band": "1000x4KiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1000x4KiB",
+    "report": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1000x4KiB.json",
+    "log": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1000x4KiB.log",
+    "arguments": [
+     "-u",
+     "-m",
+     "tools",
+     "executor",
+     "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+     "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1000x4KiB",
+     "--repeat",
+     "5",
+     "--verify-readback",
+     "--json",
+     "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1000x4KiB.json"
+    ]
+   },
+   {
+    "band": "512x128KiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-512x128KiB",
+    "report": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-512x128KiB.json",
+    "log": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-512x128KiB.log",
+    "arguments": [
+     "-u",
+     "-m",
+     "tools",
+     "executor",
+     "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+     "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-512x128KiB",
+     "--repeat",
+     "5",
+     "--verify-readback",
+     "--json",
+     "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-512x128KiB.json"
+    ]
+   },
+   {
+    "band": "64x4MiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-64x4MiB",
+    "report": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-64x4MiB.json",
+    "log": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-64x4MiB.log",
+    "arguments": [
+     "-u",
+     "-m",
+     "tools",
+     "executor",
+     "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+     "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-64x4MiB",
+     "--repeat",
+     "5",
+     "--verify-readback",
+     "--json",
+     "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-64x4MiB.json"
+    ]
+   },
+   {
+    "band": "4x128MiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-4x128MiB",
+    "report": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-4x128MiB.json",
+    "log": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-4x128MiB.log",
+    "arguments": [
+     "-u",
+     "-m",
+     "tools",
+     "executor",
+     "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+     "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-4x128MiB",
+     "--repeat",
+     "5",
+     "--verify-readback",
+     "--json",
+     "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-4x128MiB.json"
+    ]
+   },
+   {
+    "band": "1x4GiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1x4GiB",
+    "report": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1x4GiB.json",
+    "log": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1x4GiB.log",
+    "arguments": [
+     "-u",
+     "-m",
+     "tools",
+     "executor",
+     "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+     "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1x4GiB",
+     "--repeat",
+     "5",
+     "--verify-readback",
+     "--json",
+     "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1x4GiB.json"
+    ]
+   }
+  ]
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-comparison.json": {
+  "bytes": 90969,
+  "sha256": "88a626d4e0d434060c7a743c35a14c50cd9f79634209abc0e6d089c8757c9c43",
+  "content": {
+   "revision": "b9c4ad3eced994e9958e8ad685e2450486284213",
+   "candidate_status": "M namisync/core/evidence.py\n M namisync/core/execution.py\n M namisync/modules/executor/native.py\n M namisync/modules/executor/pipeline.py\n M namisync/modules/executor/runtime.py\n M tests/test_executor_native.py\n M tests/test_executor_pipeline.py\n M tests/test_executor_runtime.py\n M tests/test_tools_executor.py\n M tests/test_tools_executor_settlement_audit.py\n M tests/test_verifier_recorder_integration.py\n M tools/executor_rig.py\n M tools/executor_settlement_audit.py\n M tools/executor_settlement_baseline.json",
+   "provenance_before": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-before.json",
+   "provenance_after": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-after.json",
+   "db05e317_revision": "db05e3173252197f7c44a08dd4f74bda2342cbf0",
+   "preoptimization_revision": "0e4595e4142fc78cfbf8e274832520a4344f3b5e",
+   "rows": [
+    {
+     "band": "1000x4KiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1000x4KiB.json",
+      "sha256": "4be6f04a7669e6b4a26c9ee1361f9287a81c031d39628a7bc0b1d64f02f60fe1",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "da5eb147d81764a17015d222eab483f7733b13efb5f2cc40ab0f8925ccb3a6fc",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1000x4KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       2.5572846999857575,
+       2.7885467000305653,
+       2.756424800027162,
+       2.901667800033465,
+       2.8771367000881582
+      ],
+      "seconds_median": 2.7885467000305653,
+      "seconds_min": 2.5572846999857575,
+      "seconds_max": 2.901667800033465,
+      "throughput_mib_s_raw": [
+       1.527499069627154,
+       1.4008192869630562,
+       1.4171436855311663,
+       1.3462085494262814,
+       1.3576866194367159
+      ],
+      "throughput_mib_s_median": 1.4008192869630562,
+      "backend_seconds_median": 0.10603050258941948,
+      "outside_backend_seconds_median": 2.6825161974411458,
+      "readback_seconds_raw": [
+       1.8388866999885067,
+       1.8527425999054685,
+       1.8317458999808878,
+       1.8611745000816882,
+       1.929115500068292
+      ],
+      "write_mode": "buffered",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1000x4KiB.log",
+      "log_sha256": "9839dbe8874f4d4261fa657aa22eef45e22244eb2fd0ee568a14c9b2303000dd"
+     },
+     "db05e317": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-bench-20260928-db05e317\\fg-1000x4KiB.json",
+      "sha256": "bd63b2eec240e744ccde2612df0050c28702b4cb87497e46e379c35bf98a473f",
+      "n": 3,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "fbd5f8378fc78eaede63bf9a92581f1b42bf00134bdb6fb1cfd29bcab36e67d2",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 3,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+       "target": "G:\\NamiSyncExecutorBench-db05e317-1000x4KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       7.992143000010401,
+       7.980958500003908,
+       8.028230700001586
+      ],
+      "seconds_median": 7.992143000010401,
+      "seconds_min": 7.980958500003908,
+      "seconds_max": 8.028230700001586,
+      "throughput_mib_s_raw": [
+       0.48876127466624614,
+       0.4894462237835327,
+       0.4865642438500463
+      ],
+      "throughput_mib_s_median": 0.48876127466624614,
+      "backend_seconds_median": 0.42825850017834455,
+      "outside_backend_seconds_median": 7.561562199902255,
+      "readback_seconds_raw": [
+       1.888426499965135,
+       1.9229943999671377,
+       1.8885808000341058
+      ]
+     },
+     "preoptimization": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-assessment-20260927\\fg-1000x4KiB.json",
+      "sha256": "c713e8228fa1bf39c9efe2bed043b16aa57b382aa73fee22781cb320481d4dc8",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "36e3de56aebde572a69ab0aad8db8d67840093b5cdb98639b30e6a3dc963b243",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+       "target": "G:\\NamiSyncExecutorAssessment-20260927-1000x4KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       29.744654599984642,
+       28.545511599979363,
+       27.36744100000942,
+       28.248379099997692,
+       27.58461660001194
+      ],
+      "seconds_median": 28.248379099997692,
+      "seconds_min": 27.36744100000942,
+      "seconds_max": 29.744654599984642,
+      "throughput_mib_s_raw": [
+       0.13132611733208752,
+       0.13684287935490438,
+       0.14273347661546637,
+       0.1382822705038081,
+       0.14160972605282862
+      ],
+      "throughput_mib_s_median": 0.1382822705038081,
+      "backend_seconds_median": 0.5123479998437688,
+      "outside_backend_seconds_median": 27.738840900128707,
+      "readback_seconds_raw": [
+       3.161383200029377,
+       2.92854360002093,
+       2.83127099997364,
+       2.836146400019061,
+       2.8400898999534547
+      ]
+     },
+     "seconds_change_vs_db05_percent": -65.10889882692369,
+     "seconds_change_vs_preoptimization_percent": -90.12847183139512
+    },
+    {
+     "band": "512x128KiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-512x128KiB.json",
+      "sha256": "78986406cb039cf84228bd334765d9ca0d9ef98a75e15a4fb660324aefdc4f25",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "f62347bf96459c03d7cf9eaa9b802c82f85ad2d9049f81600f906ae75c479825",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-512x128KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       1.322401599958539,
+       1.4658734999829903,
+       1.5809625000692904,
+       1.473710099933669,
+       1.510846999939531
+      ],
+      "seconds_median": 1.473710099933669,
+      "seconds_min": 1.322401599958539,
+      "seconds_max": 1.5809625000692904,
+      "throughput_mib_s_raw": [
+       48.39679564967751,
+       43.65997475276185,
+       40.48166860200353,
+       43.42780849699043,
+       42.36034489432847
+      ],
+      "throughput_mib_s_median": 43.42780849699043,
+      "backend_seconds_median": 0.08068430016282946,
+      "outside_backend_seconds_median": 1.3930257997708395,
+      "readback_seconds_raw": [
+       2.7483573000645265,
+       2.6097934000426903,
+       2.7343189999228343,
+       2.727124600089155,
+       2.6911595000419766
+      ],
+      "write_mode": "buffered",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-512x128KiB.log",
+      "log_sha256": "38e9a1b3863d5edd726a2cad4836dbfb639857ab73af321136fd5da80f7a648d"
+     },
+     "db05e317": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-bench-20260928-db05e317\\fg-512x128KiB.json",
+      "sha256": "3afadd58bf50dafd4024b13150a63cdbc706fdfd0b5ab97e92076d2e04ac4ce5",
+      "n": 3,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "f1c84d450951c07436c746151c694cdc4c5e180c9fc27788dcacea3bcf02a40c",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 3,
+       "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+       "target": "G:\\NamiSyncExecutorBench-db05e317-512x128KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       6.0579234000178985,
+       4.204863999970257,
+       4.254847800009884
+      ],
+      "seconds_median": 4.254847800009884,
+      "seconds_min": 4.204863999970257,
+      "seconds_max": 6.0579234000178985,
+      "throughput_mib_s_raw": [
+       10.564676337738259,
+       15.220468486127661,
+       15.041666120196199
+      ],
+      "throughput_mib_s_median": 15.041666120196199,
+      "backend_seconds_median": 0.2474318002932705,
+      "outside_backend_seconds_median": 4.008710700378288,
+      "readback_seconds_raw": [
+       2.5989794000051916,
+       2.5397224000189453,
+       2.5830281999660656
+      ]
+     },
+     "preoptimization": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-assessment-20260927\\fg-512x128KiB.json",
+      "sha256": "b3d3540202d1a054d84904a317868674b445b432acd31cfccc7b7a1f29daa7ea",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "1b89cd70986ab5e4ebf14a8b9df90d1ee0484929d37501cdc2b715bd2ef7dc88",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+       "target": "G:\\NamiSyncExecutorAssessment-20260927-512x128KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       16.095696899981704,
+       13.982539899996482,
+       14.095790999999736,
+       14.067709300026763,
+       14.033000600000378
+      ],
+      "seconds_median": 14.067709300026763,
+      "seconds_min": 13.982539899996482,
+      "seconds_max": 16.095696899981704,
+      "throughput_mib_s_raw": [
+       3.976218016386277,
+       4.577136947774139,
+       4.540362438688343,
+       4.5494258258434614,
+       4.560678205914014
+      ],
+      "throughput_mib_s_median": 4.5494258258434614,
+      "backend_seconds_median": 0.2906524002319202,
+      "outside_backend_seconds_median": 13.77461179974489,
+      "readback_seconds_raw": [
+       3.2203993999864906,
+       3.23758389998693,
+       3.1947745999787003,
+       3.1957644000067376,
+       3.2136966999969445
+      ]
+     },
+     "seconds_change_vs_db05_percent": -65.36397612318247,
+     "seconds_change_vs_preoptimization_percent": -89.52416439305534
+    },
+    {
+     "band": "64x4MiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-64x4MiB.json",
+      "sha256": "d54e87802fb07f79d2be183b64551437c633baeef1dc697bcbfe05e0ba79268c",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "cfe33ce317914638ca24e8ff1e6498ca55059edf1f76827c0fe8aa476c141c90",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-64x4MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.32802490005269647,
+       0.3312221000669524,
+       0.3513989000348374,
+       0.38467659999150783,
+       0.3531815999886021
+      ],
+      "seconds_median": 0.3513989000348374,
+      "seconds_min": 0.32802490005269647,
+      "seconds_max": 0.38467659999150783,
+      "throughput_mib_s_raw": [
+       780.4285588041462,
+       772.8952867222713,
+       728.5167938050471,
+       665.4940799769247,
+       724.839572639859
+      ],
+      "throughput_mib_s_median": 728.5167938050471,
+      "backend_seconds_median": 0.10653090011328459,
+      "outside_backend_seconds_median": 0.2438343008980155,
+      "readback_seconds_raw": [
+       0.44099480006843805,
+       0.4427233000751585,
+       0.45751630002632737,
+       0.4537125000497326,
+       0.4426408000290394
+      ],
+      "write_mode": "buffered",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-64x4MiB.log",
+      "log_sha256": "d19ed684b5ef01de9cb0fd389d1b1726bde53e4f4157589c2e8f1a271dd2971a"
+     },
+     "db05e317": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-bench-20260928-db05e317\\fg-64x4MiB.json",
+      "sha256": "69139bf3472c7784319232831c70fcc4de4cdca11ecf1456c4dd6809ba948fb4",
+      "n": 3,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "763e532b3cec64773ffa99f7bc0d940df249f7d0be2a9695fc7c6f6b88761e67",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 3,
+       "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+       "target": "G:\\NamiSyncExecutorBench-db05e317-64x4MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.9358169999904931,
+       0.6395449999836273,
+       0.640958700038027
+      ],
+      "seconds_median": 0.640958700038027,
+      "seconds_min": 0.6395449999836273,
+      "seconds_max": 0.9358169999904931,
+      "throughput_mib_s_raw": [
+       273.5577575558049,
+       400.2845773269336,
+       399.4017086979425
+      ],
+      "throughput_mib_s_median": 399.4017086979425,
+      "backend_seconds_median": 0.1053925997694023,
+      "outside_backend_seconds_median": 0.5407708000275306,
+      "readback_seconds_raw": [
+       0.4500436999951489,
+       0.4666762999841012,
+       0.4236964999581687
+      ]
+     },
+     "preoptimization": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-assessment-20260927\\fg-64x4MiB.json",
+      "sha256": "d0e7d6d3c4e77d016007c60e768987d326f78b792036aeb975bb5ac06e29df35",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "6e8f29c5b3ca6c311f4ba191274fe570fd48915efa2eb39b0ea51f0ba2274a76",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+       "target": "G:\\NamiSyncExecutorAssessment-20260927-64x4MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       2.1065520999836735,
+       2.0507359000039287,
+       2.0191944000544026,
+       2.038804000010714,
+       2.0528954000328667
+      ],
+      "seconds_median": 2.0507359000039287,
+      "seconds_min": 2.0191944000544026,
+      "seconds_max": 2.1065520999836735,
+      "throughput_mib_s_raw": [
+       121.5255962584472,
+       124.83323669298888,
+       126.78323592473447,
+       125.56381093947958,
+       124.70192100186958
+      ],
+      "throughput_mib_s_median": 124.83323669298888,
+      "backend_seconds_median": 0.2042589001939632,
+      "outside_backend_seconds_median": 1.8412818998331204,
+      "readback_seconds_raw": [
+       0.5543860999750905,
+       0.5443674999987707,
+       0.6072956999996677,
+       0.5629713000380434,
+       0.565860100032296
+      ]
+     },
+     "seconds_change_vs_db05_percent": -45.176046441995474,
+     "seconds_change_vs_preoptimization_percent": -82.86474138214656
+    },
+    {
+     "band": "4x128MiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-4x128MiB.json",
+      "sha256": "5c1fe85f02a16e90e5e4a080b673ce75a471d18421dec46cfae69e3cbceeada7",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "6ca3ebd3a8c81b265466a22b3a4a5cd257a9bdebedc5d31d8c0d854fe6ac2382",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-4x128MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.13666040007956326,
+       0.1268117999425158,
+       0.12791029992513359,
+       0.12912610010243952,
+       0.1303313000826165
+      ],
+      "seconds_median": 0.12912610010243952,
+      "seconds_min": 0.1268117999425158,
+      "seconds_max": 0.13666040007956326,
+      "throughput_mib_s_raw": [
+       3746.5132525729123,
+       4037.47916386402,
+       4002.8050930978634,
+       3965.1162669190458,
+       3928.450032152255
+      ],
+      "throughput_mib_s_median": 3965.1162669190458,
+      "backend_seconds_median": 0.11579469998832792,
+      "outside_backend_seconds_median": 0.013331400114111602,
+      "readback_seconds_raw": [
+       0.23589370003901422,
+       0.24047950003296137,
+       0.23711999994702637,
+       0.23626110004261136,
+       0.26677849993575364
+      ],
+      "write_mode": "direct",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-4x128MiB.log",
+      "log_sha256": "6c384f222ff87d64f05c8e2ce231c7ca83c98bcb11630a3e2ef4fe32bdd2fa0f"
+     },
+     "db05e317": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-bench-20260928-db05e317\\fg-4x128MiB.json",
+      "sha256": "bc2d04f57a6868844244bdd8d53a5d6b44b9c358022d872d039b8f5c0a63da9d",
+      "n": 3,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "bed3fee5d897ae10ffccf772f132ca08c2674e5b00611e6b1d75a9b574ab3779",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 3,
+       "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+       "target": "G:\\NamiSyncExecutorBench-db05e317-4x128MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.3394698000047356,
+       0.3108583999564871,
+       0.3090223000035621
+      ],
+      "seconds_median": 0.3108583999564871,
+      "seconds_min": 0.3090223000035621,
+      "seconds_max": 0.3394698000047356,
+      "throughput_mib_s_raw": [
+       1508.2343112490644,
+       1647.0521628872439,
+       1656.8383576010474
+      ],
+      "throughput_mib_s_median": 1647.0521628872439,
+      "backend_seconds_median": 0.16372089996002614,
+      "outside_backend_seconds_median": 0.1497712000273168,
+      "readback_seconds_raw": [
+       0.2715848999796435,
+       0.29248840000946075,
+       0.2759945999714546
+      ]
+     },
+     "preoptimization": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-assessment-20260927\\fg-4x128MiB.json",
+      "sha256": "a70d31cdc9ed6d6d00d9d84bb7d62d584120051c94b5573ed8138c347b526024",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "93780bf2516d177195e38c9d45de834b69f5192ad8a53a64b4d01966545b6895",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+       "target": "G:\\NamiSyncExecutorAssessment-20260927-4x128MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.4448774000047706,
+       0.41358940000645816,
+       0.424064599967096,
+       0.4161300000268966,
+       0.44937170000048354
+      ],
+      "seconds_median": 0.424064599967096,
+      "seconds_min": 0.41358940000645816,
+      "seconds_max": 0.44937170000048354,
+      "throughput_mib_s_raw": [
+       1150.8788713351355,
+       1237.9427518983928,
+       1207.3632178675775,
+       1230.3847354598488,
+       1139.368589520544
+      ],
+      "throughput_mib_s_median": 1207.3632178675775,
+      "backend_seconds_median": 0.19105849997140467,
+      "outside_backend_seconds_median": 0.23939509992487729,
+      "readback_seconds_raw": [
+       0.3149517999845557,
+       0.3132451999699697,
+       0.3146817000233568,
+       0.31563699996331707,
+       0.33351859997492284
+      ]
+     },
+     "seconds_change_vs_db05_percent": -58.461440925992626,
+     "seconds_change_vs_preoptimization_percent": -69.55037036516167
+    },
+    {
+     "band": "1x4GiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1x4GiB.json",
+      "sha256": "79ab5b2be5d35ca64803c260b8a00a1563fa63f6e0aeb15b31abaa9ece2de993",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "ca9b9b7e70f6f610f61473e004f6d0dafd295ce05f348ab1f911f7dc34196d1c",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1x4GiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.7783701999578625,
+       0.9092871999600902,
+       1.0587912999326363,
+       0.8494042999809608,
+       1.1349183999700472
+      ],
+      "seconds_median": 0.9092871999600902,
+      "seconds_min": 0.7783701999578625,
+      "seconds_max": 1.1349183999700472,
+      "throughput_mib_s_raw": [
+       5262.277512964575,
+       4504.6273610579565,
+       3868.5621994255152,
+       4822.203042875826,
+       3609.070044249967
+      ],
+      "throughput_mib_s_median": 4504.6273610579565,
+      "backend_seconds_median": 0.9036603999556974,
+      "outside_backend_seconds_median": 0.005626800004392862,
+      "readback_seconds_raw": [
+       1.73940149997361,
+       1.8142270999960601,
+       1.7974034000653774,
+       1.7982946999836713,
+       1.8555803999770433
+      ],
+      "write_mode": "direct",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1x4GiB.log",
+      "log_sha256": "626048365ac3184178afe271a22b66537bdc60d759f884e8b62aa7e988d117a9"
+     },
+     "db05e317": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-bench-20260928-db05e317\\fg-1x4GiB.json",
+      "sha256": "22eec487918750420282c5e387d2ad7a973085293167356d98c432172a3f16cc",
+      "n": 3,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "3dab3bd425c00fe5a205032edfc2841f0f32c7e06438d4497ac334d6f47af460",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 3,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+       "target": "G:\\NamiSyncExecutorBench-db05e317-1x4GiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       2.11926249996759,
+       1.8814375000074506,
+       1.9556904000346549
+      ],
+      "seconds_median": 1.9556904000346549,
+      "seconds_min": 1.8814375000074506,
+      "seconds_max": 2.11926249996759,
+      "throughput_mib_s_raw": [
+       1932.7478309377157,
+       2177.058764898531,
+       2094.4010360368998
+      ],
+      "throughput_mib_s_median": 2094.4010360368998,
+      "backend_seconds_median": 1.4216768000042066,
+      "outside_backend_seconds_median": 0.5180757999187335,
+      "readback_seconds_raw": [
+       2.017435399990063,
+       2.135562800045591,
+       1.9946940999943763
+      ]
+     },
+     "preoptimization": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-assessment-20260927\\fg-1x4GiB.json",
+      "sha256": "c811ed1a7073ef43530d040ac820e014c21045e49c0d71b5ab35d3171a08a546",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "22165bcd95478382e7f1da9edb00bac3cdfa970e4ea6a7f59fac332cc887b987",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+       "target": "G:\\NamiSyncExecutorAssessment-20260927-1x4GiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       2.3854040000005625,
+       2.18411059997743,
+       2.379161400021985,
+       2.28664150001714,
+       2.103930399985984
+      ],
+      "seconds_median": 2.28664150001714,
+      "seconds_min": 2.103930399985984,
+      "seconds_max": 2.3854040000005625,
+      "throughput_mib_s_raw": [
+       1717.1095546075358,
+       1875.3629051762887,
+       1721.6150194611218,
+       1791.2733587531309,
+       1946.83246177121
+      ],
+      "throughput_mib_s_median": 1791.2733587531309,
+      "backend_seconds_median": 1.5915062999702059,
+      "outside_backend_seconds_median": 0.7329459000029601,
+      "readback_seconds_raw": [
+       2.1088348000193946,
+       2.1787238999968395,
+       2.2957988000125624,
+       2.2654343000031076,
+       2.160749000031501
+      ]
+     },
+     "seconds_change_vs_db05_percent": -53.50556509639881,
+     "seconds_change_vs_preoptimization_percent": -60.23481599746727
+    }
+   ],
+   "limits": [
+    "Diagnostic repeated-source/static-plan observations; large target writes are direct, source reads buffered. No cold-cache or device-peak claim.",
+    "Current/preoptimization n=5; db05e317 n=3. Every raw sample retained; no warmup or outlier discard.",
+    "Historical runs are sequential observations, not interleaved causal controls.",
+    "Target root spellings and plan fingerprints differ; policy, operation mix, source identity and flags are checked.",
+    "Normal rig metrics only, with no replaced stat/resolve methods; held-root diagnostics alone do not prove fast-path selection.",
+    "Before/after stat identity matches the original manifest; this does not exclude historical same-stat content replacement.",
+    "Rig uses in-memory recorder/event seams; no SQLite, workflow or GUI throughput is measured."
+   ],
+   "candidate_dependency_sha256": {
+    "count": 493,
+    "mapping_sha256": "b6b673a378d81514442269815c0fddaf0e3d728dcfc202182cf0e35e81d5c3ad"
+   }
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-cpu.json": {
+  "bytes": 116,
+  "sha256": "62ffdf50d45490d604d7be49e85346b706f7b1d031b71b5d78b3d25f5d641561",
+  "content": {
+   "Name": "13th Gen Intel(R) Core(TM) i7-13700K",
+   "NumberOfCores": 16,
+   "NumberOfLogicalProcessors": 24
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-disks.json": {
+  "bytes": 259,
+  "sha256": "a1eb7b8809a4d9dbdaa803d88c726ee9ab01aca1684ba9df801f7bd87d3f5c76",
+  "content": [
+   {
+    "Number": 3,
+    "FriendlyName": "WD_BLACK SN850X 4000GB",
+    "BusType": "NVMe",
+    "Size": 4000787030016
+   },
+   {
+    "Number": 5,
+    "FriendlyName": "WD_BLACK SN850X 4000GB",
+    "BusType": "NVMe",
+    "Size": 4000787030016
+   }
+  ]
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-drive-map.json": {
+  "bytes": 173,
+  "sha256": "7ea72edd722d244d88be63aa71032fcc506cc1fe026f2eea5a50f4cefb834616",
+  "content": [
+   {
+    "DriveLetter": "F",
+    "DiskNumber": 3,
+    "PartitionNumber": 2
+   },
+   {
+    "DriveLetter": "G",
+    "DiskNumber": 5,
+    "PartitionNumber": 2
+   }
+  ]
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-fg-1000x4KiB.json": {
+  "bytes": 11862,
+  "sha256": "4be6f04a7669e6b4a26c9ee1361f9287a81c031d39628a7bc0b1d64f02f60fe1",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.060891599976457655,
+    "preflight_seconds": 0.5540796000277624,
+    "scan_seconds": 0.0694569000042975
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.10933589993510395
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "da5eb147d81764a17015d222eab483f7733b13efb5f2cc40ab0f8925ccb3a6fc",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1000x4KiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 2.901668,
+     "median": 2.788547,
+     "minimum": 2.557285
+    },
+    "throughput_mib_s": {
+     "median": 1.401
+    }
+   },
+   "samples_dropped": 5
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-fg-1x4GiB.json": {
+  "bytes": 11915,
+  "sha256": "79ab5b2be5d35ca64803c260b8a00a1563fa63f6e0aeb15b31abaa9ece2de993",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.00034460006281733513,
+    "preflight_seconds": 0.002374399919062853,
+    "scan_seconds": 0.005575599963776767
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.0043518999591469765
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "ca9b9b7e70f6f610f61473e004f6d0dafd295ce05f348ab1f911f7dc34196d1c",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1x4GiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 1.134918,
+     "median": 0.909287,
+     "minimum": 0.77837
+    },
+    "throughput_mib_s": {
+     "median": 4504.627
+    }
+   },
+   "samples_dropped": 5
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-fg-4x128MiB.json": {
+  "bytes": 11877,
+  "sha256": "5c1fe85f02a16e90e5e4a080b673ce75a471d18421dec46cfae69e3cbceeada7",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.000582600012421608,
+    "preflight_seconds": 0.004430099972523749,
+    "scan_seconds": 0.006858600070700049
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.004391100024804473
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "6ca3ebd3a8c81b265466a22b3a4a5cd257a9bdebedc5d31d8c0d854fe6ac2382",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-4x128MiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 0.13666,
+     "median": 0.129126,
+     "minimum": 0.126812
+    },
+    "throughput_mib_s": {
+     "median": 3965.116
+    }
+   },
+   "samples_dropped": 5
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-fg-512x128KiB.json": {
+  "bytes": 11874,
+  "sha256": "78986406cb039cf84228bd334765d9ca0d9ef98a75e15a4fb660324aefdc4f25",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.031073000049218535,
+    "preflight_seconds": 0.28288039995823056,
+    "scan_seconds": 0.03788810002151877
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.03887580009177327
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "f62347bf96459c03d7cf9eaa9b802c82f85ad2d9049f81600f906ae75c479825",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-512x128KiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 1.580963,
+     "median": 1.47371,
+     "minimum": 1.322402
+    },
+    "throughput_mib_s": {
+     "median": 43.428
+    }
+   },
+   "samples_dropped": 5
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-fg-64x4MiB.json": {
+  "bytes": 11880,
+  "sha256": "d54e87802fb07f79d2be183b64551437c633baeef1dc697bcbfe05e0ba79268c",
+  "content": {
+   "batch_preparation": {
+    "plan_seconds": 0.004323599976487458,
+    "preflight_seconds": 0.03635549999307841,
+    "scan_seconds": 0.009666599915362895
+   },
+   "batch_validation": {
+    "source_recheck_seconds": 0.007992599974386394
+   },
+   "command": "executor",
+   "configuration": {
+    "correspondence": "empty",
+    "deletion_policy": "trash",
+    "diagnostics": true,
+    "plan_fingerprint": "cfe33ce317914638ca24e8ff1e6498ca55059edf1f76827c0fe8aa476c141c90",
+    "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+    "preflight": true,
+    "preparation": "once",
+    "repeat": 5,
+    "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+    "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-64x4MiB",
+    "template": null,
+    "verify_readback": true,
+    "workspace_retained": false
+   },
+   "format": "namisync-tools-benchmark-1",
+   "summary": {
+    "n": 5,
+    "seconds": {
+     "maximum": 0.384677,
+     "median": 0.351399,
+     "minimum": 0.328025
+    },
+    "throughput_mib_s": {
+     "median": 728.517
+    }
+   },
+   "samples_dropped": 5
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-os.json": {
+  "bytes": 141,
+  "sha256": "6fa96902986effa0cd6babca84ba6faf9e16ef2fabf099bac4c30ae3974efc1a",
+  "content": {
+   "Caption": "Microsoft Windows 11 Pro",
+   "Version": "10.0.26200",
+   "BuildNumber": "26200",
+   "TotalVisibleMemorySize": 66785364
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-predecessor-comparison.json": {
+  "bytes": 23541,
+  "sha256": "01450c6174e75006a3d4ec4ca7bca8578e64d122eaa39a8ce44bd44b73722bc7",
+  "content": {
+   "candidate_revision": "b9c4ad3eced994e9958e8ad685e2450486284213",
+   "predecessor_measurement_head": "6157226f523ea0df0643732ee9d862aaed77b97a",
+   "predecessor_accepted_commit": "878f15ef522f675d5a3111a25622cd3be60af884",
+   "predecessor_measurement_prefix": "build/executor-simplification-20260929/measurements/result7-6157226f-20260930-170339-3d6968b5",
+   "current_comparison": "build/executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-comparison.json",
+   "current_comparison_sha256": "88a626d4e0d434060c7a743c35a14c50cd9f79634209abc0e6d089c8757c9c43",
+   "predecessor_provenance_sha256": {
+    "build\\executor-simplification-20260929\\measurements\\result7-6157226f-20260930-170339-3d6968b5-before.json": "7c04afb409f83af09036e9b67a76dfe0b7817bc384f4cea778c914a1f45ffefa",
+    "build\\executor-simplification-20260929\\measurements\\result7-6157226f-20260930-170339-3d6968b5-after.json": "3248126ab26764aefd511c8e41f431c29b764d64277e0412e6e57ef8de3c8928"
+   },
+   "summary_driver_sha256": "dbc1da8256682772bca4606e16a3a4282e1b55f0d907c346efd23d5786700023",
+   "rows": [
+    {
+     "band": "1000x4KiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1000x4KiB.json",
+      "sha256": "4be6f04a7669e6b4a26c9ee1361f9287a81c031d39628a7bc0b1d64f02f60fe1",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "da5eb147d81764a17015d222eab483f7733b13efb5f2cc40ab0f8925ccb3a6fc",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1000x4KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       2.5572846999857575,
+       2.7885467000305653,
+       2.756424800027162,
+       2.901667800033465,
+       2.8771367000881582
+      ],
+      "seconds_median": 2.7885467000305653,
+      "seconds_min": 2.5572846999857575,
+      "seconds_max": 2.901667800033465,
+      "throughput_mib_s_raw": [
+       1.527499069627154,
+       1.4008192869630562,
+       1.4171436855311663,
+       1.3462085494262814,
+       1.3576866194367159
+      ],
+      "throughput_mib_s_median": 1.4008192869630562,
+      "backend_seconds_median": 0.10603050258941948,
+      "outside_backend_seconds_median": 2.6825161974411458,
+      "readback_seconds_raw": [
+       1.8388866999885067,
+       1.8527425999054685,
+       1.8317458999808878,
+       1.8611745000816882,
+       1.929115500068292
+      ],
+      "write_mode": "buffered",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1000x4KiB.log",
+      "log_sha256": "9839dbe8874f4d4261fa657aa22eef45e22244eb2fd0ee568a14c9b2303000dd"
+     },
+     "predecessor": {
+      "path": "build\\executor-simplification-20260929\\measurements\\result7-6157226f-20260930-170339-3d6968b5-fg-1000x4KiB.json",
+      "sha256": "bcf0c0c6f5440bc3d28bc8771143741358ce8bb509df46a6596513440089ecb6",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "48136c6b0202b3658c39ec6be73df6f70ba3d5420b07b84e3acf52ff7e6d11d4",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1000x4KiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-170339-3d6968b5-1000x4KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       3.872924100025557,
+       3.342163800029084,
+       3.340741099906154,
+       3.2421869999961928,
+       3.3132203000131994
+      ],
+      "seconds_median": 3.340741099906154,
+      "seconds_min": 3.2421869999961928,
+      "seconds_max": 3.872924100025557,
+      "throughput_mib_s_raw": [
+       1.0086048420040619,
+       1.168778741474612,
+       1.1692764818290564,
+       1.204819462913332,
+       1.1789889129872946
+      ],
+      "throughput_mib_s_median": 1.1692764818290564,
+      "backend_seconds_median": 0.4125268023926765,
+      "outside_backend_seconds_median": 2.9282142975134775,
+      "readback_seconds_raw": [
+       1.8168561999918893,
+       1.8087516999803483,
+       1.8699793999549001,
+       1.7915530999889597,
+       1.8227552000898868
+      ]
+     },
+     "seconds_change_vs_predecessor_percent": -16.529098884409233,
+     "ranges_overlap": false
+    },
+    {
+     "band": "512x128KiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-512x128KiB.json",
+      "sha256": "78986406cb039cf84228bd334765d9ca0d9ef98a75e15a4fb660324aefdc4f25",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "f62347bf96459c03d7cf9eaa9b802c82f85ad2d9049f81600f906ae75c479825",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-512x128KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       1.322401599958539,
+       1.4658734999829903,
+       1.5809625000692904,
+       1.473710099933669,
+       1.510846999939531
+      ],
+      "seconds_median": 1.473710099933669,
+      "seconds_min": 1.322401599958539,
+      "seconds_max": 1.5809625000692904,
+      "throughput_mib_s_raw": [
+       48.39679564967751,
+       43.65997475276185,
+       40.48166860200353,
+       43.42780849699043,
+       42.36034489432847
+      ],
+      "throughput_mib_s_median": 43.42780849699043,
+      "backend_seconds_median": 0.08068430016282946,
+      "outside_backend_seconds_median": 1.3930257997708395,
+      "readback_seconds_raw": [
+       2.7483573000645265,
+       2.6097934000426903,
+       2.7343189999228343,
+       2.727124600089155,
+       2.6911595000419766
+      ],
+      "write_mode": "buffered",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-512x128KiB.log",
+      "log_sha256": "38e9a1b3863d5edd726a2cad4836dbfb639857ab73af321136fd5da80f7a648d"
+     },
+     "predecessor": {
+      "path": "build\\executor-simplification-20260929\\measurements\\result7-6157226f-20260930-170339-3d6968b5-fg-512x128KiB.json",
+      "sha256": "0e14413674be472281329c780dc4d335ac134d21919846a25755df17257cd3ac",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "e526ec4531ef457dffbb4095f92db905efc6d7ae72851fe78c2ec97eeef23e1e",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\512x128KiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-170339-3d6968b5-512x128KiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       3.6109005000907928,
+       1.7104040998965502,
+       1.7267555000726134,
+       1.740343900048174,
+       1.755758099956438
+      ],
+      "seconds_median": 1.740343900048174,
+      "seconds_min": 1.7104040998965502,
+      "seconds_max": 3.6109005000907928,
+      "throughput_mib_s_raw": [
+       17.72411064729997,
+       37.41805810911637,
+       37.06373021386565,
+       36.77434097837125,
+       36.45149067037646
+      ],
+      "throughput_mib_s_median": 36.77434097837125,
+      "backend_seconds_median": 0.2308905003592372,
+      "outside_backend_seconds_median": 1.5111618001246825,
+      "readback_seconds_raw": [
+       2.7069901999784634,
+       2.7145489000249654,
+       2.6431589999701828,
+       2.6781072000740096,
+       2.7571707000024617
+      ]
+     },
+     "seconds_change_vs_predecessor_percent": -15.320753565265143,
+     "ranges_overlap": false
+    },
+    {
+     "band": "64x4MiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-64x4MiB.json",
+      "sha256": "d54e87802fb07f79d2be183b64551437c633baeef1dc697bcbfe05e0ba79268c",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "cfe33ce317914638ca24e8ff1e6498ca55059edf1f76827c0fe8aa476c141c90",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-64x4MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.32802490005269647,
+       0.3312221000669524,
+       0.3513989000348374,
+       0.38467659999150783,
+       0.3531815999886021
+      ],
+      "seconds_median": 0.3513989000348374,
+      "seconds_min": 0.32802490005269647,
+      "seconds_max": 0.38467659999150783,
+      "throughput_mib_s_raw": [
+       780.4285588041462,
+       772.8952867222713,
+       728.5167938050471,
+       665.4940799769247,
+       724.839572639859
+      ],
+      "throughput_mib_s_median": 728.5167938050471,
+      "backend_seconds_median": 0.10653090011328459,
+      "outside_backend_seconds_median": 0.2438343008980155,
+      "readback_seconds_raw": [
+       0.44099480006843805,
+       0.4427233000751585,
+       0.45751630002632737,
+       0.4537125000497326,
+       0.4426408000290394
+      ],
+      "write_mode": "buffered",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-64x4MiB.log",
+      "log_sha256": "d19ed684b5ef01de9cb0fd389d1b1726bde53e4f4157589c2e8f1a271dd2971a"
+     },
+     "predecessor": {
+      "path": "build\\executor-simplification-20260929\\measurements\\result7-6157226f-20260930-170339-3d6968b5-fg-64x4MiB.json",
+      "sha256": "cd8ecc198b9ca38f2f1d9fe746a1aa255a1eda020c96351d31bc25f4e6785fa8",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "0c2bd0f99bec823404971bbd2adab53f86cee054d2fda4f4641ed1820376d548",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\64x4MiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-170339-3d6968b5-64x4MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.6142745000543073,
+       0.33738410007208586,
+       0.3318368000909686,
+       0.35573149996344,
+       0.37550039996858686
+      ],
+      "seconds_median": 0.35573149996344,
+      "seconds_min": 0.3318368000909686,
+      "seconds_max": 0.6142745000543073,
+      "throughput_mib_s_raw": [
+       416.7517941528866,
+       758.7790887161036,
+       771.4635626001126,
+       719.6438887934023,
+       681.756930276016
+      ],
+      "throughput_mib_s_median": 719.6438887934023,
+      "backend_seconds_median": 0.10229039995465428,
+      "outside_backend_seconds_median": 0.25212519988417625,
+      "readback_seconds_raw": [
+       0.421042799949646,
+       0.4357831999659538,
+       0.41736620001029223,
+       0.4516122000059113,
+       0.47020310000516474
+      ]
+     },
+     "seconds_change_vs_predecessor_percent": -1.2179410395334322,
+     "ranges_overlap": true
+    },
+    {
+     "band": "4x128MiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-4x128MiB.json",
+      "sha256": "5c1fe85f02a16e90e5e4a080b673ce75a471d18421dec46cfae69e3cbceeada7",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "6ca3ebd3a8c81b265466a22b3a4a5cd257a9bdebedc5d31d8c0d854fe6ac2382",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-4x128MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.13666040007956326,
+       0.1268117999425158,
+       0.12791029992513359,
+       0.12912610010243952,
+       0.1303313000826165
+      ],
+      "seconds_median": 0.12912610010243952,
+      "seconds_min": 0.1268117999425158,
+      "seconds_max": 0.13666040007956326,
+      "throughput_mib_s_raw": [
+       3746.5132525729123,
+       4037.47916386402,
+       4002.8050930978634,
+       3965.1162669190458,
+       3928.450032152255
+      ],
+      "throughput_mib_s_median": 3965.1162669190458,
+      "backend_seconds_median": 0.11579469998832792,
+      "outside_backend_seconds_median": 0.013331400114111602,
+      "readback_seconds_raw": [
+       0.23589370003901422,
+       0.24047950003296137,
+       0.23711999994702637,
+       0.23626110004261136,
+       0.26677849993575364
+      ],
+      "write_mode": "direct",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-4x128MiB.log",
+      "log_sha256": "6c384f222ff87d64f05c8e2ce231c7ca83c98bcb11630a3e2ef4fe32bdd2fa0f"
+     },
+     "predecessor": {
+      "path": "build\\executor-simplification-20260929\\measurements\\result7-6157226f-20260930-170339-3d6968b5-fg-4x128MiB.json",
+      "sha256": "39ff4688fa71d0772afd2672f2f3313db6b071408eeec58de1b2ec3e7c5f4d9d",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "2177fb4d9aa3c5fc4f87f9ecaeb43f1a895dde3a882bb252993189432a0c4667",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\4x128MiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-170339-3d6968b5-4x128MiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.3193510000128299,
+       0.29033919994253665,
+       0.29031419998500496,
+       0.2909804000519216,
+       0.28566850000061095
+      ],
+      "seconds_median": 0.29033919994253665,
+      "seconds_min": 0.28566850000061095,
+      "seconds_max": 0.3193510000128299,
+      "throughput_mib_s_raw": [
+       1603.2515945759694,
+       1763.4546079252611,
+       1763.606465086604,
+       1759.5686854119397,
+       1792.2872140222146
+      ],
+      "throughput_mib_s_median": 1763.4546079252611,
+      "backend_seconds_median": 0.15569779986981302,
+      "outside_backend_seconds_median": 0.13464140007272363,
+      "readback_seconds_raw": [
+       0.28812509996350855,
+       0.2816587999695912,
+       0.287434299942106,
+       0.28359939996153116,
+       0.29373140004463494
+      ]
+     },
+     "seconds_change_vs_predecessor_percent": -55.52577808026064,
+     "ranges_overlap": false
+    },
+    {
+     "band": "1x4GiB",
+     "current": {
+      "path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1x4GiB.json",
+      "sha256": "79ab5b2be5d35ca64803c260b8a00a1563fa63f6e0aeb15b31abaa9ece2de993",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "ca9b9b7e70f6f610f61473e004f6d0dafd295ce05f348ab1f911f7dc34196d1c",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-201114-989e90d9-1x4GiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       0.7783701999578625,
+       0.9092871999600902,
+       1.0587912999326363,
+       0.8494042999809608,
+       1.1349183999700472
+      ],
+      "seconds_median": 0.9092871999600902,
+      "seconds_min": 0.7783701999578625,
+      "seconds_max": 1.1349183999700472,
+      "throughput_mib_s_raw": [
+       5262.277512964575,
+       4504.6273610579565,
+       3868.5621994255152,
+       4822.203042875826,
+       3609.070044249967
+      ],
+      "throughput_mib_s_median": 4504.6273610579565,
+      "backend_seconds_median": 0.9036603999556974,
+      "outside_backend_seconds_median": 0.005626800004392862,
+      "readback_seconds_raw": [
+       1.73940149997361,
+       1.8142270999960601,
+       1.7974034000653774,
+       1.7982946999836713,
+       1.8555803999770433
+      ],
+      "write_mode": "direct",
+      "fallback_reasons": {},
+      "log_path": "F:\\GitHubRepositories\\NamiSync\\build\\executor-simplification-20260929\\measurements\\result8-b9c4ad3e-20260930-201114-989e90d9-fg-1x4GiB.log",
+      "log_sha256": "626048365ac3184178afe271a22b66537bdc60d759f884e8b62aa7e988d117a9"
+     },
+     "predecessor": {
+      "path": "build\\executor-simplification-20260929\\measurements\\result7-6157226f-20260930-170339-3d6968b5-fg-1x4GiB.json",
+      "sha256": "3f737c43b9169fd27b66a3704b0d5fd593575cd7920e68ef2581e1ef1eea7cf0",
+      "n": 5,
+      "configuration": {
+       "correspondence": "empty",
+       "deletion_policy": "trash",
+       "diagnostics": true,
+       "plan_fingerprint": "0a654a66807695c1e6d058d4b05950e0906296107fd4ad3c9ee6f62056c4bb31",
+       "policy_fingerprint": "49affee346359eb0ff8670f883e1ef6db9b96bf39a7afb01f1246e065d20dee3",
+       "preflight": true,
+       "preparation": "once",
+       "repeat": 5,
+       "source": "F:\\NamiSyncExecutorBenchSource\\1x4GiB",
+       "target": "G:\\NamiSyncExecutorSimplification-20260930-170339-3d6968b5-1x4GiB",
+       "template": null,
+       "verify_readback": true,
+       "workspace_retained": false
+      },
+      "seconds_raw": [
+       1.9113774000434205,
+       2.293672399944626,
+       2.177148599992506,
+       1.9239907999290153,
+       1.8831440000794828
+      ],
+      "seconds_median": 1.9239907999290153,
+      "seconds_min": 1.8831440000794828,
+      "seconds_max": 2.293672399944626,
+      "throughput_mib_s_raw": [
+       2142.9572202260797,
+       1785.7824858069907,
+       1881.359866760633,
+       2128.9083087877134,
+       2175.0859200502555
+      ],
+      "throughput_mib_s_median": 2128.9083087877134,
+      "backend_seconds_median": 1.427597300033085,
+      "outside_backend_seconds_median": 0.6457951001357287,
+      "readback_seconds_raw": [
+       2.281432899995707,
+       2.4184871000470594,
+       2.274770800024271,
+       2.197671200032346,
+       2.503009599982761
+      ]
+     },
+     "seconds_change_vs_predecessor_percent": -52.73952453443967,
+     "ranges_overlap": false
+    }
+   ],
+   "limits": [
+    "Diagnostic repeated-source/static-plan observations; large target writes are direct, source reads buffered. No cold-cache or device-peak claim.",
+    "Current/preoptimization n=5; db05e317 n=3. Every raw sample retained; no warmup or outlier discard.",
+    "Historical runs are sequential observations, not interleaved causal controls.",
+    "Target root spellings and plan fingerprints differ; policy, operation mix, source identity and flags are checked.",
+    "Normal rig metrics only, with no replaced stat/resolve methods; held-root diagnostics alone do not prove fast-path selection.",
+    "Before/after stat identity matches the original manifest; this does not exclude historical same-stat content replacement.",
+    "Rig uses in-memory recorder/event seams; no SQLite, workflow or GUI throughput is measured.",
+    "Immediate predecessor and current each retain five samples. Per-band range overlap is reported.",
+    "This is a sequential historical endpoint comparison, not an interleaved causal control.",
+    "Predecessor accepted commit is caller-supplied attribution; measurement HEAD, worktree status and physical hashes remain separately recorded."
+   ]
+  }
+ },
+ "executor-simplification-20260929/measurements/result8-b9c4ad3e-20260930-201114-989e90d9-volumes.json": {
+  "bytes": 323,
+  "sha256": "12ccd13e711ec8675cfd4a23e8f8db4f3d91782872cc34f4b191cda0b7f2c5ec",
+  "content": [
+   {
+    "DriveLetter": "G",
+    "FileSystem": "NTFS",
+    "Size": 4000768323584,
+    "SizeRemaining": 2474049728512,
+    "HealthStatus": "Healthy"
+   },
+   {
+    "DriveLetter": "F",
+    "FileSystem": "NTFS",
+    "Size": 4000768323584,
+    "SizeRemaining": 1757433192448,
+    "HealthStatus": "Healthy"
+   }
+  ]
+ },
+ "executor-simplification-20260929/differential/result3a-archive-outcomes.json": {
+  "derived_from": {
+   "differential/result3a-archive-baseline.json": "86a5c4577d27eaa6d909762389ec79e78b7b239a59d1d8a5b21089b991d7113b",
+   "differential/result3a-archive-candidate.json": "bce0aea8b928fa3b4e6b1118280baf044e406ddb848aa45bff99e573feed2436"
+  },
+  "content": {
+   "cases": {
+    "hardlink_update": {
+     "baseline": {
+      "status": "failed",
+      "outcome": "failed",
+      "reason": "target-drift",
+      "recording": "ok",
+      "replace_calls": 0
+     },
+     "candidate": {
+      "status": "failed",
+      "outcome": "failed",
+      "reason": "target-drift",
+      "recording": "ok",
+      "replace_calls": 0
+     },
+     "equal": true
+    },
+    "move": {
+     "baseline": {
+      "status": "failed",
+      "outcome": "failed",
+      "reason": "target-drift",
+      "recording": "degraded",
+      "replace_calls": 0
+     },
+     "candidate": {
+      "status": "failed",
+      "outcome": "failed",
+      "reason": "target-drift",
+      "recording": "degraded",
+      "replace_calls": 0
+     },
+     "equal": true
+    },
+    "move_update": {
+     "baseline": {
+      "status": "completed",
+      "outcome": "succeeded",
+      "reason": null,
+      "recording": "ok",
+      "replace_calls": 0
+     },
+     "candidate": {
+      "status": "completed",
+      "outcome": "succeeded",
+      "reason": null,
+      "recording": "ok",
+      "replace_calls": 0
+     },
+     "equal": true
+    },
+    "move_update_committed_trash_retry": {
+     "baseline": {
+      "status": "failed",
+      "outcome": "failed",
+      "reason": "target-missing",
+      "recording": "degraded",
+      "replace_calls": 0
+     },
+     "candidate": {
+      "status": "failed",
+      "outcome": "failed",
+      "reason": "target-missing",
+      "recording": "degraded",
+      "replace_calls": 0
+     },
+     "equal": true
+    },
+    "recase": {
+     "baseline": {
+      "status": "failed",
+      "outcome": "failed",
+      "reason": "target-drift",
+      "recording": "degraded",
+      "replace_calls": 0
+     },
+     "candidate": {
+      "status": "failed",
+      "outcome": "failed",
+      "reason": "target-drift",
+      "recording": "degraded",
+      "replace_calls": 0
+     },
+     "equal": true
+    }
+   },
+   "all_equal": true,
+   "fixture_removed": [
+    true,
+    true
+   ]
+  }
+ }
+}

@@ -1,0 +1,83 @@
+{
+ "coverage-study-20261106/fixed-plan.json": {
+  "bytes": 780,
+  "sha256": "17adcd0dc4d0e0101a6e6af5db95dcdc1f3c076c9a9d8d8b2c0347906b694aa4",
+  "content": {
+   "source": "F:\\NamiSync-resource-scale-100k-7f8dda2c\\source",
+   "target": "H:\\test_dir\\NamiSync-fixed-plan-730f5a0d",
+   "terminal": {
+    "headline": "success",
+    "filesystem": "completed",
+    "integrity": "not-run",
+    "recording": "ok",
+    "audit": "ok",
+    "disposition": "ran",
+    "canceled": false,
+    "phases": [],
+    "bytes_done": "0",
+    "bytes_total": "0",
+    "error": null,
+    "recording_degraded_items": 0,
+    "recording_issues": [],
+    "omitted_detail_count": 0,
+    "presentation_omitted_detail_count": 0,
+    "review_refusal": null
+   },
+   "operations": {
+    "mkdir": 1000,
+    "copy": 100000
+   },
+   "observations": {
+    "source": 101000,
+    "target": 101000
+   },
+   "can_commit": true,
+   "target_removed": true
+  }
+ },
+ "coverage-study-20261106/refusal.json": {
+  "bytes": 952,
+  "sha256": "c03eab6cd20c491a952232aa6ea6078fc9cf0ac529266bb35c257ca83692c601",
+  "content": {
+   "operations": {
+    "mkdir": 1000,
+    "copy": 100000
+   },
+   "subjects": 202000,
+   "parents": 1001,
+   "by_root": {
+    "source": 101000,
+    "target": 101000
+   },
+   "first_excess": 120001,
+   "caller": "preflight.py:733:_observe",
+   "terminal": {
+    "headline": "refused",
+    "filesystem": "refused",
+    "integrity": "not-run",
+    "recording": "ok",
+    "audit": "ok",
+    "disposition": "unrun",
+    "canceled": false,
+    "phases": [],
+    "bytes_done": "0",
+    "bytes_total": "0",
+    "error": null,
+    "recording_degraded_items": 0,
+    "recording_issues": [],
+    "omitted_detail_count": 0,
+    "presentation_omitted_detail_count": 0,
+    "review_refusal": {
+     "reason": "review_fact_limit_exceeded",
+     "tree_kind": "plan",
+     "population": "domain",
+     "axis": "rows",
+     "row_limit": 120000,
+     "byte_limit": null
+    }
+   },
+   "absent_review": true,
+   "target_removed": true
+  }
+ }
+}

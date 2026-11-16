@@ -1,0 +1,16 @@
+{
+ "r2-notices-20261109/python-install-receipt.json": {
+  "bytes": 3980,
+  "sha256": "bf7ca5ecb990f61443ad5696ce56d5e36af465fb6fe4c1b4c13e71595bd2ae0e",
+  "content": {
+   "id": "pythoncore-3.13-64",
+   "sort-version": "3.13.17",
+   "display-name": "Python 3.13.17",
+   "url": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-amd64.zip",
+   "hash": {
+    "sha256": "b26ca4b4ee51e157836049934d2b8eabd55939be296f3130254251b6df96ec2f"
+   },
+   "source": "https://www.python.org/ftp/python/index-windows.json"
+  }
+ }
+}

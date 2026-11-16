@@ -1,0 +1,211 @@
+{
+ "handle-relative-investigation-20261021/final-profile/run_c5df5b36a3254270b98b92acbd468846/analysis.json": {
+  "bytes": 8451,
+  "sha256": "525a66782fc910880400bb0919282b83b3618f22a86989af3f17045e37d68bf8",
+  "content": {
+   "revision": "17822b1a4f5b660405384e163224b16c447d8e8e",
+   "tables": {
+    "noop90": {
+     "current": {
+      "wall_ms": {
+       "samples": [
+        2633.0618,
+        2625.6526,
+        2660.3506
+       ],
+       "minimum": 2625.6526,
+       "maximum": 2660.3506,
+       "median": 2633.0618
+      },
+      "observer_ms": {
+       "samples": [
+        364.2993,
+        359.8893,
+        363.0105
+       ],
+       "minimum": 359.8893,
+       "maximum": 364.2993,
+       "median": 363.0105
+      }
+     },
+     "historical": {
+      "wall_ms": {
+       "samples": [
+        2976.4576,
+        2994.5774,
+        3051.9281
+       ],
+       "minimum": 2976.4576,
+       "maximum": 3051.9281,
+       "median": 2994.5774
+      },
+      "observer_ms": {
+       "samples": [
+        723.8423,
+        732.0329,
+        746.7111
+       ],
+       "minimum": 723.8423,
+       "maximum": 746.7111,
+       "median": 732.0329
+      }
+     },
+     "counted_current": {
+      "root_admission_or_held_attributes": {
+       "count": 1684,
+       "inclusive_ms": 11.269399999999862
+      },
+      "chain_admission": {
+       "count": 1760,
+       "inclusive_ms": 85.56649999999973
+      },
+      "subject_final_leaf_stat": {
+       "count": 1680,
+       "inclusive_ms": 49.46869999999997
+      },
+      "temp_discovery": {
+       "count": 1,
+       "inclusive_ms": 111.0998
+      }
+     },
+     "counted_historical": {
+      "root_admission_or_held_attributes": {
+       "count": 1684,
+       "inclusive_ms": 14.658700000000014
+      },
+      "chain_admission": {
+       "count": 1760,
+       "inclusive_ms": 176.6788999999996
+      },
+      "subject_root_resolution": {
+       "count": 1680,
+       "inclusive_ms": 135.1400000000002
+      },
+      "subject_candidate_resolution": {
+       "count": 1680,
+       "inclusive_ms": 177.5695000000002
+      },
+      "subject_final_leaf_stat": {
+       "count": 880,
+       "inclusive_ms": 27.950499999999995
+      },
+      "temp_discovery": {
+       "count": 1,
+       "inclusive_ms": 117.065
+      }
+     }
+    },
+    "noop10": {
+     "current": {
+      "wall_ms": {
+       "samples": [
+        3843.5778,
+        3917.0219,
+        3846.9152
+       ],
+       "minimum": 3843.5778,
+       "maximum": 3917.0219,
+       "median": 3846.9152
+      },
+      "observer_ms": {
+       "samples": [
+        1931.652,
+        1978.6487,
+        1912.6609
+       ],
+       "minimum": 1912.6609,
+       "maximum": 1978.6487,
+       "median": 1931.652
+      }
+     },
+     "historical": {
+      "wall_ms": {
+       "samples": [
+        6891.3959,
+        6812.5428,
+        6995.4385
+       ],
+       "minimum": 6812.5428,
+       "maximum": 6995.4385,
+       "median": 6891.3959
+      },
+      "observer_ms": {
+       "samples": [
+        4988.0393,
+        4924.5234,
+        5068.7319
+       ],
+       "minimum": 4924.5234,
+       "maximum": 5068.7319,
+       "median": 4988.0393
+      }
+     },
+     "counted_current": {
+      "root_admission_or_held_attributes": {
+       "count": 14484,
+       "inclusive_ms": 85.95729999999729
+      },
+      "chain_admission": {
+       "count": 14560,
+       "inclusive_ms": 853.7751999999925
+      },
+      "subject_final_leaf_stat": {
+       "count": 14480,
+       "inclusive_ms": 488.5814999999985
+      },
+      "temp_discovery": {
+       "count": 1,
+       "inclusive_ms": 129.966
+      }
+     },
+     "counted_historical": {
+      "root_admission_or_held_attributes": {
+       "count": 14484,
+       "inclusive_ms": 93.67760000000206
+      },
+      "chain_admission": {
+       "count": 14560,
+       "inclusive_ms": 1437.3078000000057
+      },
+      "subject_root_resolution": {
+       "count": 14480,
+       "inclusive_ms": 1117.1907999999967
+      },
+      "subject_candidate_resolution": {
+       "count": 14480,
+       "inclusive_ms": 1502.9790000000053
+      },
+      "subject_final_leaf_stat": {
+       "count": 7280,
+       "inclusive_ms": 225.64230000000035
+      },
+      "temp_discovery": {
+       "count": 1,
+       "inclusive_ms": 99.5206
+      }
+     }
+    }
+   },
+   "input_hashes": {
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\summary.json": "27cd768dfe51e9c33e5d160bedc9b19a21a06415304c249042f118872c1bd751",
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\light1-noop90\\receipt.json": "2e156d4a6dfd22556791c20580d4bdc9a07c2f58058596bae9a38a8ee8c321b8",
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\light2-noop90\\receipt.json": "642a19f7c7b25fcf64823c33b96dc456eeb340fa63096722b8bf2f2962f4b21f",
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\light3-noop90\\receipt.json": "03da1f9198de5c1c1e77c793b9ecf1a21bd7ec90913ef83603b302615cad92d2",
+    "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light1-noop90\\receipt.json": "779545d2c4b38991bfbb7ae38726787e2cd5c2e74d4c23ae8e8f6637afbdda88",
+    "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light2-noop90\\receipt.json": "28d8c7b25a322bbfd6c2dec045b9df82d69d455e014bc9dee23aeb5f43e1607c",
+    "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light3-noop90\\receipt.json": "1ac1b2be7162b971f1bfdf83cc01caaa8fb64d5b2509c5f4bb7e79a439351729",
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\count-noop90\\counts.json": "9f7e64acfbbd04b057fda2c9b13eae47a80de783ad78331718ae3ec67d0394e5",
+    "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-count-noop90\\counts.json": "fff6eadca5ba13bab1ef3ace9f6882f80bd33a1863e78cf703a298504a7f8805",
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\light1-noop10\\receipt.json": "51df4fb776565ea7e38ad952d8b3b558b7aad8b24f922eca8cbf741444c58b9f",
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\light2-noop10\\receipt.json": "a4c55c6430ea8be9f9ab8e15e6e8d979cede93ab765c06595ad45fe5f1902405",
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\light3-noop10\\receipt.json": "feb5e1b51bde69fe71600d76ccb720b428f4fb738d4a06c973144ec3ee844917",
+    "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light1-noop10\\receipt.json": "0c776750f7fe3c628b74603fa1c51a9768de4b150cec09fd6c6bf0bd8ea7f66a",
+    "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light2-noop10\\receipt.json": "527e7326dbb2387775efa450710680eb09dd6ae16e743f90919ae16287647176",
+    "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light3-noop10\\receipt.json": "62fd323fa63f1094d26d0b0da59d523cc26f9fe9b13fd4a7dd425c924283d71f",
+    "F:\\GitHubRepositories\\NamiSync\\build\\handle-relative-investigation-20261021\\final-profile\\run_c5df5b36a3254270b98b92acbd468846\\count-noop10\\counts.json": "5d29df42e0207dd01e192bd5d64e521374948f6a93c9b7c84784c9905ded39dd",
+    "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-count-noop10\\counts.json": "1d3d6295633a0b6297d05d4e6e220fbcf7bbcb14d9c4807bd53be5bc838efb73"
+   },
+   "authority": "historical same-host warm observations, not a controlled causal comparison"
+  }
+ }
+}

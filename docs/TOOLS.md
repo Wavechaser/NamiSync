@@ -178,9 +178,10 @@ and draft sets stay under `build/`.
 The 2026-11-05 census verifies all 477 files of retained local `build-d` against
 both its freezer collection table and bundle manifest at `b3095886`, plus the
 two entry-point analyses (763 distinct source/name pairs), bootloader and
-bootstrap inputs. `build/m1-release-20261104/distribution/census.py` and
-`census.json` retain paths, hashes, source owners and the twenty existing About
-notices. This is a finite distribution census, not a license-clearance claim.
+bootstrap inputs. [EV-0024](../evidence/EV-0024/README.md) keeps `census.py`
+and a compacted `census.json`: counts by kind and source owner, each inventory's
+count and SHA-256, and a summary of the twenty existing About notices; the
+per-path inventories were not retained. This is a finite distribution census, not a license-clearance claim.
 The earlier hosted bundle was independently verified, but its native-library
 origin tables were not uploaded, so local origins cannot be attributed to it.
 
@@ -209,7 +210,10 @@ Text selection follows the actual distributed versions and provenance; the full
 Python notices may also describe optional Python components absent from this bundle.
 
 R2 validation (2026-11-09) uses the final isolated clean diagnostic snapshot and
-`build/m1-r2-20261109/attempt-04/`, not a frozen release candidate. Its census
+attempt 04, not a frozen release candidate. [EV-0023](../evidence/EV-0023/README.md)
+keeps its checksums, identities and owner counts, all 51 notice records and the
+reconciliation counts; the per-file inventories are kept only as counts and
+hashes. Its census
 reconciles all 436 ZIP/bundle files, 133 native origin records and 773 distinct
 module/embedded/bootstrap input triples against the collection tables, source
 archive and notice records. The 51 records comprise twenty existing About texts
@@ -217,8 +221,10 @@ and 31 supplements. Independent source review additionally followed the selected
 Python Windows projects (19 projects, 290 direct references, 790 resolved source/
 include paths) and 45 bootloader C/header files. This found the distinct bootloader
 zlib, HACL/KaRaMeL and wrapper notices that aggregate package licenses omit.
-The pinned source/header evidence lives beside the census and in
-`build/r2-notices-20261109/`. These are finite coverage observations, not a claim
+[EV-0029](../evidence/EV-0029/README.md) keeps the coverage findings and the
+pinned upstream inputs' hashes; the committed `tools/packaging/notices/manifest.json`
+is their authority, and the downloaded source/header copies were not retained.
+These are finite coverage observations, not a claim
 about arbitrary future dependency builds.
 
 The tools department passed 449 tests with three existing Windows privilege

@@ -1,0 +1,169 @@
+{
+ "r3-acceptance-20261109/collection/index.json": {
+  "bytes": 2184,
+  "sha256": "636826772f2e8c1c6faf9002295a56e319e537ef96fcaa79df0978fbb999e7d3",
+  "content": {
+   "schema": "namisync-br-g-42-collection-v1",
+   "revision": "cbb07d5f14869e663977a8e8018838bcd92c10ed",
+   "children": 5,
+   "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+   "started": "2026-11-09T21:04:44+0800",
+   "runs": [
+    {
+     "family": "history",
+     "case": "release",
+     "child": 1,
+     "exit_code": 0,
+     "report": "history/release-01.json",
+     "seconds": 138.9
+    },
+    {
+     "family": "history",
+     "case": "release",
+     "child": 2,
+     "exit_code": 0,
+     "report": "history/release-02.json",
+     "seconds": 140.5
+    },
+    {
+     "family": "history",
+     "case": "release",
+     "child": 3,
+     "exit_code": 0,
+     "report": "history/release-03.json",
+     "seconds": 140.1
+    },
+    {
+     "family": "history",
+     "case": "release",
+     "child": 4,
+     "exit_code": 0,
+     "report": "history/release-04.json",
+     "seconds": 139.4
+    },
+    {
+     "family": "history",
+     "case": "release",
+     "child": 5,
+     "exit_code": 0,
+     "report": "history/release-05.json",
+     "seconds": 139.1
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 1,
+     "exit_code": 0,
+     "report": "bridge-event/installed-01.json",
+     "seconds": 86.6
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 2,
+     "exit_code": 0,
+     "report": "bridge-event/installed-02.json",
+     "seconds": 79.5
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 3,
+     "exit_code": 0,
+     "report": "bridge-event/installed-03.json",
+     "seconds": 79.3
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 4,
+     "exit_code": 0,
+     "report": "bridge-event/installed-04.json",
+     "seconds": 79.5
+    },
+    {
+     "family": "bridge-event",
+     "case": "installed",
+     "child": 5,
+     "exit_code": 0,
+     "report": "bridge-event/installed-05.json",
+     "seconds": 79.3
+    }
+   ],
+   "finished": "2026-11-09T21:23:06+0800"
+  }
+ },
+ "r3-acceptance-20261109/collection/validation.json": {
+  "bytes": 1873,
+  "sha256": "0ebd6ee2788ee657d9e7827f0c68922f5b1ac17548b5b24696e88488f1d51eab",
+  "content": {
+   "schema": "namisync-br-g-42-validation-v1",
+   "revision": "cbb07d5f14869e663977a8e8018838bcd92c10ed",
+   "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+   "complete": true,
+   "passed": true,
+   "metrics": {
+    "history/release": {
+     "summary_max_s": 1.7363262996077538,
+     "item_page_samples": 200,
+     "event_page_samples": 200,
+     "item_page_p95_ms": 21.17729978635907,
+     "item_page_max_ms": 23.491499945521355,
+     "event_page_p95_ms": 20.834300201386213,
+     "event_page_max_ms": 22.122600115835667,
+     "children": 5,
+     "report_sha256": [
+      "02d7735bea10ef8cfb01ce7a21cba6a46ead0daaf9b70370ed5aeec3376ca22f",
+      "ba0e393e2685f6d7fc0b4750b012ce23838c95dbdbb89152dbf1999ce2e443ab",
+      "ee2591fa2e2a92ff29f44a6ad8e90e0c4029ef1e999c649516b7538fad97694d",
+      "daae8cc9919bf7008cc7cf056e56eb0a5aec5f34391fbf98a5242c0b57964a58",
+      "d1ea8960f2932e885547a2a9f73fa28f6964efd5e913bebfc419406c2d5b18e6"
+     ],
+     "passed": true,
+     "problems": []
+    },
+    "bridge-event/installed": {
+     "reliable_and_terminal": {
+      "events": 3100,
+      "worst_child_p95_ms": 10.0,
+      "maximum_ms": 40.0
+     },
+     "progress": {
+      "events": 7367,
+      "worst_child_p95_ms": 45.0,
+      "maximum_ms": 51.0
+     },
+     "children": 5,
+     "report_sha256": [
+      "2e909e44ec1df0d4e1d079c7d4272ffcff8454ad669f26d620364b14cff76d64",
+      "268ba35251651d5970d844f2b00495362e5b1fd12fc02d4942cd26bbf6932f10",
+      "2b504756a80437e3f400dda63fb9d5f6ea2b48a32fb7670e6f284896e08896dd",
+      "4a59f63dc81163b1d07f2e269a6d2acb77a099294c829ab27417a7aa85562cee",
+      "4347b32628a98198e05f34ffcc57f87480d850a8aa32d02072a0553223547ae0"
+     ],
+     "passed": true,
+     "problems": []
+    }
+   }
+  }
+ },
+ "r3-acceptance-20261109/inventory-cold-profile.json": {
+  "bytes": 561,
+  "sha256": "faf2dd3a6e8c45f0589c7d6c9598aa8fcac65956eed812869e61c418853f4c3e",
+  "content": {
+   "captured_at": "2026-11-09T13:04:00.2973918Z",
+   "os_name": "Microsoft Windows 11 Pro",
+   "os_build": "26200",
+   "cpu": "13th Gen Intel(R) Core(TM) i7-13700K",
+   "physical_cores": 16,
+   "logical_processors": 24,
+   "memory_gib": 63.7,
+   "repository_device": "WD_BLACK SN850X 4000GB",
+   "repository_bus": "NVMe",
+   "ac_power": true,
+   "no_unrelated_sustained_workload": true,
+   "workload_basis": "User left the machine quiet for R3 on 2026-11-09 and held R2 work; total CPU 3.6-5.1% before collection.",
+   "reference_profile_confirmed": true
+  }
+ }
+}

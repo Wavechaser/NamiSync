@@ -1,0 +1,2321 @@
+{
+ "scroll-window-study-20261009/c5-host-profile.json": {
+  "bytes": 1015,
+  "sha256": "e95467676f7cf5469e8739c1683a84d110eb31e572c0db0fcba09ff5f1038753",
+  "content": {
+   "captured_at": "2026-10-09 15:18:03 UTC",
+   "session_date": "2026-10-09",
+   "cpu": {
+    "logical_processors": 24,
+    "cores": 16,
+    "name": "13th Gen Intel(R) Core(TM) i7-13700K"
+   },
+   "method": "Current read-only OS, CPU, repository disk and Python queries; each child records actual viewport, DPI, theme, motion and loaded runtime. Power and unrelated workload remain unknown.",
+   "source": "59e92ae418ac0ca91dad46c3be35f046a6fe722e",
+   "os": {
+    "build": "26200",
+    "version": "10.0.26200",
+    "name": "Microsoft Windows 11 Pro"
+   },
+   "desktop_context": "not independently observed by profile collector",
+   "repository_device": {
+    "bus": "NVMe",
+    "drive": "F:",
+    "bytes": 4000787030016,
+    "model": "WD_BLACK SN850X 4000GB"
+   },
+   "memory_gib": 63.69148635864258,
+   "python": "Python 3.13.14",
+   "authority": "diagnostic only; not cold-projection acceptance",
+   "unrelated_sustained_workload": "not independently verified",
+   "power_status": "not observed"
+  }
+ },
+ "scroll-window-study-20261009/sw-summary-01.json": {
+  "bytes": 2709184,
+  "sha256": "05ee7a5fcf7d1620bf84f1487e67f4ab3e21f06dbf1e0ee449566fd01cfda766",
+  "content": {
+   "authority": "diagnostic; sparse medians/ranges, no p95 or latency gate",
+   "intervals": "Legacy standard totals include input time; after_last_input metrics exclude it. Steady settlement starts at drive end. Frame intervals are observed animation-frame cadence, not monitor refresh or compositor evidence.",
+   "host_profile_sha256": "e95467676f7cf5469e8739c1683a84d110eb31e572c0db0fcba09ff5f1038753",
+   "matched_observed_profiles": {
+    "plan": {
+     "details_expanded": "false",
+     "device_pixel_ratio": 1.75,
+     "document_has_focus": true,
+     "forced_colors": false,
+     "inner_height": 764,
+     "inner_width": 1267,
+     "reduced_motion": false,
+     "theme": "light",
+     "viewport_height": 359,
+     "viewport_width": 853,
+     "visibility_state": "visible"
+    },
+    "inventory": {
+     "details_expanded": "false",
+     "device_pixel_ratio": 1.75,
+     "document_has_focus": true,
+     "forced_colors": false,
+     "inner_height": 764,
+     "inner_width": 1267,
+     "reduced_motion": false,
+     "theme": "light",
+     "viewport_height": 321,
+     "viewport_width": 880,
+     "visibility_state": "visible"
+    }
+   },
+   "matched_runtimes": {
+    "plan": {
+     "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+     "platform": "Windows-11-10.0.26200-SP0",
+     "versions": {
+      "namisync": "0.1.0",
+      "pywebview": "6.2.1",
+      "pythonnet": "3.1.0"
+     },
+     "headed_runtime": {
+      "browser": {
+       "executable_path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\154.0.4258.62\\msedgewebview2.exe",
+       "version": "154.0.4258.62"
+      },
+      "clr": {
+       "module_path": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\clr.dll",
+       "runtime_directory": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319",
+       "runtime_version": "4.0.30319.42000",
+       "system_version": "v4.0.30319"
+      }
+     }
+    },
+    "inventory": {
+     "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+     "platform": "Windows-11-10.0.26200-SP0",
+     "versions": {
+      "namisync": "0.1.0",
+      "pywebview": "6.2.1",
+      "pythonnet": "3.1.0"
+     },
+     "headed_runtime": {
+      "browser": {
+       "executable_path": "C:\\Program Files (x86)\\Microsoft\\EdgeWebView\\Application\\154.0.4258.62\\msedgewebview2.exe",
+       "version": "154.0.4258.62"
+      },
+      "clr": {
+       "module_path": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319\\clr.dll",
+       "runtime_directory": "C:\\Windows\\Microsoft.NET\\Framework64\\v4.0.30319",
+       "runtime_version": "4.0.30319.42000",
+       "system_version": "v4.0.30319"
+      }
+     }
+    }
+   },
+   "matrices": {
+    "baseline-plan": {
+     "input": "sw-baseline-plan-01.json",
+     "sha256": "a58ea6502782b8fa9efb3fcbcf6bd07443ef6b7618fdaafd53169ddef89f240f",
+     "children": 3,
+     "pooled": {
+      "initial": {
+       "covered_ns": {
+        "count": 3,
+        "median": 86900000,
+        "minimum": 79900000,
+        "maximum": 88200000
+       },
+       "paint_opportunity_ns": {
+        "count": 3,
+        "median": 99600000,
+        "minimum": 92100000,
+        "maximum": 100500000
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 101800000,
+        "minimum": 92900000,
+        "maximum": 108400000
+       },
+       "input_span_ns": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 3,
+        "median": 86900000,
+        "minimum": 79900000,
+        "maximum": 88200000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 3,
+        "median": 99600000,
+        "minimum": 92100000,
+        "maximum": 100500000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 3,
+        "median": 101800000,
+        "minimum": 92900000,
+        "maximum": 108400000
+       },
+       "uncovered_ns": {
+        "count": 3,
+        "median": 85100000,
+        "minimum": 78000000,
+        "maximum": 86400000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "sequential": {
+       "covered_ns": {
+        "count": 9,
+        "median": 56500000,
+        "minimum": 51600000,
+        "maximum": 84200000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 70400000,
+        "minimum": 65300000,
+        "maximum": 96700000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 75500000,
+        "minimum": 69100000,
+        "maximum": 99800000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 100000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 56500000,
+        "minimum": 51600000,
+        "maximum": 84200000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 70400000,
+        "minimum": 65300000,
+        "maximum": 96700000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 75500000,
+        "minimum": 69100000,
+        "maximum": 99800000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 49800000,
+        "minimum": 46100000,
+        "maximum": 53700000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "jump": {
+       "covered_ns": {
+        "count": 9,
+        "median": 52400000,
+        "minimum": 46700000,
+        "maximum": 56800000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 66400000,
+        "minimum": 60300000,
+        "maximum": 71000000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 70100000,
+        "minimum": 67000000,
+        "maximum": 75000000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 52400000,
+        "minimum": 46700000,
+        "maximum": 56800000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 66400000,
+        "minimum": 60300000,
+        "maximum": 71000000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 70100000,
+        "minimum": 67000000,
+        "maximum": 75000000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 47100000,
+        "minimum": 44400000,
+        "maximum": 51000000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "covered-return": {
+       "covered_ns": {
+        "count": 9,
+        "median": 16500000,
+        "minimum": 9500000,
+        "maximum": 16700000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 24700000,
+        "minimum": 17600000,
+        "maximum": 24900000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 41700000,
+        "minimum": 41500000,
+        "maximum": 42800000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 8400000,
+        "minimum": 1700000,
+        "maximum": 8600000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 8100000,
+        "minimum": 7800000,
+        "maximum": 8300000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 16300000,
+        "minimum": 15900000,
+        "maximum": 16400000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 33300000,
+        "minimum": 33100000,
+        "maximum": 41100000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 8300000,
+        "minimum": 8100000,
+        "maximum": 8600000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 9,
+        "median": 8.399999976158142,
+        "minimum": 1.699999988079071,
+        "maximum": 8.600000023841858
+       }
+      },
+      "burst": {
+       "covered_ns": {
+        "count": 9,
+        "median": 122900000,
+        "minimum": 120200000,
+        "maximum": 138100000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 135600000,
+        "minimum": 132800000,
+        "maximum": 151400000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 138900000,
+        "minimum": 137200000,
+        "maximum": 158400000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 55000000,
+        "minimum": 52700000,
+        "maximum": 58600000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 69000000,
+        "minimum": 65000000,
+        "maximum": 79600000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 81700000,
+        "minimum": 78000000,
+        "maximum": 92800000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 83300000,
+        "minimum": 83100000,
+        "maximum": 99900000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 118800000,
+        "minimum": 115300000,
+        "maximum": 129900000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 4,
+        "minimum": 4,
+        "maximum": 4
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 3,
+        "minimum": 3,
+        "maximum": 3
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 63,
+        "median": 8.300000011920929,
+        "minimum": 3.600000023841858,
+        "maximum": 9.5
+       }
+      },
+      "keyboard": {
+       "covered_ns": {
+        "count": 9,
+        "median": 52700000,
+        "minimum": 51000000,
+        "maximum": 63200000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 66100000,
+        "minimum": 63900000,
+        "maximum": 76400000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 71900000,
+        "minimum": 68700000,
+        "maximum": 81600000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 100000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 52700000,
+        "minimum": 50900000,
+        "maximum": 63200000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 66100000,
+        "minimum": 63800000,
+        "maximum": 76400000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 71900000,
+        "minimum": 68600000,
+        "maximum": 81600000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "steady-240": {
+       "uncovered_ns": {
+        "count": 3,
+        "median": 11125000000.0,
+        "minimum": 11117100000.0,
+        "maximum": 11125300000.0
+       },
+       "longest_gap_ns": {
+        "count": 3,
+        "median": 11125000000.0,
+        "minimum": 11117100000.0,
+        "maximum": 11125300000.0
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 83300000,
+        "minimum": 66600000,
+        "maximum": 83600000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 459,
+        "minimum": 458,
+        "maximum": 464
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 458,
+        "minimum": 457,
+        "maximum": 463
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "actual_drive_ms": {
+        "count": 3,
+        "median": 12008.199999988079,
+        "minimum": 12000,
+        "maximum": 12008.300000011921
+       },
+       "observed_frame_interval_ms": {
+        "count": 4319,
+        "median": 8.300000011920929,
+        "minimum": 4.5,
+        "maximum": 13.199999988079071
+       }
+      },
+      "steady-1000": {
+       "uncovered_ns": {
+        "count": 3,
+        "median": 11783400000.0,
+        "minimum": 11775100000.0,
+        "maximum": 11783600000.0
+       },
+       "longest_gap_ns": {
+        "count": 3,
+        "median": 11783400000.0,
+        "minimum": 11775100000.0,
+        "maximum": 11783600000.0
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 67000000,
+        "minimum": 66700000,
+        "maximum": 75200000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 486,
+        "minimum": 482,
+        "maximum": 487
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 485,
+        "minimum": 481,
+        "maximum": 486
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "actual_drive_ms": {
+        "count": 3,
+        "median": 12002.300000011921,
+        "minimum": 12000.800000011921,
+        "maximum": 12002.899999976158
+       },
+       "observed_frame_interval_ms": {
+        "count": 4320,
+        "median": 8.300000011920929,
+        "minimum": 4.300000011920929,
+        "maximum": 14.100000023841858
+       }
+      }
+     }
+    },
+    "baseline-inventory": {
+     "input": "sw-baseline-inventory-01.json",
+     "sha256": "14dc0a1b4159619f7d93c3fd423231679d709831ccd42c886cbaca4dbf5ad228",
+     "children": 3,
+     "pooled": {
+      "initial": {
+       "covered_ns": {
+        "count": 3,
+        "median": 87100000,
+        "minimum": 75700000,
+        "maximum": 91600000
+       },
+       "paint_opportunity_ns": {
+        "count": 3,
+        "median": 98100000,
+        "minimum": 87000000,
+        "maximum": 103200000
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 101500000,
+        "minimum": 89500000,
+        "maximum": 107800000
+       },
+       "input_span_ns": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 3,
+        "median": 87100000,
+        "minimum": 75700000,
+        "maximum": 91600000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 3,
+        "median": 98100000,
+        "minimum": 87000000,
+        "maximum": 103200000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 3,
+        "median": 101500000,
+        "minimum": 89500000,
+        "maximum": 107800000
+       },
+       "uncovered_ns": {
+        "count": 3,
+        "median": 85600000,
+        "minimum": 69600000,
+        "maximum": 91000000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "sequential": {
+       "covered_ns": {
+        "count": 9,
+        "median": 57300000,
+        "minimum": 52300000,
+        "maximum": 63900000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 68000000,
+        "minimum": 63300000,
+        "maximum": 76000000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 73000000,
+        "minimum": 69000000,
+        "maximum": 83200000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 100000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 57200000,
+        "minimum": 52300000,
+        "maximum": 63900000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 67900000,
+        "minimum": 63300000,
+        "maximum": 76000000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 73000000,
+        "minimum": 69000000,
+        "maximum": 83200000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 50000000,
+        "minimum": 46800000,
+        "maximum": 55700000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "jump": {
+       "covered_ns": {
+        "count": 9,
+        "median": 53200000,
+        "minimum": 49200000,
+        "maximum": 56700000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 64200000,
+        "minimum": 60600000,
+        "maximum": 68700000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 71300000,
+        "minimum": 67700000,
+        "maximum": 77000000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 53200000,
+        "minimum": 49200000,
+        "maximum": 56700000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 64200000,
+        "minimum": 60600000,
+        "maximum": 68700000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 71300000,
+        "minimum": 67700000,
+        "maximum": 77000000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 48100000,
+        "minimum": 47100000,
+        "maximum": 54700000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "covered-return": {
+       "covered_ns": {
+        "count": 9,
+        "median": 16500000,
+        "minimum": 9300000,
+        "maximum": 16600000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 24900000,
+        "minimum": 17600000,
+        "maximum": 25000000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 41700000,
+        "minimum": 34400000,
+        "maximum": 44000000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 8600000,
+        "minimum": 1200000,
+        "maximum": 8800000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 7900000,
+        "minimum": 7800000,
+        "maximum": 8100000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 16200000,
+        "minimum": 16100000,
+        "maximum": 16400000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 33100000,
+        "minimum": 33000000,
+        "maximum": 41500000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 8100000,
+        "minimum": 7900000,
+        "maximum": 8200000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 9,
+        "median": 8.599999964237213,
+        "minimum": 1.2000000476837158,
+        "maximum": 8.800000011920929
+       }
+      },
+      "burst": {
+       "covered_ns": {
+        "count": 9,
+        "median": 126300000,
+        "minimum": 119800000,
+        "maximum": 139200000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 136500000,
+        "minimum": 131000000,
+        "maximum": 150400000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 137600000,
+        "minimum": 134600000,
+        "maximum": 158500000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 54300000,
+        "minimum": 50500000,
+        "maximum": 60400000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 72900000,
+        "minimum": 68500000,
+        "maximum": 80800000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 83300000,
+        "minimum": 79700000,
+        "maximum": 92000000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 84100000,
+        "minimum": 81400000,
+        "maximum": 100100000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 122600000,
+        "minimum": 118500000,
+        "maximum": 130700000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 4,
+        "minimum": 4,
+        "maximum": 4
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 3,
+        "minimum": 3,
+        "maximum": 3
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 63,
+        "median": 8.300000011920929,
+        "minimum": 1.199999988079071,
+        "maximum": 10.300000011920929
+       }
+      },
+      "keyboard": {
+       "covered_ns": {
+        "count": 9,
+        "median": 45000000,
+        "minimum": 44000000,
+        "maximum": 46400000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 55200000,
+        "minimum": 54400000,
+        "maximum": 56400000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 60800000,
+        "minimum": 54700000,
+        "maximum": 63200000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 45000000,
+        "minimum": 44000000,
+        "maximum": 46400000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 55200000,
+        "minimum": 54400000,
+        "maximum": 56400000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 60800000,
+        "minimum": 54700000,
+        "maximum": 63200000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "steady-240": {
+       "uncovered_ns": {
+        "count": 3,
+        "median": 11066600000.0,
+        "minimum": 11066500000.0,
+        "maximum": 11066900000.0
+       },
+       "longest_gap_ns": {
+        "count": 3,
+        "median": 11066600000.0,
+        "minimum": 11066500000.0,
+        "maximum": 11066900000.0
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 75300000,
+        "minimum": 67300000,
+        "maximum": 83200000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 440,
+        "minimum": 433,
+        "maximum": 443
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 439,
+        "minimum": 432,
+        "maximum": 442
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "actual_drive_ms": {
+        "count": 3,
+        "median": 12008.199999988079,
+        "minimum": 12008,
+        "maximum": 12008.399999976158
+       },
+       "observed_frame_interval_ms": {
+        "count": 4320,
+        "median": 8.300000011920929,
+        "minimum": 3.899999976158142,
+        "maximum": 11.100000023841858
+       }
+      },
+      "steady-1000": {
+       "uncovered_ns": {
+        "count": 3,
+        "median": 11774800000.0,
+        "minimum": 11774800000.0,
+        "maximum": 11783200000.0
+       },
+       "longest_gap_ns": {
+        "count": 3,
+        "median": 11774800000.0,
+        "minimum": 11774800000.0,
+        "maximum": 11783200000.0
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 66800000,
+        "minimum": 58600000,
+        "maximum": 66900000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 468,
+        "minimum": 459,
+        "maximum": 469
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 467,
+        "minimum": 458,
+        "maximum": 468
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "actual_drive_ms": {
+        "count": 3,
+        "median": 12002.300000011921,
+        "minimum": 12001.199999988079,
+        "maximum": 12002.899999976158
+       },
+       "observed_frame_interval_ms": {
+        "count": 4320,
+        "median": 8.300000011920929,
+        "minimum": 4.699999988079071,
+        "maximum": 12.0
+       }
+      }
+     }
+    },
+    "candidate-plan": {
+     "input": "sw-candidate-plan-01.json",
+     "sha256": "ffce916f99feafc1dd1c418fa8e61e2183fc1ea0e36413e03f758fbea54b0d77",
+     "children": 3,
+     "pooled": {
+      "initial": {
+       "covered_ns": {
+        "count": 3,
+        "median": 76600000,
+        "minimum": 76200000,
+        "maximum": 83100000
+       },
+       "paint_opportunity_ns": {
+        "count": 3,
+        "median": 91700000,
+        "minimum": 91500000,
+        "maximum": 97200000
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 99200000,
+        "minimum": 96600000,
+        "maximum": 102600000
+       },
+       "input_span_ns": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 3,
+        "median": 76600000,
+        "minimum": 76200000,
+        "maximum": 83100000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 3,
+        "median": 91700000,
+        "minimum": 91500000,
+        "maximum": 97200000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 3,
+        "median": 99200000,
+        "minimum": 96600000,
+        "maximum": 102600000
+       },
+       "uncovered_ns": {
+        "count": 3,
+        "median": 71300000,
+        "minimum": 69500000,
+        "maximum": 80800000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "sequential": {
+       "covered_ns": {
+        "count": 9,
+        "median": 55500000,
+        "minimum": 51600000,
+        "maximum": 57800000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 69100000,
+        "minimum": 65000000,
+        "maximum": 72400000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 73900000,
+        "minimum": 69600000,
+        "maximum": 79200000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 100000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 55500000,
+        "minimum": 51600000,
+        "maximum": 57800000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 69100000,
+        "minimum": 65000000,
+        "maximum": 72400000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 73900000,
+        "minimum": 69600000,
+        "maximum": 79200000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 49100000,
+        "minimum": 45800000,
+        "maximum": 51100000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "jump": {
+       "covered_ns": {
+        "count": 9,
+        "median": 50900000,
+        "minimum": 46200000,
+        "maximum": 63200000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 63600000,
+        "minimum": 59900000,
+        "maximum": 77500000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 68100000,
+        "minimum": 61400000,
+        "maximum": 81000000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 50900000,
+        "minimum": 46200000,
+        "maximum": 63200000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 63600000,
+        "minimum": 59900000,
+        "maximum": 77500000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 68100000,
+        "minimum": 61400000,
+        "maximum": 81000000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 47900000,
+        "minimum": 44500000,
+        "maximum": 57100000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "covered-return": {
+       "covered_ns": {
+        "count": 9,
+        "median": 16500000,
+        "minimum": 9200000,
+        "maximum": 17100000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 24800000,
+        "minimum": 17600000,
+        "maximum": 24900000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 41700000,
+        "minimum": 34400000,
+        "maximum": 41900000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 8400000,
+        "minimum": 1300000,
+        "maximum": 8700000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 8100000,
+        "minimum": 7900000,
+        "maximum": 8500000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 16300000,
+        "minimum": 16200000,
+        "maximum": 16500000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 33200000,
+        "minimum": 33100000,
+        "maximum": 33500000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 8300000,
+        "minimum": 8100000,
+        "maximum": 8700000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 9,
+        "median": 8.399999976158142,
+        "minimum": 1.300000011920929,
+        "maximum": 8.699999988079071
+       }
+      },
+      "burst": {
+       "covered_ns": {
+        "count": 9,
+        "median": 124800000,
+        "minimum": 120100000,
+        "maximum": 131800000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 137100000,
+        "minimum": 132200000,
+        "maximum": 144900000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 141400000,
+        "minimum": 138100000,
+        "maximum": 150000000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 57000000,
+        "minimum": 54700000,
+        "maximum": 58800000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 69200000,
+        "minimum": 65100000,
+        "maximum": 73000000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 81500000,
+        "minimum": 77200000,
+        "maximum": 86100000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 83200000,
+        "minimum": 82500000,
+        "maximum": 91600000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 119600000,
+        "minimum": 115400000,
+        "maximum": 124100000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 4,
+        "minimum": 4,
+        "maximum": 4
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 3,
+        "minimum": 3,
+        "maximum": 3
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 63,
+        "median": 8.300000011920929,
+        "minimum": 3.900000035762787,
+        "maximum": 10.5
+       }
+      },
+      "keyboard": {
+       "covered_ns": {
+        "count": 9,
+        "median": 53600000,
+        "minimum": 51100000,
+        "maximum": 60700000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 66600000,
+        "minimum": 63700000,
+        "maximum": 73100000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 72800000,
+        "minimum": 68400000,
+        "maximum": 78900000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 53600000,
+        "minimum": 51100000,
+        "maximum": 60700000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 66600000,
+        "minimum": 63700000,
+        "maximum": 73100000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 72800000,
+        "minimum": 68400000,
+        "maximum": 78900000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "steady-240": {
+       "uncovered_ns": {
+        "count": 3,
+        "median": 1418200000,
+        "minimum": 1391700000,
+        "maximum": 1437600000
+       },
+       "longest_gap_ns": {
+        "count": 3,
+        "median": 54400000,
+        "minimum": 52700000,
+        "maximum": 60300000
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 16900000,
+        "minimum": 16900000,
+        "maximum": 20100000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 36,
+        "minimum": 36,
+        "maximum": 36
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "actual_drive_ms": {
+        "count": 3,
+        "median": 12008,
+        "minimum": 12001.199999988079,
+        "maximum": 12008.300000011921
+       },
+       "observed_frame_interval_ms": {
+        "count": 4048,
+        "median": 8.300000011920929,
+        "minimum": 2.899999976158142,
+        "maximum": 44.0
+       }
+      },
+      "steady-1000": {
+       "uncovered_ns": {
+        "count": 3,
+        "median": 4320500000.0,
+        "minimum": 4248100000.0,
+        "maximum": 4426000000.0
+       },
+       "longest_gap_ns": {
+        "count": 3,
+        "median": 93900000,
+        "minimum": 54700000,
+        "maximum": 98100000
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 41500000,
+        "minimum": 17000000,
+        "maximum": 65400000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 114,
+        "minimum": 113,
+        "maximum": 115
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "actual_drive_ms": {
+        "count": 3,
+        "median": 12016,
+        "minimum": 12006.099999964237,
+        "maximum": 12026.5
+       },
+       "observed_frame_interval_ms": {
+        "count": 3459,
+        "median": 8.399999976158142,
+        "minimum": 2.300000011920929,
+        "maximum": 44.09999996423721
+       }
+      }
+     }
+    },
+    "candidate-inventory": {
+     "input": "sw-candidate-inventory-01.json",
+     "sha256": "7f3ef2ba313657cd574797c39db4e849e581f2309f4729bb315ddea00726c3f0",
+     "children": 3,
+     "pooled": {
+      "initial": {
+       "covered_ns": {
+        "count": 3,
+        "median": 86500000,
+        "minimum": 82200000,
+        "maximum": 87400000
+       },
+       "paint_opportunity_ns": {
+        "count": 3,
+        "median": 98000000,
+        "minimum": 93300000,
+        "maximum": 98900000
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 103700000,
+        "minimum": 94900000,
+        "maximum": 105200000
+       },
+       "input_span_ns": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 3,
+        "median": 86500000,
+        "minimum": 82200000,
+        "maximum": 87400000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 3,
+        "median": 98000000,
+        "minimum": 93300000,
+        "maximum": 98900000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 3,
+        "median": 103700000,
+        "minimum": 94900000,
+        "maximum": 105200000
+       },
+       "uncovered_ns": {
+        "count": 3,
+        "median": 81400000,
+        "minimum": 78400000,
+        "maximum": 83300000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "sequential": {
+       "covered_ns": {
+        "count": 9,
+        "median": 56000000,
+        "minimum": 51700000,
+        "maximum": 65700000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 67700000,
+        "minimum": 62300000,
+        "maximum": 77900000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 74300000,
+        "minimum": 68200000,
+        "maximum": 84400000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 100000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 56000000,
+        "minimum": 51700000,
+        "maximum": 65700000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 67700000,
+        "minimum": 62300000,
+        "maximum": 77900000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 74300000,
+        "minimum": 68200000,
+        "maximum": 84400000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 48300000,
+        "minimum": 46600000,
+        "maximum": 58400000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "jump": {
+       "covered_ns": {
+        "count": 9,
+        "median": 53100000,
+        "minimum": 48500000,
+        "maximum": 58700000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 63600000,
+        "minimum": 59400000,
+        "maximum": 70000000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 71600000,
+        "minimum": 65300000,
+        "maximum": 76000000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 53100000,
+        "minimum": 48500000,
+        "maximum": 58700000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 63600000,
+        "minimum": 59400000,
+        "maximum": 70000000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 71600000,
+        "minimum": 65300000,
+        "maximum": 76000000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 47200000,
+        "minimum": 46400000,
+        "maximum": 49900000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "covered-return": {
+       "covered_ns": {
+        "count": 9,
+        "median": 16600000,
+        "minimum": 12300000,
+        "maximum": 16700000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 24900000,
+        "minimum": 20500000,
+        "maximum": 25000000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 41800000,
+        "minimum": 38500000,
+        "maximum": 51700000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 8600000,
+        "minimum": 4300000,
+        "maximum": 8900000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 8000000,
+        "minimum": 7700000,
+        "maximum": 8100000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 16200000,
+        "minimum": 16100000,
+        "maximum": 16400000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 34100000,
+        "minimum": 32900000,
+        "maximum": 43100000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 8100000,
+        "minimum": 7900000,
+        "maximum": 8300000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 9,
+        "median": 8.600000023841858,
+        "minimum": 4.300000011920929,
+        "maximum": 8.899999976158142
+       }
+      },
+      "burst": {
+       "covered_ns": {
+        "count": 9,
+        "median": 123300000,
+        "minimum": 105800000,
+        "maximum": 138900000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 134200000,
+        "minimum": 115900000,
+        "maximum": 149300000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 136300000,
+        "minimum": 120200000,
+        "maximum": 150400000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 54200000,
+        "minimum": 53000000,
+        "maximum": 60500000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 69900000,
+        "minimum": 52300000,
+        "maximum": 78900000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 80300000,
+        "minimum": 62400000,
+        "maximum": 89300000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 82900000,
+        "minimum": 66700000,
+        "maximum": 90300000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 119900000,
+        "minimum": 102200000,
+        "maximum": 130200000
+       },
+       "request_count": {
+        "count": 9,
+        "median": 4,
+        "minimum": 3,
+        "maximum": 4
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 3,
+        "minimum": 2,
+        "maximum": 3
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 63,
+        "median": 8.300000011920929,
+        "minimum": 3.100000023841858,
+        "maximum": 10.100000023841858
+       }
+      },
+      "keyboard": {
+       "covered_ns": {
+        "count": 9,
+        "median": 45000000,
+        "minimum": 44200000,
+        "maximum": 46400000
+       },
+       "paint_opportunity_ns": {
+        "count": 9,
+        "median": 55200000,
+        "minimum": 54300000,
+        "maximum": 57000000
+       },
+       "settlement_ns": {
+        "count": 9,
+        "median": 61200000,
+        "minimum": 57300000,
+        "maximum": 63600000
+       },
+       "input_span_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 100000
+       },
+       "covered_after_last_input_ns": {
+        "count": 9,
+        "median": 45000000,
+        "minimum": 44200000,
+        "maximum": 46400000
+       },
+       "paint_opportunity_after_last_input_ns": {
+        "count": 9,
+        "median": 55200000,
+        "minimum": 54300000,
+        "maximum": 57000000
+       },
+       "settlement_after_last_input_ns": {
+        "count": 9,
+        "median": 61200000,
+        "minimum": 57300000,
+        "maximum": 63600000
+       },
+       "uncovered_ns": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "request_count": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "discarded_responses": {
+        "count": 9,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 9,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "input_cadence_ms": {
+        "count": 0,
+        "median": null,
+        "minimum": null,
+        "maximum": null
+       }
+      },
+      "steady-240": {
+       "uncovered_ns": {
+        "count": 3,
+        "median": 1228000000,
+        "minimum": 1207800000,
+        "maximum": 1246500000
+       },
+       "longest_gap_ns": {
+        "count": 3,
+        "median": 45200000,
+        "minimum": 43900000,
+        "maximum": 47300000
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 50200000,
+        "minimum": 16800000,
+        "maximum": 59300000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 33,
+        "minimum": 32,
+        "maximum": 33
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "actual_drive_ms": {
+        "count": 3,
+        "median": 12008.100000023842,
+        "minimum": 12008.099999964237,
+        "maximum": 12008.199999988079
+       },
+       "observed_frame_interval_ms": {
+        "count": 4115,
+        "median": 8.300000011920929,
+        "minimum": 3.0,
+        "maximum": 35.80000001192093
+       }
+      },
+      "steady-1000": {
+       "uncovered_ns": {
+        "count": 3,
+        "median": 4479800000.0,
+        "minimum": 4410400000.0,
+        "maximum": 4532900000.0
+       },
+       "longest_gap_ns": {
+        "count": 3,
+        "median": 94100000,
+        "minimum": 45700000,
+        "maximum": 124900000
+       },
+       "settlement_ns": {
+        "count": 3,
+        "median": 64400000,
+        "minimum": 12100000,
+        "maximum": 66500000
+       },
+       "request_count": {
+        "count": 3,
+        "median": 115,
+        "minimum": 112,
+        "maximum": 116
+       },
+       "discarded_responses": {
+        "count": 3,
+        "median": 0,
+        "minimum": 0,
+        "maximum": 0
+       },
+       "maximum_outstanding": {
+        "count": 3,
+        "median": 1,
+        "minimum": 1,
+        "maximum": 1
+       },
+       "actual_drive_ms": {
+        "count": 3,
+        "median": 12013.200000047684,
+        "minimum": 12002.199999988079,
+        "maximum": 12020.699999988079
+       },
+       "observed_frame_interval_ms": {
+        "count": 3526,
+        "median": 8.399999976158142,
+        "minimum": 2.200000047683716,
+        "maximum": 43.39999997615814
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}

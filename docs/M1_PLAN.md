@@ -100,8 +100,14 @@ Allocation's absent whole-app workspace is represented by its immutable Git
 summary; copyonly's absent source snapshots and exec-time's incomplete freeze
 provenance remain explicit diagnostic limitations. These are not renewed
 acceptance. The verifier assessment distinguishes retained tap/no-tap observations
-from an unretained null-hasher control. HANDOFF holds verification and promotion
-context.
+from an unretained null-hasher control.
+
+2026-11-17 promotion: after the user's per-claim review, all 36 candidates became
+EV-0003–EV-0038 (108 files, 1.09 MiB). Every lasting citation was repointed, and
+sentences promising raw intervals, source manifests, per-path census inventories,
+schedule samples or source/header copies now say what the records keep. The
+original study folders and `build/evidence-candidates/` still exist pending the
+user's deletion decision.
 
 Completed cleanup removed six local codex branches without preserving superseded
 recoveries, as explicitly directed by the user, and 61 external resource roots
@@ -126,9 +132,9 @@ under AGENTS; the separate README revision remains outside this cleanup.
 
 | Closed outcome | Final disposition | Owner and evidence |
 | --- | --- | --- |
-| R0 — release inspection | Declare audience, format, finite missing work and serialized closeout; development builds alone do not close release. | INTERFACES, TESTS, DEFENSE; `build/m1-release-20261104/`. |
+| R0 — release inspection | Declare audience, format, finite missing work and serialized closeout; development builds alone do not close release. | INTERFACES, TESTS, DEFENSE; [EV-0024](../evidence/EV-0024/README.md). |
 | R1 — portable build/CI | GUI and console executables, source ZIP, wheel, resolved dependencies, checksums and exact source/bundle identity; hash-locked inputs, immutable Action pins and full Git history for frozen authority. | TOOLS; repeatable/hosted receipts in the release root. |
-| R2 — distribution journey | Extraction/prerequisite/data/feedback guidance, complete collected notices and corresponding-source/build directions; no ambient DLL collection. | TOOLS, INTERFACES, existing notice corpus; `build/m1-r2-20261109/`. |
+| R2 — distribution journey | Extraction/prerequisite/data/feedback guidance, complete collected notices and corresponding-source/build directions; no ambient DLL collection. | TOOLS, INTERFACES, existing notice corpus; [EV-0023](../evidence/EV-0023/README.md), [EV-0029](../evidence/EV-0029/README.md). |
 | R3 — quantitative obligations | Inventory cold, History and bridge timing pass on the serviced reference profile; Plan/UI measurements are advisory. | PERFORMANCE methods/results, component criteria and DEFENSE authority; final `cfeac2d9` collections. |
 | R4 — integrated candidate | Complete release command, all mapped desktop behaviors and exact-package reviewed copy/inventory/integrity/close witness. SH-G-15 is accepted by user judgment with its raw qualifications intact. | TESTS, DESKTOP_UI, INTERFACES; R4 and repair receipts. |
 | R5 — adversarial reconciliation and tester set | Package05 reconciled against the commit and predecessor; Microsoft recipient terms included; immutable tester set assembled with M1-focused release notes. | Final closure below; `build/m1-r5-20261111/`. |
@@ -186,7 +192,7 @@ The serviced Astral 3.13.18 alternative was not selected: SQLite 3.53.1 FTS5
 applicability remained unresolved because metadata admission precedes complete
 topology refusal. Passing custody tests or absence of app FTS queries did not
 settle that exposure. No exploit/corruption was reproduced. The PSF input review
-and failed drafts remain under `build/m1-release-repair-20261110/runtime/`;
+and failed drafts in the release-repair working folder were not retained;
 the earlier bounded advisory review is `build/m1-r5-20261110/security-support-review.md`.
 Package-name tests were corrected to exact METADATA headers separately
 (`89bbd0e7`); a nickname in README is not a package-identity failure.
@@ -215,7 +221,7 @@ The complete final release gate above does not erase earlier failed receipts.
 | M1-5 / M1-6 | Shared typed/picker/recent location admission, bounded remembered hints, frozen Setup, serial pairs and standalone inventory, fresh Plan again. Hints grant no authority or global-default mutation. | WORKFLOWS, INTERFACES, BRIDGE; `e19ed9d`, `76ba7d0`, `build/m1-5/`, `build/m1-6/`. |
 | M1-7 | Bounded Plan projection, sibling sorting, server selection and reviewed execution; later R7 refinements preserve admission. R7-G was retired, not passed. | PRESENTATION, BRIDGE; through `5986c57` / `95f31e1`, `build/m1-7/evidence/p9-full-20260916/`. |
 | M1-8 | Capacity-stop settlement, live/retained execution review and installed recovery. Recorder-only failure remains degradation; later U-v2 supersedes P2 timing. | EXECUTOR, DATABASE, PRESENTATION; closure below and archived register. |
-| M1-9 | Inventory browsing, current evidence, Refresh and conditional missing visibility with original-result recovery and bounded receipts. | INVENTORY, PRESENTATION, INTERFACES; `build/m1-9-20261001/`. |
+| M1-9 | Inventory browsing, current evidence, Refresh and conditional missing visibility with original-result recovery and bounded receipts. | INVENTORY, PRESENTATION, INTERFACES; [EV-0022](../evidence/EV-0022/README.md). |
 | M1-10 | Server-owned complete file selection; explicit rebaseline confirmation; standalone integrity controls; separate original/current results and mounted Plan/Verify panes. | M1-10 decision record below; `build/m1-10-20261013/`. |
 | Review controller / RV | Shared view infrastructure retains distinct Plan and Inventory policy. Ordinary copied-file Verify replaces exact-manual desktop handoff; current-state results never rewrite original execution. | PRESENTATION, INTERFACES, WORKFLOWS; `build/review-consolidation-20261016/`. |
 | M1-12 | Integrated lifecycle/retention across Plan, execution, linked/manual/ordinary integrity and Inventory; unsupported reload contained, stale responses inert, exact release and retained truth. | Verification closure below; `build/m1-12-20261030/`. |
@@ -304,7 +310,7 @@ shared root evidence is a core mechanism, not consumer authorization.
 | Deferred optimization | Parent flush and durable commit batching require a coordinated durability design; unbuffered source reads require controlled cold-source evidence. No blanket flush skipping, verification overlap or concurrency change. |
 
 Measurements and original experiments: PERFORMANCE and
-`build/executor-simplification-20260929/`; current acceptance: EXECUTOR,
+[EV-0017](../evidence/EV-0017/README.md); current acceptance: EXECUTOR,
 VERIFIER, PREFLIGHT and DEFENSE. Historical per-commit tables are not new gates.
 
 ### Root admission optimization — 2026-09-28
@@ -323,8 +329,7 @@ acceptance of changed observation timing and logical-spelling policy; it is not
 an executor-quiescence grant or a general permission to omit admission.
 Handle-relative native research did not authorize replacing all current path
 guards. Current policies: CORE, PREFLIGHT and DEFENSE; evidence:
-`build/root-admission-optimization-20260928/` and
-`build/handle-relative-investigation-20261021/`.
+[EV-0034](../evidence/EV-0034/README.md) and [EV-0020](../evidence/EV-0020/README.md).
 
 ## Post-M1-8 reduction plan
 
@@ -340,8 +345,8 @@ AB-1–AB-10 are delivered. This remains a closed decision map, not pending work
 | AB-8 | One Python task snapshot supplies semantic progress/terminal facts. Task-list summary may briefly precede adoption, never becoming a second terminal authority. Full event-body removal remains a separate protocol decision. |
 | AB-9 / AB-10 | Retire duplicate CSS/source/gallery recipe pins while retaining behavioral/native/security witnesses; sweep current workflow/fixture dependencies without promoting diagnostics to acceptance. TESTS, DESKTOP_UI. |
 
-Evidence: `build/post-m1-8-ablation-20260925/`, `build/ab8-resume-20260926/`,
-`build/ab8-followup-20260926/`, `build/ab9-20260926/` and `build/ab10-20260926/`.
+Evidence: [EV-0003](../evidence/EV-0003/README.md) (AB-7),
+[EV-0004](../evidence/EV-0004/README.md) (AB-8), `build/ab8-followup-20260926/`, `build/ab9-20260926/` and `build/ab10-20260926/`.
 No speed/memory improvement is claimed by AB closeout. The source-linked
 historical observation and frozen authority bytes remain distinct from later
 fixture/custody updates. The study preserves rejected alternatives in

@@ -1,0 +1,275 @@
+{
+ "planning-optimization-next-20261019/closeout-integration.json": {
+  "bytes": 479,
+  "sha256": "ff5aa605078ec0a821d6d923fce5d1d395924efc3f7603dcefd72e248a0a4ba2",
+  "content": {
+   "base": "faa580f5b80ad8168288763dd3983c46878e061a",
+   "branch": "milestone1",
+   "commits": [
+    "b1c433c2",
+    "30349d07",
+    "e6734bbd"
+   ],
+   "clean_after_commit": true,
+   "po3": "accepted and integrated",
+   "po5": "accepted and integrated",
+   "po4": "native/profile study reviewed; all implementation paused under user condition",
+   "recovery_needed": false,
+   "task_worktrees_or_branches": [],
+   "push_or_pr": false,
+   "cleanup": "none; all failed and successful evidence retained"
+  }
+ },
+ "planning-optimization-next-20261019/delivery-check.json": {
+  "bytes": 927,
+  "sha256": "8059a2c5c8c06b16f4840bb9e132a3186b96dd66055a140758edc48e274d7eba",
+  "content": {
+   "local_file_links_checked": 177,
+   "diff_check": "passed",
+   "documents": {
+    "CHANGELOG.md": "41771777d5d0edf6fcf748274a46f536cac35825b9c44b62697198258db986aa",
+    "docs/CORE.md": "f5fb4f054312f94d1a54049da680eb7b9f76b11bd6010ce45f0d2546d4ac43b3",
+    "docs/PREFLIGHT.md": "cfc7dd9d0da21fbcb8501356727ed8171317f7252ee40d860f1582c92f1fce18",
+    "docs/WORKFLOWS.md": "f7cb9e0232cfb7b4fa5461cac80da23496d72824ddd96667788bed07c4d1a0cd",
+    "docs/FEATURES.md": "60ac2ab5c32cfcec6a12bf9cb4bd6e43e086f1ee79633600587dcb3f5e66b7a8",
+    "docs/PRESENTATION.md": "fa1160ebb2179045f192dcad5bfe10f9f6da402e46d686fa10313b2eaf8658da",
+    "docs/M1_PLAN.md": "438e2545ba71c9f318bde9600ba847cb0cfba54b6c9a72f3d766674e0ca72d0e",
+    "docs/PERFORMANCE.md": "ed6bb3cc05c36e1d1039b1358f5b5c2df8d5d35a9cb20d7943dabf0d50326eaf",
+    "docs/HANDOFF.md": "2b35434a64ea2f194ea705d9deb20bd822ae808bf8a13ca11f3560d815c2542e"
+   }
+  }
+ },
+ "planning-optimization-next-20261019/po3/integration.json": {
+  "bytes": 298,
+  "sha256": "0729261c548d532ade44144d4c9f6ec8fecaa102dae8d3c5cdad240931fed265",
+  "content": {
+   "base": "faa580f5b80ad8168288763dd3983c46878e061a",
+   "commit": "b1c433c2c8d05f233e480cb6837ca080e4c3c605",
+   "branch": "milestone1",
+   "method": "direct exact-path commit after independent approval",
+   "clean_after_commit": true,
+   "evidence": [
+    "receipt.json",
+    "review.md"
+   ],
+   "push": false
+  }
+ },
+ "planning-optimization-next-20261019/po3/receipt.json": {
+  "bytes": 19582,
+  "sha256": "7ed32682f3350e6cdc2425a116599d986c471f357913bfdd4efe92548c7a7d06",
+  "content": {
+   "base_revision": "faa580f5b80ad8168288763dd3983c46878e061a",
+   "gates": {
+    "seam-02": {
+     "counts": {
+      "passed": 43
+     },
+     "inputs_unchanged": true,
+     "log_sha256": "6b0d3e4fda4e0385d1d38354159e497e6ff264d98f01845290bce9c13eab510b"
+    },
+    "focused-01": {
+     "counts": {
+      "passed": 190,
+      "skipped": 1
+     },
+     "inputs_unchanged": true,
+     "log_sha256": "09cb1a8c8e707bf0ee2920647e6049934c1e756397c2ce11b330c6460902aec0"
+    },
+    "ordinary-01": {
+     "counts": {
+      "passed": 6038,
+      "failure": 81,
+      "skipped": 24
+     },
+     "inputs_unchanged": true,
+     "log_sha256": "4c607525124a2fe1badb401279d1b6a26d3a3c697e7a858932742ba4639bf8ac"
+    },
+    "ordinary-02": {
+     "counts": {
+      "passed": 6139,
+      "skipped": 4
+     },
+     "inputs_unchanged": true,
+     "log_sha256": "018a1260303ec86b561c7feb9d04e8ac60bd99ad9cf2ec965b3d0277997a2d70"
+    },
+    "imports-01": {
+     "contracts_kept": 12,
+     "contracts_broken": 0,
+     "inputs_unchanged": true
+    }
+   },
+   "host_correction": "ordinary01 used sandbox incorrectly; ordinary02 uses require_escalated host with the same candidate bytes.",
+   "initial_seam_failure": "seam01 generated overlong parameter IDs exceeded Windows environment limit; concise explicit IDs corrected the test harness; failed receipt retained.",
+   "differential": "equivalent over 6400000 calls",
+   "reconciled_cases": {
+    "count": 105,
+    "sandbox_to_host": {
+     "failure -> passed": 81,
+     "skipped -> skipped": 4,
+     "skipped -> passed": 20
+    },
+    "by_module": {
+     "tests.core.test_root_authority": 2,
+     "tests.interfaces.web.test_paths": 1,
+     "tests.modules.test_verifier_native": 2,
+     "tests.test_cli": 2,
+     "tests.test_core_scanplan": 1,
+     "tests.test_executor_native": 22,
+     "tests.test_executor_pending_cancel": 2,
+     "tests.test_executor_runtime": 17,
+     "tests.test_executor_settlement": 21,
+     "tests.test_post_execution_workflow": 1,
+     "tests.test_preflight": 6,
+     "tests.test_scanner": 3,
+     "tests.test_tools_cli": 5,
+     "tests.test_tools_corpus": 4,
+     "tests.test_tools_executor_settlement_audit": 10,
+     "tests.test_tools_gui": 1,
+     "tests.test_workflows": 5
+    },
+    "table_sha256": "95d2e8cf37670f1e37728bda8152cce6ab3821eb0af4d4a51a393bf119df8d6c"
+   }
+  }
+ },
+ "planning-optimization-next-20261019/po4/04-profile-host.json": {
+  "bytes": 499,
+  "sha256": "0ac13cbd0c7a83889b6488fb3bbde40ab0f8108e150652c197a16e0f926122b0",
+  "content": {
+   "cpu": "13th Gen Intel(R) Core(TM) i7-13700K",
+   "logical_processors": 24,
+   "ram_bytes": 68388208640,
+   "filesystem": "NTFS",
+   "volume_label": "WD Black SN850X 1",
+   "drive_type": 3,
+   "volume_size": 4000768323584,
+   "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+   "sqlite": "3.50.4",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "dependencies": {
+    "pywebview": "6.2.1",
+    "pythonnet": "3.1.0",
+    "xxhash": "3.8.1"
+   }
+  }
+ },
+ "planning-optimization-next-20261019/po4/04-profile-summary.json": {
+  "bytes": 3288,
+  "sha256": "7b51810ab8081695e4fe23fa3389c3d91712fd82863792dd005a82f00ff5c230",
+  "content": {
+   "records": [
+    {
+     "mix": "noop90",
+     "mode": "warmup",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-warmup-noop90\\receipt.json"
+    },
+    {
+     "mix": "noop10",
+     "mode": "warmup",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-warmup-noop10\\receipt.json"
+    },
+    {
+     "mix": "noop90",
+     "mode": "light1",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light1-noop90\\receipt.json"
+    },
+    {
+     "mix": "noop10",
+     "mode": "light1",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light1-noop10\\receipt.json"
+    },
+    {
+     "mix": "noop90",
+     "mode": "light2",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light2-noop90\\receipt.json"
+    },
+    {
+     "mix": "noop10",
+     "mode": "light2",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light2-noop10\\receipt.json"
+    },
+    {
+     "mix": "noop90",
+     "mode": "light3",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light3-noop90\\receipt.json"
+    },
+    {
+     "mix": "noop10",
+     "mode": "light3",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-light3-noop10\\receipt.json"
+    },
+    {
+     "mix": "noop90",
+     "mode": "count",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-count-noop90\\receipt.json"
+    },
+    {
+     "mix": "noop10",
+     "mode": "count",
+     "receipt": "F:\\GitHubRepositories\\NamiSync\\build\\planning-optimization-next-20261019\\po4\\04-count-noop10\\receipt.json"
+    }
+   ],
+   "inputs_equal": true,
+   "fixtures_before": {
+    "noop90": {
+     "source": {
+      "files": 8000,
+      "digest": "e2ef2de415fd2fd7fdb69a8b736f7c68b0db2878998f86ec5fdb4d3b6ba863a0"
+     },
+     "target": {
+      "files": 7200,
+      "digest": "5beca0077514bf8e103917c76998c5164e06e7651a83c4277d0ffd222109f011"
+     }
+    },
+    "noop10": {
+     "source": {
+      "files": 8000,
+      "digest": "e2ef2de415fd2fd7fdb69a8b736f7c68b0db2878998f86ec5fdb4d3b6ba863a0"
+     },
+     "target": {
+      "files": 800,
+      "digest": "c644c0d7b092af56d6093d5700bd0a3b5bf15569089c87609c1470e7e2e47c69"
+     }
+    }
+   },
+   "fixtures_after": {
+    "noop90": {
+     "source": {
+      "files": 8000,
+      "digest": "e2ef2de415fd2fd7fdb69a8b736f7c68b0db2878998f86ec5fdb4d3b6ba863a0"
+     },
+     "target": {
+      "files": 7200,
+      "digest": "5beca0077514bf8e103917c76998c5164e06e7651a83c4277d0ffd222109f011"
+     }
+    },
+    "noop10": {
+     "source": {
+      "files": 8000,
+      "digest": "e2ef2de415fd2fd7fdb69a8b736f7c68b0db2878998f86ec5fdb4d3b6ba863a0"
+     },
+     "target": {
+      "files": 800,
+      "digest": "c644c0d7b092af56d6093d5700bd0a3b5bf15569089c87609c1470e7e2e47c69"
+     }
+    }
+   }
+  }
+ },
+ "planning-optimization-next-20261019/po5/integration.json": {
+  "bytes": 298,
+  "sha256": "cd3c53d38321f37d07fb1a317edf12e498fde8a2bad392e323399716626c88b9",
+  "content": {
+   "base": "b1c433c2c8d05f233e480cb6837ca080e4c3c605",
+   "commit": "30349d0734e833bd9aff43abc4d562a62b72ab5f",
+   "branch": "milestone1",
+   "method": "direct exact-path commit after independent approval",
+   "clean_after_commit": true,
+   "evidence": [
+    "receipt.json",
+    "review.md"
+   ],
+   "push": false
+  }
+ }
+}

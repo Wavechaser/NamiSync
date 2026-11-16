@@ -1,0 +1,1602 @@
+{
+ "resource-study-20261106c/multi/runs/heapsample-01/allocation-report.json": {
+  "bytes": 10066,
+  "sha256": "5428451c59c3aff262f8ee13103a70fb0ac30895968b132820a4c9e73eb5670f",
+  "content": {
+   "heap_before": {
+    "usedSize": 2522400,
+    "totalSize": 3145728,
+    "embedderHeapUsedSize": 12936928,
+    "backingStorageSize": 771838
+   },
+   "heap_terminal": {
+    "usedSize": 220040568,
+    "totalSize": 280190976,
+    "embedderHeapUsedSize": 4635152,
+    "backingStorageSize": 760502
+   },
+   "heap_after_gc": {
+    "usedSize": 2865576,
+    "totalSize": 3657728,
+    "embedderHeapUsedSize": 3315384,
+    "backingStorageSize": 760251
+   },
+   "sampled_total_mib": 552.0,
+   "items": 10000,
+   "top_self_top10": [
+    [
+     "entries :0",
+     86.3,
+     15.6
+    ],
+    [
+     "(V8 API) :0",
+     79.3,
+     14.4
+    ],
+    [
+     "(anonymous) :1",
+     70.2,
+     12.7
+    ],
+    [
+     "cloneJsonValue bridge.js:2381",
+     64.5,
+     11.7
+    ],
+    [
+     "(PARSER) :0",
+     56.0,
+     10.1
+    ],
+    [
+     "window.pywebview._returnValuesCallbacks.<computed>.<computed> :137",
+     25.8,
+     4.7
+    ],
+    [
+     "keys :0",
+     16.3,
+     3.0
+    ],
+    [
+     "stringify :166",
+     15.6,
+     2.8
+    ],
+    [
+     "(BYTECODE_COMPILER) :0",
+     12.5,
+     2.3
+    ],
+    [
+     "mintId bridge.js:3692",
+     10.5,
+     1.9
+    ]
+   ],
+   "top_total_top10": [
+    [
+     "(root) :0",
+     552.0,
+     100.0
+    ],
+    [
+     "(anonymous) bridge.js:1487",
+     195.9,
+     35.5
+    ],
+    [
+     "acceptNativeResponse bridge.js:1514",
+     195.9,
+     35.5
+    ],
+    [
+     "cloneJsonValue bridge.js:2381",
+     151.3,
+     27.4
+    ],
+    [
+     "(anonymous) :1",
+     131.9,
+     23.9
+    ],
+    [
+     "map :0",
+     122.1,
+     22.1
+    ],
+    [
+     "(anonymous) bridge.js:2383",
+     120.4,
+     21.8
+    ],
+    [
+     "entries :0",
+     86.3,
+     15.6
+    ],
+    [
+     "(V8 API) :0",
+     79.3,
+     14.4
+    ],
+    [
+     "(PARSER) :0",
+     56.0,
+     10.1
+    ]
+   ],
+   "dropped": {
+    "top_self": 40,
+    "top_total": 40,
+    "top_stacks": 30
+   }
+  }
+ },
+ "resource-study-20261106c/multi/runs/multi-02/result.json": {
+  "bytes": 411,
+  "sha256": "d77ed38c7c72d767cadf3ed1cd55017f8b1f6bdc2ef556f1e107f4fb3c3f46f7",
+  "content": {
+   "name": "multi-02",
+   "complete": true,
+   "unexecuted_targets_empty": {
+    "t2": true,
+    "t4": true
+   },
+   "close": {
+    "window_found": true,
+    "exit_code": 0,
+    "remaining_pids": []
+   },
+   "deferred_mirror_checks": [
+    {
+     "label": "t1",
+     "ok": true
+    },
+    {
+     "label": "t3",
+     "ok": true
+    },
+    {
+     "label": "t5",
+     "ok": true
+    },
+    {
+     "label": "t6",
+     "ok": true
+    }
+   ]
+  }
+ },
+ "resource-study-20261106c/profiling/hostprofile-10k.json": {
+  "bytes": 27317,
+  "sha256": "6ef483bcb66bf2182b353ae1a1a8ccb0bd72c7feb1edb5606df6caed493cbd0b",
+  "content": {
+   "source": "F:\\NamiSync-resource-scale-10k-7ed0704d\\source",
+   "target": "H:\\test_dir\\NamiSync-hostprofile-2f1cb2f7",
+   "items": 10100,
+   "wall": 111.52,
+   "process_cpu": 79.33,
+   "phases": [
+    [
+     "execution-preflight",
+     0.27
+    ],
+    [
+     "execute",
+     3.17
+    ],
+    [
+     "verify",
+     56.43
+    ]
+   ],
+   "mirror_ok": true,
+   "thread_samples": 149469,
+   "sampler_ticks": 37377,
+   "threads": [
+    [
+     "namisync-dispatcher",
+     37377,
+     25.0
+    ],
+    [
+     "namisync-session-f3cc691fdefa4e128e345501325ffcb3-2",
+     37177,
+     24.9
+    ],
+    [
+     "namisync-observer-f3cc691fdefa4e128e345501325ffcb3",
+     37176,
+     24.9
+    ],
+    [
+     "namisync-audit",
+     37175,
+     24.9
+    ],
+    [
+     "29352",
+     188,
+     0.1
+    ],
+    [
+     "166492",
+     188,
+     0.1
+    ],
+    [
+     "130736",
+     188,
+     0.1
+    ]
+   ],
+   "leaf_top10": [
+    [
+     "Condition.wait (threading.py:327)",
+     111248,
+     74.4
+    ],
+    [
+     "_WindowsApi.open_file (namisync/modules/verifier/native.py:348)",
+     11252,
+     7.5
+    ],
+    [
+     "NativeFileSystem._get_attributes (namisync/modules/executor/native.py:1638)",
+     5496,
+     3.7
+    ],
+    [
+     "SerializedWriter.transact (namisync/db/writer.py:65)",
+     3484,
+     2.3
+    ],
+    [
+     "RootHold.require_ordinary (namisync/core/root_authority.py:413)",
+     2520,
+     1.7
+    ],
+    [
+     "NativeFileSystem._flush_handle (namisync/modules/executor/native.py:1536)",
+     2153,
+     1.4
+    ],
+    [
+     "_WindowsApi.read (namisync/modules/verifier/native.py:496)",
+     1943,
+     1.3
+    ],
+    [
+     "NativeFileSystem.flush_directory (namisync/modules/executor/native.py:1463)",
+     1766,
+     1.2
+    ],
+    [
+     "Path.stat (_local.py:510)",
+     1428,
+     1.0
+    ],
+    [
+     "NativeFileSystem._publish_copy (namisync/modules/executor/native.py:1280)",
+     884,
+     0.6
+    ]
+   ],
+   "inclusive_top10": [
+    [
+     "Thread._bootstrap (threading.py:1001)",
+     149469,
+     100.0
+    ],
+    [
+     "Thread.run (threading.py:984)",
+     149469,
+     100.0
+    ],
+    [
+     "Thread._bootstrap_inner (threading.py:1028)",
+     149469,
+     100.0
+    ],
+    [
+     "Condition.wait (threading.py:327)",
+     111248,
+     74.4
+    ],
+    [
+     "Dispatcher._schedule (namisync/dispatcher/dispatcher.py:1195)",
+     37377,
+     25.0
+    ],
+    [
+     "Dispatcher._run_core (namisync/dispatcher/dispatcher.py:1440)",
+     37365,
+     25.0
+    ],
+    [
+     "Dispatcher._run_worker (namisync/dispatcher/dispatcher.py:1290)",
+     37365,
+     25.0
+    ],
+    [
+     "run_session (namisync/core/session.py:700)",
+     37365,
+     25.0
+    ],
+    [
+     "SessionObserver._run (namisync/interfaces/session_observer.py:278)",
+     37364,
+     25.0
+    ],
+    [
+     "EventStream.next (namisync/dispatcher/event_bus.py:119)",
+     37364,
+     25.0
+    ]
+   ],
+   "dropped": {
+    "leaf": 40,
+    "inclusive": 80,
+    "stacks": 40
+   }
+  }
+ },
+ "resource-study-20261106c/profiling/hosttimers-10k.json": {
+  "bytes": 6318,
+  "sha256": "b4f0b879b889b57c0a0effdcf9af82d79c499eb2664ae9230b41743b881624ed",
+  "content": {
+   "source": "F:\\NamiSync-resource-scale-10k-7ed0704d\\source",
+   "target": "H:\\test_dir\\NamiSync-hosttimers-a3f7367b",
+   "files": 10000,
+   "wall": 99.12,
+   "process_cpu": 55.09,
+   "phases": [
+    [
+     "execution-preflight",
+     0.28
+    ],
+    [
+     "execute",
+     2.76
+    ],
+    [
+     "verify",
+     46.29
+    ]
+   ],
+   "mirror_ok": true,
+   "timers": {
+    "namisync.modules.verifier.engine._process_post_copy_candidate": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 51.31,
+     "ms_per_file": 5.131
+    },
+    "namisync.modules.verifier.engine._classify_subject": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 45.43,
+     "ms_per_file": 4.543
+    },
+    "namisync.modules.executor.runtime._execute": {
+     "calls": 1,
+     "calls_per_file": 0.0,
+     "total_s": 43.23,
+     "ms_per_file": 4.323
+    },
+    "namisync.modules.executor.runtime._execute_operation": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 42.04,
+     "ms_per_file": 4.204
+    },
+    "namisync.modules.executor.runtime._copy": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 40.08,
+     "ms_per_file": 4.008
+    },
+    "_WindowsApi.open_file": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 33.22,
+     "ms_per_file": 3.322
+    },
+    "namisync.modules.executor.runtime._prepare_copy": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 23.68,
+     "ms_per_file": 2.368
+    },
+    "namisync.modules.executor.runtime._complete_published_byte_operation": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 12.47,
+     "ms_per_file": 1.247
+    },
+    "SerializedWriter.transact": {
+     "calls": 20204,
+     "calls_per_file": 2.02,
+     "total_s": 12.31,
+     "ms_per_file": 1.231
+    },
+    "NativeFileSystem.resolve": {
+     "calls": 100600,
+     "calls_per_file": 10.06,
+     "total_s": 11.65,
+     "ms_per_file": 1.165
+    },
+    "NativeFileSystem._validate_existing_chain": {
+     "calls": 100600,
+     "calls_per_file": 10.06,
+     "total_s": 8.08,
+     "ms_per_file": 0.808
+    },
+    "NativeFileSystem.stat": {
+     "calls": 40200,
+     "calls_per_file": 4.02,
+     "total_s": 6.93,
+     "ms_per_file": 0.693
+    },
+    "NativeFileSystem.finalize_temp": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 6.9,
+     "ms_per_file": 0.69
+    },
+    "SyncRunRecorder.record_copied": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 6.4,
+     "ms_per_file": 0.64
+    },
+    "NativeFileSystem._flush_handle": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 6.3,
+     "ms_per_file": 0.63
+    },
+    "NativeFileSystem._get_attributes": {
+     "calls": 200700,
+     "calls_per_file": 20.07,
+     "total_s": 5.92,
+     "ms_per_file": 0.592
+    },
+    "namisync.modules.executor.runtime._resolve_target_path": {
+     "calls": 40200,
+     "calls_per_file": 4.02,
+     "total_s": 5.8,
+     "ms_per_file": 0.58
+    },
+    "namisync.modules.verifier.engine._record_post_copy_outcome": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 5.44,
+     "ms_per_file": 0.544
+    },
+    "SyncRunRecorder.record_integrity": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 5.21,
+     "ms_per_file": 0.521
+    },
+    "_WindowsApi.read": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 4.27,
+     "ms_per_file": 0.427
+    },
+    "namisync.modules.executor.runtime._guard_present": {
+     "calls": 20100,
+     "calls_per_file": 2.01,
+     "total_s": 4.18,
+     "ms_per_file": 0.418
+    },
+    "NativeFileSystem.flush_directory": {
+     "calls": 10100,
+     "calls_per_file": 1.01,
+     "total_s": 3.7,
+     "ms_per_file": 0.37
+    },
+    "NativeFileSystem.stat_path": {
+     "calls": 60300,
+     "calls_per_file": 6.03,
+     "total_s": 3.39,
+     "ms_per_file": 0.339
+    },
+    "RootHold.require_ordinary": {
+     "calls": 251199,
+     "calls_per_file": 25.12,
+     "total_s": 3.24,
+     "ms_per_file": 0.324
+    },
+    "namisync.modules.executor.runtime._guard_expected_target": {
+     "calls": 20000,
+     "calls_per_file": 2.0,
+     "total_s": 2.81,
+     "ms_per_file": 0.281
+    },
+    "namisync.modules.executor.runtime._guard_absent": {
+     "calls": 20100,
+     "calls_per_file": 2.01,
+     "total_s": 2.81,
+     "ms_per_file": 0.281
+    },
+    "NativeFileSystem._reject_reparse": {
+     "calls": 60511,
+     "calls_per_file": 6.05,
+     "total_s": 2.69,
+     "ms_per_file": 0.269
+    },
+    "NativeFileSystem._require_held_root": {
+     "calls": 211000,
+     "calls_per_file": 21.1,
+     "total_s": 2.16,
+     "ms_per_file": 0.216
+    },
+    "namisync.modules.executor.runtime._published_copy_stat": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 2.08,
+     "ms_per_file": 0.208
+    },
+    "HistoryObserver._append_events": {
+     "calls": 96,
+     "calls_per_file": 0.01,
+     "total_s": 1.7,
+     "ms_per_file": 0.17
+    },
+    "namisync.modules.verifier.native._reject_reparse_components": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 1.48,
+     "ms_per_file": 0.148
+    },
+    "_WindowsApi.require_expected_final_path": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 1.43,
+     "ms_per_file": 0.143
+    },
+    "NativeFileSystem._publish_copy": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 1.33,
+     "ms_per_file": 0.133
+    },
+    "namisync.modules.verifier.native._verification_lstat": {
+     "calls": 20000,
+     "calls_per_file": 2.0,
+     "total_s": 1.14,
+     "ms_per_file": 0.114
+    },
+    "NativeFileSystem.create_temp": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 1.03,
+     "ms_per_file": 0.103
+    },
+    "_WindowsApi.stat": {
+     "calls": 40000,
+     "calls_per_file": 4.0,
+     "total_s": 0.73,
+     "ms_per_file": 0.073
+    },
+    "NativeFileSystem.open_source": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 0.61,
+     "ms_per_file": 0.061
+    },
+    "_WindowsApi.__init__": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 0.59,
+     "ms_per_file": 0.059
+    },
+    "RootHold.confirm": {
+     "calls": 412100,
+     "calls_per_file": 41.21,
+     "total_s": 0.12,
+     "ms_per_file": 0.012
+    },
+    "_WindowsApi.sector_size_from_handle": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 0.11,
+     "ms_per_file": 0.011
+    },
+    "WindowsUnbufferedReader._open_bound": {
+     "calls": 10000,
+     "calls_per_file": 1.0,
+     "total_s": 0.01,
+     "ms_per_file": 0.001
+    }
+   }
+  }
+ },
+ "resource-study-20261106c/validation.json": {
+  "bytes": 87751,
+  "sha256": "51e90ec8f29611d870574f8034439f4181b3a6d73345ca944c28c03bed3a80d4",
+  "content": {
+   "declaration": "SH-G-15 v1",
+   "verdict": "FAIL",
+   "budgets": {
+    "startup_settled_mib": 450.0,
+    "startup_peak_mib": 600.0,
+    "startup_idle_cpu_percent": 1.0,
+    "work_peak_mib": 2048.0,
+    "closed_settled_mib": 1024.0,
+    "soak_slope_mib_per_cycle": 0.2,
+    "soak_shift_mib": 20.0,
+    "soak_handle_slope_per_cycle": 1.0,
+    "soak_gui_object_growth": 10.0,
+    "idle_slope_mib_per_10min": 2.0
+   },
+   "missing_runs": [],
+   "devtools_overhead_settled_mib": 10.566,
+   "failed_predicates": [
+    {
+     "run": "soak-01",
+     "check": "soak_handle_slope_per_cycle",
+     "value": 2.429,
+     "budget": 1.0
+    },
+    {
+     "run": "soak-02",
+     "check": "soak_handle_slope_per_cycle",
+     "value": 4.955,
+     "budget": 1.0
+    },
+    {
+     "run": "soak-03",
+     "check": "soak_slope_mib_per_cycle",
+     "value": 0.301,
+     "budget": 0.2
+    },
+    {
+     "run": "soak-03",
+     "check": "soak_shift_mib",
+     "value": 20.718,
+     "budget": 20.0
+    },
+    {
+     "run": "scale-100k-01",
+     "check": "work_peak_mib",
+     "value": 2556.918,
+     "budget": 2048.0
+    },
+    {
+     "run": "scale-100k-01",
+     "check": "closed_settled_max_mib",
+     "value": 2126.018,
+     "budget": 1024.0
+    },
+    {
+     "run": "scale-100k-02",
+     "check": "work_peak_mib",
+     "value": 2439.254,
+     "budget": 2048.0
+    },
+    {
+     "run": "scale-100k-02",
+     "check": "closed_settled_max_mib",
+     "value": 2029.168,
+     "budget": 1024.0
+    },
+    {
+     "run": "scale-100k-03",
+     "check": "work_peak_mib",
+     "value": 2364.996,
+     "budget": 2048.0
+    },
+    {
+     "run": "scale-100k-03",
+     "check": "closed_settled_max_mib",
+     "value": 1999.23,
+     "budget": 1024.0
+    }
+   ],
+   "invalid_runs": [],
+   "runs": [
+    {
+     "name": "startup-01",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 354.168,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 358.676,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.185,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 358.676,
+      "idle_cpu_percent": 0.1854
+     }
+    },
+    {
+     "name": "startup-02",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 353.129,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 357.863,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.265,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 357.863,
+      "idle_cpu_percent": 0.2648
+     }
+    },
+    {
+     "name": "startup-03",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 341.453,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 345.855,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.53,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 345.855,
+      "idle_cpu_percent": 0.5296
+     }
+    },
+    {
+     "name": "startup-cdp-01",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 373.312,
+      "idle_cpu_percent": 0.4503
+     }
+    },
+    {
+     "name": "startup-cdp-02",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 357.238,
+      "idle_cpu_percent": 0.6885
+     }
+    },
+    {
+     "name": "startup-cdp-03",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 370.055,
+      "idle_cpu_percent": 0.3443
+     }
+    },
+    {
+     "name": "soak-01",
+     "profile": "soak",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 780.879,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 752.773,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": 0.144,
+       "budget": 0.2,
+       "pass": true
+      },
+      "soak_shift_mib": {
+       "value": 10.393,
+       "budget": 20.0,
+       "pass": true
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": 2.429,
+       "budget": 1.0,
+       "pass": false
+      },
+      "soak_gui_object_growth": {
+       "value": 1.0,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 780.879
+     }
+    },
+    {
+     "name": "soak-02",
+     "profile": "soak",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 779.25,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 742.035,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": -0.017,
+       "budget": 0.2,
+       "pass": true
+      },
+      "soak_shift_mib": {
+       "value": -5.632,
+       "budget": 20.0,
+       "pass": true
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": 4.955,
+       "budget": 1.0,
+       "pass": false
+      },
+      "soak_gui_object_growth": {
+       "value": 4.0,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 779.25
+     }
+    },
+    {
+     "name": "soak-03",
+     "profile": "soak",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 731.895,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 704.383,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": 0.301,
+       "budget": 0.2,
+       "pass": false
+      },
+      "soak_shift_mib": {
+       "value": 20.718,
+       "budget": 20.0,
+       "pass": false
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": -1.003,
+       "budget": 1.0,
+       "pass": true
+      },
+      "soak_gui_object_growth": {
+       "value": -2.0,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 731.895
+     }
+    },
+    {
+     "name": "scale-10k-01",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 975.738,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 841.762,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 975.738
+     }
+    },
+    {
+     "name": "scale-100k-01",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 2556.918,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 2126.018,
+       "budget": 1024.0,
+       "pass": false
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 2556.918
+     }
+    },
+    {
+     "name": "scale-10k-02",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 964.828,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 826.066,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 964.828
+     }
+    },
+    {
+     "name": "scale-100k-02",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 2439.254,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 2029.168,
+       "budget": 1024.0,
+       "pass": false
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 2439.254
+     }
+    },
+    {
+     "name": "scale-10k-03",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 950.07,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 829.746,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 950.07
+     }
+    },
+    {
+     "name": "scale-100k-03",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 2364.996,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 1999.23,
+       "budget": 1024.0,
+       "pass": false
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 2364.996
+     }
+    },
+    {
+     "name": "payload-01",
+     "profile": "payload",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 444.152,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 424.508,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 444.152
+     }
+    },
+    {
+     "name": "idle-open-01",
+     "profile": "idle_open",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 961.652,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 804.133,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "idle_slope_mib_per_10min": {
+       "value": -3.621,
+       "budget": 2.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 961.652
+     }
+    }
+   ]
+  }
+ },
+ "resource-study-20261108/validation.json": {
+  "bytes": 88228,
+  "sha256": "78ef7e3ee8b4108bac67e4e5ec1719a36941d736bac43a82de2b4573ef7ecf8d",
+  "content": {
+   "declaration": "SH-G-15 v1",
+   "verdict": "FAIL",
+   "budgets": {
+    "startup_settled_mib": 450.0,
+    "startup_peak_mib": 600.0,
+    "startup_idle_cpu_percent": 1.0,
+    "work_peak_mib": 2048.0,
+    "closed_settled_mib": 1024.0,
+    "soak_slope_mib_per_cycle": 0.2,
+    "soak_shift_mib": 20.0,
+    "soak_handle_slope_per_cycle": 1.0,
+    "soak_gui_object_growth": 10.0,
+    "idle_slope_mib_per_10min": 2.0
+   },
+   "missing_runs": [],
+   "devtools_overhead_settled_mib": 12.824,
+   "failed_predicates": [
+    {
+     "run": "soak-01",
+     "check": "soak_slope_mib_per_cycle",
+     "value": 0.281,
+     "budget": 0.2
+    },
+    {
+     "run": "soak-02",
+     "check": "soak_slope_mib_per_cycle",
+     "value": 0.268,
+     "budget": 0.2
+    },
+    {
+     "run": "soak-02",
+     "check": "soak_handle_slope_per_cycle",
+     "value": 3.785,
+     "budget": 1.0
+    },
+    {
+     "run": "scale-100k-01",
+     "check": "work_peak_mib",
+     "value": 3588.457,
+     "budget": 2048.0
+    },
+    {
+     "run": "scale-100k-02",
+     "check": "work_peak_mib",
+     "value": 3673.688,
+     "budget": 2048.0
+    },
+    {
+     "run": "scale-100k-03",
+     "check": "work_peak_mib",
+     "value": 3297.957,
+     "budget": 2048.0
+    }
+   ],
+   "invalid_runs": [
+    {
+     "run": "soak-03",
+     "reasons": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [47012, 105064]}"
+     ]
+    },
+    {
+     "run": "scale-10k-01",
+     "reasons": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [120468, 165724]}"
+     ]
+    },
+    {
+     "run": "scale-10k-02",
+     "reasons": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [112252, 132148]}"
+     ]
+    },
+    {
+     "run": "scale-10k-03",
+     "reasons": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [113728, 160580]}"
+     ]
+    },
+    {
+     "run": "payload-01",
+     "reasons": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [92196, 140140]}"
+     ]
+    }
+   ],
+   "runs": [
+    {
+     "name": "startup-01",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 348.662,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 351.879,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.318,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 351.879,
+      "idle_cpu_percent": 0.3178
+     }
+    },
+    {
+     "name": "startup-02",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 337.006,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 341.164,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.45,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 341.164,
+      "idle_cpu_percent": 0.4503
+     }
+    },
+    {
+     "name": "startup-03",
+     "profile": "startup",
+     "valid": true,
+     "checks": {
+      "startup_settled_mib": {
+       "value": 335.047,
+       "budget": 450.0,
+       "pass": true
+      },
+      "startup_peak_mib": {
+       "value": 341.355,
+       "budget": 600.0,
+       "pass": true
+      },
+      "startup_idle_cpu_percent": {
+       "value": 0.159,
+       "budget": 1.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 341.355,
+      "idle_cpu_percent": 0.1589
+     }
+    },
+    {
+     "name": "startup-cdp-01",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 354.051,
+      "idle_cpu_percent": 0.3178
+     }
+    },
+    {
+     "name": "startup-cdp-02",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 351.363,
+      "idle_cpu_percent": 0.2648
+     }
+    },
+    {
+     "name": "startup-cdp-03",
+     "profile": "startup",
+     "valid": true,
+     "checks": {},
+     "metrics": {
+      "sampled_peak_mib": 354.281,
+      "idle_cpu_percent": 0.1854
+     }
+    },
+    {
+     "name": "soak-01",
+     "profile": "soak",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 612.465,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 525.18,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": 0.281,
+       "budget": 0.2,
+       "pass": false
+      },
+      "soak_shift_mib": {
+       "value": 17.208,
+       "budget": 20.0,
+       "pass": true
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": -0.28,
+       "budget": 1.0,
+       "pass": true
+      },
+      "soak_gui_object_growth": {
+       "value": -0.5,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 612.465
+     }
+    },
+    {
+     "name": "soak-02",
+     "profile": "soak",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 620.031,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 531.801,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": 0.268,
+       "budget": 0.2,
+       "pass": false
+      },
+      "soak_shift_mib": {
+       "value": 15.723,
+       "budget": 20.0,
+       "pass": true
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": 3.785,
+       "budget": 1.0,
+       "pass": false
+      },
+      "soak_gui_object_growth": {
+       "value": 0.5,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 620.031
+     }
+    },
+    {
+     "name": "soak-03",
+     "profile": "soak",
+     "valid": false,
+     "invalid": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [47012, 105064]}"
+     ],
+     "checks": {
+      "work_peak_mib": {
+       "value": 605.391,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 519.688,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "soak_slope_mib_per_cycle": {
+       "value": 0.174,
+       "budget": 0.2,
+       "pass": true
+      },
+      "soak_shift_mib": {
+       "value": 9.464,
+       "budget": 20.0,
+       "pass": true
+      },
+      "soak_handle_slope_per_cycle": {
+       "value": -0.135,
+       "budget": 1.0,
+       "pass": true
+      },
+      "soak_gui_object_growth": {
+       "value": -1.0,
+       "budget": 10.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 605.391
+     }
+    },
+    {
+     "name": "scale-10k-01",
+     "profile": "scale",
+     "valid": false,
+     "invalid": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [120468, 165724]}"
+     ],
+     "checks": {
+      "work_peak_mib": {
+       "value": 1223.957,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 533.648,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 1223.957
+     }
+    },
+    {
+     "name": "scale-100k-01",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 3588.457,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 689.141,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 3588.457
+     }
+    },
+    {
+     "name": "scale-10k-02",
+     "profile": "scale",
+     "valid": false,
+     "invalid": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [112252, 132148]}"
+     ],
+     "checks": {
+      "work_peak_mib": {
+       "value": 1110.301,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 540.074,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 1110.301
+     }
+    },
+    {
+     "name": "scale-100k-02",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 3673.688,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 729.293,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 3673.688
+     }
+    },
+    {
+     "name": "scale-10k-03",
+     "profile": "scale",
+     "valid": false,
+     "invalid": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [113728, 160580]}"
+     ],
+     "checks": {
+      "work_peak_mib": {
+       "value": 1100.684,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 527.246,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 1100.684
+     }
+    },
+    {
+     "name": "scale-100k-03",
+     "profile": "scale",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 3297.957,
+       "budget": 2048.0,
+       "pass": false
+      },
+      "closed_settled_max_mib": {
+       "value": 793.293,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 3297.957
+     }
+    },
+    {
+     "name": "payload-01",
+     "profile": "payload",
+     "valid": false,
+     "invalid": [
+      "abnormal close: {'window_found': True, 'exit_code': 0, 'remaining_pids': [92196, 140140]}"
+     ],
+     "checks": {
+      "work_peak_mib": {
+       "value": 427.965,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 405.066,
+       "budget": 1024.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 427.965
+     }
+    },
+    {
+     "name": "idle-open-01",
+     "profile": "idle_open",
+     "valid": true,
+     "checks": {
+      "work_peak_mib": {
+       "value": 1086.395,
+       "budget": 2048.0,
+       "pass": true
+      },
+      "closed_settled_max_mib": {
+       "value": 521.922,
+       "budget": 1024.0,
+       "pass": true
+      },
+      "idle_slope_mib_per_10min": {
+       "value": -0.012,
+       "budget": 2.0,
+       "pass": true
+      }
+     },
+     "metrics": {
+      "sampled_peak_mib": 1086.395
+     }
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,171 @@
+{
+ "test-refinement/1026541/st-h/cleanup-result.json": {
+  "bytes": 162,
+  "sha256": "3954dfe54b3e71a88412de5d81afeed23942cb0acc5669869a5c25f3da0fabc7",
+  "content": {
+   "node": "test_terminate_process_tree_closes_job_before_bounded_redirector_reap",
+   "exit_code": 0,
+   "duration_seconds": 0.1,
+   "summary": "1 passed"
+  }
+ },
+ "test-refinement/1026541/st-h/control-new/result.json": {
+  "bytes": 283,
+  "sha256": "b6bbd982e889b5d935d43647a9fe56c5d110e0827813c342fce12ee6f847c4ae",
+  "content": {
+   "command": "python -m pytest -q BR-G-30 BR-G-31 -o addopts=",
+   "exit_code": 0,
+   "duration_seconds": 46.73,
+   "summary": "2 passed",
+   "receipts": "not retained: pytest temp retention removed pytest-5349 before receipt copy; rerun required solely for durable receipts"
+  }
+ },
+ "test-refinement/1026541/st-h/h-f1-new/result.json": {
+  "bytes": 232,
+  "sha256": "cdaf29e73e267ce7b3945e172f2f5317cc26ba8186b986e4e2dd136d732967c7",
+  "content": {
+   "command": "python -m pytest -q BR-G-30 BR-G-31 -o addopts=",
+   "exit_code": 0,
+   "duration_seconds": 48.65,
+   "summary": "2 passed",
+   "receipt_inventory": [
+    "receipts/ready.json",
+    "receipts/final.json"
+   ]
+  }
+ },
+ "test-refinement/1026541/st-h/h-f1-old/result.json": {
+  "bytes": 299,
+  "sha256": "1a99bb255940f5f23c535163f8bd73f40ce0d23ebc69011660785944d052336c",
+  "content": {
+   "command": "python -m pytest -q BR-G-30 BR-G-31 -o addopts=",
+   "exit_code": 1,
+   "duration_seconds": 53.84,
+   "summary": "BR-G-30 failed KeyError off_thread_current_url_after_cancel; BR-G-31 passed",
+   "receipt_inventory": [
+    "receipts/ready.json",
+    "receipts/final.json"
+   ]
+  }
+ },
+ "test-refinement/1026541/st-h/h-f2-new/capture-manifest-v4.json": {
+  "bytes": 1464,
+  "sha256": "4649dbacd2d55bba45c736f2b332dac4427905253884332c8f47c0d8503ef98e",
+  "content": {
+   "schema_version": 4,
+   "probe": "H-F2-new",
+   "supersedes_before_execution": "capture-manifest-v3.json",
+   "failed_collection_preserved": "capture-v3-pytest.txt",
+   "owner": "tests/interfaces/web/test_native_host_gates.py",
+   "owner_original_sha256": "d75328d4d4f587872affd343ce7d27e151749d94ca0fd0935885d24aaeb7b174",
+   "driver_sha256": "a04be3ff28216cb6186ceb7cb0b5e6944e74c1835ee9dc103e616ec8a34809f5",
+   "addition_sha256": "f432b60d2d59e1c0455a66875e39f392de104e09d30865639516606ec7eb0b56",
+   "node": "tests/interfaces/web/test_native_host_gates.py::test_st_h_missing_reinjection_is_reaped_with_its_job",
+   "preflight": [
+    "copy driver to owned isolated module",
+    "copy missing-signal owner",
+    "verify both hashes",
+    "collect-only exact node must exit 0 and identify one test",
+    "verify imports are module-local and existing fixtures resolve"
+   ],
+   "capture": [
+    "launched PID",
+    "nonempty Job PID set containing launched PID at start and termination entry",
+    "terminate_process_tree entry and return",
+    "wrapper poll after termination",
+    "per-observed-PID Win32 liveness",
+    "timeout error text",
+    "ready/failure/final existence",
+    "raw pytest output"
+   ],
+   "cleanup": [
+    "preserve capture and output",
+    "restore exact original paired-test bytes/hash",
+    "restore repair child bytes/hash",
+    "verify disposable node absent by source hash; do not run further tests"
+   ]
+  }
+ },
+ "test-refinement/1026541/st-h/h-f2-new/result.json": {
+  "bytes": 302,
+  "sha256": "b482820d0bc1e2a46d6166746ab0ee49350e0c6542ccc836f058c16ab41ed8a5",
+  "content": {
+   "command": "python -m pytest -q BR-G-30 BR-G-31 -o addopts=",
+   "exit_code": 1,
+   "duration_seconds": 72.6,
+   "summary": "2 setup errors: headed scenario exceeded its whole-scenario deadline",
+   "receipt_inventory": [],
+   "ready_success": false,
+   "live_native_gate_processes_after": []
+  }
+ },
+ "test-refinement/1026541/st-h/probe-manifest.json": {
+  "bytes": 3364,
+  "sha256": "a49fa890d254bda84564245eb2e65805b5bc3185655410c02e9642ec40cbb268",
+  "content": {
+   "schema_version": 1,
+   "checkpoint": "ST-H",
+   "source_revision": "10265417174e9e9e32b564e73f2527f34b3696d2",
+   "qualified_checkout": "build/test-refinement/1026541/baseline/checkout",
+   "owner": "tests/interfaces/web/_native_gate_child.py",
+   "normalized_line_endings": "LF for disposable probe sources",
+   "owner_base_sha256": "89d8688d1a59689ad2c328966a8ea81d7503b3aa714bd25a7e594fa7a07010ef",
+   "owner_repair_sha256": "c892a7bc9250ad393a162c6450108e512f1096bc5983cfd9640e21c9434be788",
+   "immutable_scope": [
+    "tests/interfaces/web/_native_gate_child.py",
+    "tests/assets/native_host_gate/probe.js",
+    "tests/interfaces/web/test_native_host_gates.py"
+   ],
+   "unchanged_product": true,
+   "shared_deadline_seconds": 60.0,
+   "selected_nodes": [
+    "tests/interfaces/web/test_native_host_gates.py::test_br_g_30_real_installed_host_assumptions_are_measured",
+    "tests/interfaces/web/test_native_host_gates.py::test_br_g_31_installed_host_composition_preserves_security_boundaries"
+   ],
+   "corroboration_nodes": [
+    "tests/interfaces/web/test_headed_native.py::test_terminate_process_tree_closes_job_before_bounded_redirector_reap"
+   ],
+   "probes": [
+    {
+     "id": "H-F1-old",
+     "source": "base",
+     "mutation": "insert time.sleep(12.7) immediately before count-2 reinjection_ready.set()",
+     "source_sha256": "2a36d59bf135010d7af197d68dd3886d582fff150128fc58fb773ecb868a858f",
+     "expected_exit": "nonzero",
+     "expected_detector": "old delayed-return reinjection wait expires before second-ready signal",
+     "artifacts": "build/test-refinement/1026541/st-h/h-f1-old/"
+    },
+    {
+     "id": "H-F1-new",
+     "source": "repair",
+     "mutation": "insert time.sleep(12.7) immediately before count-2 reinjection_ready.set()",
+     "source_sha256": "628b7535f907967baf733c3d7016f660f9a15c9146b26be0966625633c8db0cd",
+     "expected_exit": 0,
+     "expected_detector": "BR-G-30/31 pass existing ordering, off-thread URL, stale-return and receipt assertions",
+     "artifacts": "build/test-refinement/1026541/st-h/h-f1-new/"
+    },
+    {
+     "id": "H-F2-new",
+     "source": "repair",
+     "mutation": "suppress only count-2 reinjection_ready.set(), retain event construction",
+     "source_sha256": "894d31fd15cf7c1fab1e7be2e018d9c2f847dce0fcbfc54e30bf334f7818a11a",
+     "expected_exit": "nonzero at parent 60-second deadline",
+     "expected_detector": "no ready success; deadline terminates/reaps child; PID not live",
+     "artifacts": "build/test-refinement/1026541/st-h/h-f2-new/"
+    },
+    {
+     "id": "H-control-new",
+     "source": "repair",
+     "mutation": "none",
+     "source_sha256": "c892a7bc9250ad393a162c6450108e512f1096bc5983cfd9640e21c9434be788",
+     "expected_exit": 0,
+     "expected_detector": "BR-G-30/31 pass unchanged assertions",
+     "artifacts": "build/test-refinement/1026541/st-h/control-new/"
+    }
+   ],
+   "procedure": "Apply exact replacement only in isolated checkout owner; verify SHA; run nodes serially with addopts cleared; preserve output/receipts append-only; restore repair and verify hash. H-F2 records job termination and verifies PID not live.",
+   "interpreter": "build/test-refinement/1026541/baseline/checkout/.venv/Scripts/python.exe",
+   "node_identity": "baseline/evidence/00-commands.txt"
+  }
+ }
+}

@@ -1,0 +1,638 @@
+{
+ "m1-r2-20261109/attempt-04/bundle-identity.json": {
+  "bytes": 61779,
+  "sha256": "0fc6cb8678f63f437ba4fc747d919e78d9326fe8e397bbc2c9a10536f05f8c0e",
+  "content": {
+   "files": 436,
+   "by_top_directory": {
+    "(root)": 6,
+    "_internal": 430
+   },
+   "mapping_sha256": "9a74dbfa932d303b591e43f4b129b4ce91c914289d9178a3e472d7d911f53057"
+  }
+ },
+ "m1-r2-20261109/attempt-04/distribution-census.json": {
+  "bytes": 645084,
+  "sha256": "7e9f803a075fc666aec0be5744de04d2ed13dedb5252fd6c1fb15a25c4799a60",
+  "content": {
+   "purpose": "finite R2 byte/provenance and notice coverage census; not release/resource acceptance",
+   "commit": "6d543a8ff5a948d78aa80003b6f9f359158292d2",
+   "archive_sha256": "d0eb545b2bd2e343d5813f299dbb57c5a8ccbc7c9506641165d96703fc713c67",
+   "source_archive_sha256": "6cff0021ec0a2c39c49e75d1ce61781c06cfc13dfd6784aa9379cf81940113ae",
+   "checker_sha256": "160badf38fb1f744b5d6917d2abd0724b5aadc1bc38f2c6076f5e5a027537934",
+   "notice_records": [
+    {
+     "name": "pywebview",
+     "version": "6.2.1",
+     "source": "https://pypi.org/project/pywebview/6.2.1/",
+     "sha256": "4a988dd3598832cd3653de20dc33cb677d0fb53ab5551c879ca31280ae653675"
+    },
+    {
+     "name": "pythonnet",
+     "version": "3.1.0",
+     "source": "https://pypi.org/project/pythonnet/3.1.0/",
+     "sha256": "e1dc3a6ff017a6800dc27a7220500f512b95fbcd996d38ebbbff85c693245369"
+    },
+    {
+     "name": "Python.NET contributors",
+     "version": "3.1.0",
+     "source": "https://pypi.org/project/pythonnet/3.1.0/",
+     "sha256": "65a13631f078bed51e9a4033dea257e57a7f23097f3003b1ce1ba1c8a9136c93"
+    },
+    {
+     "name": "bottle",
+     "version": "0.13.4",
+     "source": "https://pypi.org/project/bottle/0.13.4/",
+     "sha256": "af150257b1f7cce92b6207854f2e8f90ea9ae52d7cac758d13a47bd12e2a2443"
+    },
+    {
+     "name": "xxhash",
+     "version": "3.8.1",
+     "source": "https://pypi.org/project/xxhash/3.8.1/",
+     "sha256": "b3c620adc9a8812cc0c3c7fc09567fa9a9930d3546de955dfb955b168cf989ac"
+    },
+    {
+     "name": "typing_extensions",
+     "version": "4.16.0",
+     "source": "https://pypi.org/project/typing_extensions/4.16.0/",
+     "sha256": "3b2f81fe21d181c499c59a256c8e1968455d6689d269aa85373bfb6af41da3bf"
+    },
+    {
+     "name": "clr_loader",
+     "version": "0.3.1",
+     "source": "https://pypi.org/project/clr_loader/0.3.1/",
+     "sha256": "dd6bdca10cdc3b24c6b0b6cef5fd611b7feb6917f127833283ddcdb310d3b453"
+    },
+    {
+     "name": "cffi",
+     "version": "2.1.0",
+     "source": "https://pypi.org/project/cffi/2.1.0/",
+     "sha256": "5ba24ddc57067f9249add644c3afc41a5d6dc37e23433ef759d95df370b0af63"
+    },
+    {
+     "name": "pycparser",
+     "version": "3.0",
+     "source": "https://pypi.org/project/pycparser/3.0/",
+     "sha256": "0c846399369ea76ddd7b5c44fe6d16497415fcf015f5cbb508c24bf98b81c5b1"
+    },
+    {
+     "name": "proxy_tools",
+     "version": "0.1.0",
+     "source": "https://raw.githubusercontent.com/jtushman/proxy_tools/ccd35a569b95bec271a59890780c7821756c548a/LICENSE.txt",
+     "sha256": "a428fb8a2e762af3eb0a6edbbb88e9b42ccfee80fd9b423958bcacf9b9abbfe4"
+    },
+    {
+     "name": "xxHash library",
+     "version": "0.8.2 (included in xxhash 3.8.1)",
+     "source": "https://github.com/Cyan4973/xxHash/tree/v0.8.2",
+     "sha256": "6ffedbc0f7878612d2b23589f1ff2ab15633e1df7963a5d9fc750ec5500c7e7a"
+    },
+    {
+     "name": "libffi notices in CFFI Windows sources",
+     "version": "cffi 2.1.0",
+     "source": "https://pypi.org/project/cffi/2.1.0/",
+     "sha256": "6d2acfac1e3ff1e422964109de1073289691964cfbd92e314a9f90280620eb01"
+    },
+    {
+     "name": "Microsoft WebView2 SDK",
+     "version": "1.0.3856.49 (included in pywebview 6.2.1)",
+     "source": "https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.3856.49/License",
+     "sha256": "0af8f1b807512aae39c2ac1aa4d0cae65cabecb6fd554b8439a5162a0d6eca55"
+    },
+    {
+     "name": "Microsoft WebView2 SDK third-party notices",
+     "version": "1.0.3856.49",
+     "source": "https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.3856.49",
+     "sha256": "106423785c5b7eba0a8e61d1837f2132e9c828e20ad530f565d981c1df60dd90"
+    },
+    {
+     "name": "Fluent UI System Icons",
+     "version": "1.1.334",
+     "source": "https://raw.githubusercontent.com/microsoft/fluentui-system-icons/d7e5f224125e5638df10610d7c2755d709113e55/LICENSE",
+     "sha256": "69bc45dc42b9acb96a69823adbc6ae538374e3c0bde169b855b32c48eaaef52f"
+    },
+    {
+     "name": "Fluent UI theme tokens",
+     "version": "1.0.0-alpha.24 (transcribed subset)",
+     "source": "https://github.com/microsoft/fluentui/tree/32b42a5bf79c1836047dfc7fae07b1320731bce4",
+     "sha256": "1434c6b2a8417d41e4db20ff3b772888e66a0069e20d928f83fa1390f44758c7"
+    },
+    {
+     "name": "domJSON",
+     "version": "0.1.2 (included in pywebview 6.2.1)",
+     "source": "https://raw.githubusercontent.com/azaslavsky/domJSON/v0.1.2/LICENSE.md",
+     "sha256": "9876c56a0a754e788f8bd7bc683e52ccf79b7a8eae05799407fffa798fc8f272"
+    },
+    {
+     "name": "Native Promise Only",
+     "version": "0.8.1 (included in pywebview 6.2.1)",
+     "source": "https://getify.mit-license.org/",
+     "sha256": "87c815bfd1dc02ac37eb5593290e245b5dc1de6be1e0dbd00b18dcd2ed3523f6"
+    },
+    {
+     "name": "Symbol-ES6",
+     "version": "0.1.2 (included in pywebview 6.2.1)",
+     "source": "https://raw.githubusercontent.com/rousan/symbol-es6/v0.1.2/LICENSE",
+     "sha256": "24efa6399810650b5b060a735e2b6cb5d8657aaa507fe92a4bed1be8a1107167"
+    },
+    {
+     "name": "Microsoft.NET.Build.Extensions",
+     "version": "2.2.101 (included in pythonnet 3.1.0)",
+     "source": "https://dotnet.microsoft.com/dotnet_library_license.htm\nhttps://raw.githubusercontent.com/dotnet/sdk/fdfba028d6ab0dae750a904fa6bd11442d2bdc7d/LICENSE.TXT",
+     "sha256": "2ddc7ffd9b8ed968550a34d258cfafe7443073f73f5ee5ef01013782029287ab"
+    },
+    {
+     "name": "CPython Windows installation license",
+     "version": "3.13.17",
+     "source": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-amd64.zip ; installed LICENSE.txt",
+     "sha256": "62bec384df47b0328307db41455ff6ea2559e5546b394ac69148561b21703120"
+    },
+    {
+     "name": "CPython incorporated software notices",
+     "version": "3.13.17",
+     "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Doc/license.rst",
+     "sha256": "952ac05720d7f1dcb63589b35eb0931b1442eb250230a4ad31198eddf0ad6abc"
+    },
+    {
+     "name": "OpenSSL",
+     "version": "3.5.9",
+     "source": "https://raw.githubusercontent.com/openssl/openssl/openssl-3.5.9/LICENSE.txt",
+     "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a"
+    },
+    {
+     "name": "Expat",
+     "version": "2.8.5",
+     "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/expat/COPYING",
+     "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87"
+    },
+    {
+     "name": "mpdecimal",
+     "version": "4.0.0",
+     "source": "https://raw.githubusercontent.com/python/cpython-source-deps/mpdecimal-4.0.0/COPYRIGHT.txt",
+     "sha256": "2713324211652ce4a60e6e21e54f9dc3004299e591b0933a352f1a89c5fb53c2"
+    },
+    {
+     "name": "zlib",
+     "version": "1.3.1",
+     "source": "https://raw.githubusercontent.com/python/cpython-source-deps/zlib-1.3.1/LICENSE",
+     "sha256": "845efc77857d485d91fb3e0b884aaa929368c717ae8186b66fe1ed2495753243"
+    },
+    {
+     "name": "XZ",
+     "version": "5.2.5",
+     "source": "https://raw.githubusercontent.com/python/cpython-source-deps/xz-5.2.5/COPYING",
+     "sha256": "bcb02973ef6e87ea73d331b3a80df7748407f17efdb784b61b47e0e610d3bb5c"
+    },
+    {
+     "name": "SQLite",
+     "version": "3.50.4",
+     "source": "https://raw.githubusercontent.com/python/cpython-source-deps/sqlite-3.50.4.0/sqlite3.h",
+     "sha256": "85806d613cfda5901f848b3b5b4b04396c8c64e89c97c0af3706c42b0c44bb47"
+    },
+    {
+     "name": "PyInstaller bootloader and runtime licenses",
+     "version": "6.22.3",
+     "source": "https://pypi.org/project/pyinstaller/6.22.3/ ; pyinstaller-6.22.3-py3-none-win_amd64.whl!/pyinstaller-6.22.3.dist-info/licenses/COPYING.txt",
+     "sha256": "0598064c7d2718e38d7914a7d08343b2fa008e3bea9ebba2aa7a6ffa5900dd64"
+    },
+    {
+     "name": "packaging LICENSE",
+     "version": "26.2",
+     "source": "https://pypi.org/project/packaging/26.2/ ; packaging-26.2-py3-none-any.whl!/packaging-26.2.dist-info/licenses/LICENSE",
+     "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+    },
+    {
+     "name": "packaging LICENSE.APACHE",
+     "version": "26.2",
+     "source": "https://pypi.org/project/packaging/26.2/ ; packaging-26.2-py3-none-any.whl!/packaging-26.2.dist-info/licenses/LICENSE.APACHE",
+     "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+     "name": "packaging LICENSE.BSD",
+     "version": "26.2",
+     "source": "https://pypi.org/project/packaging/26.2/ ; packaging-26.2-py3-none-any.whl!/packaging-26.2.dist-info/licenses/LICENSE.BSD",
+     "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+    },
+    {
+     "name": "setuptools",
+     "version": "83.0.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools-83.0.0.dist-info/licenses/LICENSE",
+     "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+    },
+    {
+     "name": "setuptools schema notice",
+     "version": "83.0.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/config/NOTICE",
+     "sha256": "2dddf08818297a3b89d43d95ff659d8da85741108c9136dfa3a4d856c0623bd8"
+    },
+    {
+     "name": "setuptools generated validation notices",
+     "version": "83.0.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/config/_validate_pyproject/NOTICE",
+     "sha256": "09c9bcea95ca086f8bc5bed174e40bc835b297d40fb5f86bbbb570fe0a5581a7"
+    },
+    {
+     "name": "backports.tarfile",
+     "version": "1.2.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/backports.tarfile-1.2.0.dist-info/LICENSE",
+     "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+    },
+    {
+     "name": "jaraco.context",
+     "version": "6.1.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/jaraco_context-6.1.0.dist-info/licenses/LICENSE",
+     "sha256": "9755a18519666e5f0f4cae3daad3d7012bcae48a600b31237d75e9fe134e6683"
+    },
+    {
+     "name": "jaraco.functools",
+     "version": "4.4.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/jaraco_functools-4.4.0.dist-info/licenses/LICENSE",
+     "sha256": "5a57cb4db85e2a2dd88c290628908add57e3451449e0a9a71fdfb38776fd759d"
+    },
+    {
+     "name": "jaraco.text",
+     "version": "4.0.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/jaraco.text-4.0.0.dist-info/LICENSE",
+     "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741"
+    },
+    {
+     "name": "more-itertools",
+     "version": "10.8.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/more_itertools-10.8.0.dist-info/licenses/LICENSE",
+     "sha256": "09f1c8c9e941af3e584d59641ea9b87d83c0cb0fd007eb5ef391a7e2643c1a46"
+    },
+    {
+     "name": "tomli",
+     "version": "2.4.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/tomli-2.4.0.dist-info/licenses/LICENSE",
+     "sha256": "b80816b0d530b8accb4c2211783790984a6e3b61922c2b5ee92f3372ab2742fe"
+    },
+    {
+     "name": "wheel",
+     "version": "0.46.3",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/wheel-0.46.3.dist-info/licenses/LICENSE.txt",
+     "sha256": "30c23618679108f3e8ea1d2a658c7ca417bdfc891c98ef1a89fa4ff0c9828654"
+    },
+    {
+     "name": "setuptools vendored packaging LICENSE",
+     "version": "26.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE",
+     "sha256": "cad1ef5bd340d73e074ba614d26f7deaca5c7940c3d8c34852e65c4909686c48"
+    },
+    {
+     "name": "setuptools vendored packaging LICENSE.APACHE",
+     "version": "26.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE.APACHE",
+     "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+     "name": "setuptools vendored packaging LICENSE.BSD",
+     "version": "26.0",
+     "source": "https://pypi.org/project/setuptools/83.0.0/ ; setuptools-83.0.0-py3-none-any.whl!/setuptools/_vendor/packaging-26.0.dist-info/licenses/LICENSE.BSD",
+     "sha256": "b70e7e9b742f1cc6f948b34c16aa39ffece94196364bc88ff0d2180f0028fac5"
+    },
+    {
+     "name": "PyInstaller bootloader zlib",
+     "version": "1.3.2 (included in PyInstaller 6.22.3)",
+     "source": "https://raw.githubusercontent.com/pyinstaller/pyinstaller/v6.22.3/bootloader/zlib/LICENSE",
+     "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2"
+    },
+    {
+     "name": "HACL* hash implementations in CPython",
+     "version": "CPython 3.13.17 vendored source",
+     "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/_hacl/Hacl_Hash_SHA2.c",
+     "sha256": "998ce04fb8ad9dedb0bc1b44938f8c3dcf1089780fa105ce1c8c30fb5554d78c"
+    },
+    {
+     "name": "HACL* KaRaMeL support headers in CPython",
+     "version": "CPython 3.13.17 vendored source",
+     "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/_hacl/include/krml/FStar_UInt_8_16_32_64.h",
+     "sha256": "54079ca9757dbaa2a54053fbd9be60f77c5e06695fa997191fc141cd20d41d59"
+    },
+    {
+     "name": "CPython decimal wrapper",
+     "version": "CPython 3.13.17",
+     "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/_decimal/_decimal.c",
+     "sha256": "09351578782897b5b7ac0aff3b493cafa1040d9d4ab048ace3a6a5f00e570741"
+    },
+    {
+     "name": "CPython Windows API support",
+     "version": "CPython 3.13.17",
+     "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Modules/_winapi.c",
+     "sha256": "dea16d3edc0bee8725bb7286a43269805fd0171fd64bfb3f246c994e1a731094"
+    },
+    {
+     "name": "CPython getopt",
+     "version": "CPython 3.13.17",
+     "source": "https://raw.githubusercontent.com/python/cpython/v3.13.17/Python/getopt.c",
+     "sha256": "fa1d65c8bf1aafc14b926becddbd665ab2834c5ca1ab2f55801ca9bc63750d33"
+    }
+   ],
+   "bundle_owner_counts": {
+    "CPython": 25,
+    "cffi": 9,
+    "CPython generated bytecode": 1,
+    "bottle": 8,
+    "clr_loader": 9,
+    "NamiSync": 223,
+    "NamiSync frozen executable": 2,
+    "proxy_tools": 6,
+    "pycparser": 7,
+    "pythonnet": 108,
+    "pywebview": 22,
+    "setuptools": 1,
+    "typing_extensions": 6,
+    "xxhash": 8,
+    "notice export": 1
+   },
+   "input_owner_counts": {
+    "PyInstaller": 7,
+    "NamiSync": 93,
+    "setuptools": 117,
+    "CPython": 447,
+    "typing_extensions": 1,
+    "namespace marker (no source bytes)": 4,
+    "packaging": 14,
+    "pywebview": 41,
+    "bottle": 1,
+    "proxy_tools": 1,
+    "pythonnet": 2,
+    "clr_loader": 15,
+    "cffi": 16,
+    "pycparser": 5,
+    "xxhash": 2,
+    "embedded module archive": 2,
+    "CPython generated bytecode": 1,
+    "PyInstaller compiled bootstrap": 4
+   },
+   "bundle_files": {
+    "count": 436,
+    "by_kind": {
+     "BINARY": 113,
+     "EXTENSION": 20,
+     "DATA": 297,
+     "EXECUTABLE": 2,
+     "null": 4
+    },
+    "without_owner": 0,
+    "without_notice": [],
+    "distinct_notices": {
+     "CPython Windows installation license": 27,
+     "CPython incorporated software notices": 27,
+     "cffi": 10,
+     "libffi notices in CFFI Windows sources": 10,
+     "CPython decimal wrapper": 2,
+     "mpdecimal": 2,
+     "XZ": 2,
+     "SQLite": 3,
+     "bottle": 9,
+     "clr_loader": 10,
+     "OpenSSL": 3,
+     "NamiSync GPL-3.0-or-later": 225,
+     "PyInstaller bootloader and runtime licenses": 3,
+     "PyInstaller bootloader zlib": 3,
+     "analyses enumerate archive input modules": 2,
+     "Fluent UI System Icons": 178,
+     "Fluent UI theme tokens": 2,
+     "proxy_tools": 7,
+     "pycparser": 8,
+     "Expat": 2,
+     "zlib": 2,
+     "HACL* hash implementations in CPython": 2,
+     "HACL* KaRaMeL support headers in CPython": 2,
+     "CPython Windows API support": 2,
+     "CPython getopt": 2,
+     "pythonnet": 109,
+     "Python.NET contributors": 109,
+     "Microsoft.NET.Build.Extensions": 97,
+     "pywebview": 23,
+     "setuptools": 2,
+     "jaraco.text": 2,
+     "typing_extensions": 7,
+     "domJSON": 2,
+     "Native Promise Only": 2,
+     "Symbol-ES6": 2,
+     "Microsoft WebView2 SDK": 6,
+     "Microsoft WebView2 SDK third-party notices": 6,
+     "xxhash": 9,
+     "xxHash library": 9,
+     "packaging LICENSE": 1,
+     "packaging LICENSE.APACHE": 1,
+     "packaging LICENSE.BSD": 1,
+     "setuptools schema notice": 1,
+     "setuptools generated validation notices": 1,
+     "backports.tarfile": 1,
+     "jaraco.context": 1,
+     "jaraco.functools": 1,
+     "more-itertools": 1,
+     "tomli": 1,
+     "wheel": 1,
+     "setuptools vendored packaging LICENSE": 1,
+     "setuptools vendored packaging LICENSE.APACHE": 1,
+     "setuptools vendored packaging LICENSE.BSD": 1
+    },
+    "records_sha256": "a0014384f35969d44c263216d17f80670f5364cd124098ec7868e34d3b91d7f2"
+   },
+   "embedded_inputs": {
+    "count": 773,
+    "by_kind": {
+     "PYSOURCE": 7,
+     "PYMODULE": 762,
+     "PYZ": 2,
+     "EXECUTABLE": 2
+    },
+    "without_owner": 0,
+    "without_notice": [],
+    "distinct_notices": {
+     "PyInstaller bootloader and runtime licenses": 11,
+     "NamiSync GPL-3.0-or-later": 93,
+     "setuptools": 121,
+     "CPython Windows installation license": 448,
+     "CPython incorporated software notices": 448,
+     "typing_extensions": 1,
+     "jaraco.functools": 1,
+     "tomli": 4,
+     "more-itertools": 3,
+     "packaging LICENSE": 14,
+     "packaging LICENSE.APACHE": 14,
+     "packaging LICENSE.BSD": 14,
+     "wheel": 3,
+     "jaraco.text": 1,
+     "jaraco.context": 1,
+     "backports.tarfile": 4,
+     "setuptools generated validation notices": 6,
+     "setuptools schema notice": 6,
+     "setuptools vendored packaging LICENSE": 13,
+     "setuptools vendored packaging LICENSE.APACHE": 13,
+     "setuptools vendored packaging LICENSE.BSD": 13,
+     "pywebview": 41,
+     "bottle": 1,
+     "proxy_tools": 1,
+     "pythonnet": 2,
+     "Python.NET contributors": 2,
+     "clr_loader": 15,
+     "cffi": 16,
+     "libffi notices in CFFI Windows sources": 16,
+     "pycparser": 5,
+     "xxhash": 2,
+     "xxHash library": 2,
+     "zlib": 1,
+     "analyses enumerate archive input modules": 2,
+     "PyInstaller bootloader zlib": 2
+    },
+    "records_sha256": "79cbe520c08c2a17a4c73ab4aa34af3a9a9b868b524b780f5533a1487c291df7",
+    "distinct_source_name_pairs": 773
+   }
+  }
+ },
+ "m1-r2-20261109/attempt-04/native-origins.json": {
+  "bytes": 43856,
+  "sha256": "b50c1066cc77898d678d702195892d0801cbfc2e5c21a9f4eabd69056179791d",
+  "content": {
+   "scope": "COLLECT BINARY/EXTENSION inputs; raw freezer tables also retain embedded/bootloader inputs",
+   "native_files": 133,
+   "by_kind": {
+    "BINARY": 113,
+    "EXTENSION": 20
+   },
+   "by_origin": {
+    "CPython install": 25,
+    "_cffi_backend.cp313-win_amd64.pyd": 1,
+    "clr_loader": 2,
+    "pythonnet": 97,
+    "webview": 7,
+    "xxhash": 1
+   },
+   "records_sha256": "5c5529ca5a61e89f8ea1d966c62e08b7e8cccfc99b4c9e35bad6069d4915c74a"
+  }
+ },
+ "m1-r2-20261109/attempt-04/source-identity.json": {
+  "bytes": 45076,
+  "sha256": "f8e71f4a5b06f32bdf35bb368ea5950377dd1a9d57df05d3414d656b6eb48954",
+  "content": {
+   "commit": "6d543a8ff5a948d78aa80003b6f9f359158292d2",
+   "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+   "python_executable_sha256": "7c2fc2b303a4ee3cc14cc17b47bc6e8bca98c78792edd123b846a560da44b203",
+   "platform": "Windows-11-10.0.26200-SP0",
+   "source_date_epoch": 1794236880,
+   "dependencies": {
+    "altgraph": "0.17.5",
+    "bottle": "0.13.4",
+    "cffi": "2.1.0",
+    "clr-loader": "0.3.1",
+    "packaging": "26.2",
+    "pefile": "2024.8.26",
+    "pip": "26.2.2",
+    "proxy-tools": "0.1.0",
+    "pycparser": "3.0",
+    "pyinstaller": "6.22.3",
+    "pyinstaller-hooks-contrib": "2026.9",
+    "pythonnet": "3.1.0",
+    "pywebview": "6.2.1",
+    "pywin32-ctypes": "0.2.3",
+    "setuptools": "83.0.0",
+    "typing-extensions": "4.16.0",
+    "xxhash": "3.8.1"
+   },
+   "purpose": "development package; not release acceptance",
+   "files": {
+    "count": 350,
+    "mapping_sha256": "5615224b7aa954422a0fced921bf6adac5a2684096f16db88e24241fb8a04b65"
+   }
+  }
+ },
+ "m1-r2-20261109/bootloader-source-audit.json": {
+  "bytes": 26741,
+  "sha256": "3ca42f1720b741eb91fdfd6f144cb0fc817da3e7f5688959bc3eae7c8d49bcba",
+  "content": {
+   "files": 45,
+   "upstream_prefixes": [
+    "https://raw.githubusercontent.com/pyinstaller/pyinstaller/v6.22.3/bootloader/src"
+   ],
+   "notice_sets": [
+    {
+     "notices": [
+      "Copyright (c) 2013-2023, PyInstaller Development Team.",
+      "Distributed under the terms of the GNU General Public License (version 2",
+      "The full license is in the file COPYING.txt, distributed with this software.",
+      "SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)"
+     ],
+     "file_count": 28
+    },
+    {
+     "notices": [
+      "Copyright (c) 2023, PyInstaller Development Team.",
+      "Distributed under the terms of the GNU General Public License (version 2",
+      "The full license is in the file COPYING.txt, distributed with this software.",
+      "SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)"
+     ],
+     "file_count": 9,
+     "files": [
+      "pyi_pyconfig.c",
+      "pyi_pyconfig.h",
+      "pyi_pyconfig_pep587.c",
+      "pyi_pyconfig_pep587_v310.h",
+      "pyi_pyconfig_pep587_v311.h",
+      "pyi_pyconfig_pep587_v312.h",
+      "pyi_pyconfig_pep587_v313.h",
+      "pyi_pyconfig_pep587_v38.h",
+      "pyi_pyconfig_pep587_v39.h"
+     ]
+    },
+    {
+     "notices": [
+      "Copyright (c) 2026, PyInstaller Development Team.",
+      "Distributed under the terms of the GNU General Public License (version 2",
+      "The full license is in the file COPYING.txt, distributed with this software.",
+      "SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)"
+     ],
+     "file_count": 4,
+     "files": [
+      "pyi_security.c",
+      "pyi_security.h",
+      "pyi_splash_centering_win32.c",
+      "pyi_splash_centering_x11.c"
+     ]
+    },
+    {
+     "notices": [
+      "Copyright (c) 2021-2023, PyInstaller Development Team.",
+      "Distributed under the terms of the GNU General Public License (version 2",
+      "The full license is in the file COPYING.txt, distributed with this software.",
+      "SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)"
+     ],
+     "file_count": 2,
+     "files": [
+      "pyi_exception_dialog.c",
+      "pyi_exception_dialog.h"
+     ]
+    },
+    {
+     "notices": [
+      "Copyright (c) 2013-2024, PyInstaller Development Team.",
+      "Distributed under the terms of the GNU General Public License (version 2",
+      "The full license is in the file COPYING.txt, distributed with this software.",
+      "SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)"
+     ],
+     "file_count": 1,
+     "files": [
+      "pyi_main.c"
+     ]
+    },
+    {
+     "notices": [
+      "Copyright (c) 2025, PyInstaller Development Team.",
+      "Distributed under the terms of the GNU General Public License (version 2",
+      "The full license is in the file COPYING.txt, distributed with this software.",
+      "SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)"
+     ],
+     "file_count": 1,
+     "files": [
+      "pyi_pyconfig_pep741.c"
+     ]
+    }
+   ],
+   "records_sha256": "aea9ac743d031cd4bcd380cc95ada1638bfcd1b1570670d523b953d5f140c7ef"
+  }
+ }
+}

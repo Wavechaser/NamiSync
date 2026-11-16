@@ -1,0 +1,24 @@
+{
+ "refusal-ui-20261106/runs/refusal/verified.json": {
+  "bytes": 564,
+  "sha256": "9e92692fb9ee32f5960b9f56c5459f945f21ae1dc1638e7376907189bad1af70",
+  "content": {
+   "outcome": {
+    "title": "Plan limit exceeded",
+    "facts": "The review exceeds 120,000 plan items.",
+    "guidance": "Create a new task with a smaller folder pair.",
+    "rail": "Plan limit exceeded\nThe review exceeds 120,000 plan items.\nSource:\nF:\\GitHubRepositories\\NamiSync\\build\\refusal-ui-20261106\\tmph6oj0wap\\source\nTarget:\nF:\\GitHubRepositories\\NamiSync\\build\\refusal-ui-20261106\\tmph6oj0wap\\target",
+    "executeDisabled": true
+   },
+   "host": {
+    "window_found": true,
+    "exit_code": 0,
+    "remaining_pids": []
+   },
+   "calls": [
+    "open_plan_view",
+    "release_terminal_session"
+   ]
+  }
+ }
+}

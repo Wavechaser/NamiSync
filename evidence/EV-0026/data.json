@@ -1,0 +1,412 @@
+{
+ "path-consolidation-20261107/summary.json": {
+  "bytes": 7478,
+  "sha256": "de23873312ce2e426cf0d3a8f72de9dac1d510ee151d41ee216adbebfea4eadc",
+  "content": {
+   "copy_body_counts_before_after": {
+    "1": {
+     "_held_native_path": [
+      53.0,
+      33.0
+     ],
+     "_lexical_logical_path": [
+      30.0,
+      10.0
+     ],
+     "require_ordinary": [
+      19.0,
+      19.0
+     ],
+     "_require_held_root": [
+      19.0,
+      19.0
+     ],
+     "revalidate_root": [
+      15.0,
+      15.0
+     ],
+     "_revalidate_source_root": [
+      4.0,
+      4.0
+     ],
+     "validate_relative_path": [
+      32.0,
+      32.0
+     ],
+     "_win32_path": [
+      23.0,
+      23.0
+     ],
+     "_get_attributes": [
+      10.0,
+      10.0
+     ],
+     "_validate_existing_chain": [
+      10.0,
+      10.0
+     ],
+     "resolve": [
+      10.0,
+      10.0
+     ],
+     "_reject_reparse": [
+      6.0,
+      6.0
+     ],
+     "stat_path": [
+      6.0,
+      6.0
+     ],
+     "stat": [
+      4.0,
+      4.0
+     ],
+     "_guard_present": [
+      2.0,
+      2.0
+     ],
+     "_guard_expected_target": [
+      2.0,
+      2.0
+     ],
+     "lexists": [
+      3.0,
+      3.0
+     ],
+     "open_source": [
+      1.0,
+      1.0
+     ],
+     "_resolve_target_path": [
+      4.0,
+      4.0
+     ],
+     "create_temp": [
+      1.0,
+      1.0
+     ],
+     "finalize_temp": [
+      1.0,
+      1.0
+     ],
+     "_prepare_copy": [
+      1.0,
+      1.0
+     ],
+     "_require_stat_path": [
+      1.0,
+      1.0
+     ],
+     "_stat_target_path": [
+      1.0,
+      1.0
+     ],
+     "_revalidate_target_root": [
+      1.0,
+      1.0
+     ],
+     "publish_new": [
+      1.0,
+      1.0
+     ],
+     "ensure_published_metadata": [
+      1.0,
+      1.0
+     ],
+     "_published_copy_stat": [
+      1.0,
+      1.0
+     ],
+     "flush_directory": [
+      1.0,
+      1.0
+     ],
+     "_complete_published_byte_operation": [
+      1.0,
+      1.0
+     ]
+    },
+    "2": {
+     "_held_native_path": [
+      63.0,
+      43.0
+     ],
+     "_lexical_logical_path": [
+      30.0,
+      10.0
+     ],
+     "require_ordinary": [
+      19.0,
+      19.0
+     ],
+     "_require_held_root": [
+      19.0,
+      19.0
+     ],
+     "revalidate_root": [
+      15.0,
+      15.0
+     ],
+     "_revalidate_source_root": [
+      4.0,
+      4.0
+     ],
+     "validate_relative_path": [
+      43.0,
+      43.0
+     ],
+     "_win32_path": [
+      33.0,
+      33.0
+     ],
+     "_get_attributes": [
+      20.0,
+      20.0
+     ],
+     "_validate_existing_chain": [
+      10.0,
+      10.0
+     ],
+     "resolve": [
+      10.0,
+      10.0
+     ],
+     "_reject_reparse": [
+      6.0,
+      6.0
+     ],
+     "stat_path": [
+      6.0,
+      6.0
+     ],
+     "stat": [
+      4.0,
+      4.0
+     ],
+     "_guard_present": [
+      2.0,
+      2.0
+     ],
+     "_guard_expected_target": [
+      2.0,
+      2.0
+     ],
+     "lexists": [
+      3.0,
+      3.0
+     ],
+     "open_source": [
+      1.0,
+      1.0
+     ],
+     "_resolve_target_path": [
+      4.0,
+      4.0
+     ],
+     "create_temp": [
+      1.0,
+      1.0
+     ],
+     "finalize_temp": [
+      1.0,
+      1.0
+     ],
+     "_prepare_copy": [
+      1.0,
+      1.0
+     ],
+     "_require_stat_path": [
+      1.0,
+      1.0
+     ],
+     "_stat_target_path": [
+      1.0,
+      1.0
+     ],
+     "_revalidate_target_root": [
+      1.0,
+      1.0
+     ],
+     "publish_new": [
+      1.0,
+      1.0
+     ],
+     "ensure_published_metadata": [
+      1.0,
+      1.0
+     ],
+     "_published_copy_stat": [
+      1.0,
+      1.0
+     ],
+     "flush_directory": [
+      1.0,
+      1.0
+     ],
+     "_complete_published_byte_operation": [
+      1.0,
+      1.0
+     ]
+    },
+    "5": {
+     "_held_native_path": [
+      93.0,
+      73.0
+     ],
+     "_lexical_logical_path": [
+      30.0,
+      10.0
+     ],
+     "require_ordinary": [
+      19.0,
+      19.0
+     ],
+     "_require_held_root": [
+      19.0,
+      19.0
+     ],
+     "revalidate_root": [
+      15.0,
+      15.0
+     ],
+     "_revalidate_source_root": [
+      4.0,
+      4.0
+     ],
+     "validate_relative_path": [
+      73.0,
+      73.0
+     ],
+     "_win32_path": [
+      63.0,
+      63.0
+     ],
+     "_get_attributes": [
+      50.0,
+      50.0
+     ],
+     "_validate_existing_chain": [
+      10.0,
+      10.0
+     ],
+     "resolve": [
+      10.0,
+      10.0
+     ],
+     "_reject_reparse": [
+      6.0,
+      6.0
+     ],
+     "stat_path": [
+      6.0,
+      6.0
+     ],
+     "stat": [
+      4.0,
+      4.0
+     ],
+     "_guard_present": [
+      2.0,
+      2.0
+     ],
+     "_guard_expected_target": [
+      2.0,
+      2.0
+     ],
+     "lexists": [
+      3.0,
+      3.0
+     ],
+     "open_source": [
+      1.0,
+      1.0
+     ],
+     "_resolve_target_path": [
+      4.0,
+      4.0
+     ],
+     "create_temp": [
+      1.0,
+      1.0
+     ],
+     "finalize_temp": [
+      1.0,
+      1.0
+     ],
+     "_prepare_copy": [
+      1.0,
+      1.0
+     ],
+     "_require_stat_path": [
+      1.0,
+      1.0
+     ],
+     "_stat_target_path": [
+      1.0,
+      1.0
+     ],
+     "_revalidate_target_root": [
+      1.0,
+      1.0
+     ],
+     "publish_new": [
+      1.0,
+      1.0
+     ],
+     "ensure_published_metadata": [
+      1.0,
+      1.0
+     ],
+     "_published_copy_stat": [
+      1.0,
+      1.0
+     ],
+     "flush_directory": [
+      1.0,
+      1.0
+     ],
+     "_complete_published_byte_operation": [
+      1.0,
+      1.0
+     ]
+    }
+   },
+   "revalidate_process_medians_ns": {
+    "before": [
+     14976.7,
+     15198.4,
+     15913.5,
+     16151.2,
+     15170.0
+    ],
+    "after": [
+     2197.2,
+     2084.4,
+     2089.0,
+     2087.1,
+     2081.3
+    ]
+   },
+   "revalidate_across_process_median_ns": {
+    "before": 15198.4,
+    "after": 2087.1
+   },
+   "paired_revalidate_savings_ns": [
+    12779.5,
+    13114.0,
+    13824.5,
+    14064.1,
+    13088.7
+   ],
+   "sha256": {
+    "namisync\\modules\\executor\\native.py": "a663e3adf4bd771ef98fe74e8798f4a2958d7437943d8565b516ede2ac1f57c8",
+    "tests\\test_executor_native.py": "ba1150287170d186da477d4092da4182a7672d3ef520e67b51b4db21990658fd",
+    "build\\path-consolidation-20261107\\native-before.py": "e9e6356305614392fc205ccac5c77094e0751f1646bd7b8c5f7caad39e1bcbab",
+    "build\\path-consolidation-20261107\\trace_copy.py": "b05afb70d319a5e150146e55cb42a6e76d17b7e8f36eec19c693de78b961bb4b",
+    "build\\path-consolidation-20261107\\bench_revalidate.py": "26547c7fa407f73439f3dc9ca9d4b645d4bb2161dc9fce9f83978757aecfe7fe",
+    "build\\path-consolidation-20261107\\trace-before.json": "8c48619ded7f88ee672236faa19e1bbcaa5ae56868b9670d0626c3e22deefcb5",
+    "build\\path-consolidation-20261107\\trace-after.json": "beff299992b69e8d82e7e9d7bd6587459251ea3206570c22b23cd0409e9f3e8a"
+   }
+  }
+ }
+}

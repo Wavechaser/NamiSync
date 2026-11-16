@@ -1,0 +1,101 @@
+{
+ "allocation-20261107/microbench-provenance.json": {
+  "bytes": 4346,
+  "sha256": "b4b1d92385bd38770a3ee0fd38ecc2a0b50ae39bb68fc84669d0d20ddc212a5d",
+  "content": {
+   "captured_at_utc": "2026-11-07T08:21:08.981859+00:00",
+   "capture_timing": "Captured after all six measurements; source, driver and fixture unchanged since those runs. No benchmark rerun.",
+   "baseline_commit": "ade6ba75aa254c330ef2574dada69387f1dff96d",
+   "baseline_matches_git_after_newline_normalization": true,
+   "candidate": "Uncommitted four-site bridge allocation change, frozen as candidate-bridge.js.",
+   "node_version_from_all_six_receipts": "v24.22.1",
+   "node_executable": {
+    "path": "C:\\Users\\Spectrum\\AppData\\Local\\Programs\\Node.js\\node-v24.22.1-win-x64\\node.exe",
+    "sha256": "d702daa815eabbff763c7d3808e235cf031cf2ca70211b56847bc72f51e240e5",
+    "bytes": 93915464
+   },
+   "python_executable": {
+    "path": "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+    "sha256": "4e67d9e9a3673aa7b6219f1280d5ec3f1b6c0d5bd98ea8688c72d0cb7582d664",
+    "bytes": 255200
+   },
+   "inputs": [
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\baseline-bridge.js",
+     "sha256": "6fa7978641445653da46440f35f2f4adc1020c9878f7050dfe4e7691ab256cee",
+     "bytes": 155318
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\namisync\\interfaces\\web\\assets\\bridge.js",
+     "sha256": "b6a656e6de3dd5d4e9add4fa506ecc6f5b763f82da202a4f6f72a2b3800d50bb",
+     "bytes": 155280
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\microbench.mjs",
+     "sha256": "3e64a51cb9a5864b9a4ccc2f782cc3630a99477554cb9e99ebdf4923b0f961ac",
+     "bytes": 2969
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\run_microbench.py",
+     "sha256": "7762b0fa0253771712d0d25053fd858263d63360150fa418d9d7f74d31a3d0d2",
+     "bytes": 989
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\tests\\assets\\plan_window_bridge_probe.mjs",
+     "sha256": "241c5dd80888d2429cf6f4283670ce33416e045d34db0b9bc9f7167dc5cb319f",
+     "bytes": 18226
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\tests\\interfaces\\web\\_frontend_test_support.py",
+     "sha256": "dadb2805bdc3e4b4b88d9bff1b0c9cf7f02953625e195b2477e2cd0202eecb3a",
+     "bytes": 3481
+    }
+   ],
+   "frozen_copies": [
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\candidate-bridge.js",
+     "sha256": "b6a656e6de3dd5d4e9add4fa506ecc6f5b763f82da202a4f6f72a2b3800d50bb",
+     "bytes": 155280
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\plan-window-fixture.mjs",
+     "sha256": "241c5dd80888d2429cf6f4283670ce33416e045d34db0b9bc9f7167dc5cb319f",
+     "bytes": 18226
+    }
+   ],
+   "receipts": [
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\microbench-01-baseline.json",
+     "sha256": "b3bde2e0267dba050be48967cc0f0c430ea8b4135fc2b1c0055b0637dcd82b95",
+     "bytes": 225
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\microbench-02-candidate.json",
+     "sha256": "14ff83eb0c5e6ae6636687ed1973027717751b6f59c8b3544e00345605c3dd15",
+     "bytes": 227
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\microbench-03-candidate.json",
+     "sha256": "01c3edc6a7e65190a1fc093746d54996ed921859a909727adddb6ac552af744e",
+     "bytes": 216
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\microbench-04-baseline.json",
+     "sha256": "4af1c9916aee6a3a6983d778548cb8cac2b2dab5d21d01d5c8cbb52e1a6ac198",
+     "bytes": 234
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\microbench-05-baseline.json",
+     "sha256": "737f20cb97e6b6905bec62a97efd772e9129a12e6acea62a6e3ed3a0362ca161",
+     "bytes": 225
+    },
+    {
+     "path": "F:\\GitHubRepositories\\NamiSync\\build\\allocation-20261107\\microbench-06-candidate.json",
+     "sha256": "a7123b0979b9f6edb83edaa750356e3b56a7955955bdaae13117ce2d39379963",
+     "bytes": 217
+    }
+   ],
+   "limitations": "Diagnostic seam only. Sampled allocation includes collected objects; no native script compilation, DOM or IO. Focused test outputs were displayed in tool receipts, not captured as raw files."
+  }
+ }
+}

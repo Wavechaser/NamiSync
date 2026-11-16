@@ -307,9 +307,8 @@ sending native input remain necessary to avoid interacting with another window.
 AB-7's default-shell Plan Again succeeded: Task 53 was created/selected/rendered;
 the later keyboard focus re-entry-ring wait observed `document_has_focus: false`.
 The actor is unknown; do not diagnose failed Plan Again from the last checkpoint
-label. Original mapping (including CDP lines 9/490) and receipts:
-`build/trace-20260927/scripts/plan-again/` and
-`build/post-m1-8-ablation-20260925/ab7-final-evidence/`.
+label. Original mapping scripts (including CDP lines 9/490) and receipts:
+[EV-0021](../evidence/EV-0021/README.md) and [EV-0003](../evidence/EV-0003/README.md).
 
 The notice-filter helper still waits for expected notice text, no pending review
 action and enabled Plan Again before one click. This prerequisite does not fix
@@ -324,9 +323,9 @@ writes live status/hidden, narrows summary to 650px and waits one frame; a live
 without a CSS regression. This is a candidate, not a captured interleaving.
 On recurrence inspect before/after node connection, text, visibility, rectangles
 and live render; preserve the check/CSS until reproduction and authorization.
-Evidence: `build/ab8-20260926/installed-native-evidence/`,
-`build/ab8-resume-20260926/verification.md`,
-`build/incident-trace-20260927/native_trace.py`. AB-7's later larger-shell failure
+Evidence: [EV-0004](../evidence/EV-0004/README.md) (resumed verification and
+installed receipt counts; per-test receipts were not retained) and
+`native_trace.py` in [EV-0021](../evidence/EV-0021/README.md). AB-7's later larger-shell failure
 is not a proven second reproduction: its intermediate script was not preserved,
 preventing exact line attribution.
 

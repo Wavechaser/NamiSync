@@ -1,0 +1,247 @@
+{
+ "bughunt-20261104/evidence/adapters-gui-ingress-receipt.json": {
+  "bytes": 442,
+  "sha256": "818dc6d6387745e986a0e22fde287064b9b6fb0457b67e7f99419e20a205e0db",
+  "content": {
+   "source_baseline": "a2e188f1",
+   "full_command_utf16_units_including_nul": 22279,
+   "child_return_code": 0,
+   "child_stderr": "",
+   "observed": {
+    "request_utf8_bytes": 66123,
+    "argv_utf16_units": 22219,
+    "interface_value_constructed": true,
+    "path_characters": 22112,
+    "app_paths_called": true,
+    "return_code": 2,
+    "reports": [
+     "probe containment: stop before app path resolution"
+    ]
+   }
+  }
+ },
+ "bughunt-20261104/evidence/fix-a2-department-final.json": {
+  "bytes": 760,
+  "sha256": "09a490097397a3b7e621715125c5bcc5864495b406ffcdae3a36cebb3637f471",
+  "content": {
+   "fixture_root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-jcmz7wyq",
+   "structure": "pytest holds fixtures; cache holds pytest state; child runtime state uses root TEMP/TMP",
+   "cleanup": "parent accounts for exact registered root after review",
+   "source_revision": "a40fd2f74b5a1d045c097429f8d73717a9b26d47",
+   "command": [
+    "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+    "-B",
+    "-m",
+    "pytest",
+    "-q",
+    "-rs",
+    "--dept",
+    "interfaces",
+    "--basetemp",
+    "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-jcmz7wyq\\pytest",
+    "-o",
+    "cache_dir=C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-jcmz7wyq\\cache"
+   ],
+   "exit_code": 0
+  }
+ },
+ "bughunt-20261104/evidence/fix-a2-final-manifest.json": {
+  "bytes": 3774,
+  "sha256": "5dc198e83250f4f662c0a208c1cb802fd04efb9367a559350fdac308fa8feb70",
+  "content": {
+   "initial_base": "96aba441",
+   "current_head": "a40fd2f74b5a1d045c097429f8d73717a9b26d47",
+   "source_sha256": {
+    "namisync/interfaces/cli.py": "3374ece9ba84fdf1b972dd893a5b4563ca1ad56598af319ba7c4117c09dae501",
+    "tests/test_cli.py": "25765a3008156f7266c7daea6dabb2414593a36c5df8e50ad97f401f15614518",
+    "docs/COMMANDLINE.md": "6981587dadd1084b42ff41ef3a54bd77339cd151da3fcab7e233a70a8796aa6f"
+   },
+   "receipt_sha256": {
+    "fix-a2-department-final.json": {
+     "sha256": "09a490097397a3b7e621715125c5bcc5864495b406ffcdae3a36cebb3637f471",
+     "exit_code": 0
+    },
+    "fix-a2-department.json": {
+     "sha256": "dde059efa4c723d36095131878e8c7c71c07485f8a2aa77f8f5469318da804fd",
+     "exit_code": 0
+    },
+    "fix-a2-focused-final.json": {
+     "sha256": "d012c1953e92e9674d8a18f6f9783b6c1559e6bf0294ccb8999e3597e6dad126",
+     "exit_code": 0
+    },
+    "fix-a2-focused.json": {
+     "sha256": "40d97fbbfe489f61c00a80f9f7eedeb80d495918413a1b4681646a7e15f1c36e",
+     "exit_code": 0
+    },
+    "fix-a2-green-seam.json": {
+     "sha256": "d283efb1f6ea2bb7758288e80858f287c2c9c8a27e5ace17b74bb8ad52131faa",
+     "exit_code": 0
+    },
+    "fix-a2-original-final.json": {
+     "sha256": "b17a5d5482cc439c0da02362437e350b63de7b84731566a67b6acd23e3d1355d",
+     "exit_code": null
+    },
+    "fix-a2-original-repro.json": {
+     "sha256": "ac39090d84e37e5b5054487fbcdffddda5196caa2bd3b0c36166ebde25d21d14",
+     "exit_code": null
+    },
+    "fix-a2-red-external.json": {
+     "sha256": "0d418b5614c1acc0431c69ede189d7fd4c43111651574efabb3da027f595a04f",
+     "exit_code": 1
+    },
+    "fix-a2-red.json": {
+     "sha256": "57582ed65cd6e73cbb12e534fd83ae97893f21d9b3315189198dcaf3701361c5",
+     "exit_code": 1
+    }
+   },
+   "external_fixtures": [
+    {
+     "receipt": "fix-a2-department-final.json",
+     "root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-jcmz7wyq",
+     "cleanup": "parent owns exact root accounting/removal after review"
+    },
+    {
+     "receipt": "fix-a2-department.json",
+     "root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-z_l11gbm",
+     "cleanup": "parent owns exact root accounting/removal after review"
+    },
+    {
+     "receipt": "fix-a2-focused-final.json",
+     "root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-ex2smlsc",
+     "cleanup": "parent owns exact root accounting/removal after review"
+    },
+    {
+     "receipt": "fix-a2-focused.json",
+     "root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-0b4x9_4d",
+     "cleanup": "parent owns exact root accounting/removal after review"
+    },
+    {
+     "receipt": "fix-a2-green-seam.json",
+     "root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-siue815_",
+     "cleanup": "parent owns exact root accounting/removal after review"
+    },
+    {
+     "receipt": "fix-a2-red-external.json",
+     "root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-udi51q5w",
+     "cleanup": "parent owns exact root accounting/removal after review"
+    },
+    {
+     "receipt": "fix-a2-red.json",
+     "root": "C:\\Users\\Spectrum\\AppData\\Local\\Packages\\sandbox.{19324c5d-5766-4535-a8f2-af9168d8a51c}\\AC\\Temp\\namisync-bughunt-a2-w3owk44d",
+     "cleanup": "parent owns exact root accounting/removal after review"
+    }
+   ],
+   "drivers_sha256": {
+    "fix-a2-final-manifest.py": "ad3e62c5748b856ab48ef7d9d9e4bf1272d80d801841a6a3dae12ecb320d1179",
+    "fix-a2-original-repro.py": "4480cc8f3b5445852d9c5a4a1e0b7dfeb0adfc5d0fb53e8907674ddff5182bb7",
+    "fix-a2-run.py": "4ae305a69afa448432bcc5704faf0bee550c2987851c8818110620e0c572e746"
+   }
+  }
+ },
+ "bughunt-20261104/evidence/fix-a2-focused-final.json": {
+  "bytes": 752,
+  "sha256": "d012c1953e92e9674d8a18f6f9783b6c1559e6bf0294ccb8999e3597e6dad126",
+  "content": {
+   "fixture_root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-ex2smlsc",
+   "structure": "pytest holds fixtures; cache holds pytest state; child runtime state uses root TEMP/TMP",
+   "cleanup": "parent accounts for exact registered root after review",
+   "source_revision": "a40fd2f74b5a1d045c097429f8d73717a9b26d47",
+   "command": [
+    "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+    "-B",
+    "-m",
+    "pytest",
+    "-q",
+    "-rs",
+    "tests/test_cli.py",
+    "--basetemp",
+    "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-ex2smlsc\\pytest",
+    "-o",
+    "cache_dir=C:\\Users\\Spectrum\\AppData\\Local\\Temp\\namisync-bughunt-a2-ex2smlsc\\cache"
+   ],
+   "exit_code": 0
+  }
+ },
+ "bughunt-20261104/evidence/fix-a2-original-final.json": {
+  "bytes": 3437,
+  "sha256": "b17a5d5482cc439c0da02362437e350b63de7b84731566a67b6acd23e3d1355d",
+  "content": {
+   "cli_sha256": "3374ece9ba84fdf1b972dd893a5b4563ca1ad56598af319ba7c4117c09dae501",
+   "rows": [
+    {
+     "label": "default",
+     "command": [
+      "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+      "-m",
+      "namisync",
+      "history",
+      "70d6e113e75e48959644f036d1518501",
+      "--history-database",
+      "F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\history.db"
+     ],
+     "exit_code": 0,
+     "stdout": "Run: 70d6e113e75e48959644f036d1518501\r\nActivity: sync\r\nSource: F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\source\r\nTarget: F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\target\r\nCreated: 2026-11-04T04:39:37.667930+00:00\r\nStarted: 2026-11-04T04:39:37.682975+00:00\r\nEnded: 2026-11-04T04:39:37.766019+00:00\r\nResult: filesystem=completed; ledger=ok; audit=ok; integrity=verified; headline=success; disposition=ran; canceled=false; bytes=24/24\r\nAudit receipts: duplicates=0; rejected=0\r\nPhase execute: status=completed; items=5/5; bytes=24/24\r\nPhase verify: status=completed; items=3/3; bytes=24/24\r\n  execute/operation/copy alpha.txt: succeeded\r\n  execute/operation/copy nested\\[U+65E5][U+672C][U+8A9E].txt: succeeded\r\n  execute/operation/copy [[U+0085].txt: succeeded\r\n  execute/operation/trash obsolete.txt: succeeded\r\n  execute/operation/mkdir nested: succeeded\r\n  verify/integrity/integrity alpha.txt: verified\r\n  verify/integrity/integrity nested\\[U+65E5][U+672C][U+8A9E].txt: verified\r\n  verify/integrity/integrity [[U+0085].txt: verified\r\n",
+     "stderr": ""
+    },
+    {
+     "label": "utf8",
+     "command": [
+      "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+      "-X",
+      "utf8",
+      "-m",
+      "namisync",
+      "history",
+      "70d6e113e75e48959644f036d1518501",
+      "--history-database",
+      "F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\history.db"
+     ],
+     "exit_code": 0,
+     "stdout": "Run: 70d6e113e75e48959644f036d1518501\r\nActivity: sync\r\nSource: F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\source\r\nTarget: F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\target\r\nCreated: 2026-11-04T04:39:37.667930+00:00\r\nStarted: 2026-11-04T04:39:37.682975+00:00\r\nEnded: 2026-11-04T04:39:37.766019+00:00\r\nResult: filesystem=completed; ledger=ok; audit=ok; integrity=verified; headline=success; disposition=ran; canceled=false; bytes=24/24\r\nAudit receipts: duplicates=0; rejected=0\r\nPhase execute: status=completed; items=5/5; bytes=24/24\r\nPhase verify: status=completed; items=3/3; bytes=24/24\r\n  execute/operation/copy alpha.txt: succeeded\r\n  execute/operation/copy nested\\日本語.txt: succeeded\r\n  execute/operation/copy [[U+0085].txt: succeeded\r\n  execute/operation/trash obsolete.txt: succeeded\r\n  execute/operation/mkdir nested: succeeded\r\n  verify/integrity/integrity alpha.txt: verified\r\n  verify/integrity/integrity nested\\日本語.txt: verified\r\n  verify/integrity/integrity [[U+0085].txt: verified\r\n",
+     "stderr": ""
+    }
+   ]
+  }
+ },
+ "bughunt-20261104/evidence/fix-a2-original-repro.json": {
+  "bytes": 3437,
+  "sha256": "ac39090d84e37e5b5054487fbcdffddda5196caa2bd3b0c36166ebde25d21d14",
+  "content": {
+   "cli_sha256": "12102a15e031951a7503092694fa00865e63ab01178ca11b346f9e01223ea00e",
+   "rows": [
+    {
+     "label": "default",
+     "command": [
+      "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+      "-m",
+      "namisync",
+      "history",
+      "70d6e113e75e48959644f036d1518501",
+      "--history-database",
+      "F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\history.db"
+     ],
+     "exit_code": 0,
+     "stdout": "Run: 70d6e113e75e48959644f036d1518501\r\nActivity: sync\r\nSource: F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\source\r\nTarget: F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\target\r\nCreated: 2026-11-04T04:39:37.667930+00:00\r\nStarted: 2026-11-04T04:39:37.682975+00:00\r\nEnded: 2026-11-04T04:39:37.766019+00:00\r\nResult: filesystem=completed; ledger=ok; audit=ok; integrity=verified; headline=success; disposition=ran; canceled=false; bytes=24/24\r\nAudit receipts: duplicates=0; rejected=0\r\nPhase execute: status=completed; items=5/5; bytes=24/24\r\nPhase verify: status=completed; items=3/3; bytes=24/24\r\n  execute/operation/copy alpha.txt: succeeded\r\n  execute/operation/copy nested\\[U+65E5][U+672C][U+8A9E].txt: succeeded\r\n  execute/operation/copy [[U+0085].txt: succeeded\r\n  execute/operation/trash obsolete.txt: succeeded\r\n  execute/operation/mkdir nested: succeeded\r\n  verify/integrity/integrity alpha.txt: verified\r\n  verify/integrity/integrity nested\\[U+65E5][U+672C][U+8A9E].txt: verified\r\n  verify/integrity/integrity [[U+0085].txt: verified\r\n",
+     "stderr": ""
+    },
+    {
+     "label": "utf8",
+     "command": [
+      "F:\\GitHubRepositories\\NamiSync\\.venv\\Scripts\\python.exe",
+      "-X",
+      "utf8",
+      "-m",
+      "namisync",
+      "history",
+      "70d6e113e75e48959644f036d1518501",
+      "--history-database",
+      "F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\history.db"
+     ],
+     "exit_code": 0,
+     "stdout": "Run: 70d6e113e75e48959644f036d1518501\r\nActivity: sync\r\nSource: F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\source\r\nTarget: F:\\GitHubRepositories\\NamiSync\\build\\bughunt-20261104\\fixtures\\integration\\roundtrips-native\\target\r\nCreated: 2026-11-04T04:39:37.667930+00:00\r\nStarted: 2026-11-04T04:39:37.682975+00:00\r\nEnded: 2026-11-04T04:39:37.766019+00:00\r\nResult: filesystem=completed; ledger=ok; audit=ok; integrity=verified; headline=success; disposition=ran; canceled=false; bytes=24/24\r\nAudit receipts: duplicates=0; rejected=0\r\nPhase execute: status=completed; items=5/5; bytes=24/24\r\nPhase verify: status=completed; items=3/3; bytes=24/24\r\n  execute/operation/copy alpha.txt: succeeded\r\n  execute/operation/copy nested\\日本語.txt: succeeded\r\n  execute/operation/copy [[U+0085].txt: succeeded\r\n  execute/operation/trash obsolete.txt: succeeded\r\n  execute/operation/mkdir nested: succeeded\r\n  verify/integrity/integrity alpha.txt: verified\r\n  verify/integrity/integrity nested\\日本語.txt: verified\r\n  verify/integrity/integrity [[U+0085].txt: verified\r\n",
+     "stderr": ""
+    }
+   ]
+  }
+ }
+}

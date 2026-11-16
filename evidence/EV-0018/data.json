@@ -1,0 +1,231 @@
+{
+ "follow-allocation-20261108/identity.json": {
+  "bytes": 536,
+  "sha256": "23f210237f5351b14234750f6e4ac34417a7b23e126c6ff0e3a83d9774f590de",
+  "content": {
+   "base": "b5b6071ba1b55c8643ec2c95cbfe5fd9b8c91b65",
+   "paths": {
+    "tests/assets/task_shell_probe.mjs": "46d578829b51bd274f16cdda0531d7d20e467f81169fd8ff3e5ef9bb00a971f1",
+    "tests/assets/plan_review_probe.mjs": "2503ca3a872c240415c894b15bdb473650de824d8582c4aba0b730a896d5dd86",
+    "namisync/interfaces/web/assets/app.js": "af0700c56b69b881029fa8f81017bfcd485b52e0a65c96724660f4431b1c2118",
+    "namisync/interfaces/web/assets/plan_review.js": "af9a6b6fdda4faea90fde538297a3fc675001b7a62ff9b09eb7aeb0c06275c83"
+   }
+  }
+ },
+ "follow-allocation-20261108/row-counts.json": {
+  "bytes": 874,
+  "sha256": "220946310c2ed990b9b8ec63e1caa255a70fdcca9b9e0417a608623ce065c612",
+  "content": {
+   "baseline": {
+    "counts": [
+     {
+      "width": 8,
+      "elementsCreated": 98
+     },
+     {
+      "width": 64,
+      "elementsCreated": 770
+     },
+     {
+      "width": 256,
+      "elementsCreated": 3074
+     }
+    ],
+    "sha256": "eaf5b48eb45099e80afd0298cab6536759e49cb429503d6f8e358838e2eea026"
+   },
+   "candidate": {
+    "counts": [
+     {
+      "width": 8,
+      "elementsCreated": 26
+     },
+     {
+      "width": 64,
+      "elementsCreated": 26
+     },
+     {
+      "width": 256,
+      "elementsCreated": 26
+     }
+    ],
+    "sha256": "af9a6b6fdda4faea90fde538297a3fc675001b7a62ff9b09eb7aeb0c06275c83"
+   },
+   "driver_sha256": "4eefda1a50dfbb0006ba25601e336610f5c0836c92ab57d7b23e0674983d79a9",
+   "fixture_sha256": "2503ca3a872c240415c894b15bdb473650de824d8582c4aba0b730a896d5dd86"
+  }
+ },
+ "follow-memory-20261108/identity-check.json": {
+  "bytes": 603,
+  "sha256": "31da26bf6edecf4b918337af3916d56f9c290d4001fdf2648455795e1fd7f0f8",
+  "content": {
+   "verified": true,
+   "source_files_per_variant": 303,
+   "exact_changed_paths": [
+    "namisync/interfaces/web/assets/app.js",
+    "namisync/interfaces/web/assets/plan_review.js"
+   ],
+   "raw_checkout_matches_freeze": true,
+   "run_count": 4,
+   "measurement_dependencies_unchanged": true,
+   "runtime_package_files": 194,
+   "manifest_sha256": "b1dbbd2904185b9c36e10fb03f6eda2fafae5f8c9edecfb4bf32aa644c254b95",
+   "summary_sha256": "966b6b7df28659b4fbbc1d34340c77973cb885f8a73c8de9403108ff5b95647d",
+   "producer_sha256": "9f8efe9c67b8517ad12f38d35e5a325005fa47b1d6fafefe3a916194b40ac173"
+  }
+ },
+ "follow-memory-20261108/summary.json": {
+  "bytes": 6105,
+  "sha256": "966b6b7df28659b4fbbc1d34340c77973cb885f8a73c8de9403108ff5b95647d",
+  "content": {
+   "base": "b5b6071ba1b55c8643ec2c95cbfe5fd9b8c91b65",
+   "source_host_only": true,
+   "schedule": [
+    "baseline-01",
+    "candidate-01",
+    "candidate-02",
+    "baseline-02"
+   ],
+   "runs": [
+    {
+     "name": "baseline-01",
+     "whole_app_peak_mib": 1505.0,
+     "renderer_peak_mib": 1079.8,
+     "peak_phase": "task-execute",
+     "execute_seconds": 121.6,
+     "dom_nodes_peak": 159745,
+     "listeners_peak": 59091,
+     "embedder_heap_peak_mib": 483.56,
+     "js_used_peak_mib": 373.16,
+     "get_plan_window": 347,
+     "get_plan_anchor": 219,
+     "operation_count": 10100,
+     "verified_targets": 10000,
+     "browser_runtime": {
+      "product": "Edg/157.0.4341.42",
+      "revision": "@7b1486be4607d53d9f93841b7c776bc525ca74b7",
+      "jsVersion": "15.7.11.4"
+     },
+     "closed": {
+      "private_mib": 583.4,
+      "renderer_mib": 129.0,
+      "handles": 4243.0,
+      "gui": 152.0
+     },
+     "receipts": {
+      "result.json": "6ff3d8a840e6d03a7ab38bf5e14d73539dd3aae8e1805dc6670f34644424458e",
+      "summary.json": "b4bf5b2753f0caa3d95639c358d48081ec5d0267462de33bd1826a2e4e662b63",
+      "audit.json": "f86bc77ef76ec5f7e8032e7f6cc5c279ae4c1f41e591e5d703de49d96984b295",
+      "events.jsonl": "a7a71b4b15734407a6a25a71366c2d64d25d4ebd0183cd67f0ee512040030284",
+      "samples.jsonl": "0ce21e578437c9f2409c982be8b326b35d21f982c38a5bac71a05a7f889411c7",
+      "heap.jsonl": "5b423e7761f56e56c072643d2585f4f6bbcb3e55840c47ae1ea65ea945083b35"
+     }
+    },
+    {
+     "name": "candidate-01",
+     "whole_app_peak_mib": 1212.1,
+     "renderer_peak_mib": 779.4,
+     "peak_phase": "task-execute",
+     "execute_seconds": 121.2,
+     "dom_nodes_peak": 68455,
+     "listeners_peak": 16466,
+     "embedder_heap_peak_mib": 220.83,
+     "js_used_peak_mib": 337.55,
+     "get_plan_window": 271,
+     "get_plan_anchor": 57,
+     "operation_count": 10100,
+     "verified_targets": 10000,
+     "browser_runtime": {
+      "product": "Edg/157.0.4341.42",
+      "revision": "@7b1486be4607d53d9f93841b7c776bc525ca74b7",
+      "jsVersion": "15.7.11.4"
+     },
+     "closed": {
+      "private_mib": 541.1,
+      "renderer_mib": 111.8,
+      "handles": 3815.0,
+      "gui": 151.0
+     },
+     "receipts": {
+      "result.json": "a82e0f6c442ca1c3b28330df61737950179520aef69934a05c9ffd5d89feac53",
+      "summary.json": "b83d239f9d50a0fa1d7e6a17c624a1a15f16efb0b4b6db2b89790f72db050ef1",
+      "audit.json": "55f7c132e82012d166f1c58e6355f2c1acaa299f771ca1ea8b261deb28d764ff",
+      "events.jsonl": "5bae1c11be00b847394f3ffa342ea90fa45d6b9f81dacb52bf33d1bb8cc4282d",
+      "samples.jsonl": "1b42193d8dcf32c9ee7cff7d6797c95328a854eff2f70a118662090dd2ce4a9a",
+      "heap.jsonl": "7e68e8857ebe0647df99b3e74a8b305b0fd144e0d4626235174ce8335f67f1e4"
+     }
+    },
+    {
+     "name": "candidate-02",
+     "whole_app_peak_mib": 1201.1,
+     "renderer_peak_mib": 776.3,
+     "peak_phase": "task-execute",
+     "execute_seconds": 117.2,
+     "dom_nodes_peak": 64225,
+     "listeners_peak": 16435,
+     "embedder_heap_peak_mib": 212.04,
+     "js_used_peak_mib": 335.01,
+     "get_plan_window": 281,
+     "get_plan_anchor": 52,
+     "operation_count": 10100,
+     "verified_targets": 10000,
+     "browser_runtime": {
+      "product": "Edg/157.0.4341.42",
+      "revision": "@7b1486be4607d53d9f93841b7c776bc525ca74b7",
+      "jsVersion": "15.7.11.4"
+     },
+     "closed": {
+      "private_mib": 524.9,
+      "renderer_mib": 107.0,
+      "handles": 3786.0,
+      "gui": 150.0
+     },
+     "receipts": {
+      "result.json": "59bec8a7eb9bc4261806e7c8651fbfdf068a0bfd38de6f157657c47895994d35",
+      "summary.json": "3b4ec106ccc274c392db78caabfec9841ee1b1070a9b4788195ad2fa6d4bfc36",
+      "audit.json": "5215d40147618f7ee5a7fa7094a7824ae4965994106d045a2767dfc479ec2876",
+      "events.jsonl": "49432eb531abd21d5b0ed663b24dcef2aec0185564f1e66485320795a9c79bfb",
+      "samples.jsonl": "433f403cc6f2e6b7e13c764447b802c79f9d37ce8aedc77a801b44931a807188",
+      "heap.jsonl": "b1f75707a11fffd8a7b5e306edd7352b71ceb10d66900f285493e107441c050d"
+     }
+    },
+    {
+     "name": "baseline-02",
+     "whole_app_peak_mib": 1400.1,
+     "renderer_peak_mib": 976.2,
+     "peak_phase": "task-execute",
+     "execute_seconds": 118.3,
+     "dom_nodes_peak": 137903,
+     "listeners_peak": 51035,
+     "embedder_heap_peak_mib": 415.14,
+     "js_used_peak_mib": 372.26,
+     "get_plan_window": 340,
+     "get_plan_anchor": 213,
+     "operation_count": 10100,
+     "verified_targets": 10000,
+     "browser_runtime": {
+      "product": "Edg/157.0.4341.42",
+      "revision": "@7b1486be4607d53d9f93841b7c776bc525ca74b7",
+      "jsVersion": "15.7.11.4"
+     },
+     "closed": {
+      "private_mib": 532.6,
+      "renderer_mib": 114.1,
+      "handles": 4122.0,
+      "gui": 151.0
+     },
+     "receipts": {
+      "result.json": "21ee4e1da9a7a1b1cbdd4207344a1ab8402cd0ae67b75ad9eec565a3c4106cc6",
+      "summary.json": "ea77ece5eef7ee79d6f5df29c7dfcfa548901a3bd9cd7eed6f1b92b7e56b1a0e",
+      "audit.json": "d172a4d046b16002468e5a8a1de7eecc07e117ed520074c0f6a4a9410bf614ef",
+      "events.jsonl": "01db9b3230e530c471ab6ef6f3de0c503bab9d8fc8b2b9c135c0569ac9b5856c",
+      "samples.jsonl": "365a687277fc8bc50eb0dab70b2455c247bf719e75d7e3a947b8363517d4d2f0",
+      "heap.jsonl": "2ab24b793e0b288f3bb375f81715fa1d6b23cd442dc7fa01f25a914a530a8232"
+     }
+    }
+   ],
+   "producer_sha256": "94205a26ae416800dce43a4275cc189599d06a2f4e42fe5260723369c5706397",
+   "manifest_sha256": "b1dbbd2904185b9c36e10fb03f6eda2fafae5f8c9edecfb4bf32aa644c254b95",
+   "limits": "Two paired fresh processes per variant. Sampled memory peaks and command counts are diagnostic, not 100k, installed-package, throughput, or long-run stability acceptance. Default GC unchanged. Source assets differ only in the two approved Follow changes."
+  }
+ }
+}

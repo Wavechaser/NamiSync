@@ -1,0 +1,86 @@
+{
+ "ab8-resume-20260926/final-installed-evidence.json": {
+  "bytes": 7078,
+  "sha256": "f1314a49d3a72d51cd5c91a390cfa0dc8a318772c1704f673fb09bcf0aa65676",
+  "content": {
+   "original_root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\NamiSync-ab8-resume-final",
+   "files": 51,
+   "tests": 20,
+   "mapping_sha256": "c9824e729906e4d3f4a59334a37b6de95f978397902296ac8f6f2dd1d8dcc4e8"
+  }
+ },
+ "ab8-resume-20260926/installed-evidence.json": {
+  "bytes": 7081,
+  "sha256": "f2f91d8f033fd545db7c3995ab5678136f4e731473f22c98ff0c37995b10e4ea",
+  "content": {
+   "original_root": "C:\\Users\\Spectrum\\AppData\\Local\\Temp\\NamiSync-ab8-resume-complete",
+   "files": 51,
+   "tests": 20,
+   "mapping_sha256": "77ef7b2ad9e20f85f141f4126e6d0f5b0574e9fbff576c52ac8f6c43f3acbed1"
+  }
+ },
+ "ab8-resume-20260926/integration.json": {
+  "bytes": 2815,
+  "sha256": "0ecc9b1bd35f9e31cc54ee6504b4e28d7130b9b41416f91a0c53f1573b38c7b6",
+  "content": {
+   "branch": "milestone1",
+   "base": "4f1537c20f6eac51aff27b53ed5ba8b24dc513c3",
+   "commit": "7445f70aefb3bc4e45646c43135b44a4740b68ed",
+   "integration": "Reconstructed physical candidate, corrected and committed directly; no WIP merge/cherry-pick",
+   "paths": [
+    "CHANGELOG.md",
+    "docs/ARCHITECTURE.md",
+    "docs/BRIDGE.md",
+    "docs/BUGS.md",
+    "docs/DESKTOP_UI.md",
+    "docs/HANDOFF.md",
+    "docs/INTERFACES.md",
+    "docs/M1_PLAN.md",
+    "docs/PERFORMANCE.md",
+    "docs/PRESENTATION.md",
+    "docs/TESTS.md",
+    "namisync/interfaces/task_port.py",
+    "namisync/interfaces/web/assets/app.js",
+    "namisync/interfaces/web/assets/bridge.js",
+    "namisync/interfaces/web/assets/plan_review.js",
+    "namisync/interfaces/web/assets/task_status.js",
+    "namisync/interfaces/web/bridge.py",
+    "namisync/interfaces/web/drain.py",
+    "namisync/interfaces/web/task_snapshot.py",
+    "tests/_departments.py",
+    "tests/assets/component_gallery/gallery.js",
+    "tests/assets/drain_manager_probe.mjs",
+    "tests/assets/execution_review_probe.mjs",
+    "tests/assets/plan_review_probe.mjs",
+    "tests/assets/task_shell_probe.mjs",
+    "tests/assets/transport_gate/transport.js",
+    "tests/interfaces/web/_public_view_witnesses.py",
+    "tests/interfaces/web/test_commands.py",
+    "tests/interfaces/web/test_drain.py",
+    "tests/interfaces/web/test_frontend_static.py",
+    "tests/interfaces/web/test_plan_review_scale.py",
+    "tests/interfaces/web/test_task_snapshot.py",
+    "tests/interfaces/web/test_transport.py",
+    "tools/performance/bridge_event/assets/benchmark.js"
+   ],
+   "clean": true,
+   "recovery": "f7a170a19540fec1cf077af764cdf459390d4daa",
+   "recovery_preserved": "recovery.bundle",
+   "recovery_delta": "recovery-to-final.patch",
+   "recovery_delta_accounting": "Reviewed session/control/rate corrections, matching page/native fixture changes and documentation closeout; all 34 saved paths integrated",
+   "refs_before_cleanup": [
+    "refs/heads/codex/ab3-mapping c5f1de89362f0c1758a04d0fceebc80699655eaa",
+    "refs/heads/codex/gui-j-recovery-20260918 7d81018f807b3aff846e9f6fa6617e12d4ef7c99",
+    "refs/heads/codex/wip-20260925-1936-ab6-gesture 56802606fa6b47e40ed8952db4948815f9a6b878",
+    "refs/heads/codex/wip-20260926-ab8 f7a170a19540fec1cf077af764cdf459390d4daa",
+    "refs/heads/main 4924d27b0dcbe033f466583b73dca7044da45704",
+    "refs/heads/milestone0 572cb2eb1a58166c0b4cdfb95156ea3e7a4d73fe",
+    "refs/heads/milestone1 7445f70aefb3bc4e45646c43135b44a4740b68ed",
+    "refs/heads/milestone1-anthony b99d0c37741d9b9daab4f002144712d724938ed7",
+    "refs/heads/recovery/gui-m2-folder-totals-20260919 af02913bdb3505fe3dbe25820c3b314fcfa649d2"
+   ],
+   "recovery_ref_removed": true,
+   "other_refs_unchanged": true
+  }
+ }
+}

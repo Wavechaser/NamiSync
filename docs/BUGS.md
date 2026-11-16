@@ -108,8 +108,8 @@ entries to fit a batch; use explicit record offsets/limits.
   real production composition, so future drift fails the positive test. Missing,
   extra and duplicate names still invalidate either catalog. This changes no
   product command or measurement authority. Reproduction and verification:
-  `build/bridge-catalog-20261004/`; original source comparison remains in
-  `build/gui-refinements-20261004/rf2-command-catalog-audit.json`.
+  [EV-0007](../evidence/EV-0007/README.md), which also keeps the original source
+  comparison `rf2-command-catalog-audit.json`.
 
 <a id="bug-0003"></a>
 
@@ -121,8 +121,8 @@ entries to fit a batch; use explicit record offsets/limits.
   none and advises choosing a new `--json` path. Replacement-capable callers
   retain their flag advice. CLI coverage verifies refusal before launch and
   preservation of the existing report. Current evidence:
-  `build/open-bugs-20261001/`; historical reproduction remains under
-  `build/admission-bridge-closeout-20260927/`.
+  [EV-0025](../evidence/EV-0025/README.md); historical context:
+  [EV-0005](../evidence/EV-0005/README.md).
 
 <a id="bug-0004"></a>
 
@@ -140,8 +140,8 @@ entries to fit a batch; use explicit record offsets/limits.
   failure before its marker and honoring synthetic cancellation. Ordered item
   witnesses and frozen custody artifacts remain intact. Focused page/producer/
   parent controls and installed completion verify the migration; exact historical
-  AB-2/AB-10 causes remain unproven. Evidence: `build/incident-trace-20260927/`,
-  `build/trace-20260927/` and `build/admission-bridge-closeout-20260927/`.
+  AB-2/AB-10 causes remain unproven. Evidence: [EV-0021](../evidence/EV-0021/README.md)
+  and [EV-0005](../evidence/EV-0005/README.md).
 
 <a id="bug-0005"></a>
 
@@ -228,8 +228,8 @@ entries to fit a batch; use explicit record offsets/limits.
   transport events use that parent-owned deadline. A 12.7-second delayed-ready
   probe now distinguishes the old failure from the repaired pass; a suppressed
   signal reaches the parent deadline, publishes no success, and reaps the
-  launched child plus all eight observed descendants. Evidence and hashes are
-  under `build/test-refinement/1026541/st-h/`; no product defect was found.
+  launched child plus all eight observed descendants. Evidence and hashes:
+  [EV-0037](../evidence/EV-0037/README.md); no product defect was found.
 
 <a id="bug-0012"></a>
 
@@ -323,9 +323,9 @@ entries to fit a batch; use explicit record offsets/limits.
   the same five cases. Shared version recognition now checks kind, size, mtime
   and available identity after own effects and in pure rename recording;
   metadata restoration and SQL concurrency checks remain separate. Five native
-  cases and changed-version controls pass. Evidence under
-  `build/executor-simplification-20260929/differential/`: `result3a-archive-*.json`
-  retains the reproductions; `result5-final-focused.log` records the regression gate.
+  cases and changed-version controls pass. [EV-0017](../evidence/EV-0017/README.md)
+  keeps the reproductions' per-case outcomes on both sides (not the paired case
+  dumps) and `result5-final-focused.log`, the regression gate.
 <a id="bug-0020"></a>
 
 - SEVERE - FIXED (2026-09-28). Unreadable descendant admitted as absence.
@@ -351,8 +351,8 @@ entries to fit a batch; use explicit record offsets/limits.
   COPY/UPDATE across all four NTFS/exFAT directions pass native readback and
   immediate NOOP replanning; fixtures were removed. Workflow verification still
   refuses absent identity when required for reviewed-volume corroboration.
-  Evidence: `build/open-bugs-20261001/identity-fix.json`; original failure receipts
-  remain in `build/root-admission-optimization-20260928/`.
+  Evidence: `identity-fix.json` in [EV-0025](../evidence/EV-0025/README.md); the
+  original exFAT failure receipt is in [EV-0034](../evidence/EV-0034/README.md).
 <a id="bug-0022"></a>
 
 - MODERATE - FIXED (2026-08-26). Cancellation settlement ownership gap.
@@ -1116,7 +1116,7 @@ entries to fit a batch; use explicit record offsets/limits.
   Both boundaries now admit the logical operation count and validate derived
   observations against the Plan's scope. The original fixture produced a saved
   review with every operation and an empty target. Evidence:
-  `build/coverage-study-20261106/{refusal,fixed-plan}.json`.
+  `{refusal,fixed-plan}.json` in [EV-0013](../evidence/EV-0013/README.md).
 <a id="bug-0090"></a>
 
 - MODERATE - FIXED (2026-11-06). Review-limit refusal shown as retryable
@@ -1131,7 +1131,7 @@ entries to fit a batch; use explicit record offsets/limits.
   now retain the current session's specific refusal, retire stale reads and
   leave Execute disabled. Genuine read failures remain retryable and saved
   blocked plans remain reviewable. Private-desktop witness:
-  `build/refusal-ui-20261106/runs/refusal/verified.json`.
+  [EV-0031](../evidence/EV-0031/README.md).
 
 ### Setup folder admission
 
@@ -2595,9 +2595,8 @@ entries to fit a batch; use explicit record offsets/limits.
   Compact window basenames/warning tails now preserve full-path search; complete
   paths and warning text use revision-guarded snapshot details separately from
   fresh ledger evidence. Complete 256-row envelope tests include all text and
-  Plan execution overlays with margin below the unchanged cap. Original proof:
-  `build/gui-followup-20261005/b2-design-inventory-envelope.json`; correction
-  evidence: `build/gui-inventory-refinement-20261005/c1-*`.
+  Plan execution overlays with margin below the unchanged cap. Original proof
+  and correction evidence: [EV-0019](../evidence/EV-0019/README.md).
 
 ### Planning evidence freshness
 
@@ -2627,7 +2626,7 @@ entries to fit a batch; use explicit record offsets/limits.
   recheck source stability; cleanup failures do not disappear into retries.
   Pair/history regressions and real SQLite write interleavings cover this
   distinction. No mutex or effect retry is introduced. Evidence:
-  `build/cold-admission-followup-20260927/`.
+  [EV-0011](../evidence/EV-0011/README.md) (reviews; the regressions are committed tests).
 
 <a id="bug-0225"></a>
 
@@ -2644,7 +2643,7 @@ entries to fit a batch; use explicit record offsets/limits.
   owner-lifetime controls cover the distinction. Installed Setup also passes.
   This mechanism remains compatible with, not proof of, AB-7's unretained
   exception. Cold admission can still refuse externally changing unowned files.
-  Evidence: `build/trace-20260927/` and `build/admission-bridge-closeout-20260927/`.
+  Evidence: [EV-0021](../evidence/EV-0021/README.md) and [EV-0005](../evidence/EV-0005/README.md).
 
 <a id="bug-0226"></a>
 
@@ -3129,7 +3128,7 @@ entries to fit a batch; use explicit record offsets/limits.
   before Path/GuiArguments and host imports for both data-dir spellings.
   Exact-limit, first-excess, malformed argument and real native-argv tests cover
   the boundary; the existing CLI byte-counting behavior is retained. Evidence:
-  `build/bughunt-20261104/evidence/adapters-gui-ingress-receipt.json`.
+  `adapters-gui-ingress-receipt.json` in [EV-0009](../evidence/EV-0009/README.md).
 
 ### Output rendering
 
@@ -3143,7 +3142,8 @@ entries to fit a batch; use explicit record offsets/limits.
   `[U+XXXX]` markers, preserving encodable text, selected encoding, ownership
   and existing I/O-error handling. Parser diagnostics use the same boundary.
   Real module/console cp1252 and UTF-8 review/result/history cases, literal-marker
-  controls and stream/error regressions pass. Evidence: `build/bughunt-20261104/evidence/fix-a2-*`.
+  controls and stream/error regressions pass. Evidence: the A2 reproduction and final
+  results in [EV-0009](../evidence/EV-0009/README.md).
 
 <a id="bug-0271"></a>
 
@@ -3226,7 +3226,7 @@ entries to fit a batch; use explicit record offsets/limits.
   without claiming leak-free execution or adding product code. Reopen only for
   measured product-owned retention beyond the endpoints in
   [INTERFACES](INTERFACES.md#exception-retention-follow-up).
-  Evidence: `build/open-bugs-20261001/` and existing host/document lifetime tests.
+  Evidence: [EV-0025](../evidence/EV-0025/README.md) and existing host/document lifetime tests.
 <a id="bug-0277"></a>
 
 - MODERATE - FIXED (2026-08-30). Review-limit refusal provenance. A first-party

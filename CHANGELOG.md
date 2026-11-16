@@ -185,7 +185,10 @@ behavioral evidence.
 - Correct evidence-candidate medians and successful-trial aggregation; restore
   compact resource, verifier, source-binding, CLI and descendant-reaping support.
   Preserve absent-source limitations explicitly rather than implying recovered
-  raw evidence or renewed acceptance. Candidates remain unpromoted.
+  raw evidence or renewed acceptance.
+- Promote the 36 reviewed study records as EV-0003–EV-0038 (108 files,
+  1.09 MiB) and repoint every lasting citation, rewording retention promises to
+  what each record keeps.
 - Compact M1_PLAN/PERFORMANCE/CHANGELOG by outcome and service DESKTOP_UI's
   structure and stale ownership prose. Preserve methods, qualifications,
   deferrals, unresolved observations and source-linked evidence; repair links.

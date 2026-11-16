@@ -1,0 +1,507 @@
+{
+ "admission-bridge-closeout-20260927/bridge-full-final.json": {
+  "bytes": 3230087,
+  "sha256": "624db8b00ee5b723ca2bceadfc0674fe8fe4f12ea9453b1c3e4ab72ef111afa6",
+  "content": {
+   "case": "installed",
+   "environment": {
+    "driver_source": {
+     "dirty": true,
+     "revision": "639b2ea8641d87b5cc2df09022bd91cb01c8afe9"
+    },
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]"
+   },
+   "family": "bridge-event",
+   "observation": {
+    "aggregate_progress_rate_per_second": 100.06426093478362,
+    "aggregate_reliable_rate_per_second": 10.006426093478362,
+    "archive_scope_clean": false,
+    "browser_failure": null,
+    "browser_report": {
+     "gap_events": [],
+     "progress_monotonic": true,
+     "session_ids": [
+      "0642ad7bb56a4030bf201124b7bf1b9e",
+      "1d646cf41723450fbc6256db03d74424",
+      "fab410f27eee462eadd408f43aa06900",
+      "cd57daaab734496fb5e141d0bcce5251"
+     ],
+     "task_count": 4,
+     "terminal_event_latencies_ms": [
+      4,
+      17,
+      16,
+      14
+     ],
+     "terminal_record_count": 4,
+     "terminal_record_latencies_ms": [
+      4,
+      18,
+      16,
+      15
+     ]
+    },
+    "clr_runtime": "Runtime: .NET Framework\n=============\n  Version:      <undefined>\n  Initialized:  True\n  Shut down:    False\n  Properties:\n    domain = \n    config_file = None",
+    "driver_source": {
+     "checkout_dirty": true,
+     "kind": "working-tree",
+     "path": "tools/performance/bridge_event"
+    },
+    "emission_window_seconds": 59.96146820002468,
+    "event_passed": false,
+    "fixture": {
+     "progress_emissions": 6000,
+     "reliable_emissions": 600,
+     "seed": 0,
+     "task_count": 4,
+     "wall_seconds": 60
+    },
+    "gaps": [],
+    "gate": "SH-G-8 event limb / BR-G-42 bridge event envelope",
+    "machine": {
+     "logical_cpu_count": 24,
+     "machine": "AMD64",
+     "on_ac_power": true,
+     "operating_system": {
+      "BuildNumber": "26200",
+      "Caption": "Microsoft Windows 11 Pro",
+      "OSArchitecture": "64-bit",
+      "Version": "10.0.26200"
+     },
+     "physical_memory_bytes": 68388212736,
+     "platform": "Windows-11-10.0.26200-SP0",
+     "processor": {
+      "Manufacturer": "GenuineIntel",
+      "Name": "13th Gen Intel(R) Core(TM) i7-13700K",
+      "NumberOfCores": 16,
+      "NumberOfLogicalProcessors": 24
+     },
+     "processor_signature": "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+     "reference_profile_match": true,
+     "repository_drive": "F",
+     "repository_storage": {
+      "BusType": "NVMe",
+      "FriendlyName": "WD_BLACK SN850X 4000GB",
+      "Model": "WD_BLACK SN850X 4000GB",
+      "Number": 3,
+      "Size": 4000787030016
+     },
+     "system_power_status": {
+      "ac_line_status": 1,
+      "battery_flag": 128,
+      "battery_life_percent": 255
+     }
+    },
+    "measurement_valid": true,
+    "memory": {
+     "job_private_memory": {
+      "all_samples_complete": true,
+      "baseline_sample_count": 50,
+      "diagnostic_errors": [],
+      "fixture_ended_at_seconds": 63.124766499968246,
+      "fixture_sample_count": 3009,
+      "fixture_sample_span_seconds": 60.16053039999679,
+      "idle_baseline_private_bytes": 285958144,
+      "incremental_peak_private_bytes": 36696064,
+      "max_sample_interval_seconds": 0.09370640001725405,
+      "processes": {
+       "3896": {
+        "command_role": "webview2-gpu-process",
+        "creation_time_100ns": 134349265583164969,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 3896
+       },
+       "43336": {
+        "command_role": "webview2-utility:storage.mojom.StorageService",
+        "creation_time_100ns": 134349265583382905,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 43336
+       },
+       "5048": {
+        "command_role": "python-child",
+        "creation_time_100ns": 134349265567143478,
+        "image_name": "python.exe",
+        "process_id": 5048
+       },
+       "50888": {
+        "command_role": "webview2-renderer",
+        "creation_time_100ns": 134349265584002413,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 50888
+       },
+       "57120": {
+        "command_role": "webview2-utility:network.mojom.NetworkService",
+        "creation_time_100ns": 134349265583186997,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 57120
+       },
+       "59224": {
+        "command_role": "webview2-crashpad-handler",
+        "creation_time_100ns": 134349265582467689,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 59224
+       },
+       "59248": {
+        "command_role": "python-host",
+        "creation_time_100ns": 134349265567082710,
+        "image_name": "python.exe",
+        "process_id": 59248
+       },
+       "8476": {
+        "command_role": "webview2-browser",
+        "creation_time_100ns": 134349265582202870,
+        "image_name": "msedgewebview2.exe",
+        "process_id": 8476
+       }
+      },
+      "resource_samples": {
+       "_summary": {
+        "type": "list",
+        "bytes": 29745,
+        "sha256": "00764b7324b3c06d6bc75cb3aa993972f7ec1f626e25fc28f2139d9e41aae9ca",
+        "count": 61,
+        "fields": {
+         "elapsed_seconds": {
+          "min": 1.9622705999645405,
+          "median": 32.3437993999687,
+          "max": 62.62410179997096
+         },
+         "phase": {
+          "values": {
+           "baseline": 1,
+           "fixture": 60
+          }
+         },
+         "processes": {
+          "nested": [
+           "dict"
+          ]
+         }
+        }
+       }
+      },
+      "root_process_id": 59248,
+      "sampled_peak_private_bytes": 322654208,
+      "samples": {
+       "_summary": {
+        "type": "list",
+        "bytes": 1184946,
+        "sha256": "a76ef13cbd21d6a4fd6d930ade796284c0b78f4aa4cd9241287fca96fa261b37",
+        "count": 3059,
+        "fields": {
+         "diagnostic_error": {
+          "n": 0
+         },
+         "elapsed_seconds": {
+          "min": 1.9622705999645405,
+          "median": 32.54415129998233,
+          "max": 63.12409100000514
+         },
+         "missing_process_ids": {
+          "nested": [
+           "list"
+          ]
+         },
+         "phase": {
+          "values": {
+           "baseline": 50,
+           "fixture": 3009
+          }
+         },
+         "private_bytes": {
+          "min": 285958144,
+          "median": 313126912,
+          "max": 322654208
+         },
+         "private_bytes_by_process": {
+          "nested": [
+           "dict"
+          ]
+         },
+         "process_ids": {
+          "nested": [
+           "list"
+          ]
+         }
+        }
+       }
+      },
+      "target_sample_interval_seconds": 0.02,
+      "topology_transitions": [
+       {
+        "elapsed_seconds": 1.9622705999645405,
+        "exited_process_ids": [],
+        "joined_process_ids": [
+         3896,
+         5048,
+         8476,
+         43336,
+         50888,
+         57120,
+         59224,
+         59248
+        ]
+       }
+      ]
+     },
+     "whole_runtime_acceptance": "not-defined",
+     "whole_runtime_diagnostics_complete": true
+    },
+    "passed": false,
+    "producer_timing": [
+     {
+      "progress_schedule_delay": {
+       "count": 1500,
+       "maximum_ms": 6.482600034210861,
+       "p95_ms": 1.4447400243950081
+      },
+      "reliable_schedule_delay": {
+       "count": 150,
+       "maximum_ms": 5.288900013546538,
+       "p95_ms": 1.553615010458742
+      },
+      "task_index": 0
+     },
+     {
+      "progress_schedule_delay": {
+       "count": 1500,
+       "maximum_ms": 6.384700045451552,
+       "p95_ms": 1.3156650257310165
+      },
+      "reliable_schedule_delay": {
+       "count": 150,
+       "maximum_ms": 3.239400007295501,
+       "p95_ms": 1.441660045646742
+      },
+      "task_index": 1
+     },
+     {
+      "progress_schedule_delay": {
+       "count": 1500,
+       "maximum_ms": 6.229100024789602,
+       "p95_ms": 1.4239050338503034
+      },
+      "reliable_schedule_delay": {
+       "count": 150,
+       "maximum_ms": 4.39520003273941,
+       "p95_ms": 1.6815500503859937
+      },
+      "task_index": 2
+     },
+     {
+      "progress_schedule_delay": {
+       "count": 1500,
+       "maximum_ms": 6.557700023982704,
+       "p95_ms": 1.4839200505514683
+      },
+      "reliable_schedule_delay": {
+       "count": 150,
+       "maximum_ms": 5.135000005829227,
+       "p95_ms": 1.6598350233387293
+      },
+      "task_index": 3
+     }
+    ],
+    "producers": {
+     "_summary": {
+      "type": "list",
+      "bytes": 129925,
+      "sha256": "f0eea1ee9b74d651b63c82d7e053dd6d4e0372214f4ddafd04bc60ed3b636b0e",
+      "count": 4,
+      "fields": {
+       "elapsed_seconds": {
+        "min": 59.965506400039885,
+        "median": 59.96647725004004,
+        "max": 59.96703840000555
+       },
+       "first_emission_offset_seconds": {
+        "min": 9.550002869218588e-05,
+        "median": 0.0002279000182170421,
+        "max": 0.00029340002220124006
+       },
+       "last_emission_offset_seconds": {
+        "min": 59.96068150002975,
+        "median": 59.961144300032174,
+        "max": 59.961563700053375
+       },
+       "progress_emission_offsets_seconds": {
+        "nested": [
+         "list"
+        ]
+       },
+       "progress_emissions": {
+        "min": 1500,
+        "median": 1500.0,
+        "max": 1500
+       },
+       "reliable_by_second": {
+        "nested": [
+         "list"
+        ]
+       },
+       "reliable_emission_offsets_seconds": {
+        "nested": [
+         "list"
+        ]
+       },
+       "reliable_emissions": {
+        "min": 150,
+        "median": 150.0,
+        "max": 150
+       }
+      }
+     }
+    },
+    "product_source": {
+     "kind": "git-archive-head",
+     "revision": "639b2ea8641d87b5cc2df09022bd91cb01c8afe9"
+    },
+    "progress": {
+     "count": 1471,
+     "maximum_ms": 49.0,
+     "p95_ms": 43.0
+    },
+    "progress_monotonic": true,
+    "raw_samples": {
+     "_summary": {
+      "type": "list",
+      "bytes": 496088,
+      "sha256": "395c45355031e83d8ca0ac92e71b4a16950eae9ea01c4bf70b076b5b3b7e1554",
+      "count": 2091,
+      "fields": {
+       "class": {
+        "values": {
+         "reliable": 612,
+         "progress": 1471,
+         "terminal_event": 4,
+         "terminal_record": 4
+        }
+       },
+       "event_id": {
+        "distinct": 604
+       },
+       "event_result": {
+        "n": 620,
+        "nested": [
+         "dict",
+         "str"
+        ]
+       },
+       "latency_ms": {
+        "min": 1,
+        "median": 4,
+        "max": 78
+       },
+       "observed_offset_ms": {
+        "min": 102.30000001192093,
+        "median": 30260.600000023842,
+        "max": 60083.200000047684
+       },
+       "position": {
+        "n": 1471,
+        "min": 1,
+        "median": 755,
+        "max": 1500
+       },
+       "record_state": {
+        "n": 4,
+        "values": {
+         "completed": 4
+        }
+       },
+       "sequence": {
+        "n": 2087,
+        "min": 1,
+        "median": 831,
+        "max": 1654
+       },
+       "session_id": {
+        "values": {
+         "0642ad7bb56a4030bf201124b7bf1b9e": 524,
+         "1d646cf41723450fbc6256db03d74424": 523,
+         "fab410f27eee462eadd408f43aa06900": 522,
+         "cd57daaab734496fb5e141d0bcce5251": 522
+        }
+       }
+      }
+     }
+    },
+    "reliable_and_terminal": {
+     "count": 620,
+     "maximum_ms": 78.0,
+     "p95_ms": 8.0
+    },
+    "runtime": {
+     "packages": {
+      "bottle": "0.13.4",
+      "namisync": "0.1.0",
+      "pythonnet": "3.1.0",
+      "pywebview": "6.2.1"
+     },
+     "python": "3.13.14 (tags/v3.13.14:fd17997, Jun 10 2026, 13:03:48) [MSC v.1944 64 bit (AMD64)]",
+     "sqlite": "3.50.4"
+    },
+    "runtime_profile_match": true,
+    "schema_version": 1,
+    "sessions": [
+     {
+      "final_progress": 1500,
+      "progress_sample_count": 369,
+      "reliable_count": 150,
+      "session_id": "0642ad7bb56a4030bf201124b7bf1b9e",
+      "terminal_event_count": 1,
+      "terminal_record_count": 1,
+      "valid": true
+     },
+     {
+      "final_progress": 1500,
+      "progress_sample_count": 368,
+      "reliable_count": 150,
+      "session_id": "1d646cf41723450fbc6256db03d74424",
+      "terminal_event_count": 1,
+      "terminal_record_count": 1,
+      "valid": true
+     },
+     {
+      "final_progress": 1500,
+      "progress_sample_count": 367,
+      "reliable_count": 150,
+      "session_id": "fab410f27eee462eadd408f43aa06900",
+      "terminal_event_count": 1,
+      "terminal_record_count": 1,
+      "valid": true
+     },
+     {
+      "final_progress": 1500,
+      "progress_sample_count": 367,
+      "reliable_count": 150,
+      "session_id": "cd57daaab734496fb5e141d0bcce5251",
+      "terminal_event_count": 1,
+      "terminal_record_count": 1,
+      "valid": true
+     }
+    ],
+    "sh_g_8_acceptance": "incomplete-without-custody",
+    "startup_errors": [],
+    "status": "complete",
+    "tested_commit": "639b2ea8641d87b5cc2df09022bd91cb01c8afe9",
+    "webview2": "153.0.4234.48",
+    "worktree_status": [
+     "M CHANGELOG.md",
+     " M docs/BRIDGE.md",
+     " M docs/BUGS.md",
+     " M docs/M1_PLAN.md",
+     " M docs/PERFORMANCE.md",
+     " M tests/interfaces/web/test_bridge_event_benchmark.py",
+     " M tools/performance/bridge_event/__init__.py",
+     " M tools/performance/bridge_event/assets/benchmark.js",
+     " M tools/performance/bridge_event/child.py",
+     "?? tests/assets/bridge_event_page_probe.mjs"
+    ]
+   },
+   "schema": "namisync-performance-case-v1",
+   "status": "complete"
+  }
+ }
+}

@@ -1,0 +1,189 @@
+{
+ "m1-release-20261104/distribution/census.json": {
+  "bytes": 434434,
+  "sha256": "43ce9e89a3e8099d26709f27fbbce549fb4bcea847e85df5768063c3fe575e3a",
+  "content": {
+   "purpose": "distribution preparation; not license clearance or candidate acceptance",
+   "commit": "b3095886f0d4c3d1f10e243e800d69235a6e01f0",
+   "archive_sha256": "1d73619bb23e567f5c461e15fb9c82595853b419e1da169dafb17c165e7cf552",
+   "bundle_files": {
+    "_summary": {
+     "type": "list",
+     "bytes": 170267,
+     "sha256": "a5b1c0ccd381f78e952a7459d46d773e60238480c17cd7303a07b781d9742812",
+     "count": 477,
+     "fields": {
+      "kind": {
+       "values": {
+        "BINARY": 156,
+        "EXTENSION": 20,
+        "DATA": 297,
+        "EXECUTABLE": 2,
+        "generated/copied guidance": 2
+       }
+      },
+      "owner": {
+       "distinct": 21
+      },
+      "path": {
+       "distinct": 477
+      },
+      "sha256": {
+       "distinct": 455
+      },
+      "source": {
+       "n": 475,
+       "distinct": 475
+      }
+     }
+    }
+   },
+   "bundle_owner_counts": {
+    "CPython installation": 25,
+    "_cffi_backend.cp313-win_amd64.pyd": 1,
+    "ambient Codex runtime (provenance unresolved)": 43,
+    "NamiSync/freezer output": 3,
+    "bottle-0.13.4.dist-info": 8,
+    "cffi-2.1.0.dist-info": 8,
+    "clr_loader-0.3.1.dist-info": 7,
+    "clr_loader": 2,
+    "namisync-0.1.0.dist-info": 9,
+    "namisync": 211,
+    "proxy_tools-0.1.0.dist-info": 6,
+    "pycparser-3.0.dist-info": 7,
+    "pythonnet-3.1.0.dist-info": 9,
+    "pythonnet": 99,
+    "pywebview-6.2.1.dist-info": 8,
+    "setuptools": 1,
+    "typing_extensions-4.16.0.dist-info": 6,
+    "webview": 14,
+    "xxhash-3.8.1.dist-info": 7,
+    "xxhash": 1,
+    "NamiSync": 2
+   },
+   "analysis_sources": {
+    "_summary": {
+     "type": "list",
+     "bytes": 198231,
+     "sha256": "16212391011165552659547269cd5048595b6c7230204c6000e086be6f052a9a",
+     "count": 763,
+     "fields": {
+      "name": {
+       "distinct": 763
+      },
+      "owner": {
+       "distinct": 18
+      },
+      "sha256": {
+       "n": 759,
+       "distinct": 751
+      },
+      "source": {
+       "distinct": 760
+      }
+     }
+    }
+   },
+   "entrypoint_inputs": {
+    "_summary": {
+     "type": "list",
+     "bytes": 4865,
+     "sha256": "9197ab90c2321722578ac87d3af839e854ef7447188f68dd2c30d70a917d6391",
+     "count": 16,
+     "fields": {
+      "kind": {
+       "values": {
+        "PYZ": 2,
+        "PYMODULE": 5,
+        "PYSOURCE": 7,
+        "EXECUTABLE": 2
+       }
+      },
+      "name": {
+       "distinct": 16
+      },
+      "owner": {
+       "values": {
+        "NamiSync/freezer output": 9,
+        "PyInstaller": 7
+       }
+      },
+      "sha256": {
+       "distinct": 16
+      },
+      "source": {
+       "distinct": 16
+      }
+     }
+    }
+   },
+   "module_owner_counts": {
+    "PyInstaller": 4,
+    "NamiSync/freezer output": 2,
+    "_distutils_hack": 2,
+    "CPython installation": 447,
+    "setuptools": 115,
+    "typing_extensions.py": 1,
+    "namespace package": 4,
+    "packaging": 14,
+    "webview": 41,
+    "bottle.py": 1,
+    "proxy_tools": 1,
+    "clr.py": 1,
+    "pythonnet": 1,
+    "clr_loader": 15,
+    "cffi": 16,
+    "pycparser": 5,
+    "namisync": 91,
+    "xxhash": 2
+   },
+   "existing_notices": {
+    "_summary": {
+     "type": "list",
+     "bytes": 4786,
+     "sha256": "122e00e15b627d5e32fc8330937213ffa920c90121dbb0996c080ea7850114de",
+     "count": 20,
+     "fields": {
+      "license": {
+       "distinct": 9
+      },
+      "name": {
+       "distinct": 20
+      },
+      "sha256": {
+       "distinct": 20
+      },
+      "source": {
+       "distinct": 18
+      },
+      "version": {
+       "distinct": 18
+      }
+     }
+    }
+   },
+   "hosted_limit": "b3095886 downloaded bundle manifests were verified previously; hosted freezer origin tables were not uploaded"
+  }
+ },
+ "m1-release-20261104/distribution/review.json": {
+  "bytes": 1122,
+  "sha256": "99cb4d023826f49d433091c2b24c4ca540b1b058b5d5ee8b1f6a8674e2193847",
+  "content": {
+   "local_links_checked": 181,
+   "missing_links": [],
+   "hosted_run": 42056121788,
+   "conclusion": "success",
+   "node20_deprecation_in_saved_log": false,
+   "baseline_unchanged": "d38b452f5102d10060c86c0244f50afecb4bdb16f386b28aeb42b9af9e51fd41",
+   "adversarial_review": {
+    "scope": "Action refresh passed before distribution preparation; version/signing decisions are recorded",
+    "guide_accuracy": "checked GUI arguments, AppPaths, VERSION, pyproject metadata, current build admission/output and README supported limits",
+    "notice_claim": "twenty existing records are not presented as whole-bundle clearance",
+    "origins": "all local bundle bytes independently match retained identities; hosted origins remain unproven",
+    "resource_reuse": "no measured artifact changed; future native correction requires affected-evidence reassessment",
+    "integration": "new plain-text guides are explicitly unwired preparation inputs; no candidate/publication claim",
+    "remaining": "native input provenance, final notices and guide integration, resource acceptance, candidate gates and handoff"
+   }
+  }
+ }
+}
