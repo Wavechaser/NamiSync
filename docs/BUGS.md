@@ -210,8 +210,11 @@ entries to fit a batch; use explicit record offsets/limits.
   diagnostics; the directly exposed task-shell identity check uses the same
   correction. A capped original run exhausts allocation, while changing only
   formatting retains the failed comparison at about 69 MiB; the corrected four
-  frontend checks pass at about 111 MiB. Task-local Windows Job containment and
-  raw evidence are retained in `build/r0-focused-01/MEMORY_INCIDENT.md`.
+  frontend checks pass at about 111 MiB. Commit `96a02120` added the follow-up
+  containment: frontend probes run in a prelaunch Windows Job capped at 512 MiB
+  with bounded diagnostic reads (TESTS "Ordinary repository"). This is test
+  containment, not a product memory guarantee. The incident write-up and raw
+  runs were not retained; this entry, that commit and its tests are the record.
   No product data-loss or filesystem-damage consequence was established.
 
 
