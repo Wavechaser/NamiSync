@@ -18,7 +18,7 @@ from uuid import uuid4
 
 HERE = Path(__file__).resolve().parent
 REPOSITORY = HERE.parents[1]
-OUTPUT_ROOT = REPOSITORY / "build" / "m1-9-20261001"
+OUTPUT_ROOT = REPOSITORY / "build" / "inventory-cold"
 MODULE = "tools.performance.inventory"
 
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance

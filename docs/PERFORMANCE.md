@@ -186,8 +186,8 @@ separate checker: it requires exactly five complete children per case, the
 collection revision with a clean tree in every report, and recomputes each
 statistic from the raw reports. Any invalid child or exceeded limit fails R3;
 a rerun needs a recorded cause and a new collection directory. Raw reports
-stay in ignored `build/r3-acceptance-20261109/` (Inventory child logs in its
-existing `build/m1-9-20261001/` root); the validation JSON, with
+stay in ignored `build/r3-acceptance-20261109/` (Inventory child logs in the
+collector's `build/inventory-cold/` root); the validation JSON, with
 each report's SHA-256, and the Inventory compact raw/validation JSON are
 committed under `tests/interfaces/web/`.
 
@@ -258,8 +258,8 @@ the profile and metrics are summarized above. [Inventory raw](../tests/interface
 [validation](../tests/interfaces/web/r3_inventory_cold_20261109_validation.json)
 and [History/bridge validation](../tests/interfaces/web/r3_br_g_42_validation_20261109.json)
 bind the original source/runtime/hash population. Raw collection:
-`build/r3-acceptance-20261109/collection/`; Inventory logs:
-`build/m1-9-20261001/measurement-inventory-cold-20261109T130416Z-bc2ffcb0/`.
+`build/r3-acceptance-20261109/collection/`; Inventory child logs were
+collector working output and are not retained.
 Relevant source/profile changes require renewal; those original passes remain
 scoped rather than silently authenticating the current checkout.
 
@@ -320,8 +320,9 @@ Changed gating files, fixture, producer/checker/driver, Python/dependencies or
 accepted machine/profile require fresh affected samples.
 
 This local, predeclared named-reference criterion uses Tier 2 under DEFENSE §7:
-retain committed compact raw/validation JSON under `tests/interfaces/web/` and
-raw child logs under ignored `build/m1-9-20261001/`. Every run has a fresh exclusive
+retain committed compact raw/validation JSON under `tests/interfaces/web/`; raw
+child logs are working output under ignored `build/inventory-cold/` and are not
+retained. Every run has a fresh exclusive
 directory; failures remain incomplete and neither reports nor validator results
 are overwritten. Samples apply only to the recorded profile and five children,
 without universal latency, memory or complexity claims. No acceptance samples
@@ -331,7 +332,7 @@ are claimed merely by adding this method or passing correctness-only controls.
 
 | Recorded candidate/profile | Base / information-heavy maximum, five children each | Authority |
 | --- | --- | --- |
-| `ec3865c`-based source hashes, 2026-10-01 | 1.9712401 / 2.8123806 s | `m1_9_inventory_cold_{raw,validation}.json`; original child logs under `build/m1-9-20261001/`. |
+| `ec3865c`-based source hashes, 2026-10-01 | 1.9712401 / 2.8123806 s | `m1_9_inventory_cold_{raw,validation}.json`. |
 | Clean `cbf73a4f`, CPython 3.13.17, 2026-10-30 | 1.6487122 / 2.2893115 s | `m1_closeout_inventory_cold_20261030_{raw,validation}.json`; same accepted reference machine, AC/quiet. |
 
 Those committed files are under `tests/interfaces/web/`. The first collector

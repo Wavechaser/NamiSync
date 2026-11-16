@@ -791,8 +791,8 @@ of that optional case registry:
 
 ```powershell
 .\.venv\Scripts\python.exe -m tools.performance.inventory --check
-.\.venv\Scripts\python.exe -m tools.performance.inventory --collect --profile build/m1-9-20261001/inventory-cold-profile-verified.json
-.\.venv\Scripts\python.exe -m tools.performance.validate_inventory build/m1-9-20261001/measurement-inventory-cold-<run-id>/raw.json
+.\.venv\Scripts\python.exe -m tools.performance.inventory --collect --profile build/inventory-cold/inventory-cold-profile-verified.json
+.\.venv\Scripts\python.exe -m tools.performance.validate_inventory build/inventory-cold/measurement-inventory-cold-<run-id>/raw.json
 ```
 
 `--check` validates both complete fixtures without measuring elapsed time.
@@ -803,7 +803,8 @@ result. The separate checker owns the retained 3/6-second comparison and refuses
 incomplete, wrong-fixture or changed-source evidence. [PERFORMANCE](PERFORMANCE.md#cold-inventory-projection-acceptance-method)
 owns the fixture, interval, finite dependencies, profile and interpretation.
 
-Generated inventory reports live only under ignored `build/m1-9-20261001/`:
+The profile describes this machine only and stays beside the reports, untracked.
+Generated inventory reports live only under ignored `build/inventory-cold/`:
 `measurement-inventory-fixture-check-<uuid>.json` contains untimed fixture facts;
 `measurement-inventory-cold-<timestamp>-<uuid>/` contains raw JSON, per-case/index
 stdout/stderr and a separate validation JSON. Create exclusively, preserve failed

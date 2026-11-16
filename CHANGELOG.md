@@ -162,7 +162,7 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
-#### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-16)
+#### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-17)
 
 - Clear six local codex branches under the user's superseded-recovery disposal
   decision. Delete 61 registered external test roots (21.37 GiB logical),
@@ -179,6 +179,9 @@ behavioral evidence.
   Define what belongs in `build/` (including unfinished work, which no
   schedule clears), place authored studies in `docs/` and work files nowhere
   else, and give failed or superseded runs failure records apart from acceptance.
+  Give the inventory cold collector its own `build/inventory-cold/` root; its
+  machine profile and child logs stay unretained beside the committed compact
+  JSON.
 - Compact M1_PLAN/PERFORMANCE/CHANGELOG by outcome and service DESKTOP_UI's
   structure and stale ownership prose. Preserve methods, qualifications,
   deferrals, unresolved observations and source-linked evidence; repair links.

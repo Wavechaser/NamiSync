@@ -27,7 +27,7 @@ Evidence tests: 31 passed; `tools.evidence check` clean.
 
 - Promotion backlog, staged 2026-11-15 and not promoted (user: "don't promote
   any yet"): `build/evidence-candidates/INDEX.md` (working pointer) lists 36
-  compacted candidates, 100 flat files / 1.04 MiB, from the lasting-cited study
+  compacted candidates, 99 flat files / 1.04 MiB, from the lasting-cited study
   folders (~950 MiB, untouched). Each is README.md plus an optional authored
   `summary.md` (`_authored/`), `notes.md` (verbatim text under source-path
   headings) and/or `data.json` (JSON keyed by source path with original size
@@ -37,12 +37,16 @@ Evidence tests: 31 passed; `tools.evidence check` clean.
   them and checks `seal`'s caps. The 2026-11-16 content pass covered R2
   distribution/notices, executor simplification, planning PO3, exec-time,
   copyonly, AB-7/AB-8, root admission, M1-9, incident trace, resource and
-  scroll studies; the remaining small records were not revisited. Open: the
-  274 KB cited `failure.png`, and per-claim adequacy review before each
-  promotion. TOOLS still names `build/m1-9-20261001/` as the collector's
-  profile/output location, a working pointer to settle at that promotion.
-  Promotion then repoints the citing lines and deletes the source folder. The
-  R4 package ZIP and icon archive need no record (user, 2026-11-16).
+  scroll studies; the remaining small records were not revisited. The user is
+  reviewing per-claim adequacy before promotion, which then repoints the citing
+  lines and deletes the source folder. No record (user, 2026-11-16/17): the R4
+  package ZIP, icon archive, the cited `failure.png` (repoint its PERFORMANCE
+  sentence to the failure mirror) and the inventory collector's profile and
+  output. The M1-9 candidate is now summary-only and cited only by M1_PLAN's
+  M1-9 row.
+- The inventory cold collector writes to `build/inventory-cold/` (verified
+  profile copied there). At the later `build/` cleanup, keep that folder and
+  other likely-regenerated working files such as the icon archive.
 - 55 empty folders under `build/move-history-20260925/` stay locked by old
   Codex-sandbox ACLs; an elevated `Remove-Item -Recurse` clears them.
 

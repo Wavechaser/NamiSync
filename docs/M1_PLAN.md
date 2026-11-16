@@ -85,10 +85,11 @@ locked folders remain. On 2026-11-15 the user added the per-run/ledger rule; the
 records were compacted and the survey folder removed, leaving 1.00 GiB / 18,627
 build files of lasting-cited study material awaiting review or compaction
 before promotion. The user then asked for compaction without promotion: 36
-candidates (100 flat files, 1.04 MiB) are staged in `build/evidence-candidates/`
+candidates (99 flat files, 1.04 MiB) are staged in `build/evidence-candidates/`
 for review, after a content pass that aggregated per-run rows, kept failed
 resource schedules as failure records and condensed narratives; the R4
-package ZIP and icon archive need none. Keep `F:\NamiSyncExecutorBenchSource`, the user's
+package ZIP, icon archive, cited `failure.png` and inventory collector profile
+need none. Keep `F:\NamiSyncExecutorBenchSource`, the user's
 `H:\test_dir\source` and `target` play directories including their trash, and
 `dist/v0.1.0/`.
 
