@@ -26,12 +26,15 @@ Evidence tests: 31 passed; `tools.evidence check` clean.
 ## Open items
 
 - Promotion backlog, staged 2026-11-15 and not promoted (user: "don't promote
-  any yet"): `build/evidence-candidates/INDEX.md` (working pointer) lists 36
-  compacted candidates, 314 files / 1.91 MiB, from the lasting-cited study
-  folders (~950 MiB, untouched). `spec.py` holds each pick; `build_candidates.py`
-  rebuilds them and checks `seal`'s caps. Its open decisions: the 274 KB cited
-  `failure.png`, and per-claim adequacy review before each promotion. Promotion
-  then repoints the citing lines and deletes the source folder.
+  any yet"): `build/evidence-candidates/INDEX.md` (working pointer) lists 35
+  compacted candidates, 98 flat files / 2.0 MiB, from the lasting-cited study
+  folders (~950 MiB, untouched). Each is README.md plus `notes.md` (verbatim
+  text under source-path headings) and/or `data.json` (JSON keyed by source
+  path with original size and SHA-256). `spec.py` holds each pick;
+  `build_candidates.py` rebuilds them and checks `seal`'s caps. Open: the 274 KB
+  cited `failure.png`, and per-claim adequacy review before each promotion.
+  Promotion then repoints the citing lines and deletes the source folder. The
+  R4 package ZIP and icon archive need no record (user, 2026-11-16).
 - 55 empty folders under `build/move-history-20260925/` stay locked by old
   Codex-sandbox ACLs; an elevated `Remove-Item -Recurse` clears them.
 
