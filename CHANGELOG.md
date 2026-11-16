@@ -182,6 +182,10 @@ behavioral evidence.
   Give the inventory cold collector its own `build/inventory-cold/` root; its
   machine profile and child logs stay unretained beside the committed compact
   JSON.
+- Correct evidence-candidate medians and successful-trial aggregation; restore
+  compact resource, verifier, source-binding, CLI and descendant-reaping support.
+  Preserve absent-source limitations explicitly rather than implying recovered
+  raw evidence or renewed acceptance. Candidates remain unpromoted.
 - Compact M1_PLAN/PERFORMANCE/CHANGELOG by outcome and service DESKTOP_UI's
   structure and stale ownership prose. Preserve methods, qualifications,
   deferrals, unresolved observations and source-linked evidence; repair links.

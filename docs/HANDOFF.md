@@ -1,57 +1,58 @@
-# Latest session — retention policy and evidence records, 2026-11-14 – 2026-11-15
+# Latest session — evidence-candidate adequacy corrections, 2026-11-17
 
-The user ratified kind-based retention (PERFORMANCE "Evidence retention",
-AGENTS structure table and closeout rule, DEFENSE Tier 2 wording): `build/`
-must be clearable at any time; validated records are promoted to tracked
-`evidence/` at session closeout. `python -m tools.evidence` (TOOLS "Evidence
-records") allocates IDs, seals file hashes and checks the manifest and EV
-citations. A fresh Opus review found two blockers (doc example breaking
-`check`, unsorted/duplicate file lists passing); both were fixed and the delta
-re-reviewed clean.
+The user authorized minimal corrections after per-claim review, preferring
+summaries and aggregates. No candidate was promoted and no original study
+folder was deleted. Unrelated `docs/M2_PROPOSAL.md` edits remain untouched.
 
-Round 7 removed the three secondary worktrees (HEADs on main), R5 packages,
-`m1-token-audit-*`, gui-tuning HDR captures and everything not cited by a
-lasting document, keeping M1_PLAN-cited text records as early-M2 reference.
-The user's elevated rerun then removed all 1,347 sandbox-locked files.
+## Changes and verification
 
-2026-11-15 pilot compaction: the user added the rule that per-run records,
-differentials, ledgers and Git-reproducible copies are not promoted however
-small. EV-0001 (cleanup receipts) and EV-0002 (documentation compaction
-checks) were pruned from 45 files / 411 KB to 20 files / 57 KB; both disposition
-ledgers were dropped (one fixed reason per disposition; Git reproduces the
-block map). `seal` now caps records at 256 KiB per file, 1 MiB and 24 files.
-The survey working folder was deleted; build is 1.00 GiB / 18,627 files.
-Evidence tests: 31 passed; `tools.evidence check` clean.
+- `build/evidence-candidates/INDEX.md` lists 36 candidates, 108 files /
+  1,155,450 bytes (1.10 MiB). Corrections add about 64 KiB, not restored trees.
+- Even-population medians now average the middle two observations. Failed
+  execution trials stay separate from successful timing statistics. Resource
+  FAIL verdicts, every failed predicate/value/limit and invalid runs are unchanged.
+- Compact supplements retain resource package/tool identities and multi-task
+  window medians, verifier/tap aggregates, result-8/projection/RO source bindings,
+  corrected CLI gate outcomes, the minimized-run core observation and the final
+  ST-H deadline/reaping result (nine observed processes dead, no success receipt).
+- Allocation's whole-app workspace was already absent: its contemporaneous
+  aggregate is recovered from immutable Git `cbf3f090`, explicitly not a new
+  validation. Copyonly's original snapshots are also absent; no source revision
+  was invented. Exec-time retains its source attribution and surviving instrument
+  hashes without claiming a recovered per-trial freeze. These remain historical
+  diagnostics. Null-hasher results were not present in the initial-assessment
+  source folder; PERFORMANCE distinguishes that rerun control from retained
+  real-read/tap observations.
+- `correct_candidates.py` refreshes the small `_authored/` supplements;
+  `rebuild_checked.ps1` validates the absolute candidate root and rejects reparse
+  points before `build_candidates.py` replaces candidate directories. Originals
+  are read only. `verify_adequacy.py` independently checks the statistics and
+  restored claims. `adequacy-verification.json` records cap checks for all 36
+  candidates, 150 original JSON identities and 12 synthesis-input hashes.
+  These are working files, not additional promotion candidates.
+- Final adversarial check found no unexpected candidate delta. All 36 cap checks,
+  independent claim/statistic checks, 52 local documentation file links,
+  `tools.evidence check` (two records, zero problems) and `git diff --check`
+  passed. Product tests were unnecessary for evidence-only changes. No commit
+  was requested or made.
 
-## Open items
+## Promotion context
 
-- Promotion backlog, staged 2026-11-15 and not promoted (user: "don't promote
-  any yet"): `build/evidence-candidates/INDEX.md` (working pointer) lists 36
-  compacted candidates, 99 flat files / 1.04 MiB, from the lasting-cited study
-  folders (~950 MiB, untouched). Each is README.md plus an optional authored
-  `summary.md` (`_authored/`), `notes.md` (verbatim text under source-path
-  headings) and/or `data.json` (JSON keyed by source path with original size
-  and SHA-256). `spec.py` holds each pick; `reducers.py` holds the named
-  content reductions (per-run aggregates, inventories as counts and hashes,
-  SH-G-15 failure records, scroll statistics); `build_candidates.py` rebuilds
-  them and checks `seal`'s caps. The 2026-11-16 content pass covered R2
-  distribution/notices, executor simplification, planning PO3, exec-time,
-  copyonly, AB-7/AB-8, root admission, M1-9, incident trace, resource and
-  scroll studies; the remaining small records were not revisited. The user is
-  reviewing per-claim adequacy before promotion, which then repoints the citing
-  lines and deletes the source folder. No record (user, 2026-11-16/17): the R4
-  package ZIP, icon archive, the cited `failure.png` (repoint its PERFORMANCE
-  sentence to the failure mirror) and the inventory collector's profile and
-  output. The M1-9 candidate is now summary-only and cited only by M1_PLAN's
-  M1-9 row.
-- The inventory cold collector writes to `build/inventory-cold/` (verified
-  profile copied there). At the later `build/` cleanup, keep that folder and
-  other likely-regenerated working files such as the icon archive.
-- 55 empty folders under `build/move-history-20260925/` stay locked by old
-  Codex-sandbox ACLs; an elevated `Remove-Item -Recurse` clears them.
+Promotion remains the user's next step. Repoint citing prose as well as paths:
+INDEX lists obsolete promises about raw intervals, manifests, census inventories
+and source/header copies. Do not imply excluded material survives. The R3 raw
+and validation authorities already committed under `tests/interfaces/web/`
+remain unchanged. Retain resource failures apart from acceptance and keep the
+diagnostic provenance limitations with their claims.
 
-Keep F:\NamiSyncExecutorBenchSource, the user's H:\test_dir\source and target
-play directories including trash, and `dist/v0.1.0/`. Final candidate
-b0a3fe13 / Package05, ZIP SHA-256
-652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc. M1 headings
-remain pending external delivery.
+No record is needed for the R4 package ZIP, icon archive, cited `failure.png`
+(repoint to the failure mirror), or inventory collector profile/output under the
+user's prior decisions. Keep the collector's working `build/inventory-cold/`
+folder and other likely-regenerated working inputs at later cleanup. The 55
+empty `build/move-history-20260925/` folders still have old sandbox ACL locks.
+
+Keep `F:\NamiSyncExecutorBenchSource`, the user's `H:\test_dir\source` and
+`target` play directories including trash, and `dist/v0.1.0/`. Final package:
+`b0a3fe13` / Package05, ZIP SHA-256
+`652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc`.
+M1 release headings remain pending external delivery.

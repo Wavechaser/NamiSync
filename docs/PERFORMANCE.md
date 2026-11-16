@@ -1395,7 +1395,7 @@ metrics/readback, preparation and storage contention differ across studies.
 | Handle continuity / adjacent native checks | Consolidated derivation and retained published-file handle avoid duplicate work while preserving explicit access guards. | Same evidence root; ranges frequently overlap, so no per-commit causal speedup. |
 | Direct target writes | Final eligible local direct-write bands passed exact readback; small files retain buffered behavior, source reads remain buffered. | Final result-8/ceilings receipts below; no device ceiling from buffered repeated-source throughput. |
 | Source-drive contention | Retain the contended receipt and user-cleared rerun separately. | No hidden outlier deletion or claim that unchanged product explains environmental shifts. |
-| Verifier admission assessment | Compare full real reads with tap/null-hasher controls; current evidence/outcome membership is checked. | `build/executor-assessment-20260927/`; open/read costs and hashing are distinct. |
+| Verifier admission assessment | Retained full-read and tap/no-tap observations check evidence/outcome membership. Null-hasher comparison remains a rerun control, not a retained observation. | `build/executor-assessment-20260927/`; open/read costs and hashing are distinct. |
 
 ### Integrated direct target writes — 2026-09-30
 

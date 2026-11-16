@@ -85,13 +85,23 @@ locked folders remain. On 2026-11-15 the user added the per-run/ledger rule; the
 records were compacted and the survey folder removed, leaving 1.00 GiB / 18,627
 build files of lasting-cited study material awaiting review or compaction
 before promotion. The user then asked for compaction without promotion: 36
-candidates (99 flat files, 1.04 MiB) are staged in `build/evidence-candidates/`
+candidates (108 flat files, 1.10 MiB) are staged in `build/evidence-candidates/`
 for review, after a content pass that aggregated per-run rows, kept failed
 resource schedules as failure records and condensed narratives; the R4
 package ZIP, icon archive, cited `failure.png` and inventory collector profile
 need none. Keep `F:\NamiSyncExecutorBenchSource`, the user's
 `H:\test_dir\source` and `target` play directories including their trash, and
 `dist/v0.1.0/`.
+
+2026-11-17 adequacy corrections add compact claim-supporting aggregates and
+source bindings, correct even-population medians and exclude failed trials from
+successful execution statistics. No promotion or source-folder deletion occurred.
+Allocation's absent whole-app workspace is represented by its immutable Git
+summary; copyonly's absent source snapshots and exec-time's incomplete freeze
+provenance remain explicit diagnostic limitations. These are not renewed
+acceptance. The verifier assessment distinguishes retained tap/no-tap observations
+from an unretained null-hasher control. HANDOFF holds verification and promotion
+context.
 
 Completed cleanup removed six local codex branches without preserving superseded
 recoveries, as explicitly directed by the user, and 61 external resource roots
