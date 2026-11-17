@@ -101,7 +101,9 @@ uses Microsoft Edge WebView2 Runtime and .NET Framework 4.8 or a compatible late
 
 The 8 GB recommendation leaves room for Windows and the desktop host as well as
 NamiSync. Our measured 100,000-entry collections reached approximately **2.4 GB
-of whole-application peak memory**. This is workload-based guidance, not a tested
+of whole-application peak memory**. Each open task keeps its plan or inventory
+view in memory until you close it, so several large tasks add up; close finished
+tasks to release it. This is workload-based guidance, not a tested
 8 GB hardware floor or a universal memory ceiling; see the
 [resource measurements](docs/PERFORMANCE.md#release-repair-resource-attempt-on-cfeac2d9--2026-11-10).
 CPU, graphics and storage performance affect responsiveness and throughput;
