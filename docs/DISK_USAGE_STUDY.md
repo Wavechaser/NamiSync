@@ -27,7 +27,7 @@ page answers a different question:
 | Plan / execution | What will change on the target? Rows describe operations, mostly from the target's side, so it is a poor view of what simply exists. |
 | Inventory | What evidence do we hold for a tracked location? |
 | **This page** | What exists in one folder or volume, and how big is it? |
-| Compare (proposed) | What exists in A and B, and how do they differ? |
+| New browse page (proposed) | What exists in A and B, and how do they differ? |
 
 Inside NamiSync the question also comes up without being asked:
 
@@ -42,7 +42,7 @@ Inside NamiSync the question also comes up without being asked:
 
 | Question | User direction | Consequence |
 | --- | --- | --- |
-| Placement | A new page that answers “what exists here.” A compare page (“what exists in A and B and how they differ”) is a separate future page that may share the two-pane layout. | See [Page](#page). Only the layout is shared, so neither feature blocks the other. |
+| Placement | A new page that answers “what exists here.” A new browse page (“what exists in A and B and how they differ”) is a separate future page that may share the two-pane layout. | See [Page](#page). Only the layout is shared, so neither feature blocks the other. |
 | Size meaning | Logical (end-of-file) size from `os.scandir`. The small difference from allocated size is tolerated; Properties shows the exact on-disk figure. Probe the known divergent cases before implementation, for rigor. | No new enumeration backend; see [Size](#size). |
 | Shape and scale | Spaceketeer-like: one flat level of files and folders, and a few-ring sunburst of folders. | The whole tree is still walked, but only directory aggregates are retained; see [Scale](#scale). |
 | Volume custody | Wait. Say so visibly, so the user can choose to pause a sync on that volume. | No new dispatcher custody mode; see [Session behavior](#session-behavior). |
@@ -93,7 +93,7 @@ Inventory too, but that is a separate change to the DR-BR-15 sort contract.
 
 ## Page
 
-The page has two panes, a frame the compare page may reuse:
+The page has two panes, a frame the new browse page may reuse:
 
 - **Left:** the sunburst, centered on the focused folder. A breadcrumb above it
   re-roots the view. Clicking a segment focuses that folder.
@@ -238,7 +238,7 @@ mostly policy. The plumbing is modest.
     the parent exists.
   - Move rows label the previous and new paths the same way.
   - Plan has no double-click shell default. One-sided pages (Inventory, this
-    page, the compare page's per-side tables) may use double-click, because
+    page, the browse page's per-side tables) may use double-click, because
     the side is unambiguous.
 - **Missing items.** Missing items get no Open or Properties actions; “Open
   containing folder” appears when the parent exists. Copy Path stays available,
@@ -261,10 +261,10 @@ mostly policy. The plumbing is modest.
 
 ## Related Proposals
 
-- **Compare page** ([M2_PROPOSAL](M2_PROPOSAL.md)). “What exists in A and B,
+- **New browse page** ([M2_PROPOSAL](M2_PROPOSAL.md)). “What exists in A and B,
   and how do they differ”. It still needs its own outcome definition.
-- **Checksum adoption** ([M2_PROPOSAL](M2_PROPOSAL.md)). It can be run from the
-  compare page or from sync execution. It does not belong on this page, which
+- **Checksum adoption** ([M2_PROPOSAL](M2_PROPOSAL.md)). It could be run from the
+  browse page or from sync execution. It does not belong on this page, which
   writes no ledger state.
 
 ## Open Questions
