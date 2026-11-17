@@ -105,9 +105,9 @@ from an unretained null-hasher control.
 2026-11-17 promotion: after the user's per-claim review, all 36 candidates became
 EV-0003–EV-0038 (108 files, 1.09 MiB). Every lasting citation was repointed, and
 sentences promising raw intervals, source manifests, per-path census inventories,
-schedule samples or source/header copies now say what the records keep. The
-original study folders and `build/evidence-candidates/` still exist pending the
-user's deletion decision.
+schedule samples or source/header copies now say what the records keep. At the
+user's request the 42 source folders and `build/evidence-candidates/` were then
+deleted; only sandbox-locked pytest temp residue remains in four of them.
 
 Completed cleanup removed six local codex branches without preserving superseded
 recoveries, as explicitly directed by the user, and 61 external resource roots

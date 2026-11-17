@@ -24,14 +24,17 @@ profile/output got no record (user decisions).
 
 ## Open items
 
-- Pending the user's decision: delete the 42 promoted source folders under
-  `build/` (listed in the records' manifest `origin`) and the finished
-  `build/evidence-candidates/` working folder.
+- At the user's request the 42 promoted source folders (named in the records'
+  manifest `origin`) and `build/evidence-candidates/` were deleted. Four keep
+  only pytest temp residue owned by the Codex sandbox account (731 files,
+  18.5 MB; no evidence): `executor-assessment-20260927`, `m1-9-20261001`,
+  `post-m1-8-ablation-20260925` and `root-admission-optimization-20260928`.
+  Together with the 55 empty `build/move-history-20260925/` folders, they need
+  an elevated `Remove-Item -Recurse -Force`.
 - At the later `build/` cleanup, keep `build/inventory-cold/` and other
   likely-regenerated working inputs such as the icon archive. M1_PLAN-cited
   early-M2 reference folders (for example `build/ab9-20260926/`) were not part of
-  this batch. 55 empty `build/move-history-20260925/` folders still carry old
-  sandbox ACL locks; an elevated `Remove-Item -Recurse` clears them.
+  this batch.
 
 Keep `F:\NamiSyncExecutorBenchSource`, the user's `H:\test_dir\source` and
 `target` play directories including trash, and `dist/v0.1.0/`. Final package:
