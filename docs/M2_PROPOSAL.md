@@ -1,6 +1,8 @@
 # M2 Proposal
 
-This is the single index of proposed later features, not an implementation plan.
+This is the single record of proposed later features: the list below, then
+detail sections for proposals that need them. It is not an implementation plan,
+and becomes the M2 plan when M2 is activated.
 [FEATURES](FEATURES.md) owns product behavior and accepted future boundaries;
 [ARCHITECTURE](ARCHITECTURE.md#m2--durable-sessions-and-queue-ownership) owns M2
 direction. Accepted future outcomes remain binding; unrealized representation
@@ -29,6 +31,7 @@ Listing an outcome does not activate implementation or change current M1 limits.
 - **Durable queue.** Retain queued work across application restarts. M1's queue has no hold: a pending session starts as soon as its volumes are free. From M2, every queue, durable or not, respects holds. User decisions (2026-11-18):
   - Everything in the queue is visible and acted on without distinction: a task created this session and a durable task inherited from an earlier run both look like pending sessions to Pause all, Stop all and the rail.
   - Held is persisted like any other state and comes back held after a restart. A held pending execution must never return wanting to start.
+  - Ownership (2026-11-19): the GUI owns the queue. Queue logic stays in the dispatcher, where FEATURES already places it; the desktop process holds the single queue-owner lock while it runs. CLI runs stay foreground runs outside the queue, still kept off busy disks by the cross-process volume locks, and the GUI shows “Waiting for another NamiSync process” while a CLI run holds a volume it needs.
   - Nothing in the queue starts an execution through a path that bypasses or takes over a hold. Every execution is created up front, when the user commits, and waits as a visible, holdable entry. The queue may clear an existing entry to run; it never creates one. [WORKFLOWS](WORKFLOWS.md)' “queue releases may replay” a commitment is read this way and is reconciled when this design is accepted.
 
   This is a precaution: nothing in M1 starts execution or verification without a confirmation behind it (post-copy Verify runs inside the execution session's continuation), and no planned design requires an exception. Scheduled, conditional and recurring runs are deferred beyond M2 (see Scheduling); any later design must fit these rules or be an explicit, separately reviewed exception.
@@ -36,8 +39,8 @@ Listing an outcome does not activate implementation or change current M1 limits.
 - **Scheduling.** User decision (2026-11-19): deferred beyond M2, kept as an available future feature. A reviewed plan scheduled for later is usually refused by drift by the time it runs; a conditional run (“when this disk appears”) needs preauthorizing an unreviewed plan; recurring runs need a process that outlives the window, starts itself or lives in the tray. A planning-only reminder avoids all three, because planning changes nothing and still ends in review. Its smallest form needs no scheduler: show how long ago each recent pair or preset last synced, and let presets carry an optional “remind after N days” checked at launch and while the app runs. Due pairs are highlighted; plan tasks are not created unasked.
 - **Native Fluent overlay scrollbars.** Integrate WebView2's environment option through the Windows host when the backend work is justified. The current pywebview path needs coordinated startup, early navigation/HTML-loading and rendering-test changes; retain the CSS approximation for M1.
 - **Verify-only batches.** Batch standalone verification directories. The current Setup runner admits source/target pairs; extending it to single-directory tasks belongs with a reviewed M2 Setup change.
-- **Disk usage view.** Answer “what exists here, and what is taking up space?” for a folder or volume, including target capacity shortfalls and `.synctrash` growth. It is the Storage card's view on the Browse page: a sunburst navigator beside a flat one-level table of logical sizes, built from a retained directory-aggregate tree and a listing-only walk. It is read-only, makes no ledger writes, and has no mutation path. [DISK_USAGE_STUDY](DISK_USAGE_STUDY.md) records the user's 2026-11-15 direction, constraints and remaining questions. This study is not implementation authorization.
-- **Volume overview.** User direction (2026-11-19): the Storage card shows something like Explorer's “This PC” below its path box. Each lettered volume shows its letter and label, space, disk type (SSD, HDD, optical, removable, network, RAM disk), connection (SATA, NVMe, USB, SAS, virtual) and filesystem. Space reads “120 GB free of 1 TB” beside a used-space bar in the progress bar's style, exposed as a meter rather than progress, with the warning color when nearly full. Clicking a row starts a volume-wide disk usage scan. It reads volume metadata only: no scan, no ledger.
+- **Disk usage view.** Answer “what exists here, and what is taking up space?” for a folder or volume, including target capacity shortfalls and `.synctrash` growth. It is the Storage card's view on the Browse page: a sunburst navigator beside a flat one-level table of logical sizes, built from a retained directory-aggregate tree and a listing-only walk. It is read-only, makes no ledger writes, and has no mutation path. [Disk Usage View Detail](#disk-usage-view-detail) records the user's direction, constraints and remaining questions. It is not implementation authorization.
+- **Volume overview.** User direction (2026-11-19): the Storage card shows something like Explorer's “This PC” below its path box. Each lettered volume shows its letter and label, space, disk type (SSD, HDD, optical, removable, network, RAM disk), connection (SATA, NVMe, USB, SAS, virtual) and filesystem. Space reads “120 GB free of 1 TB” beside a used-space bar in the progress bar's style, exposed as a meter rather than progress, with the warning color when nearly full. Reusing the progress bar also reuses its indeterminate animation while a drive is still being read, and while a disk usage scan is running. Clicking a row starts a volume-wide disk usage scan. It reads volume metadata only: no scan, no ledger.
   - **Sources.** Already read: `GetDriveTypeW` (drive class), `GetVolumeInformationW` (label, serial and filesystem; root authority keeps the label as evidence) and `shutil.disk_usage` (preflight keeps only free space, but total and used arrive with it). New: `GetLogicalDrives` for the list, and `IOCTL_STORAGE_QUERY_PROPERTY` on a volume handle opened without data access: the device property gives the bus type and removability, and the seek-penalty property separates HDD from SSD. Pulling these through is cheap; the rest is GUI work.
   - **Honest unknowns.** An optical drive without media shows “No disc”. A volume spanning several disks (Storage Spaces, dynamic volumes), or a driver that does not answer, shows “Unknown” rather than a guess. RAM disks often report themselves as fixed disks and are labelled only when Windows says so.
   - **Bounds.** Each drive is queried independently, off the UI thread, with a deadline: a disconnected network mapping can block for seconds, so it shows “Not responding” while the others render. Network drives are listed, but Disk usage still refuses remote roots and says so. The list refreshes on open and on request.
@@ -51,7 +54,7 @@ Listing an outcome does not activate implementation or change current M1 limits.
   - **Same disk.** Two scans on one spinning disk queue one after the other under Physical-disk scheduling.
 - **Physical-disk scheduling.** User decisions (2026-11-19). Volume custody and the scheduler key on volume serial ([DISPATCHER](DISPATCHER.md#admission-and-volume-scheduling)), so two partitions of one HDD count as different disks and their sessions run at once, fighting over the drive head. That costs speed, not safety: each volume keeps its exclusive lock unchanged. Add a scheduling key per physical disk for spinning disks only, from `IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS`; a volume spanning several disks takes all of them, and SSD and NVMe sessions keep today's concurrency. Disk numbers change across restarts and device changes, so they are read fresh at admission and never stored. Whether a disk spins is stable per volume in practice but is re-read each time, because the query is cheap.
 - **Drive-type awareness.** The same seek-penalty query informs scans elsewhere: a notice when a scan runs on a spinning disk, separate HDD and SSD time estimates, and possibly parallel folder listing on SSDs, only after measurement shows it helps. HDD scans stay serial.
-- **Shell actions.** Copy Path, Open in Explorer and Properties for rows on every page, with optional click-through. Each action resolves a server-owned node id to a path on the host side; the browser never supplies path text. No file is ever launched, and NamiSync performs no mutation. On Plan, side-labelled Source and Target actions avoid an implicit side choice. Missing items keep only Copy Path and Open containing folder. [DISK_USAGE_STUDY → Shell actions](DISK_USAGE_STUDY.md#shell-actions) holds the policy and cost notes.
+- **Shell actions.** Copy Path, Open in Explorer and Properties for rows on every page, with optional click-through. Each action resolves a server-owned node id to a path on the host side; the browser never supplies path text. No file is ever launched, and NamiSync performs no mutation. On Plan, side-labelled Source and Target actions avoid an implicit side choice. Missing items keep only Copy Path and Open containing folder. [Shell Actions Detail](#shell-actions-detail) holds the policy and cost notes.
 - **Checksum adoption.** Copy content evidence from one location to another for metadata-equal pairs (no-op pairs), so existing duplicate backups gain checksums without hashing. The next Verify confirms or mismatches them. Sync execution is the natural first home: each selected paired no-op already re-checks both live stats against the review and calls `record_noop` ([RECORDER](RECORDER.md)), so adoption would extend that recording as a reviewed, fingerprinted plan option, with the adoptable count shown in review. The Browse card is a second home when its ledger switch is on, behind a counted confirmation because it writes evidence, possibly in either direction. The origin's evidence must be current: its attested stats match its current observation and carry no invalidation. The receiving row must have no evidence; a different existing digest is never overwritten and is reported as disagreement. Recording uses the conditional primitive. Adopted evidence gets a new provenance naming its origin. It never advances `last_verified_at`, and the state stays unverified. Baseline skips it, so Verify is the check, and a later mismatch is labelled as differing from the adopted origin. The row then states what was observed (a metadata match plus the origin's evidence), not that target bytes were read, which preserves never-wrong-only-behind. A new `Provenance` value is a core, ledger and history contract change, carried by Schema migration's format versions; data epochs are dropped.
 - **User-defined presets.** Create, customize and persist reusable sync pairs and inventory roots that otherwise populate Setup and use availability checks like ledger-derived recent pairs. Persistent records and bridge commands are new work; presets do not retain admission or execution authority.
 - **Schema migration.** Add the ordered migration that [DATABASE → Schema Evolution](DATABASE.md#schema-evolution) describes (backup, supported-source check, transactional migration, integrity check, restore or refuse on failure) before a released version's data must survive a schema or contract change. Every later item that changes stored data depends on it. User decisions (2026-11-17): each database migrates on its own, in its own transaction. Data epochs are dropped (epoch 8 reset the ledger for a history-only constraint), while schema-version and contract checks stay. The migrator does not check `data_epoch` at all (user decision, 2026-11-19): every existing database is treated as epoch 8, the format v0.1.0 “Gertrud” released with. Epoch-7 databases exist only from early pre-release M1 builds, none of which should still be running. A replacement guard must catch two things: our own mistakes, such as a shared format changing while only one database is bumped; and user-side mismatches, such as databases left at different formats by an interrupted upgrade or a backup restore. Candidate measures:
@@ -63,7 +66,7 @@ Listing an outcome does not activate implementation or change current M1 limits.
   Missing databases: with only a ledger, create a history and notify the user. With only a history, notify, create a ledger with a new instance id, and record a durable lineage boundary that the History page shows. The old history is kept and never treated as describing the new ledger, and ledger records are never rebuilt from history. More history than ledger is acceptable, including after a ledger restore. Policy refinements with no open decision: an invalidating step for values that cannot be converted keeps observations and marks attestations unverified instead of resetting; `settings.json` and UI state carry their own versions; and a fixture database saved from every released version (today only v0.1.0) is migrated in tests.
 - **History page.** The desktop form of the [History Dialog](FEATURES.md) feature: a run list and paged run detail over the existing history readers, with an activity-kind filter, so inventory and later pages need no history page of their own. [INTERFACES](INTERFACES.md) SH-G-9 applies. User decisions (2026-11-19): History storage stays as it is. A reopened run is a static record page, not a revived task: it shows the summary and per-item outcomes it retains (history keeps outcomes, not the plan's review tree), and only the summary once detail retention prunes items. It offers no Retry. “Open in Setup” opens a new task's Setup draft with the run's paths entered as typed paths, admitted by the ordinary checks, and settings at the current defaults, which the page says. Run settings are not stored: storing them would need a schema change and compatibility rules for every later settings change, to save a few clicks. Recording location ids for the paths stays negotiable; sync runs already share a `run_token` with the ledger's run row.
 - **Data page.** Location-level ledger management plus database maintenance, without per-record browsing. Each tracked location shows its row count, last scan and verified, unverified, stale, missing and acknowledged counts. Actions: purge acknowledged-missing rows, forget a location (refused or paired with forgetting its mappings while one uses it), and the [Data Protection](DATABASE.md#data-protection) maintenance sessions: check, backup, restore, history pruning and a guided archive-and-reset. Purging is irreversible evidence loss. User decisions (2026-11-19): it asks for confirmation in a modal with the count, like destructive confirmations; the modal need not offer a backup, since Backup is a separate action beside it. It runs as an ordinary maintenance session holding the location's volume custody, so it never overlaps a scan, plan or execution there, and deletes in bounded batched recorder transactions. Forgetting is the user's explicit choice: a later scan that includes the folder records it again, and Easier exclusions is the way to keep it out. History keeps referring to forgotten locations. Reclaiming file space needs exclusive database access.
-- **Recent locations.** Sync recents are a bounded ledger query (five each) over sync runs that started execution on active mappings; they are not a stored list and do not use history. History is the wrong source, because it stores path text instead of volume identity and has its own retention. Inventory roots have no ledger run row. To study: one ledger-owned last-used record per location and purpose (sync source or target, inventory root, browse), which sync could also use to remember planned pairs that never executed. It is a schema change, so it follows Schema migration. Read-only use of the Browse page (disk usage scans, and comparisons with the ledger switch off) keeps no recents (user decision, 2026-11-19), as [DISK_USAGE_STUDY](DISK_USAGE_STUDY.md#non-goals) already states; a comparison with the switch on records last-used paths as Inventory does. The write itself would be harmless (one small upsert behind SQLite's single writer, invisible to WAL readers), but it would make a read-only page create and write the ledger, and tie it to Schema migration and the Data page's forget and purge. If they are wanted later, they belong in UI state, not the ledger.
+- **Recent locations.** Sync recents are a bounded ledger query (five each) over sync runs that started execution on active mappings; they are not a stored list and do not use history. History is the wrong source, because it stores path text instead of volume identity and has its own retention. Inventory roots have no ledger run row. To study: one ledger-owned last-used record per location and purpose (sync source or target, inventory root, browse), which sync could also use to remember planned pairs that never executed. It is a schema change, so it follows Schema migration. Read-only use of the Browse page (disk usage scans, and comparisons with the ledger switch off) keeps no recents (user decision, 2026-11-19), as the disk usage [Non-Goals](#non-goals) already state; a comparison with the switch on records last-used paths as Inventory does. The write itself would be harmless (one small upsert behind SQLite's single writer, invisible to WAL readers), but it would make a read-only page create and write the ledger, and tie it to Schema migration and the Data page's forget and purge. If they are wanted later, they belong in UI state, not the ledger.
 - **Shared review surface.** Plan and Inventory each build their own header, view switcher, status card, table and details pane (Plan composes the table controller directly, Inventory through `tree.js`), and they drifted repeatedly in M1. Examples: switcher labels Plan/Verify versus Sync/Integrity, and differing details empty-state and missing-value text. Build one review component that owns the shared chrome, the table and the details fact list and its states. Pages supply columns, cells, facts, a data source and actions; any deviation is an explicit option. Guard it with a parity test that renders both pages from one fixture against a documented list of allowed differences, plus a static check that pages do not assemble shared parts directly. The gallery shows the real component. It lands before any new M2 table.
   - **One table component** (user decision, 2026-11-19). Two table families exist today and share only base scroll and layout classes: Recent pairs and the batch table are native tables with 56 px two-line rows, five fixed slots and about 40 Setup-specific style rules; the review tables are windowed `div` rows of 24 px with sorting, selection and details. Having two families is itself the defect. Every table becomes one component built on the windowed review substrate, which can also render a few rows; the review chrome is a layer above it. Each instance configures row height and line count, wrapping, columns, sorting (available to small tables too), growth (fixed slots that scroll, or filling the page) and row interaction (a click runs an action, or selects and shows details). The row-action hover and press behavior Recent pairs needed many fixes to get right is solved once in the component. Recent pairs and the batch table move onto it before the Volume overview lands.
 - **Custom title bar.** Extend content into the caption area while keeping the native frame (pywebview's `frameless` mode removes it), and move the task view switcher into a SelectorBar-style control beside the title. A framing spike comes before the GUI change and must keep Snap Layouts, resizing from every edge, double-click maximize, Alt+Space, high contrast, mixed-DPI monitors and Mica. The selector itself is small; settle the switcher label drift first.
@@ -115,3 +118,294 @@ A proposed order, not scope activation.
 | — | Independent | Verification open lookahead, session cleanup, small-file copy batching, unbuffered source reads, specific I/O errors, command-result retention; Completion notification | None; the notification spike comes first. |
 | Later | Postponed | MCP adapter | CLI parity. |
 | Later | Beyond M2 | Scheduling | Durable work; a process that outlives the window. |
+
+## Disk Usage View Detail
+
+Study detail for the Disk usage view, the Storage card's view on the Browse page.
+Merged from the former disk usage study (2026-11-19); its inspected revision was
+`ebf72fbe`. Nothing here activates implementation or changes an M1 limit.
+
+### Prompt
+
+Spaceketeer was a Windows disk-usage viewer. It is no longer distributed: its
+Store listing is gone, and its website remains without its web apps or contact
+links. It scanned a drive or folder and showed a sunburst chart next to a flat,
+Explorer-like table with Name / Contents (“N files, M folders”) / Size columns.
+The table lists one level only. The sunburst goes a few rings deep, shows
+folders but not individual files, and caps how many segments it draws. It
+offered Pause / Resume / Rescan, Copy Path, Open in Explorer and Properties.
+NamiSync's scanner and inventory already compute most of that data. The
+question is whether NamiSync should present it the same way.
+
+### User Goal
+
+The view answers **“what exists here, and what is taking up space?”** Each
+view answers a different question:
+
+| View | Question |
+| --- | --- |
+| Plan / execution | What will change on the target? Rows describe operations, mostly from the target's side, so it is a poor view of what simply exists. |
+| Inventory | What evidence do we hold for a tracked location? |
+| **Disk usage (Storage card)** | What exists in one folder or volume, and how big is it? |
+| Browse card | What exists in A and B, and how do they differ? |
+
+Inside NamiSync the question also comes up without being asked:
+
+- Plan review reports a capacity shortfall on the target, and the user needs to
+  know what to clear.
+- `.synctrash` and displaced update versions grow on the target. Nothing shows
+  how much space they use until a trash retention policy exists
+  ([FEATURES → Trash Retention Policy](FEATURES.md#data-protection)).
+- Before a first sync, the user wants to see the shape of a source tree.
+
+### Decisions (2026-11-15)
+
+| Question | User direction | Consequence |
+| --- | --- | --- |
+| Placement | Revised 2026-11-19: one Browse page with two cards. The Storage card (a path box with Scan, then the Volume overview) opens this view; the Browse card compares two locations. | See [Page](#page) and New browse page above. The cards share a page but not their scans, so neither feature blocks the other. |
+| Size meaning | Logical (end-of-file) size from `os.scandir`. The small difference from allocated size is tolerated; Properties shows the exact on-disk figure. Probe the known divergent cases before implementation, for rigor. | No new enumeration backend; see [Size](#size). |
+| Shape and scale | Spaceketeer-like: one flat level of files and folders, and a few-ring sunburst of folders. | The whole tree is still walked, but only directory aggregates are retained; see [Scale](#scale). |
+| Volume custody | Wait. Say so visibly, so the user can choose to pause a sync on that volume. | No new dispatcher custody mode; see [Session behavior](#session-behavior). |
+| Chart | Sunburst. Each ring shows only the largest few child folders above a size threshold, so it stays readable. | Parent totals come from the aggregate tree, so no separate slice-merging pass is needed; see [Chart](#chart). |
+| Copy Path, Open in Explorer, Properties | Wanted on every page regardless of this feature. Click-through is nice to have. Plan prefers the target side, but copies and updates point naturally at the source. Missing items get no item actions; their folder can still open if it exists. | Separate proposal (Shell actions above). Side policy is under [Shell actions detail](#shell-actions-detail). |
+
+### What Exists Today
+
+| Spaceketeer capability | NamiSync now | Gap |
+| --- | --- | --- |
+| Recursive walk of a folder or whole drive | Scanner FULL scan. Volume roots are admissible locations (displayed as “Volume root”). | The sync scanner opens every entry on NTFS to read file identity; see [Size](#size). |
+| Per-folder total size | Inventory projection rolls up complete file bytes. Overflow and unknown bytes are explicit, never clamped ([INVENTORY](INVENTORY.md#stage-6-desktop-contracts-protocol-subset-active)). | Requires a ledger-backed inventory. |
+| Contents (“N files, M folders”) | Rollup counters already include descendant row and file counts (`inventory_projection._row_counters`). | No column. |
+| Largest-first table | Server-owned sibling sort on Size ([PRESENTATION](PRESENTATION.md#search-filters-sorting-and-follow)). | **Folders cannot be ranked by total.** `sibling_order.sorted_siblings` sorts files first, then folders by their own size, not their aggregate bytes. |
+| Flat one-level list with drill-down | Bounded tree with expand and collapse. | No flat “focus folder” list or breadcrumb. |
+| Chart | None. | New. |
+| Rescan | Whole, exact or recursive-folder Refresh. This is already finer than Spaceketeer's. | None. |
+| Pause / Resume | Inventory scan is cancel-only (pause unsupported). | Not needed. |
+| Copy Path, Open in Explorer, Properties | Copy Path is listed as a future Inventory action. The host already exposes one native call, the folder picker (`interfaces/web/host.py`). | Separate proposal. |
+
+### Why Inventory Is Not the Engine
+
+Pointing the current Inventory at a drive would fail for four reasons:
+
+1. **Population wall.** Inventory admits at most 150,000 rows per population
+   ([DEFENSE](DEFENSE.md) capacity policy). The screenshot's `F:` holds about
+   422,000 files in about 46,000 folders, more than three times that limit, so
+   the scan refuses.
+2. **Ledger side effect.** Inventory is durable evidence. A casual space check
+   would register a location and write every row. Disk usage belongs outside
+   the ledger (feature orthogonality). Untracked ingest sources set the
+   precedent: they are scanned in memory, used, and forgotten
+   ([FEATURES → Untracked Ingest Sources](FEATURES.md#ingest)).
+3. **Ignored artifacts are exactly what eats target space.** The default
+   `IgnoreSet` hides `.synctrash`, owned temporary files, `DESKTOP.INI` and
+   `THUMBS.DB`. A space scan turns off the trash and temp exclusions (both are
+   flags on `IgnoreSet`) and labels those entries as NamiSync-owned.
+4. **Unreadable areas are normal at drive scope.** System Volume Information,
+   other users' `$RECYCLE.BIN` and `WindowsApps` deny access. The host refuses
+   elevated launch, so these areas stay unreadable. They become an explicit
+   “unreadable” entry with unknown size, not a failed scan.
+
+The space view therefore gets its own read-only workflow: a new entry point that
+uses the scanner module and a pure projection, with no recorder or ledger. The
+shared `visible_sequence.py`, sibling ordering and windowed table renderer are
+reused. A folder-total sort and Contents column could later be added to
+Inventory too, but that is a separate change to the DR-BR-15 sort contract.
+
+### Page
+
+The view has two panes:
+
+- **Left:** the sunburst, centered on the focused folder. A breadcrumb above it
+  re-roots the view. Clicking a segment focuses that folder.
+- **Right:** a flat table of the focused folder's direct children. Folders are
+  listed first by default, or mixed with files when sorted by size. Columns:
+  Name, Contents, Size (with a “% of parent” bar), Modified. Double-clicking a
+  folder focuses it, as Explorer does.
+
+Hovering a segment highlights its table row, and the reverse. The table is the
+accessible source of truth; the chart is a navigator.
+
+### Size
+
+Size is logical (end-of-file) size, the figure Explorer's Properties dialog
+shows as “Size”. The Properties action gives the exact “Size on disk” when a
+user needs it.
+
+- **No per-file opens.** On Windows, `os.scandir` returns size, modification
+  time and attributes from the directory listing itself; `DirEntry.stat()`
+  needs no extra call for them. File identity and link count are not in the
+  listing. On NTFS the sync scanner therefore calls `lstat` for every entry,
+  which opens each one (`modules/scanner.py`, the `entry.stat` /
+  `self._backend.lstat` fallback). A space walk needs no file identity, so it
+  reads listing data only. Directories still get identity for loop defense:
+  about 46,000 opens on `F:` instead of about 468,000. Skipping file opens also
+  avoids the per-file cloud-recall question
+  ([SCANNER → Cloud availability](SCANNER.md#cloud-availability-and-hydration-boundary)).
+  Whether this is a scanner mode or a separate walk is an implementation
+  choice. The sync scanner's behavior does not change.
+- **Accepted consequences:**
+  - Hard links are counted once per path, as in Explorer's “Size”.
+  - Online-only cloud files show their full logical size. Their row already
+    carries the cloud indicator.
+- **Probe before implementation.** For rigor, measure logical size against
+  allocated size, and check that directory-listing sizes match `lstat`, on
+  these cases:
+  - a file being written (NTFS updates directory-entry sizes lazily);
+  - NTFS- and WOF-compressed files;
+  - sparse files;
+  - block-cloned (ReFS) or deduplicated files;
+  - tiny files stored inside the MFT;
+  - hard links;
+  - online-only cloud placeholders.
+
+  Record results in PERFORMANCE. A surprising divergence reopens this decision.
+- **Volume summary.** For a volume root, the view shows used space from
+  `GetDiskFreeSpaceExW` next to the scanned total. The two use different units
+  (allocated versus logical), so the difference is described as “not accounted
+  for” rather than computed as an exact remainder.
+
+### Scale
+
+No Windows API returns a folder's recursive size. Explorer's Properties dialog
+walks the tree itself, and reading the MFT directly needs elevation, which a
+Store app would not have had. Spaceketeer almost certainly walked too. The walk
+is unavoidable; what matters is what gets retained.
+
+- **Retain directories only.** Keep a compact aggregate tree: one entry per
+  directory with its parent, name, and subtree totals for files, folders and
+  bytes. Also keep each directory's direct-file count and bytes. Memory then
+  grows with the number of directories (about 46,000 on `F:`), not the number
+  of files. The sunburst needs only this tree.
+- **Read files when a folder is focused.** The flat table re-enumerates the
+  focused directory's direct entries. Its folder rows come from the aggregate
+  tree. If the fresh direct-file total differs from the scanned one, the header
+  says “Changed since scan” and offers Rescan for that folder, instead of
+  silently mixing two snapshots.
+- **Bounds.** Directory count and direct entries per directory each need a
+  wall, sized from measurement (directory-heavy shapes such as `node_modules`
+  matter). The table still serves 1..256-row windows over a server-sorted
+  directory. A single folder holding more than 150,000 entries is realistic
+  (machine-learning datasets, one-file-per-message mail stores, log dumps), so
+  the per-folder wall is not a refusal (user decision, 2026-11-19): past it,
+  the listing keeps only the largest few thousand files, in memory bounded by
+  that count, plus a summary row (“and 1,170,000 smaller files, 40 GB”). Size
+  order stays correct; name order is unavailable past the wall, and the header
+  says why.
+- **Measurement first.** PERFORMANCE should record walk time and peak memory on
+  a large real volume (the screenshot's `F:` is a good profile), comparing the
+  listing-only walk with the sync scanner's per-entry `lstat`.
+
+### Chart
+
+Drawing a sunburst is cheap: hand-written SVG arc paths, with no third-party
+chart library. That keeps the packaged-document and closed-asset rules intact.
+
+- **Server layout, top children only.** Lay the chart out on the server from
+  the focus folder, about 4 rings deep.
+  - In each ring, draw only the largest *N* child folders (about 5) whose share
+    passes a threshold (for example 2% of the focus folder).
+  - Each parent's total comes from the aggregate tree, so everything not drawn
+    is simply parent total minus drawn children. That remainder includes the
+    parent's direct files and every small or unranked folder, and it appears as
+    a neutral arc, much as Spaceketeer left it unfilled.
+
+  No separate merge pass exists, and the payload size is fixed by
+  *N* × depth.
+- **Accessibility.** The chart is `aria-hidden` and supplementary. The table,
+  breadcrumb and keyboard focus carry the same navigation. Forced colors use
+  system colors with outlines.
+- **Palette (open).** Spaceketeer gave each top-level branch its own hue. That
+  conflicts with NamiSync's reserved semantic hues
+  ([FEATURES → Semantic Color Channels](FEATURES.md#desktop-ui)). The proposed
+  default is a single accent or neutral lightness ramp by depth, with the
+  hovered or focused path emphasized. A categorical palette needs an explicit
+  product-author decision.
+
+### Session Behavior
+
+- **Waiting for a volume.** A space scan takes ordinary volume custody and
+  queues behind any session that holds the volume. While waiting, the view
+  names the blocking task (with a link) and says: “Waiting for *task* to finish
+  on F:. Pausing it lets this scan run now; it resumes after the scan.” This
+  matches existing behavior: pausing releases custody, and a resumed session
+  re-enters the back of its volumes' queue
+  ([FEATURES → Resume Never Preempts](FEATURES.md#dispatcher)). The dispatcher
+  stays domain-blind; the adapter maps the blocking session to its task.
+- **Cancel and Rescan, no Pause.** A read-only scan has no continuation worth
+  keeping.
+- **Settled-only first.** The chart appears when the scan completes, matching
+  inventory's no-partial publication; until then the progress bar's
+  indeterminate animation shows the scan is running. A progressive chart is a
+  later option.
+
+### Shell Actions Detail
+
+The cross-page Shell actions proposal above is consumed by this view. The
+remaining work is mostly policy. The plumbing is modest.
+
+- **Plumbing.** The folder picker is already a host-side callable injected into
+  the web adapter. Each action follows the same pattern: a bridge command
+  carries a server-owned node id, the server resolves it to a path, and a host
+  callable acts. The browser never supplies path text. Primitives:
+  - Copy Path: host clipboard.
+  - Open in Explorer: `SHOpenFolderAndSelectItems`.
+  - Properties: `SHObjectProperties` on a COM-initialized (STA) host thread.
+  - Never `ShellExecute` “open” on a file: that would launch it.
+
+  Each command needs BRIDGE ingress bounds and a DEFENSE note for the new
+  external effect.
+- **Plan side policy (proposed).** Plan rows can describe two paths. A silent
+  default makes copies point at the source and everything else at the target,
+  and that is the confusion to avoid. The proposal is to never choose
+  implicitly:
+  - The row menu shows explicitly labelled actions, “Source: Open in Explorer”
+    and “Target: Open in Explorer”.
+  - Each label is offered only when that side's path exists now. For example,
+    a planned copy has no target file yet, so it gets “Target: Open folder” if
+    the parent exists.
+  - Move rows label the previous and new paths the same way.
+  - Plan has no double-click shell default. One-sided views (Inventory, Disk
+    usage, the Browse card's per-side tables) may use double-click, because
+    the side is unambiguous.
+- **Missing items.** Missing items get no Open or Properties actions; “Open
+  containing folder” appears when the parent exists. Copy Path stays available,
+  because the text is harmless and useful for finding the file. This is a
+  proposed refinement of the user's rule.
+- **Mutation boundary.** Explorer and the Properties dialog let the user change
+  files outside NamiSync. That is the user's own action, as with any Explorer
+  use. NamiSync performs none itself and adds no delete, move or cleanup path.
+
+### Non-Goals
+
+- No delete, move, or cleanup from this view. Mutation inside a managed root
+  stays pipeline-only (plan → preflight → execute).
+- No ledger writes, recents, history runs or background or scheduled scans.
+  Checksum adoption belongs to sync execution and to the Browse card with
+  ledger recording on, not to this view.
+- No elevation and no MFT or USN reading. The future
+  [Change-Journal Scanning](FEATURES.md#scanner) protocol is the lawful route
+  to faster rescans.
+- No duplicate finder (content dedup belongs to ingest) and no network shares
+  (remote roots are refused by admission).
+
+### Open Questions
+
+1. Sunburst palette: depth ramp (proposed) or a categorical palette.
+2. Whether the Plan capacity link (“See what's using target space”, opening
+   this view on the target with `.synctrash` highlighted) belongs in the first
+   slice or later.
+3. Ring count, *N* and the threshold. Tune these on real volumes.
+4. Wall values, after measurement.
+
+### Suggested Slices (Not Commitments)
+
+1. Size-case probes and the walk measurement (listing-only versus per-entry
+   `lstat`), recorded in PERFORMANCE.
+2. Read-only space workflow, aggregate tree and view:
+   - flat table and breadcrumb;
+   - trash and temps visible and labelled;
+   - unreadable and not-accounted-for entries;
+   - visible wait-for-volume notice.
+3. Sunburst navigator.
+4. Shell actions on every page (separate proposal; can ship before slices 1–3).
+5. Plan capacity link.
