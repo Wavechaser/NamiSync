@@ -42,7 +42,7 @@ Inside NamiSync the question also comes up without being asked:
 
 | Question | User direction | Consequence |
 | --- | --- | --- |
-| Placement | A new page that answers “what exists here.” A new browse page (“what exists in A and B and how they differ”) is a separate future page that may share the two-pane layout. | See [Page](#page). Only the layout is shared, so neither feature blocks the other. |
+| Placement | Revised 2026-11-19: one Browse page with two cards. The Storage card (a path box with Scan, then the volume overview) opens this view; the Browse card compares two locations. | See [Page](#page) and [M2_PROPOSAL → New browse page](M2_PROPOSAL.md). The cards share a page but not their scans, so neither feature blocks the other. |
 | Size meaning | Logical (end-of-file) size from `os.scandir`. The small difference from allocated size is tolerated; Properties shows the exact on-disk figure. Probe the known divergent cases before implementation, for rigor. | No new enumeration backend; see [Size](#size). |
 | Shape and scale | Spaceketeer-like: one flat level of files and folders, and a few-ring sunburst of folders. | The whole tree is still walked, but only directory aggregates are retained; see [Scale](#scale). |
 | Volume custody | Wait. Say so visibly, so the user can choose to pause a sync on that volume. | No new dispatcher custody mode; see [Session behavior](#session-behavior). |
@@ -93,7 +93,7 @@ Inventory too, but that is a separate change to the DR-BR-15 sort contract.
 
 ## Page
 
-The page has two panes, a frame the new browse page may reuse:
+The view has two panes:
 
 - **Left:** the sunburst, centered on the focused folder. A breadcrumb above it
   re-roots the view. Clicking a segment focuses that folder.
@@ -164,7 +164,13 @@ is unavoidable; what matters is what gets retained.
 - **Bounds.** Directory count and direct entries per directory each need a
   wall, sized from measurement (directory-heavy shapes such as `node_modules`
   matter). The table still serves 1..256-row windows over a server-sorted
-  directory.
+  directory. A single folder holding more than 150,000 entries is realistic
+  (machine-learning datasets, one-file-per-message mail stores, log dumps), so
+  the per-folder wall is not a refusal (user decision, 2026-11-19): past it,
+  the listing keeps only the largest few thousand files, in memory bounded by
+  that count, plus a summary row (“and 1,170,000 smaller files, 40 GB”). Size
+  order stays correct; name order is unavailable past the wall, and the header
+  says why.
 - **Measurement first.** PERFORMANCE should record walk time and peak memory on
   a large real volume (the screenshot's `F:` is a good profile), comparing the
   listing-only walk with the sync scanner's per-entry `lstat`.
@@ -261,11 +267,12 @@ mostly policy. The plumbing is modest.
 
 ## Related Proposals
 
-- **New browse page** ([M2_PROPOSAL](M2_PROPOSAL.md)). “What exists in A and B,
-  and how do they differ”. It still needs its own outcome definition.
+- **New browse page** ([M2_PROPOSAL](M2_PROPOSAL.md)). The page this view now
+  lives on. Its Browse card answers “what exists in A and B, and how do they
+  differ” from fresh scans, with optional ledger recording.
 - **Checksum adoption** ([M2_PROPOSAL](M2_PROPOSAL.md)). It could be run from the
-  browse page or from sync execution. It does not belong on this page, which
-  writes no ledger state.
+  Browse card with ledger recording on, or from sync execution. It does not
+  belong in this view, which writes no ledger state.
 
 ## Open Questions
 
