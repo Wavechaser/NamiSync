@@ -186,24 +186,16 @@ does not grant cloud compatibility or permission to bypass those guards.
 [DEFENSE.md](DEFENSE.md) §2.5 owns the policy for reviewed local effects, provider
 propagation and local completion. Content reads during copy and verification
 can hydrate admitted sources; the advisory is information, not separate network
-authorization. M2 must establish provider coverage, residency changes and native
-metadata/enumeration behavior before claiming complete detection or hydration-
-proof scanning. Specifically, the inspected CPython 3.13.17 slow-stat path opens
-for `FILE_READ_ATTRIBUTES` without an explicit no-recall option, and has an
+authorization. Neither complete detection nor hydration-proof scanning is
+claimed; establishing provider coverage, residency changes and native
+metadata/enumeration behavior is postponed under
+[M2_PROPOSAL](M2_PROPOSAL.md)'s Hydration-proof scanning. Specifically, the
+inspected CPython 3.13.17 slow-stat path opens for `FILE_READ_ATTRIBUTES`
+without an explicit no-recall option, and has an
 `ERROR_INVALID_PARAMETER` fallback requesting `GENERIC_READ`; there is no evidence
 that this fallback is reached for the tested cloud files. Adding one flag at
 one call would not cover root/scoped probes, identity fallback and enumeration.
 Availability advisories add no filesystem access.
-
-M2 should define the boundary as no file-content hydration attributable to scan
-access, separately from namespace population and network traffic. Evaluate a
-metadata-only/no-recall backend across root and ancestor admission, scoped
-observations, identity fallback and folder mounts, preserving errors, identity,
-sharing and containment. Verify online, partially local, local, recall-on-open,
-virtual-directory, failure and changing-residency cases with provider fetch
-evidence as well as allocation observations. See Microsoft's
-[attribute definitions](https://learn.microsoft.com/windows/win32/fileio/file-attribute-constants)
-and [placeholder guidance](https://learn.microsoft.com/windows-hardware/drivers/ifs/placeholders_guidance).
 
 Root identity and scan evidence always use ordinary absolute drive or UNC
 spelling. The native backend adds the Windows extended-length prefix only for
