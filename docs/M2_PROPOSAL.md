@@ -69,7 +69,7 @@ safety are settled here, and the rest are deferred to the owning segment.
 - **Scheduling.** User decision (2026-11-19): deferred beyond M2, kept as an available future feature. A reviewed plan scheduled for later is usually refused by drift by the time it runs; a conditional run (“when this disk appears”) needs preauthorizing an unreviewed plan; recurring runs need a process that outlives the window, starts itself or lives in the tray. A planning-only reminder avoids all three, because planning changes nothing and still ends in review. Its smallest form needs no scheduler: show how long ago each recent pair or preset last synced, and let presets carry an optional “remind after N days” checked at launch and while the app runs. Due pairs are highlighted; plan tasks are not created unasked.
 - **Native Fluent overlay scrollbars.** Integrate WebView2's environment option through the Windows host when the backend work is justified. The current pywebview path needs coordinated startup, early navigation/HTML-loading and rendering-test changes; retain the CSS approximation for M1.
 - **Verify-only batches.** Batch standalone verification directories. The current Setup runner admits source/target pairs; extending it to single-directory tasks belongs with a reviewed M2 Setup change.
-- **Disk usage view.** Answer “what exists here, and what is taking up space?” for a folder or volume, including target capacity shortfalls and `.synctrash` growth. It is the Storage card's view on the Browse page: a sunburst navigator beside a flat one-level table of logical sizes, built from a retained directory-aggregate tree and a listing-only walk. It is read-only, makes no ledger writes, and has no mutation path. [Disk Usage View Detail](#disk-usage-view-detail) records the user's direction, constraints and remaining questions. It is not implementation authorization.
+- **Disk usage view.** Answer “what exists here, and what is taking up space?” for a folder or volume, including target capacity shortfalls and `.synctrash` growth. It is the Storage card's view on the Browse page: an icicle navigator beside a flat one-level table of logical sizes, built from a retained directory-aggregate tree and a listing-only walk. It is read-only, makes no ledger writes, and has no mutation path. [Disk Usage View Detail](#disk-usage-view-detail) records the user's direction, constraints and remaining questions. It is not implementation authorization.
 - **Volume overview.** User direction (2026-11-19): the Storage card shows something like Explorer's “This PC” below its path box. Each lettered volume shows its letter and label, space, disk type (SSD, HDD, optical, removable, network, RAM disk), connection (SATA, NVMe, USB, SAS, virtual) and filesystem. Space reads “120 GB free of 1 TB” beside a used-space bar in the progress bar's style, exposed as a meter rather than progress, with the warning color when nearly full. Reusing the progress bar also reuses its indeterminate animation while a drive is still being read, and while a disk usage scan is running. Clicking a row starts a volume-wide disk usage scan. It reads volume metadata only: no scan, no ledger.
   - **Sources.** Already read: `GetDriveTypeW` (drive class), `GetVolumeInformationW` (label, serial and filesystem; root authority keeps the label as evidence) and `shutil.disk_usage` (preflight keeps only free space, but total and used arrive with it). New: `GetLogicalDrives` for the list, and `IOCTL_STORAGE_QUERY_PROPERTY` on a volume handle opened without data access: the device property gives the bus type and removability, and the seek-penalty property separates HDD from SSD. Pulling these through is cheap; the rest is GUI work.
   - **Honest unknowns.** An optical drive without media shows “No disc”. A volume spanning several disks (Storage Spaces, dynamic volumes), or a driver that does not answer, shows “Unknown” rather than a guess. Scheduling treats unknown and USB disks as spinning (Physical-disk scheduling); the label shows only what Windows reports. RAM disks often report themselves as fixed disks and are labelled only when Windows says so.
@@ -83,8 +83,10 @@ safety are settled here, and the rest are deferred to the owning segment.
   - **Ledger access.** An on/off switch on comparisons, off by default. Off, both scans stay in memory and the ledger is never touched. On, the two scans run as ordinary Inventory scans, so last-observed times, last-used paths, evidence status beside each file and checksum adoption come with them. There is no read-only ledger mode: showing evidence against a fresh scan needs Inventory's stale and missing reconciliation, which would be duplicated without its writes. Volume-wide disk usage scans never record.
   - **Row limits.** Display is allowed up to 150,000 rows with an advisory past 120,000: before the scan only when a count is known from a previous recorded scan, and during the scan when the count passes 120,000 (“approaching the limit; a narrower folder avoids a refusal”), without stopping it.
   - **Same disk.** Two scans on one spinning disk queue one after the other under Physical-disk scheduling.
-  - **Sorting** (user decision, 2026-11-21). Every table on the page sorts, through the shared table component: comparison tables as Plan and Inventory do, and Disk usage's flat table with folders ranked by their subtree total, which today's sibling sort cannot do ([What Exists Today](#what-exists-today)).
-  - **Snapshots and custody** (user decisions, 2026-11-20). Both cards show snapshots, so the filesystem can change under them; that is intended and harmless because they are read-only, and Rescan gives the current census. A comparison is a snapshot in full: nothing is read again until Rescan. Disk usage keeps only the folder tree and its totals, and lists the focused folder's files from disk, showing “Changed since scan” on a mismatch ([Size](#size)). Full walks, including a rescan of one folder's subtree, wait for volume custody. Listing one focused folder does not: it is a read-only glance bounded by the per-folder entry wall and a deadline, still admitted against the scanned root like any other read, and its drift is already reported. Waiting would hang a finished view for the length of an unrelated sync without preventing any harm.
+  - **Navigation and new snapshots** (user decisions, 2026-11-22). Inside one snapshot, movement is free: Back, Forward and the breadcrumb move between focused folders of a tree already in memory, and nothing is rescanned. Browse home (the two cards, prefilled with the current paths) acts as the task's setup; Back from it without submitting returns to the current snapshot unchanged, as Edit setup's Back does. Submitting a new snapshot (a rescan, another folder, another volume or another comparison) replaces the task under Edit setup's model, invisibly and without confirmation, since only a rebuildable snapshot is lost. It is a replacement rather than a new session inside the task because each start holds a response slot until its task closes, so repeated glances in one tab would exhaust the slots; the in-task model becomes possible once Command-result retention lands. Each tab keeps one snapshot, released when the new scan is admitted. There is no Back across snapshots: it would either hold up to 150,000 rows per step or start long scans from one click. A canceled new scan leaves “Canceled: Rescan, or go back to Browse”. Two rules differ from Sync's, because stopping a read-only scan loses nothing: Browse home stays available while a scan runs, and submitting from it cancels that scan without confirmation, where Sync's Edit setup stays disabled while anything runs; and a restored task keeps only its paths, under the Scan button above.
+  - **Comparison table** (user decisions, 2026-11-22). One merged tree table, not two side by side: two tables compare only when their rows line up, which already makes them one table with a gap, and the merged form needs no scroll syncing and fits Plan's shape through the shared review surface. Rows match by relative path. Columns: Name, Status, A size, B size, A modified, B modified. Status is Same, Differs, Only in A, Only in B, a file-versus-folder mismatch, a name differing only in case, or unreadable. It is a column because color cannot carry it alone, and folder rows show a count such as “3 differences”. A folder present on one side only is one row (“Only in A, 12,345 items”) whose contents appear when expanded. One-sided rows follow the active sort rather than collecting at the bottom; a Status filter (All, Differences, Only in A, Only in B) handles large one-sided sets. Checksums are not a column, since the verdict is the planner's metadata comparison: with the ledger switch on, the collapsible details pane says whether a pair's checksums agree or differ. Column order and row styling are layout choices that stay cheap to change at or after implementation.
+  - **Sorting** (user decisions, 2026-11-21 and 2026-11-22). Every table on the page sorts, through the shared table component: comparison tables as Plan and Inventory do, and Disk usage's flat table with folders ranked by their subtree total, which today's sibling sort cannot do ([What Exists Today](#what-exists-today)). Rows with no value in the sorted column, such as B size on an Only in A row, sort last in both directions. The comparison's Status column filters instead of sorting.
+  - **Snapshots and custody** (user decisions, 2026-11-20). Both cards show snapshots, so the filesystem can change under them; that is intended and harmless because they are read-only, and Rescan gives the current census. A comparison is a snapshot in full: nothing is read again until Rescan. Disk usage keeps only the folder tree and its totals, and lists the focused folder's files from disk, showing “Changed since scan” on a mismatch ([Size](#size)). Full walks, including a rescan of one folder's subtree, wait for volume custody. Listing one focused folder does not: it is a read-only glance bounded by the per-folder entry wall and a deadline, still admitted against the scanned root like any other read, and its drift is already reported. Waiting would hang a finished view for the length of an unrelated sync without preventing any harm. When the filesystem changes under a snapshot (user decisions, 2026-11-22), the view never follows a replaced path: every live listing goes through the scanned root's admission and descendant guards, so a folder replaced by a junction or a file is refused, not entered. It never mixes silently: snapshot totals and live names stay apart under “Changed since scan”. It never rescans by itself, since a rescan is a full walk under custody. It never strands the view: a missing, unreadable or refused folder, including a vanished Back target, keeps its snapshot sizes and shows “This folder no longer exists or can't be read” with Rescan and a way to the parent folder, never an error dialog or an endless spinner. Shell actions on vanished items say the item was not found. Comparisons read nothing live, so only their shell actions are affected, and Send to Sync rescans anyway.
 - **Physical-disk scheduling.** User decisions (2026-11-19). Volume custody and the scheduler key on volume serial ([DISPATCHER](DISPATCHER.md#admission-and-volume-scheduling)), so two partitions of one HDD count as different disks and their sessions run at once, fighting over the drive head. That costs speed, not safety: each volume keeps its exclusive lock unchanged. Add a scheduling key per physical disk for spinning disks only, from `IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS`; a volume spanning several disks takes all of them, and SSD and NVMe sessions keep today's concurrency. Disk numbers change across restarts and device changes, including within one session, so they are never stored and are read again at every start attempt, fresh, resumed or restored (user decision, 2026-11-20). Whether a disk spins is stable per volume in practice but is re-read each time, because the query is cheap. User decisions (2026-11-20):
   - **Reading.** The scheduler needs the key before it decides to start a session, which is before preflight. Each session supplies a key-reading callback at admission, and the dispatcher calls it at each start attempt, just before custody, so the dispatcher stays domain-blind.
   - **Unreadable keys.** A volume whose disk extents cannot be read (RAM disks, encrypted containers, some virtual volumes) falls back to today's per-volume custody with a quiet advisory (“Couldn't tell which physical disk this is; it may share the disk with other work”). It is not refused: the key affects speed only, and volume custody still protects every volume.
@@ -242,9 +244,9 @@ Inside NamiSync the question also comes up without being asked:
 | --- | --- | --- |
 | Placement | Revised 2026-11-19: one Browse page with two cards. The Storage card (a path box with Scan, then the Volume overview) opens this view; the Browse card compares two locations. | See [Page](#page) and New browse page above. The cards share a page but not their scans, so neither feature blocks the other. |
 | Size meaning | Logical (end-of-file) size from `os.scandir`. The small difference from allocated size is tolerated; Properties shows the exact on-disk figure. Probe the known divergent cases before implementation, for rigor. | No new enumeration backend; see [Size](#size). |
-| Shape and scale | Spaceketeer-like: one flat level of files and folders, and a few-ring sunburst of folders. | The whole tree is still walked, but only directory aggregates are retained; see [Scale](#scale). |
+| Shape and scale | Spaceketeer-like: one flat level of files and folders, and a few-level chart of folders. | The whole tree is still walked, but only directory aggregates are retained; see [Scale](#scale). |
 | Volume custody | Wait. Say so visibly, so the user can choose to pause a sync on that volume. | No new dispatcher custody mode; see [Session behavior](#session-behavior). |
-| Chart | Sunburst. Each ring shows only the largest few child folders above a size threshold, so it stays readable. | Parent totals come from the aggregate tree, so no separate slice-merging pass is needed; see [Chart](#chart). |
+| Chart | Revised 2026-11-22: a partition chart drawn as an icicle; treemap rejected. Each level shows only the largest few child folders above a size threshold, so it stays readable. | Parent totals come from the aggregate tree, so no separate slice-merging pass is needed; see [Chart](#chart). |
 | Copy Path, Open in Explorer, Properties | Wanted on every page regardless of this feature. Click-through is nice to have. Plan prefers the target side, but copies and updates point naturally at the source. Missing items get no item actions; their folder can still open if it exists. | Separate proposal (Shell actions above). Side policy is under [Shell actions detail](#shell-actions-detail). |
 
 ### What Exists Today
@@ -291,17 +293,26 @@ Inventory too, but that is a separate change to the DR-BR-15 sort contract.
 
 ### Page
 
-The view has two panes:
+The view puts a chart beside a table (user decisions, 2026-11-22), because
+height is what browsing needs most and the table is narrow. The layout is
+cheap to change at or after implementation.
 
-- **Left:** the sunburst, centered on the focused folder. A breadcrumb above it
-  re-roots the view. Clicking a segment focuses that folder.
-- **Right:** a flat table of the focused folder's direct children. Folders are
-  listed first by default, or mixed with files when sorted by size. Columns:
-  Name, Contents, Size (with a “% of parent” bar), Modified. Double-clicking a
-  folder focuses it, as Explorer does.
+- **Chart:** a vertical icicle rooted at the focused folder, with depth
+  running left to right and sizes top to bottom, about 4 levels of roughly
+  90 px each. Folder names run horizontally inside each block; blocks too short
+  for a line rely on hover. Clicking a block focuses that folder. Below a width
+  threshold the chart collapses behind a toggle rather than switching
+  orientation.
+- **Table:** a flat table of the focused folder's direct children. Columns:
+  Name, Size (with a “% of parent” bar) and Modified, plus Contents while the
+  width allows; Contents is the first to drop. Folders are listed first by
+  default, or mixed with files when sorted by size. Double-clicking a folder
+  focuses it, as Explorer does.
 
-Hovering a segment highlights its table row, and the reverse. The table is the
-accessible source of truth; the chart is a navigator.
+A breadcrumb above both re-roots the view, and Back and Forward move between
+focused folders (New browse page's Navigation). Hovering a block highlights its
+table row, and the reverse. The table is the accessible source of truth; the
+chart is a navigator.
 
 ### Size
 
@@ -357,7 +368,7 @@ is unavoidable; what matters is what gets retained.
   directory with its parent, name, and subtree totals for files, folders and
   bytes. Also keep each directory's direct-file count and bytes. Memory then
   grows with the number of directories (about 46,000 on `F:`), not the number
-  of files. The sunburst needs only this tree.
+  of files. The chart needs only this tree.
 - **Read files when a folder is focused.** The flat table re-enumerates the
   focused directory's direct entries. Its folder rows come from the aggregate
   tree. If the fresh direct-file total differs from the scanned one, the header
@@ -387,17 +398,23 @@ is unavoidable; what matters is what gets retained.
 
 ### Chart
 
-Drawing a sunburst is cheap: hand-written SVG arc paths, with no third-party
-chart library. That keeps the packaged-document and closed-asset rules intact.
+The chart is a partition of the focused folder's subtree (user decisions,
+2026-11-22). A sunburst and an icicle draw the same partition and differ only
+in layout: the icicle compares lengths on a common baseline, keeps labels
+horizontal and has no thin outer wedges, so it is the shape drawn. A treemap is
+rejected: it needs another layout algorithm, its areas are hard to compare, and
+its one strength, showing files, is the table's job. Drawing is cheap:
+hand-written SVG rectangles, with no third-party chart library. That keeps the
+packaged-document and closed-asset rules intact.
 
 - **Server layout, top children only.** Lay the chart out on the server from
-  the focus folder, about 4 rings deep.
-  - In each ring, draw only the largest *N* child folders (about 5) whose share
+  the focus folder, about 4 levels deep.
+  - In each level, draw only the largest *N* child folders (about 5) whose share
     passes a threshold (for example 2% of the focus folder).
   - Each parent's total comes from the aggregate tree, so everything not drawn
     is simply parent total minus drawn children. That remainder includes the
     parent's direct files and every small or unranked folder, and it appears as
-    a neutral arc, much as Spaceketeer left it unfilled.
+    a neutral block, much as Spaceketeer left it unfilled.
 
   No separate merge pass exists, and the payload size is fixed by
   *N* × depth.
@@ -455,9 +472,10 @@ remaining work is mostly policy. The plumbing is modest.
     a planned copy has no target file yet, so it gets “Target: Open folder” if
     the parent exists.
   - Move rows label the previous and new paths the same way.
-  - Plan has no double-click shell default. One-sided views (Inventory, Disk
-    usage, the Browse card's per-side tables) may use double-click, because
-    the side is unambiguous.
+  - Plan has no double-click shell default, and neither has the Browse card's
+    merged comparison table, which labels its A and B actions the same way.
+    One-sided views (Inventory, Disk usage) may use double-click, because the
+    side is unambiguous.
 - **Changed drive letters** (user decision, 2026-11-20). Open in Explorer and
   Properties first compare the drive's current volume identity with the scanned
   root's, one Windows call. On a mismatch they use the volume's current letter
@@ -488,11 +506,12 @@ remaining work is mostly policy. The plumbing is modest.
 
 ### Open Questions
 
-1. Sunburst palette: depth ramp (proposed) or a categorical palette.
+1. Chart palette: depth ramp (proposed) or a categorical palette.
 2. Whether the Plan capacity link (“See what's using target space”, opening
    this view on the target with `.synctrash` highlighted) belongs in the first
    slice or later.
-3. Ring count, *N* and the threshold. Tune these on real volumes.
+3. Level count, *N*, the threshold and the chart's collapse width. Tune these
+   on real volumes.
 4. Wall values, after measurement.
 
 ### Suggested Slices (Not Commitments)
@@ -504,6 +523,6 @@ remaining work is mostly policy. The plumbing is modest.
    - trash and temps visible and labelled;
    - unreadable and not-accounted-for entries;
    - visible wait-for-volume notice.
-3. Sunburst navigator.
+3. Icicle navigator.
 4. Shell actions on every page (separate proposal; can ship before slices 1–3).
 5. Plan capacity link.
