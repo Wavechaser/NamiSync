@@ -83,6 +83,7 @@ safety are settled here, and the rest are deferred to the owning segment.
   - **Ledger access.** An on/off switch on comparisons, off by default. Off, both scans stay in memory and the ledger is never touched. On, the two scans run as ordinary Inventory scans, so last-observed times, last-used paths, evidence status beside each file and checksum adoption come with them. There is no read-only ledger mode: showing evidence against a fresh scan needs Inventory's stale and missing reconciliation, which would be duplicated without its writes. Volume-wide disk usage scans never record.
   - **Row limits.** Display is allowed up to 150,000 rows with an advisory past 120,000: before the scan only when a count is known from a previous recorded scan, and during the scan when the count passes 120,000 (“approaching the limit; a narrower folder avoids a refusal”), without stopping it.
   - **Same disk.** Two scans on one spinning disk queue one after the other under Physical-disk scheduling.
+  - **Sorting** (user decision, 2026-11-21). Every table on the page sorts, through the shared table component: comparison tables as Plan and Inventory do, and Disk usage's flat table with folders ranked by their subtree total, which today's sibling sort cannot do ([What Exists Today](#what-exists-today)).
   - **Snapshots and custody** (user decisions, 2026-11-20). Both cards show snapshots, so the filesystem can change under them; that is intended and harmless because they are read-only, and Rescan gives the current census. A comparison is a snapshot in full: nothing is read again until Rescan. Disk usage keeps only the folder tree and its totals, and lists the focused folder's files from disk, showing “Changed since scan” on a mismatch ([Size](#size)). Full walks, including a rescan of one folder's subtree, wait for volume custody. Listing one focused folder does not: it is a read-only glance bounded by the per-folder entry wall and a deadline, still admitted against the scanned root like any other read, and its drift is already reported. Waiting would hang a finished view for the length of an unrelated sync without preventing any harm.
 - **Physical-disk scheduling.** User decisions (2026-11-19). Volume custody and the scheduler key on volume serial ([DISPATCHER](DISPATCHER.md#admission-and-volume-scheduling)), so two partitions of one HDD count as different disks and their sessions run at once, fighting over the drive head. That costs speed, not safety: each volume keeps its exclusive lock unchanged. Add a scheduling key per physical disk for spinning disks only, from `IOCTL_VOLUME_GET_VOLUME_DISK_EXTENTS`; a volume spanning several disks takes all of them, and SSD and NVMe sessions keep today's concurrency. Disk numbers change across restarts and device changes, including within one session, so they are never stored and are read again at every start attempt, fresh, resumed or restored (user decision, 2026-11-20). Whether a disk spins is stable per volume in practice but is re-read each time, because the query is cheap. User decisions (2026-11-20):
   - **Reading.** The scheduler needs the key before it decides to start a session, which is before preflight. Each session supplies a key-reading callback at admission, and the dispatcher calls it at each start attempt, just before custody, so the dispatcher stays domain-blind.
@@ -158,8 +159,11 @@ ride along and never block M2. In priority order:
 2. The rest, unordered: Window (Custom title bar, Native Fluent overlay
    scrollbars); the Setup group (Recent locations, Verify-only batches,
    User-defined presets, Drag-and-drop Setup, Easier exclusions); Progress
-   chart; Completion notification; Specific I/O errors; and Capacity, except
-   where Durable work forces it.
+   chart; Completion notification; Specific I/O errors; Capacity, except where
+   Durable work forces it; and Disk awareness (user decision, 2026-11-21). Its
+   backend reads stay in segment 1 because they are very cheap; what is
+   non-blocking is how far scheduling, notices and estimates use what they
+   read.
 
 CLI parity's decided parts (commitment tokens, run-scoped refusals and
 maintenance commands) serve the thesis; its other additions are non-blocking.
