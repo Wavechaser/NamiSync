@@ -177,6 +177,13 @@ behavioral evidence.
   `release_timing`. `python -m tools` commands are unchanged; direct module
   commands follow the new paths. An import-linter contract now enforces the
   harness boundary, and a test pins the corpus repository guard to the checkout.
+- Move measurement JSON out of `tests/interfaces/web/`, leaving only the frozen
+  `sh_g_8_*` custody files: the Plan contract now sits beside its driver, the
+  Plan fixture manifests are a test asset, and EV-0039 keeps the R3 receipts
+  and M1-8 results unchanged while listing 1.5 MiB of superseded authorities,
+  measurements and receipts by Git commit and hash. The rejected
+  pre-compaction M1-7 artifacts were dropped. The execution receipt/UI scale
+  tests lost their `m1_8_` prefix.
 
 #### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-17)
 

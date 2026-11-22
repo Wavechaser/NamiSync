@@ -23,6 +23,13 @@ merged) splits the working rules and reorganizes `tools/` in small commits.
 - import-linter analyzes `tools` too; a new contract limits `tools.harness` to
   core, modules and `workflows.selection`. A new test pins the corpus guard to
   the whole checkout.
+- `tests/interfaces/web/` keeps only the frozen `sh_g_8_*` JSON. The Plan
+  contract is `tools/performance/plan_contract.json` (bytes unchanged), the
+  Plan fixture oracle is `tests/assets/plan_fixture_manifests.json`, and
+  [EV-0039](../evidence/EV-0039/README.md) holds the R3 receipts and M1-8
+  results unchanged and lists the retired files by `main` commit and SHA-256.
+  The rejected pre-compaction M1-7 trio was deleted. The execution receipt/UI
+  scale tests dropped their `m1_8_` prefix.
 
 ## Verification
 
@@ -33,25 +40,26 @@ merged) splits the working rules and reorganizes `tools/` in small commits.
   and has a 3.1.0 dependency where 3.2.1 is expected. The eighth was residue
   from this session's deliberate wrong-depth corpus mutation check; after
   removing it the corpus tests pass (38 passed, 1 skipped). `--dept tools`
-  passed earlier (504 passed, 3 skipped).
+  passed earlier (504 passed, 3 skipped). After the JSON move the suite has
+  6,589 passed, 4 skipped and only those seven failures; corrupting the new
+  fixture-manifest asset fails the Plan fixture test as intended.
+- EV-0039 copies hash-match their originals; each Inventory `raw_sha256`, each
+  M1-8 `receipts_sha256` and the M1-7 measurements' canonical contract hash
+  still match.
 
 - `lint-imports`: 13 contracts kept; a probe `import namisync.db` in the harness
   broke the new contract. `tools.settlement.audit check --repeat 3` passed
-  (30 scenarios × 3). `tools.repo.evidence check`: 38 records, zero problems.
-  A scratch link checker over active Markdown: 453 relative links and anchors
+  (30 scenarios × 3). `tools.repo.evidence check`: 39 records, zero problems.
+  A scratch link checker over active Markdown: 456 relative links and anchors
   resolve. `git diff --check` clean.
 
 ## Open items
 
-- `tests/interfaces/web/` is untouched apart from import/path updates: the
-  gate-coded `m1_7_*`, `m1_8_*`, `m1_9_*` and `r3_*` JSON files (about 16 read
-  by no test) await review and compaction before any move to `evidence/`. The
-  execution receipt/UI scale tests dropped their `m1_8_` prefix. Frozen
-  `sh_g_8_*` custody artifacts must not be renamed.
-- Pending user decision: ARCHITECTURE §7 and DEFENSE §8 now point to
-  DOCUMENTS instead of keeping their own ownership lists, and PERFORMANCE
-  points to CLOSEOUT for retention. Restore local copies if they matter for
-  compliance the way the BUGS and CHANGELOG headers do.
+- Frozen `sh_g_8_*` custody artifacts must not be renamed or moved. Thirteen
+  `test_m1_8_*` functions in `test_drain.py` keep their gate-coded names.
+- ARCHITECTURE §7, DEFENSE §8 and PERFORMANCE keep pointers to DOCUMENTS and
+  CLOSEOUT by the user's decision (lower-frequency documents); only BUGS and
+  CHANGELOG keep local header instructions.
 - The local `.venv` is not on the selected release interpreter (3.15.2); rebuild
   it per TOOLS' portable build preparation before relying on custody or gate
   results locally.
