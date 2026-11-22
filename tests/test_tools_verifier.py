@@ -34,8 +34,8 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.root_authority import RootAuthority
-from tools import sidecar, verifier_rig
-from tools.seams import AuthorityBoundTappedReader, Tape, TappedReader
+from tools.harness import sidecar, verifier_rig
+from tools.harness.seams import AuthorityBoundTappedReader, Tape, TappedReader
 
 
 def _stat(*, identity: bool = True, index: int = 1) -> FileStat:

@@ -29,11 +29,11 @@ from namisync.core.models import EntryKind, FileStat, MetadataSnapshot
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, PlanOperation
 from namisync.core.session import Disposition, SessionState
-from tools import executor_rig
+from tools.harness import executor_rig
 from tools import __main__ as tools_cli
-from tools.executor_rig import ExecutorRigError
-from tools.seams import Tape
-from tools.verifier_rig import VerifierRigError
+from tools.harness.executor_rig import ExecutorRigError
+from tools.harness.seams import Tape
+from tools.harness.verifier_rig import VerifierRigError
 
 
 @pytest.mark.parametrize("command", ["verifier", "executor"])

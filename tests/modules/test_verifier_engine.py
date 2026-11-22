@@ -72,7 +72,7 @@ from namisync.modules.verifier import (
     verify,
     verify_post_copy,
 )
-from tools.seams import AuthorityBoundTappedReader
+from tools.harness.seams import AuthorityBoundTappedReader
 
 from _verifier_fixtures import (
     _Clock,

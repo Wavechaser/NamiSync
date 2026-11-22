@@ -1228,7 +1228,7 @@ def _reject_dangerous(path: Path) -> None:
     resolved = Path(path).resolve()
     if resolved.parent == resolved:
         raise CorpusError(f"refusing to operate on a filesystem root: {resolved}")
-    repository = Path(__file__).resolve().parents[1]
+    repository = Path(__file__).resolve().parents[2]
     for guarded in (Path.home().resolve(), Path.cwd().resolve(), repository):
         if resolved == guarded or guarded.is_relative_to(resolved):
             raise CorpusError(

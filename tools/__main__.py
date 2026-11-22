@@ -23,8 +23,8 @@ from namisync.core.planning import DeletionPolicy, OperationKind, SyncOptions
 from namisync.core.root_authority import is_reparse_stat
 from namisync.core.session import Disposition, SessionState
 
-from . import corpus, sidecar
-from .executor_rig import (
+from .harness import corpus, sidecar
+from .harness.executor_rig import (
     ExecutorRun,
     ExecutorRigError,
     copy_metrics_summary,
@@ -36,8 +36,8 @@ from .executor_rig import (
     require_stable_copy_evidence,
     run_executor,
 )
-from .seams import constant_hasher_factory
-from .verifier_rig import (
+from .harness.seams import constant_hasher_factory
+from .harness.verifier_rig import (
     VerifierRigError,
     content_evidence,
     load_baselines,

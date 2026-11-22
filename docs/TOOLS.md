@@ -1,11 +1,17 @@
 # Development Tools
 
-`tools/` contains development-only utilities. `python -m tools`
-owns the executor/verifier measurement harness, deterministic corpus generator
-and selected performance cases. `tools/desktop/gui.ps1` is a standalone editable-source desktop convenience
-launcher. `tools/repo/icons.py` maintains the fixed local icon vocabulary from
-`tools/repo/icons.json`. None is part of the shipped `namisync` package. Pytest covers
-their behavior; measurement output remains subject to the authority rules below.
+`tools/` contains development-only utilities, grouped by purpose. None is part
+of the shipped `namisync` package. Pytest covers their behavior; measurement
+output remains subject to the authority rules below.
+
+| Folder | Contents |
+| --- | --- |
+| `tools/harness/` | Executor/verifier measurement rigs, ledger-free seams, sidecars and the deterministic corpus generator, run through `python -m tools` |
+| `tools/settlement/` | [Executor settlement oracle](#executor-settlement-oracle) and its retained baseline |
+| `tools/performance/` | Selected [performance drivers](#performance-drivers), run through `python -m tools performance` or their own collectors |
+| `tools/packaging/` | [Portable build preparation](#portable-build-preparation) |
+| `tools/repo/` | [Bug log](#bug-log-access), [evidence](#evidence-records) and [icon](#icon-maintenance) upkeep |
+| `tools/desktop/` | The [editable GUI launcher](#editable-gui-launcher) and the [background headed runner](#headed-gui-test-harness) |
 
 ## Headed GUI test harness
 

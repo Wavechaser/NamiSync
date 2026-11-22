@@ -9,7 +9,7 @@ import stat
 
 import pytest
 
-from tools import corpus
+from tools.harness import corpus
 from namisync.core.pathing import to_extended_length_path
 
 

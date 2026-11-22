@@ -11,7 +11,7 @@ from namisync.core.execution import validated_run_id
 from namisync.core.planning import OperationKind
 from namisync.core.root_authority import RootHold
 from namisync.core.session import SessionState
-from tools import corpus, executor_rig
+from tools.harness import corpus, executor_rig
 import namisync.modules.executor.native as executor_native
 
 

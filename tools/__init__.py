@@ -1,12 +1,8 @@
-"""Development tools for measuring the executor and verifier modules.
+"""Development tools; none ship in the ``namisync`` package.
 
-The measurement harness stands in for the workflow layer only. It fakes the two
-ledger seams (``Recorder`` and ``IntegrityRecorder``) and the run seam
-(``RunContext``), while retaining the real scanner, planner, native filesystem,
-native copy backend, and unbuffered reader. Executor planning uses explicit
-empty correspondence and therefore represents a first-run/no-history plan.
-
-It imports ``namisync.core`` and ``namisync.modules`` plus the pure
-``workflows.selection`` safe-subset helper, and nothing else. It is not part of
-the shipped package.
+``harness`` measures the executor and verifier, ``settlement`` holds the
+executor settlement oracle, ``performance`` the selected measurement drivers,
+``packaging`` the portable build, ``repo`` record and asset upkeep, and
+``desktop`` the editable GUI launcher and background headed runner.
+``python -m tools`` is the harness and performance command line.
 """
