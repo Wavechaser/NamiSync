@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 39,
+  "next_id": 40,
   "records": [
     {
       "id": "EV-0001",
@@ -943,6 +943,59 @@
           "path": "notes.md",
           "bytes": 2611,
           "sha256": "955a78e24a7fc464ef6d27059002d0e6f175059b5ef0a7f1fba22174ca6d5390"
+        }
+      ]
+    },
+    {
+      "id": "EV-0039",
+      "title": "Measurement receipts moved out of tests/interfaces/web (2026-11-23)",
+      "date": "2026-11-23",
+      "origin": "tests/interfaces/web at 7b2b014f",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 3262,
+          "sha256": "09dfbccf3d9cde3b7cd5e98c07916b3d918b55253d4fac5a965a090f5b7a5670"
+        },
+        {
+          "path": "m1_8_execution_receipt_result.json",
+          "bytes": 629,
+          "sha256": "5873376562ce2a16f291d1b7c2539dd474ba44e0e6b71921744c265e16ed1297"
+        },
+        {
+          "path": "m1_8_execution_ui_result.json",
+          "bytes": 3422,
+          "sha256": "2cad15cba831f1a2649fa4588800a6e84a1aa5fb14fa3c9a2ff8de2c70594f1d"
+        },
+        {
+          "path": "r3_br_g_42_validation_20261109.json",
+          "bytes": 1873,
+          "sha256": "0ebd6ee2788ee657d9e7827f0c68922f5b1ac17548b5b24696e88488f1d51eab"
+        },
+        {
+          "path": "r3_br_g_42_validation_20261110.json",
+          "bytes": 1869,
+          "sha256": "cb7fc756bea868f3d2df9c0ef57b4c0a829fad2640c41fe55990276ade9a6b2f"
+        },
+        {
+          "path": "r3_inventory_cold_20261109_raw.json",
+          "bytes": 30900,
+          "sha256": "be252c8f59245731f0325d0a909ce83b0643574a63193300e71d1b0c6bf006c7"
+        },
+        {
+          "path": "r3_inventory_cold_20261109_validation.json",
+          "bytes": 411,
+          "sha256": "6a7a3b6f8044e9a5ec47d2352f1cda1f6192a6d2963276b969caa8978f4d6da4"
+        },
+        {
+          "path": "r3_inventory_cold_20261110_raw.json",
+          "bytes": 33536,
+          "sha256": "03b952df7cf994edcb703269e63d3ed4e3462c5192b4bc52e43064770b3fbdbd"
+        },
+        {
+          "path": "r3_inventory_cold_20261110_validation.json",
+          "bytes": 411,
+          "sha256": "c99d6ccf3b566a3ca5d1f9e5752b3bd7971abf9dcf9f661992636ce693038d6a"
         }
       ]
     }

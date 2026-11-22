@@ -187,9 +187,9 @@ review reconciles source/runtime/profile identities, raw hashes and metrics.
 
 History's worst normal commit was 54.03 ms; maximum pending state was 256
 events / 109,568 bytes, with recording and audit assertions satisfied.
-Committed receipts: [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261110_raw.json),
-[Inventory verdict](../tests/interfaces/web/r3_inventory_cold_20261110_validation.json)
-and [History/bridge verdict](../tests/interfaces/web/r3_br_g_42_validation_20261110.json).
+Committed receipts: [Inventory raw](../evidence/EV-0039/r3_inventory_cold_20261110_raw.json),
+[Inventory verdict](../evidence/EV-0039/r3_inventory_cold_20261110_validation.json)
+and [History/bridge verdict](../evidence/EV-0039/r3_br_g_42_validation_20261110.json).
 [EV-0032](../evidence/EV-0032/README.md) keeps the collection's identity,
 profile, commands, index, validation and independent review; full reports and
 logs were not retained.
@@ -201,15 +201,16 @@ SQLite 3.50.4. Its Inventory maxima were 1.623/2.297 seconds, History summary
 1.736 seconds, item/event page p95 21.2/20.8 ms and maxima 23.5/22.1 ms, bridge
 reliable worst p95/max 10/40 ms and progress 45/51 ms. It remains historical
 profile-qualified acceptance, not the serviced runtime's receipt. Committed
-`r3_*20261109*.json` authorities and original logs are unchanged; the result
+`r3_*20261109*.json` authorities (now in [EV-0039](../evidence/EV-0039/README.md))
+and original logs are unchanged; the result
 above is the renewed profile, not a retuned limit.
 
 ### R3 acceptance result — 2026-11-09
 
 The original clean `cbb07d5f` five-child collections passed without retries;
-the profile and metrics are summarized above. [Inventory raw](../tests/interfaces/web/r3_inventory_cold_20261109_raw.json),
-[validation](../tests/interfaces/web/r3_inventory_cold_20261109_validation.json)
-and [History/bridge validation](../tests/interfaces/web/r3_br_g_42_validation_20261109.json)
+the profile and metrics are summarized above. [Inventory raw](../evidence/EV-0039/r3_inventory_cold_20261109_raw.json),
+[validation](../evidence/EV-0039/r3_inventory_cold_20261109_validation.json)
+and [History/bridge validation](../evidence/EV-0039/r3_br_g_42_validation_20261109.json)
 bind the original source/runtime/hash population. [EV-0030](../evidence/EV-0030/README.md)
 keeps the collection's profile, run log, index and validation; raw reports and
 Inventory child logs were not retained.
@@ -273,9 +274,9 @@ Changed gating files, fixture, producer/checker/driver, Python/dependencies or
 accepted machine/profile require fresh affected samples.
 
 This local, predeclared named-reference criterion uses Tier 2 under DEFENSE §7:
-retain committed compact raw/validation JSON under `tests/interfaces/web/`; raw
-child logs are working output under ignored `build/inventory-cold/` and are not
-retained. Every run has a fresh exclusive
+promote the validated raw/validation JSON unchanged into an `evidence/`
+record; raw child logs are working output under ignored `build/inventory-cold/`
+and are not retained. Every run has a fresh exclusive
 directory; failures remain incomplete and neither reports nor validator results
 are overwritten. Samples apply only to the recorded profile and five children,
 without universal latency, memory or complexity claims. No acceptance samples
@@ -288,7 +289,8 @@ are claimed merely by adding this method or passing correctness-only controls.
 | `ec3865c`-based source hashes, 2026-10-01 | 1.9712401 / 2.8123806 s | `m1_9_inventory_cold_{raw,validation}.json`. |
 | Clean `cbf73a4f`, CPython 3.13.17, 2026-10-30 | 1.6487122 / 2.2893115 s | `m1_closeout_inventory_cold_20261030_{raw,validation}.json`; same accepted reference machine, AC/quiet. |
 
-Those committed files are under `tests/interfaces/web/`. The first collector
+Both pairs are retired to Git; [EV-0039](../evidence/EV-0039/README.md) lists their
+commits and hashes. The first collector
 attempt rejected venv-redirector identity before admission; its failure was not
 timing acceptance. Five launches and source/driver/checker closure were checked
 for each successful collection. No isolated speed comparison follows different
@@ -507,7 +509,9 @@ projection rows and a 240,000-row information-heavy variant with 120,000
 warnings. It exercises depth 32, prior-path rows, widest siblings, raw-key
 order, selection and actual changed/unchanged views. The public Plan cases
 are component measurements selected by metric IDs in the frozen [compact contract](../tools/performance/plan_contract.json);
-the receipt/UI adapters own the current installed headed cases.
+the receipt/UI adapters own the current installed headed cases. The contract's
+`artifacts` paths name files since retired to Git and listed in
+[EV-0039](../evidence/EV-0039/README.md); no driver reads them.
 Cold cases retain one sample; warm cases retain six. The optional projection
 memory case measures retained construction overlap but does not certify a
 fixed object graph or SH-G-15. Functional tests independently check fixture
@@ -559,12 +563,12 @@ project Python supplies development dependencies. Record the wheel and
 installation used alongside the JSON, and preserve the raw log when diagnosing
 failure. The 300-second child deadline is containment, not a latency target.
 
-The committed [M1-7 compact contract](../tools/performance/plan_contract.json),
-[authority](../tests/interfaces/web/m1_7_plan_compact_authority.json) and
-[measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json),
-and the M1-8 [P2](../tests/interfaces/web/m1_8_execution_receipt_result.json)
-and [U-v2](../tests/interfaces/web/m1_8_execution_ui_result.json) records
-remain byte-identical historical evidence at their stated revisions. Their
+The M1-7 [compact contract](../tools/performance/plan_contract.json), the
+M1-8 [P2](../evidence/EV-0039/m1_8_execution_receipt_result.json) and
+[U-v2](../evidence/EV-0039/m1_8_execution_ui_result.json) results, and the
+authority, measurement and receipt files retired to Git and listed in
+[EV-0039](../evidence/EV-0039/README.md) remain byte-identical historical
+evidence at their stated revisions. Their
 readiness children, 35-case/78-attempt collection indexes, source-hash
 certificates and legacy validators were retired from current execution by
 AB-2. They neither authenticate a new checkout nor prescribe a new selected
@@ -1314,7 +1318,8 @@ advisory under DEFENSE rather than revived release gates.
 
 ## Source-linked historical observations
 
-All values below are independently derived from committed compact JSON.
+All values below are independently derived from the compact JSON that
+[EV-0039](../evidence/EV-0039/README.md) keeps or lists by commit and hash.
 The M1-7 Plan profile was accepted at `3c3bbbc` in the 2026-09-16 P9
 collection; the M1-8 U-v2 profile at RC-1 `3ea4e6b` on 2026-09-24.
 The compact contracts and authority artifacts bind their specific source,
@@ -1324,21 +1329,19 @@ build and are superseded by U-v2 for the corresponding delivered UI bytes.
 
 | Source/revision and fixture | Recorded profile and limitation | Statistic/unit | Children; samples | Observation | Limit |
 | --- | --- | --- | ---: | ---: | ---: |
-| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; cold base, 100,000 operations/120,000 rows | P9 reference; measured revision only | maximum ms | 5; 5 | 1,752.5309 | 2,000 |
-| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; cold information-heavy, 100,000 operations/240,000 rows | P9 reference; measured revision only | maximum ms | 5; 5 | 2,764.6222 | 4,000 |
-| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; unchanged 256-row window | P9 reference; measured revision only | nearest-rank p95 / maximum ms | 5; 30 | 1.6548 / 1.6856 | 250 / 500 |
-| [M1-7 compact measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json), `3c3bbbc`; incremental retained construction overlap | P9 reference; projection memory only | maximum bytes | 5; 5 | 280,768,512 | 335,544,320 (320 MiB) |
-| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst cold click (destructive start) | U-v2 installed headed; measured revision only | maximum ms | 5; 5 in case (40 across eight cases) | 20.3 | 50 |
-| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt p95 (cancel) | U-v2 installed headed; measured revision only | nearest-rank p95 ms | 5; 30 in case (150 across five cases) | 72.0 | 100 |
-| [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt maximum (cancel) | U-v2 installed headed; measured revision only | maximum ms | 5; 30 in case | 73.3 | 250 |
+| [M1-7 compact measurements](../evidence/EV-0039/README.md#retired-to-git), `3c3bbbc`; cold base, 100,000 operations/120,000 rows | P9 reference; measured revision only | maximum ms | 5; 5 | 1,752.5309 | 2,000 |
+| [M1-7 compact measurements](../evidence/EV-0039/README.md#retired-to-git), `3c3bbbc`; cold information-heavy, 100,000 operations/240,000 rows | P9 reference; measured revision only | maximum ms | 5; 5 | 2,764.6222 | 4,000 |
+| [M1-7 compact measurements](../evidence/EV-0039/README.md#retired-to-git), `3c3bbbc`; unchanged 256-row window | P9 reference; measured revision only | nearest-rank p95 / maximum ms | 5; 30 | 1.6548 / 1.6856 | 250 / 500 |
+| [M1-7 compact measurements](../evidence/EV-0039/README.md#retired-to-git), `3c3bbbc`; incremental retained construction overlap | P9 reference; projection memory only | maximum bytes | 5; 5 | 280,768,512 | 335,544,320 (320 MiB) |
+| [M1-8 U-v2 result](../evidence/EV-0039/m1_8_execution_ui_result.json), `3ea4e6b`; worst cold click (destructive start) | U-v2 installed headed; measured revision only | maximum ms | 5; 5 in case (40 across eight cases) | 20.3 | 50 |
+| [M1-8 U-v2 result](../evidence/EV-0039/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt p95 (cancel) | U-v2 installed headed; measured revision only | nearest-rank p95 ms | 5; 30 in case (150 across five cases) | 72.0 | 100 |
+| [M1-8 U-v2 result](../evidence/EV-0039/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt maximum (cancel) | U-v2 installed headed; measured revision only | maximum ms | 5; 30 in case | 73.3 | 250 |
 
 M1-7's [compact contract](../tools/performance/plan_contract.json)
-and companion authority, plus U-v2's [authority](../tests/interfaces/web/m1_8_execution_ui_authority.json)
-and [receipts](../tests/interfaces/web/m1_8_execution_ui_receipts.json),
-carry the source and profile bindings and raw sample membership. The P2
-[authority](../tests/interfaces/web/m1_8_execution_receipt_authority.json),
-[receipts](../tests/interfaces/web/m1_8_execution_receipt_receipts.json) and
-[result](../tests/interfaces/web/m1_8_execution_receipt_result.json) record
+and companion authority, plus U-v2's authority and receipts (retired to Git;
+see [EV-0039](../evidence/EV-0039/README.md#retired-to-git)), carry the source
+and profile bindings and raw sample membership. The P2 authority, receipts and
+[result](../evidence/EV-0039/m1_8_execution_receipt_result.json) record
 the earlier 6.8/7.3 ms window and 58.8/65.1 ms start p95/max observations.
 Do not combine maxima and p95 across endpoints into one score.
 
