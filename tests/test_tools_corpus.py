@@ -37,6 +37,20 @@ def test_generate_replaces_owned_contents_deterministically(tmp_path: Path) -> N
     assert corpus.outputs_for(root).exists()
 
 
+def test_claim_refuses_the_whole_repository_from_any_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repository = Path(__file__).resolve().parents[1]
+    probe = repository / "build" / "corpus-repository-guard-probe"
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(corpus.CorpusError, match="contains or equals"):
+        corpus.claim(repository)
+    with pytest.raises(corpus.CorpusError, match="inside the repository"):
+        corpus.claim(probe / "workspace")
+    assert not probe.exists()
+
+
 def test_generate_refuses_unknown_descendants_without_deleting_anything(
     tmp_path: Path,
 ) -> None:
