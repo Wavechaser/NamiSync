@@ -143,7 +143,8 @@ a rerun needs a recorded cause and a new collection directory. Raw reports and
 Inventory child logs are working output under ignored `build/` and are not
 retained; the validation JSON, with
 each report's SHA-256, and the Inventory compact raw/validation JSON are
-committed under `tests/interfaces/web/`.
+promoted unchanged into an `evidence/` record
+([EV-0039](../evidence/EV-0039/README.md) for both R3 collections).
 
 ### R3 release repair renewal — predeclared 2026-11-10
 
