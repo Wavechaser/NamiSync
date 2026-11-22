@@ -1136,7 +1136,7 @@ delivery retains 100 ms p95 / 250 ms maximum with no Gap; replaceable progress
 retains 1 s p95 / 2 s maximum with coalesced monotonicity. Current-source timing
 acceptance passed the predeclared five-child
 [R3 collection](PERFORMANCE.md#r3-acceptance-result--2026-11-09) at `cbb07d5f`,
-validated by `tools.performance.br_g_42`; changed bridge transport, driver,
+validated by `tools.performance.br_g_42` (now `release_timing`); changed bridge transport, driver,
 runtime or profile requires renewal.
 The current v5 custody fixture and frozen v1 acceptance are distinct: per task,
 150 reliable outcomes own items_done, while byte coordinates 1..1,500 drive

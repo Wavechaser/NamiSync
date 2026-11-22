@@ -1,4 +1,4 @@
-"""BR-G-42 History and bridge-event acceptance collection and validation.
+"""History release and bridge-event timing collection and validation (gate BR-G-42).
 
 ``collect`` runs the predeclared collection from a clean checkout: five fresh
 children each of the History release case and the installed bridge-event case.
@@ -185,7 +185,7 @@ def validate(output: Path) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m tools.performance.br_g_42")
+    parser = argparse.ArgumentParser(prog="python -m tools.performance.release_timing")
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("collect").add_argument("output", type=Path)
     commands.add_parser("validate").add_argument("output", type=Path)

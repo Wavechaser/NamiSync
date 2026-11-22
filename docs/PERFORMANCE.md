@@ -128,14 +128,14 @@ R3 maps the open timing obligations by owner before any acceptance sample:
 | Obligation | Owner and limit | Collection | Statistic |
 | --- | --- | --- | --- |
 | Cold Inventory projection | PRESENTATION 3 s / 6 s maximum | Existing `tools.performance.inventory --collect` and `validate_inventory`, five fresh children per case; renewal needed because `b2e872e6` changed gating `core` sources | Per-case maximum |
-| History release | HISTORY 3 s summary; 500 ms p95 / 1 s maximum per 256-row page | `python -m tools.performance.br_g_42 collect`, five fresh `history release` children | Maximum of ten summary readings; pooled nearest-rank p95 and maximum over 200 item and 200 event page samples |
+| History release | HISTORY 3 s summary; 500 ms p95 / 1 s maximum per 256-row page | `python -m tools.performance.release_timing collect`, five fresh `history release` children | Maximum of ten summary readings; pooled nearest-rank p95 and maximum over 200 item and 200 event page samples |
 | Bridge event | BRIDGE 100 ms p95 / 250 ms max reliable/terminal; 1 s / 2 s progress; no Gap | Same collector, five fresh `bridge-event installed` children | Worst child p95 and overall maximum per stream; every child `passed`, `measurement_valid`, runtime/machine profile match and clean archive scope |
 | Plan and execution UI | Advisory under DEFENSE §7 | Not collected; the named 2026-11-09 diagnostics are the comparison | None |
 | SH-G-15 | INTERFACES; user judgment on measured behavior | R4 resource schedule on the rebuilt candidate | Not R3 |
 
 All collections run once, on one clean revision, on the reference profile with
 CPython 3.13.17, AC power and no concurrent task, test or build work. Children
-are never retried. `python -m tools.performance.br_g_42 validate DIR` is the
+are never retried. `python -m tools.performance.release_timing validate DIR` is the
 separate checker: it requires exactly five complete children per case, the
 collection revision with a clean tree in every report, and recomputes each
 statistic from the raw reports. Any invalid child or exceeded limit fails R3;
