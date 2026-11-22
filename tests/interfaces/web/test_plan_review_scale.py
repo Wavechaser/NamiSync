@@ -34,7 +34,7 @@ from namisync.workflows.plan_projection import (
 from namisync.workflows.selection import apply_selection_mutation, derive_execution_selection
 
 CONTRACT_PATH = Path(__file__).parents[3] / "tools" / "performance" / "plan_contract.json"
-AUTHORITY_PATH = Path(__file__).with_name("m1_7_plan_compact_authority.json")
+FIXTURE_MANIFESTS_PATH = Path(__file__).parents[2] / "assets" / "plan_fixture_manifests.json"
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 RUNNER_PATH = REPOSITORY_ROOT / "tools" / "performance" / "plan.py"
 def test_scoped_selection_120k_server_mutation_cost() -> None:
@@ -511,7 +511,7 @@ if (removed !== 1 || coexistingCalls !== 3) {
 
 @cache
 def _frozen_fixture_manifests() -> dict[str, object]:
-    return json.loads(AUTHORITY_PATH.read_bytes())["fixture_manifests"]
+    return json.loads(FIXTURE_MANIFESTS_PATH.read_bytes())
 
 
 
