@@ -9,7 +9,7 @@ import tarfile
 
 import pytest
 
-from tools import icons
+from tools.repo import icons
 
 
 ASSETS = Path("namisync/interfaces/web/assets")
@@ -60,7 +60,7 @@ def _catalog(archive: bytes, glyphs: list[str] | None = None) -> dict:
 
 
 def _save_catalog(root: Path, catalog: dict) -> None:
-    path = root / "tools/icons.json"
+    path = root / "tools/repo/icons.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(catalog), encoding="utf-8")
 
@@ -98,7 +98,7 @@ def _run(root: Path, command: str) -> int:
 
 def test_native_generation_preserves_bytes_and_has_independent_provenance(workspace: Path) -> None:
     archive = (workspace / "upstream.tgz").read_bytes()
-    catalog = icons.load_catalog(workspace / "tools/icons.json")
+    catalog = icons.load_catalog(workspace / "tools/repo/icons.json")
     before = _snapshot(workspace)
 
     outputs = icons.plan_outputs(workspace, catalog, archive)
@@ -194,7 +194,7 @@ def test_catalog_rejects_invalid_filled_alias(workspace: Path, filled: dict) -> 
     catalog["filled"] = filled
     _save_catalog(workspace, catalog)
     with pytest.raises(ValueError, match="filled"):
-        icons.load_catalog(workspace / "tools/icons.json")
+        icons.load_catalog(workspace / "tools/repo/icons.json")
 
 
 @pytest.mark.parametrize("corruption", ["archive", "license", "markers", "duplicate", "symlink", "script", "external-fill"])
@@ -404,7 +404,7 @@ def test_catalog_rejects_glyphs_that_cannot_be_fixed_identifiers(tmp_path: Path,
     _save_catalog(tmp_path, _catalog(_archive(_members()), [glyph]))
 
     with pytest.raises(ValueError):
-        icons.load_catalog(tmp_path / "tools/icons.json")
+        icons.load_catalog(tmp_path / "tools/repo/icons.json")
 
 
 def test_catalog_rejects_duplicate_json_keys(tmp_path: Path) -> None:

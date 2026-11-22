@@ -15,7 +15,7 @@ from _headed_native import scenario_deadline, start_headed_process, terminate_pr
 
 ASSET_ROOT = "namisync/interfaces/web/assets/"
 # Authored development catalog, independent of generated runtime declarations.
-ICON_CATALOG_PATH = Path(__file__).parents[3] / "tools" / "icons.json"
+ICON_CATALOG_PATH = Path(__file__).parents[3] / "tools" / "repo" / "icons.json"
 ICON_CATALOG = json.loads(ICON_CATALOG_PATH.read_text(encoding="utf-8"))
 ICON_GLYPHS = tuple(ICON_CATALOG["glyphs"])
 ICON_MASK_FILES = {

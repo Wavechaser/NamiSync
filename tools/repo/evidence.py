@@ -13,7 +13,7 @@ import stat
 import sys
 
 
-DEFAULT_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = "manifest.json"
 FILE_CAP = 256 << 10
 RECORD_CAP = 1 << 20

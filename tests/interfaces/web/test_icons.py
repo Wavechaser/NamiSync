@@ -199,8 +199,8 @@ def test_sh_g_14_built_wheel_contains_exact_icon_foundation(
     expected["icons.js"] = (ASSETS / "icons.js").read_bytes()
 
     with zipfile.ZipFile(built_wheel.path) as wheel:
-        assert "tools/icons.py" not in wheel.namelist()
-        assert "tools/icons.json" not in wheel.namelist()
+        assert "tools/repo/icons.py" not in wheel.namelist()
+        assert "tools/repo/icons.json" not in wheel.namelist()
         packaged = {
             name.removeprefix(ASSET_ROOT): wheel.read(name)
             for name in wheel.namelist()

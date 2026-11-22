@@ -68,7 +68,7 @@ are exempt from this recurrence rule.
 ### Sibling analysis
 
 For sibling analysis in [BUGS](../BUGS.md), filter across owners using causal
-terms as well as categories (`python -m tools.bugs`), then read the complete
+terms as well as categories (`python -m tools.repo.bugs`), then read the complete
 candidate entries and relevant current code/tests. Record the compared IDs,
 population and exclusions. Exact category or text matches retrieve candidates;
 they do not prove common cause, duplicate records, current defects or

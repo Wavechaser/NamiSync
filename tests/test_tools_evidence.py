@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-from tools import evidence
-from tools.evidence import DEFAULT_ROOT, FILE_CAP, check, main, render
+from tools.repo import evidence
+from tools.repo.evidence import DEFAULT_ROOT, FILE_CAP, check, main, render
 
 
 def _repo(tmp_path: Path) -> Path:
@@ -203,7 +203,7 @@ def test_real_evidence_tree_is_valid():
 
 def test_cli_from_other_directory(tmp_path):
     root = _sealed(tmp_path / "repo")
-    tool = DEFAULT_ROOT / "tools" / "evidence.py"
+    tool = DEFAULT_ROOT / "tools" / "repo" / "evidence.py"
     result = subprocess.run([sys.executable, str(tool), "--root", str(root), "check"],
                             cwd=tmp_path, capture_output=True, text=True, timeout=20)
     assert result.returncode == 0, result.stdout + result.stderr

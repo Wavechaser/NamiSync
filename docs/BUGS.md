@@ -58,7 +58,7 @@ next unused number above the largest assigned ID (at least four digits); never
 renumber, recycle or delete an assigned identity. Retain superseded records
 with their disposition instead. Existing module/scope links remain valid.
 
-This file is the canonical record. `python -m tools.bugs` validates every entry
+This file is the canonical record. `python -m tools.repo.bugs` validates every entry
 and generates full-record Markdown or JSONL views on demand; see
 [TOOLS](TOOLS.md#bug-log-access). Generated catalogs belong in ignored `build/`,
 not in a second maintained log. Validation rejects missing/duplicate IDs and

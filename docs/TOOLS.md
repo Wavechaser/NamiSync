@@ -3,8 +3,8 @@
 `tools/` contains development-only utilities. `python -m tools`
 owns the executor/verifier measurement harness, deterministic corpus generator
 and selected performance cases. `tools/gui.ps1` is a standalone editable-source desktop convenience
-launcher. `tools/icons.py` maintains the fixed local icon vocabulary from
-`tools/icons.json`. None is part of the shipped `namisync` package. Pytest covers
+launcher. `tools/repo/icons.py` maintains the fixed local icon vocabulary from
+`tools/repo/icons.json`. None is part of the shipped `namisync` package. Pytest covers
 their behavior; measurement output remains subject to the authority rules below.
 
 ## Headed GUI test harness
@@ -15,15 +15,15 @@ describes which native checks still need the input desktop.
 
 ## Bug log access
 
-`python -m tools.bugs` reads canonical [BUGS](BUGS.md), validates the complete
+`python -m tools.repo.bugs` reads canonical [BUGS](BUGS.md), validates the complete
 population before filtering, and prints full records as Markdown (default) or
 `--format jsonl`. It never edits the log. Stable IDs and entry conventions are
 owned by BUGS. Only the Python standard library is required.
 
 ```powershell
-python -m tools.bugs --id BUG-0001
-python -m tools.bugs --text authority --text path --format jsonl --output build/bug-path-authority.jsonl
-python -m tools.bugs --owner interfaces --status FIXED --offset 0 --limit 20
+python -m tools.repo.bugs --id BUG-0001
+python -m tools.repo.bugs --text authority --text path --format jsonl --output build/bug-path-authority.jsonl
+python -m tools.repo.bugs --owner interfaces --status FIXED --offset 0 --limit 20
 ```
 
 `--owner`, `--scope` and `--category` are case-insensitive substring filters;
@@ -58,14 +58,14 @@ is a folder `evidence/EV-NNNN/` listed in `evidence/manifest.json` with its
 title, date, origin (the working location and source identity it came from) and
 every file's path, size and SHA-256. The manifest's `next_id` only grows, so
 IDs are not reused unless it is hand-edited. `python -m
-tools.evidence` maintains that manifest; choosing, compacting and copying files
+tools.repo.evidence` maintains that manifest; choosing, compacting and copying files
 stays a deliberate closeout step, not something the tool infers from `build/`.
 
 ```powershell
-python -m tools.evidence add --title "Post-M1 build cleanup receipts" --origin "build/mop-up-survey-20261111 at 051e8d98"
-python -m tools.evidence seal EV-NNNN
-python -m tools.evidence check
-python -m tools.evidence list --format jsonl
+python -m tools.repo.evidence add --title "Post-M1 build cleanup receipts" --origin "build/mop-up-survey-20261111 at 051e8d98"
+python -m tools.repo.evidence seal EV-NNNN
+python -m tools.repo.evidence check
+python -m tools.repo.evidence list --format jsonl
 ```
 
 `add` allocates the next ID and creates an empty folder; copy the chosen files
@@ -242,13 +242,13 @@ The recall advisory uses the pinned catalog's plain `cloud` glyph with
 native 16/20/24 px artwork, generated through the same offline provenance path.
 
 `namisync/interfaces/web/assets/icons/` contains fixed local monochrome SVGs
-from pinned `@fluentui/svg-icons`. `tools/icons.json` is the reviewed, development-
+from pinned `@fluentui/svg-icons`. `tools/repo/icons.json` is the reviewed, development-
 only authority for package version, glyph selection and deliberate size fallbacks.
 Keep upstream filenames, exact package/file URLs, version, per-file SHA-256
 hashes and MIT license with the assets. Runtime registration, remote loading,
 generated SVG/path markup and data-derived asset paths are forbidden.
 
-`tools/icons.py` verifies archive integrity and copies native SVGs, generating
+`tools/repo/icons.py` verifies archive integrity and copies native SVGs, generating
 provenance and marked fixed registry/CSS sections offline. Commit the generated
 source; the app never loads the catalog or generator. Tests belong in `tests/`
 and independently check catalog/output correspondence, SVG safety, packaging
@@ -259,7 +259,7 @@ The shared Plan/Inventory Filter trigger uses the catalog-selected `filter`
 Regular artwork at its native 16/20/24 px sizes; it does not upgrade the package
 pin or use a generated custom glyph.
 
-Edit `tools/icons.json` to select glyph names and declare missing-size fallbacks,
+Edit `tools/repo/icons.json` to select glyph names and declare missing-size fallbacks,
 then synchronize and review the generated diff:
 
 Catalog schema 2 keeps existing glyph names Regular by default. Its `filled`
@@ -269,16 +269,16 @@ without a runtime style selector. Remove an alias from both `glyphs` and
 `filled` when retiring it. Package provenance retains its existing schema.
 
 ```powershell
-.\.venv\Scripts\python.exe tools/icons.py sync
-.\.venv\Scripts\python.exe tools/icons.py check
+.\.venv\Scripts\python.exe tools/repo/icons.py sync
+.\.venv\Scripts\python.exe tools/repo/icons.py check
 
 # Use an already downloaded pinned npm archive without network access
-.\.venv\Scripts\python.exe tools/icons.py sync --archive "build/gui-icons/svg-icons-1.1.334.tgz"
-.\.venv\Scripts\python.exe tools/icons.py check --archive "build/gui-icons/svg-icons-1.1.334.tgz"
+.\.venv\Scripts\python.exe tools/repo/icons.py sync --archive "build/gui-icons/svg-icons-1.1.334.tgz"
+.\.venv\Scripts\python.exe tools/repo/icons.py check --archive "build/gui-icons/svg-icons-1.1.334.tgz"
 
 # Optional explicit checkout root; otherwise inferred from the script's location
-.\.venv\Scripts\python.exe tools/icons.py check --root "F:\GitHubRepositories\NamiSync"
-.\.venv\Scripts\python.exe tools/icons.py --help
+.\.venv\Scripts\python.exe tools/repo/icons.py check --root "F:\GitHubRepositories\NamiSync"
+.\.venv\Scripts\python.exe tools/repo/icons.py --help
 ```
 
 Both commands accept `--archive` and `--root`. Without `--archive`, the command

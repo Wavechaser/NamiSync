@@ -11,7 +11,7 @@ import re
 import sys
 
 
-DEFAULT_SOURCE = Path(__file__).resolve().parents[1] / "docs" / "BUGS.md"
+DEFAULT_SOURCE = Path(__file__).resolve().parents[2] / "docs" / "BUGS.md"
 ANCHOR = re.compile(r'<a id="bug-([0-9]{4,})"></a>')
 HEADER = re.compile(
     r"- (SEVERE|MODERATE|MINOR) - ([^()]+?) "

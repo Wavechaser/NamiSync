@@ -8,7 +8,7 @@ import sys
 
 import pytest
 
-from tools.bugs import DEFAULT_SOURCE, load_records, main, parse_records
+from tools.repo.bugs import DEFAULT_SOURCE, load_records, main, parse_records
 
 
 def _log(identity="0001", status="CLOSED, BOUNDED", date="2026-07-21; reviewed 2026-08-27"):
@@ -136,7 +136,7 @@ def test_cli_from_other_directory_exports_unicode_and_reports_invalid_bounds(tmp
     source = tmp_path / 'bugs.md'
     source.write_text(_log().replace('Consequence', '日本語 consequence'), encoding='utf-8')
     output = tmp_path / 'export.jsonl'
-    tool = DEFAULT_SOURCE.parents[1] / 'tools' / 'bugs.py'
+    tool = DEFAULT_SOURCE.parents[1] / 'tools' / 'repo' / 'bugs.py'
     result = subprocess.run(
         [sys.executable, str(tool), '--source', str(source), '--format', 'jsonl', '--output', str(output)],
         cwd=tmp_path, capture_output=True, text=True, timeout=20,

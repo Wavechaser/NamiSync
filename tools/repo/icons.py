@@ -258,12 +258,12 @@ def _removals(root: Path, outputs: dict[str, bytes]) -> list[Path]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("sync", "check"))
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     parser.add_argument("--archive", type=Path, help="Pinned npm tarball for offline use")
     args = parser.parse_args(argv)
     try:
         root = args.root.resolve(strict=True)
-        catalog = load_catalog(_path(root, "tools/icons.json"))
+        catalog = load_catalog(_path(root, "tools/repo/icons.json"))
         if args.archive is None:
             with urlopen(archive_url(catalog), timeout=30) as response:
                 archive_bytes = response.read(MAX_ARCHIVE_BYTES + 1)
