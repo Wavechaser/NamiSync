@@ -12,7 +12,7 @@ import pytest
 
 
 PROJECT_ROOT = Path(__file__).parents[1]
-GUI_SCRIPT = PROJECT_ROOT / "tools" / "gui.ps1"
+GUI_SCRIPT = PROJECT_ROOT / "tools" / "desktop" / "gui.ps1"
 POWERSHELL = shutil.which("pwsh")
 WINDOWS_POWERSHELL = shutil.which("powershell")
 

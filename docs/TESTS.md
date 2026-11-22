@@ -289,7 +289,7 @@ for their named appearance outcomes, and a native composited observation before
 attributing a Mica contrast defect to product tokens. Preserve earlier raw
 captures; correct their interpretation rather than rewriting historical evidence.
 
-`tools/gui.ps1 gallery` reuses the child and milestone format for an editable
+`tools/desktop/gui.ps1 gallery` reuses the child and milestone format for an editable
 manual preview, but its GUID-named output is diagnostic only. It is not produced
 from the clean installed wheel, is not parent-validated as an acceptance run,
 and cannot satisfy a headed gate. A normal preview removes only its
@@ -354,7 +354,7 @@ release receipts. Preserve the first failure before retrying.
 For unattended page journeys, run the following from the Windows workspace:
 
 ```powershell
-.\.venv\Scripts\python.exe -m tools.headed_background
+.\.venv\Scripts\python.exe -m tools.desktop.headed_background
 ```
 
 The launcher creates a uniquely named private Win32 desktop in the current

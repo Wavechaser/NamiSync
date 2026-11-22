@@ -623,7 +623,7 @@ def test_headed_source_never_targets_the_shared_production_desktop() -> None:
     assert "--test-mutex" in slice_source
     assert "--test-title" in slice_source
     assert '"--expose-ready-status"' in slice_source
-    gui_source = (PROJECT_ROOT / "tools" / "gui.ps1").read_text(
+    gui_source = (PROJECT_ROOT / "tools" / "desktop" / "gui.ps1").read_text(
         encoding="utf-8"
     )
     assert "--expose-ready-status" not in gui_source

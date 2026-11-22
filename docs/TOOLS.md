@@ -2,14 +2,14 @@
 
 `tools/` contains development-only utilities. `python -m tools`
 owns the executor/verifier measurement harness, deterministic corpus generator
-and selected performance cases. `tools/gui.ps1` is a standalone editable-source desktop convenience
+and selected performance cases. `tools/desktop/gui.ps1` is a standalone editable-source desktop convenience
 launcher. `tools/repo/icons.py` maintains the fixed local icon vocabulary from
 `tools/repo/icons.json`. None is part of the shipped `namisync` package. Pytest covers
 their behavior; measurement output remains subject to the authority rules below.
 
 ## Headed GUI test harness
 
-For unattended WebView2 page journeys, `python -m tools.headed_background`
+For unattended WebView2 page journeys, `python -m tools.desktop.headed_background`
 starts pytest on a private Windows desktop. [TESTS](TESTS.md#run-levels)
 describes which native checks still need the input desktop.
 
@@ -347,18 +347,18 @@ iteration. Windows PowerShell 5.1 is refused before the launcher runs:
 
 ```powershell
 # Real development shell
-.\tools\gui.ps1
+.\tools\desktop\gui.ps1
 
 # Component gallery; dark when -Mode is omitted
-.\tools\gui.ps1 gallery
-.\tools\gui.ps1 gallery -Mode light
-.\tools\gui.ps1 gallery -Mode dark
-.\tools\gui.ps1 gallery -Mode forced
-.\tools\gui.ps1 gallery -Mode reduced
+.\tools\desktop\gui.ps1 gallery
+.\tools\desktop\gui.ps1 gallery -Mode light
+.\tools\desktop\gui.ps1 gallery -Mode dark
+.\tools\desktop\gui.ps1 gallery -Mode forced
+.\tools\desktop\gui.ps1 gallery -Mode reduced
 
 # Grouped gallery profiles
-.\tools\gui.ps1 gallery -Mode fluent  # light + dark
-.\tools\gui.ps1 gallery -Mode all     # all four modes
+.\tools\desktop\gui.ps1 gallery -Mode fluent  # light + dark
+.\tools\desktop\gui.ps1 gallery -Mode all     # all four modes
 ```
 
 Bare `gui.ps1` always selects the real shell. `gallery` defaults to `dark`, and
@@ -384,7 +384,7 @@ packaged assets, and both clean-wheel children remain unchanged.
 
 The shell keeps the ordinary Ready label hidden. Only smoke-test invocations
 explicitly pass the helper's `--expose-ready-status` switch for their UI Automation
-witness; `tools/gui.ps1` does not opt in to this test presentation override.
+witness; `tools/desktop/gui.ps1` does not opt in to this test presentation override.
 
 Data is persistent and isolated beneath
 `%LOCALAPPDATA%\NamiSync-Development`: `shell` for the real development host and

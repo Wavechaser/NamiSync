@@ -883,7 +883,7 @@ if ($MyInvocation.InvocationName -ne ".") {
             SelectedMode = $Mode
             ModeWasExplicit = $PSBoundParameters.ContainsKey("Mode")
             RepositoryRoot = [IO.Path]::GetFullPath(
-                (Join-Path $PSScriptRoot "..")
+                (Join-Path $PSScriptRoot "..\..")
             )
             LocalAppDataRoot = $localAppData
         }

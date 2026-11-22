@@ -33,7 +33,7 @@ class _ProcessInfo(ctypes.Structure):
 
 
 def main() -> int:
-    repo = Path(__file__).resolve().parents[1]
+    repo = Path(__file__).resolve().parents[2]
     sys.path.insert(0, str(repo / "tests" / "interfaces" / "web"))
     from _headed_native import create_headed_job
 
