@@ -56,8 +56,8 @@ with matching tests and documentation:
 | `namisync/interfaces/` | CLI/API/desktop adapters; access workflows and dispatcher through composition; no domain policy. `branding/` holds the app icon's SVG masters as package data. |
 | `tests/` | Pytest coverage following package boundaries. |
 | `tools/` | Development utilities; their fixtures, archives and run output go in `build/`. |
-| `build/` | Ignored working output and work in progress, kept free of lasting dependencies under the [retention policy](docs/PERFORMANCE.md#evidence-retention). Authored studies, proposals and plans go in `docs/`; work files go nowhere else. |
-| `evidence/` | Tracked, validated records promoted at session closeout under the [retention policy](docs/PERFORMANCE.md#evidence-retention). |
+| `build/` | Ignored working output and work in progress, kept free of lasting dependencies under the [retention policy](docs/procedures/CLOSEOUT.md#evidence-retention). Authored studies, proposals and plans go in `docs/`; work files go nowhere else. |
+| `evidence/` | Tracked, validated records promoted at session closeout under the [retention policy](docs/procedures/CLOSEOUT.md#evidence-retention). |
 
 `lint-imports` enforces the import law through the contracts in `pyproject.toml`.
 

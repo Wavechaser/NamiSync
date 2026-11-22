@@ -53,7 +53,7 @@ This is a retrieval tool, not a semantic classifier or a second bug authority.
 ## Evidence records
 
 Tracked `evidence/` holds records promoted under
-[PERFORMANCE](PERFORMANCE.md#evidence-retention)'s retention policy. Each record
+the [retention policy](procedures/CLOSEOUT.md#evidence-retention). Each record
 is a folder `evidence/EV-NNNN/` listed in `evidence/manifest.json` with its
 title, date, origin (the working location and source identity it came from) and
 every file's path, size and SHA-256. The manifest's `next_id` only grows, so

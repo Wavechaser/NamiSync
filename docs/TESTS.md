@@ -441,7 +441,7 @@ unknown, missing and wrong-policy controls, explicit test-command extensions,
 immutable production specs and test-support exclusion from the wheel.
 Optional measurement runs are not automatic gates. Known direct consumer breaks
 still need migration or an explicit disposition. Evidence retention follows
-[PERFORMANCE](PERFORMANCE.md#evidence-retention).
+[CLOSEOUT](procedures/CLOSEOUT.md#evidence-retention).
 
 ## Departments
 

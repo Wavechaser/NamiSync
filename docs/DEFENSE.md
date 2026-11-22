@@ -939,7 +939,8 @@ may close a gate.
   independently predeclared budget: exact fixture and profile; expected result
   plus evaluation count for a deterministic quantity, or statistic plus run
   count for a noisy one; committed raw evidence (an `evidence/` record under
-  PERFORMANCE's retention policy); and a separate validator.
+  the [retention policy](procedures/CLOSEOUT.md#evidence-retention)); and a
+  separate validator.
   **Tier 3** is protected authority with the empirical and deterministic forms
   below.
 - The recorded M1-7/M1-8 Plan and execution-UI latency and empirical
