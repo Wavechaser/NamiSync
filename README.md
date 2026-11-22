@@ -260,7 +260,15 @@ never hides the other result axes in rendered output.
 - [Database](docs/DATABASE.md), [Recorder](docs/RECORDER.md), and
   [History](docs/HISTORY.md) — local persistence and audit behavior.
 - [Desktop UI](docs/DESKTOP_UI.md) — current WebView2 desktop delivery contract.
+- [Core](docs/CORE.md) — shared contracts, session events, path safety and root
+  authority.
+- [Scanner](docs/SCANNER.md), [Planner](docs/PLANNER.md), and
+  [Preflight](docs/PREFLIGHT.md) — observation, deterministic planning, and
+  pre-mutation judgment.
 - [Executor](docs/EXECUTOR.md) — guarded filesystem mutation, pipeline, and recovery.
+- [Dispatcher](docs/DISPATCHER.md) — domain-blind admission, custody, control,
+  and event fan-out.
+- [Ingest](docs/INGEST.md) — latent draft of a later media-ingest workflow.
 - [Inventory](docs/INVENTORY.md), [Verifier](docs/VERIFIER.md), and
   [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
