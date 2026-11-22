@@ -523,7 +523,9 @@ with an explicit persisted-correspondence input contract.
 
 The executor/verifier rigs may import `core`, `modules`, and the pure
 `workflows.selection` helper. They do not import `db`, `dispatcher`,
-`interfaces`, or workflow runtime composition.
+`interfaces`, or workflow runtime composition. `lint-imports` enforces this
+boundary for `tools/harness/`, which also stays independent of the other tool
+folders.
 
 ## Executor settlement oracle
 

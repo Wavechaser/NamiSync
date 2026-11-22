@@ -51,7 +51,7 @@ markers = [
 ]
 
 [tool.importlinter]
-root_package = "namisync"
+root_packages = ["namisync", "tools"]
 
 [[tool.importlinter.contracts]]
 name = "Core imports no project layer"
@@ -153,6 +153,22 @@ layers = [
     "namisync.interfaces.cli | namisync.interfaces.web",
     "namisync.interfaces.service",
 ]
+
+[[tool.importlinter.contracts]]
+name = "Measurement harness reaches only core, modules and workflow selection"
+type = "forbidden"
+source_modules = ["tools.harness"]
+forbidden_modules = [
+    "namisync.db",
+    "namisync.dispatcher",
+    "namisync.interfaces",
+    "namisync.workflows",
+    "tools.desktop",
+    "tools.performance",
+    "tools.repo",
+    "tools.settlement",
+]
+ignore_imports = ["tools.harness.** -> namisync.workflows.selection"]
 
 [[tool.importlinter.contracts]]
 name = "Web task drain cannot reach domain lifecycle owners"
