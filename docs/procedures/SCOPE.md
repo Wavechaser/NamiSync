@@ -65,6 +65,16 @@ may use in-turn adjudication, never waive the pause/review. Count mechanisms
 semantically, not by BUGS category spelling. Predeclared finite migrations
 are exempt from this recurrence rule.
 
+### Sibling analysis
+
+For sibling analysis in [BUGS](../BUGS.md), filter across owners using causal
+terms as well as categories (`python -m tools.bugs`), then read the complete
+candidate entries and relevant current code/tests. Record the compared IDs,
+population and exclusions. Exact category or text matches retrieve candidates;
+they do not prove common cause, duplicate records, current defects or
+applicability of a recurrence stop. Do not truncate entries to fit a batch; use
+explicit record offsets/limits.
+
 ## Stops and recovery branches
 
 The always-stop conditions are in [AGENTS](../../AGENTS.md#stops). Broad

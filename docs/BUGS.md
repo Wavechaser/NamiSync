@@ -22,18 +22,15 @@ symptom, cause, and fix.
   pathname, and observed outcome in the description. Do not use a sentence,
   milestone, review gate, test outcome, fix, or broad result such as availability
   or convergence as the category.
-- Category similarity is an input to the repeated-mechanism rule in
-  `AGENTS.md`; it is semantic, not exact-string identity and not proof that one
-  cross-layer abstraction is correct. A predeclared finite migration may have
-  several instances without becoming a newly discovered mechanism.
+- Category similarity is an input to the
+  [recurrence pause](procedures/SCOPE.md#recurrence-pause); it is semantic, not
+  exact-string identity and not proof that one cross-layer abstraction is correct.
 - Record an `OPEN` entry only after a supported consequence and causal class
   are verified. A hypothesis, code-size concern, duplicate mechanism without a
   demonstrated consequence, or documentation inconsistency belongs in the
   active delivery document or handoff instead. An `OPEN` entry does not expand
-  the active delivery scope. A regression introduced by the current change is
-  fixed before its mergeable commit; a bounded pre-existing substantive bug may
-  use a separate fix commit while the repeated-mechanism and third-defect stop
-  rules in `AGENTS.md` remain untriggered.
+  the active delivery scope; [SCOPE](procedures/SCOPE.md#findings-and-scope-decisions)
+  decides whether and when it is fixed.
 - Assign severity from the worst consequence supported by the admitted product
   path, not the importance of the audit or test that found it. A safe refusal,
   test-only race, or hypothetical future caller does not inherit the severity
@@ -67,13 +64,8 @@ and generates full-record Markdown or JSONL views on demand; see
 not in a second maintained log. Validation rejects missing/duplicate IDs and
 malformed records rather than silently reducing the corpus. Preserve raw status
 and date qualifiers; older prose does not need mechanical Cause/Fix extraction.
-
-For sibling analysis, filter across owners using causal terms as well as
-categories, then read the complete candidate entries and relevant current
-code/tests. Record the compared IDs, population and exclusions. Exact category
-or text matches retrieve candidates; they do not prove common cause, duplicate
-records, current defects or applicability of a recurrence stop. Do not truncate
-entries to fit a batch; use explicit record offsets/limits.
+Sibling analysis across entries follows
+[SCOPE](procedures/SCOPE.md#sibling-analysis).
 
 ---
 
