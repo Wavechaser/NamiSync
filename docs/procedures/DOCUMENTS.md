@@ -31,18 +31,31 @@ into every consumer document.
   and describe their own mechanisms; they do not restate its tables or accept
   a residual merely by describing it.
 - [FEATURES.md](../FEATURES.md) owns product behavior and distinguishes active
-  from unrealized outcomes, without milestone build recaps.
-- [BUGS.md](../BUGS.md) owns substantive defects and its entry conventions. Keep
-  entries module-first, roughly 6–12 rendered lines, retaining consequence,
-  cause, fix and essential residual/test context. Categories name reusable
-  causal mechanisms; severity follows the worst supported product consequence,
-  not the audit or gate that found it.
+  from unrealized outcomes, without milestone build recaps. It links any
+  limitation to its defense disposition.
+- Component and module documents own implemented component policy,
+  operation-specific mechanisms, algorithms, local tests, current state, limits
+  and extension policy that do not redefine a cross-cutting defense or bridge
+  contract. [BRIDGE.md](../BRIDGE.md) owns protocol and transport: exact desktop
+  envelopes, commands, wire behavior, limits and acceptance gates beneath
+  DEFENSE §4's trusted-base decision. [PRESENTATION.md](../PRESENTATION.md) owns
+  views and focused scale criteria; [INTERFACES.md](../INTERFACES.md) owns
+  host/lifecycle and release criteria.
+- [BUGS.md](../BUGS.md) owns concrete defect incidents, fixes and severity, and
+  its entry conventions. Keep entries module-first, roughly 6–12 rendered lines,
+  retaining consequence, cause, fix and only the residual/test detail needed to
+  identify the technical boundary. Categories name reusable causal mechanisms;
+  severity follows the worst supported product consequence, not the audit or
+  gate that found it.
 - [M1_PLAN.md](../M1_PLAN.md) is the sole M1 delivery register. Archive
   superseded plan ancestry rather than maintaining parallel current authorities.
 - [PERFORMANCE.md](../PERFORMANCE.md) owns measurement methods, fixture/profile
   and scaling descriptions, aggregation, provenance and results. Component
   documents own their behavior and acceptance decisions; DEFENSE owns evidence
-  authority and consequence.
+  authority and consequence. Reporting an observation neither classifies
+  consequence nor changes an acceptance gate.
+- [CHANGELOG.md](../../CHANGELOG.md) owns dated task outcomes, including dated
+  adoption or revision of DEFENSE policy.
 - [HANDOFF.md](../HANDOFF.md) covers only the latest session: changes, verification
   and immediate operational context. Replace it rather than accumulating a
   project reference or transcript; retain necessary resumption/evidence pointers.

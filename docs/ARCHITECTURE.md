@@ -1133,18 +1133,8 @@ existing identity, evidence, custody, and settlement contracts.
 
 ## 7. Documentation ownership
 
-- `DEFENSE.md` owns supported assumptions, trusted boundaries, hard walls,
-  tolerance classes, quantitative-evidence authority, and residual-risk
-  dispositions.
-- `ARCHITECTURE.md` owns durable structure, coordination, contracts, and
-  milestone direction.
-- `FEATURES.md` owns implemented and planned product behavior.
-- Module documents own implemented component policy, algorithms, local tests,
-  current state, and limits that do not redefine a cross-cutting defense or
-  bridge contract.
-- `M1_PLAN.md` owns remaining delivery. `BRIDGE.md` owns protocol/transport, `PRESENTATION.md` owns views and focused scale criteria, and `INTERFACES.md` owns host/lifecycle and release criteria. `PERFORMANCE.md` owns measurement methods, profiles and results.
-- `CHANGELOG.md` owns dated task outcomes.
-- `HANDOFF.md` owns only immediate operational context.
+[DOCUMENTS](procedures/DOCUMENTS.md#subject-ownership) lists which document
+owns each subject.
 
 When a detail changes without altering a cross-module contract, update its
 owning module document rather than copying it here. Add architecture detail

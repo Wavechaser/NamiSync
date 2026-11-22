@@ -998,22 +998,8 @@ may close a gate.
 
 ## 8. Documentation ownership
 
-- `DEFENSE.md` owns supported assumptions, trusted boundaries, hard walls,
-  tolerance classes, quantitative-evidence authority, residual dispositions,
-  and model-reopen triggers.
-- `ARCHITECTURE.md` owns the durable contracts and layering that enforce them.
-- `FEATURES.md` owns implemented and planned user-visible behavior and links
-  any limitation to its defense disposition.
-- `BUGS.md` owns concrete defect incidents, fixes, severity, and only the
-  residual detail necessary to identify the technical boundary.
-- Module documents own operation-specific mechanisms, limits, and extension
-  policy. `BRIDGE.md` owns exact desktop envelopes, commands, limits, and
-  acceptance gates beneath the trusted-base decision in §4.
-- `PERFORMANCE.md` owns measurement methods, fixture/profile and scaling
-  descriptions, aggregation, provenance and results. It does not classify
-  consequence or change an acceptance gate by reporting an observation.
-- `CHANGELOG.md` records dated adoption or revision of this policy;
-  `HANDOFF.md` carries only immediate operational context.
+[DOCUMENTS](procedures/DOCUMENTS.md#subject-ownership) lists which document
+owns each subject, including this one.
 
 When behavior, an authority boundary, a supported precondition, or a residual
 disposition changes, update this document and the owning behavior/mechanism
