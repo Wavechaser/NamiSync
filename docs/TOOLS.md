@@ -521,7 +521,7 @@ The executor/verifier rigs may import `core`, `modules`, and the pure
 
 ## Executor settlement oracle
 
-`tools/executor_settlement_audit.py` is a retained maintenance gate for the
+`tools/settlement/audit.py` is a retained maintenance gate for the
 executor settlement refactor. Unlike the measurement rig, it builds exact
 small plans through core contracts, injects a synchronous copy backend and
 public filesystem/recorder seams, and deliberately exercises success, failure,
@@ -537,18 +537,18 @@ calibration, headroom, and holdout are inapplicable; the common discipline is
 protected observations plus independently declared acceptance.
 
 ```powershell
-.\.venv\Scripts\python.exe -m tools.executor_settlement_audit list
-.\.venv\Scripts\python.exe -m tools.executor_settlement_audit run failure.byte-published
-.\.venv\Scripts\python.exe -m tools.executor_settlement_audit oracle --repeat 3
-.\.venv\Scripts\python.exe -m tools.executor_settlement_audit snapshot --repeat 3
-.\.venv\Scripts\python.exe -m tools.executor_settlement_audit diff --repeat 3
-.\.venv\Scripts\python.exe -m tools.executor_settlement_audit check --repeat 3
+.\.venv\Scripts\python.exe -m tools.settlement.audit list
+.\.venv\Scripts\python.exe -m tools.settlement.audit run failure.byte-published
+.\.venv\Scripts\python.exe -m tools.settlement.audit oracle --repeat 3
+.\.venv\Scripts\python.exe -m tools.settlement.audit snapshot --repeat 3
+.\.venv\Scripts\python.exe -m tools.settlement.audit diff --repeat 3
+.\.venv\Scripts\python.exe -m tools.settlement.audit check --repeat 3
 ```
 
 The portable resume gate is exactly:
 
 ```powershell
-python -m tools.executor_settlement_audit check --repeat 3
+python -m tools.settlement.audit check --repeat 3
 ```
 
 For the current 30-scenario, 70-row manifest, a successful gate ends with
@@ -562,7 +562,7 @@ fail; unrelated worktree changes do not. The command is read-only and never
 refreshes the baseline.
 
 The in-code oracle is independent of
-`tools/executor_settlement_baseline.json`. Each manifest row declares its
+`tools/settlement/baseline.json`. Each manifest row declares its
 expected terminal outcome, reason, recording state, durable-state detail,
 recorder behavior, retry/control behavior, cleanup, evidence, and final tree.
 Every installed filesystem fault rule must fire its declared number of times;

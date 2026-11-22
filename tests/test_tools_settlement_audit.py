@@ -14,7 +14,7 @@ import pytest
 from namisync.core.evidence import Outcome
 from namisync.core.execution import ItemRecordingReason, TaskRecordingIssueReason
 from namisync.core.planning import OpId, OperationKind
-from tools import executor_settlement_audit as audit
+from tools.settlement import audit
 
 
 _EXPECTED_SCENARIOS = frozenset(
@@ -2276,15 +2276,15 @@ def test_official_check_reads_clean_head_baseline_and_enforces_semantic_pin(
             "--quiet",
             "HEAD",
             "--",
-            "tools/executor_settlement_baseline.json",
+            "tools/settlement/baseline.json",
         ),
         (
             "diff",
             "--quiet",
             "--",
-            "tools/executor_settlement_baseline.json",
+            "tools/settlement/baseline.json",
         ),
-        ("show", "HEAD:tools/executor_settlement_baseline.json"),
+        ("show", "HEAD:tools/settlement/baseline.json"),
     ]
 
 
@@ -2407,7 +2407,7 @@ def test_default_baseline_alias_cannot_bypass_the_official_check(
     monkeypatch.setattr(audit, "_read_baseline", unexpected_worktree_read)
     monkeypatch.setattr(audit, "capture_all", lambda *, repeat: capture)
 
-    alias = Path("tools") / "executor_settlement_baseline.json"
+    alias = Path("tools") / "settlement" / "baseline.json"
     assert audit.main(["check", "--repeat", "3", "--baseline", str(alias)]) == 0
     assert official_calls == 1
     assert "settlement check passed" in capsys.readouterr().out

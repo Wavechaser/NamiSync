@@ -802,11 +802,11 @@ refactor, while the 12 later rows retain separately reviewed post-refactor
 stabilization behavior. Together they form the current corrected-baseline
 lineage for later regression checks.
 
-The retained baseline is `tools/executor_settlement_baseline.json`, currently
+The retained baseline is `tools/settlement/baseline.json`, currently
 with oracle `format_version: 1`. The resume gate is exactly:
 
 ```powershell
-.\.venv\Scripts\python.exe -m tools.executor_settlement_audit check --repeat 3
+.\.venv\Scripts\python.exe -m tools.settlement.audit check --repeat 3
 ```
 
 For the current 30-scenario, 70-row manifest, success ends with

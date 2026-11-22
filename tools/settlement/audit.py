@@ -1,6 +1,6 @@
 """Retained policy oracle and differential trace for executor settlement.
 
-Run this module directly with ``python -m tools.executor_settlement_audit``.
+Run this module directly with ``python -m tools.settlement.audit``.
 The expected policy below is deliberately independent of the optional JSON
 baseline: matching yesterday's implementation never makes an oracle mismatch
 acceptable.
@@ -74,9 +74,9 @@ from namisync.modules.executor import ExecutorPolicies, NativeFileSystem, execut
 
 FORMAT_VERSION = 1
 RUN_ID = validated_run_id("a" * 32)
-DEFAULT_BASELINE = Path(__file__).with_name("executor_settlement_baseline.json")
-_REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-_DEFAULT_BASELINE_GIT_PATH = "tools/executor_settlement_baseline.json"
+DEFAULT_BASELINE = Path(__file__).with_name("baseline.json")
+_REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+_DEFAULT_BASELINE_GIT_PATH = "tools/settlement/baseline.json"
 REVIEWED_BASELINE_SHA256 = (
     "555890ad4ac6ca69e5288b656c9fbe2ba09a0e8be99a3b2565510655cfb9ff52"
 )
@@ -8497,7 +8497,7 @@ def _positive_int(value: str) -> int:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="python -m tools.executor_settlement_audit",
+        prog="python -m tools.settlement.audit",
         description="Independent executor settlement oracle and retained trace.",
     )
     commands = parser.add_subparsers(dest="command", required=True)
