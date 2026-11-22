@@ -1,44 +1,64 @@
-# Latest session — evidence promotion, 2026-11-17
+# Latest session — agent procedures and tools layout, 2026-11-23
 
-After the user's per-claim adequacy review, all 36 staged candidates were
-promoted unchanged as EV-0003–EV-0038 (108 files, 1,147,687 bytes) with
-`tools.evidence add`/`seal`. Each record README now names its working source
-and promotion date; the candidate-only "claims resting on the source" lists were
-dropped (`python -m tools.evidence list` reports citers). The inventory cold
-collector moved to `build/inventory-cold/`; `failure.png` and the collector
-profile/output got no record (user decisions).
+Branch `refactor/procedures-and-tools` (from `main` at `7b2b014f`, not pushed or
+merged) splits the working rules and reorganizes `tools/` in small commits.
 
-## Changes and verification
+## Changes
 
-- 74 citing lines in BUGS, M1_PLAN, PERFORMANCE, TESTS and TOOLS now link
-  records instead of `build/` folders. Retention prose was corrected with each
-  repoint: PERFORMANCE no longer promises raw intervals, source manifests,
-  schedule samples, R3 full reports, the payload screenshot or result-8 scripts;
-  TOOLS' census text names counts/identities instead of paths and hashes, and the
-  R2 notices text points at the committed `tools/packaging/notices/manifest.json`
-  instead of source/header copies. Allocation, copyonly and exec-time citations
-  carry their provenance limits.
-- `tools.evidence check`: 38 records, zero problems. No lasting Markdown cites a
-  promoted source folder. 361 relative Markdown links resolve; `git diff --check`
-  clean. Product tests were unnecessary for documentation and evidence changes.
+- AGENTS keeps only always-on rules (269 → 137 lines) and a trigger table for
+  `docs/procedures/`: SCOPE (scope, findings, recurrence, recovery, sibling
+  analysis), CLOSEOUT (commits, session boundaries, evidence retention moved
+  from PERFORMANCE) and DOCUMENTS (subject ownership merged from AGENTS,
+  ARCHITECTURE §7 and DEFENSE §8; changelog rules). CLAUDE.md lost its stale
+  "Windows Rules" pointer and duplicated HANDOFF line. README indexes every
+  active subject document, including six that were missing.
+- Header maintenance instructions in BUGS and CHANGELOG stay local by the
+  user's decision (local copies keep compliance up); an early commit that
+  replaced BUGS's with links was reverted.
+- `tools/` folders: `harness/` (rigs, seams, sidecar, corpus), `settlement/`
+  (`audit.py`, `baseline.json`), `performance/` (unchanged; `br_g_42.py` is now
+  `release_timing.py`, schema IDs unchanged), `packaging/`, `repo/` (bugs,
+  evidence, icons) and `desktop/` (`gui.ps1`, `headed_background.py`).
+  `python -m tools ...` is unchanged; direct commands follow the new paths.
+- import-linter analyzes `tools` too; a new contract limits `tools.harness` to
+  core, modules and `workflows.selection`. A new test pins the corpus guard to
+  the whole checkout.
+
+## Verification
+
+- Ordinary suite: 6,588 passed, 4 skipped, 8 failed. Seven failures (five
+  `test_bridge_transport_custody`, the live custody check and
+  `test_native_host_gates` page probe) fail identically on `main`: the local
+  `.venv` runs CPython 3.13.17, outside the frozen 3.15.2 custody qualifier,
+  and has a 3.1.0 dependency where 3.2.1 is expected. The eighth was residue
+  from this session's deliberate wrong-depth corpus mutation check; after
+  removing it the corpus tests pass (38 passed, 1 skipped). `--dept tools`
+  passed earlier (504 passed, 3 skipped).
+
+- `lint-imports`: 13 contracts kept; a probe `import namisync.db` in the harness
+  broke the new contract. `tools.settlement.audit check --repeat 3` passed
+  (30 scenarios × 3). `tools.repo.evidence check`: 38 records, zero problems.
+  A scratch link checker over active Markdown: 453 relative links and anchors
+  resolve. `git diff --check` clean.
 
 ## Open items
 
-- At the user's request the 42 promoted source folders (named in the records'
-  manifest `origin`) and `build/evidence-candidates/` were deleted. Four keep
-  only pytest temp residue owned by the Codex sandbox account (731 files,
-  18.5 MB; no evidence): `executor-assessment-20260927`, `m1-9-20261001`,
-  `post-m1-8-ablation-20260925` and `root-admission-optimization-20260928`.
-  Together with the 55 empty `build/move-history-20260925/` folders, they need
-  an elevated `Remove-Item -Recurse -Force`.
-- At the later `build/` cleanup, keep `build/inventory-cold/` and other
-  likely-regenerated working inputs such as the icon archive. M1_PLAN-cited
-  early-M2 reference folders (for example `build/ab9-20260926/`) were not part of
-  this batch.
-
-Keep `F:\NamiSyncExecutorBenchSource`, the user's `H:\test_dir\source` and
-`target` play directories including trash, and `dist/v0.1.0/`. Final package:
-`b0a3fe13` / Package05, ZIP SHA-256
-`652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc`.
-M1 release headings remain pending external delivery. Unrelated
-`docs/M2_PROPOSAL.md` edits remain uncommitted.
+- `tests/interfaces/web/` is untouched apart from import/path updates: the
+  gate-coded `m1_7_*`, `m1_8_*`, `m1_9_*` and `r3_*` JSON files (about 16 read
+  by no test) await review and compaction before any move to `evidence/`, and
+  `test_m1_8_execution_{receipt,ui}_scale.py` keep their names. Frozen
+  `sh_g_8_*` custody artifacts must not be renamed.
+- Pending user decision: ARCHITECTURE §7 and DEFENSE §8 now point to
+  DOCUMENTS instead of keeping their own ownership lists, and PERFORMANCE
+  points to CLOSEOUT for retention. Restore local copies if they matter for
+  compliance the way the BUGS and CHANGELOG headers do.
+- The local `.venv` is not on the selected release interpreter (3.15.2); rebuild
+  it per TOOLS' portable build preparation before relying on custody or gate
+  results locally.
+- Proposed, not built: Markdown link/anchor test, commit-subject check,
+  changelog structure test, advisory `python -m tools closeout`.
+- Carried over: four `build/` folders with Codex-sandbox pytest residue and 55
+  empty `build/move-history-20260925/` folders need an elevated
+  `Remove-Item -Recurse -Force`; keep `build/inventory-cold/` and the icon
+  archive. Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir\source`/`target`
+  and `dist/v0.1.0/` (final package `b0a3fe13` / Package05).

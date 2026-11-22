@@ -165,6 +165,19 @@ Product, test and documentation reductions removed repeated machinery while
 preserving operational safety, externally visible contracts and independent
 behavioral evidence.
 
+#### Split agent procedures and reorganize development tools (2026-11-23)
+
+- Condense AGENTS to always-on rules (269 to 137 lines) with a trigger table
+  for new `docs/procedures/` SCOPE, CLOSEOUT and DOCUMENTS. Move evidence
+  retention out of PERFORMANCE and merge the ARCHITECTURE/DEFENSE ownership
+  lists into DOCUMENTS; BUGS and CHANGELOG keep their header instructions.
+  README now indexes every active subject document.
+- Group `tools/` into harness, settlement, performance, packaging, repo and
+  desktop folders; rename the gate-coded `br_g_42` collector to
+  `release_timing`. `python -m tools` commands are unchanged; direct module
+  commands follow the new paths. An import-linter contract now enforces the
+  harness boundary, and a test pins the corpus repository guard to the checkout.
+
 #### Survey and clear post-M1 cleanup candidates (2026-11-11 – 2026-11-17)
 
 - Clear six local codex branches under the user's superseded-recovery disposal
