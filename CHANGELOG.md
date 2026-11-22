@@ -7,7 +7,10 @@ task-level delivery. The date or date range covers the summarized delivery;
 related sessions and commits stay under one task. Before adding a new task,
 first decide whether the session advances an existing one; extend that entry
 when it does, and create a new task only when no existing entry accurately fits
-the outcome. `README.md` repeats only milestone and phase summaries.
+the outcome. Put post-delivery work in the relevant hardening phase rather than
+appending it to the original feature task. `README.md` repeats only milestone
+and phase summaries; update its synopsis only when one of those summaries
+changes.
 
 Before named releases, milestone headings use names such as `M1`. After
 versioning begins, headings use the version and codename, such as

@@ -281,6 +281,9 @@ never hides the other result axes in rendered output.
 - [M2 proposal](docs/M2_PROPOSAL.md) — proposed later features, without an
   implementation plan or delivery commitment.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
+- [Working rules](AGENTS.md) and their situational procedures for
+  [scope](docs/procedures/SCOPE.md), [closeout](docs/procedures/CLOSEOUT.md)
+  and [documentation](docs/procedures/DOCUMENTS.md).
 
 Historical plans and investigations are indexed in the [M1 delivery register](docs/M1_PLAN.md).
 

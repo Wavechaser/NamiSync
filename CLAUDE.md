@@ -10,13 +10,9 @@
 
 ## Claude Code Notes
 
-- This repo is Windows/PowerShell-only (see AGENTS.md "Windows Rules"). Use the
-  PowerShell tool for all commands, not Bash/Git Bash/WSL, unless a task is
-  genuinely impossible from PowerShell.
-- The project virtual environment is at `.venv\`. Follow `docs/TESTS.md` for
-  the run levels (focused, department, neighborhood, ordinary, headed); check
-  import boundaries with `.venv\Scripts\lint-imports.exe`; run the dev
-  measurement harness with `.venv\Scripts\python.exe -m tools`.
-- Start each session by reading `docs/HANDOFF.md` for the latest session
-  state, then the relevant focused doc in `docs/` (see the README
-  documentation index) before making changes.
+- Use the PowerShell tool for all commands, not Bash/Git Bash/WSL, unless a
+  task is genuinely impossible from PowerShell.
+- The project virtual environment is at `.venv\`: run tests with
+  `.venv\Scripts\python.exe -m pytest`, import contracts with
+  `.venv\Scripts\lint-imports.exe`, and development tools with
+  `.venv\Scripts\python.exe -m tools`.
