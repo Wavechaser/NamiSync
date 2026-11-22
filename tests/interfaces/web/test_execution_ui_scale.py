@@ -1,4 +1,4 @@
-"""Functional controls for selected M1-8 UI measurements."""
+"""Functional controls for selected execution UI measurements."""
 
 from __future__ import annotations
 

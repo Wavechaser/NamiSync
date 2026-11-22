@@ -45,8 +45,8 @@ merged) splits the working rules and reorganizes `tools/` in small commits.
 
 - `tests/interfaces/web/` is untouched apart from import/path updates: the
   gate-coded `m1_7_*`, `m1_8_*`, `m1_9_*` and `r3_*` JSON files (about 16 read
-  by no test) await review and compaction before any move to `evidence/`, and
-  `test_m1_8_execution_{receipt,ui}_scale.py` keep their names. Frozen
+  by no test) await review and compaction before any move to `evidence/`. The
+  execution receipt/UI scale tests dropped their `m1_8_` prefix. Frozen
   `sh_g_8_*` custody artifacts must not be renamed.
 - Pending user decision: ARCHITECTURE §7 and DEFENSE §8 now point to
   DOCUMENTS instead of keeping their own ownership lists, and PERFORMANCE
