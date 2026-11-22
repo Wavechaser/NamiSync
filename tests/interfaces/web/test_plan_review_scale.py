@@ -33,8 +33,8 @@ from namisync.workflows.plan_projection import (
 )
 from namisync.workflows.selection import apply_selection_mutation, derive_execution_selection
 
-CONTRACT_PATH = Path(__file__).with_name("m1_7_plan_compact_contract.json")
-AUTHORITY_PATH = CONTRACT_PATH.with_name("m1_7_plan_compact_authority.json")
+CONTRACT_PATH = Path(__file__).parents[3] / "tools" / "performance" / "plan_contract.json"
+AUTHORITY_PATH = Path(__file__).with_name("m1_7_plan_compact_authority.json")
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 RUNNER_PATH = REPOSITORY_ROOT / "tools" / "performance" / "plan.py"
 def test_scoped_selection_120k_server_mutation_cost() -> None:

@@ -506,7 +506,7 @@ The Plan fixture uses seed `0x4E414D49`, 100,000 operations, 120,000 base
 projection rows and a 240,000-row information-heavy variant with 120,000
 warnings. It exercises depth 32, prior-path rows, widest siblings, raw-key
 order, selection and actual changed/unchanged views. The public Plan cases
-are component measurements selected by their compact-contract metric IDs;
+are component measurements selected by metric IDs in the frozen [compact contract](../tools/performance/plan_contract.json);
 the receipt/UI adapters own the current installed headed cases.
 Cold cases retain one sample; warm cases retain six. The optional projection
 memory case measures retained construction overlap but does not certify a
@@ -559,7 +559,7 @@ project Python supplies development dependencies. Record the wheel and
 installation used alongside the JSON, and preserve the raw log when diagnosing
 failure. The 300-second child deadline is containment, not a latency target.
 
-The committed [M1-7 compact contract](../tests/interfaces/web/m1_7_plan_compact_contract.json),
+The committed [M1-7 compact contract](../tools/performance/plan_contract.json),
 [authority](../tests/interfaces/web/m1_7_plan_compact_authority.json) and
 [measurements](../tests/interfaces/web/m1_7_plan_compact_measurements.json),
 and the M1-8 [P2](../tests/interfaces/web/m1_8_execution_receipt_result.json)
@@ -1332,7 +1332,7 @@ build and are superseded by U-v2 for the corresponding delivered UI bytes.
 | [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt p95 (cancel) | U-v2 installed headed; measured revision only | nearest-rank p95 ms | 5; 30 in case (150 across five cases) | 72.0 | 100 |
 | [M1-8 U-v2 result](../tests/interfaces/web/m1_8_execution_ui_result.json), `3ea4e6b`; worst warm receipt maximum (cancel) | U-v2 installed headed; measured revision only | maximum ms | 5; 30 in case | 73.3 | 250 |
 
-M1-7's [compact contract](../tests/interfaces/web/m1_7_plan_compact_contract.json)
+M1-7's [compact contract](../tools/performance/plan_contract.json)
 and companion authority, plus U-v2's [authority](../tests/interfaces/web/m1_8_execution_ui_authority.json)
 and [receipts](../tests/interfaces/web/m1_8_execution_ui_receipts.json),
 carry the source and profile bindings and raw sample membership. The P2

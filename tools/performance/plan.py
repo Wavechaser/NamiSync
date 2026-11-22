@@ -56,13 +56,7 @@ FIXTURE_WINDOW_LIMIT: Final = 256
 CHILD_RECEIPT_SCHEMA: Final = "namisync-m1-7-plan-review-child-v3"
 
 
-CONTRACT_PATH: Final = (
-    Path(__file__).resolve().parents[2]
-    / "tests"
-    / "interfaces"
-    / "web"
-    / "m1_7_plan_compact_contract.json"
-)
+CONTRACT_PATH: Final = Path(__file__).resolve().with_name("plan_contract.json")
 
 
 _META = MetadataSnapshot(0, None)
