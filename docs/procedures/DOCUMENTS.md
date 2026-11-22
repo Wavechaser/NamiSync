@@ -9,7 +9,8 @@ Read this before creating or editing a document in `docs/`, README or CHANGELOG.
   historical reference and must not guide current implementation.
 - Root `AGENTS.md` owns always-on repository execution boundaries and routes to
   these procedures. Root `README.md` remains the product/package readme,
-  documentation index, roadmap and concise milestone/phase changelog.
+  documentation index, roadmap and concise milestone/phase changelog. This
+  document owns editing conventions, not a second product index.
 
 Read the section relevant to the document being edited. Update a subject's
 existing owner rather than creating parallel authority or copying its rules
@@ -62,6 +63,7 @@ into every consumer document.
 
 ## Changelogs
 
-[CHANGELOG.md](../../CHANGELOG.md)'s header owns heading levels, task entries,
-date ranges and milestone/version naming. README has only `##` milestone/release
-and `###` phase summaries, never task entries.
+Both root changelogs are newest-first. [CHANGELOG.md](../../CHANGELOG.md)'s
+header owns heading levels, task entries, date ranges and milestone/version
+naming. README has only `##` milestone/release and `###` phase summaries, never
+task entries.
