@@ -4,8 +4,9 @@
 
 - Default to discussion, not changes. Treat questions, reviews, plan critiques,
   and thinking-out-loud as requests for assessment: report findings and stop.
-  Make file edits, commits, or other side-effectful actions only when the user
-  explicitly asks to edit/implement/commit (or the request plainly implies it).
+  Make file edits or other side-effectful actions only when the user explicitly
+  asks to edit/implement (or the request plainly implies it); that request
+  includes committing per AGENTS, but push and merge need their own.
   When in doubt, propose and ask rather than apply.
 
 ## Claude Code Notes
