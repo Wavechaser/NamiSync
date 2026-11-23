@@ -1110,21 +1110,22 @@ archived as `obsolete/M1_REGISTER.md`; subject criteria live in `BRIDGE.md` and
 
 **Status:** Active; delivery lives in `M2_PLAN.md`
 
-Adds durable session metadata, exclusive queue ownership, startup reconciliation
-and the first production use of `INTERRUPTED`, durable committed plans, launch
-policy, and cross-process task visibility. Restartable continuations require a
+Adds explicit schema migration with cross-process-coordinated data protection
+and history retention, because M2 ends in a release whose data must survive its
+schema changes. Also adds durable session metadata, exclusive queue ownership,
+startup reconciliation and the first production use of `INTERRUPTED`, durable
+committed plans, launch policy, and cross-process task visibility. Restartable continuations require a
 separate protected recovery-store contract with explicit retention and fresh
 workflow authority/custody reconciliation; persisting current process-local
 checkpoints through the metadata store is not that design. Coordination remains
 domain-blind and workflow-owned continuation meaning remains outside dispatcher.
 
-### M3+ — maintenance, scale, and new workflows
+### M3+ — scale and new workflows
 
 **Status:** Unrealized
 
-Adds cross-process-coordinated history retention and data protection, explicit
-schema migration, incremental change sources, evidence-justified parallelism,
-ingest, replay/repair, and additional interfaces. New workflows reuse the same
+Adds incremental change sources, evidence-justified parallelism, ingest,
+replay/repair, and additional interfaces. New workflows reuse the same
 typed plan/review/preflight/execution path; optimizations must preserve the
 existing identity, evidence, custody, and settlement contracts.
 

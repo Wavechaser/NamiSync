@@ -285,8 +285,8 @@ never hides the other result axes in rendered output.
 - [Bridge](docs/BRIDGE.md) — external protocol, transport, retry/recovery and evidence.
 - [Presentation](docs/PRESENTATION.md) — tree/view, search/sort and scale contracts.
 - [Interfaces](docs/INTERFACES.md) — adapters, host/package and lifecycle contracts.
-- [M2 plan](docs/M2_PLAN.md) — M2 features, segments and delivery; its
-  checkpoint register is not yet defined.
+- [M2 plan](docs/M2_PLAN.md) — M2's checkpoint register (proposed, no row
+  accepted yet) and feature specification.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
 - [Working rules](AGENTS.md) and their situational procedures for
   [scope](docs/procedures/SCOPE.md), [closeout](docs/procedures/CLOSEOUT.md)
@@ -307,8 +307,9 @@ restarts, crashes, restores, retries and schema changes, and is shown honestly.
 
 ### M2 Planning
 
-The M1 register is archived and the M2 plan is active; segment checkpoints are
-being defined before implementation starts.
+The M1 register is archived and the M2 plan is active. Its checkpoint register
+proposes segments A to D and a closing release; implementation starts when the
+user accepts a row.
 
 ## M1
 

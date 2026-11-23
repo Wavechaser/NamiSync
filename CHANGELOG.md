@@ -30,11 +30,17 @@ Documentation servicing and delivery planning before implementation starts.
 - Archive the completed M1 delivery register as `docs/obsolete/M1_REGISTER.md`
   and rename the M2 proposal to `docs/M2_PLAN.md`, the active delivery plan.
 - Repoint delivery ownership in AGENTS, procedures, ARCHITECTURE's roadmap and
-  subject documents; cite the archive for completed M1 decisions. No checkpoint
-  register or product change yet.
+  subject documents; cite the archive for completed M1 decisions. No product
+  change.
 - Letter M2's segments A, B and C, and record that M2 ends in a release with
   real v0.1.0 migration, that development gets a guard for live production
   data, and that the new pages are late M2.
+- Draft M2_PLAN's checkpoint register: segments A to D with aims, entry and exit
+  conditions and non-goals, proposed checkpoints M2-A1 to M2-D4 and the M2-R1
+  release, and the rule that requirements move to their owning documents at each
+  checkpoint's start. Queue ownership is settled in B before rail actions and
+  durability; presets get a db-owned config file of their own. ARCHITECTURE's
+  roadmap moves schema migration and data protection from M3+ into M2.
 
 ## M1
 

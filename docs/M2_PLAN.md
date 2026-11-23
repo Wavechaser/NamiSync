@@ -1,16 +1,279 @@
 # M2 Plan
 
-M2 started on 2026-11-23, and this is its plan: the feature list below, then
-detail sections for features that need them. It is still mostly a product
-specification. A checkpoint register for each segment is not yet defined, and
-no implementation checkpoint is active until the user accepts one; until then
-listing an outcome does not authorize implementation or change current limits.
+M2 started on 2026-11-23, and this is its plan and delivery register: the
+checkpoint register first, then the feature specification it draws on, then
+detail sections for features that need them. The register's rows are a proposed
+shape. No implementation checkpoint is active until the user accepts its row;
+until then listing an outcome does not authorize implementation or change
+current limits.
 [FEATURES](FEATURES.md) owns product behavior and accepted future boundaries;
 [ARCHITECTURE](ARCHITECTURE.md#m2--durable-sessions-and-queue-ownership) owns M2
 direction. Accepted future outcomes remain binding; unrealized representation
 and implementation recipes are reconsidered at first use under [AGENTS](../AGENTS.md).
 Completed M1 decisions, exclusions and unresolved observations are in the
 archived [M1 register](obsolete/M1_REGISTER.md).
+
+## Checkpoint Register
+
+**Thesis** (user decision, 2026-11-21): M2 makes NamiSync lasting and legible.
+What it did, what it knows and what it was doing survive time (restarts,
+crashes, restores, retries and schema changes) without anything acting on stale
+authority, and are shown to the user honestly. Items that serve neither half
+ride along and never block M2.
+
+M2 ends in a release (user decision, 2026-11-23), so databases written by
+v0.1.0 must really migrate, and doing so is part of M2's exit gate. Because the
+user now runs the released product, development also needs a stronger guarantee
+that work from the source tree, including tests, tools and the CLI, cannot
+casually change the live production databases (M2-A1).
+
+### How The Register Works
+
+- **Segments.** M2 is delivered in larger segments (user direction,
+  2026-11-20), lettered so a checkpoint reads as M2-A1 (user direction,
+  2026-11-23). Each has an aim under the thesis, an entry condition, an exit
+  condition and non-goals. Segment A carries mostly backend work with little
+  immediate user value; to keep its contracts from being designed for imagined
+  needs, each foundation piece ships with its first real consumer, even a thin one.
+- **Rows.** Each checkpoint names its outcome, what it includes, its first
+  consumer, what it depends on and what kind of gate closes it. That is a shape,
+  not a specification: exact populations, tests, gates and stops are fixed when
+  the user accepts the row at its start, under [SCOPE](procedures/SCOPE.md).
+  Rows are in dependency order; a row may be reordered within its dependencies
+  or split (M2-B5a, M2-B5b), and an id is never reused.
+- **Status.** Proposed, accepted, active or complete. Every row is proposed
+  until the user accepts it, and a proposed row authorizes nothing.
+- **Where requirements go.** A checkpoint's first commit moves the decisions it
+  relies on from the feature specification into the owning documents (FEATURES,
+  ARCHITECTURE, DATABASE and the component documents), makes any pending
+  FEATURES or WORKFLOWS reconciliation, and leaves a pointer in the
+  specification. Contracts several checkpoints share (session progress and hold
+  reason, the ledger instance id, ids never reused, the maintenance gate, the
+  queue contract) move into ARCHITECTURE or DATABASE at the start of the
+  checkpoint that first implements them.
+- **Completion.** A complete row shrinks to its outcome, its evidence record and
+  any accepted residuals. The specification shrinks as rows start, so this plan
+  becomes a register as M2 proceeds, without separate compaction passes.
+- **Ride-alongs.** Items outside the thesis become rows only when the user
+  accepts them; until then each keeps the ordering constraint listed for it.
+
+### Segment A — Safe To Change The Databases
+
+- **Aim:** released data survives schema changes, development cannot casually
+  damage the user's live data, and the foundations B and C build on exist.
+- **Entry:** none.
+- **Exit:** the v0.1.0 fixture databases migrate to the current schema;
+  maintenance refuses under any writer in any process; session progress and
+  hold reason are core contracts; Plan and Inventory share one review surface.
+- **Non-goals:** the History and Data pages (B); anything surviving a restart (C).
+
+Checkpoints:
+
+- **M2-A1 Live-data guard** (proposed). Source-tree work (tests, tools, the CLI
+  and the development GUI) cannot change the live production databases unless
+  explicitly told to. Includes the default data root for a source checkout, an
+  explicit opt-in to the live root, and a suite-wide test guard. Candidate: only
+  a release build defaults to `%LOCALAPPDATA%\NamiSync`; a source checkout
+  defaults to `NamiSync-Development`, which the GUI launcher already uses.
+  Consumer: the test suite and CLI. Depends on nothing and lands before the first
+  schema change. Closes on: a test touching the live root fails, and a
+  source-checkout run without the opt-in resolves to the development root.
+- **M2-A2 Spikes** (proposed). Live checks that inform designs (user decision,
+  2026-11-18): window framing, drag-and-drop paths, completion notification,
+  volume overview queries, and Stop's cancel-to-release time on the HDD fixture.
+  Read-only; may run beside any A checkpoint. Closes on: each result recorded in
+  its feature's entry, with evidence where [PERFORMANCE](PERFORMANCE.md) requires it.
+- **M2-A3 Schema migration** (proposed). Released databases migrate forward or
+  are refused, never half-migrated. Includes core-owned format constants with
+  known-answer vectors, per-database role and format metadata, refusal of newer
+  databases, the ledger instance id recorded by each run, `AUTOINCREMENT` for
+  externally referenced ids, backup before migrating with restore or refusal on
+  failure, and a saved v0.1.0 fixture database. Consumer: the first M2 schema
+  itself (instance id and `AUTOINCREMENT`), migrated from v0.1.0. Depends on A1.
+  Closes on: the fixture migrates; an interrupted migration leaves the old or the
+  new database; a newer database is refused; a format changed without its
+  constant and vector fails tests.
+- **M2-A4 Maintenance gate** (proposed). Maintenance never runs under a writer of
+  either database, in any process. Includes the db-owned cross-process claim and
+  maintenance sessions for check, backup and restore, with restore issuing a new
+  ledger instance id and its lineage. Consumer: CLI maintenance commands (check,
+  backup, restore); the Data page follows in B3. Depends on A3. Closes on:
+  maintenance refuses while a GUI or CLI run holds a claim, new runs are refused
+  while maintenance holds it, and a killed process releases its claim.
+- **M2-A5 Session progress and hold reason** (proposed). Sessions carry progress
+  and hold reason, and the server derives every capability from them. Includes
+  the `PENDING`-to-held edge. Consumer: Pause all and Resume all, pulled forward
+  from Task rail batch actions so the contract ships with a real user. Holds act
+  on today's in-process queue; nothing is persisted, and queue ownership is
+  B2's. Closes on: transition tests (a held session never starts), Pause all
+  atomic against the scheduler, and Resume all's admission order.
+- **M2-A6 Shared review surface** (proposed). Plan and Inventory render through
+  one review component on the windowed table substrate, settling the switcher
+  label drift. Includes the parity test against documented allowed differences,
+  the static check and the gallery. Must land before any new table. Closes on:
+  the parity test, and no page assembling shared parts directly.
+- **M2-A7 One table component** (proposed). Recent pairs and the batch table move
+  onto the same component, so one table family remains. Depends on A6. Closes on:
+  no native-table family left, with row-action behavior tested once in the component.
+- **M2-A8 Physical-disk scheduling** (proposed). Sessions on one spinning disk run
+  one at a time. Includes the per-start key callback, the unreadable-key
+  fallback and the seek-penalty read; drive-type notices and estimates ride
+  along. Depends on A2's volume query spike. Closes on: two partitions of the HDD
+  fixture serialize, SSD concurrency is unchanged, and unreadable keys fall back.
+- **M2-A9 Capacity decision** (proposed; rides along except where durable work
+  forces it). Profile large tasks, then choose the task and start-response
+  bounds (at most 256) and add the README and in-app notices. Optimizations the
+  profile justifies become rows of their own. Closes on: the profile in
+  PERFORMANCE, the bounds and notices shipped, and a decision on optimization rows.
+
+### Segment B — See And Act On What Happened
+
+- **Aim:** the user can see what NamiSync did and knows, manage its data, retry
+  or change a task in place, and act on many tasks at once.
+- **Entry:** A3 and A4 for anything that reads or changes the databases in a new
+  way; A5 for retry and rail actions; A7 for new tables.
+- **Exit:** the History and Data pages, in-place retry and Edit setup, the
+  recorded queue contract, rail actions and CLI parity's decided parts.
+- **Non-goals:** anything surviving a restart beyond M1's behavior (C).
+
+Checkpoints:
+
+- **M2-B1 History page** (proposed). Run list, paged run detail and an
+  activity-kind filter over the existing readers, entered above Settings, with
+  Open in Setup carrying paths only. Reconciles FEATURES' Restorable Task Setup.
+  Closes on: [INTERFACES](INTERFACES.md) SH-G-9, and pruned or degraded runs
+  shown as what History holds.
+- **M2-B2 Queue ownership and policy** (proposed). Settled in early-mid B, before
+  rail actions and durability build on the queue, so B and C never fight over
+  queue policy (user direction, 2026-11-23). Records one contract: the desktop
+  process owns the queue under one owner lock; every queue respects holds; the
+  queue may clear an entry, never create one; launch policy; CLI awareness.
+  Implements only what B's own rows need; persistence is C4. Reconciles
+  FEATURES' Queue Launch Policy and WORKFLOWS' queue-replay rule. Depends on A5.
+  Closes on: the contract accepted by the user and recorded in its owners, with
+  any in-process change tested.
+- **M2-B3 Data page** (proposed). Location management (counts, purge of
+  acknowledged-missing rows, forget) and the A4 maintenance sessions in the GUI,
+  adding history pruning and a guided archive-and-reset. Reconciles FEATURES'
+  Soft-Deleted Mappings. Depends on A3 and A4. Closes on: counted confirmations,
+  restore refusing while reviewed or queued work exists and naming it, and
+  History showing forgotten locations as forgotten.
+- **M2-B4 Task annotations** (proposed). Notes on History runs, first in run
+  detail. Decides whether the table moves to History through A3's migration.
+  Depends on B1.
+- **M2-B5 Same-task retry and Edit setup** (proposed). In-place replacement with
+  its routing, close-at-admission and reserved slot; Verification retries; task-
+  owned admitted bindings. Replacing a paused run (the predecessor wait) may
+  split off as B5b. Reconciles FEATURES' Plan Again. Depends on A5 and B1. Closes
+  on: routing tests for unrun, ran, degraded and unknown attempts, retry on a full
+  rail, and two tasks never running together.
+- **M2-B6 Rail actions** (proposed). Stop all, batch Close, the rail filter, the
+  batch runner's pause, and Stop while checking, scanning or planning. Depends on
+  A5, B2 and B5. Closes on: the late-stop-is-harmless test, a full rail within
+  the bridge's 64-exchange bound, and stop latency against A2's measurement.
+- **M2-B7 CLI parity** (proposed). JSON output, plan-only and commit tokens,
+  per-run options, operation selection, settings, ledger browsing, acknowledge
+  and restore, history filters, `verify --run`, `recent` and agent-usable review
+  output. Tokens and run-scoped refusals serve the thesis; the rest rides along.
+  Independent of other B rows. Closes on: token mismatch refusals naming the
+  difference, and run-scoped commands never silently widening.
+- **M2-B8 Presets and the user config file** (proposed; presets ride along, the
+  ownership decision does not). Presets live in a small db-owned config file of
+  their own beside `settings.json`, outside the ledger and History (user
+  direction, 2026-11-23), so it has its own format, migration and backup and
+  never mixes with durable evidence. Whether recent locations move into it is
+  decided before presets go live. Depends on A3's version discipline and A7.
+  Closes on: the file versioned, migrated and backed up on its own; a corrupt
+  file losing only presets; and presets conferring no admission authority.
+
+### Segment C — Work Survives The App
+
+- **Aim:** tabs, reviewed plans, paused runs and the queue survive closing,
+  crashes and restarts, and nothing acts on stale authority.
+- **Entry:** the B2 contract, B5 and B6.
+- **Exit:** launch restores by the recorded rules, the crash rules are tested,
+  and `INTERRUPTED` has its first production use.
+- **Non-goals:** scheduling; resuming anything that was running when the process died.
+
+Checkpoints:
+
+- **M2-C1 Recovery store and stored plans** (proposed). A separate SQLite store
+  with one writer, reached through a core protocol that db implements. Commits
+  settings and admitted bindings at admission and keeps reviewed plans with
+  their selection and used mark; preflight checks the ledger instance. Consumer:
+  reviewed plans and held tasks restored after a restart. Depends on A3 and A5;
+  B3's restore refusal extends to stored plans here. Closes on: restore after restart, a corrupt or mismatched store losing only
+  tabs, and a used plan returning as needing attention.
+- **M2-C2 Paused continuations and crash rules** (proposed). Paused state saved
+  once at pause and marked resuming before filesystem work; launch reads the
+  most specific evidence first; interrupted runs offer Retry. Depends on C1 and
+  B5. Closes on: process-kill tests at each mark, with no resumed run behind the files.
+- **M2-C3 Closing the app** (proposed). Close applies Pause all, confirms with
+  counts, saves paused and pending sessions and shows what it waits for;
+  sign-out and shutdown save best effort. Depends on B6 and C2.
+- **M2-C4 Durable queue** (proposed). The queue-owner lock and persisted holds
+  under B2's contract; queued executions return held; CLI runs show as waiting.
+  Depends on B2 and C1.
+- **M2-C5 Lazy restore and lineage** (proposed). Light launch restore, the
+  opening mark that prevents launch loops, and the History lineage link. Depends
+  on C1 and B5. Closes on: a task killed while opening returning without its
+  heavy data, and Task-Grouped History whole across replacements.
+
+### Segment D — Look Before Syncing
+
+- **Aim:** answer what exists where, what takes the space and how two places
+  differ, without planning a sync. Part of late M2 (user decision, 2026-11-23):
+  much of each page is GUI work over reads the backend already serves.
+- **Entry:** A7, A8 and B5's Setup prefill. D may overlap C; restored D tasks
+  keep only their paths once C5 lands.
+- **Exit:** the Browse page with both cards, disk usage, the volume overview and
+  shell actions.
+- **Non-goals:** any mutation; ledger writes with the switch off; recents from
+  read-only use.
+
+Checkpoints:
+
+- **M2-D1 Browse page and volume overview** (proposed). One page with the Browse
+  and Storage cards, the volume list from A2's queries, and its tasks on the rail.
+- **M2-D2 Disk usage view** (proposed). The Storage card's view; the open
+  questions in its detail section are settled at its start. Depends on D1.
+- **M2-D3 Comparison** (proposed). The merged comparison table over the
+  planner's comparison as a pure function, the ledger switch, and Send to Sync.
+  Depends on D1.
+- **M2-D4 Shell actions** (proposed). Copy Path, Open in Explorer and Properties
+  for rows on every page. Depends on A6, not on D1–D3.
+
+### Release
+
+- **M2-R1 Release** (proposed). M2 ships as a release. Includes migration of
+  real v0.1.0 data, proven on the fixture and rehearsed on a copy of the user's
+  live databases, never on the live files, plus release evidence under
+  [TOOLS](TOOLS.md). Depends on every accepted row that does not ride along.
+  Closes on: the release gates and the migration rehearsal.
+
+### Ride-Alongs And Later
+
+Ride-alongs never block M2. In priority order:
+
+1. The performance items come first. They do not fit the thesis and are not
+   easy, but they touch the backend and recording stack M2 already opens, so
+   later they could be harder or costlier: Verification open lookahead; Small-file
+   copy batching, after A4 because grouped commits move when a writer's claim
+   ends, with settlement rules that C2 must accept; Unbuffered source reads.
+2. The rest, unordered (user decision, 2026-11-21): Window (Custom title bar and
+   Native Fluent overlay scrollbars, after A2's framing spike and A6's label
+   settlement); Recent locations, after B8's ownership decision; Verify-only
+   batches; Drag-and-drop Setup, after A2's drop spike; Easier exclusions;
+   Progress chart; Completion notification, after A2's spike, its registration
+   stance being a user decision; Specific I/O errors; Session cleanup;
+   Command-result retention, the lasting capacity fix that also allows D's
+   in-task snapshots; drive-type notices and estimates, after A8.
+
+Checksum adoption stays unassigned; it needs A3, and its Browse home needs D3.
+Later: MCP adapter (postponed, after B7); Hydration-proof scanning (postponed,
+low priority); Scheduling (beyond M2).
+
+## Feature Specification
 
 Design review here is bounded (user decision, 2026-11-20). This plan
 settles only contracts between features, safety and durability rules, and what
@@ -97,7 +360,7 @@ safety are settled here, and the rest are deferred to the owning segment.
 - **Drive-type awareness.** The same seek-penalty query, under Physical-disk scheduling's rule that unknown and USB disks count as spinning, informs scans elsewhere: a notice when a scan runs on a spinning disk, separate HDD and SSD time estimates, and possibly parallel folder listing on SSDs, only after measurement shows it helps. HDD scans stay serial.
 - **Shell actions.** Copy Path, Open in Explorer and Properties for rows on every page, with optional click-through. Each action resolves a server-owned node id to a path on the host side; the browser never supplies path text. No file is ever launched, and NamiSync performs no mutation. On Plan, side-labelled Source and Target actions avoid an implicit side choice. Missing items keep only Copy Path and Open containing folder. [Shell Actions Detail](#shell-actions-detail) holds the policy and cost notes.
 - **Checksum adoption.** Copy content evidence from one location to another for metadata-equal pairs (no-op pairs), so existing duplicate backups gain checksums without hashing. The next Verify confirms or mismatches them. Sync execution is the natural first home: each selected paired no-op already re-checks both live stats against the review and calls `record_noop` ([RECORDER](RECORDER.md)), so adoption would extend that recording as a reviewed, fingerprinted plan option, with the adoptable count shown in review. The Browse card is a second home when its ledger switch is on, behind a counted confirmation because it writes evidence, possibly in either direction. The origin's evidence must be current: its attested stats match its current observation and carry no invalidation. The receiving row must have no evidence; a different existing digest is never overwritten and is reported as disagreement. Recording uses the conditional primitive. Adopted evidence gets a new provenance naming its origin. It never advances `last_verified_at`, and the state stays unverified. Baseline skips it, so Verify is the check, and a later mismatch is labelled as differing from the adopted origin. The row then states what was observed (a metadata match plus the origin's evidence), not that target bytes were read, which preserves never-wrong-only-behind. Adoption may chain (user decision, 2026-11-20): evidence adopted from A into B may be adopted again from B into C, because metadata sameness is already the premise and each step stays unverified until Verify. The provenance names the original origin, the row whose bytes were actually read, plus how many adoption steps the evidence went through, never the intermediate row. Adoption rides on its pair's no-op (user decision, 2026-11-21): it is recorded only as part of a no-op that succeeded, so any filesystem failure or race that fails the no-op's checks (preflight, and the live-stat re-check against review) takes the adoption down with it. Plan and execution already largely enforce this. No change to adoption may relax, bypass or reinterpret those checks, or carry other changes in under them; in Browse, the same live-stat re-check is the prerequisite. Eligibility that changes after review (user decisions, 2026-11-21) covers only ledger evidence changing while the filesystem side still matches, and is rejected in both directions, because adoption acts only on what was reviewed or confirmed and only while it still holds. Each pair's evidence is checked again as it is written, through the conditional primitive: the origin's evidence is still current with the reviewed digest, and the receiving row still has no evidence. Any change skips that pair, including the receiving row gaining any checksum, same or different. A skip is not a failure, because adoption only adds evidence: the no-op is still recorded and the result says “12 adoptions skipped because evidence changed since review”. A pair that becomes eligible after review, such as an origin gaining a checksum, is never adopted, since the reviewed count and the fingerprint cover it. Disagreement found at review is still reported. Both homes call one workflow operation over the db layer's conditional primitive, so they cannot diverge: Browse re-checks live stats as execution already does, its counted confirmation plays review's role, and its write takes the Database maintenance gate's shared claim like any writer. A new `Provenance` value is a core, ledger and history contract change, carried by Schema migration's format versions; data epochs are dropped.
-- **User-defined presets.** Create, customize and persist reusable sync pairs and inventory roots that otherwise populate Setup and use availability checks like ledger-derived recent pairs. Persistent records and bridge commands are new work; presets do not retain admission or execution authority.
+- **User-defined presets.** Create, customize and persist reusable sync pairs and inventory roots that otherwise populate Setup and use availability checks like ledger-derived recent pairs. Persistent records and bridge commands are new work; presets do not retain admission or execution authority. Presets live in a small db-owned config file of their own, beside `settings.json` and outside the ledger and History, with its own format, migration and backup (user direction, 2026-11-23). Whether Recent locations move into it is settled before presets go live (M2-B8).
 - **Schema migration.** Add the ordered migration that [DATABASE → Schema Evolution](DATABASE.md#schema-evolution) describes (backup, supported-source check, transactional migration, integrity check, restore or refuse on failure) before a released version's data must survive a schema or contract change. Every later item that changes stored data depends on it. User decisions (2026-11-17): each database migrates on its own, in its own transaction. Data epochs are dropped (epoch 8 reset the ledger for a history-only constraint), while schema-version and contract checks stay. The migrator does not check `data_epoch` at all (user decision, 2026-11-19): every existing database is treated as epoch 8, the format v0.1.0 “Gertrud” released with. Epoch-7 databases exist only from early pre-release M1 builds, none of which should still be running. A replacement guard must catch two things: our own mistakes, such as a shared format changing while only one database is bumped; and user-side mismatches, such as databases left at different formats by an interrupted upgrade or a backup restore. Candidate measures:
   - Core-owned version constants for each shared format (event encoding, evidence and hash preimage, identity text, numeric encoding), each with known-answer test vectors. Changing an encoding without a new constant and vector fails tests.
   - Each database stores its role, schema version and every embedded format version as separate metadata rows instead of one contract string. Schema code declares which formats each database embeds. A test fails when a core format changes and an embedding database has no migration or invalidating step for it.
@@ -146,69 +409,6 @@ safety are settled here, and the rest are deferred to the owning segment.
 - **Progress chart.** Implements FEATURES' [Throughput Graph](FEATURES.md#desktop-ui) together with Status Layout Refinement. The compact bar expands into an Explorer-style chart of transfer rate against progress. The Python adapter already keeps a monotonic sample history for estimates. It would add a bounded, progress-bucketed rate series to the task snapshot (a new internal snapshot version), so a page reload keeps the chart. Pause, a new phase and Gap show as breaks rather than invented rates. Execution and post-copy Verify are separate series.
 
 No further Settings are planned. A setting arrives only with a feature that brings a user choice.
-
-## Grouping And Order
-
-A proposed order, not checkpoint authorization.
-
-**Thesis** (user decision, 2026-11-21): M2 makes NamiSync lasting and legible.
-What it did, what it knows and what it was doing survive time (restarts,
-crashes, restores, retries and schema changes) without anything acting on stale
-authority, and are shown to the user honestly. Items that serve neither half
-ride along and never block M2. In priority order:
-
-1. The performance items (Verification open lookahead, Small-file copy
-   batching, Unbuffered source reads) come first among them. They do not fit
-   the thesis, and they are not easy, but they touch the backend and recording
-   stack that M2 already opens, so later they could be harder or costlier.
-2. The rest, unordered: Window (Custom title bar, Native Fluent overlay
-   scrollbars); the Setup group (Recent locations, Verify-only batches,
-   User-defined presets, Drag-and-drop Setup, Easier exclusions); Progress
-   chart; Completion notification; Specific I/O errors; Capacity, except where
-   Durable work forces it; and Disk awareness (user decision, 2026-11-21). Its
-   backend reads stay in segment A because they are very cheap; what is
-   non-blocking is how far scheduling, notices and estimates use what they
-   read.
-
-CLI parity's decided parts (commitment tokens, run-scoped refusals and
-maintenance commands) serve the thesis; its other additions are non-blocking.
-Checksum adoption stays unassigned.
-
-M2 is delivered in three larger segments (user direction, 2026-11-20), lettered
-A, B and C so a checkpoint reads as M2-A1 (user direction, 2026-11-23), each
-with its own aim under the thesis. The first carries mostly backend work with little immediate user value,
-but later user-facing features rest on it. To keep its contracts from being
-designed for imagined needs, each foundation piece ships with its first real
-consumer, even a thin one. Rows within a segment are in dependency order.
-
-M2 ends in a release (user decision, 2026-11-23), so databases written by
-v0.1.0 must really migrate, and doing so is part of M2's exit gate. Because the
-user now runs the released product, development also needs a stronger guarantee
-that work from the source tree, including tests, tools and the CLI, cannot
-casually change the live production databases. That guarantee lands in segment
-A before the first schema change; its mechanism is decided there.
-
-| Segment | Group | Items | Depends on |
-| --- | --- | --- | --- |
-| A. Safe to change the databases | Early spikes | Live checks and measurements (user decision, 2026-11-18): framing; drag-and-drop paths; completion notification; volume overview queries; Stop's cancel-to-release time on the HDD fixture | None; each informs its feature's design. |
-| A | Persistence foundation | Schema migration; Database maintenance gate; Data page maintenance sessions, the gate's first consumer | Must be ready before released data has to survive a change; the gate comes before any maintenance session. |
-| A | Session states | Session progress and hold reason, including the held edge | None. |
-| A | Shared review surface | Shared review surface, including one table component and moving Recent pairs and the batch table onto it | Must land before any new table. |
-| A | Capacity | Large-task memory profiling and optimization; raised task and start-response bounds; README and in-app notices | Profiling before choosing bounds; Command-result retention for the lasting fix. |
-| A | Disk awareness | Physical-disk scheduling; Drive-type awareness | The volume overview queries spike. |
-| B. See and act on what happened | History and data | History page; Task annotations; Data page location management; their entry points above Settings | Persistence foundation. |
-| B | Retry | Same-task retry (absorbing Execution retries); Verification retries; Edit setup | Session states (the wait on a predecessor); History page, for closing attempts that ran. |
-| B | Task presentation | Task rail filter; Task rail batch actions; Stop while checking, scanning or planning; Progress chart | Session states (held and capabilities); Same-task retry's close-at-admission and “finished” rules. |
-| B | CLI | CLI parity | The maintenance sessions in Persistence foundation for its maintenance commands, not the Data page; the rest is independent. |
-| B | Setup | Recent locations; Verify-only batches; User-defined presets; Drag-and-drop Setup; Easier exclusions | Schema migration where records change; the drop spike. |
-| C. Work survives the app | Durable work | Durable task recovery; Durable queue | Schema migration (the lineage link); Session states; Same-task retry (lineage, reserved slot); Task rail batch actions (Stop all's path for closing the app). |
-| Late M2 | New pages | New browse page (Browse and Storage cards); Disk usage view; Volume overview; Shell actions | Shared review surface; Edit setup's prefill for sending paths to Sync; the planner's comparison as a pure function. Part of late M2 (user decision, 2026-11-23): much of each page is GUI work over reads the backend already serves. Where they sit is settled with the checkpoint register. |
-| Unassigned | Window | Framing spike, Custom title bar, Native Fluent overlay scrollbars | The spike comes first. |
-| Unassigned | Evidence | Checksum adoption | Schema migration. |
-| — | Independent | Verification open lookahead, session cleanup, small-file copy batching, unbuffered source reads, specific I/O errors, command-result retention; Completion notification | None; the notification spike comes first. |
-| Later | Postponed | MCP adapter | CLI parity. |
-| Later | Postponed | Hydration-proof scanning | None; low priority. |
-| Later | Beyond M2 | Scheduling | Durable work; a process that outlives the window. |
 
 ## Disk Usage View Detail
 
