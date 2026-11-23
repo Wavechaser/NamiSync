@@ -32,6 +32,9 @@ Documentation servicing and delivery planning before implementation starts.
 - Repoint delivery ownership in AGENTS, procedures, ARCHITECTURE's roadmap and
   subject documents; cite the archive for completed M1 decisions. No checkpoint
   register or product change yet.
+- Letter M2's segments A, B and C, and record that M2 ends in a release with
+  real v0.1.0 migration, that development gets a guard for live production
+  data, and that the new pages are late M2.
 
 ## M1
 

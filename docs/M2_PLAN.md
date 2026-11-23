@@ -166,7 +166,7 @@ ride along and never block M2. In priority order:
    User-defined presets, Drag-and-drop Setup, Easier exclusions); Progress
    chart; Completion notification; Specific I/O errors; Capacity, except where
    Durable work forces it; and Disk awareness (user decision, 2026-11-21). Its
-   backend reads stay in segment 1 because they are very cheap; what is
+   backend reads stay in segment A because they are very cheap; what is
    non-blocking is how far scheduling, notices and estimates use what they
    read.
 
@@ -174,27 +174,35 @@ CLI parity's decided parts (commitment tokens, run-scoped refusals and
 maintenance commands) serve the thesis; its other additions are non-blocking.
 Checksum adoption stays unassigned.
 
-M2 is delivered in three larger segments (user direction, 2026-11-20), each
+M2 is delivered in three larger segments (user direction, 2026-11-20), lettered
+A, B and C so a checkpoint reads as M2-A1 (user direction, 2026-11-23), each
 with its own aim under the thesis. The first carries mostly backend work with little immediate user value,
 but later user-facing features rest on it. To keep its contracts from being
 designed for imagined needs, each foundation piece ships with its first real
 consumer, even a thin one. Rows within a segment are in dependency order.
 
+M2 ends in a release (user decision, 2026-11-23), so databases written by
+v0.1.0 must really migrate, and doing so is part of M2's exit gate. Because the
+user now runs the released product, development also needs a stronger guarantee
+that work from the source tree, including tests, tools and the CLI, cannot
+casually change the live production databases. That guarantee lands in segment
+A before the first schema change; its mechanism is decided there.
+
 | Segment | Group | Items | Depends on |
 | --- | --- | --- | --- |
-| 1. Safe to change the databases | Early spikes | Live checks and measurements (user decision, 2026-11-18): framing; drag-and-drop paths; completion notification; volume overview queries; Stop's cancel-to-release time on the HDD fixture | None; each informs its feature's design. |
-| 1 | Persistence foundation | Schema migration; Database maintenance gate; Data page maintenance sessions, the gate's first consumer | Must be ready before released data has to survive a change; the gate comes before any maintenance session. |
-| 1 | Session states | Session progress and hold reason, including the held edge | None. |
-| 1 | Shared review surface | Shared review surface, including one table component and moving Recent pairs and the batch table onto it | Must land before any new table. |
-| 1 | Capacity | Large-task memory profiling and optimization; raised task and start-response bounds; README and in-app notices | Profiling before choosing bounds; Command-result retention for the lasting fix. |
-| 1 | Disk awareness | Physical-disk scheduling; Drive-type awareness | The volume overview queries spike. |
-| 2. See and act on what happened | History and data | History page; Task annotations; Data page location management; their entry points above Settings | Persistence foundation. |
-| 2 | Retry | Same-task retry (absorbing Execution retries); Verification retries; Edit setup | Session states (the wait on a predecessor); History page, for closing attempts that ran. |
-| 2 | Task presentation | Task rail filter; Task rail batch actions; Stop while checking, scanning or planning; Progress chart | Session states (held and capabilities); Same-task retry's close-at-admission and “finished” rules. |
-| 2 | CLI | CLI parity | The maintenance sessions in Persistence foundation for its maintenance commands, not the Data page; the rest is independent. |
-| 2 | Setup | Recent locations; Verify-only batches; User-defined presets; Drag-and-drop Setup; Easier exclusions | Schema migration where records change; the drop spike. |
-| 3. Work survives the app | Durable work | Durable task recovery; Durable queue | Schema migration (the lineage link); Session states; Same-task retry (lineage, reserved slot); Task rail batch actions (Stop all's path for closing the app). |
-| Unassigned | New pages | New browse page (Browse and Storage cards); Disk usage view; Volume overview; Shell actions | Shared review surface; Edit setup's prefill for sending paths to Sync; the planner's comparison as a pure function. May join segment 2 or follow it as its own. |
+| A. Safe to change the databases | Early spikes | Live checks and measurements (user decision, 2026-11-18): framing; drag-and-drop paths; completion notification; volume overview queries; Stop's cancel-to-release time on the HDD fixture | None; each informs its feature's design. |
+| A | Persistence foundation | Schema migration; Database maintenance gate; Data page maintenance sessions, the gate's first consumer | Must be ready before released data has to survive a change; the gate comes before any maintenance session. |
+| A | Session states | Session progress and hold reason, including the held edge | None. |
+| A | Shared review surface | Shared review surface, including one table component and moving Recent pairs and the batch table onto it | Must land before any new table. |
+| A | Capacity | Large-task memory profiling and optimization; raised task and start-response bounds; README and in-app notices | Profiling before choosing bounds; Command-result retention for the lasting fix. |
+| A | Disk awareness | Physical-disk scheduling; Drive-type awareness | The volume overview queries spike. |
+| B. See and act on what happened | History and data | History page; Task annotations; Data page location management; their entry points above Settings | Persistence foundation. |
+| B | Retry | Same-task retry (absorbing Execution retries); Verification retries; Edit setup | Session states (the wait on a predecessor); History page, for closing attempts that ran. |
+| B | Task presentation | Task rail filter; Task rail batch actions; Stop while checking, scanning or planning; Progress chart | Session states (held and capabilities); Same-task retry's close-at-admission and “finished” rules. |
+| B | CLI | CLI parity | The maintenance sessions in Persistence foundation for its maintenance commands, not the Data page; the rest is independent. |
+| B | Setup | Recent locations; Verify-only batches; User-defined presets; Drag-and-drop Setup; Easier exclusions | Schema migration where records change; the drop spike. |
+| C. Work survives the app | Durable work | Durable task recovery; Durable queue | Schema migration (the lineage link); Session states; Same-task retry (lineage, reserved slot); Task rail batch actions (Stop all's path for closing the app). |
+| Late M2 | New pages | New browse page (Browse and Storage cards); Disk usage view; Volume overview; Shell actions | Shared review surface; Edit setup's prefill for sending paths to Sync; the planner's comparison as a pure function. Part of late M2 (user decision, 2026-11-23): much of each page is GUI work over reads the backend already serves. Where they sit is settled with the checkpoint register. |
 | Unassigned | Window | Framing spike, Custom title bar, Native Fluent overlay scrollbars | The spike comes first. |
 | Unassigned | Evidence | Checksum adoption | Schema migration. |
 | — | Independent | Verification open lookahead, session cleanup, small-file copy batching, unbuffered source reads, specific I/O errors, command-result retention; Completion notification | None; the notification spike comes first. |
