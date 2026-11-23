@@ -510,7 +510,7 @@ recall detection and a universal no-hydration scan guarantee remain M2 work.
 #### 2.5.3 Guard-family dispositions
 
 This table applies §2.5 to existing guard families. It sets target posture;
-[M1_PLAN](M1_PLAN.md) owns scheduling and delivery of any change.
+[M2_PLAN](M2_PLAN.md) owns scheduling and delivery of any change.
 
 | Guard family | Owners | Disposition |
 | --- | --- | --- |
@@ -522,7 +522,7 @@ This table applies §2.5 to existing guard families. It sets target posture;
 | Review-to-execution drift | preflight, executor | **Keep once** per mutating effect under §2.5.1. |
 | Owned-trash destination | preflight, executor | **Keep** as the promised recovery path; check once per run plus the final move. |
 | Durability barriers before recording | executor | **Keep**; hard wall 5. |
-| Verifier evidence subject (pre-open walk, final path, opened volume, handle reparse) | verifier | **Consolidate** duplicate classification. Retain the pre-open walk for component/placeholder refusal and the post-open final path for redirection. The reviewed leaf-check move saves no query and changes refusal classes; the user chose equivalent classifier cleanup (M1_PLAN, 2026-09-29). |
+| Verifier evidence subject (pre-open walk, final path, opened volume, handle reparse) | verifier | **Consolidate** duplicate classification. Retain the pre-open walk for component/placeholder refusal and the post-open final path for redirection. The reviewed leaf-check move saves no query and changes refusal classes; the user chose equivalent classifier cleanup (M1 register, 2026-09-29). |
 | Live external-writer and race-proofing work | executor, §6 EW-1..4 | **Freeze**; no further climbing without a plausible supported trigger. Retire checks justified only by a racer. |
 | Refusal-reason precedence | executor, verifier | **Relax** under §2.5.1. |
 | Internal re-certification between first-party modules | workflows, core | Governed by §2.1 rung 3; not yet audited against this section. |

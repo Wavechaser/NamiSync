@@ -391,7 +391,7 @@ must be committed in its isolated candidate before these checks can pass.
 ## Accepted-target verification
 
 Accepted but unrealized M1 Stage 6 contracts are neither current behavior nor
-acceptance evidence. `M1_PLAN.md` owns remaining delivery; `BRIDGE.md`, `PRESENTATION.md`, and `INTERFACES.md` own subject criteria. Do not reproduce delivery, command,
+acceptance evidence. `M2_PLAN.md` owns delivery; `BRIDGE.md`, `PRESENTATION.md`, and `INTERFACES.md` own subject criteria. Do not reproduce delivery, command,
 module, or case catalogs here.
 
 While implementing an accepted target, run focused tests, every affected

@@ -1,15 +1,18 @@
-# M2 Proposal
+# M2 Plan
 
-This is the single record of proposed later features: the list below, then
-detail sections for proposals that need them. It is not an implementation plan,
-and becomes the M2 plan when M2 is activated.
+M2 started on 2026-11-23, and this is its plan: the feature list below, then
+detail sections for features that need them. It is still mostly a product
+specification. A checkpoint register for each segment is not yet defined, and
+no implementation checkpoint is active until the user accepts one; until then
+listing an outcome does not authorize implementation or change current limits.
 [FEATURES](FEATURES.md) owns product behavior and accepted future boundaries;
 [ARCHITECTURE](ARCHITECTURE.md#m2--durable-sessions-and-queue-ownership) owns M2
 direction. Accepted future outcomes remain binding; unrealized representation
 and implementation recipes are reconsidered at first use under [AGENTS](../AGENTS.md).
-Listing an outcome does not activate implementation or change current M1 limits.
+Completed M1 decisions, exclusions and unresolved observations are in the
+archived [M1 register](obsolete/M1_REGISTER.md).
 
-Design review here is bounded (user decision, 2026-11-20). This proposal
+Design review here is bounded (user decision, 2026-11-20). This plan
 settles only contracts between features, safety and durability rules, and what
 the user sees and what it means. Field shapes, mechanisms and exact wording are
 decided in each segment's design, where implementation can still choose.
@@ -146,7 +149,7 @@ No further Settings are planned. A setting arrives only with a feature that brin
 
 ## Grouping And Order
 
-A proposed order, not scope activation.
+A proposed order, not checkpoint authorization.
 
 **Thesis** (user decision, 2026-11-21): M2 makes NamiSync lasting and legible.
 What it did, what it knows and what it was doing survive time (restarts,
@@ -203,7 +206,7 @@ consumer, even a thin one. Rows within a segment are in dependency order.
 
 Study detail for the Disk usage view, the Storage card's view on the Browse page.
 Merged from the former disk usage study (2026-11-19); its inspected revision was
-`ebf72fbe`. Nothing here activates implementation or changes an M1 limit.
+`ebf72fbe`. Nothing here authorizes implementation or changes a current limit.
 
 ### Prompt
 

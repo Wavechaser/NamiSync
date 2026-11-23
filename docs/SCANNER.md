@@ -189,7 +189,7 @@ can hydrate admitted sources; the advisory is information, not separate network
 authorization. Neither complete detection nor hydration-proof scanning is
 claimed; establishing provider coverage, residency changes and native
 metadata/enumeration behavior is postponed under
-[M2_PROPOSAL](M2_PROPOSAL.md)'s Hydration-proof scanning. Specifically, the
+[M2_PLAN](M2_PLAN.md)'s Hydration-proof scanning. Specifically, the
 inspected CPython 3.13.17 slow-stat path opens for `FILE_READ_ATTRIBUTES`
 without an explicit no-recall option, and has an
 `ERROR_INVALID_PARAMETER` fallback requesting `GENERIC_READ`; there is no evidence

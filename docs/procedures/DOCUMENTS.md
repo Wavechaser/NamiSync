@@ -48,8 +48,10 @@ into every consumer document.
   identify the technical boundary. Categories name reusable causal mechanisms;
   severity follows the worst supported product consequence, not the audit or
   gate that found it.
-- [M1_PLAN.md](../M1_PLAN.md) is the sole M1 delivery register. Archive
-  superseded plan ancestry rather than maintaining parallel current authorities.
+- [M2_PLAN.md](../M2_PLAN.md) is the sole active delivery plan and register.
+  A completed milestone's register moves to `obsolete/` (M1's is
+  [M1_REGISTER](../obsolete/M1_REGISTER.md)). Archive superseded plan ancestry
+  rather than maintaining parallel current authorities.
 - [PERFORMANCE.md](../PERFORMANCE.md) owns measurement methods, fixture/profile
   and scaling descriptions, aggregation, provenance and results. Component
   documents own their behavior and acceptance decisions; DEFENSE owns evidence

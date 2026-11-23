@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 is a scoped release criterion defined below, accepted for the R4 candidate.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, whole/selected Refresh, missing-item visibility and standalone integrity selection/controls use the same-task bridge actions. Same-task copied-file verification uses ordinary Inventory scan/Verify over workflow-admitted copied paths. Settings exposes saved Setup defaults and theme preferences. History and further settings remain unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan review supplies bounded hierarchy, sibling sorting, server-owned selection, destructive confirmation and same-task execution with live controls and retained result review. Inventory read projections, whole/selected Refresh, missing-item visibility and standalone integrity selection/controls use the same-task bridge actions. Same-task copied-file verification uses ordinary Inventory scan/Verify over workflow-admitted copied paths. Settings exposes saved Setup defaults and theme preferences. History and further settings remain unrealized outcomes. Their delivery register is [M2_PLAN.md](M2_PLAN.md).
 
 
 ## Purpose
@@ -794,7 +794,7 @@ Refresh reserves this existing start-response capacity before claiming or scanni
 capacity refusal directs the user to close a task. It adds no per-task scan cap
 and does not change Plan's single execution follow-up.
 Decoupling settled command-result retention from task lifetime is proposed in
-[M2_PROPOSAL](M2_PROPOSAL.md); it must preserve unresolved original-outcome
+[M2_PLAN](M2_PLAN.md); it must preserve unresolved original-outcome
 recovery and prevent replay after retirement. M1 retains the existing bound.
 
 Plan task records retain the workflow's exact `sync-plan` kind across the
@@ -1098,7 +1098,8 @@ measurements non-blocking under this SH-G-15 disposition, including the familiar
 approximately 2.4 GB peak. Resources03's raw incomplete receipt and missing
 open-idle observation remain recorded in PERFORMANCE; neither is relabeled a
 passing measurement. The requested follow-up targets the Close timeout without
-another long soak. M1_PLAN owns that investigation and release status.
+another long soak. The archived [M1 register](obsolete/M1_REGISTER.md) records
+that investigation and release status.
 
 ## Common Adapter Contract
 

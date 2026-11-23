@@ -1,19 +1,25 @@
+> Archived on 2026-11-23 when M2 started. This is the completed M1 delivery
+> register: historical decisions, release status, exclusions and unresolved
+> observations, not current implementation authority. Current subject contracts
+> live one directory above; M2 delivery is [M2_PLAN](../M2_PLAN.md).
+> Original source SHA-256 (Git blob before banner and link relocation): 5CFD1C8323F7C6E6FF2D62DB6543F7BAB08333031401EADB0F9F66848B81A9BE
+
 # M1 Delivery Register
 
 M1 building and validation are complete. This register records delivered
 outcomes, decisions, exclusions and unresolved observations; it does not activate
-another milestone. [FEATURES](FEATURES.md) owns product behavior,
-[ARCHITECTURE](ARCHITECTURE.md) owns layering and durable direction, and component
-documents own current contracts. [AGENTS](../AGENTS.md) owns execution boundaries.
+another milestone. [FEATURES](../FEATURES.md) owns product behavior,
+[ARCHITECTURE](../ARCHITECTURE.md) owns layering and durable direction, and component
+documents own current contracts. [AGENTS](../../AGENTS.md) owns execution boundaries.
 Historical evidence certifies its recorded source, producer, checker, driver,
 runtime and profile; a pass at one revision is not current-checkout acceptance.
 
 The pre-compaction narrative is available in Git at `f80773b5`; the compaction's
-dispositions, checks and review are [EV-0002](../evidence/EV-0002/README.md).
+dispositions, checks and review are [EV-0002](../../evidence/EV-0002/README.md).
 Earlier registers are historical:
-[M1-8](obsolete/M1_8_DELIVERY.md),
-[post-M1-8 study](obsolete/POST_M1_8_ABLATION.md), and the
-[earlier M1 plan](obsolete/M1_PLAN.md). Their unimplemented recipes do not grant
+[M1-8](M1_8_DELIVERY.md),
+[post-M1-8 study](POST_M1_8_ABLATION.md), and the
+[earlier M1 plan](M1_PLAN.md). Their unimplemented recipes do not grant
 authority. Accepted future outcomes remain binding under their current owners.
 
 ## Post-M1 mop-up — 2026-11-11
@@ -44,7 +50,7 @@ No code, tests, frozen evidence, budgets or build cleanup are included.
 Completed 2026-11-11: outcome/method compaction, Release phase reassignment,
 DESKTOP_UI structure/current-owner reconciliation and direct link repairs.
 Disposition totals, retained-method/visual checks, link and diff verification,
-and adversarial editorial review are [EV-0002](../evidence/EV-0002/README.md);
+and adversarial editorial review are [EV-0002](../../evidence/EV-0002/README.md);
 the per-block ledger was not retained (Git reproduces it). No product tests were
 needed for this documentation-only checkpoint.
 
@@ -118,7 +124,7 @@ uncited/obsolete-only entries, disposable environments/pytest/SQLite state,
 ZIP-matched extractions, PyInstaller intermediates, Git-reconstructible byte
 copies, synthetic payloads and, in round 7, all material outside the retention
 policy. Exact plans, holds, denied rows and verification:
-[EV-0001](../evidence/EV-0001/cleanup.md).
+[EV-0001](../../evidence/EV-0001/cleanup.md).
 These receipts own chronology; historical size figures are not current usage.
 
 ## M1-Release — authorized 2026-11-04
@@ -132,9 +138,9 @@ under AGENTS; the separate README revision remains outside this cleanup.
 
 | Closed outcome | Final disposition | Owner and evidence |
 | --- | --- | --- |
-| R0 — release inspection | Declare audience, format, finite missing work and serialized closeout; development builds alone do not close release. | INTERFACES, TESTS, DEFENSE; [EV-0024](../evidence/EV-0024/README.md). |
+| R0 — release inspection | Declare audience, format, finite missing work and serialized closeout; development builds alone do not close release. | INTERFACES, TESTS, DEFENSE; [EV-0024](../../evidence/EV-0024/README.md). |
 | R1 — portable build/CI | GUI and console executables, source ZIP, wheel, resolved dependencies, checksums and exact source/bundle identity; hash-locked inputs, immutable Action pins and full Git history for frozen authority. | TOOLS; repeatable/hosted receipts in the release root. |
-| R2 — distribution journey | Extraction/prerequisite/data/feedback guidance, complete collected notices and corresponding-source/build directions; no ambient DLL collection. | TOOLS, INTERFACES, existing notice corpus; [EV-0023](../evidence/EV-0023/README.md), [EV-0029](../evidence/EV-0029/README.md). |
+| R2 — distribution journey | Extraction/prerequisite/data/feedback guidance, complete collected notices and corresponding-source/build directions; no ambient DLL collection. | TOOLS, INTERFACES, existing notice corpus; [EV-0023](../../evidence/EV-0023/README.md), [EV-0029](../../evidence/EV-0029/README.md). |
 | R3 — quantitative obligations | Inventory cold, History and bridge timing pass on the serviced reference profile; Plan/UI measurements are advisory. | PERFORMANCE methods/results, component criteria and DEFENSE authority; final `cfeac2d9` collections. |
 | R4 — integrated candidate | Complete release command, all mapped desktop behaviors and exact-package reviewed copy/inventory/integrity/close witness. SH-G-15 is accepted by user judgment with its raw qualifications intact. | TESTS, DESKTOP_UI, INTERFACES; R4 and repair receipts. |
 | R5 — adversarial reconciliation and tester set | Package05 reconciled against the commit and predecessor; Microsoft recipient terms included; immutable tester set assembled with M1-focused release notes. | Final closure below; `build/m1-r5-20261111/`. |
@@ -206,7 +212,7 @@ open-idle and payload, not the other 15 profiles. Its present rows are valid,
 while its aggregate incomplete-schedule FAIL remains. The rail reproducer
 demonstrates a lost-click defect but does not prove the original timeout's
 untraced ordering. PERFORMANCE owns exact metrics, profiles and artifacts;
-[INTERFACES](INTERFACES.md#sh-g-release-criteria) owns the acceptance disposition.
+[INTERFACES](../INTERFACES.md#sh-g-release-criteria) owns the acceptance disposition.
 No universal leak-freedom claim, GC/heap policy or repeated soak follows.
 
 ## Completed checkpoints
@@ -221,7 +227,7 @@ The complete final release gate above does not erase earlier failed receipts.
 | M1-5 / M1-6 | Shared typed/picker/recent location admission, bounded remembered hints, frozen Setup, serial pairs and standalone inventory, fresh Plan again. Hints grant no authority or global-default mutation. | WORKFLOWS, INTERFACES, BRIDGE; `e19ed9d`, `76ba7d0`, `build/m1-5/`, `build/m1-6/`. |
 | M1-7 | Bounded Plan projection, sibling sorting, server selection and reviewed execution; later R7 refinements preserve admission. R7-G was retired, not passed. | PRESENTATION, BRIDGE; through `5986c57` / `95f31e1`, `build/m1-7/evidence/p9-full-20260916/`. |
 | M1-8 | Capacity-stop settlement, live/retained execution review and installed recovery. Recorder-only failure remains degradation; later U-v2 supersedes P2 timing. | EXECUTOR, DATABASE, PRESENTATION; closure below and archived register. |
-| M1-9 | Inventory browsing, current evidence, Refresh and conditional missing visibility with original-result recovery and bounded receipts. | INVENTORY, PRESENTATION, INTERFACES; [EV-0022](../evidence/EV-0022/README.md). |
+| M1-9 | Inventory browsing, current evidence, Refresh and conditional missing visibility with original-result recovery and bounded receipts. | INVENTORY, PRESENTATION, INTERFACES; [EV-0022](../../evidence/EV-0022/README.md). |
 | M1-10 | Server-owned complete file selection; explicit rebaseline confirmation; standalone integrity controls; separate original/current results and mounted Plan/Verify panes. | M1-10 decision record below; `build/m1-10-20261013/`. |
 | Review controller / RV | Shared view infrastructure retains distinct Plan and Inventory policy. Ordinary copied-file Verify replaces exact-manual desktop handoff; current-state results never rewrite original execution. | PRESENTATION, INTERFACES, WORKFLOWS; `build/review-consolidation-20261016/`. |
 | M1-12 | Integrated lifecycle/retention across Plan, execution, linked/manual/ordinary integrity and Inventory; unsupported reload contained, stale responses inert, exact release and retained truth. | Verification closure below; `build/m1-12-20261030/`. |
@@ -268,7 +274,7 @@ were not closed by behavioral DOM evidence.
 ### M1-8 execution review closure
 
 M1-8's finite R0–R3/A1–A6/B1–B6 authority remains in the
-[archived register](obsolete/M1_8_DELIVERY.md). Capacity failure stops later
+[archived register](M1_8_DELIVERY.md). Capacity failure stops later
 admission after current settlement; immutable Plan, selected scope, fresh
 preflight, native publication and durable truth remain. Recorder-only failure
 does not become a global execution stop. Retained terminal review survives
@@ -310,7 +316,7 @@ shared root evidence is a core mechanism, not consumer authorization.
 | Deferred optimization | Parent flush and durable commit batching require a coordinated durability design; unbuffered source reads require controlled cold-source evidence. No blanket flush skipping, verification overlap or concurrency change. |
 
 Measurements and original experiments: PERFORMANCE and
-[EV-0017](../evidence/EV-0017/README.md); current acceptance: EXECUTOR,
+[EV-0017](../../evidence/EV-0017/README.md); current acceptance: EXECUTOR,
 VERIFIER, PREFLIGHT and DEFENSE. Historical per-commit tables are not new gates.
 
 ### Root admission optimization — 2026-09-28
@@ -329,7 +335,7 @@ acceptance of changed observation timing and logical-spelling policy; it is not
 an executor-quiescence grant or a general permission to omit admission.
 Handle-relative native research did not authorize replacing all current path
 guards. Current policies: CORE, PREFLIGHT and DEFENSE; evidence:
-[EV-0034](../evidence/EV-0034/README.md) and [EV-0020](../evidence/EV-0020/README.md).
+[EV-0034](../../evidence/EV-0034/README.md) and [EV-0020](../../evidence/EV-0020/README.md).
 
 ## Post-M1-8 reduction plan
 
@@ -345,12 +351,12 @@ AB-1–AB-10 are delivered. This remains a closed decision map, not pending work
 | AB-8 | One Python task snapshot supplies semantic progress/terminal facts. Task-list summary may briefly precede adoption, never becoming a second terminal authority. Full event-body removal remains a separate protocol decision. |
 | AB-9 / AB-10 | Retire duplicate CSS/source/gallery recipe pins while retaining behavioral/native/security witnesses; sweep current workflow/fixture dependencies without promoting diagnostics to acceptance. TESTS, DESKTOP_UI. |
 
-Evidence: [EV-0003](../evidence/EV-0003/README.md) (AB-7),
-[EV-0004](../evidence/EV-0004/README.md) (AB-8), `build/ab8-followup-20260926/`, `build/ab9-20260926/` and `build/ab10-20260926/`.
+Evidence: [EV-0003](../../evidence/EV-0003/README.md) (AB-7),
+[EV-0004](../../evidence/EV-0004/README.md) (AB-8), `build/ab8-followup-20260926/`, `build/ab9-20260926/` and `build/ab10-20260926/`.
 No speed/memory improvement is claimed by AB closeout. The source-linked
 historical observation and frozen authority bytes remain distinct from later
 fixture/custody updates. The study preserves rejected alternatives in
-[obsolete/POST_M1_8_ABLATION.md](obsolete/POST_M1_8_ABLATION.md).
+[obsolete/POST_M1_8_ABLATION.md](POST_M1_8_ABLATION.md).
 
 ## November rendering and allocation decisions
 
@@ -396,7 +402,7 @@ none proves universal leak freedom or 100k scaling.
   beyond appearance remain deferred under their owners.
 - Specific I/O reasons, verification open lookahead, grouped flush/commit
   batching, unbuffered reads and other later proposals live in the single
-  [M2 proposal index](M2_PROPOSAL.md). Listing or measuring them is not activation.
+  [M2 proposal index](../M2_PLAN.md). Listing or measuring them is not activation.
 - Shared Win32 binding consolidation was deferred: identical declarations do
   not justify violating the import law. A generic owner merger, duplicate
   locked-drain extraction and aggregate-artifact/whole-owner reservation were

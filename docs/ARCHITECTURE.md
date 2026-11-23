@@ -1098,18 +1098,17 @@ later milestones build on.
 
 ### M1 — integrity product and headed desktop
 
-**Status:** Active
+**Status:** Complete
 
 Adds canonical content evidence, role-free inventory, standalone and linked
 integrity workflows, bounded durable history readback, shared service/selection
-facades, and the secured WebView2 desktop. The remaining work is product-facing
-desktop completion and beta hardening, not a new domain architecture. Exact
-remaining delivery lives in `M1_PLAN.md`; subject criteria live in
-`BRIDGE.md`, and `INTERFACES.md`.
+facades, and the secured WebView2 desktop. Its completed delivery register is
+archived as `obsolete/M1_REGISTER.md`; subject criteria live in `BRIDGE.md` and
+`INTERFACES.md`.
 
 ### M2 — durable sessions and queue ownership
 
-**Status:** Unrealized
+**Status:** Active; delivery lives in `M2_PLAN.md`
 
 Adds durable session metadata, exclusive queue ownership, startup reconciliation
 and the first production use of `INTERRUPTED`, durable committed plans, launch

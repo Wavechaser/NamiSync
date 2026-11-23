@@ -1,7 +1,7 @@
 # M1-6 accepted Setup study
 
 Historical design and scope provenance for M1-6, based on `b98dce4`. This file
-is not an active implementation plan. [M1_PLAN](../M1_PLAN.md) owns delivery
+is not an active implementation plan. [M1_PLAN](M1_REGISTER.md) owns delivery
 status; active subject documents own current behavior and future changes.
 
 ## M1-6 expansion

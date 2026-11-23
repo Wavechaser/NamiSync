@@ -19,7 +19,7 @@ files or creates a second domain lifecycle.
 | [BRIDGE](BRIDGE.md) | Exact transport, bounded envelopes, revisions/opaque IDs, command/recovery custody, progress and response validation. |
 | [INTERFACES](INTERFACES.md) | Host, task/session observation, native admission, per-user paths/logging, prerequisites and ordered shutdown. |
 | [TOOLS](TOOLS.md) / [TESTS](TESTS.md) | Asset maintenance, development launch, installed/native evidence and verification routes. |
-| [M1_PLAN](M1_PLAN.md) | Completed delivery, accepted residuals, exclusions and unresolved observations. |
+| [M2_PLAN](M2_PLAN.md) | Delivery; completed M1 delivery, accepted residuals, exclusions and unresolved observations are in the archived [M1 register](obsolete/M1_REGISTER.md). |
 
 M1 keeps the standard native frame and separate GUI/console entry points over
 workflow composition. There is no unattended execution, durable Plan/session
@@ -1071,5 +1071,5 @@ resume nor fallback for missing task artifacts. No task review depends on that p
   no browser-retained full result.
 - Exact target contracts and gates remain in
   [BRIDGE.md](BRIDGE.md), delivery coverage in
-  [M1_PLAN.md](M1_PLAN.md), and test-scope policy in
+  the archived [M1 register](obsolete/M1_REGISTER.md), and test-scope policy in
   [TESTS.md](TESTS.md).

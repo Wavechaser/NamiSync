@@ -205,7 +205,8 @@ its inclusion policy retains that family for older Windows. Windows 11 resolves
 API sets through its loader and always uses the system UCRT. Removing those
 copies does not justify renewing resource evidence: R4 still assesses its exact
 candidate and dependency changes. Existing measured packages remain untouched.
-M1_PLAN owns the R2 gate and release decisions.
+The archived [M1 register](obsolete/M1_REGISTER.md) records the R2 gate and
+release decisions.
 Upstream references: [CPython 3.15.2 incorporated-software notices](https://github.com/python/cpython/blob/v3.15.2/Doc/license.rst),
 [its Windows external dependency inputs](https://github.com/python/cpython/blob/v3.15.2/PCbuild/get_externals.bat),
 [PyInstaller licensing](https://pyinstaller.org/en/stable/license.html) and

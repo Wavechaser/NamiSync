@@ -84,8 +84,8 @@ Use the relevant route, not a mandatory full-document reading sequence:
   and scale: [PRESENTATION.md](docs/PRESENTATION.md).
 - UI and icons: [DESKTOP_UI.md](docs/DESKTOP_UI.md); icon assets or catalog
   servicing use the tooling and maintenance guidelines in [TOOLS.md](docs/TOOLS.md).
-- Product scope: [FEATURES.md](docs/FEATURES.md); M1 checkpoints and decisions:
-  [M1_PLAN.md](docs/M1_PLAN.md). Accepted future outcomes remain binding, but
+- Product scope: [FEATURES.md](docs/FEATURES.md); M2 scope, checkpoints and
+  decisions: [M2_PLAN.md](docs/M2_PLAN.md). Accepted future outcomes remain binding, but
   unrealized representation, reservation, DTO and command-count recipes are
   reconsidered at first use; retain only narrow admission and measured scale
   obligations with named owners.

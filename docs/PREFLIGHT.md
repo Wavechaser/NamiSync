@@ -195,7 +195,7 @@ attributes and that strict DONT_REPARSE opens can still succeed on exposed cloud
 entries. A final handle's attributes do not establish intermediate-component
 classification. Root admission, two acquisition lifetimes, alias corroboration,
 and complete parent/absence judgments also need a settled design. This option
-therefore remains unimplemented under [M1_PLAN](M1_PLAN.md); the current pathname
+therefore remains unimplemented and unscheduled in [M2_PLAN](M2_PLAN.md); the current pathname
 algorithm and its existing placeholder policy remain active. These probes do
 not establish that the pathname algorithm detects every hidden cloud component.
 
@@ -324,7 +324,7 @@ observation, including resume and queue wakeup, admits again. A process-lifetime
 volume cache would make remount evidence stale and remains unacceptable. Further
 subject-stat or path-check consolidation is a separate outcome: it must preserve
 the existing observations or receive an explicit decision for changed concurrent
-refusal behavior under [M1_PLAN.md](M1_PLAN.md)'s equivalence rules.
+refusal behavior, recorded in the active delivery register ([M2_PLAN](M2_PLAN.md)).
 
 ## PoC Hardening
 

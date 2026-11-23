@@ -1,6 +1,6 @@
 # Archived M1-8 delivery register
 
-Historical snapshot before R3 condensation, after RC-1 `3ea4e6b`. This is not active implementation authority; [M1_PLAN](../M1_PLAN.md) owns current status and future rows.
+Historical snapshot before R3 condensation, after RC-1 `3ea4e6b`. This is not active implementation authority; [M1_PLAN](M1_REGISTER.md) owns current status and future rows.
 
 # M1 Delivery Register
 
@@ -962,7 +962,7 @@ populations or repeated test counts.
 | GUI-S4–S12, GUI-R1–R2 | Origin-owned batch receipts, queued removal and settled-result clearing; compact tables with stable header/body gutters; native CSS scrollbar approximation; explicit smoke-only Ready witness; Fluent control and Setup refinements. [DESKTOP_UI](../DESKTOP_UI.md). |
 | GUI-S13–S21 | Translucent Fluent control fills and authored 1.2px boundaries; keyboard/pointer textbox focus; pinned checkbox glyph; per-pair frozen options; sync-only batch projection. Keyboard, forced-color, exact retry and admission guarantees remain. [DESKTOP_UI](../DESKTOP_UI.md). |
 | GUI-I1–I3 | Pinned local Fluent icon catalog, provenance, offline generation/checking and maintenance workflow. [TOOLS](../TOOLS.md). |
-| GUI-D1–D7 | Shadow/disabled-label diagnostics and batch-housing study; M2 records for native overlay scrollbars, verify-only batching and persistent presets. [BUGS](../BUGS.md#desktop-material-composition), [DESKTOP_UI](../DESKTOP_UI.md), [M2_PROPOSAL](../M2_PROPOSAL.md). |
+| GUI-D1–D7 | Shadow/disabled-label diagnostics and batch-housing study; M2 records for native overlay scrollbars, verify-only batching and persistent presets. [BUGS](../BUGS.md#desktop-material-composition), [DESKTOP_UI](../DESKTOP_UI.md), [M2_PROPOSAL](../M2_PLAN.md). |
 | AI-1–AI-2 | Execution/containment guidance and instruction condensation; component rules routed to their owners. AGENTS remains execution authority; personal-skill edits are separately recorded in CHANGELOG. |
 | DOC-1, DOC-3 | Accepted frontend/M2 decisions reconciled across subject docs; completed history condensed and checkpoint expansion procedure established. Documentation verification did not claim product acceptance. |
 | Plan-surface GUI-P1–P3 (2026-09-17) | Plan/Status cards, resizable rootless virtual table, sibling-sort gestures and exact byte display. `27f1a6b`, `4053a53`, `6425fa7`, `db46269`; component and installed Plan/gallery checks. [DESKTOP_UI](../DESKTOP_UI.md), [PRESENTATION](../PRESENTATION.md). |

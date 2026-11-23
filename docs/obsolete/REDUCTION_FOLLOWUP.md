@@ -22,7 +22,7 @@ Status: complete 2026-09-08. All NR-0–NR-9 gates are closed;
 execution evidence is recorded below. The user authorized GPT-5.6 agent
 implementation, fresh adversarial reviewers, independent atomic commits, and
 isolated parallel work where dependencies permit. This is the maintenance subregister linked by
-[M1_PLAN.md](../M1_PLAN.md), not another M1 product roadmap. The closed PR-0–PR-9
+[M1_PLAN.md](M1_REGISTER.md), not another M1 product roadmap. The closed PR-0–PR-9
 register in [PRODUCTION_REDUCTION.md](PRODUCTION_REDUCTION.md) remains unchanged.
 
 ### Closed simplification populations

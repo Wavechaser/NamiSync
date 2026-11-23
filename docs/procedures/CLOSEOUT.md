@@ -28,7 +28,7 @@ unchanged reviews or gates without a dependency reason.
   At task delivery, extend the matching CHANGELOG task/date range or add a new
   task when none fits; update README's summary only if its phase/milestone
   synopsis changes.
-- Update the active delivery register ([M1_PLAN](../M1_PLAN.md) for M1) when
+- Update the active delivery register ([M2_PLAN](../M2_PLAN.md) for M2) when
   scope, decisions or checkpoint status changes, and at session/stop
   boundaries; it is not a per-commit transcript.
 - At session/stop boundaries, clean or promote the session's `build/` output

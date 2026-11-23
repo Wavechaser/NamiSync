@@ -16,6 +16,23 @@ Before named releases, milestone headings use names such as `M1`. After
 versioning begins, headings use the version and codename, such as
 `v0.1.0 "Gertrud"`.
 
+## M2
+
+M2 makes NamiSync lasting and legible: what it did, knows and was doing survives
+restarts, crashes, restores, retries and schema changes, and is shown honestly.
+
+### M2 Planning
+
+Documentation servicing and delivery planning before implementation starts.
+
+#### Start M2 documentation (2026-11-23)
+
+- Archive the completed M1 delivery register as `docs/obsolete/M1_REGISTER.md`
+  and rename the M2 proposal to `docs/M2_PLAN.md`, the active delivery plan.
+- Repoint delivery ownership in AGENTS, procedures, ARCHITECTURE's roadmap and
+  subject documents; cite the archive for completed M1 decisions. No checkpoint
+  register or product change yet.
+
 ## M1
 
 M1 expands the reviewed-sync runtime into a complete headless integrity,

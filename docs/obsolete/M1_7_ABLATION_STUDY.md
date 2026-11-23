@@ -248,7 +248,7 @@ its product/test baseline is `5986c57`. Study corpus: inclusive `ae3daf6..5986c5
 (diff base `40ca76f`). The user authorized consolidation on 2026-09-17,
 including localized checkpoint measurements and one full run at closeout.
 **Deliver now** below is the authorized implementation scope.
-[M1_PLAN](../M1_PLAN.md) is the parent delivery
+[M1_PLAN](M1_REGISTER.md) is the parent delivery
 authority; this document supplies its bounded maintenance subregister.
 
 ## Scope and decisions

@@ -657,8 +657,8 @@ are used only to explain a refused match. Context exit
 closes the remaining hold, including admission failure, pause, cancellation and
 return. A confirmation attempt after closure returns false. Descendant checks
 remain required. The hold is never stored in shared adapters, plans,
-continuations or persistence. Consumer integration is tracked in
-[M1_PLAN](M1_PLAN.md#root-admission-optimization--2026-09-28).
+continuations or persistence. Consumer integration is recorded in the archived
+[M1 register](obsolete/M1_REGISTER.md#root-admission-optimization--2026-09-28).
 
 `rel_path_key` follows Windows/NTFS one-codepoint case mapping, not
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code

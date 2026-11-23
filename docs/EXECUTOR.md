@@ -372,7 +372,7 @@ and-swap guarantee.
    flushing and recording. The returned metadata must remain stable after that
    final close. Copied or inherited ACLs may deny a fresh reopen or pathname
    publication while the retained handle still has its previously granted
-   access; the user-approved exception in M1_PLAN permits that handle to finish.
+   access; the user-approved M1 exception permits that handle to finish.
 10. Require the published target size to equal the hashed byte count before any
     operation-specific destructive completion step. MOVE_UPDATE builds the
     attestation at this point, so an attestation-construction failure cannot
@@ -777,7 +777,7 @@ axes while operation tests retain filesystem-probe and call-timing coverage.
 
 ## Settlement Stability Gate
 
-The completed [executor simplification run](M1_PLAN.md#executor-simplification-and-throughput--2026-09-29)
+The completed [executor simplification run](obsolete/M1_REGISTER.md#executor-simplification-and-throughput--2026-09-29)
 used an explicit exception for its declared trace re-pins: each shipped in the
 same atomic commit as its cause, with per-row dispositions and a restarted
 three-run gate. That closed exception does not authorize future re-pins.

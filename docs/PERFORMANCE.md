@@ -148,7 +148,7 @@ promoted unchanged into an `evidence/` record
 
 ### R3 release repair renewal — predeclared 2026-11-10
 
-The [approved repair](M1_PLAN.md#approved-release-repair--2026-11-10) selects
+The [approved repair](obsolete/M1_REGISTER.md#approved-release-repair--2026-11-10) selects
 official Windows x64 CPython 3.15.2 with SQLite 3.53.4. The installed bridge
 child uses pywebview 6.2.1, pythonnet 3.2.1 and the selected package dependency
 set. Record the actual interpreter, SQLite, WebView2, CLR and package versions
@@ -968,7 +968,7 @@ schedule samples were not retained. The raw schedule
 validator correctly reports FAIL because the other 15 profiles were deliberately
 not repeated. Its two present run rows are valid with no failed predicates.
 Do not relabel this partial collection a complete 17-run pass or rewrite the
-earlier Resources03 receipt. M1_PLAN retains the user's non-blocking SH-G-15
+earlier Resources03 receipt. The archived M1 register retains the user's non-blocking SH-G-15
 resource disposition.
 Independent metric/provenance review is `resources/review.md`.
 
@@ -1069,7 +1069,7 @@ SHA-256 `58429fa854c3161cd5e43bffeaedda05fc6373541430ece369009af40547478f`,
 built by that folder's `build_package.ps1` (same hash-locked recipe and offline
 downloads as R2) from clean `1f632b13`. The final R4 candidate `3ece185f`
 changes only a test driver; its package has identical wheel members and
-executable payloads ([M1_PLAN](M1_PLAN.md#m1-release--authorized-2026-11-04), "R4 candidate run"), so these results
+executable payloads ([M1 register](obsolete/M1_REGISTER.md#m1-release--authorized-2026-11-04), "R4 candidate run"), so these results
 apply to it unchanged. The collector, corpus, host and frozen
 17-run schedule are those of the [`733f0cb1` study](#historical-resource-comparisons).
 The runs took about 4.4 hours (00:32–04:55 local) with the machine otherwise
@@ -1163,7 +1163,7 @@ investigation. Execute→Verify remains sequential. Preserve ordered classificat
 and recording, native readback, bounded handle/buffer ownership and full worker
 settlement on control; review earlier observation/sharing-lock timing before
 adopting lookahead. Serial fresh-file timing is not evidence that concurrency
-will help. [M2_PROPOSAL](M2_PROPOSAL.md) owns the unactivated proposal;
+will help. [M2_PLAN](M2_PLAN.md) owns the unactivated proposal;
 VERIFIER/WORKFLOWS own any eventual behavior. The copy/verification/host-retention
 investigation is [EV-0012](../evidence/EV-0012/README.md) and
 [EV-0033](../evidence/EV-0033/README.md); copyonly's original source snapshots

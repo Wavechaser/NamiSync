@@ -2,7 +2,7 @@
 
 > Retired 2026-09-26 after AB-10 (`cb57c41a`). Historical investigation and
 > superseded proposals only; do not use this as an execution register or current
-> contract. [M1_PLAN](../M1_PLAN.md#post-m1-8-reduction-plan) carries the compact
+> contract. [M1_PLAN](M1_REGISTER.md#post-m1-8-reduction-plan) carries the compact
 > delivered outcomes, retained decisions and deferred work; subject documents
 > own current behavior. The original source analysis and rejected alternatives
 > remain here for provenance, including the qualifications in §13–14.
@@ -14,14 +14,14 @@ against `a7f8402` and the user's subsequent dispositions. The central diagnosis
 is supported; the original deletion sequence and blanket redundancy claims are
 not. This document retains the investigation and dispositions; the actionable
 plan and sole checkpoint register are in
-[M1_PLAN](../M1_PLAN.md#post-m1-8-reduction-plan).
+[M1_PLAN](M1_REGISTER.md#post-m1-8-reduction-plan).
 
 S3's server-snapshot direction is accepted. L5/L7/L8/L9 are rejected. D1–D7
 are distinguished as settled directions, preferences or unresolved choices in
 §11; D2 now removes elapsed-time mutation abandonment/replay while preserving
 original-outcome recovery, and D4 is retained without feature reduction.
 Recommendations do not silently become user decisions. PA-1–PA-3 in
-[M1_PLAN](../M1_PLAN.md) authorized the earlier documentation reconciliation and
+[M1_PLAN](M1_REGISTER.md) authorized the earlier documentation reconciliation and
 study retirement only. The user subsequently activated the complete AB batch;
 the current register owns status and dependency gates. AB-1 establishes
 documentation ownership without demoting an executable measurement gate;
@@ -524,7 +524,7 @@ on the investigation's recommendation; no full task-owner merger is scheduled.
 
 ## 12. Planned delivery
 
-[M1_PLAN](../M1_PLAN.md#post-m1-8-reduction-plan) now records completed AB outcomes
+[M1_PLAN](M1_REGISTER.md#post-m1-8-reduction-plan) now records completed AB outcomes
 and remaining decisions; its version at `cb57c41a` preserves the detailed
 dependencies, regression mapping and acceptance gates. The original sequence was:
 documentation is
@@ -699,7 +699,7 @@ directory. This validates specific seams, not a universal resend protocol.
 | F6 | The retained evidence has injected delivery loss, not an observed natural loss. The real Setup error and unexplained Plan-again timeouts remain unresolved observations. This does not establish that local delivery cannot fail or authorize unrelated fixes. |
 
 The user authorized the qualified reduction as **AB-7R**, a separate checkpoint
-before AB-8. [M1_PLAN](../M1_PLAN.md#post-m1-8-reduction-plan)
+before AB-8. [M1_PLAN](M1_REGISTER.md#post-m1-8-reduction-plan)
 records its delivered outcome; its pre-compaction version and evidence retain
 the finite register and verification. Five commands (`pick_folder`,
 `admit_location`, `update_plan_view`, `mutate_plan_highlight`,
@@ -738,7 +738,7 @@ real effect/recovery seam. The optional tracer records actual eligibility rather
 than copying product policy. Distinct queued-row removal, control, selection,
 release and Close behaviors remain, even where their scenarios are lengthy.
 
-[M1_PLAN AB-7S](../M1_PLAN.md#post-m1-8-reduction-plan)
+[M1_PLAN AB-7S](M1_REGISTER.md#post-m1-8-reduction-plan)
 records the delivered outcome and current owners. `ab7s-bridge.md`, `ab7s-ui.md` and
 `ab7s-tests.md` in the existing evidence directory map deletions to guarantees.
 This is a bounded consolidation, not evidence that all remaining tests are

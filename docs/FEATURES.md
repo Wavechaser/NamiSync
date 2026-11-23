@@ -4,7 +4,7 @@ The headless sync/inventory/integrity/history/CLI capabilities and secured
 desktop host/transport/presentation foundation are active. Desktop Setup, Plan
 review, execution, Inventory review and integrity controls are active; desktop
 History remains unrealized. Each feature
-owns its behavior/status; M1_PLAN owns remaining delivery, and BRIDGE,
+owns its behavior/status; M2_PLAN owns delivery, and BRIDGE,
 PRESENTATION and INTERFACES own protocol, projection and host contracts.
 
 Reference documentation imported from the proof-of-concept lives in
@@ -557,8 +557,8 @@ active. Desktop History remains unrealized.
 
 ## M2 PROPOSED
 
-[M2_PROPOSAL](M2_PROPOSAL.md) is the single index of proposed later outcomes
-and their qualifications, without an implementation plan or activation. Durable
+[M2_PLAN](M2_PLAN.md) is the single index of proposed later outcomes and their
+qualifications; listing an outcome there does not schedule or realize it. Durable
 desktop tasks and queue ownership retain their unrealized status and accepted
 boundaries in the feature sections above and ARCHITECTURE's milestone roadmap.
 

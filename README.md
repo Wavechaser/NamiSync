@@ -76,8 +76,9 @@ The first milestone is complete. **v0.1.0 “Gertrud”** is prepared as an unsi
 Windows x64 portable tester build, with reviewed copy, inventory and verification
 workflows tested in the packaged application. Public distribution is still
 pending. See the [tester guide](tools/packaging/START-HERE.txt) for prerequisites,
-extraction and first use, and the [delivery register](docs/M1_PLAN.md) for release
-evidence and known qualifications.
+extraction and first use, and the archived [M1 delivery register](docs/obsolete/M1_REGISTER.md)
+for release evidence and known qualifications. M2 has started; its plan is
+[M2_PLAN](docs/M2_PLAN.md).
 
 Inventory, integrity evidence and recorded history persist. Open tasks and
 unexecuted plans do not survive restart; pause/resume applies within the current
@@ -284,21 +285,30 @@ never hides the other result axes in rendered output.
 - [Bridge](docs/BRIDGE.md) — external protocol, transport, retry/recovery and evidence.
 - [Presentation](docs/PRESENTATION.md) — tree/view, search/sort and scale contracts.
 - [Interfaces](docs/INTERFACES.md) — adapters, host/package and lifecycle contracts.
-- [M1 delivery register](docs/M1_PLAN.md) — completed outcomes, decisions,
-  release verification and unresolved dispositions.
-- [M2 proposal](docs/M2_PROPOSAL.md) — proposed later features, without an
-  implementation plan or delivery commitment.
+- [M2 plan](docs/M2_PLAN.md) — M2 features, segments and delivery; its
+  checkpoint register is not yet defined.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
 - [Working rules](AGENTS.md) and their situational procedures for
   [scope](docs/procedures/SCOPE.md), [closeout](docs/procedures/CLOSEOUT.md)
   and [documentation](docs/procedures/DOCUMENTS.md).
 
-Historical plans and investigations are indexed in the [M1 delivery register](docs/M1_PLAN.md).
+Historical plans and investigations live in [docs/obsolete/](docs/obsolete/),
+including the completed [M1 delivery register](docs/obsolete/M1_REGISTER.md).
 
 ## Changelog
 
 Detailed task history and dates live in [CHANGELOG.md](CHANGELOG.md). This
 README intentionally stops at milestone and phase summaries.
+
+## M2
+
+M2 makes NamiSync lasting and legible: what it did, knows and was doing survives
+restarts, crashes, restores, retries and schema changes, and is shown honestly.
+
+### M2 Planning
+
+The M1 register is archived and the M2 plan is active; segment checkpoints are
+being defined before implementation starts.
 
 ## M1
 
@@ -332,7 +342,7 @@ desktop snapshot reduction, visual test recipes and unused mapping readers were
 removed while preserving reviewed effects, settlement, source/target admission,
 command identity and behavioral witnesses. Earlier product, test and document
 consolidation aligned core contracts, stable component facades, the typed
-settlement reducer and layered test routes. M1_PLAN remains the sole active
+settlement reducer and layered test routes. M1_PLAN was the sole active
 delivery register; historical plans and studies are archived.
 
 ### M1 Hardening

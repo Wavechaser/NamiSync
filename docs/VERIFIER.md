@@ -274,7 +274,7 @@ atomically with the evidence transaction. Pause/resume retains exact admitted
 ids/order and completed results without reapplying fresh-selection filters.
 Automatic linked post-copy verification remains separate from ordinary Verify.
 Completed delivery and regression evidence are recorded in the
-[completed M1 decision record](M1_PLAN.md#m1-10-integrity-and-review-decisions).
+[completed M1 decision record](obsolete/M1_REGISTER.md#m1-10-integrity-and-review-decisions).
 
 ## Selected And Post-Execution Verification
 
