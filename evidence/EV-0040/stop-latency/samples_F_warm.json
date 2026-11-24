@@ -1,0 +1,6075 @@
+{
+ "identity": {
+  "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+  "sqlite": "3.50.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "git_revision": "ab31ba08abeeef35ff780ac5e2d08610d2819e95",
+  "git_branch": "milestone2",
+  "git_dirty": true,
+  "git_status_lines": [
+   "M CHANGELOG.md",
+   " M README.md",
+   " M docs/COMMANDLINE.md",
+   " M docs/DATABASE.md",
+   " M docs/INTERFACES.md",
+   " M docs/TESTS.md",
+   " M docs/TOOLS.md",
+   " M namisync/interfaces/web/paths.py",
+   " M namisync/workflows/runtime.py",
+   " M tests/_departments.py",
+   " M tests/conftest.py",
+   " M tests/interfaces/test_launcher.py",
+   " M tests/interfaces/web/test_headed_native.py",
+   " M tests/interfaces/web/test_paths.py",
+   " M tests/test_cli.py",
+   " M tests/test_tools_gui.py",
+   " M tools/desktop/gui.ps1",
+   "?? tests/_live_data_guard.py",
+   "?? tests/test_live_data_guard.py"
+  ]
+ },
+ "args": {
+  "cmd": "run",
+  "fixture_root": "build\\m2-a2\\stop-latency\\fixture",
+  "data_root": "build\\m2-a2\\stop-latency\\data_warm",
+  "out": "build\\m2-a2\\stop-latency\\samples_F_warm.json",
+  "scan_ms": "build\\m2-a2\\stop-latency\\scan_ms.json",
+  "fractions": "0.05,0.2,0.35,0.5,0.65,0.8",
+  "cases": "inventory-scan,plan-source-scan,plan-target-scan",
+  "samples": 30,
+  "warmup": 1,
+  "tag": "warm"
+ },
+ "samples": [
+  {
+   "case": "inventory-scan",
+   "delay_ms": 355.0,
+   "session_id": "80db3dfa49eb472bb3d2790a222183be",
+   "submit_to_phase_ms": 10.5963,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 10370,
+   "checkpoints_final": 10371,
+   "scan_call_index": 1,
+   "since_phase_ms": 355.4386,
+   "cancel_call_ms": 0.1244,
+   "scanner_raise_ms": 0.163,
+   "custody_release_ms": 0.9297,
+   "terminal_event_ms": 3.1375,
+   "final_record_ms": 3.1926,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.831,
+   "post_cancel_events": [
+    [
+     0.268,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     1.024,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.138,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.193,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 0,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 349.0,
+   "session_id": "361395cdbc534fb39bb37a945800cc20",
+   "submit_to_phase_ms": 3.5259,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 9478,
+   "checkpoints_final": 9479,
+   "scan_call_index": 1,
+   "since_phase_ms": 349.4135,
+   "cancel_call_ms": 0.1055,
+   "scanner_raise_ms": 0.1504,
+   "custody_release_ms": 0.7717,
+   "terminal_event_ms": 1.0063,
+   "final_record_ms": 1.0726,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.0468,
+   "post_cancel_events": [
+    [
+     0.665,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     0.812,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     1.006,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     1.073,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 0,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 108.5,
+   "session_id": "e96bdb837072410b9f348cd9ff36d00e",
+   "submit_to_phase_ms": 7048.6833,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 209050,
+   "checkpoints_final": 209051,
+   "scan_call_index": 2,
+   "since_phase_ms": 108.8934,
+   "cancel_call_ms": 0.1031,
+   "scanner_raise_ms": 0.1487,
+   "custody_release_ms": 11.3147,
+   "terminal_event_ms": 11.5767,
+   "final_record_ms": 11.6426,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 112.228,
+   "post_cancel_events": [
+    [
+     11.203,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     11.344,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.577,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.643,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 0,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 1420.0,
+   "session_id": "2f0e04e468b44402b44d85ae35f5d185",
+   "submit_to_phase_ms": 9.2702,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 40220,
+   "checkpoints_final": 40221,
+   "scan_call_index": 1,
+   "since_phase_ms": 1420.413,
+   "cancel_call_ms": 0.1021,
+   "scanner_raise_ms": 0.154,
+   "custody_release_ms": 2.2034,
+   "terminal_event_ms": 4.9069,
+   "final_record_ms": 4.9872,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.7229,
+   "post_cancel_events": [
+    [
+     0.29,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.417,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     4.907,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     4.987,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 1,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 1396.0,
+   "session_id": "a6c3f17e6c114d70bf8a520f8a29f3f8",
+   "submit_to_phase_ms": 3.2874,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 39463,
+   "checkpoints_final": 39464,
+   "scan_call_index": 1,
+   "since_phase_ms": 1396.3848,
+   "cancel_call_ms": 0.1231,
+   "scanner_raise_ms": 0.1613,
+   "custody_release_ms": 1.9904,
+   "terminal_event_ms": 2.3678,
+   "final_record_ms": 2.4462,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.1225,
+   "post_cancel_events": [
+    [
+     1.972,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.167,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     2.368,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     2.446,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 1,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 434.0,
+   "session_id": "7157dc5be48d4ab0b448324aa0004a6a",
+   "submit_to_phase_ms": 7013.2235,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 214252,
+   "checkpoints_final": 214253,
+   "scan_call_index": 2,
+   "since_phase_ms": 435.3708,
+   "cancel_call_ms": 0.1134,
+   "scanner_raise_ms": 0.2156,
+   "custody_release_ms": 23.2636,
+   "terminal_event_ms": 23.8911,
+   "final_record_ms": 24.0503,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 119.7872,
+   "post_cancel_events": [
+    [
+     22.262,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     23.367,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     23.891,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     24.05,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 1,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 2485.0,
+   "session_id": "be2eedc5566e498fb4bd0567c3579ae4",
+   "submit_to_phase_ms": 14.6796,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 67617,
+   "checkpoints_final": 67618,
+   "scan_call_index": 1,
+   "since_phase_ms": 2485.3773,
+   "cancel_call_ms": 0.1049,
+   "scanner_raise_ms": 0.2373,
+   "custody_release_ms": 3.428,
+   "terminal_event_ms": 5.7493,
+   "final_record_ms": 5.8104,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.9665,
+   "post_cancel_events": [
+    [
+     0.214,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.461,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     5.749,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     5.81,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 2,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 2443.0,
+   "session_id": "856de0f1ff6f4b14b85f30cd9c5f44b9",
+   "submit_to_phase_ms": 3.1496,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 68394,
+   "checkpoints_final": 68395,
+   "scan_call_index": 1,
+   "since_phase_ms": 2443.3418,
+   "cancel_call_ms": 0.102,
+   "scanner_raise_ms": 0.1337,
+   "custody_release_ms": 3.0663,
+   "terminal_event_ms": 3.4575,
+   "final_record_ms": 3.5392,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.9036,
+   "post_cancel_events": [
+    [
+     3.243,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.269,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.458,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.539,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 2,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 759.5,
+   "session_id": "13904d73ea534e398b98188ef227d134",
+   "submit_to_phase_ms": 7443.3251,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 227762,
+   "checkpoints_final": 227763,
+   "scan_call_index": 2,
+   "since_phase_ms": 759.7968,
+   "cancel_call_ms": 0.1036,
+   "scanner_raise_ms": 0.145,
+   "custody_release_ms": 11.883,
+   "terminal_event_ms": 12.2403,
+   "final_record_ms": 12.2869,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 144.6342,
+   "post_cancel_events": [
+    [
+     11.862,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.108,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     12.24,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     12.287,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 2,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 3550.0,
+   "session_id": "d38fd5b9240745c8a5336a39c0f1df77",
+   "submit_to_phase_ms": 10.216,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 101061,
+   "checkpoints_final": 101062,
+   "scan_call_index": 1,
+   "since_phase_ms": 3551.1261,
+   "cancel_call_ms": 0.1074,
+   "scanner_raise_ms": 0.3489,
+   "custody_release_ms": 5.2483,
+   "terminal_event_ms": 7.9733,
+   "final_record_ms": 8.0187,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.2734,
+   "post_cancel_events": [
+    [
+     0.603,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     5.357,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.973,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.019,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 3,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 3490.0,
+   "session_id": "b6377f9443ec409b8b4d4c57b036d083",
+   "submit_to_phase_ms": 3.3615,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 97892,
+   "checkpoints_final": 97893,
+   "scan_call_index": 1,
+   "since_phase_ms": 3490.4162,
+   "cancel_call_ms": 0.0994,
+   "scanner_raise_ms": 0.1354,
+   "custody_release_ms": 4.5164,
+   "terminal_event_ms": 4.7414,
+   "final_record_ms": 4.8045,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 9.212,
+   "post_cancel_events": [
+    [
+     4.48,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     4.491,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     4.741,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     4.804,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 3,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1085.0,
+   "session_id": "3b0f5264ad094617af1e0b7bbecdfbd6",
+   "submit_to_phase_ms": 7206.0469,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 236687,
+   "checkpoints_final": 236688,
+   "scan_call_index": 2,
+   "since_phase_ms": 1085.3657,
+   "cancel_call_ms": 0.1072,
+   "scanner_raise_ms": 0.1495,
+   "custody_release_ms": 12.6203,
+   "terminal_event_ms": 13.226,
+   "final_record_ms": 13.3334,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 124.2364,
+   "post_cancel_events": [
+    [
+     12.733,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     13.041,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     13.226,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     13.333,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 3,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 4615.0,
+   "session_id": "c55aa9ecebdd46c1a969ca2345bbaf71",
+   "submit_to_phase_ms": 11.0274,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 125616,
+   "checkpoints_final": 125617,
+   "scan_call_index": 1,
+   "since_phase_ms": 4615.5734,
+   "cancel_call_ms": 0.1227,
+   "scanner_raise_ms": 0.1559,
+   "custody_release_ms": 6.4709,
+   "terminal_event_ms": 8.923,
+   "final_record_ms": 8.9935,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 8.7446,
+   "post_cancel_events": [
+    [
+     0.265,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     6.524,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     8.923,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.993,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 4,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 4537.0,
+   "session_id": "4e03188a47114c13b81b48527a9d14bc",
+   "submit_to_phase_ms": 3.6418,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 129944,
+   "checkpoints_final": 129945,
+   "scan_call_index": 1,
+   "since_phase_ms": 4537.4313,
+   "cancel_call_ms": 0.1022,
+   "scanner_raise_ms": 0.1465,
+   "custody_release_ms": 6.0636,
+   "terminal_event_ms": 6.3233,
+   "final_record_ms": 6.4028,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 15.8052,
+   "post_cancel_events": [
+    [
+     5.94,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     6.099,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     6.323,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     6.403,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 4,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1410.5,
+   "session_id": "366e39b13ad845b794a663cedccb3a29",
+   "submit_to_phase_ms": 7057.0012,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 241765,
+   "checkpoints_final": 241766,
+   "scan_call_index": 2,
+   "since_phase_ms": 1410.8368,
+   "cancel_call_ms": 0.1078,
+   "scanner_raise_ms": 0.151,
+   "custody_release_ms": 12.2594,
+   "terminal_event_ms": 12.6042,
+   "final_record_ms": 12.666,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 136.4755,
+   "post_cancel_events": [
+    [
+     12.234,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.44,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     12.604,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     12.666,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 4,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 5680.0,
+   "session_id": "c463f352ee044c23a9fb7d90d249e2b5",
+   "submit_to_phase_ms": 9.8147,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 164420,
+   "checkpoints_final": 164421,
+   "scan_call_index": 1,
+   "since_phase_ms": 5680.5867,
+   "cancel_call_ms": 0.177,
+   "scanner_raise_ms": 0.2493,
+   "custody_release_ms": 12.5735,
+   "terminal_event_ms": 14.3499,
+   "final_record_ms": 14.4271,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 10.3032,
+   "post_cancel_events": [
+    [
+     0.334,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.914,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     14.35,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     14.427,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 5,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 5584.0,
+   "session_id": "3176606cbad443f1a6ec37dfbee4974d",
+   "submit_to_phase_ms": 3.5781,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 168960,
+   "checkpoints_final": 168961,
+   "scan_call_index": 1,
+   "since_phase_ms": 5584.3787,
+   "cancel_call_ms": 0.1006,
+   "scanner_raise_ms": 0.1386,
+   "custody_release_ms": 7.7246,
+   "terminal_event_ms": 7.9652,
+   "final_record_ms": 8.0498,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 11.4905,
+   "post_cancel_events": [
+    [
+     7.476,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     7.757,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.965,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.05,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 5,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1736.0,
+   "session_id": "21636bc155a24fe9a0c1a1d6aac2479c",
+   "submit_to_phase_ms": 6858.2528,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 256544,
+   "checkpoints_final": 256545,
+   "scan_call_index": 2,
+   "since_phase_ms": 1736.3944,
+   "cancel_call_ms": 0.0975,
+   "scanner_raise_ms": 0.1763,
+   "custody_release_ms": 12.4615,
+   "terminal_event_ms": 12.9239,
+   "final_record_ms": 12.9928,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 123.6498,
+   "post_cancel_events": [
+    [
+     12.583,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.758,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     12.924,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     12.993,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 5,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 355.0,
+   "session_id": "105a4edda74c48cea122668a6ed5afa6",
+   "submit_to_phase_ms": 9.7686,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 10356,
+   "checkpoints_final": 10357,
+   "scan_call_index": 1,
+   "since_phase_ms": 355.3711,
+   "cancel_call_ms": 0.1002,
+   "scanner_raise_ms": 0.1376,
+   "custody_release_ms": 0.8568,
+   "terminal_event_ms": 3.7646,
+   "final_record_ms": 3.8275,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.6068,
+   "post_cancel_events": [
+    [
+     0.184,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     1.004,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.765,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.828,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 6,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 349.0,
+   "session_id": "e0d3caca78c542af8a20e64abc9b3b44",
+   "submit_to_phase_ms": 3.104,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 10448,
+   "checkpoints_final": 10449,
+   "scan_call_index": 1,
+   "since_phase_ms": 349.4188,
+   "cancel_call_ms": 0.0979,
+   "scanner_raise_ms": 0.1748,
+   "custody_release_ms": 0.9452,
+   "terminal_event_ms": 1.1878,
+   "final_record_ms": 1.2481,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.0277,
+   "post_cancel_events": [
+    [
+     0.911,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     0.924,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     1.188,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     1.248,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 6,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 108.5,
+   "session_id": "be9e44802e94487db2d1bb20376aceb8",
+   "submit_to_phase_ms": 6902.4101,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 208892,
+   "checkpoints_final": 208893,
+   "scan_call_index": 2,
+   "since_phase_ms": 108.8948,
+   "cancel_call_ms": 0.1046,
+   "scanner_raise_ms": 0.2121,
+   "custody_release_ms": 10.3019,
+   "terminal_event_ms": 10.6159,
+   "final_record_ms": 10.6783,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 120.3021,
+   "post_cancel_events": [
+    [
+     0.186,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.358,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.616,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.678,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 6,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 1420.0,
+   "session_id": "ff2e7a71a9f94d27ae657d5f2ce32287",
+   "submit_to_phase_ms": 9.9607,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 40734,
+   "checkpoints_final": 40735,
+   "scan_call_index": 1,
+   "since_phase_ms": 1420.3193,
+   "cancel_call_ms": 0.1046,
+   "scanner_raise_ms": 0.1493,
+   "custody_release_ms": 2.1975,
+   "terminal_event_ms": 3.3466,
+   "final_record_ms": 3.4198,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.0733,
+   "post_cancel_events": [
+    [
+     0.195,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.37,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.347,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.42,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 7,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 1396.0,
+   "session_id": "0ded527851c2487597f857d28543a997",
+   "submit_to_phase_ms": 3.0827,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 39296,
+   "checkpoints_final": 39297,
+   "scan_call_index": 1,
+   "since_phase_ms": 1396.5417,
+   "cancel_call_ms": 0.1308,
+   "scanner_raise_ms": 0.1845,
+   "custody_release_ms": 2.0273,
+   "terminal_event_ms": 2.2986,
+   "final_record_ms": 2.3477,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.1059,
+   "post_cancel_events": [
+    [
+     1.99,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     1.998,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     2.299,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     2.348,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 7,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 434.0,
+   "session_id": "060d29805c8a4c5fa2dc14bc2229f05c",
+   "submit_to_phase_ms": 6870.1501,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 218348,
+   "checkpoints_final": 218349,
+   "scan_call_index": 2,
+   "since_phase_ms": 434.3433,
+   "cancel_call_ms": 0.0986,
+   "scanner_raise_ms": 0.1431,
+   "custody_release_ms": 10.1362,
+   "terminal_event_ms": 10.4221,
+   "final_record_ms": 10.4614,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 115.5298,
+   "post_cancel_events": [
+    [
+     9.937,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.175,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.422,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.461,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 7,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 2485.0,
+   "session_id": "e1ff1db1d617443b8fea941d76a1b59f",
+   "submit_to_phase_ms": 9.7173,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 70926,
+   "checkpoints_final": 70927,
+   "scan_call_index": 1,
+   "since_phase_ms": 2485.3675,
+   "cancel_call_ms": 0.1027,
+   "scanner_raise_ms": 0.1479,
+   "custody_release_ms": 3.4961,
+   "terminal_event_ms": 6.0156,
+   "final_record_ms": 6.0763,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.633,
+   "post_cancel_events": [
+    [
+     0.196,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.633,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     6.016,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     6.076,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 8,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 2443.0,
+   "session_id": "e57cf2ffd67f421699e6d8cb250b34cd",
+   "submit_to_phase_ms": 3.4012,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 69869,
+   "checkpoints_final": 69870,
+   "scan_call_index": 1,
+   "since_phase_ms": 2443.3377,
+   "cancel_call_ms": 0.1052,
+   "scanner_raise_ms": 0.142,
+   "custody_release_ms": 3.3018,
+   "terminal_event_ms": 3.6124,
+   "final_record_ms": 3.6754,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 9.5733,
+   "post_cancel_events": [
+    [
+     3.283,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.461,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.612,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.675,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 8,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 759.5,
+   "session_id": "6df807a575924e0080bb09410fdc19f2",
+   "submit_to_phase_ms": 7014.4657,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 227808,
+   "checkpoints_final": 227809,
+   "scan_call_index": 2,
+   "since_phase_ms": 759.8484,
+   "cancel_call_ms": 0.111,
+   "scanner_raise_ms": 0.1487,
+   "custody_release_ms": 10.7314,
+   "terminal_event_ms": 11.0273,
+   "final_record_ms": 11.1014,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 128.4293,
+   "post_cancel_events": [
+    [
+     0.194,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.777,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.027,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.101,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 8,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 3550.0,
+   "session_id": "11eedbdf2c8c46a4b09a46b13fc92497",
+   "submit_to_phase_ms": 9.9922,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 101792,
+   "checkpoints_final": 101793,
+   "scan_call_index": 1,
+   "since_phase_ms": 3550.3967,
+   "cancel_call_ms": 0.1003,
+   "scanner_raise_ms": 0.137,
+   "custody_release_ms": 4.7258,
+   "terminal_event_ms": 7.4678,
+   "final_record_ms": 7.533,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 13.3259,
+   "post_cancel_events": [
+    [
+     0.185,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     4.908,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.468,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     7.533,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 9,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 3490.0,
+   "session_id": "9e131e74b76045c6ba7fa101c3474739",
+   "submit_to_phase_ms": 3.1368,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 100078,
+   "checkpoints_final": 100079,
+   "scan_call_index": 1,
+   "since_phase_ms": 3490.4331,
+   "cancel_call_ms": 0.1037,
+   "scanner_raise_ms": 0.1437,
+   "custody_release_ms": 4.7475,
+   "terminal_event_ms": 4.9818,
+   "final_record_ms": 5.0568,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.5348,
+   "post_cancel_events": [
+    [
+     4.624,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     4.773,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     4.982,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     5.057,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 9,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1085.0,
+   "session_id": "4c180df6b00b4d08941e00d426fe1f3c",
+   "submit_to_phase_ms": 7798.4757,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 231997,
+   "checkpoints_final": 231998,
+   "scan_call_index": 2,
+   "since_phase_ms": 1085.3263,
+   "cancel_call_ms": 0.0986,
+   "scanner_raise_ms": 0.1326,
+   "custody_release_ms": 10.4953,
+   "terminal_event_ms": 10.7624,
+   "final_record_ms": 10.8214,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 123.9412,
+   "post_cancel_events": [
+    [
+     10.36,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.541,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.762,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.821,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 9,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 4615.0,
+   "session_id": "27850ceabfe44b9a9dcd92268a076dc0",
+   "submit_to_phase_ms": 9.5453,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 122640,
+   "checkpoints_final": 122641,
+   "scan_call_index": 1,
+   "since_phase_ms": 4615.3937,
+   "cancel_call_ms": 0.1048,
+   "scanner_raise_ms": 0.1463,
+   "custody_release_ms": 5.8327,
+   "terminal_event_ms": 8.41,
+   "final_record_ms": 8.4815,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.9671,
+   "post_cancel_events": [
+    [
+     0.342,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     5.88,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     8.41,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.482,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 10,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 4537.0,
+   "session_id": "2afd0baa1cde422c8a01da57c1303514",
+   "submit_to_phase_ms": 3.0744,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 135694,
+   "checkpoints_final": 135695,
+   "scan_call_index": 1,
+   "since_phase_ms": 4537.432,
+   "cancel_call_ms": 0.1295,
+   "scanner_raise_ms": 0.3156,
+   "custody_release_ms": 6.3429,
+   "terminal_event_ms": 6.6685,
+   "final_record_ms": 6.7384,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 7.9379,
+   "post_cancel_events": [
+    [
+     6.225,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     6.379,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     6.668,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     6.738,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 10,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1410.5,
+   "session_id": "6c5180ae052f4093a34342b03d437472",
+   "submit_to_phase_ms": 6890.2337,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 244830,
+   "checkpoints_final": 244831,
+   "scan_call_index": 2,
+   "since_phase_ms": 1410.8549,
+   "cancel_call_ms": 0.1017,
+   "scanner_raise_ms": 0.139,
+   "custody_release_ms": 12.2716,
+   "terminal_event_ms": 12.5081,
+   "final_record_ms": 12.583,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 116.8932,
+   "post_cancel_events": [
+    [
+     12.147,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.293,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     12.508,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     12.583,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 10,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 5680.0,
+   "session_id": "b925e9d0a47e465886fb8486d875dcb9",
+   "submit_to_phase_ms": 9.2527,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 155193,
+   "checkpoints_final": 155194,
+   "scan_call_index": 1,
+   "since_phase_ms": 5680.6002,
+   "cancel_call_ms": 0.1255,
+   "scanner_raise_ms": 0.1843,
+   "custody_release_ms": 8.4445,
+   "terminal_event_ms": 9.7619,
+   "final_record_ms": 9.8657,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.3113,
+   "post_cancel_events": [
+    [
+     0.381,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     8.611,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     9.762,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     9.866,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 11,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 5584.0,
+   "session_id": "976121c945704450b1ccf878857e07df",
+   "submit_to_phase_ms": 3.288,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 163192,
+   "checkpoints_final": 163193,
+   "scan_call_index": 1,
+   "since_phase_ms": 5584.3234,
+   "cancel_call_ms": 0.1038,
+   "scanner_raise_ms": 0.1346,
+   "custody_release_ms": 7.5475,
+   "terminal_event_ms": 7.8181,
+   "final_record_ms": 7.8969,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 5.9328,
+   "post_cancel_events": [
+    [
+     7.407,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     7.588,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.818,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     7.897,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 11,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1736.0,
+   "session_id": "3a0ce7a63c96441f9a9ff583d3112565",
+   "submit_to_phase_ms": 7029.0388,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 253430,
+   "checkpoints_final": 253431,
+   "scan_call_index": 2,
+   "since_phase_ms": 1736.3859,
+   "cancel_call_ms": 0.1025,
+   "scanner_raise_ms": 0.1475,
+   "custody_release_ms": 12.227,
+   "terminal_event_ms": 12.4948,
+   "final_record_ms": 12.6098,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 150.8498,
+   "post_cancel_events": [
+    [
+     12.106,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.274,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     12.495,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     12.61,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 11,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 355.0,
+   "session_id": "61a10014cdbc4e84a017b74834c466c2",
+   "submit_to_phase_ms": 9.844,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 10066,
+   "checkpoints_final": 10067,
+   "scan_call_index": 1,
+   "since_phase_ms": 355.4518,
+   "cancel_call_ms": 0.1034,
+   "scanner_raise_ms": 0.147,
+   "custody_release_ms": 1.0099,
+   "terminal_event_ms": 3.6714,
+   "final_record_ms": 3.7565,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.7585,
+   "post_cancel_events": [
+    [
+     0.216,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     1.038,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.671,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.756,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 12,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 349.0,
+   "session_id": "fb088bfc5eef4400b255230acc8856a3",
+   "submit_to_phase_ms": 3.3286,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 9856,
+   "checkpoints_final": 9857,
+   "scan_call_index": 1,
+   "since_phase_ms": 349.4143,
+   "cancel_call_ms": 0.1007,
+   "scanner_raise_ms": 0.1438,
+   "custody_release_ms": 0.7343,
+   "terminal_event_ms": 1.0553,
+   "final_record_ms": 1.1261,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.0613,
+   "post_cancel_events": [
+    [
+     0.72,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     0.911,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     1.055,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     1.126,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 12,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 108.5,
+   "session_id": "50d3ed4a02974505b8315c2d2f30bfe3",
+   "submit_to_phase_ms": 7030.6309,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 209143,
+   "checkpoints_final": 209144,
+   "scan_call_index": 2,
+   "since_phase_ms": 108.8703,
+   "cancel_call_ms": 0.102,
+   "scanner_raise_ms": 0.14,
+   "custody_release_ms": 10.7519,
+   "terminal_event_ms": 11.0008,
+   "final_record_ms": 11.0716,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 118.9339,
+   "post_cancel_events": [
+    [
+     10.635,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.78,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.001,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.072,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 12,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 1420.0,
+   "session_id": "582a6f58cfa04cb0a749172b957c5d19",
+   "submit_to_phase_ms": 9.5157,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 39088,
+   "checkpoints_final": 39089,
+   "scan_call_index": 1,
+   "since_phase_ms": 1420.3521,
+   "cancel_call_ms": 0.1056,
+   "scanner_raise_ms": 0.139,
+   "custody_release_ms": 2.3659,
+   "terminal_event_ms": 4.6356,
+   "final_record_ms": 4.7124,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.0446,
+   "post_cancel_events": [
+    [
+     0.181,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.4,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     4.636,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     4.712,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 13,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 1396.0,
+   "session_id": "5ac948cf30314146b64ad347207989f4",
+   "submit_to_phase_ms": 3.1997,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 37371,
+   "checkpoints_final": 37372,
+   "scan_call_index": 1,
+   "since_phase_ms": 1396.44,
+   "cancel_call_ms": 0.1034,
+   "scanner_raise_ms": 0.1347,
+   "custody_release_ms": 2.0358,
+   "terminal_event_ms": 2.3012,
+   "final_record_ms": 2.3772,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 4.3944,
+   "post_cancel_events": [
+    [
+     2.008,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.018,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     2.301,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     2.377,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 13,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 434.0,
+   "session_id": "90e6218b936449e898b710f9144568b2",
+   "submit_to_phase_ms": 7306.2529,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 218141,
+   "checkpoints_final": 218142,
+   "scan_call_index": 2,
+   "since_phase_ms": 434.3364,
+   "cancel_call_ms": 0.1029,
+   "scanner_raise_ms": 0.148,
+   "custody_release_ms": 10.4853,
+   "terminal_event_ms": 10.8783,
+   "final_record_ms": 10.9593,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 122.9248,
+   "post_cancel_events": [
+    [
+     10.657,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.668,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.878,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.959,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 13,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 2485.0,
+   "session_id": "578b849344904dcfbd30d5548e297e60",
+   "submit_to_phase_ms": 9.9288,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 68648,
+   "checkpoints_final": 68649,
+   "scan_call_index": 1,
+   "since_phase_ms": 2485.3804,
+   "cancel_call_ms": 0.1019,
+   "scanner_raise_ms": 0.1443,
+   "custody_release_ms": 3.5069,
+   "terminal_event_ms": 5.9405,
+   "final_record_ms": 6.0105,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.87,
+   "post_cancel_events": [
+    [
+     0.252,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.539,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     5.941,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     6.011,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 14,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 2443.0,
+   "session_id": "838a99943ded4863a4e055b923be2d58",
+   "submit_to_phase_ms": 3.3977,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 68023,
+   "checkpoints_final": 68024,
+   "scan_call_index": 1,
+   "since_phase_ms": 2443.3134,
+   "cancel_call_ms": 0.1102,
+   "scanner_raise_ms": 0.1966,
+   "custody_release_ms": 3.268,
+   "terminal_event_ms": 3.5409,
+   "final_record_ms": 3.6126,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 5.6796,
+   "post_cancel_events": [
+    [
+     0.177,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.309,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.541,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.613,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 14,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 759.5,
+   "session_id": "491e474a6b32485fbf1d3f8d6e6ee220",
+   "submit_to_phase_ms": 7195.1241,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 226835,
+   "checkpoints_final": 226836,
+   "scan_call_index": 2,
+   "since_phase_ms": 759.8692,
+   "cancel_call_ms": 0.1016,
+   "scanner_raise_ms": 0.1406,
+   "custody_release_ms": 10.7078,
+   "terminal_event_ms": 11.0972,
+   "final_record_ms": 11.1429,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 118.0949,
+   "post_cancel_events": [
+    [
+     10.677,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.694,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.097,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.143,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 14,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 3550.0,
+   "session_id": "2be4da07d0154deea169a67e3d2ea98b",
+   "submit_to_phase_ms": 9.904,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 97404,
+   "checkpoints_final": 97405,
+   "scan_call_index": 1,
+   "since_phase_ms": 3550.3972,
+   "cancel_call_ms": 0.0991,
+   "scanner_raise_ms": 0.14,
+   "custody_release_ms": 4.614,
+   "terminal_event_ms": 7.063,
+   "final_record_ms": 7.1241,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 11.0303,
+   "post_cancel_events": [
+    [
+     0.182,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     4.65,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.063,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     7.124,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 15,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 3490.0,
+   "session_id": "106fb885e9ad4ffb85e5db68c29701bd",
+   "submit_to_phase_ms": 3.275,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 98894,
+   "checkpoints_final": 98895,
+   "scan_call_index": 1,
+   "since_phase_ms": 3490.3242,
+   "cancel_call_ms": 0.1043,
+   "scanner_raise_ms": 0.1438,
+   "custody_release_ms": 5.7151,
+   "terminal_event_ms": 6.0207,
+   "final_record_ms": 6.0968,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.7004,
+   "post_cancel_events": [
+    [
+     5.586,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     5.746,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     6.021,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     6.097,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 15,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1085.0,
+   "session_id": "59b47e06da5147a7b69e05b47fbd2981",
+   "submit_to_phase_ms": 7160.3061,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 237337,
+   "checkpoints_final": 237338,
+   "scan_call_index": 2,
+   "since_phase_ms": 1085.3764,
+   "cancel_call_ms": 0.1049,
+   "scanner_raise_ms": 0.1533,
+   "custody_release_ms": 10.4987,
+   "terminal_event_ms": 10.898,
+   "final_record_ms": 10.9669,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 141.0805,
+   "post_cancel_events": [
+    [
+     10.549,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.742,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.898,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.967,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 15,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 4615.0,
+   "session_id": "24cbf1b507474bceb03c791a36ff4057",
+   "submit_to_phase_ms": 9.6253,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 130043,
+   "checkpoints_final": 130044,
+   "scan_call_index": 1,
+   "since_phase_ms": 4615.3572,
+   "cancel_call_ms": 0.0906,
+   "scanner_raise_ms": 0.1301,
+   "custody_release_ms": 6.1765,
+   "terminal_event_ms": 8.5639,
+   "final_record_ms": 8.6335,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 19.8907,
+   "post_cancel_events": [
+    [
+     0.169,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     6.231,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     8.564,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.633,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 16,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 4537.0,
+   "session_id": "c2381e5c2d444032bba79410927dcdb6",
+   "submit_to_phase_ms": 3.4292,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 124281,
+   "checkpoints_final": 124282,
+   "scan_call_index": 1,
+   "since_phase_ms": 4537.3512,
+   "cancel_call_ms": 0.1011,
+   "scanner_raise_ms": 0.1295,
+   "custody_release_ms": 5.6202,
+   "terminal_event_ms": 5.8796,
+   "final_record_ms": 5.9431,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.0316,
+   "post_cancel_events": [
+    [
+     5.498,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     5.665,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     5.88,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     5.943,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 16,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1410.5,
+   "session_id": "38bb70b7c107408d80a67c82bfb847ca",
+   "submit_to_phase_ms": 7184.0516,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 245669,
+   "checkpoints_final": 245670,
+   "scan_call_index": 2,
+   "since_phase_ms": 1410.8433,
+   "cancel_call_ms": 0.1028,
+   "scanner_raise_ms": 0.1321,
+   "custody_release_ms": 10.9374,
+   "terminal_event_ms": 11.3371,
+   "final_record_ms": 11.4063,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 148.5879,
+   "post_cancel_events": [
+    [
+     10.977,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     11.178,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.337,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.406,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 16,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 5680.0,
+   "session_id": "b5ecf6ef75a84bca91bcb622884fca0f",
+   "submit_to_phase_ms": 10.1143,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 167227,
+   "checkpoints_final": 167228,
+   "scan_call_index": 1,
+   "since_phase_ms": 5680.4216,
+   "cancel_call_ms": 0.0976,
+   "scanner_raise_ms": 0.1347,
+   "custody_release_ms": 7.6874,
+   "terminal_event_ms": 10.0426,
+   "final_record_ms": 10.1125,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 20.3877,
+   "post_cancel_events": [
+    [
+     0.183,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     7.727,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.043,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.113,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 17,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 5584.0,
+   "session_id": "e59358b6076c48fdbeeb624e06351a03",
+   "submit_to_phase_ms": 3.0599,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 159232,
+   "checkpoints_final": 159233,
+   "scan_call_index": 1,
+   "since_phase_ms": 5584.3318,
+   "cancel_call_ms": 0.1034,
+   "scanner_raise_ms": 0.1355,
+   "custody_release_ms": 7.5288,
+   "terminal_event_ms": 7.7142,
+   "final_record_ms": 7.7996,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 26.9907,
+   "post_cancel_events": [
+    [
+     7.264,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     7.442,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.714,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     7.8,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 17,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1736.0,
+   "session_id": "6a048befc9c74bf9af2fcbca501ec191",
+   "submit_to_phase_ms": 7804.7719,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 252472,
+   "checkpoints_final": 252473,
+   "scan_call_index": 2,
+   "since_phase_ms": 1736.37,
+   "cancel_call_ms": 0.1002,
+   "scanner_raise_ms": 0.1396,
+   "custody_release_ms": 12.1409,
+   "terminal_event_ms": 12.6228,
+   "final_record_ms": 12.6981,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 114.9826,
+   "post_cancel_events": [
+    [
+     12.195,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.444,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     12.623,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     12.698,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 17,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 355.0,
+   "session_id": "092dc6d8d67a4172a093893fdd86807b",
+   "submit_to_phase_ms": 9.5831,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 10177,
+   "checkpoints_final": 10178,
+   "scan_call_index": 1,
+   "since_phase_ms": 355.3245,
+   "cancel_call_ms": 0.1057,
+   "scanner_raise_ms": 0.1415,
+   "custody_release_ms": 1.0279,
+   "terminal_event_ms": 3.4922,
+   "final_record_ms": 3.5594,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.8691,
+   "post_cancel_events": [
+    [
+     0.254,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     1.052,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.492,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.559,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 18,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 349.0,
+   "session_id": "0eed05f43be9435c804583db303d0699",
+   "submit_to_phase_ms": 3.3,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 10271,
+   "checkpoints_final": 10272,
+   "scan_call_index": 1,
+   "since_phase_ms": 349.465,
+   "cancel_call_ms": 0.0981,
+   "scanner_raise_ms": 0.1354,
+   "custody_release_ms": 0.6264,
+   "terminal_event_ms": 0.9834,
+   "final_record_ms": 1.0522,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.7586,
+   "post_cancel_events": [
+    [
+     0.724,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     0.734,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     0.983,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     1.052,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 18,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 108.5,
+   "session_id": "cf3b9fa798df4ca693cc8804616cdf7c",
+   "submit_to_phase_ms": 6830.6786,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 207949,
+   "checkpoints_final": 207950,
+   "scan_call_index": 2,
+   "since_phase_ms": 108.8722,
+   "cancel_call_ms": 0.0985,
+   "scanner_raise_ms": 0.1304,
+   "custody_release_ms": 9.2097,
+   "terminal_event_ms": 9.5797,
+   "final_record_ms": 9.6507,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 114.3564,
+   "post_cancel_events": [
+    [
+     9.413,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     9.424,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     9.58,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     9.651,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 18,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 1420.0,
+   "session_id": "a3988204f6684b5cb0d7e0be0554eabd",
+   "submit_to_phase_ms": 9.3915,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 40879,
+   "checkpoints_final": 40880,
+   "scan_call_index": 1,
+   "since_phase_ms": 1420.3274,
+   "cancel_call_ms": 0.1024,
+   "scanner_raise_ms": 0.1182,
+   "custody_release_ms": 2.1104,
+   "terminal_event_ms": 4.883,
+   "final_record_ms": 4.954,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.0253,
+   "post_cancel_events": [
+    [
+     0.166,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.286,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     4.883,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     4.954,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 19,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 1396.0,
+   "session_id": "09b99f3d747b445d9350da0703d8c18f",
+   "submit_to_phase_ms": 3.3034,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 38952,
+   "checkpoints_final": 38953,
+   "scan_call_index": 1,
+   "since_phase_ms": 1396.6128,
+   "cancel_call_ms": 0.1062,
+   "scanner_raise_ms": 0.1464,
+   "custody_release_ms": 2.1357,
+   "terminal_event_ms": 2.4017,
+   "final_record_ms": 2.4796,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.8706,
+   "post_cancel_events": [
+    [
+     2.023,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.201,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     2.402,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     2.48,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 19,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 434.0,
+   "session_id": "72aba3ba04e24430bda6f2c5f913d471",
+   "submit_to_phase_ms": 6935.6443,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 218730,
+   "checkpoints_final": 218731,
+   "scan_call_index": 2,
+   "since_phase_ms": 434.3835,
+   "cancel_call_ms": 0.1588,
+   "scanner_raise_ms": 0.2038,
+   "custody_release_ms": 9.7425,
+   "terminal_event_ms": 10.1261,
+   "final_record_ms": 10.2082,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 113.9374,
+   "post_cancel_events": [
+    [
+     9.884,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     9.895,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.126,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.208,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 19,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 2485.0,
+   "session_id": "c7b6633b9be34bfb89b106040eb36463",
+   "submit_to_phase_ms": 9.3456,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 71819,
+   "checkpoints_final": 71820,
+   "scan_call_index": 1,
+   "since_phase_ms": 2485.3626,
+   "cancel_call_ms": 0.0998,
+   "scanner_raise_ms": 0.1404,
+   "custody_release_ms": 3.6063,
+   "terminal_event_ms": 6.4731,
+   "final_record_ms": 6.5542,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 7.6523,
+   "post_cancel_events": [
+    [
+     0.188,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.776,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     6.473,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     6.554,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 20,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 2443.0,
+   "session_id": "dcf02bab9a494556bfd505d9d06f8ebc",
+   "submit_to_phase_ms": 3.1223,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 66563,
+   "checkpoints_final": 66564,
+   "scan_call_index": 1,
+   "since_phase_ms": 2443.4009,
+   "cancel_call_ms": 0.1012,
+   "scanner_raise_ms": 0.141,
+   "custody_release_ms": 3.2431,
+   "terminal_event_ms": 3.47,
+   "final_record_ms": 3.5471,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.7657,
+   "post_cancel_events": [
+    [
+     3.134,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.288,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.47,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.547,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 20,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 759.5,
+   "session_id": "286c3fab9259460aac2c77193cc96787",
+   "submit_to_phase_ms": 7028.004,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 227768,
+   "checkpoints_final": 227769,
+   "scan_call_index": 2,
+   "since_phase_ms": 759.8759,
+   "cancel_call_ms": 0.1023,
+   "scanner_raise_ms": 0.1315,
+   "custody_release_ms": 11.0514,
+   "terminal_event_ms": 11.3036,
+   "final_record_ms": 11.3874,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 119.7808,
+   "post_cancel_events": [
+    [
+     10.919,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     11.089,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.304,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.387,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 20,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 3550.0,
+   "session_id": "64375436a8a04820bf0d656861595117",
+   "submit_to_phase_ms": 9.6334,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 100291,
+   "checkpoints_final": 100292,
+   "scan_call_index": 1,
+   "since_phase_ms": 3550.3299,
+   "cancel_call_ms": 0.1042,
+   "scanner_raise_ms": 0.1441,
+   "custody_release_ms": 5.1572,
+   "terminal_event_ms": 8.0237,
+   "final_record_ms": 8.1153,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 5.5047,
+   "post_cancel_events": [
+    [
+     0.235,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     5.362,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     8.024,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.115,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 21,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 3490.0,
+   "session_id": "fe612b464fc24e59a1e8524290b426d3",
+   "submit_to_phase_ms": 3.2467,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 98887,
+   "checkpoints_final": 98888,
+   "scan_call_index": 1,
+   "since_phase_ms": 3490.3943,
+   "cancel_call_ms": 0.1047,
+   "scanner_raise_ms": 0.1466,
+   "custody_release_ms": 4.4694,
+   "terminal_event_ms": 4.7216,
+   "final_record_ms": 4.7774,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 13.2399,
+   "post_cancel_events": [
+    [
+     4.369,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     4.52,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     4.722,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     4.777,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 21,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1085.0,
+   "session_id": "740e4294ef814cbcb6d7f7838521bb42",
+   "submit_to_phase_ms": 7297.0804,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 237249,
+   "checkpoints_final": 237250,
+   "scan_call_index": 2,
+   "since_phase_ms": 1085.3207,
+   "cancel_call_ms": 0.1037,
+   "scanner_raise_ms": 0.1448,
+   "custody_release_ms": 11.5507,
+   "terminal_event_ms": 11.802,
+   "final_record_ms": 11.8688,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 130.0473,
+   "post_cancel_events": [
+    [
+     11.426,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     11.578,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.802,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.869,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 21,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 4615.0,
+   "session_id": "20cb0660c33b432492d622948bdc0280",
+   "submit_to_phase_ms": 9.3272,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 129778,
+   "checkpoints_final": 129779,
+   "scan_call_index": 1,
+   "since_phase_ms": 4615.4706,
+   "cancel_call_ms": 0.1097,
+   "scanner_raise_ms": 0.2445,
+   "custody_release_ms": 6.09,
+   "terminal_event_ms": 8.8273,
+   "final_record_ms": 8.8998,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 12.8642,
+   "post_cancel_events": [
+    [
+     0.22,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     6.341,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     8.827,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.9,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 22,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 4537.0,
+   "session_id": "786a7bfe81ed45448ac0211cd0860f15",
+   "submit_to_phase_ms": 3.5481,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 111620,
+   "checkpoints_final": 111621,
+   "scan_call_index": 1,
+   "since_phase_ms": 4537.3776,
+   "cancel_call_ms": 0.111,
+   "scanner_raise_ms": 0.1393,
+   "custody_release_ms": 5.5797,
+   "terminal_event_ms": 5.8388,
+   "final_record_ms": 5.9163,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.8584,
+   "post_cancel_events": [
+    [
+     5.477,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     5.616,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     5.839,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     5.916,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 22,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1410.5,
+   "session_id": "a0364742326145f6ae9dedbe526a7769",
+   "submit_to_phase_ms": 7418.4353,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 242858,
+   "checkpoints_final": 242859,
+   "scan_call_index": 2,
+   "since_phase_ms": 1410.8407,
+   "cancel_call_ms": 0.1,
+   "scanner_raise_ms": 0.1305,
+   "custody_release_ms": 11.8258,
+   "terminal_event_ms": 12.1552,
+   "final_record_ms": 12.2333,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 116.7369,
+   "post_cancel_events": [
+    [
+     11.768,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.003,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     12.155,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     12.233,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 22,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 5680.0,
+   "session_id": "88f7fbf909ba485ba3525a2cb819925b",
+   "submit_to_phase_ms": 9.8385,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 169748,
+   "checkpoints_final": 169749,
+   "scan_call_index": 1,
+   "since_phase_ms": 5680.4083,
+   "cancel_call_ms": 0.1038,
+   "scanner_raise_ms": 0.1318,
+   "custody_release_ms": 7.9351,
+   "terminal_event_ms": 10.1151,
+   "final_record_ms": 10.1874,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 15.3257,
+   "post_cancel_events": [
+    [
+     0.241,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     7.974,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.115,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.187,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 23,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 5584.0,
+   "session_id": "9d5a3362748e4fbb92bc0d636e7444b1",
+   "submit_to_phase_ms": 3.2225,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 159839,
+   "checkpoints_final": 159840,
+   "scan_call_index": 1,
+   "since_phase_ms": 5584.4088,
+   "cancel_call_ms": 0.1023,
+   "scanner_raise_ms": 0.1329,
+   "custody_release_ms": 7.1525,
+   "terminal_event_ms": 7.3905,
+   "final_record_ms": 7.4656,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 22.7935,
+   "post_cancel_events": [
+    [
+     7.052,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     7.177,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.391,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     7.466,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 23,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1736.0,
+   "session_id": "d461184f31a14627b116b54dc78a5157",
+   "submit_to_phase_ms": 7036.1822,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 256163,
+   "checkpoints_final": 256164,
+   "scan_call_index": 2,
+   "since_phase_ms": 1736.4072,
+   "cancel_call_ms": 0.1056,
+   "scanner_raise_ms": 0.1368,
+   "custody_release_ms": 11.4229,
+   "terminal_event_ms": 11.6799,
+   "final_record_ms": 11.7424,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 141.3383,
+   "post_cancel_events": [
+    [
+     11.271,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     11.462,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.68,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.742,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 23,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 355.0,
+   "session_id": "cc21395ae63c4193873d10ba4bc86be1",
+   "submit_to_phase_ms": 9.6633,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 9962,
+   "checkpoints_final": 9963,
+   "scan_call_index": 1,
+   "since_phase_ms": 355.3672,
+   "cancel_call_ms": 0.1007,
+   "scanner_raise_ms": 0.1344,
+   "custody_release_ms": 0.8795,
+   "terminal_event_ms": 3.7502,
+   "final_record_ms": 3.8183,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.1016,
+   "post_cancel_events": [
+    [
+     0.243,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     0.916,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     3.75,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     3.818,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 24,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 349.0,
+   "session_id": "c51a881d177a4292b849625b3c4c09b4",
+   "submit_to_phase_ms": 3.1819,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 9691,
+   "checkpoints_final": 9692,
+   "scan_call_index": 1,
+   "since_phase_ms": 349.35,
+   "cancel_call_ms": 0.1037,
+   "scanner_raise_ms": 0.1502,
+   "custody_release_ms": 0.8193,
+   "terminal_event_ms": 1.0696,
+   "final_record_ms": 1.1427,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.7067,
+   "post_cancel_events": [
+    [
+     0.712,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     0.849,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     1.07,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     1.143,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 24,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 108.5,
+   "session_id": "8037e6fbf02d44a882b31ee66c4da350",
+   "submit_to_phase_ms": 6940.7259,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 209064,
+   "checkpoints_final": 209065,
+   "scan_call_index": 2,
+   "since_phase_ms": 108.8788,
+   "cancel_call_ms": 0.0976,
+   "scanner_raise_ms": 0.1288,
+   "custody_release_ms": 9.5613,
+   "terminal_event_ms": 9.7929,
+   "final_record_ms": 9.8792,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 108.6799,
+   "post_cancel_events": [
+    [
+     9.448,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     9.594,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     9.793,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     9.879,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 24,
+   "frac": 0.05,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 1420.0,
+   "session_id": "7c12d43d23dc4008be1096f1846fabd8",
+   "submit_to_phase_ms": 9.3813,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 41065,
+   "checkpoints_final": 41066,
+   "scan_call_index": 1,
+   "since_phase_ms": 1420.3328,
+   "cancel_call_ms": 0.1021,
+   "scanner_raise_ms": 0.1334,
+   "custody_release_ms": 2.1704,
+   "terminal_event_ms": 4.727,
+   "final_record_ms": 4.8042,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.8916,
+   "post_cancel_events": [
+    [
+     0.177,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.265,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     4.727,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     4.804,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 25,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 1396.0,
+   "session_id": "90accbbceb4d40bc81c34bb67f0cd354",
+   "submit_to_phase_ms": 3.3709,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 39183,
+   "checkpoints_final": 39184,
+   "scan_call_index": 1,
+   "since_phase_ms": 1396.2572,
+   "cancel_call_ms": 0.1196,
+   "scanner_raise_ms": 0.1548,
+   "custody_release_ms": 2.0295,
+   "terminal_event_ms": 2.2765,
+   "final_record_ms": 2.3876,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 2.0428,
+   "post_cancel_events": [
+    [
+     2.011,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     2.021,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     2.276,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     2.388,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 25,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 434.0,
+   "session_id": "5eb3bd2383f04b87848c316a70aa7e13",
+   "submit_to_phase_ms": 6979.7462,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 217790,
+   "checkpoints_final": 217791,
+   "scan_call_index": 2,
+   "since_phase_ms": 434.4162,
+   "cancel_call_ms": 0.1016,
+   "scanner_raise_ms": 0.1384,
+   "custody_release_ms": 10.0505,
+   "terminal_event_ms": 10.3606,
+   "final_record_ms": 10.4385,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 115.9192,
+   "post_cancel_events": [
+    [
+     10.027,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.228,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.361,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.438,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 25,
+   "frac": 0.2,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 2485.0,
+   "session_id": "1292b0e56c0549db87826aac2d761487",
+   "submit_to_phase_ms": 10.0852,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 71039,
+   "checkpoints_final": 71040,
+   "scan_call_index": 1,
+   "since_phase_ms": 2485.363,
+   "cancel_call_ms": 0.1033,
+   "scanner_raise_ms": 0.1332,
+   "custody_release_ms": 3.5413,
+   "terminal_event_ms": 5.9981,
+   "final_record_ms": 6.0641,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.9918,
+   "post_cancel_events": [
+    [
+     0.181,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     3.584,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     5.998,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     6.064,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 26,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 2443.0,
+   "session_id": "cd968bdf95ea4b3db4a5a975aff71aca",
+   "submit_to_phase_ms": 3.1489,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 70901,
+   "checkpoints_final": 70902,
+   "scan_call_index": 1,
+   "since_phase_ms": 2443.3717,
+   "cancel_call_ms": 0.1015,
+   "scanner_raise_ms": 0.1289,
+   "custody_release_ms": 3.8072,
+   "terminal_event_ms": 4.1482,
+   "final_record_ms": 4.2217,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.6606,
+   "post_cancel_events": [
+    [
+     3.783,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     4.002,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     4.148,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     4.222,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 26,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 759.5,
+   "session_id": "439225db4d3e4461b45c676b5ae6fd06",
+   "submit_to_phase_ms": 6979.2415,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 228412,
+   "checkpoints_final": 228413,
+   "scan_call_index": 2,
+   "since_phase_ms": 759.8628,
+   "cancel_call_ms": 0.1029,
+   "scanner_raise_ms": 0.1381,
+   "custody_release_ms": 11.224,
+   "terminal_event_ms": 11.456,
+   "final_record_ms": 11.5089,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 140.4731,
+   "post_cancel_events": [
+    [
+     10.983,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     11.162,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.456,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.509,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 26,
+   "frac": 0.35,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 3550.0,
+   "session_id": "339bd6d10a6d4e69b0894efe1368f16d",
+   "submit_to_phase_ms": 14.1767,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 104129,
+   "checkpoints_final": 104130,
+   "scan_call_index": 1,
+   "since_phase_ms": 3550.3568,
+   "cancel_call_ms": 0.108,
+   "scanner_raise_ms": 0.1401,
+   "custody_release_ms": 4.9524,
+   "terminal_event_ms": 7.5804,
+   "final_record_ms": 7.6595,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 1.7339,
+   "post_cancel_events": [
+    [
+     0.188,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     5.154,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.58,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     7.66,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 27,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 3490.0,
+   "session_id": "99fb33bda62946d8a13fe3e1fffc920b",
+   "submit_to_phase_ms": 3.2645,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 102223,
+   "checkpoints_final": 102224,
+   "scan_call_index": 1,
+   "since_phase_ms": 3490.3214,
+   "cancel_call_ms": 0.1025,
+   "scanner_raise_ms": 0.1375,
+   "custody_release_ms": 4.7389,
+   "terminal_event_ms": 5.0968,
+   "final_record_ms": 5.1679,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 7.7735,
+   "post_cancel_events": [
+    [
+     4.716,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     4.936,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     5.097,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     5.168,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 27,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1085.0,
+   "session_id": "822f44c0e348413591bf64defcba415f",
+   "submit_to_phase_ms": 6873.3797,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 237372,
+   "checkpoints_final": 237373,
+   "scan_call_index": 2,
+   "since_phase_ms": 1085.538,
+   "cancel_call_ms": 0.1054,
+   "scanner_raise_ms": 0.2136,
+   "custody_release_ms": 10.7834,
+   "terminal_event_ms": 11.1804,
+   "final_record_ms": 11.224,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 112.8156,
+   "post_cancel_events": [
+    [
+     0.181,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     10.978,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.18,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.224,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 27,
+   "frac": 0.5,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 4615.0,
+   "session_id": "67d611e32657486c8cd216819ba655df",
+   "submit_to_phase_ms": 9.9359,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 131934,
+   "checkpoints_final": 131935,
+   "scan_call_index": 1,
+   "since_phase_ms": 4615.4387,
+   "cancel_call_ms": 0.102,
+   "scanner_raise_ms": 0.1671,
+   "custody_release_ms": 6.1251,
+   "terminal_event_ms": 8.585,
+   "final_record_ms": 8.6488,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 6.924,
+   "post_cancel_events": [
+    [
+     0.218,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     6.154,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     8.585,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.649,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 28,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 4537.0,
+   "session_id": "903e0f31cb5743bab98a14c38abf4c54",
+   "submit_to_phase_ms": 3.4425,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 127816,
+   "checkpoints_final": 127817,
+   "scan_call_index": 1,
+   "since_phase_ms": 4537.4045,
+   "cancel_call_ms": 0.1121,
+   "scanner_raise_ms": 0.1593,
+   "custody_release_ms": 6.273,
+   "terminal_event_ms": 6.8177,
+   "final_record_ms": 6.8959,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 13.6425,
+   "post_cancel_events": [
+    [
+     6.322,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     6.545,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     6.818,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     6.896,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 28,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1410.5,
+   "session_id": "e325b718adf742288f30de035414b58b",
+   "submit_to_phase_ms": 7593.8975,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 242619,
+   "checkpoints_final": 242620,
+   "scan_call_index": 2,
+   "since_phase_ms": 1410.895,
+   "cancel_call_ms": 0.1063,
+   "scanner_raise_ms": 0.1647,
+   "custody_release_ms": 11.5076,
+   "terminal_event_ms": 11.7324,
+   "final_record_ms": 11.7763,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 114.3264,
+   "post_cancel_events": [
+    [
+     11.312,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     11.714,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     11.732,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     11.776,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 28,
+   "frac": 0.65,
+   "tag": "warm"
+  },
+  {
+   "case": "inventory-scan",
+   "delay_ms": 5680.0,
+   "session_id": "131bbb985cec452588b3308a7ca34833",
+   "submit_to_phase_ms": 10.0327,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 164193,
+   "checkpoints_final": 164194,
+   "scan_call_index": 1,
+   "since_phase_ms": 5680.4054,
+   "cancel_call_ms": 0.112,
+   "scanner_raise_ms": 0.1275,
+   "custody_release_ms": 8.0212,
+   "terminal_event_ms": 10.4404,
+   "final_record_ms": 10.5095,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 8.4689,
+   "post_cancel_events": [
+    [
+     0.183,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     8.16,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     10.44,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     10.509,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 29,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-source-scan",
+   "delay_ms": 5584.0,
+   "session_id": "b4a95e55eb734789b83b9bb5f3794cba",
+   "submit_to_phase_ms": 3.3781,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 166970,
+   "checkpoints_final": 166971,
+   "scan_call_index": 1,
+   "since_phase_ms": 5584.4318,
+   "cancel_call_ms": 0.1021,
+   "scanner_raise_ms": 0.1387,
+   "custody_release_ms": 7.6386,
+   "terminal_event_ms": 7.9896,
+   "final_record_ms": 8.0592,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 9.3293,
+   "post_cancel_events": [
+    [
+     7.528,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     7.669,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     7.99,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     8.059,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 29,
+   "frac": 0.8,
+   "tag": "warm"
+  },
+  {
+   "case": "plan-target-scan",
+   "delay_ms": 1736.0,
+   "session_id": "a19632fa2e134c88a24f4d655d5dbe67",
+   "submit_to_phase_ms": 6869.4212,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": false,
+   "checkpoints_at_cancel": 255305,
+   "checkpoints_final": 255306,
+   "scan_call_index": 2,
+   "since_phase_ms": 1736.3555,
+   "cancel_call_ms": 0.1042,
+   "scanner_raise_ms": 0.1361,
+   "custody_release_ms": 12.8414,
+   "terminal_event_ms": 13.0972,
+   "final_record_ms": 13.1739,
+   "final_state": "canceled",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 116.3067,
+   "post_cancel_events": [
+    [
+     12.708,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     12.868,
+     "StateChanged",
+     {
+      "state": "canceled"
+     }
+    ],
+    [
+     13.097,
+     "Terminal",
+     {
+      "result": {
+       "status": "canceled",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": true,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     13.174,
+     "canceled",
+     ""
+    ]
+   ],
+   "i": 29,
+   "frac": 0.8,
+   "tag": "warm"
+  }
+ ]
+}

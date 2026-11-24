@@ -1,0 +1,24 @@
+{"letter":"M","standby_check_after_s":45,"mode":"Device is in the PM0: Active state or PM1: Idle State"}
+{"letter":"M","rep":1,"query":"positive_read","query_result":{"query":"positive_read","letter":"M","ms":84.299,"result":{"ok":true,"value":{"file":"$RA0WE6J.mp4","read":4096}}}}
+{"letter":"M","rep":1,"query":"GetLogicalDrives","query_result":{"query":"GetLogicalDrives","letter":"M","ms":0.013,"result":{"ok":true,"value":"0x3ffc"}}}
+{"letter":"M","rep":1,"query":"GetDriveTypeW","query_result":{"query":"GetDriveTypeW","letter":"M","ms":0.013,"result":{"ok":true,"value":"FIXED"}}}
+{"letter":"M","rep":1,"query":"GetVolumeInformationW","query_result":{"query":"GetVolumeInformationW","letter":"M","ms":0.081,"result":{"ok":true,"value":{"label":"Seagate Barracuda LP","serial":"7248738B","fs":"NTFS"}}}}
+{"letter":"M","rep":1,"query":"GetDiskFreeSpaceExW","query_result":{"query":"GetDiskFreeSpaceExW","letter":"M","ms":0.053,"result":{"ok":true,"value":{"avail":1223809462272,"total":2000396742656,"free":1223809462272}}}}
+{"letter":"M","rep":1,"query":"CreateFileW0","query_result":{"query":"CreateFileW0","letter":"M","ms":0.024,"result":{"ok":true,"value":null}}}
+{"letter":"M","rep":1,"query":"device_prop","query_result":{"query":"device_prop","letter":"M","ms":0.073,"result":{"ok":true,"value":{"BusType":"USB","RemovableMedia":false,"DeviceType":0,"vendor":"ST320005","product":"42AS","revision":"0"}}}}
+{"letter":"M","rep":1,"query":"seek_penalty","query_result":{"query":"seek_penalty","letter":"M","ms":0.063,"result":{"ok":true,"value":{"IncursSeekPenalty":true}}}}
+{"letter":"M","rep":1,"query":"disk_extents","query_result":{"query":"disk_extents","letter":"M","ms":0.063,"result":{"ok":true,"value":{"extents":1,"disks":[11]}}}}
+{"letter":"M","rep":1,"query":"GetDevicePowerState","query_result":{"query":"GetDevicePowerState","letter":"M","ms":0.036,"result":{"ok":true,"value":"ON"}}}
+{"letter":"M","rep":1,"query":"positive_read","query_result":{"query":"positive_read","letter":"M","ms":83.416,"result":{"ok":true,"value":{"file":"$RA0WE6J.mp4","read":4096}}}}
+{"letter":"J","standby_check_after_s":45,"mode":"Device is in the PM2: Standby state and device is in the Standby_z power condition"}
+{"letter":"J","rep":1,"query":"positive_read","query_result":{"query":"positive_read","letter":"J","ms":8279.023,"result":{"ok":true,"value":{"file":"Cosmic.Princess.Kaguya.2026.1080p.TukuyomiTube.AAC5.1.x265.10bit-Rainbaby.mp4","read":4096}}}}
+{"letter":"J","rep":1,"query":"GetLogicalDrives","query_result":{"query":"GetLogicalDrives","letter":"J","ms":0.013,"result":{"ok":true,"value":"0x3ffc"}}}
+{"letter":"J","rep":1,"query":"GetDriveTypeW","query_result":{"query":"GetDriveTypeW","letter":"J","ms":0.014,"result":{"ok":true,"value":"FIXED"}}}
+{"letter":"J","rep":1,"query":"GetVolumeInformationW","query_result":{"query":"GetVolumeInformationW","letter":"J","ms":0.091,"result":{"ok":true,"value":{"label":"Ultrastar DC HC550 2","serial":"84B7DB1C","fs":"NTFS"}}}}
+{"letter":"J","rep":1,"query":"GetDiskFreeSpaceExW","query_result":{"query":"GetDiskFreeSpaceExW","letter":"J","ms":0.058,"result":{"ok":true,"value":{"avail":12611542663168,"total":16000881782784,"free":12611542663168}}}}
+{"letter":"J","rep":1,"query":"CreateFileW0","query_result":{"query":"CreateFileW0","letter":"J","ms":0.027,"result":{"ok":true,"value":null}}}
+{"letter":"J","rep":1,"query":"device_prop","query_result":{"query":"device_prop","letter":"J","ms":0.081,"result":{"ok":true,"value":{"BusType":"SATA","RemovableMedia":false,"DeviceType":0,"vendor":"","product":"WDC  WUH721816ALE6L4","revision":"PCGNW232"}}}}
+{"letter":"J","rep":1,"query":"seek_penalty","query_result":{"query":"seek_penalty","letter":"J","ms":0.076,"result":{"ok":true,"value":{"IncursSeekPenalty":true}}}}
+{"letter":"J","rep":1,"query":"disk_extents","query_result":{"query":"disk_extents","letter":"J","ms":0.061,"result":{"ok":true,"value":{"extents":1,"disks":[0]}}}}
+{"letter":"J","rep":1,"query":"GetDevicePowerState","query_result":{"query":"GetDevicePowerState","letter":"J","ms":0.036,"result":{"ok":true,"value":"ON"}}}
+{"letter":"J","rep":1,"query":"positive_read","query_result":{"query":"positive_read","letter":"J","ms":8292.561,"result":{"ok":true,"value":{"file":"Cosmic.Princess.Kaguya.2026.1080p.TukuyomiTube.AAC5.1.x265.10bit-Rainbaby.mp4","read":4096}}}}

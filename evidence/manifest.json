@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 40,
+  "next_id": 41,
   "records": [
     {
       "id": "EV-0001",
@@ -996,6 +996,119 @@
           "path": "r3_inventory_cold_20261110_validation.json",
           "bytes": 411,
           "sha256": "c99d6ccf3b566a3ca5d1f9e5752b3bd7971abf9dcf9f661992636ce693038d6a"
+        }
+      ]
+    },
+    {
+      "id": "EV-0040",
+      "title": "M2-A2 spike results (2026-11-24)",
+      "date": "2026-11-24",
+      "origin": "build/m2-a2 at 9bb58fa9",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 1521,
+          "sha256": "937fb56f0828fee13f2f00eb4693a592d61e1c2879eeeda3cd88c089ad03953e"
+        },
+        {
+          "path": "drop/REPORT.md",
+          "bytes": 5058,
+          "sha256": "552e1ab98fb6fcc075a5e121c0b87004e9b68d3d6486a22ffc34110a0ac03f4f"
+        },
+        {
+          "path": "drop/drop-log.prevent-on.selftest.jsonl",
+          "bytes": 10841,
+          "sha256": "210c91c2a14b771367d3d02aa8369edd7a70bcd134e491c6100273e50cd71d4b"
+        },
+        {
+          "path": "framing/REPORT.md",
+          "bytes": 6374,
+          "sha256": "0a6081ad2caae9eae43de95a71e46e9fb4d4a6247ff45e14a752e0f13a70dd75"
+        },
+        {
+          "path": "framing/nonclient_carve.json",
+          "bytes": 24389,
+          "sha256": "4016a2e48af2752fd0bcb51099ededff3ac128be33ee8f5be2cf4e06135e6ee5"
+        },
+        {
+          "path": "framing/nonclient_carve_hover_max.png",
+          "bytes": 135378,
+          "sha256": "d003c6d448506d6b88ac3d4dbc0e575f87f6980267afbe3731161017739822fe"
+        },
+        {
+          "path": "notify/REPORT.md",
+          "bytes": 3871,
+          "sha256": "f17f44d1c0ff925246ceb22fc75461e298fd71cedae0d09ebad4eb597379e90c"
+        },
+        {
+          "path": "stop-latency/REPORT.md",
+          "bytes": 6754,
+          "sha256": "bb6ca3f8af42ba8aff215c89cf3a886822336bb153662b29419899a55292758d"
+        },
+        {
+          "path": "stop-latency/analyze.py",
+          "bytes": 1444,
+          "sha256": "95f5924c2a1fc67f5a99c0d3127a06f3a622cd868e13bf1a0f88a596f70a131a"
+        },
+        {
+          "path": "stop-latency/harness.py",
+          "bytes": 20423,
+          "sha256": "803613b25c24fe119c46384dabb73a61f02cfc351db9bd110d1d292d13f3c511"
+        },
+        {
+          "path": "stop-latency/samples_F_cold.json",
+          "bytes": 27499,
+          "sha256": "b0efc0cedeb0851fc8dec3c28d07d033882e533e97985f5a86beab6427760549"
+        },
+        {
+          "path": "stop-latency/samples_F_compute10k.json",
+          "bytes": 9079,
+          "sha256": "76452b162130e4b46906f98dd063044723a6cdcacf288966bf0c6b8fc45a9c46"
+        },
+        {
+          "path": "stop-latency/samples_F_compute30k.json",
+          "bytes": 4568,
+          "sha256": "2ca625698dc852c1b1d03459606762f44816aaf2ac1e0a9cc1b3c2acabc3c2f8"
+        },
+        {
+          "path": "stop-latency/samples_F_warm.json",
+          "bytes": 131549,
+          "sha256": "cb8f2460ac03a5f81888854de37bf945f5d1b82584019ace86dc8c31ae65639c"
+        },
+        {
+          "path": "stop-latency/samples_J_warm.json",
+          "bytes": 131633,
+          "sha256": "42fb6ae9f1118454784040dda0564f0996d08612c5acb6bbe40520893eecd51c"
+        },
+        {
+          "path": "volume/REPORT.md",
+          "bytes": 5579,
+          "sha256": "5f2e59ddc96f044255b76cc8878b21ccaa10bdc9ff9c1e1da94586130ef7a9fa"
+        },
+        {
+          "path": "volume/probe.py",
+          "bytes": 9760,
+          "sha256": "3e303d3e977b1e4bbf1df4a963567030a4b05bf0dc6ebd4e15083c784722d0a6"
+        },
+        {
+          "path": "volume/results.json",
+          "bytes": 49987,
+          "sha256": "eb7b96240c572fac36c2ede464e327e699434f2b5e794686ea321f14a7f0e287"
+        },
+        {
+          "path": "volume/spin_query.py",
+          "bytes": 2473,
+          "sha256": "d079c9e81c270b3c08ef3a81635112004c8c1bc8d88290ce910ee1d7928158b8"
+        },
+        {
+          "path": "volume/spinup2-20261124T084325Z.jsonl",
+          "bytes": 4379,
+          "sha256": "f9559d9fed0c9e15c88c5e5138930433fa431239929e1cbd5074bb402df414b3"
+        },
+        {
+          "path": "volume/spinup2.ps1",
+          "bytes": 3518,
+          "sha256": "5624da296ff0c8b3d77af48edad1a8ba8a46af549a52489f6a1de8afc88000c5"
         }
       ]
     }

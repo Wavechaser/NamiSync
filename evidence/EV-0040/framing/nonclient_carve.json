@@ -1,0 +1,1033 @@
+{
+ "mode": "nonclient_carve",
+ "flags": {
+  "nccalc": true,
+  "nchit": true,
+  "nonclient": true,
+  "carve": true
+ },
+ "hwnd": "0xba1552",
+ "dwm_dark_set_hr": 0,
+ "dwm_backdrop_set_hr": 0,
+ "extend_frame_hr": 0,
+ "subclass_installed": true,
+ "IsNonClientRegionSupportEnabled_before": false,
+ "IsNonClientRegionSupportEnabled_after": true,
+ "reloaded_loaded_event": true,
+ "nodrag_rects_px": [
+  [
+   304,
+   7,
+   482,
+   49
+  ]
+ ],
+ "carve_buttons_rect_ctrl": [
+  1643,
+  0,
+  1902,
+  51
+ ],
+ "carved": true,
+ "pywebview": "?",
+ "dpi": 168,
+ "window_rect": [
+  455,
+  245,
+  2380,
+  1505
+ ],
+ "extended_frame_bounds": [
+  465,
+  245,
+  2370,
+  1495
+ ],
+ "caption_button_bounds_window_rel": [
+  0,
+  [
+   1655,
+   0,
+   1914,
+   51
+  ]
+ ],
+ "styles": {
+  "WS_CAPTION": true,
+  "WS_THICKFRAME": true,
+  "WS_SYSMENU": true,
+  "WS_MAXIMIZEBOX": true,
+  "WS_MINIMIZEBOX": true,
+  "WS_MAXIMIZE": false
+ },
+ "dwm_dark_readback": [
+  0,
+  0
+ ],
+ "dwm_backdrop_readback": [
+  0,
+  2
+ ],
+ "children": [
+  "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 parent=0xba1552:WindowsForms10.Window.8.app.0.aec740_r21_ad1:pid46740",
+  "0xbd1712 Chrome_WidgetWin_0 pid46740 parent=0x1ca0862:WindowsForms10.Window.8.app.0.aec740_r21_ad1:pid46740",
+  "0xab0b6a Chrome_WidgetWin_0 pid46740 parent=0xbd1712:Chrome_WidgetWin_0:pid46740",
+  "0x6f17ac Chrome_WidgetWin_0 pid46740 parent=0xbd1712:Chrome_WidgetWin_0:pid46740",
+  "0xf11620 Chrome_WidgetWin_0 pid46740 parent=0xbd1712:Chrome_WidgetWin_0:pid46740",
+  "0x5b17d2 Chrome_WidgetWin_0 pid46740 parent=0xbd1712:Chrome_WidgetWin_0:pid46740",
+  "0x1620bb2 Chrome_WidgetWin_1 pid69628 parent=0xbd1712:Chrome_WidgetWin_0:pid46740",
+  "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 parent=0x1620bb2:Chrome_WidgetWin_1:pid69628",
+  "0x24204f0 Intermediate D3D Window pid67204 parent=0x1620bb2:Chrome_WidgetWin_1:pid69628"
+ ],
+ "client_origin_minus_window_origin": [
+  12,
+  0
+ ],
+ "client_size": [
+  1901,
+  1248
+ ],
+ "sweep_caption_y": [
+  [
+   1615,
+   1672,
+   "HTCAPTION"
+  ],
+  [
+   1673,
+   1752,
+   "HTMINBUTTON"
+  ],
+  [
+   1753,
+   1833,
+   "HTMAXBUTTON"
+  ],
+  [
+   1834,
+   1913,
+   "HTCLOSE"
+  ],
+  [
+   1914,
+   1921,
+   "HTRIGHT"
+  ]
+ ],
+ "grid_normal": {
+  "left_out3": {
+   "x": 462,
+   "y": 870,
+   "chain": [],
+   "top_NCHITTEST": "HTLEFT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "right_out3": {
+   "x": 2372,
+   "y": 870,
+   "chain": [],
+   "top_NCHITTEST": "HTRIGHT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "bottom_out3": {
+   "x": 1417,
+   "y": 1497,
+   "chain": [],
+   "top_NCHITTEST": "HTBOTTOM",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "top_out3": {
+   "x": 1417,
+   "y": 242,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTNOWHERE",
+   "WindowFromPoint": "0x1ba04fa Chrome_RenderWidgetHostHWND pid42356 ROOT=OTHER",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "left_in1": {
+   "x": 466,
+   "y": 870,
+   "chain": [],
+   "top_NCHITTEST": "HTLEFT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "right_in1": {
+   "x": 2368,
+   "y": 870,
+   "chain": [],
+   "top_NCHITTEST": "HTRIGHT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "bottom_in1": {
+   "x": 1417,
+   "y": 1493,
+   "chain": [],
+   "top_NCHITTEST": "HTBOTTOM",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "top_in1": {
+   "x": 1417,
+   "y": 246,
+   "chain": [],
+   "top_NCHITTEST": "HTTOP",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "left_in4": {
+   "x": 469,
+   "y": 870,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "right_in4": {
+   "x": 2365,
+   "y": 870,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "bottom_in4": {
+   "x": 1417,
+   "y": 1490,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "top_in4": {
+   "x": 1417,
+   "y": 249,
+   "chain": [],
+   "top_NCHITTEST": "HTTOP",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "left_in10": {
+   "x": 475,
+   "y": 870,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "right_in10": {
+   "x": 2359,
+   "y": 870,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "bottom_in10": {
+   "x": 1417,
+   "y": 1484,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "top_in10": {
+   "x": 1417,
+   "y": 255,
+   "chain": [
+    "Chrome_WidgetWin_0=HTTOP",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCAPTION",
+   "WindowFromPoint": "0x6f17ac Chrome_WidgetWin_0 pid46740 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTTOP"
+  },
+  "topleft_in1": {
+   "x": 466,
+   "y": 246,
+   "chain": [],
+   "top_NCHITTEST": "HTTOPLEFT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "topright_in1": {
+   "x": 2368,
+   "y": 246,
+   "chain": [],
+   "top_NCHITTEST": "HTTOPRIGHT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "bottomleft_in1": {
+   "x": 466,
+   "y": 1493,
+   "chain": [],
+   "top_NCHITTEST": "HTLEFT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "bottomright_in1": {
+   "x": 2368,
+   "y": 1493,
+   "chain": [],
+   "top_NCHITTEST": "HTRIGHT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "none",
+   "WFP_NCHITTEST": "-"
+  },
+  "topleft_in4": {
+   "x": 469,
+   "y": 249,
+   "chain": [],
+   "top_NCHITTEST": "HTTOPLEFT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "topright_in4": {
+   "x": 2365,
+   "y": 249,
+   "chain": [],
+   "top_NCHITTEST": "HTTOPRIGHT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "bottomleft_in4": {
+   "x": 469,
+   "y": 1490,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "bottomright_in4": {
+   "x": 2365,
+   "y": 1490,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "topleft_corner_in12": {
+   "x": 477,
+   "y": 248,
+   "chain": [],
+   "top_NCHITTEST": "HTTOPLEFT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "topright_corner_in12": {
+   "x": 2357,
+   "y": 248,
+   "chain": [],
+   "top_NCHITTEST": "HTTOPRIGHT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "caption_drag_left": {
+   "x": 535,
+   "y": 273,
+   "chain": [
+    "Chrome_WidgetWin_0=HTCAPTION",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCAPTION",
+   "WindowFromPoint": "0xf11620 Chrome_WidgetWin_0 pid46740 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCAPTION"
+  },
+  "caption_drag_center": {
+   "x": 1417,
+   "y": 273,
+   "chain": [
+    "Chrome_WidgetWin_0=HTCAPTION",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCAPTION",
+   "WindowFromPoint": "0x6f17ac Chrome_WidgetWin_0 pid46740 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCAPTION"
+  },
+  "caption_below_resize_y10": {
+   "x": 1417,
+   "y": 255,
+   "chain": [
+    "Chrome_WidgetWin_0=HTTOP",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCAPTION",
+   "WindowFromPoint": "0x6f17ac Chrome_WidgetWin_0 pid46740 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTTOP"
+  },
+  "min_btn": {
+   "x": 2167,
+   "y": 270,
+   "chain": [],
+   "top_NCHITTEST": "HTMINBUTTON",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "max_btn": {
+   "x": 2248,
+   "y": 270,
+   "chain": [],
+   "top_NCHITTEST": "HTMAXBUTTON",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "close_btn": {
+   "x": 2328,
+   "y": 270,
+   "chain": [],
+   "top_NCHITTEST": "HTCLOSE",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "left_of_buttons_x-4": {
+   "x": 2123,
+   "y": 270,
+   "chain": [],
+   "top_NCHITTEST": "HTCAPTION",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "max_btn_top_edge_y1": {
+   "x": 2248,
+   "y": 246,
+   "chain": [],
+   "top_NCHITTEST": "HTMAXBUTTON",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "close_btn_topright_y1": {
+   "x": 2364,
+   "y": 246,
+   "chain": [],
+   "top_NCHITTEST": "HTTOPRIGHT",
+   "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+   "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "-"
+  },
+  "client_body_center": {
+   "x": 1417,
+   "y": 870,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  },
+  "client_body_below_caption": {
+   "x": 1417,
+   "y": 329,
+   "chain": [
+    "Chrome_RenderWidgetHostHWN=HTCLIENT",
+    "Chrome_WidgetWin_1=HTCLIENT",
+    "Chrome_WidgetWin_0=HTCLIENT",
+    "WindowsForms10.Window.8.ap=HTCLIENT"
+   ],
+   "top_NCHITTEST": "HTCLIENT",
+   "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+   "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "WFP_NCHITTEST": "HTCLIENT"
+  }
+ },
+ "real_cursor": {
+  "caption_drag_center": {
+   "at": [
+    1417,
+    273
+   ],
+   "top_level_received": [],
+   "count": 0,
+   "WindowFromPoint": "Chrome_WidgetWin_0",
+   "root_is_ours": true
+  },
+  "max_btn": {
+   "at": [
+    2248,
+    270
+   ],
+   "top_level_received": [
+    [
+     2248,
+     270,
+     9,
+     "HTMAXBUTTON"
+    ],
+    [
+     2248,
+     270,
+     9,
+     "HTMAXBUTTON"
+    ],
+    [
+     2248,
+     270,
+     9,
+     "HTMAXBUTTON"
+    ]
+   ],
+   "count": 10,
+   "WindowFromPoint": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "root_is_ours": true,
+   "screenshot": "nonclient_carve_hover_max.png"
+  },
+  "top_edge_y1": {
+   "at": [
+    1417,
+    246
+   ],
+   "top_level_received": [
+    [
+     1417,
+     245,
+     12,
+     "HTTOP"
+    ],
+    [
+     1417,
+     245,
+     12,
+     "HTTOP"
+    ],
+    [
+     1417,
+     245,
+     12,
+     "HTTOP"
+    ]
+   ],
+   "count": 6,
+   "WindowFromPoint": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "root_is_ours": true
+  },
+  "top_edge_y3": {
+   "at": [
+    1417,
+    248
+   ],
+   "top_level_received": [
+    [
+     1409,
+     247,
+     12,
+     "HTTOP"
+    ],
+    [
+     1417,
+     247,
+     12,
+     "HTTOP"
+    ],
+    [
+     1417,
+     247,
+     12,
+     "HTTOP"
+    ]
+   ],
+   "count": 4,
+   "WindowFromPoint": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "root_is_ours": true
+  },
+  "left_edge_in1": {
+   "at": [
+    466,
+    870
+   ],
+   "top_level_received": [
+    [
+     465,
+     870,
+     10,
+     "HTLEFT"
+    ],
+    [
+     465,
+     870,
+     10,
+     "HTLEFT"
+    ],
+    [
+     465,
+     870,
+     10,
+     "HTLEFT"
+    ]
+   ],
+   "count": 12,
+   "WindowFromPoint": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "root_is_ours": true
+  },
+  "left_edge_out3": {
+   "at": [
+    462,
+    870
+   ],
+   "top_level_received": [
+    [
+     461,
+     870,
+     10,
+     "HTLEFT"
+    ],
+    [
+     461,
+     870,
+     10,
+     "HTLEFT"
+    ],
+    [
+     461,
+     870,
+     10,
+     "HTLEFT"
+    ]
+   ],
+   "count": 8,
+   "WindowFromPoint": "WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+   "root_is_ours": true
+  },
+  "bottom_right_corner_in2": {
+   "at": [
+    2367,
+    1492
+   ],
+   "top_level_received": [],
+   "count": 0,
+   "WindowFromPoint": "Chrome_RenderWidgetHostHWND",
+   "root_is_ours": true
+  },
+  "client_body": {
+   "at": [
+    1417,
+    870
+   ],
+   "top_level_received": [],
+   "count": 0,
+   "WindowFromPoint": "Chrome_RenderWidgetHostHWND",
+   "root_is_ours": true
+  }
+ },
+ "printwindow_ok": [
+  true,
+  true
+ ],
+ "screenshots": [
+  "nonclient_carve_light.png",
+  "nonclient_carve_dark.png"
+ ],
+ "actions": {
+  "monitor_rect_work": [
+   [
+    0,
+    0,
+    3840,
+    2160
+   ],
+   [
+    0,
+    0,
+    3840,
+    2076
+   ]
+  ],
+  "monitors_in_system": 2,
+  "caption_drag": {
+   "before": [
+    455,
+    245,
+    2380,
+    1505
+   ],
+   "after": [
+    545,
+    315,
+    2470,
+    1575
+   ],
+   "moved_xy": [
+    90,
+    70
+   ],
+   "size_changed": false
+  },
+  "dblclick_caption_1": {
+   "zoomed": true,
+   "rect": [
+    -12,
+    -12,
+    3852,
+    2088
+   ]
+  },
+  "maximized_geometry": {
+   "window_rect": [
+    -12,
+    -12,
+    3852,
+    2088
+   ],
+   "client_screen_rect": [
+    0,
+    0,
+    3840,
+    2076
+   ],
+   "monitor_rect_work": [
+    [
+     0,
+     0,
+     3840,
+     2160
+    ],
+    [
+     0,
+     0,
+     3840,
+     2076
+    ]
+   ],
+   "caption_button_bounds": [
+    0,
+    [
+     3592,
+     0,
+     3851,
+     51
+    ]
+   ],
+   "styles": {
+    "WS_CAPTION": true,
+    "WS_THICKFRAME": true,
+    "WS_SYSMENU": true,
+    "WS_MAXIMIZEBOX": true,
+    "WS_MINIMIZEBOX": true,
+    "WS_MAXIMIZE": true
+   }
+  },
+  "maximized_sweep": [
+   [
+    3552,
+    3609,
+    "HTCAPTION"
+   ],
+   [
+    3610,
+    3689,
+    "HTMINBUTTON"
+   ],
+   [
+    3690,
+    3770,
+    "HTMAXBUTTON"
+   ],
+   [
+    3771,
+    3850,
+    "HTCLOSE"
+   ],
+   [
+    3851,
+    3858,
+    "HTCAPTION"
+   ]
+  ],
+  "maximized_grid_sample": {
+   "top_in1": {
+    "x": 1920,
+    "y": 1,
+    "chain": [
+     "Chrome_WidgetWin_0=HTCAPTION",
+     "Chrome_WidgetWin_0=HTCLIENT",
+     "WindowsForms10.Window.8.ap=HTCLIENT"
+    ],
+    "top_NCHITTEST": "HTCAPTION",
+    "WindowFromPoint": "0x5b17d2 Chrome_WidgetWin_0 pid46740 ROOT=ours",
+    "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "WFP_NCHITTEST": "HTCAPTION"
+   },
+   "top_in4": {
+    "x": 1920,
+    "y": 4,
+    "chain": [
+     "Chrome_WidgetWin_0=HTCAPTION",
+     "Chrome_WidgetWin_0=HTCLIENT",
+     "WindowsForms10.Window.8.ap=HTCLIENT"
+    ],
+    "top_NCHITTEST": "HTCAPTION",
+    "WindowFromPoint": "0x5b17d2 Chrome_WidgetWin_0 pid46740 ROOT=ours",
+    "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "WFP_NCHITTEST": "HTCAPTION"
+   },
+   "caption_drag_center": {
+    "x": 1920,
+    "y": 28,
+    "chain": [
+     "Chrome_WidgetWin_0=HTCAPTION",
+     "Chrome_WidgetWin_0=HTCLIENT",
+     "WindowsForms10.Window.8.ap=HTCLIENT"
+    ],
+    "top_NCHITTEST": "HTCAPTION",
+    "WindowFromPoint": "0x6f17ac Chrome_WidgetWin_0 pid46740 ROOT=ours",
+    "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "WFP_NCHITTEST": "HTCAPTION"
+   },
+   "min_btn": {
+    "x": 3637,
+    "y": 13,
+    "chain": [],
+    "top_NCHITTEST": "HTMINBUTTON",
+    "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+    "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "WFP_NCHITTEST": "-"
+   },
+   "max_btn": {
+    "x": 3718,
+    "y": 13,
+    "chain": [],
+    "top_NCHITTEST": "HTMAXBUTTON",
+    "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+    "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "WFP_NCHITTEST": "-"
+   },
+   "close_btn": {
+    "x": 3798,
+    "y": 13,
+    "chain": [],
+    "top_NCHITTEST": "HTCLOSE",
+    "WindowFromPoint": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1 pid46740 (top) ROOT=ours",
+    "ChildWindowFromPointEx": "0xba1552 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "WFP_NCHITTEST": "-"
+   },
+   "client_body_center": {
+    "x": 1920,
+    "y": 1038,
+    "chain": [
+     "Chrome_RenderWidgetHostHWN=HTCLIENT",
+     "Chrome_WidgetWin_1=HTCLIENT",
+     "Chrome_WidgetWin_0=HTCLIENT",
+     "WindowsForms10.Window.8.ap=HTCLIENT"
+    ],
+    "top_NCHITTEST": "HTCLIENT",
+    "WindowFromPoint": "0xef0fc2 Chrome_RenderWidgetHostHWND pid69628 ROOT=ours",
+    "ChildWindowFromPointEx": "0x1ca0862 WindowsForms10.Window.8.app.0.aec740_r21_ad1",
+    "WFP_NCHITTEST": "HTCLIENT"
+   }
+  },
+  "maximized_screenshot_ok": true,
+  "dblclick_caption_2": {
+   "zoomed": false,
+   "rect": [
+    545,
+    315,
+    2470,
+    1627
+   ]
+  },
+  "maxbtn_click_1": {
+   "zoomed": true
+  },
+  "maxbtn_click_2": {
+   "zoomed": false
+  },
+  "minbtn_click": {
+   "iconic": true
+  },
+  "resize": {
+   "top_edge": {
+    "start": [
+     1507,
+     317
+    ],
+    "delta_ltrb": [
+     0,
+     -41,
+     0,
+     0
+    ]
+   },
+   "left_edge": {
+    "start": [
+     556,
+     971
+    ],
+    "delta_ltrb": [
+     -41,
+     0,
+     0,
+     0
+    ]
+   },
+   "right_edge": {
+    "start": [
+     2458,
+     971
+    ],
+    "delta_ltrb": [
+     0,
+     0,
+     40,
+     0
+    ]
+   },
+   "bottom_edge": {
+    "start": [
+     1507,
+     1667
+    ],
+    "delta_ltrb": [
+     0,
+     0,
+     0,
+     40
+    ]
+   },
+   "topleft_corner": {
+    "start": [
+     516,
+     276
+    ],
+    "delta_ltrb": [
+     -30,
+     -30,
+     0,
+     0
+    ]
+   },
+   "topright_corner": {
+    "start": [
+     2497,
+     246
+    ],
+    "delta_ltrb": [
+     0,
+     -30,
+     30,
+     0
+    ]
+   },
+   "bottomright_corner": {
+    "start": [
+     2532,
+     1711
+    ],
+    "delta_ltrb": [
+     0,
+     0,
+     30,
+     30
+    ]
+   },
+   "bottomleft_corner": {
+    "start": [
+     481,
+     1741
+    ],
+    "delta_ltrb": [
+     -30,
+     0,
+     0,
+     30
+    ]
+   }
+  },
+  "alt_space": {
+   "gui_flags": "0x0",
+   "system_menu_mode": false,
+   "in_menu_mode": false
+  },
+  "right_click_caption": {
+   "gui_flags": "0x14",
+   "system_menu_mode": false,
+   "popup_menu_mode": true
+  }
+ }
+}

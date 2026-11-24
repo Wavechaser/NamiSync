@@ -1,0 +1,190 @@
+{
+ "identity": {
+  "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+  "sqlite": "3.50.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "git_revision": "ab31ba08abeeef35ff780ac5e2d08610d2819e95",
+  "git_branch": "milestone2",
+  "git_dirty": true,
+  "git_status_lines": [
+   "M CHANGELOG.md",
+   " M README.md",
+   " M docs/COMMANDLINE.md",
+   " M docs/DATABASE.md",
+   " M docs/DESKTOP_UI.md",
+   " M docs/INTERFACES.md",
+   " M docs/TESTS.md",
+   " M docs/TOOLS.md",
+   " M namisync/interfaces/launcher.py",
+   " M namisync/interfaces/web/host.py",
+   " M namisync/interfaces/web/paths.py",
+   " M namisync/workflows/runtime.py",
+   " M tests/_departments.py",
+   " M tests/conftest.py",
+   " M tests/interfaces/test_launcher.py",
+   " M tests/interfaces/web/_headed_native.py",
+   " M tests/interfaces/web/test_headed_native.py",
+   " M tests/interfaces/web/test_paths.py",
+   " M tests/interfaces/web/test_single_instance.py",
+   " M tests/interfaces/web/test_slice1_headed.py"
+  ]
+ },
+ "args": {
+  "cmd": "run",
+  "fixture_root": "build\\m2-a2\\stop-latency\\fixture_s30",
+  "data_root": "build\\m2-a2\\stop-latency\\data_pc30",
+  "out": "build\\m2-a2\\stop-latency\\samples_F_compute30k.json",
+  "scan_ms": "build\\m2-a2\\stop-latency\\scan_ms_compute.json",
+  "fractions": "0.05,0.2,0.35,0.5,0.65,0.8",
+  "cases": "plan-compute",
+  "samples": 2,
+  "warmup": 0,
+  "tag": "compute-30k"
+ },
+ "samples": [
+  {
+   "case": "plan-compute",
+   "delay_ms": 5.0,
+   "session_id": "4bebab94bc3c401fa289ac9070c26c73",
+   "submit_to_phase_ms": 3053.9345,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": true,
+   "checkpoints_at_cancel": 80344,
+   "checkpoints_final": 80344,
+   "scan_call_index": 2,
+   "since_phase_ms": 5.3063,
+   "cancel_call_ms": 0.1161,
+   "scanner_raise_ms": null,
+   "custody_release_ms": 41727.2612,
+   "terminal_event_ms": 41727.6173,
+   "final_record_ms": 41727.7198,
+   "final_state": "completed",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 27.6729,
+   "post_cancel_events": [
+    [
+     0.187,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     24334.098,
+     "PhaseChanged",
+     ""
+    ],
+    [
+     41727.329,
+     "StateChanged",
+     {
+      "state": "completed"
+     }
+    ],
+    [
+     41727.617,
+     "Terminal",
+     {
+      "result": {
+       "status": "completed",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": false,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     41727.72,
+     "completed",
+     ""
+    ]
+   ],
+   "i": 0,
+   "frac": 0.05,
+   "tag": "compute-30k"
+  },
+  {
+   "case": "plan-compute",
+   "delay_ms": 20.0,
+   "session_id": "a8a437c92c224570a8f706881749e9fe",
+   "submit_to_phase_ms": 2947.1869,
+   "accepted": true,
+   "cancel_code": "accepted",
+   "scan_alive_at_cancel": true,
+   "checkpoints_at_cancel": 80344,
+   "checkpoints_final": 80344,
+   "scan_call_index": 2,
+   "since_phase_ms": 179.6194,
+   "cancel_call_ms": 0.1295,
+   "scanner_raise_ms": null,
+   "custody_release_ms": 41046.4872,
+   "terminal_event_ms": 41046.8476,
+   "final_record_ms": 41046.9111,
+   "final_state": "completed",
+   "held_when_armed": true,
+   "prober_error": null,
+   "max_checkpoint_gap_ms": 31.878,
+   "post_cancel_events": [
+    [
+     0.227,
+     "StateChanged",
+     {
+      "state": "canceling"
+     }
+    ],
+    [
+     23790.677,
+     "PhaseChanged",
+     ""
+    ],
+    [
+     41046.548,
+     "StateChanged",
+     {
+      "state": "completed"
+     }
+    ],
+    [
+     41046.848,
+     "Terminal",
+     {
+      "result": {
+       "status": "completed",
+       "recording": "ok",
+       "audit": "ok",
+       "disposition": "ran",
+       "canceled": false,
+       "phases": [],
+       "bytes_done": "0",
+       "bytes_total": "0",
+       "error": null,
+       "recording_degraded_items": 0,
+       "recording_issues": [],
+       "omitted_detail_count": 0,
+       "review_fact_limit": null
+      }
+     }
+    ],
+    [
+     41046.911,
+     "completed",
+     ""
+    ]
+   ],
+   "i": 1,
+   "frac": 0.2,
+   "tag": "compute-30k"
+  }
+ ]
+}

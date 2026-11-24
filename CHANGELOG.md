@@ -26,6 +26,18 @@ restarts, crashes, restores, retries and schema changes, and is shown honestly.
 Safe-to-change-the-databases work: guards and foundations that land before the
 first schema change. M2_PLAN owns checkpoint scope and gates.
 
+#### Spikes for M2 designs (2026-11-24)
+
+- Ran the M2-A2 live checks and recorded each result in its M2_PLAN feature
+  entry, with probes, raw samples and reports in EV-0040. Volume overview
+  queries need no elevation, answer from memory without waking a sleeping SATA
+  HDD, and need a per-drive deadline because unreachable network paths block
+  for over a minute. Content in the caption area is feasible with a native
+  frame. WebView2 hands the host full paths for dropped folders. Toasts need a
+  registration, and a per-user AppUserModelId key is enough. A cancelled scan
+  frees volume custody within about 20 ms, but planning cannot be stopped and
+  keeps custody.
+
 #### Guard live production data from source-tree work (2026-11-24)
 
 - Default to `%LOCALAPPDATA%\NamiSync-Development` for every run except the

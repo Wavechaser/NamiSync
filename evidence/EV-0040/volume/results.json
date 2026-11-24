@@ -1,0 +1,2811 @@
+{
+ "token": {
+  "TokenElevation": 0,
+  "TokenElevationType": 3,
+  "meaning": "TokenElevation 0 = not elevated; TokenElevationType 1=Default 2=Full(elevated) 3=Limited",
+  "IsUserAnAdmin": false
+ },
+ "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+ "GetLogicalDrives": {
+  "mask": "0x3ffc",
+  "letters": [
+   "C",
+   "D",
+   "E",
+   "F",
+   "G",
+   "H",
+   "I",
+   "J",
+   "K",
+   "L",
+   "M",
+   "N"
+  ]
+ },
+ "drives": {
+  "C": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.006,
+     "first": 0.006
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "Windows",
+      "serial": "5E36F328",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.021,
+     "median": 0.024,
+     "max": 0.088,
+     "first": 0.088
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 184635518976,
+      "total": 498245562368,
+      "free": 184635518976
+     }
+    },
+    "ms": {
+     "min": 0.017,
+     "median": 0.017,
+     "max": 0.027,
+     "first": 0.027
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 498245562368,
+      "used": 313610043392,
+      "free": 184635518976
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.017,
+     "max": 0.045,
+     "first": 0.027
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.018,
+     "first": 0.018
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "NVMe",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "",
+       "product": "Samsung SSD 970 EVO Plus 500GB",
+       "revision": "2B2QEXM7"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        2
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.02,
+     "max": 0.113,
+     "first": 0.113
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "Samsung SSD 970 EVO Plus 500GB",
+      "revision": "2B2QEXM7"
+     }
+    },
+    "ms": {
+     "min": 0.005,
+     "median": 0.005,
+     "max": 0.008,
+     "first": 0.008
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.037,
+     "first": 0.005
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       2
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.006,
+     "first": 0.006
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.01,
+     "first": 0.01
+    }
+   }
+  },
+  "D": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "Intel Optane 905p 1",
+      "serial": "5810A7AB",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.014,
+     "median": 0.015,
+     "max": 0.046,
+     "first": 0.046
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 653613637632,
+      "total": 960178941952,
+      "free": 653613637632
+     }
+    },
+    "ms": {
+     "min": 0.011,
+     "median": 0.011,
+     "max": 0.031,
+     "first": 0.014
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 960178941952,
+      "used": 306565304320,
+      "free": 653613637632
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.01,
+     "max": 0.014,
+     "first": 0.014
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.013,
+     "first": 0.013
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "NVMe",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "",
+       "product": "INTEL SSDPE21D960GA",
+       "revision": "E2010480"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        7
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.015,
+     "median": 0.015,
+     "max": 0.034,
+     "first": 0.034
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "INTEL SSDPE21D960GA",
+      "revision": "E2010480"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       7
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   }
+  },
+  "E": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "Intel Optane 905p 2",
+      "serial": "A8FDE16E",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.014,
+     "median": 0.015,
+     "max": 0.027,
+     "first": 0.027
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 304096968704,
+      "total": 1500283662336,
+      "free": 304096968704
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.011,
+     "max": 0.011,
+     "first": 0.011
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 1500283662336,
+      "used": 1196186693632,
+      "free": 304096968704
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.01,
+     "max": 0.011,
+     "first": 0.011
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.011,
+     "first": 0.011
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "NVMe",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "",
+       "product": "INTEL SSDPE21D015TA",
+       "revision": "E2010480"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        6
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.015,
+     "median": 0.015,
+     "max": 0.023,
+     "first": 0.023
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "INTEL SSDPE21D015TA",
+      "revision": "E2010480"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       6
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.007,
+     "first": 0.003
+    }
+   }
+  },
+  "F": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.0,
+     "median": 0.001,
+     "max": 0.001,
+     "first": 0.001
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "WD Black SN850X 1",
+      "serial": "AC4C5542",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.02,
+     "median": 0.021,
+     "max": 0.037,
+     "first": 0.037
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 1746473123840,
+      "total": 4000768323584,
+      "free": 1746473123840
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.017,
+     "max": 0.053,
+     "first": 0.018
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 4000768323584,
+      "used": 2254295199744,
+      "free": 1746473123840
+     }
+    },
+    "ms": {
+     "min": 0.015,
+     "median": 0.016,
+     "max": 0.017,
+     "first": 0.017
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.009,
+     "first": 0.009
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "NVMe",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "",
+       "product": "WD_BLACK SN850X 4000GB",
+       "revision": "624311WD"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        3
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.017,
+     "max": 0.065,
+     "first": 0.033
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WD_BLACK SN850X 4000GB",
+      "revision": "624311WD"
+     }
+    },
+    "ms": {
+     "min": 0.005,
+     "median": 0.005,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       3
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   }
+  },
+  "G": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "WD Black SN850X 2",
+      "serial": "A23EFC9E",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.014,
+     "median": 0.014,
+     "max": 0.048,
+     "first": 0.048
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 2468306694144,
+      "total": 4000768323584,
+      "free": 2468306694144
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.011,
+     "max": 0.023,
+     "first": 0.015
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 4000768323584,
+      "used": 1532461629440,
+      "free": 2468306694144
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.01,
+     "max": 0.013,
+     "first": 0.013
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.01,
+     "first": 0.01
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "NVMe",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "",
+       "product": "WD_BLACK SN850X 4000GB",
+       "revision": "624331WD"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        5
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.016,
+     "max": 0.028,
+     "first": 0.028
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WD_BLACK SN850X 4000GB",
+      "revision": "624331WD"
+     }
+    },
+    "ms": {
+     "min": 0.005,
+     "median": 0.005,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       5
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   }
+  },
+  "H": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "WD Blue SN550",
+      "serial": "4CA163D1",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.015,
+     "median": 0.015,
+     "max": 0.033,
+     "first": 0.033
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 405507706880,
+      "total": 1000186310656,
+      "free": 405507706880
+     }
+    },
+    "ms": {
+     "min": 0.011,
+     "median": 0.012,
+     "max": 0.029,
+     "first": 0.013
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 1000186310656,
+      "used": 594678603776,
+      "free": 405507706880
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.011,
+     "max": 0.013,
+     "first": 0.013
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.015,
+     "first": 0.015
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "NVMe",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "",
+       "product": "WDC WDS100T2B0C-00PXH0",
+       "revision": "211070WD"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        4
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.017,
+     "max": 0.029,
+     "first": 0.029
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WDC WDS100T2B0C-00PXH0",
+      "revision": "211070WD"
+     }
+    },
+    "ms": {
+     "min": 0.005,
+     "median": 0.005,
+     "max": 0.006,
+     "first": 0.006
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       4
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   }
+  },
+  "I": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.0,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "Ultrastar DC HC550 1",
+      "serial": "4CA93BA0",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.014,
+     "median": 0.015,
+     "max": 0.056,
+     "first": 0.056
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 4658357243904,
+      "total": 16000881782784,
+      "free": 4658357243904
+     }
+    },
+    "ms": {
+     "min": 0.011,
+     "median": 0.011,
+     "max": 0.046,
+     "first": 0.016
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 16000881782784,
+      "used": 11342524538880,
+      "free": 4658357243904
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.01,
+     "max": 0.02,
+     "first": 0.015
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.015,
+     "first": 0.015
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "SATA",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "",
+       "product": "WDC  WUH721816ALE6L4",
+       "revision": "PCGNW232"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": true
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        1
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.016,
+     "max": 0.045,
+     "first": 0.045
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "SATA",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WDC  WUH721816ALE6L4",
+      "revision": "PCGNW232"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": true
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       1
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.006,
+     "first": 0.006
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.005,
+     "first": 0.005
+    }
+   }
+  },
+  "J": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "Ultrastar DC HC550 2",
+      "serial": "84B7DB1C",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.014,
+     "median": 0.014,
+     "max": 0.031,
+     "first": 0.031
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 12611699212288,
+      "total": 16000881782784,
+      "free": 12611699212288
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.011,
+     "max": 0.012,
+     "first": 0.012
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 16000881782784,
+      "used": 3389182570496,
+      "free": 12611699212288
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.01,
+     "max": 0.012,
+     "first": 0.012
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.01,
+     "first": 0.01
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "SATA",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "",
+       "product": "WDC  WUH721816ALE6L4",
+       "revision": "PCGNW232"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": true
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        0
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.015,
+     "median": 0.016,
+     "max": 0.026,
+     "first": 0.026
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "SATA",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WDC  WUH721816ALE6L4",
+      "revision": "PCGNW232"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": true
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       0
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   }
+  },
+  "K": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "REMOVABLE"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.001,
+     "first": 0.001
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": false,
+     "error": 21
+    },
+    "ms": {
+     "min": 1.316,
+     "median": 1.359,
+     "max": 1.489,
+     "first": 1.489
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": false,
+     "error": 21
+    },
+    "ms": {
+     "min": 1.318,
+     "median": 1.369,
+     "max": 1.446,
+     "first": 1.393
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": false,
+     "error": 21
+    },
+    "ms": {
+     "min": 1.334,
+     "median": 1.367,
+     "max": 1.44,
+     "first": 1.426
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.026,
+     "first": 0.026
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "USB",
+       "RemovableMedia": true,
+       "DeviceType": 0,
+       "vendor": "Sony",
+       "product": "MRW-S1",
+       "revision": "1.00"
+      }
+     },
+     "seek": {
+      "ok": false,
+      "error": 1
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        10
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.018,
+     "max": 0.078,
+     "first": 0.059
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "USB",
+      "RemovableMedia": true,
+      "DeviceType": 0,
+      "vendor": "Sony",
+      "product": "MRW-S1",
+      "revision": "1.00"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.016,
+     "first": 0.006
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": false,
+     "error": 1
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.007,
+     "first": 0.007
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       10
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.049,
+     "first": 0.008
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.004,
+     "first": 0.004
+    }
+   }
+  },
+  "L": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.0,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "Samsung T7",
+      "serial": "FCF87C29",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.014,
+     "median": 0.015,
+     "max": 0.052,
+     "first": 0.052
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 325682966528,
+      "total": 2000381014016,
+      "free": 325682966528
+     }
+    },
+    "ms": {
+     "min": 0.011,
+     "median": 0.011,
+     "max": 0.087,
+     "first": 0.015
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 2000381014016,
+      "used": 1674698047488,
+      "free": 325682966528
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.01,
+     "max": 0.048,
+     "first": 0.048
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.015,
+     "first": 0.015
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "USB",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "Samsung",
+       "product": "PSSD T7",
+       "revision": "0"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        8
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.016,
+     "median": 0.016,
+     "max": 0.045,
+     "first": 0.041
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "USB",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "Samsung",
+      "product": "PSSD T7",
+      "revision": "0"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.007,
+     "first": 0.006
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.006,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       8
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.004,
+     "first": 0.004
+    }
+   }
+  },
+  "M": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.0,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "EOS_DIGITAL",
+      "serial": "1A120A39",
+      "fs": "exFAT"
+     }
+    },
+    "ms": {
+     "min": 0.009,
+     "median": 0.009,
+     "max": 0.031,
+     "first": 0.031
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 205609238528,
+      "total": 256043122688,
+      "free": 205609238528
+     }
+    },
+    "ms": {
+     "min": 0.006,
+     "median": 0.006,
+     "max": 0.018,
+     "first": 0.007
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 256043122688,
+      "used": 50433884160,
+      "free": 205609238528
+     }
+    },
+    "ms": {
+     "min": 0.006,
+     "median": 0.006,
+     "max": 0.008,
+     "first": 0.008
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.008,
+     "first": 0.008
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "USB",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "SANDISK",
+       "product": "SDDR-F451",
+       "revision": "2105"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        11
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.015,
+     "median": 0.016,
+     "max": 0.024,
+     "first": 0.024
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "USB",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "SANDISK",
+      "product": "SDDR-F451",
+      "revision": "2105"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       11
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   }
+  },
+  "N": {
+   "GetDriveTypeW": {
+    "result": {
+     "ok": true,
+     "value": "FIXED"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.001,
+     "first": 0.001
+    }
+   },
+   "GetVolumeInformationW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "label": "Intel SSD 660p",
+      "serial": "F4A2EEE8",
+      "fs": "NTFS"
+     }
+    },
+    "ms": {
+     "min": 0.014,
+     "median": 0.015,
+     "max": 0.03,
+     "first": 0.03
+    }
+   },
+   "GetDiskFreeSpaceExW": {
+    "result": {
+     "ok": true,
+     "value": {
+      "avail": 1432664694784,
+      "total": 2048390066176,
+      "free": 1432664694784
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.011,
+     "max": 0.017,
+     "first": 0.013
+    }
+   },
+   "shutil.disk_usage": {
+    "result": {
+     "ok": true,
+     "value": {
+      "total": 2048390066176,
+      "used": 615725371392,
+      "free": 1432664694784
+     }
+    },
+    "ms": {
+     "min": 0.01,
+     "median": 0.01,
+     "max": 0.012,
+     "first": 0.012
+    }
+   },
+   "CreateFileW(0)": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.013,
+     "first": 0.013
+    }
+   },
+   "handle_seq(open+device+seek+extents+close)": {
+    "result": {
+     "device": {
+      "ok": true,
+      "value": {
+       "BusType": "USB",
+       "RemovableMedia": false,
+       "DeviceType": 0,
+       "vendor": "Realtek",
+       "product": "RTL9210 NVME",
+       "revision": "1.00"
+      }
+     },
+     "seek": {
+      "ok": true,
+      "value": {
+       "IncursSeekPenalty": false
+      }
+     },
+     "extents": {
+      "ok": true,
+      "value": {
+       "extents": 1,
+       "disks": [
+        9
+       ]
+      }
+     }
+    },
+    "ms": {
+     "min": 0.015,
+     "median": 0.016,
+     "max": 0.027,
+     "first": 0.027
+    }
+   },
+   "IOCTL device_prop (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "USB",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "Realtek",
+      "product": "RTL9210 NVME",
+      "revision": "1.00"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.006,
+     "first": 0.005
+    }
+   },
+   "IOCTL seek_penalty (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.003
+    }
+   },
+   "IOCTL disk_extents (handle open)": {
+    "result": {
+     "ok": true,
+     "value": {
+      "extents": 1,
+      "disks": [
+       9
+      ]
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.005,
+     "first": 0.005
+    }
+   },
+   "GetDevicePowerState(volume)": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   }
+  }
+ },
+ "physical": {
+  "0": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.021,
+     "first": 0.012
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "SATA",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WDC  WUH721816ALE6L4",
+      "revision": "PCGNW232"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.008,
+     "first": 0.008
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": true
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.002,
+     "max": 0.005,
+     "first": 0.005
+    }
+   }
+  },
+  "1": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.01,
+     "first": 0.01
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "SATA",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WDC  WUH721816ALE6L4",
+      "revision": "PCGNW232"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.006,
+     "first": 0.006
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": true
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.008,
+     "first": 0.003
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.002,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  },
+  "2": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.011,
+     "first": 0.011
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "Samsung SSD 970 EVO Plus 500GB",
+      "revision": "2B2QEXM7"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.005,
+     "max": 0.015,
+     "first": 0.015
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.003,
+     "first": 0.003
+    }
+   }
+  },
+  "3": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.01,
+     "first": 0.01
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WD_BLACK SN850X 4000GB",
+      "revision": "624311WD"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.005,
+     "max": 0.009,
+     "first": 0.009
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.003
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  },
+  "4": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.008,
+     "first": 0.008
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WDC WDS100T2B0C-00PXH0",
+      "revision": "211070WD"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.005,
+     "max": 0.007,
+     "first": 0.007
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  },
+  "5": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.009,
+     "first": 0.009
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "WD_BLACK SN850X 4000GB",
+      "revision": "624331WD"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.007,
+     "first": 0.007
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.003,
+     "first": 0.003
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  },
+  "6": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.01,
+     "first": 0.01
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "INTEL SSDPE21D015TA",
+      "revision": "E2010480"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.006,
+     "first": 0.006
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.003,
+     "first": 0.003
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  },
+  "7": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.009,
+     "first": 0.009
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "NVMe",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "",
+      "product": "INTEL SSDPE21D960GA",
+      "revision": "E2010480"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.006,
+     "first": 0.006
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.003,
+     "first": 0.003
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  },
+  "8": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.008,
+     "first": 0.008
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "USB",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "Samsung",
+      "product": "PSSD T7",
+      "revision": "0"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.009,
+     "first": 0.009
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  },
+  "9": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.008,
+     "first": 0.008
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "USB",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "Realtek",
+      "product": "RTL9210 NVME",
+      "revision": "1.00"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.006,
+     "first": 0.006
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.003
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  },
+  "10": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.005,
+     "median": 0.006,
+     "max": 0.015,
+     "first": 0.014
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "USB",
+      "RemovableMedia": true,
+      "DeviceType": 0,
+      "vendor": "Sony",
+      "product": "MRW-S1",
+      "revision": "1.00"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.005,
+     "max": 0.008,
+     "first": 0.008
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": false,
+     "error": 1
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.007,
+     "first": 0.005
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.002,
+     "median": 0.002,
+     "max": 0.006,
+     "first": 0.004
+    }
+   }
+  },
+  "11": {
+   "open": {
+    "result": {
+     "ok": true,
+     "value": null
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.007,
+     "first": 0.007
+    }
+   },
+   "device_prop": {
+    "result": {
+     "ok": true,
+     "value": {
+      "BusType": "USB",
+      "RemovableMedia": false,
+      "DeviceType": 0,
+      "vendor": "SANDISK",
+      "product": "SDDR-F451",
+      "revision": "2105"
+     }
+    },
+    "ms": {
+     "min": 0.004,
+     "median": 0.004,
+     "max": 0.007,
+     "first": 0.007
+    }
+   },
+   "seek": {
+    "result": {
+     "ok": true,
+     "value": {
+      "IncursSeekPenalty": false
+     }
+    },
+    "ms": {
+     "min": 0.003,
+     "median": 0.003,
+     "max": 0.004,
+     "first": 0.004
+    }
+   },
+   "power": {
+    "result": {
+     "ok": true,
+     "value": "ON"
+    },
+    "ms": {
+     "min": 0.001,
+     "median": 0.001,
+     "max": 0.002,
+     "first": 0.002
+    }
+   }
+  }
+ },
+ "unc": {
+  "path": "\\\\192.0.2.1\\share\\",
+  "timeout_s": 30.0,
+  "runs": [
+   {
+    "query": "GetDriveTypeW",
+    "completed": false,
+    "waited_s": 30.02,
+    "note": "worker still blocked at outer timeout; abandoned (daemon thread)"
+   },
+   {
+    "query": "GetVolumeInformationW",
+    "completed": false,
+    "waited_s": 30.01,
+    "note": "worker still blocked at outer timeout; abandoned (daemon thread)"
+   },
+   {
+    "query": "GetDiskFreeSpaceExW",
+    "completed": true,
+    "ms": 13448.1,
+    "result": {
+     "ok": false,
+     "error": 64
+    }
+   }
+  ]
+ }
+}
