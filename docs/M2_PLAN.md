@@ -69,20 +69,43 @@ casually change the live production databases (M2-A1).
 
 Checkpoints:
 
-- **M2-A1 Live-data guard** (proposed). Source-tree work (tests, tools, the CLI
-  and the development GUI) cannot change the live production databases unless
-  explicitly told to. Includes the default data root for a source checkout, an
-  explicit opt-in to the live root, and a suite-wide test guard. Candidate: only
-  a release build defaults to `%LOCALAPPDATA%\NamiSync`; a source checkout
-  defaults to `NamiSync-Development`, which the GUI launcher already uses.
-  Consumer: the test suite and CLI. Depends on nothing and lands before the first
-  schema change. Closes on: a test touching the live root fails, and a
-  source-checkout run without the opt-in resolves to the development root.
-- **M2-A2 Spikes** (proposed). Live checks that inform designs (user decision,
+- **M2-A1 Live-data guard** (active, accepted 2026-11-24). Source-tree work
+  (tests, tools, the CLI and the development GUI) cannot change the live
+  production databases unless explicitly told to. Consumer: the test suite and
+  CLI. Depends on nothing and lands before the first schema change. User
+  decisions (2026-11-24):
+  - Only the PyInstaller release (`sys.frozen`) defaults to
+    `%LOCALAPPDATA%\NamiSync`. Every other run, the CLI and `namisync-gui`
+    without `--data-dir`, defaults to `%LOCALAPPDATA%\NamiSync-Development`,
+    laid out like the release root. The GUI launcher's development shell uses
+    that same root, so the development CLI and GUI share one ledger as the
+    release does; its old `shell` profile is left unused.
+  - The opt-in is an explicit path: `--data-dir`, `--database` or
+    `--history-database` naming the live files. No new flag or variable.
+  - The suite guard is a Python audit hook installed for the whole pytest
+    session. It fails any operation that could create or change something under
+    the live root (found from the Windows known folder, not the environment):
+    writing opens, SQLite connects, and creating, renaming or deleting entries.
+    Child processes are covered by the source-checkout default.
+
+  Population: the two default resolvers (`AppPaths.production` and
+  `default_database_paths`, kept as separate owners under SH-G-2), the GUI
+  launcher's shell plan, `tests/conftest.py`, their direct tests, and the
+  documents that state the default root. Non-goals: changing the release's
+  root, guarding native calls made through `ctypes` in tests, and moving
+  existing development data. Closes on: a test touching the live root fails,
+  and a source-checkout run without the opt-in resolves to the development root.
+- **M2-A2 Spikes** (active, accepted 2026-11-24). Live checks that inform designs (user decision,
   2026-11-18): window framing, drag-and-drop paths, completion notification,
   volume overview queries, and Stop's cancel-to-release time on the HDD fixture.
-  Read-only; may run beside any A checkpoint. Closes on: each result recorded in
-  its feature's entry, with evidence where [PERFORMANCE](PERFORMANCE.md) requires it.
+  Read-only toward the product; may run beside any A checkpoint. Probes and raw
+  output stay in `build/m2-a2/`. The user allowed (2026-11-24) a generated
+  fixture on the `J:` HDD and a short-lived per-user toast registration probe,
+  and did not allow changing the disk sleep timeout, so whether a volume query
+  wakes a sleeping HDD stays unanswered unless that changes. Checks that need a
+  person at the desktop run from each spike's checklist. Closes on: each result
+  recorded in its feature's entry, with evidence where
+  [PERFORMANCE](PERFORMANCE.md) requires it.
 - **M2-A3 Schema migration** (proposed). Released databases migrate forward or
   are refused, never half-migrated. Includes core-owned format constants with
   known-answer vectors, per-database role and format metadata, refusal of newer
