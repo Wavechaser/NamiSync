@@ -1,0 +1,6 @@
+{"event": "shown", "t": 1795528677.241}
+{"event": "before_load-fired", "t": 1795528677.472}
+{"event": "attached", "runtime": "158.0.4370.33", "allow_external_drop": "True", "elevated": false, "t": 1795528677.477}
+{"event": "loaded", "t": 1795528677.489}
+{"event": "drop", "field": "source", "seq": 1, "host_count": 2, "page": {"field": "source", "seq": 1, "mode": "both", "fileCount": 1, "itemCount": 1, "files": [{"name": "folder_a", "size": 0, "type": ""}], "handleKinds": ["directory"], "handleNames": ["folder_a"]}, "items": [{"type": "<class 'Microsoft.Web.WebView2.Core.CoreWebView2File'>", "clr": "Microsoft.Web.WebView2.Core.CoreWebView2File", "path": "F:\\GitHubRepositories\\NamiSync\\build\\m2-a2\\drop\\fixtures\\folder_a", "os_isdir": true, "os_isfile": false, "drive": "F:"}, {"type": "None"}], "elevated": false, "t": 1795528814.014}
+{"event": "drop", "field": "source", "seq": 2, "host_count": 0, "page": {"field": "source", "seq": 2, "mode": "both", "fileCount": 0, "itemCount": 0, "files": [], "handleKinds": [], "handleNames": []}, "items": [], "elevated": false, "t": 1795528864.68}

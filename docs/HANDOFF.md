@@ -16,6 +16,15 @@ and their decisions are in [M2_PLAN](M2_PLAN.md).
   evidence in [EV-0040](../evidence/EV-0040/README.md). Also in this commit:
   A1 marked complete and A2 left active.
 
+- `3dd3231d` docs(m2): the user's decisions on two spike results. Toasts
+  become a user-enabled setting whose off state removes the registry key; a
+  stoppable planner is required by B6, and planning time is profiled in A9.
+- `b647a7c7` docs(m2): checkpoints reordered. A3 now builds the maintenance
+  claim with migration as its first consumer; A4 adds the ledger-instance
+  check for plans held in memory; C1, C3 and C4 each own one restart scenario.
+- Desktop checks with the user, recorded in the Drag-and-drop Setup and Custom
+  title bar entries with [EV-0041](../evidence/EV-0041/README.md).
+
 ## Verification
 
 - A1: lint-imports 13/0. The ordinary suite has 6675 passed, 4 skipped and 7
@@ -27,21 +36,9 @@ and their decisions are in [M2_PLAN](M2_PLAN.md).
 
 ## Open items
 
-- A2 stays active until the desktop checks are done; each spike's checklist is
-  in its EV-0040 report. Still open: real Explorer drops and the elevated-app
-  case (`build/m2-a2/drop/spike.py`); and the framing prototype
-  (`build/m2-a2/framing/proto.py --mode nonclient_carve`) for Win+Arrow, high
-  contrast, light/dark switching, and Alt+Space with PowerToys Run quit. My
-  computer-use access could not drag from Explorer or see the venv-Python
-  window. The prototypes stay in `build/m2-a2/` for these checks.
-- Decisions the spikes raise for the user:
-  - whether NamiSync may write a per-user `AppUserModelId` registry key for
-    toasts (against INTERFACES' no-registry stance);
-  - how Stop handles planning, which has no checkpoints and keeps volume
-    custody.
-- Finding, not fixed: planning time grows faster than the trees (10 s at
-  10k/3k files, 41 s at 30k/9k, more than 8 min at 100k/30k on a loaded
-  machine). It needs a measured study before any fix.
+- A2 stays active only for the framing prototype's high-contrast and taskbar
+  checks (`build/m2-a2/framing/proto.py --mode nonclient_carve`); the
+  prototypes stay in `build/m2-a2/` until then.
 - A8's gate needs an HDD that carries two lettered partitions; none exists on
   the reference machine.
 - `J:\NamiSyncSpike\stop-latency` (about 157 MB) is kept as the HDD fixture

@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 41,
+  "next_id": 42,
   "records": [
     {
       "id": "EV-0001",
@@ -1109,6 +1109,44 @@
           "path": "volume/spinup2.ps1",
           "bytes": 3518,
           "sha256": "5624da296ff0c8b3d77af48edad1a8ba8a46af549a52489f6a1de8afc88000c5"
+        }
+      ]
+    },
+    {
+      "id": "EV-0041",
+      "title": "M2-A2 desktop checks: Explorer drops and window framing",
+      "date": "2026-11-24",
+      "origin": "build/m2-a2/drop and build/m2-a2/framing at b647a7c7, user-driven and agent-driven desktop checks",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 2803,
+          "sha256": "0cf35151a2cff8fe68a9d83910051b25f35dea827d97411b3464c514bb97d9ea"
+        },
+        {
+          "path": "drop-log.explorer-elevated.jsonl",
+          "bytes": 2251,
+          "sha256": "c2e42164896ef4a93aec310d7a450758b87545b87a707d4f71e9240166fcd172"
+        },
+        {
+          "path": "drop-log.explorer-longpath.jsonl",
+          "bytes": 1109,
+          "sha256": "f5a45ef41f75672afede2390f2dfe75d04093a7c3b35eaaa520ce309649363c6"
+        },
+        {
+          "path": "drop-log.explorer-no-prevent.jsonl",
+          "bytes": 258,
+          "sha256": "f925eaaf7d98ff3918335d1f678a53c65fa5b1fb6a92b5795ce5fa96f3d537eb"
+        },
+        {
+          "path": "drop-log.explorer-prevent.jsonl",
+          "bytes": 5143,
+          "sha256": "806d689a8b18e6f60d8d668d0a796b24af5622334f2548addd20bff9daaf8657"
+        },
+        {
+          "path": "stderr-prevent.txt",
+          "bytes": 750,
+          "sha256": "621c282eccd57afaca8a1944b4d7a06b2099645b20120e8cbb1287ffe9fbdad7"
         }
       ]
     }

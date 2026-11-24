@@ -1,0 +1,12 @@
+[pywebview] Exception occurred during on_script_notify
+Traceback (most recent call last):
+  File "F:\GitHubRepositories\NamiSync\.venv\Lib\site-packages\webview\platforms\edgechromium.py", line 244, in on_script_notify
+    func_name, func_param, value_id = json.loads(return_value)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 3)
+[pywebview] Exception occurred during on_script_notify
+Traceback (most recent call last):
+  File "F:\GitHubRepositories\NamiSync\.venv\Lib\site-packages\webview\platforms\edgechromium.py", line 244, in on_script_notify
+    func_name, func_param, value_id = json.loads(return_value)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: too many values to unpack (expected 3)

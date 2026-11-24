@@ -1,0 +1,4 @@
+{"event": "shown", "t": 1795528397.495}
+{"event": "before_load-fired", "t": 1795528397.767}
+{"event": "attached", "runtime": "158.0.4370.33", "allow_external_drop": "True", "elevated": false, "t": 1795528397.772}
+{"event": "loaded", "t": 1795528397.784}
