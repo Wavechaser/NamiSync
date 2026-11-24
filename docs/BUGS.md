@@ -85,22 +85,23 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0001"></a>
 
-- MINOR - FIXED (2026-08-26). Derived oracle acceptance truth. The seven-row
-  recording oracle reconstructed item attribution from frozen event-v4 detail
-  and task issues from recorder calls, so producer-side `ExecutionSet` reason
-  or issue drift could pass; deleting a catalog row also disabled that check,
-  and the reducer matrix compared expectations only when reduction returned a
-  value. Cause: compatibility evidence was reused as semantic authority and
-  the catalog/matrix checks were incomplete. Fixed with an authoritative typed
-  side channel stripped before normalized capture, an exact manifest-protected
-  catalog, typed producer-drift regressions, and unconditional reducer result
-  comparison. The protected trace, baseline, and semantic hash are unchanged.
+- MINOR - FIXED (2026-08-26). Compatibility-evidence authority substitution. The
+  seven-row recording oracle reconstructed item attribution from frozen event-v4
+  detail and task issues from recorder calls, so producer-side `ExecutionSet`
+  reason or issue drift could pass; deleting a catalog row also disabled that
+  check, and the reducer matrix compared expectations only when reduction
+  returned a value. Cause: compatibility evidence was reused as semantic
+  authority and the catalog/matrix checks were incomplete. Fixed with an
+  authoritative typed side channel stripped before normalized capture, an exact
+  manifest-protected catalog, typed producer-drift regressions, and
+  unconditional reducer result comparison. The protected trace, baseline, and
+  semantic hash are unchanged.
 
 ### Workspace and measurement integrity
 
 <a id="bug-0002"></a>
 
-- MINOR - FIXED (2026-10-04). Stale observation contract. The optional
+- MINOR - FIXED (2026-10-04). Observation contract drift. The optional
   `bridge-event installed` diagnostic rejects current complete composition
   receipts as invalid even when its event and resource observations qualify.
   Cause: the native child records the full production command mapping, while
@@ -115,7 +116,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0003"></a>
 
-- MINOR - FIXED (2026-10-01). Unsupported recovery advice. Reusing a
+- MINOR - FIXED (2026-10-01). Recovery-advice option mismatch. Reusing a
   `tools performance --json` destination safely refuses before launching,
   but suggests `--replace-report`, which that subcommand does not accept.
   Cause: the shared output guard used a replacement-option default that only
@@ -128,7 +129,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0004"></a>
 
-- MINOR - FIXED (2026-09-27). Stale observation contract. The optional
+- MINOR - FIXED (2026-09-27). Observation contract drift. The optional
   bridge-event diagnostic rejects current decimal-string Progress positions
   against its integer-only sample validator, and its terminal summaries still
   read the retired result `items` array. Cause: its sample consumer was not
@@ -147,7 +148,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0005"></a>
 
-- MINOR - FIXED (2026-09-26). Stale observation contract. Seven optional
+- MINOR - FIXED (2026-09-26). Observation contract drift. Seven optional
   execution-UI feedback cases produced the current pending-or-accepted frame
   receipt, then rejected it against historical busy/pending-frame fields.
   A successful installed nondestructive Execute observation therefore returned
@@ -159,7 +160,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0006"></a>
 
-- MINOR - FIXED (2026-09-25). Dialog completion conflated with selection.
+- MINOR - FIXED (2026-09-25). Dialog completion/selection conflation.
   The native transport test helper reported a selected folder when the dialog
   disappeared and could post a second confirmation after a fixed wait without
   verifying the typed path. One installed run returned an old source directory;
@@ -181,11 +182,11 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0008"></a>
 
-- MODERATE - FIXED (2026-09-23). Window-fixture acceptance without a visible
-  row. The gallery returned one row at the renderer's overscan start, then
-  inferred a reachable whole row from viewport height even though that row
-  lay above the viewport. The existing fixture now returns a bounded contiguous
-  window covering the viewport, with stable row identities and the long-content
+- MODERATE - FIXED (2026-09-23). Window-fixture visible-row assumption. The
+  gallery returned one row at the renderer's overscan start, then inferred a
+  reachable whole row from viewport height even though that row lay above the
+  viewport. The existing fixture now returns a bounded contiguous window
+  covering the viewport, with stable row identities and the long-content
   operation at its actual index. Acceptance observes a whole rendered row and
   row activation and the card disclosure's hit target and focus. Logical row
   count, eight-state corpus and product request limits are unchanged.
@@ -203,7 +204,7 @@ entries to fit a batch; use explicit record offsets/limits.
   movement before recording; failures retain their keyboard-stage location.
 <a id="bug-0010"></a>
 
-- SEVERE - FIXED (2026-09-22). Unbounded assertion diagnostics. A failed
+- SEVERE - FIXED (2026-09-22). Assertion-diagnostic amplification. A failed
   `plan_review_probe.mjs` DOM identity assertion exhausted Windows commit;
   Event 2004 recorded one Node process at 67,223,269,376 bytes, with coincident
   application/runtime failures reported by the user. Cause: a stale D1 parent
@@ -330,7 +331,7 @@ entries to fit a batch; use explicit record offsets/limits.
   dumps) and `result5-final-focused.log`, the regression gate.
 <a id="bug-0020"></a>
 
-- SEVERE - FIXED (2026-09-28). Unreadable descendant admitted as absence.
+- SEVERE - FIXED (2026-09-28). Unreadable-descendant absence conflation.
   The native descendant walk treated every `OSError` as a missing component.
   A preplaced junction with ACL-denied no-follow attributes could therefore
   be accepted by held and unheld resolve, permitting mutation outside the root.
@@ -343,7 +344,7 @@ entries to fit a batch; use explicit record offsets/limits.
   and remove the junction before fixture cleanup.
 <a id="bug-0021"></a>
 
-- MODERATE - FIXED (2026-10-01). Native handle metadata on exFAT.
+- MODERATE - FIXED (2026-10-01). exFAT handle-identity assumption.
   K: copies failed before publication when temp finalization requested unsupported
   `FileIdInfo`. Cause: handle metadata required identity before an identity-weak
   profile could discard it. Failed queries now inspect that handle's filesystem
@@ -932,7 +933,7 @@ entries to fit a batch; use explicit record offsets/limits.
   hub/lock pairs under the dispatcher condition.
 <a id="bug-0073"></a>
 
-- MODERATE - FIXED (2026-08-05). Split shutdown-deadline budgeting. Shutdown's shared
+- MODERATE - FIXED (2026-08-05). Shutdown-deadline budget split. Shutdown's shared
   deadline stopped at the
   session publication gate: cancellation could persist `CANCELING` and then
   wait the full audit-offer timeout for a hub lock held by another reliable
@@ -989,8 +990,8 @@ entries to fit a batch; use explicit record offsets/limits.
   degrade audit without changing domain or ledger truth.
 <a id="bug-0078"></a>
 
-- MODERATE - FIXED (2026-08-05). Post-materialization read bound. History readback was
-  bounded only after
+- MODERATE - FIXED (2026-08-05). Post-materialization read amplification. History
+  readback was bounded only after
   materialization. `list_recent()` invoked the full-run getter once per run,
   and that getter selected and decoded every item, making a 50-run summary an
   N+1 query path with work and memory proportional to all selected detail.
@@ -999,7 +1000,7 @@ entries to fit a batch; use explicit record offsets/limits.
   watermarks, and streamed CLI detail. The unbounded full-run API was removed.
 <a id="bug-0079"></a>
 
-- MODERATE - FIXED (2026-08-04). Split close-deadline budgeting. Audit-pump close
+- MODERATE - FIXED (2026-08-04). Close-deadline budget split. Audit-pump close
   could spend the complete
   caller timeout waiting to enqueue its stop command and then spend the complete
   timeout again joining the worker, so the advertised shutdown allowance was
@@ -1091,7 +1092,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0088"></a>
 
-- SEVERE - FIXED (2026-11-06). Render allocation outpacing collection. A
+- SEVERE - FIXED (2026-11-06). Render allocation amplification. A
   10,100-item Execute with automatic verification exhausted the renderer twice.
   The bridge delivers every event but publishes one snapshot per batch. The
   page repainted even when an event supplied no new snapshot, reread up to
@@ -1106,34 +1107,33 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0089"></a>
 
-- SEVERE - FIXED (2026-11-06). Supported-scale plan refused at half the
-  target. A 100,000 × 32 B copy into an empty target (101,000 operations,
-  1,000 directories) was refused with `ReviewFactLimitExceeded`
-  (plan/domain/rows, 120,000); 50,000 files (50,500 operations) planned. The
-  user's stated policy is a performance guarantee up to 120,000 items with
-  larger plans allowed but unguaranteed, so no refusal is expected here.
-  A service replay counted 202,000 distinct observation subjects (101,000 per
-  root) and 1,001 target parents. Preflight built the subject map, then refused
-  on observation 120,001. Observed-world adoption checks both maps again.
-  Both boundaries now admit the logical operation count and validate derived
-  observations against the Plan's scope. The original fixture produced a saved
-  review with every operation and an empty target. Evidence:
-  `{refusal,fixed-plan}.json` in [EV-0013](../evidence/EV-0013/README.md).
+- SEVERE - FIXED (2026-11-06). Review-fact limit unit mismatch. A 100,000 × 32 B
+  copy into an empty target (101,000 operations, 1,000 directories) was refused
+  with `ReviewFactLimitExceeded` (plan/domain/rows, 120,000); 50,000 files
+  (50,500 operations) planned. The user's stated policy is a performance
+  guarantee up to 120,000 items with larger plans allowed but unguaranteed, so
+  no refusal is expected here. A service replay counted 202,000 distinct
+  observation subjects (101,000 per root) and 1,001 target parents. Preflight
+  built the subject map, then refused on observation 120,001. Observed-world
+  adoption checks both maps again. Both boundaries now admit the logical
+  operation count and validate derived observations against the Plan's scope.
+  The original fixture produced a saved review with every operation and an empty
+  target. Evidence: `{refusal,fixed-plan}.json` in
+  [EV-0013](../evidence/EV-0013/README.md).
 <a id="bug-0090"></a>
 
-- MODERATE - FIXED (2026-11-06). Review-limit refusal shown as retryable
-  failure. When the plan above was refused, no plan was saved.
-  The page still requested the Plan view; `open_plan_view` hit the missing
-  plan (`KeyError` in `runtime.get_plan`), the bridge returned
-  `internal_error`, and the task showed "Plan unavailable. Select the task to
-  retry. Check the task settings and try again." Retrying cannot succeed and
-  the limit was never named. The wire already carries the validated
-  `terminal_result.review_refusal`. Terminal release and task selection both
-  reached `loadPlanReview` without checking that fact. Release and reselection
-  now retain the current session's specific refusal, retire stale reads and
-  leave Execute disabled. Genuine read failures remain retryable and saved
-  blocked plans remain reviewable. Private-desktop witness:
-  [EV-0031](../evidence/EV-0031/README.md).
+- MODERATE - FIXED (2026-11-06). Review-limit refusal misclassification. When
+  the plan above was refused, no plan was saved. The page still requested the
+  Plan view; `open_plan_view` hit the missing plan (`KeyError` in
+  `runtime.get_plan`), the bridge returned `internal_error`, and the task showed
+  "Plan unavailable. Select the task to retry. Check the task settings and try
+  again." Retrying cannot succeed and the limit was never named. The wire
+  already carries the validated `terminal_result.review_refusal`. Terminal
+  release and task selection both reached `loadPlanReview` without checking that
+  fact. Release and reselection now retain the current session's specific
+  refusal, retire stale reads and leave Execute disabled. Genuine read failures
+  remain retryable and saved blocked plans remain reviewable. Private-desktop
+  witness: [EV-0031](../evidence/EV-0031/README.md).
 
 ### Setup folder admission
 
@@ -1170,7 +1170,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0093"></a>
 
-- MODERATE - FIXED (2026-10-16). Missing producer invalidation. Returning to
+- MODERATE - FIXED (2026-10-16). Producer invalidation omission. Returning to
   Plan after same-task inventory work could retain a digest attributed to the
   execution even though the scan had superseded that ledger evidence. Cause:
   auxiliary release refreshed Inventory but left the cached Plan window/detail
@@ -1182,7 +1182,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0094"></a>
 
-- MINOR - FIXED (2026-10-11). Conflated outcome presentation. Execution rows
+- MINOR - FIXED (2026-10-11). Outcome presentation conflation. Execution rows
   labeled actual no-ops Skipped while giving both no-ops and deselected skips
   green completion styling. Cause: color used the broad skipped result and
   text ignored its already distinct reason. Only skipped with reason noop now
@@ -1195,7 +1195,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0095"></a>
 
-- MINOR - FIXED (2026-10-06). Incomplete gesture cancellation. Owned row
+- MINOR - FIXED (2026-10-06). Gesture cancellation gap. Owned row
   context gestures can reach the WebView native menu when custom-menu
   eligibility returns early. Installed characterization also shows the Menu
   key emits a contextmenu on the newly focused custom-menu item after keyup,
@@ -1224,7 +1224,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0097"></a>
 
-- MODERATE - FIXED (2026-10-16). Lost read reconciliation. D2 copied-file
+- MODERATE - FIXED (2026-10-16). Read reconciliation loss. D2 copied-file
   verification can remain unavailable after a completed execution until another
   pane load or Reload, despite eligible copied files. Cause: readiness drops
   triggers while loading, discards responses after its execution revision changes
@@ -1252,7 +1252,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0099"></a>
 
-- MODERATE - FIXED (2026-10-11). Conflated input cancellation. SN3's general
+- MODERATE - FIXED (2026-10-11). Input cancellation conflation. SN3's general
   input handlers retired scroll-window requests along with keyboard navigation,
   discarding useful reads during repeated wheel events in Plan and Inventory.
   Input interruption now retires highlight/keyboard intent separately; explicit
@@ -1263,20 +1263,20 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0100"></a>
 
-- MODERATE - FIXED (2026-10-11). Unbounded navigation intent. Plan queued each
-  repeated arrow or pointer replacement behind earlier highlight work, leaving
-  a delayed input tail; Inventory repeats reused the committed index instead of
-  accumulating the desired endpoint. Both now retain one navigation read and
-  one latest target. Other input retires pending intent and late visual feedback;
-  admitted mutations still settle without replay. Discrete gestures preserve
-  order and displayed revisions, and Python retains range/anchor authority.
-  Delayed probes cover repeats, reversal, interruption, stale replies and
-  highlighted-selection conflicts. Interfaces/tools and installed tree,
+- MODERATE - FIXED (2026-10-11). Navigation intent accumulation. Plan queued
+  each repeated arrow or pointer replacement behind earlier highlight work,
+  leaving a delayed input tail; Inventory repeats reused the committed index
+  instead of accumulating the desired endpoint. Both now retain one navigation
+  read and one latest target. Other input retires pending intent and late visual
+  feedback; admitted mutations still settle without replay. Discrete gestures
+  preserve order and displayed revisions, and Python retains range/anchor
+  authority. Delayed probes cover repeats, reversal, interruption, stale replies
+  and highlighted-selection conflicts. Interfaces/tools and installed tree,
   Inventory and shell input gates pass.
 
 <a id="bug-0101"></a>
 
-- MODERATE - FIXED (2026-10-11). Split request settlement. Plan's renderer kept
+- MODERATE - FIXED (2026-10-11). Request settlement split. Plan's renderer kept
   its pending offset after the app discarded a window for navigation or hidden
   geometry, suppressing a same-offset request on return. An exact request-token
   callback now retires renderer demand without clearing newer work. Zero-height
@@ -1311,14 +1311,14 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0104"></a>
 
-- MODERATE - FIXED (2026-10-05). Repeated unbounded labels. Supported deep
-  prior paths, move-group destinations and scan-warning paths travelled in
-  every 256-row window; actual production bridge dispatch refused a window
-  above its 8 MiB response limit, preventing that part of the plan from loading.
-  Cause: row count bounded the population while full repeated strings bypassed
-  compact presentation. Window labels now have Unicode-safe bounds, rename
-  rows carry only an old name, and exact revisioned node details retain full
-  paths and diagnostics. Composition cases cover ASCII/CJK origins, groups
+- MODERATE - FIXED (2026-10-05). Repeated-label response amplification.
+  Supported deep prior paths, move-group destinations and scan-warning paths
+  travelled in every 256-row window; actual production bridge dispatch refused a
+  window above its 8 MiB response limit, preventing that part of the plan from
+  loading. Cause: row count bounded the population while full repeated strings
+  bypassed compact presentation. Window labels now have Unicode-safe bounds,
+  rename rows carry only an old name, and exact revisioned node details retain
+  full paths and diagnostics. Composition cases cover ASCII/CJK origins, groups
   and notices; closed operation/presentation kind pairs are admitted together.
 
 <a id="bug-0105"></a>
@@ -1363,7 +1363,7 @@ entries to fit a batch; use explicit record offsets/limits.
   progress probe covers a 90,071,992,547,409,920-byte delta over five seconds.
 <a id="bug-0109"></a>
 
-- MODERATE - FIXED (2026-09-23). Repeated navigation side effects. Cached
+- MODERATE - FIXED (2026-09-23). Follow-update scroll override. Cached
   follow-target updates reset scroll on every progress tick, undoing a user's
   position even while the active row remained visible. Automatic same-target
   updates now reuse the anchor without a new scroll request; explicit Go still
@@ -1380,7 +1380,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0111"></a>
 
-- MODERATE - FIXED (2026-09-23). Unshrinkable row-note content. Long Plan
+- MODERATE - FIXED (2026-09-23). Row-note intrinsic-width overflow. Long Plan
   notes displaced the appended Details button outside its clipped cell without
   creating a usable horizontal scroll range. The notes were an anonymous flex
   item with an intrinsic minimum. The initial repair made that text shrinkable;
@@ -1398,7 +1398,7 @@ entries to fit a batch; use explicit record offsets/limits.
   the production row renderer across execution, verification and settlement.
 <a id="bug-0113"></a>
 
-- MINOR - FIXED (2026-09-23). Incomplete presentation invalidation. Retained
+- MINOR - FIXED (2026-09-23). Presentation invalidation gap. Retained
   detail rendering reopened a user-collapsed disclosure, while an unchanged
   Plan window prevented newer active-row progress from appearing. Detail
   rendering now preserves explicit collapse; hiding the detail area transfers
@@ -1455,7 +1455,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0118"></a>
 
-- MODERATE - FIXED (2026-09-14). Missing recovery dispatch. A failed Plan load
+- MODERATE - FIXED (2026-09-14). Recovery dispatch omission. A failed Plan load
   advertised selecting the task to retry, but selection only reloaded Setup,
   leaving the Plan unavailable. Cause: the navigation consumer omitted the Plan
   loader. Selection now invokes the existing guarded loader for eligible sync-plan
@@ -1536,7 +1536,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0124"></a>
 
-- MODERATE - FIXED (2026-10-14). Incomplete accepted activity adoption. After
+- MODERATE - FIXED (2026-10-14). Accepted-activity adoption gap. After
   execution, Inventory Refresh can be refused despite a released session and
   current idle view. Cause: the browser adopts execution's new session but
   retains its original Plan request as the current request. The actual adapter
@@ -1548,7 +1548,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0125"></a>
 
-- MODERATE - FIXED (2026-10-13). Closed kind catalog misses a registered activity.
+- MODERATE - FIXED (2026-10-13). Closed kind-catalog omission.
   The browser rejected a genuine manual-verification terminal record and its
   co-batched events, preventing terminal observation and automatic release.
   Cause: TaskSummary and native registration admitted the new kind, but the
@@ -1559,7 +1559,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0126"></a>
 
-- MODERATE - FIXED (2026-10-13). Current activity revokes retained read authority.
+- MODERATE - FIXED (2026-10-13). Read-guard session substitution.
   Execution-task Inventory refused public windows, details and view gestures
   during active or paused auxiliary verification, hiding live result overlays.
   Cause: its read guard required the current session's release after that session
@@ -1571,7 +1571,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0127"></a>
 
-- MODERATE - FIXED (2026-10-13). Scan identity substituted for publication identity.
+- MODERATE - FIXED (2026-10-13). Scan/publication identity substitution.
   The M1-10 execution-task candidate safely refused missing-row acknowledge/restore
   until Refresh, despite publishing a complete target-ledger view. Cause: the
   service still required standalone scan metadata after execution-ledger views
@@ -1583,7 +1583,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0128"></a>
 
-- MODERATE - FIXED (2026-10-13). Current-session cleanup omits task-owned state.
+- MODERATE - FIXED (2026-10-13). Task-owned state cleanup omission.
   The M1-10 auxiliary-session candidate retained the original execution review
   after exact Close following manual/ordinary verification or Refresh. Repeated
   task creation could accumulate closed-task result graphs. Cause: retirement
@@ -1595,7 +1595,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0129"></a>
 
-- MODERATE - FIXED (2026-10-02). Late admission overwrites observation. An
+- MODERATE - FIXED (2026-10-02). Late start-receipt state regression. An
   unrelated task-list read can discover a new session before its start response
   arrives; if its drain then observes completion, the late receipt reset it to
   active/unreleased. A failed follow-up read left Refresh disabled and the scan
@@ -1605,7 +1605,7 @@ entries to fit a batch; use explicit record offsets/limits.
   receipt probe covers completion before response and failed reconciliation.
 <a id="bug-0130"></a>
 
-- MINOR - FIXED (2026-10-02). Feedback outlives its applicable state. Refresh
+- MINOR - FIXED (2026-10-02). Stale feedback retention. Refresh
   admission promised a future result after completion or refusal, and refused
   scans without current details advised repeatedly reloading an unavailable
   projection. Cause: permanent admission prose and generic read-failure advice
@@ -1705,7 +1705,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0139"></a>
 
-- MODERATE - FIXED (2026-09-14). Incomplete terminal-record discriminant.
+- MODERATE - FIXED (2026-09-14). Terminal-record discriminant gap.
   An execution could finish Refused while its task still appeared active and could
   not release. Cause: native and browser task-record validators retained older
   kind/capability restrictions. They now accept exactly plan and inventory records
@@ -1732,7 +1732,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0141"></a>
 
-- MODERATE - FIXED (2026-09-14). Mutable queued options. Add pair retained
+- MODERATE - FIXED (2026-09-14). Queued-option aliasing. Add pair retained
   paths but no settings snapshot, so later form edits changed queued rows'
   displayed semantics and the options used to create their plans. Batch start
   also overwrote every queued row with one current-form snapshot. Fixed by
@@ -1982,7 +1982,7 @@ entries to fit a batch; use explicit record offsets/limits.
   route was added.
 <a id="bug-0164"></a>
 
-- MINOR - FIXED (2026-08-26). Unbound producer fixtures. Separate Python public
+- MINOR - FIXED (2026-08-26). Producer-fixture drift. Separate Python public
   view witnesses and browser literals could stay green while the real codec
   drifted away from JavaScript. Cause: no differential check passed the actual
   Python primitive projection to the packaged consumer. Fixed by binding all
@@ -2027,10 +2027,10 @@ entries to fit a batch; use explicit record offsets/limits.
   authorization.
 <a id="bug-0168"></a>
 
-- MODERATE - FIXED (2026-08-22). Post-Gap phase-authority lock. After a Gap,
-  the first self-described Progress established only lossy phase context, but
-  the reducer treated it like reliable `PhaseChanged` authority and rejected a
-  later valid phase when the intervening change was outside replay; atomic
+- MODERATE - FIXED (2026-08-22). Post-Gap phase-authority conflation. After a
+  Gap, the first self-described Progress established only lossy phase context,
+  but the reducer treated it like reliable `PhaseChanged` authority and rejected
+  a later valid phase when the intervening change was outside replay; atomic
   preflight could also withhold reliable siblings. Fixed by locking phase only
   under reliable authority, resetting progress-only temporal state on a newer
   self-described phase, retaining same-phase regression checks, and proving
@@ -2146,9 +2146,9 @@ entries to fit a batch; use explicit record offsets/limits.
   loop return, after which the startup-refused finalizer runs.
 <a id="bug-0179"></a>
 
-- MODERATE - FIXED (2026-08-17). Selected-state boundary contrast. Selected
-  and current task cards used the subtle neutral boundary that belongs to
-  quiet surfaces, leaving their actionable edge below the 3:1 non-text
+- MODERATE - FIXED (2026-08-17). Selected-state boundary-token substitution.
+  Selected and current task cards used the subtle neutral boundary that belongs
+  to quiet surfaces, leaving their actionable edge below the 3:1 non-text
   contrast requirement in light mode. Fixed with the opaque selected surface,
   accessible neutral boundary, retained elevation/focus, and distinct
   forced-colors hover/press outlines. Transparent unselected rest cards remain
@@ -2236,7 +2236,7 @@ entries to fit a batch; use explicit record offsets/limits.
   and untested by this evidence.
 <a id="bug-0187"></a>
 
-- MINOR - FIXED (2026-08-13). Split protocol authority. Active
+- MINOR - FIXED (2026-08-13). Protocol authority split. Active
   documents delegated exact errors and retry rules to `obsolete/M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers
   could follow incompatible contracts and SH-G-8 appeared closed without its
@@ -2280,7 +2280,7 @@ entries to fit a batch; use explicit record offsets/limits.
   O(chain-depth) anchoring.
 <a id="bug-0191"></a>
 
-- MODERATE - FIXED (2026-08-13). Semantic-only accessibility implementation.
+- MODERATE - FIXED (2026-08-13). Tree-widget behavior gap.
   The renderer advertised
   `tree`/`treeitem` roles but exposed no Tab stop, active descendant, keyboard
   navigation, or off-DOM sibling metadata, so keyboard and assistive-technology
@@ -2314,7 +2314,7 @@ entries to fit a batch; use explicit record offsets/limits.
   leaves and containers with no retained child emit `null` and no disclosure.
 <a id="bug-0194"></a>
 
-- MODERATE - FIXED (2026-08-17). Virtual-tree interaction ownership gaps.
+- MODERATE - FIXED (2026-08-17). Virtual-tree interaction ownership gap.
   Keyboard navigation changed the active descendant without ensuring its row
   stayed inside the scroll viewport, while the visible disclosure had no
   pointer-owned toggle path and bubbled to row activation. Fixed with exact
@@ -2353,18 +2353,18 @@ entries to fit a batch; use explicit record offsets/limits.
   no private receiver or document mutation is reachable.
 <a id="bug-0198"></a>
 
-- SEVERE - FIXED (2026-08-13). Unbounded domain admission and teardown
-  ownership. Pinned pywebview creates an exposed-call thread before NamiSync
-  admission; the dispatcher then had no cap, and teardown could wait forever or
-  release logging, path, and instance owners after quiescence failed. Fixed with
-  a 64-handler admitted-work ceiling, bounded monotonic handler wait, one fail-
+- SEVERE - FIXED (2026-08-13). Unbounded exposed-call admission. Pinned
+  pywebview creates an exposed-call thread before NamiSync admission; the
+  dispatcher then had no cap, and teardown could wait forever or release
+  logging, path, and instance owners after quiescence failed. Fixed with a
+  64-handler admitted-work ceiling, bounded monotonic handler wait, one fail-
   closed quiescence sequence, retryable close, and owner release only after
   complete service shutdown. Drains and producers wake before the wait;
   saturation returns `bridge_busy`. Raw exposed-call thread creation remains a
   dependency-owned availability boundary classified in `DEFENSE.md` §4.
 <a id="bug-0199"></a>
 
-- MODERATE - FIXED (2026-08-13). Unbounded task retention and recovery retry.
+- MODERATE - FIXED (2026-08-13). Unbounded task and recovery-retry retention.
   Terminal tasks and start receipts had no production release command, an
   uncertain start could lose replay when its folder slots expired, and repeated
   drain failure could immediately rearm forever. Fixed with a 48-task ceiling,
@@ -2478,7 +2478,7 @@ entries to fit a batch; use explicit record offsets/limits.
   is unsupported-installation diagnostics rather than a normal user path.
 <a id="bug-0210"></a>
 
-- MODERATE - FIXED (2026-08-01). Fallback-import side effects. Refusing a
+- MODERATE - FIXED (2026-08-01). Fallback-import registry mutation. Refusing a
   missing WebView2 runtime wrote Internet Explorer feature-control keys first:
   `webview.start()` imported pywebview's MSHTML fallback before NamiSync's
   renderer check. Fixed with a read-only, pywebview-compatible registry preflight
@@ -2506,7 +2506,7 @@ entries to fit a batch; use explicit record offsets/limits.
   and navigation guards remain defense in depth.
 <a id="bug-0213"></a>
 
-- MODERATE - FIXED (2026-07-31). Incomplete navigation interception. Top-level
+- MODERATE - FIXED (2026-07-31). Navigation interception gap. Top-level
   `NavigationStarting` does not observe iframes, so weakened or late CSP left no
   native frame control. Fixed by attaching `FrameNavigationStarting` and
   canceling every frame navigation while retaining first-in-`head`
@@ -2588,17 +2588,18 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0222"></a>
 
-- MODERATE - FIXED (2026-10-05). Repeated unbounded labels. Inventory domain
-  displays and warning paths repeat complete supported paths in 256-row windows.
-  With 25,112-unit relative paths (25,120 including root, 250-unit components),
-  production response admission rejects domain and notice envelopes of
-  19,426,765 and 38,691,017 bytes against its 8 MiB ceiling; those windows cannot
-  load. Cause: row-count bounds leave repeated full strings in window fields.
-  Compact window basenames/warning tails now preserve full-path search; complete
-  paths and warning text use revision-guarded snapshot details separately from
-  fresh ledger evidence. Complete 256-row envelope tests include all text and
-  Plan execution overlays with margin below the unchanged cap. Original proof
-  and correction evidence: [EV-0019](../evidence/EV-0019/README.md).
+- MODERATE - FIXED (2026-10-05). Repeated-label response amplification.
+  Inventory domain displays and warning paths repeat complete supported paths in
+  256-row windows. With 25,112-unit relative paths (25,120 including root,
+  250-unit components), production response admission rejects domain and notice
+  envelopes of 19,426,765 and 38,691,017 bytes against its 8 MiB ceiling; those
+  windows cannot load. Cause: row-count bounds leave repeated full strings in
+  window fields. Compact window basenames/warning tails now preserve full-path
+  search; complete paths and warning text use revision-guarded snapshot details
+  separately from fresh ledger evidence. Complete 256-row envelope tests include
+  all text and Plan execution overlays with margin below the unchanged cap.
+  Original proof and correction evidence:
+  [EV-0019](../evidence/EV-0019/README.md).
 
 ### Planning evidence freshness
 
@@ -2618,8 +2619,8 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0224"></a>
 
-- MODERATE - FIXED (2026-09-27). Inconclusive admission reset guidance. Fresh
-  CLI admission and the first history read could interpret normal external
+- MODERATE - FIXED (2026-09-27). Admission schema-mismatch misclassification.
+  Fresh CLI admission and the first history read could interpret normal external
   database activity as incompatibility and advise archiving or deleting the pair.
   Cause: artifact drift and unavailable reads shared the schema-mismatch error.
   Typed drift now retries validation at most three times; persistent drift gives
@@ -2686,17 +2687,17 @@ entries to fit a batch; use explicit record offsets/limits.
   remains supported; unrelated history is not planning input.
 <a id="bug-0229"></a>
 
-- MODERATE - FIXED (2026-08-27). Unbounded integrity candidate population.
-  Fresh full and selected-path integrity, stale-plus-completed scope, and saved
-  resume could materialize an arbitrary eligible ledger population before any
-  custody refusal, risking process exhaustion and partial downstream work.
-  Cause: general inventory getters and Python post-filtering owned selection,
-  so batching bounded parameters but not total rows or one complete union.
-  Fixed with the separately typed candidate fact, SQL-side mode eligibility,
-  one-snapshot streamed reads capped at the first row beyond 120,000, exact
-  saved order/missing checks, stale identity deduplication, and workflow
-  settlement that starts no verifier work. The independently modeled retained-
-  byte and codec-envelope axes remain unimplemented.
+- MODERATE - FIXED (2026-08-27). Integrity-candidate materialization
+  amplification. Fresh full and selected-path integrity, stale-plus-completed
+  scope, and saved resume could materialize an arbitrary eligible ledger
+  population before any custody refusal, risking process exhaustion and partial
+  downstream work. Cause: general inventory getters and Python post-filtering
+  owned selection, so batching bounded parameters but not total rows or one
+  complete union. Fixed with the separately typed candidate fact, SQL-side mode
+  eligibility, one-snapshot streamed reads capped at the first row beyond
+  120,000, exact saved order/missing checks, stale identity deduplication, and
+  workflow settlement that starts no verifier work. The independently modeled
+  retained- byte and codec-envelope axes remain unimplemented.
 <a id="bug-0230"></a>
 
 - MODERATE - FIXED (2026-08-26). Ambient snapshot placement. File admission
@@ -2759,10 +2760,10 @@ entries to fit a batch; use explicit record offsets/limits.
   at the intermediate drift state.
 <a id="bug-0236"></a>
 
-- MODERATE - FIXED (2026-08-08). Post-materialization selection bound. Frozen
-  resume and stale-before integrity selection loaded every row for a location
-  and filtered in Python, making small checks O(location size). Cause: the
-  repository exposed canonical-path batching but no location-scoped row-ID
+- MODERATE - FIXED (2026-08-08). Post-materialization selection amplification.
+  Frozen resume and stale-before integrity selection loaded every row for a
+  location and filtered in Python, making small checks O(location size). Cause:
+  the repository exposed canonical-path batching but no location-scoped row-ID
   read, and the workflow reused the full-inventory getter. Fixed with ordered
   canonical row-ID lookup in 400-ID chunks under one read snapshot, direct stale
   rows plus exact completed-row fetches, and refusal of missing/foreign saved
@@ -2780,7 +2781,7 @@ entries to fit a batch; use explicit record offsets/limits.
   only a successful guarded evidence write clears the marker.
 <a id="bug-0238"></a>
 
-- MODERATE - FIXED (2026-08-04). Split contention-budget enforcement. Serialized database
+- MODERATE - FIXED (2026-08-04). Contention-budget enforcement split. Serialized database
   contention could outlive
   its configured retry bound: waiting for the in-process writer lock was
   unbounded, each SQLite attempt retained the full busy timeout, and retry sleep
@@ -2821,15 +2822,15 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0242"></a>
 
-- MODERATE - FIXED (2026-08-27). Unbounded verifier buffer policy. The ordinary
-  runtime selects a 4 MiB chunk, but public `VerifierContext` accepts any
-  positive size and the Windows reader simultaneously owns that aligned native
-  buffer and a Python bytes copy. A direct supported component caller can thus
-  bypass any finite task-transient charge. Cause: a composition default stood
-  in for a contract maximum. Fixed by admitting only exact integer chunk sizes
-  from one byte through 4 MiB, keeping the existing default as the maximum.
-  The task model can now charge one native buffer plus one Python chunk without
-  narrowing ordinary runtime behavior.
+- MODERATE - FIXED (2026-08-27). Verifier buffer-size charge bypass. The
+  ordinary runtime selects a 4 MiB chunk, but public `VerifierContext` accepts
+  any positive size and the Windows reader simultaneously owns that aligned
+  native buffer and a Python bytes copy. A direct supported component caller can
+  thus bypass any finite task-transient charge. Cause: a composition default
+  stood in for a contract maximum. Fixed by admitting only exact integer chunk
+  sizes from one byte through 4 MiB, keeping the existing default as the
+  maximum. The task model can now charge one native buffer plus one Python chunk
+  without narrowing ordinary runtime behavior.
 <a id="bug-0243"></a>
 
 - MODERATE - FIXED (2026-08-22). Verify-phase admission split. Linked
@@ -2890,7 +2891,7 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0248"></a>
 
-- MODERATE - FIXED (2026-09-28). Stale held-root attributes.
+- MODERATE - FIXED (2026-09-28). Held-root reparse-attribute race.
   A confirmed empty NTFS directory could become a junction through an
   attribute-only write handle while the admission hold stayed open. Cause:
   delete-sharing denial prevents rename but does not freeze reparse attributes;
@@ -2902,17 +2903,18 @@ entries to fit a batch; use explicit record offsets/limits.
   compatible; DEFENSE's existing quiescence rule governs the check/use interval.
 <a id="bug-0249"></a>
 
-- MODERATE - FIXED (2026-08-30). Linear completion membership. Completing each
-  linked or standalone integrity item scanned the immutable candidate tuple to
-  confirm its id, making complete settlement quadratic even after workflow
-  authority reconciliation became constant-time. Cause: the mutable completed
-  map was indexed, but known selection membership was not. Fixed with one
-  selection-owned immutable id index, validated against the fixed tuple and
-  reused by verifier progress. Replay still checks the completed map first;
-  continuation shapes, item order, authority, and outcome behavior are unchanged.
+- MODERATE - FIXED (2026-08-30). Completion-membership scan amplification.
+  Completing each linked or standalone integrity item scanned the immutable
+  candidate tuple to confirm its id, making complete settlement quadratic even
+  after workflow authority reconciliation became constant-time. Cause: the
+  mutable completed map was indexed, but known selection membership was not.
+  Fixed with one selection-owned immutable id index, validated against the fixed
+  tuple and reused by verifier progress. Replay still checks the completed map
+  first; continuation shapes, item order, authority, and outcome behavior are
+  unchanged.
 <a id="bug-0250"></a>
 
-- MODERATE - FIXED (2026-08-27). Source primitive admission gaps. Core path,
+- MODERATE - FIXED (2026-08-27). Source primitive admission gap. Core path,
   volume, capability, warning, filter, assignment, scan-scope, and inventory
   binding values could retain subclasses, malformed Unicode, or source-sized
   populations before a later serializer or aggregate wall noticed them;
@@ -3105,7 +3107,7 @@ entries to fit a batch; use explicit record offsets/limits.
   results, phases, and nominal items.
 <a id="bug-0268"></a>
 
-- MODERATE - FIXED (2026-07-30). Incomplete recursive JSON validation. The security spike
+- MODERATE - FIXED (2026-07-30). Recursive JSON validation gap. The security spike
   accepted boolean/float schema 1, duplicate keys, exponent-overflow infinity,
   and escaped lone surrogates; a handler could run on the last two before output
   validation noticed them. Cause: validation covered JSON syntax and top-level
@@ -3596,14 +3598,14 @@ entries to fit a batch; use explicit record offsets/limits.
 
 <a id="bug-0312"></a>
 
-- MINOR - FIXED (2026-07-21; superseded 2026-08-27). Inconsistent Unicode-
-  encoding boundary. Free-form malformed diagnostic text could fail ledger,
-  history, or workflow JSON encoding despite path validation. M0 aligned the
-  encoders with the then-tolerant plan encoder. The later Unicode-scalar fix
-  replaces that fallback with strict encoding and symmetric payload admission:
-  optional scan-warning detail is omitted at construction, typed item detail
-  retains its counted omission, and required text refuses. Valid observations
-  remain recordable without claiming malformed identity text round-trips.
+- MINOR - FIXED (2026-07-21; superseded 2026-08-27). Unicode encoder mismatch.
+  Free-form malformed diagnostic text could fail ledger, history, or workflow
+  JSON encoding despite path validation. M0 aligned the encoders with the
+  then-tolerant plan encoder. The later Unicode-scalar fix replaces that
+  fallback with strict encoding and symmetric payload admission: optional
+  scan-warning detail is omitted at construction, typed item detail retains its
+  counted omission, and required text refuses. Valid observations remain
+  recordable without claiming malformed identity text round-trips.
 <a id="bug-0313"></a>
 
 - SEVERE - FIXED (2026-07-20). Pre-validation name normalization. One NTFS, SMB,
@@ -3672,7 +3674,7 @@ entries to fit a batch; use explicit record offsets/limits.
   visibility without suppressing content work.
 <a id="bug-0319"></a>
 
-- MODERATE - FIXED (2026-07-19). Incomplete equality predicate. A readonly,
+- MODERATE - FIXED (2026-07-19). Equality predicate gap. A readonly,
   hidden, or system attribute change with unchanged size and mtime planned as
   `noop`, leaving the target stale. Cause: equality checked only size and
   timestamp; fixed by including standard attributes and verifying native
