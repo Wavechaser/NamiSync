@@ -631,6 +631,22 @@ truthfully. Released formats require explicit migration policy; automatic
 best-effort reinterpretation is forbidden. Exact active schema versions and
 reset procedures belong in `DATABASE.md`.
 
+From M2-A3, three persistence contracts are shared across checkpoints;
+`DATABASE.md` owns their mechanisms and current status:
+
+- **Ledger instance.** A ledger carries a random instance id, and anything
+  recorded or planned against a ledger names that instance. A consumer that
+  finds a different instance treats its reference as belonging to another
+  ledger, never as a match.
+- **Ids are never reused.** An id referenced from outside its own database is
+  never handed out again, so a stale reference fails as not-found instead of
+  resolving to a different row.
+- **Maintenance claim.** Work that replaces or rewrites a database (migration,
+  restore, pruning, purge) excludes every writer of either database in every
+  process, and writers are refused while it runs. The db layer owns the claim
+  because only its writers know when their last write has landed; the
+  dispatcher stays domain-blind, and volume custody remains a separate lock.
+
 ---
 
 ## 4. Module boundaries

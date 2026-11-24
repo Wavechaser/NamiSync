@@ -683,14 +683,154 @@ only a guarded positive evidence transaction can make the row current again.
 
 ## Schema Evolution
 
-Both databases start with a version stamp. The active pre-release boundary is
-reset-and-refuse: no startup migration or partial schema repair runs. Before
-real user evidence must survive a schema change, a dedicated ordered migration
-module will take an atomic backup, check supported source versions, migrate
-transactionally, verify integrity, and restore/refuse safely on failure.
+Status: accepted for M2-A3 (2026-11-25) and unrealized until its implementation
+lands; until then the reset-and-refuse boundary above is what the code does.
+v0.1.0 “Gertrud” released ledger v4 and history v8. From M2 on, a released
+database migrates forward or is refused: never reset, never half-migrated and
+never migrated under a writer. [M2_PLAN](M2_PLAN.md) holds the checkpoint's
+outcomes, gate and non-goals.
 
-Legacy import/merge is separate from normal startup migration. It never guesses
+### Formats and metadata
+
+- Core owns one version constant for each shared format a database persists,
+  in `namisync/core/formats.py`: the event envelope, content evidence, the
+  recording contract, the canonical hash preimage, file identity text, numeric
+  text and canonical path keys. Each constant has known-answer vectors in
+  tests, held as literal bytes or digests per version. An encoding that changes
+  without a new constant fails its vector; a new constant without a vector
+  fails too.
+- `schema_metadata` holds separate rows instead of one contract string: `role`,
+  `schema_version` and one `format.<name>` row per embedded format. The ledger
+  also holds `instance_id`. The `contract_id` and `data_epoch` rows are gone.
+- Schema code declares which formats each database embeds. A test pins the
+  formats of every schema version, so a core format cannot change under a
+  database without a new schema version, and every version from the oldest
+  supported source to the current one has a migration step or an invalidating
+  step.
+- At open, a database is current, older and supported, or refused. A newer
+  database is refused with direction to use the NamiSync that wrote it, never
+  with reset guidance. The only supported source is v0.1.0's format: ledger v4
+  or history v8 with its released contract id and the released tables and
+  columns. `data_epoch` is not read; every such database is treated as epoch 8
+  (user decision, 2026-11-19).
+- Each database is judged and migrated on its own, in its own transaction (user
+  decision, 2026-11-17). A pair left at different versions by an interrupted
+  upgrade therefore finishes on the next start, and pairwise agreement follows
+  from each role matching the application's current formats.
+
+### Ledger instance and ids
+
+- The ledger gets a random `instance_id` when it is created, or when a v0.1.0
+  ledger migrates. Every history run records the ledger instance it was
+  recorded against. Runs already in a v0.1.0 history are stamped with the
+  instance of the ledger they migrate beside, because the pair was admitted as
+  a pair. The stamp is a column of its own, outside the run's context hash, so
+  no stored hash is reinterpreted. Restore lineage and the read rule for
+  mismatched runs arrive with restore (M2-A4).
+- An id referenced from outside its own database is never reused (user
+  decision, 2026-11-21). A plain `INTEGER PRIMARY KEY` hands a new row the
+  highest id plus one, so deleting the highest-numbered location would give its
+  id to the next new one, and History would resolve the old runs to the new
+  path. M1 never deletes such rows; forgetting, purging and pruning will. The
+  design-time inventory (2026-11-25) found:
+  - `locations.id` and `inventory.id` are stored durably outside the ledger:
+    History keeps a location id as a run's `subject_id` and both ids inside
+    integrity event envelopes.
+  - `locations.id`, `mappings.id` and `inventory.id` are held for a process
+    lifetime by task setup, recent pairs, inventory review and the
+    `--location-id` argument.
+  - Nothing outside History refers to a History row id; runs are named by
+    token.
+
+  `locations`, `mappings` and `inventory` therefore use `AUTOINCREMENT`, and no
+  History table needs it. A table whose ids start to leave its database later
+  gets it through a migration.
+
+### Migration
+
+Migration runs where a pair is admitted for mutating work and at desktop
+startup, before the first ordinary connection. It is automatic and says so.
+Read-only classification never migrates: a command that only reads, such as
+standalone `history`, refuses an older database with direction to start
+NamiSync once.
+
+For each database that needs it, ledger first:
+
+1. **Exclusive access.** The caller holds the [maintenance claim](#maintenance-claim)
+   exclusively. Migration then proves through the files that nobody else is
+   using the database, whatever their version. First, opening the main file
+   with delete access must succeed, which fails while any other handle is open
+   without delete sharing: every SQLite connection, and the handles a desktop
+   pins at startup. Then one connection takes SQLite's exclusive locking mode
+   and keeps it until migration ends. SQLite refuses that lock while another
+   connection is open, and while it is held no other process can read or write.
+   This is the signal for processes released before the claim existed. A v0.1.0
+   desktop pins both files while it runs, and a v0.1.0 CLI run keeps its
+   connections open while it records.
+2. **Backup.** The SQLite backup API copies the database to a temporary file
+   beside it, which is checked (`integrity_check` and the source contract),
+   flushed and then published atomically as a dated backup. No backup, no
+   migration.
+3. **One transaction.** Old tables are renamed aside and their indexes and
+   triggers dropped; the shipped current schema is created by its own
+   statements; rows are copied with explicit columns, keeping every id; the old
+   tables are dropped; metadata is written. Because the objects are created by
+   the shipped statements, the result has exactly a fresh database's topology.
+4. **Verification before commit.** `integrity_check`, `foreign_key_check`, the
+   exact topology comparison and per-table row counts all pass, or the
+   transaction rolls back.
+
+A failure or interruption at any point leaves the old database: the transaction
+is all or nothing, and an uncommitted WAL tail is discarded at the next open.
+Migration is then refused with the reason, and the backup stays. There is no
+automatic restore, because nothing partial is ever published; restoring a
+backup is a maintenance command (M2-A4). Rotation of migration backups also
+waits for A4, so each migration leaves one backup per database.
+
+A released binary cannot be taught about newer formats: v0.1.0 refuses a
+migrated database through its exact-contract check before writing anything, but
+its message still suggests archiving or deleting the pair. Release notes carry
+the warning.
+
+Legacy import or merge is separate from migration. It never guesses
 volume/location correspondence.
+
+## Maintenance Claim
+
+Status: accepted for M2-A3 (2026-11-25) and unrealized until its implementation
+lands. User decisions (2026-11-20, 2026-11-24).
+
+Maintenance (migration first; later restore, archive-and-reset, reclaiming file
+space, history pruning and purge) must not run while any run's records are
+still being written to either database, in any process.
+
+- **Owner.** The db layer, because only its writers know when a run's last
+  write has landed. The dispatcher stays domain-blind.
+- **Mechanism.** Each database has a lock file beside its main file, named
+  `<main>.claim`. A claim is a `LockFileEx` lock on its first byte, shared or
+  exclusive, taken without waiting. Windows drops it when the handle closes or
+  the process dies. Locks belong to handles, so two claims in one process
+  conflict exactly as two processes do. The file is created on demand and never
+  deleted. It is not a database artifact: fresh-pair detection ignores it.
+- **Writers hold it shared.** The ledger recorder holds its database's claim
+  for the life of its connection, which is one run or one resumed stretch. Each
+  history observer holds History's claim from its construction at admission
+  until it closes, across pauses, because the History connection is shared and
+  outlives runs. The claim is taken before the first write and released after
+  the last is flushed. A writer refused because maintenance holds the claim
+  fails its admission with a typed refusal; new runs are refused, not queued.
+- **Maintenance holds it exclusively** on both databases of the pair, ledger
+  first, and refuses rather than waits while any claim is held. One gate covers
+  both because a ledger change under a History writer still recording location
+  ids is the id-reuse hazard. Schema creation takes its own database's claim
+  exclusively.
+- **Readers take no claim.** SQLite reads are consistent snapshots, and a stale
+  view is only behind.
+- **Outside the gate.** Settings keep their own named mutex. A paused run holds
+  no ledger claim; contract validation at its next open is what refuses a
+  database that changed underneath it. Work that is waiting rather than writing
+  (reviewed plans, held or queued executions) is covered by the ledger instance
+  check and the named refusals that arrive with M2-A4.
 
 ## Data Protection
 
