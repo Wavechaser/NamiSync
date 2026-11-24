@@ -1,0 +1,42 @@
+ledger.db 131072
+ledger.db-wal 148736152
+ledger.db-shm 294912
+[in-backup-small] exit=9 out=['ready', 'killing in-backup remaining=30 total=38'] -> ledger older, same-content, files ['ledger.db.migration-fd1a87944336f272.tmp', 'ledger.db.migration-fd1a87944336f272.tmp-journal']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T213647833173Z', 'history.db.backup-v8-20261124T213647851645Z'] ledger current history current content same
+[rename-kill-small] exit=9 out=['ready', 'killing before-rename'] -> ledger older, same-content, files ['ledger.db.migration-00010e65c3fdd8bd.tmp']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T213648331565Z', 'history.db.backup-v8-20261124T213648350023Z'] ledger current history current content same
+[in-backup-large] exit=9 out=['ready', 'killing in-backup remaining=35644 total=35652'] -> ledger older, same-content, files ['ledger.db.migration-06362fa28170f627.tmp', 'ledger.db.migration-06362fa28170f627.tmp-journal']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T213704359633Z', 'history.db.backup-v8-20261124T213718032712Z'] ledger current history current content same
+[in-copy-0.2] exit=9 out=['ready', 'killing in-copy +0.2'] -> ledger older, same-content, files ['ledger.db.backup-v4-20261124T213734368646Z']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T213744843858Z', 'history.db.backup-v8-20261124T213758241613Z'] ledger current history current content same
+[in-copy-1.0] exit=9 out=['ready', 'killing in-copy +1.0'] -> ledger older, same-content, files ['ledger.db.backup-v4-20261124T213814512332Z']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T213825825343Z', 'history.db.backup-v8-20261124T213839301041Z'] ledger current history current content same
+[in-copy-3.0] exit=9 out=['ready', 'killing in-copy +3.0'] -> ledger older, same-content, files ['ledger.db.backup-v4-20261124T213855645700Z']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T213909122442Z', 'history.db.backup-v8-20261124T213922462752Z'] ledger current history current content same
+[in-commit-0.0] exit=9 out=['commit-start', 'killing in-commit +0.0'] -> ledger older, same-content, files ['ledger.db.backup-v4-20261124T213938676285Z']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T214001790105Z', 'history.db.backup-v8-20261124T214014654028Z'] ledger current history current content same
+[in-commit-0.002] exit=9 out=['commit-start', 'killing in-commit +0.002'] -> ledger older, same-content, files ['ledger.db.backup-v4-20261124T214030785672Z']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T214053949146Z', 'history.db.backup-v8-20261124T214107057264Z'] ledger current history current content same
+[in-commit-0.01] exit=9 out=['commit-start', 'killing in-commit +0.01'] -> ledger older, same-content, files ['ledger.db.backup-v4-20261124T214123118156Z']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T214146271235Z', 'history.db.backup-v8-20261124T214159143382Z'] ledger current history current content same
+[in-commit-0.05] exit=9 out=['commit-start', 'killing in-commit +0.05'] -> ledger older, same-content, files ['ledger.db.backup-v4-20261124T214215211099Z']
+   rerun: ready None backups=['ledger.db.backup-v4-20261124T214238508358Z', 'history.db.backup-v8-20261124T214251459624Z'] ledger current history current content same
+[in-commit-0.2] exit=9 out=['commit-start', 'killing in-commit +0.2'] -> ledger current, same-content, files ['ledger.db.backup-v4-20261124T214307574012Z']
+   rerun: ready None backups=['history.db.backup-v8-20261124T214327937980Z'] ledger current history current content same
+[in-close-0.0] exit=9 out=['close-start', 'killing in-close +0.0'] -> ledger current, same-content, files ['ledger.db.backup-v4-20261124T214344083716Z']
+   rerun: ready None backups=['history.db.backup-v8-20261124T214406096827Z'] ledger current history current content same
+[in-close-0.05] exit=9 out=['close-done', 'killing in-close +0.05'] -> ledger current, same-content, files ['ledger.db.backup-v4-20261124T214422226693Z']
+   rerun: ready None backups=['history.db.backup-v8-20261124T214441752197Z'] ledger current history current content same
+[in-close-0.3] exit=9 out=['close-done', 'killing in-close +0.3'] -> ledger current, same-content, files ['ledger.db.backup-v4-20261124T214457916443Z']
+   rerun: ready None backups=['history.db.backup-v8-20261124T214517801793Z'] ledger current history current content same
+[in-close-1.0] exit=9 out=['close-done', 'killing in-close +1.0'] -> ledger current, same-content, files ['ledger.db.backup-v4-20261124T214534038951Z']
+   rerun: ready None backups=['history.db.backup-v8-20261124T214554420020Z'] ledger current history current content same
+result: refused migration-failed
+guidance: Updating the ledger database F:\GitHubRepositories\NamiSync\build\m2-a3\review-migrator\e9\ledger.db failed and it was left unchanged (DatabaseError: injected verification failure). Its backup is F:\GitHubRepositories\NamiSync\build\m2-a3\review-migrator\e9\ledger.db.backup-v4-20261124T214610728082Z. Close every other NamiSync window and command, then start NamiSync again; if this repeats, keep both files for inspection.
+before: {'ledger.db': (131072, '2158eb430234'), 'ledger.db-wal': (148736152, '8d8516022b42')}
+after:  {'ledger.db': (131072, '2158eb430234'), 'ledger.db-wal': (295531752, '2d00aff62318')}
+ordinary reader sees: {'schema_version': '4', 'contract_id': 'm1-ledger-v4-event-v5-evidence-v2', 'data_epoch': '8'} inventory 400030 quick_check ok
+fingerprint same: True
+second: ready ['ledger.db.backup-v4-20261124T214630051305Z', 'history.db.backup-v8-20261124T214643339379Z']
+fingerprint after migration same: True
+final files: ['history.db', 'history.db-shm', 'history.db.backup-v8-20261124T214643339379Z', 'history.db.claim', 'ledger.db', 'ledger.db.backup-v4-20261124T214610728082Z', 'ledger.db.backup-v4-20261124T214630051305Z', 'ledger.db.claim']

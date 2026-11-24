@@ -248,7 +248,7 @@ never hides the other result axes in rendered output.
 
 - No durable plan/session queue or restart-resume.
 - No cross-process desktop task visibility, background integrity, concurrent
-  file execution, general database migration, backup, or history retention controls.
+  file execution, database backup or restore commands, or history retention controls.
 - No automatic execution or bypass of reviewed-plan confirmation.
 - The desktop host requires standard Windows permissions and refuses elevated
   launches before exposing commands. [Defense model](docs/DEFENSE.md#21-supported-environment-and-trusted-computing-base)
@@ -288,8 +288,8 @@ never hides the other result axes in rendered output.
 - [Bridge](docs/BRIDGE.md) — external protocol, transport, retry/recovery and evidence.
 - [Presentation](docs/PRESENTATION.md) — tree/view, search/sort and scale contracts.
 - [Interfaces](docs/INTERFACES.md) — adapters, host/package and lifecycle contracts.
-- [M2 plan](docs/M2_PLAN.md) — M2's checkpoint register (proposed, no row
-  accepted yet) and feature specification.
+- [M2 plan](docs/M2_PLAN.md) — M2's checkpoint register and feature
+  specification.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
 - [Working rules](AGENTS.md) and their situational procedures for
   [scope](docs/procedures/SCOPE.md), [closeout](docs/procedures/CLOSEOUT.md)
@@ -314,7 +314,9 @@ Source-tree runs default to a separate development data root, and the test
 suite refuses the file, database and directory operations that would create or
 change entries under the release's data folder. Live spikes settled the open
 questions behind window framing, drag-and-drop, completion notifications, the
-volume overview and stopping a scan.
+volume overview and stopping a scan. Databases written by v0.1.0 migrate to the
+M2 schema with a verified backup, under a cross-process maintenance claim that
+keeps migration and writers apart.
 
 ### M2 Planning
 

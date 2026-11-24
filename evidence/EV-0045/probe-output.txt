@@ -1,0 +1,19 @@
+sqlite 3.50.4 python 3.13.17
+alone: acquired (journal_mode=wal)
+other process reader: refused (database is locked)
+  after kill reader: acquired (journal_mode=wal)
+other process open-read-tx: refused (database is locked)
+  after kill open-read-tx: acquired (journal_mode=wal)
+other process writer-idle: refused (database is locked)
+  after kill writer-idle: acquired (journal_mode=wal)
+other process never-touched: acquired (journal_mode=wal)
+  after kill never-touched: acquired (journal_mode=wal)
+while held, other read: refused (database is locked)
+while held, other write: refused (database is locked)
+after COMMIT still holding connection, other read: refused (database is locked)
+backup from exclusive holder rows: 1 integrity: ok
+sidecars after close: ['held.db']
+crash child: mid exit 3
+  artifacts: [('crash.db', 8192), ('crash.db-wal', 0)]
+  after crash rows: [(1,)] sql: CREATE TABLE t(x INTEGER PRIMARY KEY) mode: wal
+topology identical to fresh: True | sqlite_sequence: [('t', 1)]

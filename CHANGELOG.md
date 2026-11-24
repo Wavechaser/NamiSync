@@ -26,6 +26,34 @@ restarts, crashes, restores, retries and schema changes, and is shown honestly.
 Safe-to-change-the-databases work: guards and foundations that land before the
 first schema change. M2_PLAN owns checkpoint scope and gates.
 
+#### Maintenance claim and schema migration (2026-11-25)
+
+- Delivered M2-A3. A database written by v0.1.0 now migrates to the M2 schema
+  (ledger 5, history 9) the first time the desktop starts or a mutating CLI
+  command runs. Every row and id is kept, a verified backup is published beside
+  each database first, and one transaction per database makes a failure a
+  rollback and a refusal. A newer database, and a swapped or unknown role, are
+  refused without reset guidance. The `history` command never migrates.
+- Added the cross-process maintenance claim: writers hold it shared, schema
+  creation and migration hold it exclusive, and a killed process releases it.
+  Migration also refuses while any process has either database open, which is
+  how a running v0.1.0 is seen.
+- Each database now states its role, schema version and the versions of the
+  formats it embeds, replacing the contract id and data epoch. Seven shared
+  formats have constants in `namisync/core/formats.py`, pinned by literal
+  known-answer vectors. The ledger carries an instance id, each history run
+  records the ledger instance it ran against, and `locations`, `mappings` and
+  `inventory` never reuse an id.
+- Saved a database pair written by the released v0.1.0 binary under
+  `tests/assets/v0_1_0/`, with provenance and a rerunnable producer that
+  refuses the live data root.
+- Gate (EV-0045): the fixture migrates and reopens as ready; a migration killed
+  during backup, copy, commit or close left the old or the new database in all
+  15 trials, including a 400,000-row ledger, and the next start finished it;
+  7079 ordinary tests pass apart from the seven known interpreter-bound
+  failures; 13 import contracts hold. Each outcome had an independent
+  adversarial review. Limits and what M2-A4 inherits are in M2_PLAN.
+
 #### Spikes for M2 designs (2026-11-24)
 
 - Ran the M2-A2 live checks and recorded each result in its M2_PLAN feature

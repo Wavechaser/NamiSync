@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 45,
+  "next_id": 46,
   "records": [
     {
       "id": "EV-0001",
@@ -1266,6 +1266,64 @@
           "path": "summary.json",
           "bytes": 8469,
           "sha256": "12dfcd2c46bab71f3cc978ae5793f2a58b898842053984709aef327f772b5245"
+        }
+      ]
+    },
+    {
+      "id": "EV-0045",
+      "title": "M2-A3 migration gate, design probe and review experiments",
+      "date": "2026-11-25",
+      "origin": "build/m2-a3 at 880c3ad7",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 6832,
+          "sha256": "22b5bd5606736ae7d60a5a0edc0ca6789915ba3fa06e6df2e5d7e2159b5b0f3f"
+        },
+        {
+          "path": "common.py",
+          "bytes": 3173,
+          "sha256": "ae604cb884745b1dcf8a880c355b8a901daa52294fa740985db913a206fc928c"
+        },
+        {
+          "path": "e3_kills.py",
+          "bytes": 4222,
+          "sha256": "326616df4014b324d8c32e2fc9bf64db2e33c0eda07013d30ddd22b20e7b4bef"
+        },
+        {
+          "path": "e9_rollback_large.py",
+          "bytes": 2353,
+          "sha256": "eca4a97600b1f07aac9fd3cd7335bf3e130aa1ae987ecde74e7fa7b58d7a0e80"
+        },
+        {
+          "path": "kill_child.py",
+          "bytes": 3287,
+          "sha256": "b7435289df53d6d3dcecc611ac96a8f2db9f09a702f85d9432e8016e3bfee738"
+        },
+        {
+          "path": "kills-output.txt",
+          "bytes": 5997,
+          "sha256": "d9e48667e94eee444d92aa999059587dcae8bbf474d3fa9ced082d679b654c05"
+        },
+        {
+          "path": "make_large.py",
+          "bytes": 1842,
+          "sha256": "fa9ba31461f3fd863df9067f0616ab4274b9a4c6d2187d0ec05ba7091ce7f2c3"
+        },
+        {
+          "path": "probe-output.txt",
+          "bytes": 1013,
+          "sha256": "ba0468c1f2114493f0744e9cdfb8716f3d55444e729fb557d857be22aea9eba2"
+        },
+        {
+          "path": "probe_exclusive.py",
+          "bytes": 6892,
+          "sha256": "926fbee6609980bfb8f945ea374f97e089741e0e1104e8be42636e3c3d804862"
+        },
+        {
+          "path": "stress_drain.py",
+          "bytes": 2118,
+          "sha256": "d386cbdb74f2ad71e98a43cc1eb1d2c00e32b6d9c28a8af38f2e49af72633fd3"
         }
       ]
     }

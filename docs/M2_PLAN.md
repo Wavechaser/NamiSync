@@ -100,63 +100,60 @@ Checkpoints:
   UNC drops, a cold sleeping-disk scan and USB disks remain unchecked;
   the `J:\NamiSyncSpike\stop-latency` fixture kept for a few days
   at the user's request.
-- **M2-A3 Maintenance claim and schema migration** (active; accepted by the
-  user, 2026-11-25). Released databases migrate forward or are refused, never
-  half-migrated and never under a writer. The exclusive gate comes first, with
-  migration as its first consumer (user decision, 2026-11-24). Requirements
-  live in [DATABASE](DATABASE.md#schema-evolution) and
-  [ARCHITECTURE](ARCHITECTURE.md#38-persistence-boundary). Depends on A1.
-  - **Outcomes**, one reviewed commit each, in dependency order:
-    1. *Maintenance claim.* `namisync/db` gains the shared and exclusive claim;
-       the ledger recorder, each history observer and schema creation take it.
-       Consumers: recorder and history construction, and how a refused claim
-       surfaces at admission in the dispatcher, CLI and desktop.
-    2. *Format constants.* `namisync/core/formats.py` and literal known-answer
-       vectors for the seven shared formats.
-    3. *v0.1.0 fixture.* A pair written by the released v0.1.0 binary, saved
-       under `tests/assets/` with its provenance and a rerunnable producer
-       under `tools/`.
-    4. *M2 schema and migrator.* Ledger v5 and history v9 (metadata rows,
-       instance id, `AUTOINCREMENT`, the ledger instance on each history run),
-       the current, older, newer and refused classification, and
-       `namisync/db/migration.py`. Consumers: every test that synthesizes an
-       old or mixed pair, and the documents that state versions.
-    5. *Admission.* Pair admission migrates under the exclusive claims;
-       desktop startup and the CLI report it; read-only commands refuse with
-       direction. FEATURES, COMMANDLINE and INTERFACES follow.
-  - **Preserved:** no-write cold classification; exact topology authority;
-    refusal, without repair, of journals, orphan sidecars, one-present pairs
-    and unknown versions; the recorder's durability and replay contracts; the
-    import law; the live-data guard.
-  - **Gate:** the fixture migrates to the current schema with every id and row
-    kept and reopens as ready; a migration killed at each stage leaves the old
-    or the new database, never another state; a newer database is refused
-    without reset guidance; a format changed without its constant and vector
-    fails tests; migration refuses while another process holds a claim, and
-    while one has either database open without holding a claim, as a v0.1.0
-    process would; a killed process releases its claim; the ordinary suite and
-    `lint-imports` pass apart from the seven known interpreter-bound failures.
-  - **Design decisions** (2026-11-25, the row's design; DATABASE has the
-    reasons). The signal for a v0.1.0 process is the database files themselves,
-    not `Local\NamiSync.Desktop`: the mutex cannot see a CLI run and also
-    names every newer desktop. A design probe on SQLite 3.50.4 showed the
-    exclusive lock refused under an idle reader, an open read transaction and
-    an idle writer in another process, granted after that process was killed,
-    and a killed migration leaving the old database. Migration is one
-    transaction per database, so failure is a rollback and a refusal; there is
+- **M2-A3 Maintenance claim and schema migration** (complete, 2026-11-25).
+  A database written by v0.1.0 migrates to ledger schema 5 and history schema 9
+  when the desktop starts or a mutating CLI command runs, with every row and id
+  kept and a verified backup published first; anything else is refused, never
+  half-migrated and never under a writer. The gate came first, with migration
+  as its first consumer (user decision, 2026-11-24). Behavior and reasons live
+  in [DATABASE](DATABASE.md#schema-evolution),
+  [ARCHITECTURE](ARCHITECTURE.md#38-persistence-boundary) and
+  [CORE](CORE.md); the gate record is
+  [EV-0045](../evidence/EV-0045/README.md).
+  - **Delivered as four reviewed commits:** the v0.1.0 fixture, the format
+    constants and vectors, the maintenance claim, and the schema with its
+    migrator and admission. The accepted row listed schema and admission as two
+    outcomes; they landed together because a schema change without admission
+    would have refused every released pair.
+  - **Gate, passed:** the fixture migrates and reopens as ready; a migration
+    killed during backup, copy, commit or close left the old or the new
+    database in 15 of 15 trials and the next call finished it; a newer database
+    is refused without reset guidance; a format changed without its constant
+    and vector fails tests; migration refuses under another process's claim or
+    open handle; a killed process releases its claim; 7079 ordinary tests pass
+    apart from the seven known interpreter-bound failures, and 13 import
+    contracts hold.
+  - **Design decisions** (2026-11-25, made in the row's design and open to the
+    user's revision). The signal for a v0.1.0 process is the database files
+    themselves, not `Local\NamiSync.Desktop`, which cannot see a CLI run and
+    names every newer desktop. Migration is one transaction per database with
     no automatic restore. `locations`, `mappings` and `inventory` get
-    `AUTOINCREMENT`; no History table needs it.
-  - **Accepted residual:** a v0.1.0 process that holds no handle at the moment
-    of migration is not seen. It cannot write afterwards, because its own
-    exact-contract check refuses the migrated database, but it shows v0.1.0's
-    reset guidance.
-  - **Non-goals:** the missing-database policies; restore lineage and the read
-    rule for runs of another ledger instance (A4); check, backup and restore
-    commands and backup rotation (A4); moving annotations (B4); the recovery
-    store (C1).
-  - **Stops:** AGENTS' always-stops. In addition, stop on any migration result
-    that is neither the old nor the new database, and on any write under the
-    live data root.
+    `AUTOINCREMENT`. A history run's ledger instance is nullable, because
+    direct history writers in tests and tools have no ledger. The CLI announces
+    a migration on standard output; the desktop only in its log.
+  - **Accepted residuals:**
+    - A v0.1.0 process holding no handle at the moment of migration is not
+      seen. It cannot write afterwards, because its own contract check refuses
+      the migrated database, but it shows v0.1.0's reset guidance. The release
+      notes must say so (M2-R1).
+    - A v0.1.0 history with no ledger beside it can be neither read nor
+      migrated until the missing-database policy lands.
+    - A v0.1.0 main file copied without its `-wal` migrates as the empty
+      database it is; v0.1.0 leaves every committed row in the `-wal`.
+    - A damaged v0.1.0 database is refused at every start with direction to
+      keep its files; there is no repair or restore before A4.
+    - Each failed attempt leaves its backup, and a rolled-back attempt on a
+      large ledger grows the `-wal` (148 MB to 296 MB at 400,000 rows), until
+      A4's rotation.
+    - Path keys follow the release interpreter's Unicode case tables; no vector
+      can detect a change there ([CORE](CORE.md)).
+  - **Found outside scope, not fixed:** the copied-dispatcher pause, resume and
+    cancel cases in `tests/interfaces/web/test_drain.py` miss their fixed
+    deadlines under heavy parallel load, also on the commit before this row's
+    work (EV-0045).
+  - **Handed to A4:** refusal at admission when maintenance holds the claim
+    (in the A4 row), the read rule for runs with no or another ledger
+    instance, backup rotation, and a way forward for a damaged database.
 - **M2-A4 Maintenance commands** (proposed). Check, backup and restore run as
   maintenance sessions under A3's claim, with restore issuing a new ledger
   instance id and its lineage. Every plan, held in memory or stored, records the
@@ -453,12 +450,12 @@ safety are settled here, and the rest are deferred to the owning segment.
 - **Shell actions.** Copy Path, Open in Explorer and Properties for rows on every page, with optional click-through. Each action resolves a server-owned node id to a path on the host side; the browser never supplies path text. No file is ever launched, and NamiSync performs no mutation. On Plan, side-labelled Source and Target actions avoid an implicit side choice. Missing items keep only Copy Path and Open containing folder. [Shell Actions Detail](#shell-actions-detail) holds the policy and cost notes.
 - **Checksum adoption.** Copy content evidence from one location to another for metadata-equal pairs (no-op pairs), so existing duplicate backups gain checksums without hashing. The next Verify confirms or mismatches them. Sync execution is the natural first home: each selected paired no-op already re-checks both live stats against the review and calls `record_noop` ([RECORDER](RECORDER.md)), so adoption would extend that recording as a reviewed, fingerprinted plan option, with the adoptable count shown in review. The Browse card is a second home when its ledger switch is on, behind a counted confirmation because it writes evidence, possibly in either direction. The origin's evidence must be current: its attested stats match its current observation and carry no invalidation. The receiving row must have no evidence; a different existing digest is never overwritten and is reported as disagreement. Recording uses the conditional primitive. Adopted evidence gets a new provenance naming its origin. It never advances `last_verified_at`, and the state stays unverified. Baseline skips it, so Verify is the check, and a later mismatch is labelled as differing from the adopted origin. The row then states what was observed (a metadata match plus the origin's evidence), not that target bytes were read, which preserves never-wrong-only-behind. Adoption may chain (user decision, 2026-11-20): evidence adopted from A into B may be adopted again from B into C, because metadata sameness is already the premise and each step stays unverified until Verify. The provenance names the original origin, the row whose bytes were actually read, plus how many adoption steps the evidence went through, never the intermediate row. Adoption rides on its pair's no-op (user decision, 2026-11-21): it is recorded only as part of a no-op that succeeded, so any filesystem failure or race that fails the no-op's checks (preflight, and the live-stat re-check against review) takes the adoption down with it. Plan and execution already largely enforce this. No change to adoption may relax, bypass or reinterpret those checks, or carry other changes in under them; in Browse, the same live-stat re-check is the prerequisite. Eligibility that changes after review (user decisions, 2026-11-21) covers only ledger evidence changing while the filesystem side still matches, and is rejected in both directions, because adoption acts only on what was reviewed or confirmed and only while it still holds. Each pair's evidence is checked again as it is written, through the conditional primitive: the origin's evidence is still current with the reviewed digest, and the receiving row still has no evidence. Any change skips that pair, including the receiving row gaining any checksum, same or different. A skip is not a failure, because adoption only adds evidence: the no-op is still recorded and the result says “12 adoptions skipped because evidence changed since review”. A pair that becomes eligible after review, such as an origin gaining a checksum, is never adopted, since the reviewed count and the fingerprint cover it. Disagreement found at review is still reported. Both homes call one workflow operation over the db layer's conditional primitive, so they cannot diverge: Browse re-checks live stats as execution already does, its counted confirmation plays review's role, and its write takes the Database maintenance gate's shared claim like any writer. A new `Provenance` value is a core, ledger and history contract change, carried by Schema migration's format versions; data epochs are dropped.
 - **User-defined presets.** Create, customize and persist reusable sync pairs and inventory roots that otherwise populate Setup and use availability checks like ledger-derived recent pairs. Persistent records and bridge commands are new work; presets do not retain admission or execution authority. Presets live in a small db-owned config file of their own, beside `settings.json` and outside the ledger and History, with its own format, migration and backup (user direction, 2026-11-23). Whether Recent locations move into it is settled before presets go live (M2-B8).
-- **Schema migration.** Active under M2-A3: the migration order, format constants, per-database metadata, the open rule, the ledger instance id and the never-reused-id rule with its inventory are now in [DATABASE → Schema Evolution](DATABASE.md#schema-evolution). What remains here is not A3's:
+- **Schema migration.** Delivered by M2-A3: the migration order, format constants, per-database metadata, the open rule, the ledger instance id and the never-reused-id rule with its inventory are now in [DATABASE → Schema Evolution](DATABASE.md#schema-evolution). What remains here is not A3's:
   - **Restore lineage** (user decision, 2026-11-20; M2-A4). A ledger restore gives the ledger a new instance id and records its predecessor's id and the backup's cut-off time, a lineage boundary like the missing-ledger case below. Cross-database lookups apply only to matching runs; other runs are shown as belonging to an earlier ledger. A run joins the ledger if its instance matches, or if it belongs to the predecessor and started before the cut-off. Without this, a restore would keep the id while the restored database also brings back its old id counter, and History runs from the lost period would resolve to the wrong location.
   - **Stale references fail cleanly.** History, the recovery store's bindings, stored plans and, if they stay in the ledger, annotations get not-found instead of a wrong match, and History shows a forgotten location as such, never as another path.
 
   Missing databases: with only a ledger, create a history and notify the user. With only a history, notify, create a ledger with a new instance id, and record a durable lineage boundary that the History page shows. The old history is kept and never treated as describing the new ledger, and ledger records are never rebuilt from history. More history than ledger is acceptable, including after a ledger restore. Less history than ledger, after a History restore, is equivalent to History pruning, which the ledger already tolerates. Policy refinements with no open decision: an invalidating step for values that cannot be converted keeps observations and marks attestations unverified instead of resetting; `settings.json` and UI state carry their own versions; and a fixture database saved from every released version (today only v0.1.0) is migrated in tests.
-- **Database maintenance gate.** Active under M2-A3: the owner, the cross-process mechanism, who holds the claim and what stays outside it are now in [DATABASE → Maintenance Claim](DATABASE.md#maintenance-claim). The earlier accepted residual, that the first migration is unprotected against processes released before the gate, is superseded: migration refuses while any process has either database open (M2-A3). What remains here is M2-A4's:
+- **Database maintenance gate.** Delivered by M2-A3: the owner, the cross-process mechanism, who holds the claim and what stays outside it are now in [DATABASE → Maintenance Claim](DATABASE.md#maintenance-claim). The earlier accepted residual, that the first migration is unprotected against processes released before the gate, is superseded: migration refuses while any process has either database open (M2-A3). What remains here is M2-A4's:
   - **Waiting work.** Every plan, held in memory or stored, and every paused continuation records the ledger instance it was planned against, and preflight refuses a mismatch (user decisions, 2026-11-20 and 2026-11-24, the in-memory case from M2-A4). Because restore and archive-and-reset give the ledger a new instance id (Schema migration), work planned before them can never record against reused ids. On top of that, restore and archive-and-reset refuse while any reviewed plan, held or queued execution or paused run exists, and name them (“3 queued syncs were reviewed against the current ledger; stop them first”), so the user is not surprised later. The gate alone does not see this work because it is not writing.
   - Maintenance that touches files still takes volume custody through the dispatcher.
 - **History page.** The desktop form of the [History Dialog](FEATURES.md) feature: a run list and paged run detail over the existing history readers, with an activity-kind filter, so inventory and later pages need no history page of their own. [INTERFACES](INTERFACES.md) SH-G-9 applies. User decisions (2026-11-19): History storage stays as it is. A reopened run is a static record page, not a revived task: it shows the summary and per-item outcomes it retains (history keeps outcomes, not the plan's review tree), and only the summary once detail retention prunes items. It offers no Retry. “Open in Setup” opens a new task's Setup draft with the run's paths entered as typed paths, admitted by the ordinary checks, and settings at the current defaults, which the page says. Run settings are not stored: storing them would need a schema change and compatibility rules for every later settings change, to save a few clicks. History is permanent, so it would carry those rules forever, unlike the recovery store, which may discard a mismatch. FEATURES' [Restorable Task Setup](FEATURES.md) is narrowed to paths when this design is accepted. Recording location ids for the paths stays negotiable; sync runs already share a `run_token` with the ledger's run row.
