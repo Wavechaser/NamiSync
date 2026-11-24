@@ -44,8 +44,16 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   taskbar checks. Its two defects were traced and fixed in the prototype:
   pywebview's theme handler turns Mica off in light mode, so the host
   reapplies it after every change, and caption-button hover needs each hit
-  test passed to `DwmDefWindowProc`, which still declines maximized windows.
+  test passed to `DwmDefWindowProc`, which in that revision still declined
+  maximized windows.
   M2-A2 is complete.
+- Investigated maximized caption hover and clipping (EV-0043). Keeping the
+  non-client top inset at zero restores native DWM handling; client-side
+  padding keeps the page visible, and exact native button rectangles correct
+  the WebView cutout. The user confirmed hover, Snap Layouts and alignment;
+  all 15 final button corner/center checks passed. Native buttons remain
+  viable without custom rendering. A separate restore-height growth reproduced
+  in both old and new prototypes is recorded for later host work.
 - Recorded the user's decisions on two results: toasts become a user-enabled
   setting whose off state removes the registry key, and planning becomes
   stoppable no later than M2-B6, with planning time profiled under M2-A9.

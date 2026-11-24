@@ -1,0 +1,627 @@
+{
+  "authority": "Diagnostic observations on this profile, not product acceptance",
+  "repository_head": "bd005c07b9f83f0184037fdfe07b10fd030a3b99",
+  "python": "3.13.17 (tags/v3.13.17:64e080d, Oct 21 2026, 14:08:53) [MSC v.1944 64 bit (AMD64)]",
+  "windows": "Windows-11-10.0.26200-SP0",
+  "packages": {
+    "pywebview": "6.2.1",
+    "pythonnet": "3.1.0"
+  },
+  "sources_sha256": {
+    "evidence\\EV-0042\\framing-proto.py": "09cf968b69c4e717f0605840179386f3b05da515d2c68808b7d85f444e3a8215",
+    "build\\m2-a2-maximized\\probe.py": "d9d01ee3df5159abfd6129a9338140f92bf6746154196f02839f0cf2dcb30561",
+    "build\\m2-a2-maximized\\matrix.ps1": "0ecb7817d1d93bdb375988db0b6b7a17cbf0d0098a1ff729205f492f1df36316",
+    "build\\m2-a2-maximized\\fresh-check.py": "c4738dbd8a496b75ffc392912aa604d5e02b1a9c253347bcb419fa5ba38489a8",
+    "build\\m2-a2-max-clean\\probe.py": "3d5af90382f3c6de11bd2c140e8427ac3959a3adcc0546b52c3c528541f24c20",
+    "build\\m2-a2-max-clean\\probe-baseline.py": "71202546ac92655a6084466c578ed41d2f24e74b972cb677523ba12c3d32a8dd",
+    "build\\m2-a2-max-clean\\probe-native.py": "fd63072923917a81aac385ae36d15fe27bb92b505c90b6489f3134b89978d331"
+  },
+  "webview2_sdk_file_version": "1.0.3856.49",
+  "grid": "600 UI-thread DwmDefWindowProc calls: x=window.right-300..right step 10; y=max(0,window.top)..+100 step 5",
+  "matrix": [
+    {
+      "name": "m01-baseline",
+      "config": {
+        "name": "m01-baseline",
+        "maximized": true
+      },
+      "geometry": {
+        "window": [
+          -12,
+          -12,
+          3852,
+          2088
+        ],
+        "client_origin": [
+          0,
+          0
+        ],
+        "webview_origin": [
+          0,
+          0
+        ],
+        "webview_rect": [
+          0,
+          0,
+          3840,
+          2076
+        ],
+        "client_size": [
+          3840,
+          2076
+        ],
+        "frame": 12,
+        "maximized": true,
+        "dpi": 168,
+        "buttons": [
+          3592,
+          0,
+          3851,
+          51
+        ],
+        "extended": [
+          0,
+          0,
+          3840,
+          2076
+        ]
+      },
+      "dwmHandled": 0,
+      "hitCodes": []
+    },
+    {
+      "name": "m02-default-first",
+      "config": {
+        "name": "m02-default-first",
+        "default_first": true
+      },
+      "geometry": {
+        "window": [
+          -12,
+          -12,
+          3852,
+          2088
+        ],
+        "client_origin": [
+          0,
+          0
+        ],
+        "webview_origin": [
+          0,
+          0
+        ],
+        "webview_rect": [
+          0,
+          0,
+          3840,
+          2076
+        ],
+        "client_size": [
+          3840,
+          2076
+        ],
+        "frame": 12,
+        "maximized": true,
+        "dpi": 168,
+        "buttons": [
+          3592,
+          0,
+          3851,
+          51
+        ],
+        "extended": [
+          0,
+          0,
+          3840,
+          2076
+        ]
+      },
+      "dwmHandled": 0,
+      "hitCodes": []
+    },
+    {
+      "name": "m03-return-zero",
+      "config": {
+        "name": "m03-return-zero",
+        "zero_return": true
+      },
+      "geometry": {
+        "window": [
+          -12,
+          -12,
+          3852,
+          2088
+        ],
+        "client_origin": [
+          0,
+          0
+        ],
+        "webview_origin": [
+          0,
+          0
+        ],
+        "webview_rect": [
+          0,
+          0,
+          3840,
+          2076
+        ],
+        "client_size": [
+          3840,
+          2076
+        ],
+        "frame": 12,
+        "maximized": true,
+        "dpi": 168,
+        "buttons": [
+          3592,
+          0,
+          3851,
+          51
+        ],
+        "extended": [
+          0,
+          0,
+          3840,
+          2076
+        ]
+      },
+      "dwmHandled": 0,
+      "hitCodes": []
+    },
+    {
+      "name": "m04-top-one",
+      "config": {
+        "zero_return": true,
+        "inset": 1,
+        "name": "m04-top-one"
+      },
+      "geometry": {
+        "window": [
+          -12,
+          -12,
+          3852,
+          2088
+        ],
+        "client_origin": [
+          0,
+          -11
+        ],
+        "webview_origin": [
+          0,
+          -11
+        ],
+        "webview_rect": [
+          0,
+          -11,
+          3840,
+          2076
+        ],
+        "client_size": [
+          3840,
+          2087
+        ],
+        "frame": 12,
+        "maximized": true,
+        "dpi": 168,
+        "buttons": [
+          3592,
+          0,
+          3851,
+          51
+        ],
+        "extended": [
+          0,
+          0,
+          3840,
+          2076
+        ]
+      },
+      "dwmHandled": 0,
+      "hitCodes": []
+    },
+    {
+      "name": "m05-top-zero-default-return",
+      "config": {
+        "name": "m05-top-zero-default-return",
+        "inset": 0
+      },
+      "geometry": {
+        "window": [
+          -12,
+          -12,
+          3852,
+          2088
+        ],
+        "client_origin": [
+          0,
+          -12
+        ],
+        "webview_origin": [
+          0,
+          -12
+        ],
+        "webview_rect": [
+          0,
+          -12,
+          3840,
+          2076
+        ],
+        "client_size": [
+          3840,
+          2088
+        ],
+        "frame": 12,
+        "maximized": true,
+        "dpi": 168,
+        "buttons": [
+          3592,
+          0,
+          3851,
+          51
+        ],
+        "extended": [
+          0,
+          0,
+          3840,
+          2076
+        ]
+      },
+      "dwmHandled": 240,
+      "hitCodes": [
+        8,
+        9,
+        20
+      ]
+    },
+    {
+      "name": "m06-top-margin",
+      "config": {
+        "zero_return": true,
+        "margins": [
+          0,
+          0,
+          64,
+          0
+        ],
+        "name": "m06-top-margin"
+      },
+      "geometry": {
+        "window": [
+          -12,
+          -12,
+          3852,
+          2088
+        ],
+        "client_origin": [
+          0,
+          0
+        ],
+        "webview_origin": [
+          0,
+          0
+        ],
+        "webview_rect": [
+          0,
+          0,
+          3840,
+          2076
+        ],
+        "client_size": [
+          3840,
+          2076
+        ],
+        "frame": 12,
+        "maximized": true,
+        "dpi": 168,
+        "buttons": [
+          3592,
+          0,
+          3851,
+          51
+        ],
+        "extended": [
+          0,
+          0,
+          3840,
+          2076
+        ]
+      },
+      "dwmHandled": 0,
+      "hitCodes": []
+    },
+    {
+      "name": "m07-stock",
+      "config": {
+        "default_only": true,
+        "default_first": true,
+        "name": "m07-stock",
+        "stock": true
+      },
+      "geometry": {
+        "window": [
+          -12,
+          -12,
+          3852,
+          2088
+        ],
+        "client_origin": [
+          0,
+          40
+        ],
+        "webview_origin": [
+          0,
+          40
+        ],
+        "webview_rect": [
+          0,
+          40,
+          3840,
+          2076
+        ],
+        "client_size": [
+          3840,
+          2036
+        ],
+        "frame": 12,
+        "maximized": true,
+        "dpi": 168,
+        "buttons": [
+          3592,
+          0,
+          3851,
+          51
+        ],
+        "extended": [
+          0,
+          0,
+          3840,
+          2076
+        ]
+      },
+      "dwmHandled": 0,
+      "hitCodes": []
+    },
+    {
+      "name": "m08-candidate",
+      "config": {
+        "maximized": true,
+        "zero_return": true,
+        "correct_carve": true,
+        "name": "m08-candidate",
+        "pad": true,
+        "inset": 0,
+        "native_hit": true
+      },
+      "geometry": {
+        "window": [
+          -12,
+          -12,
+          3852,
+          2088
+        ],
+        "client_origin": [
+          0,
+          -12
+        ],
+        "webview_origin": [
+          0,
+          0
+        ],
+        "webview_rect": [
+          0,
+          0,
+          3840,
+          2076
+        ],
+        "client_size": [
+          3840,
+          2088
+        ],
+        "frame": 12,
+        "maximized": true,
+        "dpi": 168,
+        "buttons": [
+          3592,
+          0,
+          3851,
+          51
+        ],
+        "extended": [
+          0,
+          0,
+          3840,
+          2076
+        ]
+      },
+      "dwmHandled": 240,
+      "hitCodes": [
+        8,
+        9,
+        20
+      ]
+    }
+  ],
+  "foreground_candidate": {
+    "geometry": {
+      "window": [
+        -12,
+        -12,
+        3852,
+        2088
+      ],
+      "client_origin": [
+        0,
+        -12
+      ],
+      "webview_origin": [
+        0,
+        0
+      ],
+      "webview_rect": [
+        0,
+        0,
+        3840,
+        2076
+      ],
+      "client_size": [
+        3840,
+        2088
+      ],
+      "frame": 12,
+      "maximized": true,
+      "dpi": 168,
+      "buttons": [
+        3592,
+        0,
+        3851,
+        51
+      ],
+      "extended": [
+        0,
+        0,
+        3840,
+        2076
+      ]
+    },
+    "dwm_hit_counts": {
+      "8": 80,
+      "9": 80,
+      "20": 80
+    },
+    "button_rectangles_screen": [
+      [
+        3594,
+        0,
+        3676,
+        50
+      ],
+      [
+        3676,
+        0,
+        3757,
+        50
+      ],
+      [
+        3757,
+        0,
+        3840,
+        50
+      ]
+    ],
+    "boundary_recipe": "Four inside corners and center of each TITLEBARINFOEX rectangle; WM_NCHITTEST and WindowFromPoint",
+    "correct_button_results": 15,
+    "form_is_real_input_receiver": 15,
+    "points": 15
+  },
+  "restored_candidate": {
+    "geometry": {
+      "window": [
+        455,
+        245,
+        2380,
+        1609
+      ],
+      "client_origin": [
+        467,
+        245
+      ],
+      "webview_origin": [
+        467,
+        245
+      ],
+      "webview_rect": [
+        467,
+        245,
+        2368,
+        1597
+      ],
+      "client_size": [
+        1901,
+        1352
+      ],
+      "frame": 12,
+      "maximized": false,
+      "dpi": 168,
+      "buttons": [
+        1655,
+        0,
+        1914,
+        51
+      ],
+      "extended": [
+        465,
+        245,
+        2370,
+        1599
+      ]
+    }
+  },
+  "separate_restore_size_finding": {
+    "baseline": {
+      "restored_sizes": [
+        [
+          1925,
+          1260
+        ],
+        [
+          1925,
+          1312
+        ],
+        [
+          1925,
+          1364
+        ]
+      ],
+      "stable_restore_size": false,
+      "max_page_fits": true,
+      "restored_padding_zero": true
+    },
+    "candidate": {
+      "restored_sizes": [
+        [
+          1925,
+          1260
+        ],
+        [
+          1925,
+          1312
+        ],
+        [
+          1925,
+          1364
+        ]
+      ],
+      "stable_restore_size": false,
+      "max_page_fits": true,
+      "restored_padding_zero": true
+    },
+    "candidate_native_commands": {
+      "restored_sizes": [
+        [
+          1925,
+          1260
+        ],
+        [
+          1925,
+          1312
+        ],
+        [
+          1925,
+          1364
+        ]
+      ],
+      "stable_restore_size": false,
+      "max_page_fits": true,
+      "restored_padding_zero": true
+    }
+  },
+  "limitations": [
+    "Matrix ran occluded: its WindowFromPoint results were invalid for routing and are not counted; m09 foreground check is the routing witness.",
+    "Stock native caption also declines DwmDefWindowProc: this diagnostic count is not evidence that stock caption hover fails.",
+    "User confirmed hover, Snap Layouts and alignment on the padded candidate with metric-adjusted carve; exact TITLEBARINFOEX carve was subsequently checked at all 15 boundary points.",
+    "No fresh mixed-DPI, high-contrast or snapped-window acceptance claimed.",
+    "Fresh candidate-only and baseline-only runs both grow restored height by 52 physical pixels per cycle. Same result through native system commands. Cause and fix remain uninvestigated; this is not introduced by the caption-hover candidate."
+  ],
+  "validation": "All compaction assertions passed"
+}

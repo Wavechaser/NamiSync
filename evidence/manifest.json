@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 43,
+  "next_id": 44,
   "records": [
     {
       "id": "EV-0001",
@@ -1195,6 +1195,44 @@
           "path": "framing-theme-reapply.txt",
           "bytes": 504,
           "sha256": "aad6fe07a6e11b67e5dd9184178f57ee308fe754ad9c87b8693158764907d1cd"
+        }
+      ]
+    },
+    {
+      "id": "EV-0043",
+      "title": "M2-A2 maximized native caption investigation",
+      "date": "2026-11-24",
+      "origin": "build/m2-a2-maximized at bd005c07b9f83f0184037fdfe07b10fd030a3b99",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 6485,
+          "sha256": "ae1fb20f43eba8dbc39c91e40769e41aee62ef331c440a9d36b1098e9df13ab0"
+        },
+        {
+          "path": "compact.py",
+          "bytes": 4224,
+          "sha256": "395e6fcb689401ba7168df16ed9bedc4c54e3d8bc6bfba7da0d7bcf9fc5895e0"
+        },
+        {
+          "path": "fresh-check.py",
+          "bytes": 2275,
+          "sha256": "c4738dbd8a496b75ffc392912aa604d5e02b1a9c253347bcb419fa5ba38489a8"
+        },
+        {
+          "path": "matrix.ps1",
+          "bytes": 1942,
+          "sha256": "0ecb7817d1d93bdb375988db0b6b7a17cbf0d0098a1ff729205f492f1df36316"
+        },
+        {
+          "path": "probe.py",
+          "bytes": 8026,
+          "sha256": "d9d01ee3df5159abfd6129a9338140f92bf6746154196f02839f0cf2dcb30561"
+        },
+        {
+          "path": "summary.json",
+          "bytes": 12675,
+          "sha256": "a9fbec494ad609a7af2dddf30ef171a59288480c4a0c3caa0fc40be06502fd8a"
         }
       ]
     }
