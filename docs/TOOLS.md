@@ -12,6 +12,45 @@ output remains subject to the authority rules below.
 | `tools/packaging/` | [Portable build preparation](#portable-build-preparation) |
 | `tools/repo/` | [Bug log](#bug-log-access), [evidence](#evidence-records) and [icon](#icon-maintenance) upkeep |
 | `tools/desktop/` | The [editable GUI launcher](#editable-gui-launcher) and the [background headed runner](#headed-gui-test-harness) |
+| `tools/fixtures/` | [Producers](#released-database-fixture) of tracked test fixtures that only an external program can write |
+
+## Released database fixture
+
+`python -m tools.fixtures.v0_1_0_pair ARCHIVE OUTPUT` drives the released
+v0.1.0 console executable through a fixed scenario to write the
+[v0.1.0 fixture](TESTS.md#released-v010-database-fixture): two mappings and a
+role-free location; copy with verify-after-copy, then update, move, trash and
+no-op syncs; a sync refused for drift after review and one failed on a locked
+source file; inventory, baseline, a verify with a mismatch and a missing file,
+and rebaseline. Missing-file acknowledgement is GUI-only in v0.1.0 and absent.
+
+It checks the archive against its pinned SHA-256, extracts it into OUTPUT and
+runs every command with `LOCALAPPDATA` pointed at an empty folder in OUTPUT.
+Every command that can open a database also passes explicit `--database` and
+`--history-database` paths in OUTPUT; the three `--help` invocations exit inside
+argument parsing and run only under the `LOCALAPPDATA` override. The run stops
+if anything appears in the substitute `LOCALAPPDATA` folder. A change in the
+real live folder's top-level listing is reported as a warning, since the user's
+own NamiSync may be running. It never launches the GUI or runs `history`, which
+takes no ledger flag.
+
+It refuses an OUTPUT that is not new or empty, or that is or lies inside the
+live data root (from the Windows known folder) or `tests/assets`. Both are
+compared by spelling and, when they exist, by identity: OUTPUT and each existing
+ancestor are checked with `os.path.samefile`, which catches case, `..`,
+verbatim `\\?\`, UNC and junction aliases. If the live root does not exist,
+only the spelling comparison applies.
+
+It reads the databases only from copies, writes and prints
+`OUTPUT/provenance.json`, and exits 1 if a step's exit code differs from the
+one v0.1.0 returned for the fixture. The saved bytes are the fixture and the
+producer is the method: a rerun never reproduces them, and promotion is a
+manual copy. `tests/test_tools_fixture_producer.py` covers the refusals and the
+child containment with a stub executable; it never runs the release.
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.fixtures.v0_1_0_pair dist\v0.1.0\NamiSync-0.1.0-windows-x64.zip build\fixture-run
+```
 
 ## Headed GUI test harness
 

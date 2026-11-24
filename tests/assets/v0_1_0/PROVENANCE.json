@@ -1,0 +1,398 @@
+{
+  "producer": "tools/fixtures/v0_1_0_pair.py",
+  "produced_utc": "2026-11-24T17:07:55Z",
+  "release": {
+    "archive": "NamiSync-0.1.0-windows-x64.zip",
+    "archive_sha256": "652c55ca3c2ace0903732490ead0b907ac726dba5af4155aa5345db80c8e9efc",
+    "executable": "NamiSync/namisync.exe",
+    "executable_sha256": "9750b2ef5774dbadde01cf1b15e87f222d476cbb639c5ff8947639798d235452",
+    "sqlite_dll": "NamiSync/_internal/sqlite3.dll",
+    "sqlite_dll_sha256": "73530e8f4555605d716352ee98fe0ce205a09e5eec57e7e6360d4c915efcacd8"
+  },
+  "containment": {
+    "LOCALAPPDATA": "<OUTPUT>\\localappdata",
+    "database": "<OUTPUT>\\data\\ledger.db",
+    "history_database": "<OUTPUT>\\data\\history.db",
+    "substitute_localappdata_entries": []
+  },
+  "steps": [
+    {
+      "step": "help",
+      "command": [
+        "namisync.exe",
+        "--help"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "sync-help",
+      "command": [
+        "namisync.exe",
+        "sync",
+        "--help"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "inventory-help",
+      "command": [
+        "namisync.exe",
+        "inventory",
+        "--help"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "alpha-copy",
+      "command": [
+        "namisync.exe",
+        "sync",
+        "<OUTPUT>\\roots\\alpha-source",
+        "<OUTPUT>\\roots\\alpha-target",
+        "--deletion-policy",
+        "trash",
+        "--verify-after-copy",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "answer": "execute"
+    },
+    {
+      "step": "alpha-update-move-trash",
+      "command": [
+        "namisync.exe",
+        "sync",
+        "<OUTPUT>\\roots\\alpha-source",
+        "<OUTPUT>\\roots\\alpha-target",
+        "--deletion-policy",
+        "trash",
+        "--verify-after-copy",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "answer": "execute"
+    },
+    {
+      "step": "alpha-noop",
+      "command": [
+        "namisync.exe",
+        "sync",
+        "<OUTPUT>\\roots\\alpha-source",
+        "<OUTPUT>\\roots\\alpha-target",
+        "--deletion-policy",
+        "trash",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "answer": "execute"
+    },
+    {
+      "step": "beta-copy",
+      "command": [
+        "namisync.exe",
+        "sync",
+        "<OUTPUT>\\roots\\beta-source",
+        "<OUTPUT>\\roots\\beta-target",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "answer": "execute"
+    },
+    {
+      "step": "beta-drift-refused",
+      "command": [
+        "namisync.exe",
+        "sync",
+        "<OUTPUT>\\roots\\beta-source",
+        "<OUTPUT>\\roots\\beta-target",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 3,
+      "expected": 3,
+      "answer": "execute"
+    },
+    {
+      "step": "beta-locked-failed",
+      "command": [
+        "namisync.exe",
+        "sync",
+        "<OUTPUT>\\roots\\beta-source",
+        "<OUTPUT>\\roots\\beta-target",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 4,
+      "expected": 4,
+      "answer": "execute"
+    },
+    {
+      "step": "beta-recovered",
+      "command": [
+        "namisync.exe",
+        "sync",
+        "<OUTPUT>\\roots\\beta-source",
+        "<OUTPUT>\\roots\\beta-target",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0,
+      "answer": "execute"
+    },
+    {
+      "step": "gamma-inventory",
+      "command": [
+        "namisync.exe",
+        "inventory",
+        "<OUTPUT>\\roots\\gamma",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "gamma-baseline",
+      "command": [
+        "namisync.exe",
+        "baseline",
+        "<OUTPUT>\\roots\\gamma",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "gamma-verify",
+      "command": [
+        "namisync.exe",
+        "verify",
+        "<OUTPUT>\\roots\\gamma",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "gamma-verify-mismatch",
+      "command": [
+        "namisync.exe",
+        "verify",
+        "<OUTPUT>\\roots\\gamma",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 8,
+      "expected": 8
+    },
+    {
+      "step": "gamma-inventory-missing",
+      "command": [
+        "namisync.exe",
+        "inventory",
+        "<OUTPUT>\\roots\\gamma",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "gamma-rebaseline",
+      "command": [
+        "namisync.exe",
+        "rebaseline",
+        "<OUTPUT>\\roots\\gamma",
+        "--path",
+        "data/same-size.txt",
+        "--accept-current-evidence",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "alpha-target-inventory",
+      "command": [
+        "namisync.exe",
+        "inventory",
+        "<OUTPUT>\\roots\\alpha-target",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0
+    },
+    {
+      "step": "alpha-target-baseline",
+      "command": [
+        "namisync.exe",
+        "baseline",
+        "<OUTPUT>\\roots\\alpha-target",
+        "--database",
+        "<OUTPUT>\\data\\ledger.db",
+        "--history-database",
+        "<OUTPUT>\\data\\history.db"
+      ],
+      "exit": 0,
+      "expected": 0
+    }
+  ],
+  "data_folder_entries": [
+    "history.db",
+    "history.db-shm",
+    "history.db-wal",
+    "ledger.db",
+    "ledger.db-shm",
+    "ledger.db-wal"
+  ],
+  "databases": {
+    "ledger": {
+      "files": {
+        "ledger.db": {
+          "sha256": "2158eb430234bf816e4cdc7a499120b4a90360b55d02aae21c077c4cea42525a",
+          "size": 131072
+        },
+        "ledger.db-wal": {
+          "sha256": "2cf0a9b95ae24cc5836b5960819903404e79187a344124f394e4477215019e6a",
+          "size": 1973512
+        },
+        "ledger.db-shm": {
+          "sha256": "4d630affc47eebf09e2d50b1bcb07f7bf01b15295c78128549591aeeb8f11055",
+          "size": 32768
+        }
+      },
+      "header_sqlite_version_number": 3053004,
+      "header_write_read_versions": [
+        2,
+        2
+      ],
+      "journal_mode": "wal",
+      "user_version": 0,
+      "page_size": 4096,
+      "page_count": 38,
+      "integrity_check": [
+        "ok"
+      ],
+      "schema_metadata": {
+        "contract_id": "m1-ledger-v4-event-v5-evidence-v2",
+        "data_epoch": "8",
+        "schema_version": "4"
+      },
+      "row_counts": {
+        "annotations": 0,
+        "hosts": 1,
+        "inventory": 30,
+        "locations": 5,
+        "mapping_correspondence": 10,
+        "mappings": 2,
+        "operations": 31,
+        "recording_commands": 28,
+        "runs": 6,
+        "schema_metadata": 3,
+        "volumes": 1
+      },
+      "main_only_row_counts": {
+        "annotations": 0,
+        "hosts": 0,
+        "inventory": 0,
+        "locations": 0,
+        "mapping_correspondence": 0,
+        "mappings": 0,
+        "operations": 0,
+        "recording_commands": 0,
+        "runs": 0,
+        "schema_metadata": 3,
+        "volumes": 0
+      }
+    },
+    "history": {
+      "files": {
+        "history.db": {
+          "sha256": "bea0255fe2bfc873b2ac85133ca0660879bf3338d95696b5a4e83d1fa6f9a69b",
+          "size": 86016
+        },
+        "history.db-wal": {
+          "sha256": "148290ea7fdf8f6d837d9996848f520611e7c4c69d6cd2e649c76619551dfbd0",
+          "size": 782832
+        },
+        "history.db-shm": {
+          "sha256": "d4f0a97634d24239063d2cdfbcd1aafc0f3955a31bd211a967d20f1cd0cf0961",
+          "size": 32768
+        }
+      },
+      "header_sqlite_version_number": 3053004,
+      "header_write_read_versions": [
+        2,
+        2
+      ],
+      "journal_mode": "wal",
+      "user_version": 0,
+      "page_size": 4096,
+      "page_count": 39,
+      "integrity_check": [
+        "ok"
+      ],
+      "schema_metadata": {
+        "contract_id": "m1-history-v8-event-v5-recording-v1",
+        "data_epoch": "8",
+        "schema_version": "8"
+      },
+      "row_counts": {
+        "history_events": 126,
+        "history_phases": 4,
+        "history_runs": 15,
+        "schema_metadata": 3
+      },
+      "main_only_row_counts": {
+        "history_events": 0,
+        "history_phases": 0,
+        "history_runs": 0,
+        "schema_metadata": 3
+      }
+    }
+  }
+}

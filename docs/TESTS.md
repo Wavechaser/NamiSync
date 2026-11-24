@@ -504,6 +504,27 @@ already-open connection, UNC aliases of the root (`\\localhost\C$\...`,
 `tests/test_live_data_guard.py` drives the real hook only through operations it
 refuses, on paths whose parent does not exist.
 
+## Released v0.1.0 database fixture
+
+`tests/assets/v0_1_0/` holds a ledger/history pair written by the released
+v0.1.0 console executable, for migration tests. v0.1.0 exits with its
+committed rows still in each database's `-wal` (the main files hold only the
+schema), so the fixture is the six files it left, main, `-wal` and `-shm` for
+each, plus `PROVENANCE.json`: release and executable hashes, every command with
+its exit code, each file's size and SHA-256, `schema_metadata`, row counts with
+and without the WAL, and the production time. `tests/test_v0_1_0_fixture.py`
+checks those facts. Tests read the tracked files only to copy them; open and
+migrate the copies under `tmp_path`. Git keeps the folder byte-exact (`-text`),
+and `.gitignore` excepts exactly these six database files. The pair contains
+the producing machine's host name, volume serial and label, and the absolute
+paths of its scenario roots.
+
+To regenerate, run the [producer](TOOLS.md#released-database-fixture) into a
+fresh `build/` folder, review its provenance, then copy its `data/` files and
+`provenance.json` (as `PROVENANCE.json`) over the fixture by hand. A rerun has
+new tokens, timestamps, ids and paths, so tests that depend on fixture values
+must be rechecked.
+
 ## Markers and skips
 
 - `headed` requires the real interactive desktop host. It is excluded by the

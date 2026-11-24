@@ -17,6 +17,12 @@ dist/
 *.db
 *.db-wal
 *.db-shm
+!/tests/assets/v0_1_0/ledger.db
+!/tests/assets/v0_1_0/ledger.db-wal
+!/tests/assets/v0_1_0/ledger.db-shm
+!/tests/assets/v0_1_0/history.db
+!/tests/assets/v0_1_0/history.db-wal
+!/tests/assets/v0_1_0/history.db-shm
 
 .synctrash/
 *.synctmp-*
