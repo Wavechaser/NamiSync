@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 44,
+  "next_id": 45,
   "records": [
     {
       "id": "EV-0001",
@@ -1233,6 +1233,39 @@
           "path": "summary.json",
           "bytes": 12675,
           "sha256": "a9fbec494ad609a7af2dddf30ef171a59288480c4a0c3caa0fc40be06502fd8a"
+        }
+      ]
+    },
+    {
+      "id": "EV-0044",
+      "title": "Restore-size drift: WinForms client-size restore record",
+      "date": "2026-11-24",
+      "origin": "build/m2-a2-restore-drift (drift.py, cycle.py) and build/m2-a2/framing/proto.py --fix-restore at 63d67f24",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 3665,
+          "sha256": "c69854ce869e5a79e6b5a657a7d25f7a1fe3924aca8d50e1c150f10e304a96d9"
+        },
+        {
+          "path": "cycle.py",
+          "bytes": 1033,
+          "sha256": "0df999ac92a4e63a1828d6e820271db66e29cb5ed3a2d4dcb88212fd9ba24920"
+        },
+        {
+          "path": "drift.py",
+          "bytes": 8546,
+          "sha256": "43c940d843b6a4f4e25bb2ff82f40b568ea66f38be7a11ee96d23892532d458c"
+        },
+        {
+          "path": "framing-proto.py",
+          "bytes": 44308,
+          "sha256": "f734876da8364bc0e9e1bf83fe8f0ffabc7d6e131c097e50e9b68b11988abcea"
+        },
+        {
+          "path": "summary.json",
+          "bytes": 8469,
+          "sha256": "12dfcd2c46bab71f3cc978ae5793f2a58b898842053984709aef327f772b5245"
         }
       ]
     }

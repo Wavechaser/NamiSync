@@ -54,6 +54,11 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   all 15 final button corner/center checks passed. Native buttons remain
   viable without custom rendering. A separate restore-height growth reproduced
   in both old and new prototypes is recorded for later host work.
+- Traced that restore-height growth to WinForms (EV-0044): on maximize it saves
+  the client size and on restore converts it back with the stock frame, adding
+  the removed caption and top border each cycle. It reproduces without WebView2.
+  Clearing the form's saved restore record after maximizing removed the growth
+  in a bare form and in the pywebview prototype.
 - Recorded the user's decisions on two results: toasts become a user-enabled
   setting whose off state removes the registry key, and planning becomes
   stoppable no later than M2-B6, with planning time profiled under M2-A9.

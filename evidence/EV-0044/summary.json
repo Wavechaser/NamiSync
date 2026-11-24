@@ -1,0 +1,437 @@
+{
+  "restored_sizes": {
+    "out-nccalc-state-fix": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-nccalc-state-hook": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-nccalc-syscmd-fix": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-nccalc-syscmd-hook": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-nccalc-syscmd": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        772
+      ],
+      [
+        1100,
+        824
+      ],
+      [
+        1100,
+        824
+      ]
+    ],
+    "out-nccalc0-state-fix": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-nccalc0-state-hook": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-nccalc0-state": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        772
+      ],
+      [
+        1100,
+        824
+      ],
+      [
+        1100,
+        824
+      ]
+    ],
+    "out-nccalc0-syscmd-fix": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-nccalc0-syscmd-hook": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-nccalc0-syscmd": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        772
+      ],
+      [
+        1100,
+        824
+      ],
+      [
+        1100,
+        824
+      ]
+    ],
+    "out-plain-state-fix": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-plain-syscmd-fix": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ],
+    "out-plain-syscmd": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ]
+  },
+  "nccalc0_syscmd_resize_after_restore": {
+    "cx": 1100,
+    "cy": 772,
+    "flags": "0x16",
+    "stack": [
+      "at System.Windows.Forms.SafeNativeMethods.SetWindowPos(HandleRef hWnd, HandleRef hWndInsertAfter, Int32 x, Int32 y, Int32 cx, Int32 cy, Int32 flags)",
+      "at System.Windows.Forms.SafeNativeMethods.SetWindowPos(HandleRef hWnd, HandleRef hWndInsertAfter, Int32 x, Int32 y, Int32 cx, Int32 cy, Int32 flags)",
+      "at System.Windows.Forms.Control.SetBoundsCore(Int32 x, Int32 y, Int32 width, Int32 height, BoundsSpecified specified)",
+      "at System.Windows.Forms.Form.SetBoundsCore(Int32 x, Int32 y, Int32 width, Int32 height, BoundsSpecified specified)",
+      "at System.Windows.Forms.Control.SetBounds(Int32 x, Int32 y, Int32 width, Int32 height, BoundsSpecified specified)",
+      "at System.Windows.Forms.Form.RestoreWindowBoundsIfNecessary()",
+      "at System.Windows.Forms.Form.WndProc(Message& m)",
+      "at System.Windows.Forms.NativeWindow.Callback(IntPtr hWnd, Int32 msg, IntPtr wparam, IntPtr lparam)",
+      "at System.Windows.Forms.UnsafeNativeMethods.CallWindowProc(IntPtr wndProc, IntPtr hWnd, Int32 msg, IntPtr wParam, IntPtr lParam)",
+      "at System.Windows.Forms.UnsafeNativeMethods.CallWindowProc(IntPtr wndProc, IntPtr hWnd, Int32 msg, IntPtr wParam, IntPtr lParam)",
+      "at System.Windows.Forms.NativeWindow.DefWndProc(Message& m)",
+      "at System.Windows.Forms.Form.DefWndProc(Message& m)",
+      "at System.Windows.Forms.Control.WndProc(Message& m)",
+      "at System.Windows.Forms.Form.WmSysCommand(Message& m)",
+      "at System.Windows.Forms.NativeWindow.Callback(IntPtr hWnd, Int32 msg, IntPtr wparam, IntPtr lparam)",
+      "at System.Windows.Forms.Timer.OnTick(EventArgs e)"
+    ]
+  },
+  "nccalc0_syscmd_winforms_private": [
+    {
+      "label": "start",
+      "window": [
+        300,
+        200,
+        1400,
+        920
+      ],
+      "client": [
+        1076,
+        708
+      ],
+      "winforms": {
+        "restoredWindowBounds": "{X=-1,Y=-1,Width=-1,Height=-1}",
+        "restoredWindowBoundsSpecified": "None",
+        "clientWidth": "1076",
+        "clientHeight": "708",
+        "FormStateExWindowBoundsWidthIsClientSize": 0,
+        "FormStateExWindowBoundsHeightIsClientSize": 0
+      }
+    },
+    {
+      "label": "after max",
+      "window": [
+        -12,
+        -12,
+        3852,
+        2088
+      ],
+      "client": [
+        3840,
+        2088
+      ],
+      "winforms": {
+        "restoredWindowBounds": "{X=300,Y=200,Width=1076,Height=708}",
+        "restoredWindowBoundsSpecified": "All",
+        "clientWidth": "3840",
+        "clientHeight": "2088",
+        "FormStateExWindowBoundsWidthIsClientSize": 1,
+        "FormStateExWindowBoundsHeightIsClientSize": 1
+      }
+    },
+    {
+      "label": "after restore",
+      "window": [
+        300,
+        200,
+        1400,
+        972
+      ],
+      "client": [
+        1076,
+        760
+      ],
+      "winforms": {
+        "restoredWindowBounds": "{X=-1,Y=-1,Width=-1,Height=-1}",
+        "restoredWindowBoundsSpecified": "None",
+        "clientWidth": "1076",
+        "clientHeight": "760",
+        "FormStateExWindowBoundsWidthIsClientSize": 0,
+        "FormStateExWindowBoundsHeightIsClientSize": 0
+      }
+    },
+    {
+      "label": "after max",
+      "window": [
+        -12,
+        -12,
+        3852,
+        2088
+      ],
+      "client": [
+        3840,
+        2088
+      ],
+      "winforms": {
+        "restoredWindowBounds": "{X=300,Y=200,Width=1076,Height=760}",
+        "restoredWindowBoundsSpecified": "All",
+        "clientWidth": "3840",
+        "clientHeight": "2088",
+        "FormStateExWindowBoundsWidthIsClientSize": 1,
+        "FormStateExWindowBoundsHeightIsClientSize": 1
+      }
+    },
+    {
+      "label": "after restore",
+      "window": [
+        300,
+        200,
+        1400,
+        1024
+      ],
+      "client": [
+        1076,
+        812
+      ],
+      "winforms": {
+        "restoredWindowBounds": "{X=-1,Y=-1,Width=-1,Height=-1}",
+        "restoredWindowBoundsSpecified": "None",
+        "clientWidth": "1076",
+        "clientHeight": "812",
+        "FormStateExWindowBoundsWidthIsClientSize": 0,
+        "FormStateExWindowBoundsHeightIsClientSize": 0
+      }
+    },
+    {
+      "label": "end",
+      "window": [
+        300,
+        200,
+        1400,
+        1024
+      ],
+      "client": [
+        1076,
+        812
+      ],
+      "winforms": {
+        "restoredWindowBounds": "{X=-1,Y=-1,Width=-1,Height=-1}",
+        "restoredWindowBoundsSpecified": "None",
+        "clientWidth": "1076",
+        "clientHeight": "812",
+        "FormStateExWindowBoundsWidthIsClientSize": 0,
+        "FormStateExWindowBoundsHeightIsClientSize": 0
+      }
+    }
+  ],
+  "real_prototype_dpi_unaware_cycle": {
+    "without_fix": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        750
+      ],
+      [
+        1100,
+        779
+      ]
+    ],
+    "with_fix_restore": [
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ],
+      [
+        1100,
+        720
+      ]
+    ]
+  }
+}

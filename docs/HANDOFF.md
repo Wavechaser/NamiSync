@@ -15,9 +15,12 @@ title-bar clipping report; no product code changed.
   fresh-process drivers, checked compact observations and primary sources.
   EV-0042 remains unchanged historical evidence. CHANGELOG records the result.
 - Separate existing finding: baseline and candidate both grow restored height
-  by 52 physical pixels per tested maximize/restore cycle. Fresh processes and
-  native system commands reproduce it. Cause/remedy remain for title-bar host
-  work; this investigation does not fix or accept that behavior.
+  by 52 physical pixels per tested maximize/restore cycle. Traced afterwards in
+  [EV-0044](../evidence/EV-0044/README.md): WinForms' `Form` saves the client
+  size on maximize and converts it back with the stock frame on restore.
+  Clearing its private `restoredWindowBoundsSpecified` after `WM_SIZE`
+  maximized removes the growth in a bare form and in the pywebview prototype;
+  the title-bar host design decides whether to adopt that private-field fix.
 
 ## Verification
 
