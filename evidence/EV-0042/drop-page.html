@@ -1,0 +1,57 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>NamiSync drop spike</title>
+<style>
+ body{font:15px Segoe UI,sans-serif;margin:20px}
+ .zone{border:2px dashed #888;border-radius:8px;padding:28px;margin:14px 0;min-height:60px}
+ .zone.over{background:#def;border-color:#06c}
+ pre{background:#f4f4f4;padding:8px;white-space:pre-wrap}
+</style>
+<h3>Drop spike</h3>
+<div class="zone" id="source" data-field="source">SOURCE field: drop here</div>
+<div class="zone" id="destination" data-field="destination">DESTINATION field: drop here</div>
+<div>Page default-prevent: <b id="mode">on</b></div>
+<pre id="out">(nothing yet)</pre>
+<script>
+const MAX_ITEMS = 8;                    // page-side cap; host enforces its own
+const params = new URLSearchParams(location.search);
+const prevent = params.get('prevent') !== '0';
+document.getElementById('mode').textContent = prevent ? 'on' : 'OFF (navigation test)';
+const out = document.getElementById('out');
+window.__mode = 'both';  // both | files | handles (what is posted as additional objects)
+for (const z of document.querySelectorAll('.zone')) {
+  z.addEventListener('dragenter', e => { if (prevent) e.preventDefault(); z.classList.add('over'); });
+  z.addEventListener('dragover',  e => { if (prevent) e.preventDefault(); });
+  z.addEventListener('dragleave', () => z.classList.remove('over'));
+  z.addEventListener('drop', async e => {
+    z.classList.remove('over');
+    if (prevent) e.preventDefault();
+    const dt = e.dataTransfer;
+    // DataTransfer is only valid synchronously inside the handler: take everything now.
+    const files = Array.from(dt.files).slice(0, MAX_ITEMS);
+    const items = Array.from(dt.items).slice(0, MAX_ITEMS);
+    const pending = items.filter(it => it.kind === 'file' && it.getAsFileSystemHandle)
+                         .map(it => it.getAsFileSystemHandle().catch(() => null));
+    const handles = (await Promise.all(pending)).filter(Boolean);
+    const info = {
+      field: z.dataset.field,
+      seq: (window.__seq = (window.__seq || 0) + 1),
+      mode: window.__mode,
+      fileCount: files.length, itemCount: items.length,
+      files: files.map(f => ({name: f.name, size: f.size, type: f.type})),
+      handleKinds: handles.map(h => h.kind),
+      handleNames: handles.map(h => h.name),
+    };
+    out.textContent = JSON.stringify(info, null, 1);
+    // Page only forwards; host reads native objects. Files first, then handles.
+    const mode = window.__mode;
+    const objs = mode === 'files' ? files : mode === 'handles' ? handles : files.concat(handles);
+    try {
+      chrome.webview.postMessageWithAdditionalObjects(JSON.stringify(info), objs);
+    } catch (err) {
+      out.textContent += '\nERR ' + err;
+      chrome.webview.postMessage(JSON.stringify({field: z.dataset.field, error: String(err)}));
+    }
+  });
+}
+</script>

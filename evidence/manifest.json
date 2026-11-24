@@ -1,6 +1,6 @@
 {
   "format": 1,
-  "next_id": 42,
+  "next_id": 43,
   "records": [
     {
       "id": "EV-0001",
@@ -1147,6 +1147,54 @@
           "path": "stderr-prevent.txt",
           "bytes": 750,
           "sha256": "621c282eccd57afaca8a1944b4d7a06b2099645b20120e8cbb1287ffe9fbdad7"
+        }
+      ]
+    },
+    {
+      "id": "EV-0042",
+      "title": "M2-A2 framing fixes and drop prototype",
+      "date": "2026-11-24",
+      "origin": "build/m2-a2/framing (proto.py with --fix-theme and --fix-hover) and build/m2-a2/drop at c17b082a",
+      "files": [
+        {
+          "path": "README.md",
+          "bytes": 2648,
+          "sha256": "6ff0fa6a75dc8a8e4761e47fac0d3615f4d72060ba5479516c1a1cd82b88501b"
+        },
+        {
+          "path": "drop-page-noprevent.html",
+          "bytes": 2849,
+          "sha256": "6e8676a2ea53cb87920d2e4784c495bd63bf805ea0ee4b14ffc735732027b1b2"
+        },
+        {
+          "path": "drop-page.html",
+          "bytes": 2873,
+          "sha256": "a8500d03f2d7253fbf8a6302d4472a677923487a594f83a1dc43e8625e6d41db"
+        },
+        {
+          "path": "drop-read-log.py",
+          "bytes": 1298,
+          "sha256": "815519ff98393937d6d76af35faffc6ffdecea93082379db490a8e29ee1e3569"
+        },
+        {
+          "path": "drop-spike.py",
+          "bytes": 6994,
+          "sha256": "5ae91e64881c38160003846ee35e5add1e95b81970e164040905a39e8c7446e9"
+        },
+        {
+          "path": "framing-maximized-hit-trace.json",
+          "bytes": 27976,
+          "sha256": "d195079d2ef2d963c8397bedb0c06dca7f5a59c89cba14cd18928ff283fcd750"
+        },
+        {
+          "path": "framing-proto.py",
+          "bytes": 43021,
+          "sha256": "09cf968b69c4e717f0605840179386f3b05da515d2c68808b7d85f444e3a8215"
+        },
+        {
+          "path": "framing-theme-reapply.txt",
+          "bytes": 504,
+          "sha256": "aad6fe07a6e11b67e5dd9184178f57ee308fe754ad9c87b8693158764907d1cd"
         }
       ]
     }

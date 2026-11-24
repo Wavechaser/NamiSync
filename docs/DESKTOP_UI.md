@@ -248,7 +248,10 @@ the first page appearance envelope before creation; section initialization canno
 delay operational readiness. This is not a compositor flash-free-paint guarantee.
 Live appearance reads/apply coalesce on the native UI thread; subscription precedes
 initial read and changed native generations cannot overwrite newer state.
-Unknown/unreadable display flags retain prior state. Appearance-envelope revisions
+Unknown/unreadable display flags retain prior state. pywebview's form also handles
+theme changes and sets the backdrop to none in light mode, so the material
+reapply after each change is what keeps Mica in light mode (M2-A2,
+[EV-0042](../evidence/EV-0042/README.md)). Appearance-envelope revisions
 are not persisted cosmetic or bridge-protocol versions. Injected contrast/CDP
 evidence is not a real OS-theme-transition witness.
 

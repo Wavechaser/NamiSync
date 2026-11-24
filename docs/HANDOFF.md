@@ -23,7 +23,10 @@ and their decisions are in [M2_PLAN](M2_PLAN.md).
   claim with migration as its first consumer; A4 adds the ledger-instance
   check for plans held in memory; C1, C3 and C4 each own one restart scenario.
 - Desktop checks with the user, recorded in the Drag-and-drop Setup and Custom
-  title bar entries with [EV-0041](../evidence/EV-0041/README.md).
+  title bar entries with [EV-0041](../evidence/EV-0041/README.md). The two
+  framing defects were traced: pywebview's theme handler turns Mica off in
+  light mode, and caption-button hover needs `WM_NCHITTEST` passed to
+  `DwmDefWindowProc`. A2 closed after the user confirmed both fixes.
 
 ## Verification
 
@@ -36,9 +39,11 @@ and their decisions are in [M2_PLAN](M2_PLAN.md).
 
 ## Open items
 
-- A2 stays active only for the framing prototype's high-contrast and taskbar
-  checks (`build/m2-a2/framing/proto.py --mode nonclient_carve`); the
-  prototypes stay in `build/m2-a2/` until then.
+- A2 is complete. The framing prototype's Mica and hover fixes are in
+  [EV-0042](../evidence/EV-0042/README.md); maximized windows still get no
+  caption-button hover, a choice for the Custom title bar design. Every
+  prototype is promoted to EV-0040 or EV-0042, so `build/m2-a2/` can be
+  cleared.
 - A8's gate needs an HDD that carries two lettered partitions; none exists on
   the reference machine.
 - `J:\NamiSyncSpike\stop-latency` (about 157 MB) is kept as the HDD fixture

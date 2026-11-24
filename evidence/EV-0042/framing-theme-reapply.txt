@@ -1,0 +1,8 @@
+22:46:37 theme reapply dark=0 hr=0,0 backdrop_readback=(0, 2)
+22:46:37 theme reapply dark=0 hr=0,0 backdrop_readback=(0, 2)
+22:46:43 theme reapply dark=1 hr=0,0 backdrop_readback=(0, 2)
+22:46:43 theme reapply dark=1 hr=0,0 backdrop_readback=(0, 2)
+22:46:47 theme reapply dark=0 hr=0,0 backdrop_readback=(0, 2)
+22:46:48 theme reapply dark=0 hr=0,0 backdrop_readback=(0, 2)
+22:46:53 theme reapply dark=1 hr=0,0 backdrop_readback=(0, 2)
+22:46:54 theme reapply dark=1 hr=0,0 backdrop_readback=(0, 2)

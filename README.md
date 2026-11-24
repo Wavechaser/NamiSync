@@ -312,7 +312,9 @@ restarts, crashes, restores, retries and schema changes, and is shown honestly.
 
 Source-tree runs default to a separate development data root, and the test
 suite refuses the file, database and directory operations that would create or
-change entries under the release's data folder.
+change entries under the release's data folder. Live spikes settled the open
+questions behind window framing, drag-and-drop, completion notifications, the
+volume overview and stopping a scan.
 
 ### M2 Planning
 

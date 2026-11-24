@@ -40,8 +40,12 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
 - Ran the desktop checks with the user (EV-0041). Real Explorer drops deliver
   full paths up to about 260 characters and nothing beyond, reach an elevated
   window, and open in their default app unless the whole page prevents them.
-  The framing prototype passes the keyboard and mixed-DPI checks but loses
-  Mica on a dark-to-light switch and shows no caption-button hover.
+  The framing prototype passes the keyboard, mixed-DPI, high-contrast and
+  taskbar checks. Its two defects were traced and fixed in the prototype:
+  pywebview's theme handler turns Mica off in light mode, so the host
+  reapplies it after every change, and caption-button hover needs each hit
+  test passed to `DwmDefWindowProc`, which still declines maximized windows.
+  M2-A2 is complete.
 - Recorded the user's decisions on two results: toasts become a user-enabled
   setting whose off state removes the registry key, and planning becomes
   stoppable no later than M2-B6, with planning time profiled under M2-A9.
