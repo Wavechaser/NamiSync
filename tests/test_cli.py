@@ -307,7 +307,7 @@ def test_cli_admission_interleaves_real_sqlite_commits_without_reset_advice(
                           stdout=io.StringIO(), stderr=stderr)
         else:
             with NamiSyncService(ledger, history) as service:
-                result = cli_module._database_refusal(service, stderr)
+                result = cli_module._database_refusal(service, io.StringIO(), stderr)
         assert result == (EXIT_REFUSED if persistent else EXIT_SUCCESS if entry == "history" else None)
         assert attempts == (3 if persistent else 2)
         assert mutations == (3 if persistent else 1)
@@ -330,7 +330,7 @@ def test_cli_admission_reset_guidance_requires_confirmed_stable_incompatibility(
         Path(f"{history}-journal").write_bytes(b"preserve journal")
     elif failure == "schema":
         with closing(sqlite3.connect(history)) as connection:
-            connection.execute("UPDATE schema_metadata SET value = 'wrong' WHERE key = 'contract_id'")
+            connection.execute("UPDATE schema_metadata SET value = 'wrong' WHERE key = 'format.numeric'")
             connection.commit()
     elif failure == "corrupt":
         history.write_bytes(b"not a SQLite database")
@@ -355,7 +355,7 @@ def test_cli_admission_reset_guidance_requires_confirmed_stable_incompatibility(
                       stdout=io.StringIO(), stderr=stderr)
     else:
         with NamiSyncService(ledger, history) as service:
-            result = cli_module._database_refusal(service, stderr)
+            result = cli_module._database_refusal(service, io.StringIO(), stderr)
     assert result == EXIT_REFUSED
     assert ("archive or delete" in stderr.getvalue()) == (failure in {"schema", "corrupt"})
     assert calls == (1 if failure in {"permission", "sqlite-io", "sqlite-busy"} else 0)
@@ -1408,8 +1408,8 @@ def test_mutating_cli_refuses_mismatched_database_pair_read_only(
     try:
         with connection:
             connection.execute(
-                "UPDATE schema_metadata SET value = ? WHERE key = 'contract_id'",
-                ("wrong-history-role",),
+                "UPDATE schema_metadata SET value = ? WHERE key = 'format.numeric'",
+                ("wrong-history-marker",),
             )
     finally:
         connection.close()

@@ -38,6 +38,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
     "database": (
         "tests/test_db_claims.py",
         "tests/test_db_history.py",
+        "tests/test_db_migration.py",
         "tests/test_db_repositories.py",
         "tests/test_db_schema.py",
         "tests/test_db_write_boundary.py",
@@ -56,6 +57,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/test_bridge_selection.py",
         "tests/test_bridge_tree.py",
         "tests/test_database_contracts.py",
+        "tests/test_database_pair_migration.py",
         "tests/test_execution_review.py",
         "tests/test_inventory_projection.py",
         "tests/test_inventory_runtime.py",
@@ -122,6 +124,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/interfaces/web/test_wheel_assets.py",
         "tests/test_bridge_service.py",
         "tests/test_cli.py",
+        "tests/test_cli_migration.py",
         "tests/test_package.py",
         "tests/test_pywebview_runtime.py",
         "tests/test_result_classification.py",

@@ -116,7 +116,7 @@ def test_live_database_damage_refuses_before_writer_configuration(
     if damage in ("marker", "topology"):
         with closing(sqlite3.connect(path, isolation_level=None)) as connection:
             connection.execute(
-                "UPDATE schema_metadata SET value = 'wrong' WHERE key = 'contract_id'"
+                "UPDATE schema_metadata SET value = 'wrong' WHERE key = 'format.numeric'"
                 if damage == "marker" else "CREATE TABLE unexpected(value)"
             )
     elif damage == "journal":
@@ -222,7 +222,7 @@ def test_retired_reader_reopen_rechecks_live_contract(runtime: LocalWorkflowRunt
         runtime.get_history_summary("missing")
     assert runtime._history_reader is None
     with closing(sqlite3.connect(runtime.history_path, isolation_level=None)) as writer:
-        writer.execute("UPDATE schema_metadata SET value = 'wrong' WHERE key = 'contract_id'")
+        writer.execute("UPDATE schema_metadata SET value = 'wrong' WHERE key = 'format.numeric'")
     with pytest.raises(SchemaResetRequired):
         runtime.list_history()
     assert runtime._history_reader is None
@@ -311,10 +311,7 @@ def _seed_history(path: Path) -> None:
 
 
 def _make_database(path: Path, role: str, page_size: int = 4096) -> None:
-    script = (
-        schema_module._LEDGER_SCHEMA if role == "ledger"
-        else schema_module._HISTORY_SCHEMA
-    )
+    script = schema_module._schema_script(role == "history")
     with closing(sqlite3.connect(path, isolation_level=None)) as connection:
         connection.execute(f"PRAGMA page_size = {page_size}")
         connection.executescript(script)
@@ -561,7 +558,7 @@ def test_new_runtime_refuses_an_incompatible_database_after_prior_owner_closed(
     runtime.close()
     with closing(sqlite3.connect(path, isolation_level=None)) as writer:
         writer.execute(
-            "UPDATE schema_metadata SET value = 'incompatible' WHERE key = 'contract_id'"
+            "UPDATE schema_metadata SET value = 'incompatible' WHERE key = 'format.numeric'"
         )
     before = path.read_bytes()
     with closing(LocalWorkflowRuntime(runtime.ledger_path, runtime.history_path)) as reopened:

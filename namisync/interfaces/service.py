@@ -384,6 +384,27 @@ class NamiSyncService:
             self._runtime.initialize_database_contracts()
         )
 
+    def migrate_database_contracts(
+        self,
+    ) -> tuple[DatabaseContractView, tuple[tuple[str, int, str], ...]]:
+        """Migrate a NamiSync 0.1.0 pair before any database is opened.
+
+        Returns the resulting contract, whose refusal carries its guidance,
+        and one ``(role, source schema version, backup path)`` per database
+        this call migrated (in-process callers only; no bridge shape carries
+        them).
+        """
+
+        self._require_open()
+        migration = self._runtime.migrate_database_contracts()
+        return (
+            _database_contract_view(migration.contract),
+            tuple(
+                (database.role, database.source_version, str(database.backup))
+                for database in migration.migrated
+            ),
+        )
+
     def admit_location_candidate(
         self,
         candidate: LocationCandidate,

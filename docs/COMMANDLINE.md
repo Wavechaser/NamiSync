@@ -61,9 +61,9 @@ reaches those files only when `--database` or `--history-database` names them.
 Semantic defaults live in `settings.json` beside the selected ledger, so an
 explicit `--database` also selects an isolated sibling settings file.
 
-At the active Stage 6 database cutover, mutating commands require the
-coordinated database pair. Standalone history remains deliberately read-only
-and may inspect one exact history-v8 database without a ledger peer. CLI history
+Mutating commands require the coordinated database pair. Standalone history
+remains deliberately read-only and may inspect one current history database
+without a ledger peer. CLI history
 summary/detail output renders a persisted review-fact limit as typed durable
 history truth, gives the same narrow-roots or resolve-scan/preflight guidance
 as the desktop, and never reconstructs the refusal from diagnostic text or
@@ -71,25 +71,54 @@ shows a presentation-only omission as history. `DATABASE.md` and `HISTORY.md`
 own the persisted consequence; `BRIDGE.md` owns the shared protocol shape
 and `DEFENSE.md` §1.3 owns the scalar wall.
 
-At the current M1 pre-migrator boundary, ledger v4 and receipt-aware history v8
-require their exact contract markers. Opening any ledger v1-v3 database, any
-history v1-v7 database, or a current-version file with a missing/mismatched
-marker fails
-before schema mutation with an instruction to close NamiSync and manually
-archive or delete **both** local database mains and all SQLite sidecars, then
-rerun the command. Startup does not
-delete, migrate, or backfill either database automatically. This is
-development-state recovery, not a migration or preservation promise.
+The current databases are ledger v5 and history v9 ([DATABASE](DATABASE.md#persistence-versions)).
+Opening any ledger v1-v3 database, any history v1-v7 database, a v4/v8 file
+with a pre-release contract id, or a current-version file with missing or
+mismatched metadata fails before schema mutation with an instruction to close
+NamiSync and manually archive or delete **both** local database mains and all
+SQLite sidecars, then rerun the command. A database written by a newer
+NamiSync is refused with direction to use that version, never with that
+instruction. A ledger given as `--history-database` or a history given as
+`--database` is refused with `<role>-wrong-role` and direction to check the two
+paths, which look swapped; a file whose role this version does not know is
+refused the same way, with direction to check its path. Commands never delete
+or backfill either database.
 
 Before the first sync or location command admission, the CLI calls the shared
-read-only database-pair preflight. A refused pair returns exit `3`, prints the
-coordinated reset direction, and leaves every existing main and sidecar byte
-unchanged. A fresh sync pair remains absent through planning and declined
-review, then is initialized together only after explicit execution commitment.
-Inventory and integrity initialize a fresh pair during workflow preparation,
-before their audit observer can open history. The standalone `history` command
-is read-only and deliberately exempt, so an existing history database remains
-inspectable when its ledger peer is missing.
+read-only database-pair preflight. A pair written by NamiSync 0.1.0 is then
+migrated before the command proceeds, and one line on standard output names
+what migrated and its backups, for example:
+
+```text
+Updated the ledger (v4) and history (v8) databases written by NamiSync 0.1.0; backups kept at: <ledger backup>, <history backup>
+```
+
+A refused pair returns exit `3` with `Database pair refused: <reason>.` and
+its guidance. A refusal at admission or because another NamiSync process, of
+any version, has either database open or holds its claim leaves every existing
+main and sidecar byte unchanged. A migration that fails after its backup was
+published (`migration-failed`) normally leaves the old main file, the published
+backup, and a WAL grown by a discarded tail. When the failure was in the final
+commit itself, the update could not be confirmed and the database may already
+be the new one; the message says so, and the next start checks again.
+`backup-failed` changes nothing: when the backup failed verification, the
+database itself failed SQLite's integrity check and the message says to keep
+its files for inspection; otherwise it says to check write access and free
+space. A ledger
+that had already migrated when History's own step failed stays migrated, and
+the next command finishes the history. A v0.1.0 main file copied without its
+`-wal` migrates as the empty database it is, since v0.1.0 keeps its committed
+rows in the `-wal`. A fresh sync pair remains
+absent through planning and declined review, then is initialized together only
+after explicit execution commitment. Inventory and integrity initialize a fresh
+pair during workflow preparation, before their audit observer can open history.
+The standalone `history` command is read-only and deliberately exempt, so an
+existing history database remains inspectable when its ledger peer is missing.
+It never migrates: a history written by NamiSync 0.1.0 exits `3` with
+`History admission refused:` and direction to start NamiSync, or run a sync or
+inventory command, once. That cannot help a v0.1.0 history whose ledger is
+missing: a pair with one database missing stays refused, so such a history can
+be neither read nor updated by this version, as the refusal says.
 
 History listing reads summary rows without decoding event detail. `history RUN`
 prints terminal axes when finalized or an explicit incomplete state/phase and

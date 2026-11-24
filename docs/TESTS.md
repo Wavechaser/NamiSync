@@ -169,7 +169,7 @@ exact reliable-envelope maximum and first excess before `EventHub` mutation;
 the exact maximum event drains alone. Browser tests admit all seven canonical
 producer projections, then atomically reject invalid transport version,
 session, sequence, tag, body-object, lifecycle, or snapshot input without
-advancing the cursor; clean replay remains exact. History-v8 pages cannot carry
+advancing the cursor; clean replay remains exact. History pages cannot carry
 a prior event version. The consolidation closeout search found no downstream
 event-body certifier; retained core guards pin prior, future, and coercive
 version rejection through the public validator/decoder and require the exact
@@ -514,7 +514,13 @@ each, plus `PROVENANCE.json`: release and executable hashes, every command with
 its exit code, each file's size and SHA-256, `schema_metadata`, row counts with
 and without the WAL, and the production time. `tests/test_v0_1_0_fixture.py`
 checks those facts. Tests read the tracked files only to copy them; open and
-migrate the copies under `tmp_path`. Git keeps the folder byte-exact (`-text`),
+migrate the copies under `tmp_path`. `tests/_released_fixture.py` makes those
+copies for the migration tests (`tests/test_db_migration.py`,
+`tests/test_database_pair_migration.py`, `tests/test_cli_migration.py` and the
+desktop startup cases in `tests/interfaces/web/test_host.py`) and for the
+old-marker refusal cases in `tests/test_database_contracts.py`, which edit
+markers on a copy. Migration tests that need concurrency or process death use
+real child processes through `tests/_child_process.py`. Git keeps the folder byte-exact (`-text`),
 and `.gitignore` excepts exactly these six database files. The pair contains
 the producing machine's host name, volume serial and label, and the absolute
 paths of its scenario roots.

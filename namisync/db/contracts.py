@@ -16,6 +16,9 @@ from typing import Callable, Iterator, TypeVar
 
 from .schema import (
     DatabaseAdmissionError,
+    DatabaseMigrationRequired,
+    DatabaseNewerVersion,
+    DatabaseRoleMismatch,
     SchemaResetRequired,
     validate_history_reader_contract,
     validate_ledger_reader_contract,
@@ -117,7 +120,10 @@ class DatabaseConnectionOwner:
                 _require_no_journal(self.path)
                 if self._main_identity() != self._identity:
                     raise DatabaseAdmissionError("owned database main was replaced")
-            except SchemaResetRequired:
+            except (
+                SchemaResetRequired, DatabaseMigrationRequired, DatabaseNewerVersion,
+                DatabaseRoleMismatch,
+            ):
                 raise
             except (OSError, sqlite3.Error) as error:
                 raise DatabaseAdmissionError(DATABASE_UNAVAILABLE_DIRECTION) from error

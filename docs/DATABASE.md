@@ -1,77 +1,78 @@
 # Database Module
 
 Status: schema bones, safe connection factories, ledger/repositories, inventory
-reconciliation, bounded receipt-journal history, the ledger-v4/history-v8
-data-epoch-8 reset boundary, and the semantic settings store are implemented.
-General migrations, retention, and backup/protection workflows remain
-unrealized.
+reconciliation, bounded receipt-journal history, the ledger-v5/history-v9
+schemas with forward migration from NamiSync 0.1.0, the maintenance claim, and
+the semantic settings store are implemented. Retention and backup/protection
+workflows remain unrealized.
 
-## Active V4/V8 Persistence Boundary
+## Persistence Versions
 
-Status: ledger-v4/history-v8 shapes, shared data epoch 8, and the corrected
-ledger contract id are active. This is a coordinated pre-release reset, not an
-in-place migration.
+Status: ledger v5 and history v9 are current (M2-A3, 2026-11-25). Each
+database is judged on its own as current, older and supported, newer, or
+refused; [Schema Evolution](#schema-evolution) owns the rules and the migrator.
 
-| Database | Schema | `data_epoch` | `contract_id` |
-| --- | ---: | ---: | --- |
-| ledger | 4 | 8 | `m1-ledger-v4-event-v5-evidence-v2` |
-| history | 8 | 8 | `m1-history-v8-event-v5-recording-v1` |
+| Database | Schema | `schema_metadata` rows |
+| --- | ---: | --- |
+| ledger | 5 | `role`, `schema_version`, `format.event`, `format.evidence`, `format.identity`, `format.numeric`, `format.path-key`, `format.preimage`, `format.recording`, `instance_id` |
+| history | 9 | `role`, `schema_version`, `format.event`, `format.numeric`, `format.preimage`, `format.recording` |
 
-Version, contract id, and epoch values are mandatory. Two absent main files
-with no sidecars remain the only fresh state. Any old or mixed pair,
-one-present pair, missing/wrong marker, incomplete/poisoned topology, or orphan
-WAL/SHM/journal sidecar is refused by read-only validation before mutating
-startup or CLI work. Stable confirmed incompatibility directs the user to close
-NamiSync and archive or delete both database mains and all sidecars together.
-Incomplete pairs, journal presence, access failures, and observed activity
-instead receive non-destructive inspection or retry guidance; startup does not
-migrate, repair, or delete artifacts. A standalone read-only history command may
-open one exact history-v8 database without creating or requiring its ledger
-peer; it still validates the history role, version, contract id, epoch, and
-complete topology through the shared nonmutating file preflight.
+`LEDGER_FORMATS` and `HISTORY_FORMATS` in `schema.py` declare the embedded
+formats; each row holds that format's `FORMAT_VERSIONS` value. Two absent main
+files with no sidecars remain the only fresh state; a `-wal` or `-shm` beside
+its main is normal. A one-present pair, a journal, or an orphan sidecar is
+refused by read-only validation before mutating startup or CLI work, with
+non-destructive inspection or retry guidance, as are access failures and
+observed activity. Older supported and newer databases are typed admission
+refusals without reset guidance, as is a database at the other role's path
+(the two paths look swapped) or one whose `role` this version does not know.
+Only a stable confirmed unsupported
+database — a pre-release version or contract id, missing or
+mismatched metadata, an incomplete or poisoned topology, an empty or
+markerless file, or corruption — directs the user to close NamiSync and
+archive or delete both database mains and all sidecars together. Startup never
+repairs or deletes artifacts. A standalone read-only history command may open
+one current history database without creating or requiring its ledger peer; it
+still validates role, version, formats and complete topology through the shared
+nonmutating file preflight, and it refuses an older history with direction to
+start NamiSync once.
 
-Epoch 6 separated the corrected identity-bearing hash preimages from epoch 5's
-numeric file-index preimages under the former ledger-v4/history-v6 pair. Those
-hash-preimage facts and their frozen receipt fixtures remain historical
-evidence. History v7 removed the redundant duplicate-link UPDATE guard.
-History v8 changes the SQL row-limit constraint so current refusals can record
-150,000 exactly. It also recognizes the prior 120,000 fact. The ledger keeps
-its v4 shape and contract id; both databases advance to epoch 8.
+Pre-release epochs are history. Epoch 6 separated the corrected
+identity-bearing hash preimages from epoch 5's numeric file-index preimages
+under the former ledger-v4/history-v6 pair; those facts and their frozen
+receipt fixtures remain historical evidence. History v7 removed the redundant
+duplicate-link UPDATE guard, and history v8 changed the SQL row-limit
+constraint so refusals record 150,000 exactly while still recognizing 120,000.
+NamiSync 0.1.0 released ledger v4 (`m1-ledger-v4-event-v5-evidence-v2`) and
+history v8 (`m1-history-v8-event-v5-recording-v1`) at data epoch 8; that pair
+migrates. Epoch-5 and epoch-6 pairs, history v7, and mixed directions with
+them stay refused with the reset direction. Recreating a refused pair discards
+its inventory, baselines, attestations, mappings, receipts and audit history;
+archived files may be kept for separate inspection. It does not delete or
+modify source files, target files, semantic settings, or sync trash. No
+application startup or reader performs this destructive reset automatically.
 
-Old epoch-5 pair fixtures, including their historical 5/6 mixed directions,
-remain refusal evidence. Every prior epoch-6 pair and either mixed 6/7 direction
-is also refused, including when its old markers are committed only in WAL.
-An epoch-7 pair and either mixed 7/8 direction require the same manual cutover.
-Recreating the pair discards the active app inventory, baselines, attestations,
-mappings, receipts, and audit history; archived files may be kept for separate
-inspection but are not migrated into the new pair. It does not delete or modify
-source files, target files, semantic settings, or sync trash. A new scan can
-rebuild current observations, not the discarded historical baselines,
-attestations, receipts, or audit trail. No application startup or reader
-performs this destructive reset automatically.
+Refusal tests write old markers onto copies of the released fixture: captured
+epoch-5 markers on both roles or one role beside a current peer, the epoch-6
+ledger's prior contract id, epoch-7 history, and old markers committed only in
+WAL with or without source SHM; source main/WAL/SHM/journal membership and
+bytes stay unchanged. Because `data_epoch` is not read, a ledger of the
+released shape and contract id with any epoch row classifies as older and
+supported (`test_released_data_epoch_is_not_read`). Fresh pairs reopen only
+with the exact current metadata. These tests never reset user data.
 
-Captured epoch-5 markers in the identity fixture seed synthetic refusal cases.
-Current tests exercise old markers on both roles or one role beside a current
-peer, including the epoch-6 ledger's prior contract ID. WAL-only
-old markers refuse with or without source SHM; source main/WAL/SHM/journal
-membership and bytes remain unchanged. Existing epoch-4 and journal-presence
-negatives remain independent controls. Read-only refusal tests also cover both
-epoch-7 markers together and each beside a current peer. Fresh epoch-8 pairs reopen only with the
-exact ledger-v4/history-v8 markers and current history contract id. These tests
-never reset user data.
-
-Ledger v4 stores complete file identities as canonical `FileIndex128` text and
+The ledger (since v4) stores complete file identities as canonical `FileIndex128` text and
 strengthens pair, canonical-domain, and attestation checks. It does not add an
 operation digest. Bounded recent-location readback uses the existing schema;
 new recent-query indexes and the execution-evidence join remain unrealized.
 Process-local command and task ids remain outside the ledger.
 
-At the active cutover, ledger numeric and native-identity storage follows
+Ledger numeric and native-identity storage follows
 `DEFENSE.md` §1.3 and the mapped bridge decision without a database-local
 domain or codec variant. `HISTORY.md` owns canonical event-envelope
 persistence.
 
-History v8 admits only its coordinated core-event version and retains a nullable,
+History (since v8) admits only its coordinated core-event version and retains a nullable,
 all-or-complete review-limit terminal group. `HISTORY.md` owns its durable
 observer/finalization consequences; `namisync/core/events.py` owns the exact shared internal shape.
 Presentation-only omission state is never stored. The duplicate-link INSERT
@@ -91,7 +92,12 @@ markers.
 shipped role schema. SQLite's stored SQL is compared verbatim: there is no
 case folding, whitespace removal, literal rewriting, or object-prefix filter.
 Automatic indexes retain their null SQL. Physical root pages are excluded;
-data and marker values remain outside this definition comparator.
+data and marker values remain outside this definition comparator. Fresh
+creation, the reference and migration all build objects from the same shipped
+statement list (`_LEDGER_STATEMENTS`, `_HISTORY_STATEMENTS`), so one authority
+holds. A released v0.1.0 database is compared with its released topology
+instead: the SHA-256 of the same projection (`_topology_digest`), frozen in
+`schema.py` and checked against the fixture.
 
 Only these SQLite-owned table definitions are optional, at most once each:
 `CREATE TABLE sqlite_stat1(tbl,idx,stat)` and
@@ -161,6 +167,8 @@ inaccessible, journal-bearing, or otherwise unreadable artifacts refuse with
 non-destructive inspection/access guidance; none of these observations proves
 incompatibility or warrants resetting the pair. Only a stable confirmed schema
 mismatch or SQLite corruption/not-a-database result carries the existing reset
+direction; an older supported database (`DatabaseMigrationRequired`) and a
+newer one (`DatabaseNewerVersion`) are typed refusals with their own
 direction. CLI history reports typed admission refusals with exit code 3;
 unrelated later history-read failures retain exit code 4. Retries never replay a
 task or execute database initialization, recovery, or other effects.
@@ -309,7 +317,8 @@ ledger verification is separate from evidence attributed to that original run.
 ## Purpose And Boundaries
 
 `namisync.db` owns SQLite schemas, connection factories, recorder implementation,
-read repositories, history observer/store, and unrealized migrations. The main
+read repositories, history observer/store, the maintenance claim, and schema
+migration (`migration.py`). The main
 ledger stores durable operational evidence; the history database stores an
 independent activity audit. They have separate connections, versions,
 retention, failure domains, and no cross-database foreign keys.
@@ -323,7 +332,9 @@ state is interface-owned and never shares this file.
 
 ## Implemented Foundation
 
-`schema.py` creates a version-4 ledger and version-8 history schema. The ledger
+`schema.py` creates a version-5 ledger, with a random `instance_id` and
+`AUTOINCREMENT` ids for locations, mappings and inventory, and a version-9
+history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
 correspondence, run/operation tokens, generic annotations, and nullable hardlink
@@ -344,7 +355,7 @@ representation used by both schemas.
 
 The M1 desktop shell service composes these per-file checks into one
 read-only `validate_database_contracts()` preflight returning a
-`fresh`/`ready`/`refused` pair state — including the exactly-one-present and
+`fresh`/`ready`/`migration-required`/`refused` pair state — including the exactly-one-present and
 orphaned-sidecar refusals — enforced by the CLI mutation paths and ready for
 the Slice 1 product host to consume before window creation, so history cannot
 be initialized without the ledger. Cold validation uses the shared immutable or
@@ -384,7 +395,7 @@ integrity, and mapping-pair statements use at most the batch size plus two
 parameters, row-ID statements use at most the batch size plus one, and
 two-column identity statements use at most twice the batch size plus one.
 
-History version 8 creates a provisional `history_runs` row at the first durable
+History (version 9) creates a provisional `history_runs` row at the first durable
 window and appends disposition-bound reliable receipts to `history_events`.
 Canonical and exact-duplicate rows retain their envelopes; a supported
 oversized event retains only bounded metadata, reason, and its original payload
@@ -436,15 +447,13 @@ can lose only the last uncommitted window. A nonterminal committed row is
 readable as `incomplete` after restart and is not classified as interrupted or
 resumable without future durable custody.
 
-The current schemas carry exact whole-contract metadata: ledger
-`contract_id=m1-ledger-v4-event-v5-evidence-v2`, history
-`contract_id=m1-history-v8-event-v5-recording-v1`, and shared `data_epoch=8`.
-Opening ledger v1-v3, history v1-v7, or a current database with a
-missing/mismatched marker raises the same actionable
-`SchemaResetRequired` family without altering the old tables or version stamp.
-During this pre-release window the user must close NamiSync and manually delete
-or archive both local database files and their sidecars before restarting.
-Each archived pair retains the event and evidence constraints of its own epoch.
+The current schemas carry the metadata rows in
+[Persistence Versions](#persistence-versions). `classify_database` reads only
+the catalog and those rows: opening ledger v1-v3, history v1-v7, a v4/v8
+database with another contract id, or a current database with a
+missing/mismatched row raises `SchemaResetRequired` without altering it; a
+released v0.1.0 database raises `DatabaseMigrationRequired` and a newer one
+`DatabaseNewerVersion` from every reader and writer admission path.
 `reset_databases()` is an explicit
 development/test helper that validates both exact paths before deleting their
 database/WAL/SHM/journal artifacts and recreates both current schemas; normal startup
@@ -452,8 +461,9 @@ never calls it. The reset is intentionally destructive and non-transactional:
 all NamiSync and SQLite handles must already be closed, and a locked sidecar can
 make a later delete fail after an earlier artifact was removed. The caller must
 clear the lock and rerun the coordinated reset/recreation; this helper is not a
-user-data recovery guarantee. No general ordered migration, backup, retention,
-export/import, or maintenance writer is claimed yet.
+user-data recovery guarantee. Forward migration of a released pair is the only
+maintenance writer ([Migration](#migration)); backup commands, retention and
+export/import are not claimed yet.
 
 `settings.py` owns `SemanticSettingsStore`. A commit takes a deterministic
 Windows named mutex, rereads the latest document while holding it, applies only
@@ -524,7 +534,7 @@ The initial schema reserves the expensive identity/evidence bones:
   independent of plan or interface view state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
-At the active epoch-8 persistence boundary, file-index columns and repository
+Since ledger v4, file-index columns and repository
 binds use canonical `FileIndex128` text rather than SQLite numeric affinity.
 The exact identity domain and native-source rule remain owned by `BRIDGE.md`
 and `DEFENSE.md` §1.3.
@@ -537,7 +547,7 @@ conditional integrity writes; pause closes/reopens the connection without
 ending the row, and terminal settlement fills `ended_at` once.
 
 Official writers keep observed and attested file-identity fields paired and
-clear attested-only fields when no content evidence exists. Ledger v4 encodes
+clear attested-only fields when no content evidence exists. The ledger encodes
 identity-pair, canonical `FileIndex128`, invalidation, and current-versus-
 attested consistency rules as raw-SQL checks, and repositories defensively
 reject corrupt identity text. Attested creation time remains legitimately
@@ -551,8 +561,11 @@ from referencing a target file in another location.
 
 ## Connection Rules
 
-Every writable ledger connection enables foreign keys, WAL, bounded busy
-timeout, and explicit transactions. The serialized writer spends one monotonic
+Every writable ledger connection from the connection factories enables foreign
+keys, WAL, bounded busy timeout, and explicit transactions. The migrator's
+exclusive connection is the exception: foreign keys stay off so old tables
+can be renamed and dropped, and `foreign_key_check` proves the result before
+COMMIT ([Migration](#migration)). The serialized writer spends one monotonic
 contention budget across its local lock, SQLite busy waits, and retry sleeps;
 the transaction body is not misclassified as contention time. Only SQLite
 primary result codes `SQLITE_BUSY` and `SQLITE_LOCKED`, including their extended
@@ -684,8 +697,11 @@ only a guarded positive evidence transaction can make the row current again.
 
 ## Schema Evolution
 
-Status: accepted for M2-A3 (2026-11-25) and unrealized until its implementation
-lands; until then the reset-and-refuse boundary above is what the code does.
+Status: implemented by M2-A3 (2026-11-25): classification in `schema.py`, the
+migrator in `namisync/db/migration.py`, pair admission in
+`namisync/workflows/database_pair.py`. Tests: `tests/test_db_migration.py`,
+`tests/test_database_pair_migration.py`, `tests/test_cli_migration.py` and the
+desktop startup cases in `tests/interfaces/web/test_host.py`.
 v0.1.0 “Gertrud” released ledger v4 and history v8. From M2 on, a released
 database migrates forward or is refused: never reset, never half-migrated and
 never migrated under a writer. [M2_PLAN](M2_PLAN.md) holds the checkpoint's
@@ -703,17 +719,38 @@ outcomes, gate and non-goals.
 - `schema_metadata` holds separate rows instead of one contract string: `role`,
   `schema_version` and one `format.<name>` row per embedded format. The ledger
   also holds `instance_id`. The `contract_id` and `data_epoch` rows are gone.
-- Schema code declares which formats each database embeds. A test pins the
-  formats of every schema version, so a core format cannot change under a
-  database without a new schema version, and every version from the oldest
-  supported source to the current one has a migration step or an invalidating
-  step.
-- At open, a database is current, older and supported, or refused. A newer
-  database is refused with direction to use the NamiSync that wrote it, never
-  with reset guidance. The only supported source is v0.1.0's format: ledger v4
-  or history v8 with its released contract id and the released tables and
-  columns. `data_epoch` is not read; every such database is treated as epoch 8
-  (user decision, 2026-11-19).
+- Schema code declares which formats each database embeds: every format whose
+  vectors pin an encoder or vocabulary that produced stored text, a hash or a
+  token. The ledger embeds all seven: event vocabularies
+  (`recording_commands.disposition` as `RecordDisposition`, decoded on replay;
+  `runs.filesystem_status` as `SessionState`, also hashed into
+  `finish_payload_hash`; `operations.outcome` as `Outcome`; `operations.kind`
+  as `OperationKind`; `IntegrityMode` in integrity payload hashes), evidence
+  columns and digests, `FileIndex128` text, integers decoded under the numeric
+  bounds, path keys, plan fingerprints, selection digests, operation tokens
+  and payload hashes over core projections (preimage), and recording status
+  text and command vocabulary. History embeds event (envelopes and receipts),
+  numeric (decimal scalar text inside them and the safe-integer column
+  checks), preimage (operation item ids, which are deterministic operation
+  ids, and the item identity hashes over them) and recording facts. A test pins the formats of every schema
+  version, so a core format cannot change under a database without a new
+  schema version, and every version from the oldest supported source to the
+  current one has a registered step (`MIGRATION_STEPS`).
+- At open, a database is current, older and supported, newer, at the wrong
+  path, or refused. A newer database (a `role` row naming the expected role,
+  and a schema version or a `format.<name>` row above this NamiSync's) is
+  refused with direction to use the NamiSync that wrote it, never with reset
+  guidance. A database that is recognisably the other role (a `role` row
+  naming it, or no `role` row and the other role's released contract id) is
+  refused as `DatabaseRoleMismatch`: the two paths look swapped, check them;
+  no reset and no "newer" text. A `role` row this version does not know (only
+  a newer NamiSync could write one) is also `DatabaseRoleMismatch`: the file
+  is not a database of the expected role this version knows, check the path;
+  no reset and no "newer" claim. Any other role-less database above the current
+  version is refused as unsupported. The only supported source is v0.1.0's format:
+  ledger v4 or history v8 with its released contract id, no `role` row, and
+  exactly the released topology. `data_epoch` is not read; every such database
+  is treated as epoch 8 (user decision, 2026-11-19).
 - Each database is judged and migrated on its own, in its own transaction (user
   decision, 2026-11-17). A pair left at different versions by an interrupted
   upgrade therefore finishes on the next start, and pairwise agreement follows
@@ -725,9 +762,13 @@ outcomes, gate and non-goals.
   ledger migrates. Every history run records the ledger instance it was
   recorded against. Runs already in a v0.1.0 history are stamped with the
   instance of the ledger they migrate beside, because the pair was admitted as
-  a pair. The stamp is a column of its own, outside the run's context hash, so
-  no stored hash is reinterpreted. Restore lineage and the read rule for
-  mismatched runs arrive with restore (M2-A4).
+  a pair. The stamp is a column of its own (`history_runs.ledger_instance_id`,
+  32 lowercase hexadecimal digits), outside the run's context hash, so no
+  stored hash is reinterpreted. A trigger makes it write-once, since no hash
+  covers it. The column is nullable: the runtime, the only production writer,
+  always supplies it from the ledger it admitted, but direct `HistoryStore`
+  writers in tests and measurement tools have no ledger. Restore lineage and
+  the read rule for mismatched runs arrive with restore (M2-A4).
 - An id referenced from outside its own database is never reused (user
   decision, 2026-11-21). A plain `INTEGER PRIMARY KEY` hands a new row the
   highest id plus one, so deleting the highest-numbered location would give its
@@ -751,42 +792,133 @@ outcomes, gate and non-goals.
 
 Migration runs where a pair is admitted for mutating work and at desktop
 startup, before the first ordinary connection. It is automatic and says so.
-Read-only classification never migrates: a command that only reads, such as
-standalone `history`, refuses an older database with direction to start
-NamiSync once.
+Read-only classification never migrates and never writes a database artifact
+or a `.claim` file: `validate_database_pair` reports `migration-required` (reason
+`ledger-older`, `history-older` or `pair-older`), and a command that only
+reads, such as standalone `history`, refuses an older database with direction
+to start NamiSync once.
+
+`migrate_database_pair` takes both exclusive claims, classifies the pair again
+under them, and returns any state other than `migration-required` unchanged.
+It then runs the delete-access probe (step 1) on both main files before
+either migrates, so a process holding only History refuses the pair with both
+databases unchanged. Then `migrate_database` runs for the ledger, then for
+History with the ledger's instance id. Each call migrates an older database
+or, for a current one, only confirms it (and, for the ledger, reads its
+instance id), so a pair an interruption left half done finishes on the next
+call. Its refusals return a `refused` contract with guidance and no reset
+direction: `database-in-use` (a claim or an open handle), `backup-failed`
+(step 2), `migration-failed` (the rollback below, naming the backup) or
+`migration-unavailable` (an access or stability failure). A refusal leaves
+both databases as they were, apart from a ledger that had already migrated
+when History's own step then failed. A swapped pair, or a database of a role
+this version does not know, is refused with reason `ledger-wrong-role` or
+`history-wrong-role` by classification. The CLI and the desktop classify cold
+before migrating, so there it is refused before any claim is taken;
+`migrate_database_pair` called directly takes both claims first and then
+returns that refusal without migrating. `ensure_database_pair` migrates only while the process has
+opened neither database; with a live role owner it refuses with the migration
+direction, because migration needs every connection closed.
 
 For each database that needs it, ledger first:
 
-1. **Exclusive access.** The caller holds the [maintenance claim](#maintenance-claim)
-   exclusively. Migration then proves through the files that nobody else is
-   using the database, whatever their version. First, opening the main file
-   with delete access must succeed, which fails while any other handle is open
-   without delete sharing: every SQLite connection, and the handles a desktop
-   pins at startup. Then one connection takes SQLite's exclusive locking mode
-   and keeps it until migration ends. SQLite refuses that lock while another
-   connection is open, and while it is held no other process can read or write.
-   This is the signal for processes released before the claim existed. A v0.1.0
-   desktop pins both files while it runs, and a v0.1.0 CLI run keeps its
-   connections open while it records.
-2. **Backup.** The SQLite backup API copies the database to a temporary file
-   beside it, which is checked (`integrity_check` and the source contract),
-   flushed and then published atomically as a dated backup. No backup, no
-   migration.
-3. **One transaction.** Old tables are renamed aside and their indexes and
-   triggers dropped; the shipped current schema is created by its own
-   statements; rows are copied with explicit columns, keeping every id; the old
-   tables are dropped; metadata is written. Because the objects are created by
-   the shipped statements, the result has exactly a fresh database's topology.
+1. **Exclusive access.** `migrate_database` takes the database's held
+   exclusive claim (`hold_maintenance_claims` yields both as
+   `MaintenanceClaims`) and refuses any other. It then proves through the
+   files that nobody else is using the database, whatever their version.
+   First, opening the main file with delete access (sharing read, write and
+   delete) must succeed, which fails while any other handle is open without
+   delete sharing: every SQLite connection, opened or idle, and the handle a
+   desktop pins (`WindowsPathLeaseNative`). The probe handle closes again,
+   because SQLite's own handle does not share delete. Then one connection
+   (busy timeout zero) sets `locking_mode=EXCLUSIVE` and runs
+   `BEGIN EXCLUSIVE; COMMIT` before any other access, and keeps the lock until
+   migration ends. SQLite refuses that lock while another connection holds a
+   read or write lock, and while it is held no other process can read or
+   write. Either refusal is `DatabaseInUse` with no change to any file.
+2. **Backup.** From the exclusive connection the SQLite backup API copies the
+   committed database, WAL content included, to `<main>.migration-<random>.tmp`
+   beside it. The copy is switched to rollback-journal mode so it stands alone,
+   checked (`integrity_check`, classification as the source version, and every
+   table's row count against the source), flushed with `fsync`, and renamed to
+   `<main>.backup-v<source version>-<UTC yyyymmddThhmmss + microseconds>Z`.
+   A Windows rename never replaces an existing file, so a name collision
+   refuses. No backup, no migration: any failure is `DatabaseBackupFailed`
+   (pair reason `backup-failed`) and nothing is changed. Its guidance depends
+   on the cause. A backup that fails verification (its `integrity_check`, its
+   classification or its row counts), or a copy that SQLite reports as corrupt
+   or not a database, means the source itself is damaged, because the backup
+   is a page-for-page copy: the message says the database failed SQLite's
+   integrity check and to keep the files and sidecars for inspection, with no
+   free-space, reset, archive or delete advice. A failure to write, flush or
+   publish says to check write access and free space (updating needs roughly
+   three times the database's size beside it). A temporary left by a crash is never read,
+   reused or removed, and is not a backup.
+3. **One transaction.** Foreign keys are off on this connection (they cannot
+   change inside a transaction), so renaming and dropping cascade nothing. Old
+   triggers and explicit indexes are dropped and every old table renamed to
+   `_migration_old_<name>`; the tables and indexes are created by the shipped
+   statements; rows are copied with explicit column lists, keeping every id
+   (History runs gain the ledger instance id); the old tables are dropped; the
+   shipped triggers are created; metadata is written. Triggers come after the
+   copy: the rows were admitted under identical triggers, and History's append
+   guards would refuse events of an already finalized run. Copying explicit
+   ids into `AUTOINCREMENT` tables sets `sqlite_sequence` to the highest. The
+   result has exactly a fresh database's topology.
 4. **Verification before commit.** `integrity_check`, `foreign_key_check`, the
-   exact topology comparison and per-table row counts all pass, or the
-   transaction rolls back.
+   full current reader contract (role, version, formats, instance id and the
+   exact topology), per-table row counts, and a stamp on every History run all
+   pass, or the transaction rolls back and `DatabaseMigrationFailed` names the
+   backup. A failure raised by COMMIT itself does not claim the database is
+   unchanged, since the commit may already be durable: the message says the
+   update could not be confirmed and that NamiSync checks the databases again
+   at the next start.
+5. **Close.** After COMMIT, closing checkpoints the WAL into the main file and
+   removes it. v0.1.0's stale `-shm` stays; the exclusive connection never used
+   it, and the next ordinary opener reinitializes it. The cold probe ignores
+   source SHM, so the next probe and the next ordinary open both succeed. A
+   refusal or rollback closes without that checkpoint, so the files stay as
+   found apart from an uncommitted WAL tail.
 
-A failure or interruption at any point leaves the old database: the transaction
-is all or nothing, and an uncommitted WAL tail is discarded at the next open.
-Migration is then refused with the reason, and the backup stays. There is no
-automatic restore, because nothing partial is ever published; restoring a
-backup is a maintenance command (M2-A4). Rotation of migration backups also
-waits for A4, so each migration leaves one backup per database.
+A failure or interruption at any point leaves the old database or, after
+COMMIT, the new one: the transaction is all or nothing, and an uncommitted WAL
+tail is discarded at the next open. Migration is then refused with the reason,
+and the backup stays. There is no automatic restore, because nothing partial
+is ever published; restoring a backup is a maintenance command (M2-A4).
+Rotation of migration backups also waits for A4, so each migration leaves one
+backup per database and each interrupted attempt may leave another.
+
+Cost: each database is copied in one transaction, so time and WAL growth are
+linear in its size, the WAL holds roughly a second copy until the closing
+checkpoint, and the backup needs a third database-sized file beside it. No
+size limit is enforced or measured; this is a diagnostic statement under
+[DEFENSE §7](DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
+
+The desktop announces a migration only in its log, as
+`startup.databases_migrated ledger=v4 history=v8` with roles and source
+versions and no paths, since GUI logging records no filenames or paths. The
+backups sit beside the databases under the name in step 2. An in-window
+notice would need a bridge addition and is not built. The CLI prints one line
+naming the databases that migrated and their backups.
+
+Limits:
+
+- A v0.1.0 history whose ledger is missing can no longer be read by the
+  `history` command and cannot be migrated: a one-present pair stays refused
+  until the missing-database policy lands. The older-database refusal says so.
+- Each attempt that fails after publishing its backup leaves another full
+  backup, and a rolled-back attempt leaves the WAL grown with a discarded
+  tail, until M2-A4 adds rotation and maintenance.
+- A v0.1.0 main file copied without its `-wal` migrates as the empty database
+  it is, because v0.1.0 keeps its committed rows in the `-wal`.
+- `history_runs.ledger_instance_id` is nullable, so the readers that arrive
+  with M2-A4 must handle NULL.
+- A process that opens a database between the delete-access probe and the
+  exclusive lock without reading is not refused; its first read is refused
+  while migration holds the lock.
+- The backup rename's directory entry is not forced to disk beyond the file
+  `fsync`. Optional `sqlite_stat*` tables are left in place and may hold
+  stale statistics for the rebuilt tables, which affects only query planning.
 
 A released binary cannot be taught about newer formats: v0.1.0 refuses a
 migrated database through its exact-contract check before writing anything, but
@@ -799,8 +931,8 @@ volume/location correspondence.
 ## Maintenance Claim
 
 Status: implemented by M2-A3 outcome 1 (2026-11-25) in
-`namisync/db/claims.py`; migration, its first maintenance consumer, lands with
-outcome 4. User decisions (2026-11-20, 2026-11-24).
+`namisync/db/claims.py`; migration (`namisync/db/migration.py`) is its first
+maintenance consumer. User decisions (2026-11-20, 2026-11-24).
 
 Maintenance (migration first; later restore, archive-and-reset, reclaiming file
 space, history pruning and purge) must not run while any run's records are

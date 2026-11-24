@@ -375,7 +375,7 @@ contract = initialize_database_pair(root / "ledger.db", root / "history.db")
 assert contract.state == "ready"
 with sqlite3.connect(root / "history.db") as connection:
     connection.execute(
-        "UPDATE schema_metadata SET value = ? WHERE key = 'contract_id'",
+        "UPDATE schema_metadata SET value = ? WHERE key = 'format.numeric'",
         ("mismatched-headed-test-contract",),
     )
     connection.commit()

@@ -9,6 +9,8 @@ def test_production_ledger_mutation_sql_is_owned_by_recorder_or_schema() -> None
         package / "db" / "recorder.py",
         package / "db" / "schema.py",
         package / "db" / "history.py",
+        # Migration is the only other write owner (DATABASE "Connection Rules").
+        package / "db" / "migration.py",
     }
     mutation_markers = (
         "INSERT INTO ",

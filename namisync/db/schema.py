@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
+import secrets
 import sqlite3
 from pathlib import Path
 from typing import Iterable
+
+from namisync.core.formats import FORMAT_VERSIONS
 
 from .connections import (
     DEFAULT_BUSY_TIMEOUT_MS,
@@ -14,14 +20,38 @@ from .connections import (
 )
 
 
-LEDGER_SCHEMA_VERSION = 4
-HISTORY_SCHEMA_VERSION = 8
-DATA_EPOCH = 8
-LEDGER_CONTRACT_ID = "m1-ledger-v4-event-v5-evidence-v2"
-HISTORY_CONTRACT_ID = "m1-history-v8-event-v5-recording-v1"
+LEDGER_SCHEMA_VERSION = 5
+HISTORY_SCHEMA_VERSION = 9
+# The core formats each current schema embeds, stored as ``format.<name>``
+# rows with their ``FORMAT_VERSIONS`` values. A core format change therefore
+# needs a new schema version and its migration (tests pin these sets).
+LEDGER_FORMATS = (
+    "event", "evidence", "identity", "numeric", "path-key", "preimage", "recording",
+)
+HISTORY_FORMATS = ("event", "numeric", "preimage", "recording")
+# The only supported older source is the pair NamiSync 0.1.0 released. Its
+# ``data_epoch`` row is never read.
+RELEASED_LEDGER_SCHEMA_VERSION = 4
+RELEASED_HISTORY_SCHEMA_VERSION = 8
+RELEASED_LEDGER_CONTRACT_ID = "m1-ledger-v4-event-v5-evidence-v2"
+RELEASED_HISTORY_CONTRACT_ID = "m1-history-v8-event-v5-recording-v1"
+# SHA-256 of the released complete ``sqlite_schema`` topology, as serialized
+# by ``_topology_digest``; tests check both against the v0.1.0 fixture.
+_RELEASED_LEDGER_TOPOLOGY_SHA256 = (
+    "99591e4cb8d60a68d2ce496d94bd9c69521ffa05df16efe1b3a7d72761f3b126"
+)
+_RELEASED_HISTORY_TOPOLOGY_SHA256 = (
+    "0b1410757609d54161fd06c05d221de903c1d37488f635288df82805cc9697c3"
+)
+_INSTANCE_ID = re.compile("[0-9a-f]{32}")
 MAX_HISTORY_PHASE_NAME_BYTES = 1_024
 MAX_HISTORY_ERROR_TYPE_BYTES = 1_024
 MAX_HISTORY_ERROR_MESSAGE_BYTES = 1_024
+_RESET_DIRECTION = (
+    "Close every NamiSync process, then archive or delete both database "
+    "main files and all of their -wal, -shm, and -journal sidecars "
+    "together before restarting."
+)
 
 
 class DatabaseAdmissionError(sqlite3.DatabaseError):
@@ -29,30 +59,43 @@ class DatabaseAdmissionError(sqlite3.DatabaseError):
 
 
 class SchemaResetRequired(DatabaseAdmissionError):
-    """An incompatible pre-release schema must be reset, never migrated."""
+    """An unsupported schema can only be archived and recreated, never migrated."""
 
 
-_LEDGER_SCHEMA = f"""
-BEGIN IMMEDIATE;
+class DatabaseMigrationRequired(DatabaseAdmissionError):
+    """A supported older database must be migrated before ordinary use."""
 
-CREATE TABLE IF NOT EXISTS schema_metadata (
+
+class DatabaseNewerVersion(DatabaseAdmissionError):
+    """A database written by a newer NamiSync, which this version never changes."""
+
+
+class DatabaseRoleMismatch(DatabaseAdmissionError):
+    """The path holds the other role (paths look swapped) or a role this version does not know."""
+
+
+def _statements(script: str) -> tuple[str, ...]:
+    """Split a schema script into complete statements, trigger bodies included."""
+
+    statements: list[str] = []
+    pending = ""
+    for line in script.splitlines(keepends=True):
+        pending += line
+        if sqlite3.complete_statement(pending):
+            statements.append(pending.strip().removesuffix(";").rstrip())
+            pending = ""
+    if pending.strip():
+        raise ValueError("schema script ends inside a statement")
+    return tuple(statements)
+
+
+_LEDGER_STATEMENTS = _statements("""
+CREATE TABLE schema_metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 ) STRICT;
 
-INSERT INTO schema_metadata(key, value)
-VALUES ('schema_version', '{LEDGER_SCHEMA_VERSION}')
-ON CONFLICT(key) DO NOTHING;
-
-INSERT INTO schema_metadata(key, value)
-VALUES ('contract_id', '{LEDGER_CONTRACT_ID}')
-ON CONFLICT(key) DO NOTHING;
-
-INSERT INTO schema_metadata(key, value)
-VALUES ('data_epoch', '{DATA_EPOCH}')
-ON CONFLICT(key) DO NOTHING;
-
-CREATE TABLE IF NOT EXISTS hosts (
+CREATE TABLE hosts (
     id INTEGER PRIMARY KEY,
     host_key TEXT NOT NULL UNIQUE,
     display_name TEXT NOT NULL,
@@ -60,7 +103,7 @@ CREATE TABLE IF NOT EXISTS hosts (
     last_seen_at TEXT NOT NULL
 ) STRICT;
 
-CREATE TABLE IF NOT EXISTS volumes (
+CREATE TABLE volumes (
     id INTEGER PRIMARY KEY,
     serial TEXT NOT NULL,
     fs_type TEXT NOT NULL,
@@ -71,10 +114,10 @@ CREATE TABLE IF NOT EXISTS volumes (
     UNIQUE(serial, fs_type)
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS volumes_serial_idx ON volumes(serial);
+CREATE INDEX volumes_serial_idx ON volumes(serial);
 
-CREATE TABLE IF NOT EXISTS locations (
-    id INTEGER PRIMARY KEY,
+CREATE TABLE locations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     volume_id INTEGER NOT NULL REFERENCES volumes(id),
     volume_relative_path TEXT NOT NULL,
     volume_relative_path_key TEXT NOT NULL,
@@ -84,8 +127,8 @@ CREATE TABLE IF NOT EXISTS locations (
     UNIQUE(volume_id, volume_relative_path_key)
 ) STRICT;
 
-CREATE TABLE IF NOT EXISTS mappings (
-    id INTEGER PRIMARY KEY,
+CREATE TABLE mappings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     source_location_id INTEGER NOT NULL REFERENCES locations(id),
     target_location_id INTEGER NOT NULL REFERENCES locations(id),
     created_at TEXT NOT NULL,
@@ -93,12 +136,12 @@ CREATE TABLE IF NOT EXISTS mappings (
     CHECK(source_location_id <> target_location_id)
 ) STRICT;
 
-CREATE UNIQUE INDEX IF NOT EXISTS mappings_active_pair_uq
+CREATE UNIQUE INDEX mappings_active_pair_uq
 ON mappings(source_location_id, target_location_id)
 WHERE deleted_at IS NULL;
 
-CREATE TABLE IF NOT EXISTS inventory (
-    id INTEGER PRIMARY KEY,
+CREATE TABLE inventory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     location_id INTEGER NOT NULL REFERENCES locations(id),
     rel_path TEXT NOT NULL,
     rel_path_key TEXT NOT NULL,
@@ -247,12 +290,12 @@ CREATE TABLE IF NOT EXISTS inventory (
     )
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS inventory_location_presence_idx
+CREATE INDEX inventory_location_presence_idx
 ON inventory(location_id, presence, rel_path_key);
-CREATE INDEX IF NOT EXISTS inventory_identity_idx
+CREATE INDEX inventory_identity_idx
 ON inventory(location_id, file_identity_volume_serial, file_identity_file_index);
 
-CREATE TABLE IF NOT EXISTS runs (
+CREATE TABLE runs (
     id INTEGER PRIMARY KEY,
     run_token TEXT NOT NULL UNIQUE,
     activity_kind TEXT NOT NULL,
@@ -270,7 +313,7 @@ CREATE TABLE IF NOT EXISTS runs (
     finish_payload_hash BLOB
 ) STRICT;
 
-CREATE TABLE IF NOT EXISTS operations (
+CREATE TABLE operations (
     id INTEGER PRIMARY KEY,
     run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
     op_token TEXT NOT NULL,
@@ -285,9 +328,9 @@ CREATE TABLE IF NOT EXISTS operations (
     UNIQUE(run_id, op_token)
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS operations_run_order_idx ON operations(run_id, id);
+CREATE INDEX operations_run_order_idx ON operations(run_id, id);
 
-CREATE TABLE IF NOT EXISTS mapping_correspondence (
+CREATE TABLE mapping_correspondence (
     mapping_id INTEGER NOT NULL REFERENCES mappings(id) ON DELETE CASCADE,
     source_inventory_id INTEGER NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
     target_inventory_id INTEGER NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
@@ -338,7 +381,7 @@ CREATE TABLE IF NOT EXISTS mapping_correspondence (
     UNIQUE(mapping_id, target_inventory_id)
 ) STRICT;
 
-CREATE TRIGGER IF NOT EXISTS mapping_correspondence_locations_insert
+CREATE TRIGGER mapping_correspondence_locations_insert
 BEFORE INSERT ON mapping_correspondence
 WHEN NOT EXISTS (
     SELECT 1
@@ -353,7 +396,7 @@ BEGIN
     SELECT RAISE(ABORT, 'correspondence location mismatch');
 END;
 
-CREATE TRIGGER IF NOT EXISTS mapping_correspondence_locations_update
+CREATE TRIGGER mapping_correspondence_locations_update
 BEFORE UPDATE ON mapping_correspondence
 WHEN NOT EXISTS (
     SELECT 1
@@ -368,7 +411,7 @@ BEGIN
     SELECT RAISE(ABORT, 'correspondence location mismatch');
 END;
 
-CREATE TABLE IF NOT EXISTS recording_commands (
+CREATE TABLE recording_commands (
     command_key TEXT PRIMARY KEY,
     command_kind TEXT NOT NULL,
     payload_hash BLOB NOT NULL,
@@ -376,7 +419,7 @@ CREATE TABLE IF NOT EXISTS recording_commands (
     recorded_at TEXT NOT NULL
 ) STRICT;
 
-CREATE TABLE IF NOT EXISTS annotations (
+CREATE TABLE annotations (
     id INTEGER PRIMARY KEY,
     entity_kind TEXT NOT NULL,
     entity_id TEXT NOT NULL,
@@ -386,37 +429,28 @@ CREATE TABLE IF NOT EXISTS annotations (
     updated_at TEXT NOT NULL,
     UNIQUE(entity_kind, entity_id, key)
 ) STRICT;
-
-COMMIT;
-"""
+""")
 
 
-_HISTORY_SCHEMA = f"""
-BEGIN IMMEDIATE;
-
-CREATE TABLE IF NOT EXISTS schema_metadata (
+_HISTORY_STATEMENTS = _statements(f"""
+CREATE TABLE schema_metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 ) STRICT;
 
-INSERT INTO schema_metadata(key, value)
-VALUES ('schema_version', '{HISTORY_SCHEMA_VERSION}')
-ON CONFLICT(key) DO NOTHING;
-
-INSERT INTO schema_metadata(key, value)
-VALUES ('contract_id', '{HISTORY_CONTRACT_ID}')
-ON CONFLICT(key) DO NOTHING;
-
-INSERT INTO schema_metadata(key, value)
-VALUES ('data_epoch', '{DATA_EPOCH}')
-ON CONFLICT(key) DO NOTHING;
-
-CREATE TABLE IF NOT EXISTS history_runs (
+CREATE TABLE history_runs (
     id INTEGER PRIMARY KEY,
     run_token TEXT NOT NULL UNIQUE,
     session_id TEXT NOT NULL,
     activity_kind TEXT NOT NULL,
     host_key TEXT NOT NULL,
+    ledger_instance_id TEXT CHECK(
+        ledger_instance_id IS NULL
+        OR (
+            length(ledger_instance_id) = 32
+            AND ledger_instance_id NOT GLOB '*[^0-9a-f]*'
+        )
+    ),
     subject_kind TEXT,
     subject_id TEXT,
     source_context TEXT,
@@ -582,17 +616,24 @@ CREATE TABLE IF NOT EXISTS history_runs (
     )
 ) STRICT;
 
-CREATE INDEX IF NOT EXISTS history_runs_started_idx
+CREATE INDEX history_runs_started_idx
 ON history_runs(COALESCE(started_at, created_at) DESC, id DESC);
 
-CREATE TRIGGER IF NOT EXISTS history_runs_finalized_update
+CREATE TRIGGER history_runs_finalized_update
 BEFORE UPDATE ON history_runs
 WHEN OLD.terminal_payload_hash IS NOT NULL
 BEGIN
     SELECT RAISE(ABORT, 'finalized history runs are immutable');
 END;
 
-CREATE TRIGGER IF NOT EXISTS history_runs_update_identity_conflict
+CREATE TRIGGER history_runs_ledger_instance_immutable
+BEFORE UPDATE OF ledger_instance_id ON history_runs
+WHEN NEW.ledger_instance_id IS NOT OLD.ledger_instance_id
+BEGIN
+    SELECT RAISE(ABORT, 'history run ledger instance is immutable');
+END;
+
+CREATE TRIGGER history_runs_update_identity_conflict
 BEFORE UPDATE OF id, run_token ON history_runs
 WHEN EXISTS (
     SELECT 1 FROM history_runs AS existing
@@ -603,13 +644,13 @@ BEGIN
     SELECT RAISE(ABORT, 'history runs cannot replace another run');
 END;
 
-CREATE TRIGGER IF NOT EXISTS history_runs_append_only_delete
+CREATE TRIGGER history_runs_append_only_delete
 BEFORE DELETE ON history_runs
 BEGIN
     SELECT RAISE(ABORT, 'history runs cannot be deleted');
 END;
 
-CREATE TRIGGER IF NOT EXISTS history_runs_append_only_replace
+CREATE TRIGGER history_runs_append_only_replace
 BEFORE INSERT ON history_runs
 WHEN EXISTS (
     SELECT 1 FROM history_runs AS existing
@@ -619,7 +660,7 @@ BEGIN
     SELECT RAISE(ABORT, 'history runs cannot be replaced');
 END;
 
-CREATE TABLE IF NOT EXISTS history_events (
+CREATE TABLE history_events (
     run_id INTEGER NOT NULL REFERENCES history_runs(id) ON DELETE CASCADE,
     event_seq INTEGER NOT NULL
         CHECK(event_seq BETWEEN 1 AND 9007199254740991),
@@ -823,11 +864,11 @@ CREATE TABLE IF NOT EXISTS history_events (
     )
 ) STRICT, WITHOUT ROWID;
 
-CREATE UNIQUE INDEX IF NOT EXISTS history_events_run_canonical_item_uq
+CREATE UNIQUE INDEX history_events_run_canonical_item_uq
 ON history_events(run_id, item_type, item_id)
 WHERE event_disposition = 'recorded' AND item_order IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS history_events_run_identity_hash_idx
+CREATE UNIQUE INDEX history_events_run_identity_hash_idx
 ON history_events(run_id, item_identity_hash)
 WHERE (
       event_disposition = 'recorded'
@@ -835,7 +876,7 @@ WHERE (
   )
   AND item_identity_hash IS NOT NULL;
 
-CREATE TRIGGER IF NOT EXISTS history_events_append_insert
+CREATE TRIGGER history_events_append_insert
 BEFORE INSERT ON history_events
 WHEN EXISTS (
     SELECT 1 FROM history_runs AS run
@@ -910,7 +951,7 @@ BEGIN
     SELECT RAISE(ABORT, 'history event insert is outside the writable tail');
 END;
 
-CREATE TRIGGER IF NOT EXISTS history_events_duplicate_link_insert
+CREATE TRIGGER history_events_duplicate_link_insert
 BEFORE INSERT ON history_events
 WHEN (
         NEW.event_disposition = 'duplicate'
@@ -947,27 +988,27 @@ BEGIN
     SELECT RAISE(ABORT, 'duplicate receipt link mismatch');
 END;
 
-CREATE TRIGGER IF NOT EXISTS history_events_append_only_update
+CREATE TRIGGER history_events_append_only_update
 BEFORE UPDATE ON history_events
 BEGIN
     SELECT RAISE(ABORT, 'history events are append-only');
 END;
 
-CREATE TRIGGER IF NOT EXISTS history_events_append_only_delete
+CREATE TRIGGER history_events_append_only_delete
 BEFORE DELETE ON history_events
 BEGIN
     SELECT RAISE(ABORT, 'history events are append-only');
 END;
 
-CREATE INDEX IF NOT EXISTS history_events_run_item_order_idx
+CREATE INDEX history_events_run_item_order_idx
 ON history_events(run_id, item_order)
 WHERE item_order IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS history_events_run_item_aggregate_idx
+CREATE INDEX history_events_run_item_aggregate_idx
 ON history_events(run_id, item_type, phase, kind, result, reason)
 WHERE item_order IS NOT NULL;
 
-CREATE TABLE IF NOT EXISTS history_phases (
+CREATE TABLE history_phases (
     run_id INTEGER NOT NULL REFERENCES history_runs(id) ON DELETE CASCADE,
     phase_order INTEGER NOT NULL CHECK(phase_order >= 0 AND phase_order < 256),
     phase TEXT NOT NULL CHECK(
@@ -994,9 +1035,7 @@ CREATE TABLE IF NOT EXISTS history_phases (
     CHECK(bytes_done >= 0),
     CHECK(bytes_total IS NULL OR bytes_total >= bytes_done)
 ) STRICT;
-
-COMMIT;
-"""
+""")
 
 
 _SchemaObject = tuple[str, str, str, str | None]
@@ -1019,6 +1058,72 @@ def _schema_topology(connection: sqlite3.Connection) -> list[_SchemaObject]:
     ]
 
 
+def _role(history: bool) -> str:
+    return "history" if history else "ledger"
+
+
+def _schema_statements(history: bool) -> tuple[str, ...]:
+    return _HISTORY_STATEMENTS if history else _LEDGER_STATEMENTS
+
+
+def new_instance_id() -> str:
+    """A random ledger instance id in its canonical 32 lowercase hex form."""
+
+    return secrets.token_hex(16)
+
+
+def _metadata_rows(history: bool, instance_id: str | None) -> tuple[tuple[str, str], ...]:
+    formats = HISTORY_FORMATS if history else LEDGER_FORMATS
+    rows = [
+        ("role", _role(history)),
+        ("schema_version", str(HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION)),
+        *((f"format.{name}", str(FORMAT_VERSIONS[name])) for name in formats),
+    ]
+    if not history:
+        if instance_id is None or _INSTANCE_ID.fullmatch(instance_id) is None:
+            raise ValueError("a ledger requires a canonical instance id")
+        rows.append(("instance_id", instance_id))
+    elif instance_id is not None:
+        raise ValueError("only a ledger carries an instance id")
+    return tuple(rows)
+
+
+def _schema_script(history: bool) -> str:
+    """One creation transaction: the shipped statements, then the metadata rows.
+
+    A ledger receives a fresh random instance id each time this is rendered.
+    """
+
+    inserts = tuple(
+        f"INSERT INTO schema_metadata(key, value) VALUES ('{key}', '{value}')"
+        for key, value in _metadata_rows(history, None if history else new_instance_id())
+    )
+    return "BEGIN IMMEDIATE;\n" + ";\n\n".join(
+        (*_schema_statements(history), *inserts)
+    ) + ";\nCOMMIT;\n"
+
+
+def _without_statistics(actual: list[_SchemaObject]) -> list[_SchemaObject]:
+    for statistic in _SQLITE_STATISTICS_TOPOLOGY:
+        if statistic in actual:
+            # Each exact SQLite-owned table is optional once, not a wildcard
+            # exemption for duplicate, poisoned, or additional catalog rows.
+            actual.remove(statistic)
+    return actual
+
+
+def _topology_digest(topology: list[_SchemaObject]) -> str:
+    return hashlib.sha256(
+        json.dumps(topology, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _refuse_topology(history: bool) -> None:
+    raise SchemaResetRequired(
+        f"unsupported {_role(history)} schema topology. {_RESET_DIRECTION}"
+    )
+
+
 def _validate_schema_topology(
     connection: sqlite3.Connection, *, history: bool,
 ) -> None:
@@ -1026,29 +1131,140 @@ def _validate_schema_topology(
 
     reference = sqlite3.connect(":memory:")
     try:
-        reference.executescript(_HISTORY_SCHEMA if history else _LEDGER_SCHEMA)
+        reference.executescript(_schema_script(history))
         expected = _schema_topology(reference)
     finally:
         reference.close()
-    actual = _schema_topology(connection)
-    for statistic in _SQLITE_STATISTICS_TOPOLOGY:
-        if statistic in actual:
-            # Each exact SQLite-owned table is optional once, not a wildcard
-            # exemption for duplicate, poisoned, or additional catalog rows.
-            actual.remove(statistic)
-    if actual != expected:
-        database = "history" if history else "ledger"
-        raise SchemaResetRequired(
-            f"unsupported {database} schema topology. "
-            "Close every NamiSync process, then archive or delete both database "
-            "main files and all of their -wal, -shm, and -journal sidecars "
-            "together before restarting."
+    if _without_statistics(_schema_topology(connection)) != expected:
+        _refuse_topology(history)
+
+
+def _validate_released_topology(
+    connection: sqlite3.Connection, *, history: bool,
+) -> None:
+    expected = (
+        _RELEASED_HISTORY_TOPOLOGY_SHA256 if history else _RELEASED_LEDGER_TOPOLOGY_SHA256
+    )
+    if _topology_digest(_without_statistics(_schema_topology(connection))) != expected:
+        _refuse_topology(history)
+
+
+def _metadata(connection: sqlite3.Connection) -> dict[str, str]:
+    return {
+        str(key): str(value)
+        for key, value in connection.execute("SELECT key, value FROM schema_metadata")
+    }
+
+
+def _format_version(value: str) -> int | None:
+    return int(value) if re.fullmatch("[1-9][0-9]{0,8}", value) else None
+
+
+def _raise_newer(history: bool, detail: str) -> None:
+    raise DatabaseNewerVersion(
+        f"The {_role(history)} database was written by a newer NamiSync ({detail}). "
+        "Open it with that NamiSync version; this version cannot use it and "
+        "leaves it unchanged."
+    )
+
+
+def _refuse_metadata(history: bool, detail: str) -> None:
+    raise SchemaResetRequired(
+        f"unsupported {_role(history)} schema metadata ({detail}). {_RESET_DIRECTION}"
+    )
+
+
+def classify_database(connection: sqlite3.Connection, *, history: bool) -> int:
+    """Return the schema version of a current or supported older database.
+
+    Raises ``DatabaseNewerVersion`` for a database of this role written by a
+    newer NamiSync, ``DatabaseRoleMismatch`` for a database of the other role
+    (the paths look swapped) or of a role this version does not know, and
+    ``SchemaResetRequired`` for anything else this version cannot use. Reads
+    the catalog and metadata only.
+    """
+
+    version = _existing_schema_version(connection, history=history)
+    if version is None:
+        _raise_reset_required("empty", history=history)
+    metadata = _metadata(connection)
+    role = metadata.get("role")
+    other_contract = RELEASED_LEDGER_CONTRACT_ID if history else RELEASED_HISTORY_CONTRACT_ID
+    if role == _role(not history) or (
+        role is None and metadata.get("contract_id") == other_contract
+    ):
+        raise DatabaseRoleMismatch(
+            f"The {_role(history)} database path holds a {_role(not history)} "
+            "database: the ledger and history database paths look swapped. Check "
+            "the two database paths (for the command line, --database and "
+            "--history-database), then start again. Nothing was changed."
         )
+    if role is not None and role != _role(history):
+        # Only a newer NamiSync could write a role this version does not know.
+        raise DatabaseRoleMismatch(
+            f"The file at the {_role(history)} database path is not a NamiSync "
+            f"{_role(history)} database this version knows (its role is "
+            f"{role!r}). Check the database path (for the command line, "
+            "--database and --history-database), then start again. Nothing was "
+            "changed."
+        )
+    current = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
+    if version > current:
+        # Only a database that names this role can be from a newer NamiSync.
+        if role is None:
+            _raise_reset_required(version, history=history)
+        _raise_newer(history, f"schema version {version}")
+    if version == current:
+        if role is None:
+            _refuse_metadata(history, "role")
+        _require_current_metadata(metadata, history=history)
+        _validate_schema_topology(connection, history=history)
+        return version
+    released = RELEASED_HISTORY_SCHEMA_VERSION if history else RELEASED_LEDGER_SCHEMA_VERSION
+    if version != released or role is not None:
+        _raise_reset_required(version, history=history)
+    contract = RELEASED_HISTORY_CONTRACT_ID if history else RELEASED_LEDGER_CONTRACT_ID
+    if metadata.get("contract_id") != contract:
+        _raise_reset_required(
+            f"{version} contract {metadata.get('contract_id', 'missing')}", history=history,
+        )
+    _validate_released_topology(connection, history=history)
+    return version
+
+
+def _require_current_metadata(metadata: dict[str, str], *, history: bool) -> None:
+    for key, value in metadata.items():
+        if key.startswith("format."):
+            stored = _format_version(value)
+            known = FORMAT_VERSIONS.get(key.removeprefix("format."))
+            if stored is not None and known is not None and stored > known:
+                _raise_newer(history, f"{key} {stored}")
+    instance_id = metadata.get("instance_id")
+    if not history and (instance_id is None or _INSTANCE_ID.fullmatch(instance_id) is None):
+        _refuse_metadata(history, "instance id")
+    expected = dict(_metadata_rows(history, None if history else instance_id))
+    if metadata != expected:
+        differing = sorted(
+            key for key in metadata.keys() | expected.keys()
+            if metadata.get(key) != expected.get(key)
+        )
+        _refuse_metadata(history, ", ".join(differing))
+
+
+def ledger_instance_id(connection: sqlite3.Connection) -> str:
+    """Read the canonical instance id of an admitted current ledger."""
+
+    row = connection.execute(
+        "SELECT value FROM schema_metadata WHERE key = 'instance_id'"
+    ).fetchone()
+    value = None if row is None else row[0]
+    if type(value) is not str or _INSTANCE_ID.fullmatch(value) is None:
+        _refuse_metadata(False, "instance id")
+    return value
 
 
 def _initialize(
     path: str | Path,
-    schema: str,
     *,
     history: bool,
     busy_timeout_ms: int,
@@ -1063,11 +1279,11 @@ def _initialize(
     if database_artifacts_present(resolved):
         require_database_file_contract(resolved, history=history)
         return resolved
-    return _create_schema(resolved, schema, history=history, busy_timeout_ms=busy_timeout_ms)
+    return _create_schema(resolved, history=history, busy_timeout_ms=busy_timeout_ms)
 
 
 def _create_schema(
-    resolved: Path, schema: str, *, history: bool, busy_timeout_ms: int,
+    resolved: Path, *, history: bool, busy_timeout_ms: int,
 ) -> Path:
     # Deferred import: claim refusals extend this module's admission error.
     from .claims import acquire_database_claim
@@ -1081,7 +1297,7 @@ def _create_schema(
             version = _existing_schema_version(connection, history=history)
             if version is not None:
                 _raise_reset_required("not-empty", history=history)
-            connection.executescript(schema)
+            connection.executescript(_schema_script(history))
             _validate_reader_contract(connection, history=history)
         finally:
             connection.close()
@@ -1114,62 +1330,27 @@ def _existing_schema_version(
 
 
 def _raise_reset_required(version: object, *, history: bool) -> None:
-    database = "history" if history else "ledger"
     raise SchemaResetRequired(
-        f"unsupported {database} schema version {version}; "
-        "NamiSync M1 requires ledger v4 and history v8 at data epoch 8. "
-        "Close every NamiSync process, then archive or delete both database "
-        "main files and all of their -wal, -shm, and -journal sidecars "
-        "together before restarting."
+        f"unsupported {_role(history)} schema version {version}; this NamiSync "
+        f"uses ledger v{LEDGER_SCHEMA_VERSION} and history v{HISTORY_SCHEMA_VERSION} "
+        f"and updates the ledger v{RELEASED_LEDGER_SCHEMA_VERSION} and history "
+        f"v{RELEASED_HISTORY_SCHEMA_VERSION} of NamiSync 0.1.0. {_RESET_DIRECTION}"
     )
-
-
-def _require_contract_id(
-    connection: sqlite3.Connection, *, history: bool
-) -> None:
-    expected = HISTORY_CONTRACT_ID if history else LEDGER_CONTRACT_ID
-    row = connection.execute(
-        "SELECT value FROM schema_metadata WHERE key = 'contract_id'"
-    ).fetchone()
-    actual = None if row is None else str(row[0])
-    if actual != expected:
-        database = "history" if history else "ledger"
-        value = "missing" if actual is None else actual
-        raise SchemaResetRequired(
-            f"unsupported {database} schema contract {value}; "
-            "NamiSync M1 requires ledger v4 and history v8 at data epoch 8. "
-            "Close every NamiSync process, then archive or delete both database "
-            "main files and all of their -wal, -shm, and -journal sidecars "
-            "together before restarting."
-        )
-    epoch_row = connection.execute(
-        "SELECT value FROM schema_metadata WHERE key = 'data_epoch'"
-    ).fetchone()
-    epoch = None if epoch_row is None else str(epoch_row[0])
-    if epoch != str(DATA_EPOCH):
-        database = "history" if history else "ledger"
-        value = "missing" if epoch is None else epoch
-        raise SchemaResetRequired(
-            f"unsupported {database} data epoch {value}; "
-            "NamiSync M1 requires ledger v4 and history v8 at data epoch 8. "
-            "Close every NamiSync process, then archive or delete both database "
-            "main files and all of their -wal, -shm, and -journal sidecars "
-            "together before restarting."
-        )
 
 
 def _validate_reader_contract(
     connection: sqlite3.Connection, *, history: bool
 ) -> None:
-    version = _existing_schema_version(connection, history=history)
-    expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
-    if version != expected:
-        _raise_reset_required(
-            "empty" if version is None else version,
-            history=history,
+    version = classify_database(connection, history=history)
+    if version != (HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION):
+        raise DatabaseMigrationRequired(
+            f"The {_role(history)} database was written by NamiSync 0.1.0 and "
+            "must be updated before use. Start NamiSync, or run a sync or "
+            f"inventory command, once to update it together with its "
+            f"{_role(not history)} database; a backup is kept beside each. A "
+            f"{_role(history)} whose {_role(not history)} database is missing "
+            "cannot be updated by this version."
         )
-    _require_contract_id(connection, history=history)
-    _validate_schema_topology(connection, history=history)
 
 
 def validate_ledger_reader_contract(connection: sqlite3.Connection) -> None:
@@ -1188,7 +1369,7 @@ def _initialize_reserved_ledger(path: Path) -> Path:
     """Create only under the pair coordinator's existing empty reservations."""
 
     return _create_schema(
-        path, _LEDGER_SCHEMA, history=False, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS,
+        path, history=False, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS,
     )
 
 
@@ -1196,7 +1377,7 @@ def _initialize_reserved_history(path: Path) -> Path:
     """Create only under the pair coordinator's existing empty reservations."""
 
     return _create_schema(
-        path, _HISTORY_SCHEMA, history=True, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS,
+        path, history=True, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS,
     )
 
 
@@ -1208,7 +1389,6 @@ def initialize_ledger(
 ) -> Path:
     return _initialize(
         path,
-        _LEDGER_SCHEMA,
         history=False,
         busy_timeout_ms=busy_timeout_ms,
         managed_roots=managed_roots,
@@ -1223,7 +1403,6 @@ def initialize_history(
 ) -> Path:
     return _initialize(
         path,
-        _HISTORY_SCHEMA,
         history=True,
         busy_timeout_ms=busy_timeout_ms,
         managed_roots=managed_roots,

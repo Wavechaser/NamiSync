@@ -1,16 +1,17 @@
 # History Module
 
-Status: history schema v8 records exact core-event-v5 reliable receipts in
+Status: history schema v9 records exact core-event-v5 reliable receipts in
 bounded, incrementally durable windows and exposes bounded summary, item-page,
 and event-page reads. Retention, export, durable task custody, and execution
 resume remain unrealized.
 
-## Active Schema-V8 Persistence Boundary
+## Active Schema-V9 Persistence Boundary
 
-Status: active beside ledger v4. `DATABASE.md` owns the pair metadata, refusal
-boundary, and reset instructions; there is no in-place migration.
+Status: active beside ledger v5. `DATABASE.md` owns the pair metadata,
+classification, refusal and reset guidance, and the migration of v0.1.0's
+history v8 ([Schema Evolution](DATABASE.md#schema-evolution)).
 
-History v8 accepts only the coordinated exact core-event-v5 receipts, including
+History (since v8) accepts only the coordinated exact core-event-v5 receipts, including
 duplicate and bounded rejection receipts; it has no mixed-version page or
 compatibility decoder. The observer stores the canonical envelope and matching
 typed projection from the same admitted snapshot. At admission it projects an
@@ -35,7 +36,7 @@ group. Writer and SQL validation reject partial or mismatched groups before
 publication; the group remains independent of audit and participates in
 authentication, repeat equality, reconstruction, bounded summary readback, and
 CLI rendering. Presentation-only omission state never enters history.
-Current producers emit 150,000 for the row axis. Event-v5, history-v8 and
+Current producers emit 150,000 for the row axis. Event-v5, history (since v8) and
 browser readers also accept the previous exact value of 120,000 and preserve
 which value the producer supplied. Other row limits are invalid.
 
@@ -68,22 +69,26 @@ uses execute as the top-level byte domain. History records what NamiSync
 attempted and reported; reliable item receipts and the independent filesystem
 ledger, not this aggregate byte pair, own settlement and publication truth.
 
-## Schema V8 And Reset Boundary
+## Schema V9 And Its Admission
 
-The current exact marker is
-`contract_id=m1-history-v8-event-v5-recording-v1` with
-`HISTORY_SCHEMA_VERSION = 8` and `data_epoch=8`. The new row-limit constraint
-advances the history schema and shared epoch together.
-NamiSync refuses history v1-v7 and a v8 database with a missing or mismatched
-marker through a read-only connection. Refusal
-must not alter the database or its WAL, SHM, or journal sidecars. This remains
-a pre-release reset-only boundary: close every NamiSync process and archive the
-ledger and history databases together with all SQLite sidecars before starting
-fresh. Startup never deletes either file and
-there is no migration from an older event/evidence epoch.
+`HISTORY_SCHEMA_VERSION = 9`, with `role`, `schema_version` and the
+`format.event`, `format.numeric`, `format.preimage` (operation item ids are
+deterministic operation ids) and `format.recording` rows. Schema v9 adds
+`history_runs.ledger_instance_id` (below) and changes nothing else. v0.1.0's
+history v8 (contract `m1-history-v8-event-v5-recording-v1`) migrates to v9,
+every row and hash kept; read-only reads refuse it until then with direction
+to start NamiSync once. NamiSync refuses history v1-v7, a v8 database with
+another contract id, and a v9 database with missing or mismatched metadata,
+through a read-only connection and with the reset direction; a newer history
+is refused with direction to use the NamiSync that wrote it, and a ledger at
+the history path as swapped paths. A v0.1.0 history whose ledger is missing
+can be neither read nor migrated by this version. Refusal must not
+alter the database or its WAL, SHM, or journal sidecars. `DATABASE.md` owns
+the classification and the migration.
 
 `history_runs` is created provisionally by the first committed window. It holds
-immutable context, lifecycle and phase, the committed sequence and item
+immutable context, the ledger instance the run records against, lifecycle and
+phase, the committed sequence and item
 watermarks, rolling outcome counts, a context hash, the rolling event-chain
 hash, an authenticated prefix-projection hash, and nullable terminal axes.
 The prefix hash binds lifecycle timestamps/state/phase, both watermarks, and
@@ -94,6 +99,13 @@ prefix cannot impersonate a finalized run. A finalized run is immutable, and
 committed run rows cannot be deleted or replaced.
 `started_at` records an actual start only: a finalized queued cancellation with
 `disposition=unrun` keeps it null and validates its end against `created_at`.
+`ledger_instance_id` is the ledger's `instance_id` (32 lowercase hexadecimal
+digits) that the runtime supplies through `HistoryContext`; migration stamps
+every v0.1.0 run with the instance of the ledger it migrates beside. It is
+outside the context hash, so no stored hash changes meaning, and a trigger
+makes it write-once. It is nullable only for direct `HistoryStore` writers
+without a ledger (tests, measurement tools); no read rule uses it before
+restore lineage (M2-A4).
 
 `history_events` is the append-only reliable-event receipt journal. Its primary
 key is `(run_id, event_seq)`. Every row retains timestamp, schema/body type,
@@ -313,11 +325,11 @@ hash-only rejection receipt.
 
 Every current `HistoryEventView.schema_version` is exactly 5. Recorded and
 duplicate rows authenticate and decode the exact canonical envelope; rejected
-receipts instead expose `body=None`. The coordinated reset makes a mixed-version
-page unrepresentable: old, mixed, markerless, or incomplete database pairs
-refuse before mutating commands. The payload hash remains the identity of the
+receipts instead expose `body=None`. A mixed-version page is unrepresentable:
+history v8 and v9 both hold only event-v5 rows, and unsupported, markerless or
+incomplete database pairs refuse before mutating commands. The payload hash remains the identity of the
 retained envelope. Core source contains only the exact v5 decoder; no
-history-v8 row or repository route can select an older event decoder.
+history row or repository route can select an older event decoder.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including

@@ -151,6 +151,9 @@ class HistoryContext:
     subject_id: str | None = None
     source_context: str | None = None
     target_context: str | None = None
+    # The ledger instance the run records against. Stored beside the run,
+    # outside its context hash; the runtime always supplies it.
+    ledger_instance_id: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.run_token, str) or not isinstance(
@@ -159,6 +162,12 @@ class HistoryContext:
             raise TypeError("history run token and host key must be strings")
         if not self.run_token or not self.host_key:
             raise ValueError("history run token and host key are required")
+        if self.ledger_instance_id is not None and (
+            type(self.ledger_instance_id) is not str
+            or len(self.ledger_instance_id) != 32
+            or self.ledger_instance_id.strip("0123456789abcdef")
+        ):
+            raise ValueError("history ledger instance id must be 32 lowercase hex digits")
         for field_name in (
             "activity_kind",
             "subject_kind",
@@ -1311,17 +1320,19 @@ class HistoryObserver:
             connection.execute(
                 """INSERT INTO history_runs(
                        run_token, session_id, activity_kind, host_key,
+                       ledger_instance_id,
                        subject_kind, subject_id, source_context, target_context,
                        created_at, started_at, current_state, current_phase,
                        last_committed_seq, item_count, last_committed_at,
                        context_hash, event_chain_hash, prefix_projection_hash
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, NULL,
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 0, 0, NULL,
                              ?, ?, ?) RETURNING id""",
                 (
                     context.run_token,
                     str(self._record.session_id),
                     context.activity_kind or self._record.kind,
                     context.host_key,
+                    context.ledger_instance_id,
                     context.subject_kind,
                     context.subject_id,
                     context.source_context,

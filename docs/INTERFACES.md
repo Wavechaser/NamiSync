@@ -312,6 +312,7 @@ The current public service surface includes:
 NamiSyncService(ledger_path, history_path, *, settings_path=None)
 validate_database_contracts() -> DatabaseContractView
 initialize_database_contracts() -> DatabaseContractView
+migrate_database_contracts() -> tuple[DatabaseContractView, tuple[tuple[str, int, str], ...]]
 start_plan(source, target, *, deletion_policy=None, command_id=None)
     -> PlanSession
 start_task_plan(source, target, *, deletion_policy, command_id,
@@ -439,9 +440,13 @@ directions are reserved for confirmed incompatibility on stable evidence.
 Observed cold-file drift receives bounded validation retries and then retry
 guidance without reset advice. Its validation method is strictly read-only and
 classifies the ledger/history mains plus WAL/SHM/journal sidecars as fresh,
-ready, or refused. Initialization is a separate call and never resets an
-existing file. Sync and location CLI compositions validate before their first
-admission; fresh sync review remains database-free until execution commitment.
+ready, migration-required, or refused. Initialization is a separate call and
+never resets an existing file. Migration is another separate call, made before
+the process opens either database: it returns the resulting contract and, to
+in-process callers only, the role, source schema version and backup path of each database it migrated (no bridge
+shape carries them). Sync and location CLI compositions validate, and migrate
+a NamiSync 0.1.0 pair, before their first admission; fresh sync review remains
+database-free until execution commitment.
 Execution, inventory, integrity, and direct inventory-visibility mutations
 revalidate and ensure the pair before any history observer can open. The
 standalone read-only history composition intentionally does not require or
@@ -1028,7 +1033,7 @@ One immutable `AppPaths` resolves all GUI artifacts. Only the frozen (PyInstalle
 
 GUI logging is standard-library-only and configured before pywebview import. It eagerly opens `logs/namisync.log` with an UTF-8 `RotatingFileHandler`, 5 MiB maximum, five backups, and `backslashreplace`. The one shared handler serves the non-propagating `namisync` and `pywebview` loggers at INFO and neither configures nor mutates the root logger. It is idempotent, installs one wrapper each for `sys.excepthook` and `threading.excepthook`, and uses UTC millisecond records with level, PID, thread, logger, and message. It records startup/runtime version facts and typed stable diagnostics without formatting raw bridge bodies, returned domain objects, settings, filenames, or paths. Tracebacks and external errors can still contain paths, so logs require review before sharing. Log failure never changes operational, ledger, history, or shutdown truth; normal finalization logs then calls `logging.shutdown()`.
 
-The host acquires fixed instance identity before logging or webview import, prepares the renderer before service/window composition, validates or initializes the database pair before command admission, binds its loopback origin once after renderer-checked initialization, and snapshots the bridge mapping before exposing the page. Startup refusal performs only the applicable owner-bound teardown and retains the initiating diagnosis; every post-logging failure records typed `startup.failed` before final cleanup.
+The host acquires fixed instance identity before logging or webview import, prepares the renderer before service/window composition, validates the database pair and then initializes a fresh one or migrates a NamiSync 0.1.0 one before pinning both database files and admitting commands. The desktop announces a migration only in its log, as `startup.databases_migrated` with the migrated roles and their source versions and no paths, because GUI logging records no filenames or paths; the backups sit beside the databases under the name DATABASE documents, and an in-window notice would need a bridge addition that is not built. It then binds its loopback origin once after renderer-checked initialization, and snapshots the bridge mapping before exposing the page. Startup refusal performs only the applicable owner-bound teardown and retains the initiating diagnosis; every post-logging failure records typed `startup.failed` before final cleanup.
 
 The initial loaded document has a fixed five-second readiness deadline. The packaged readiness receiver starts before appearance/shell, acknowledges its current generation through dispatch, waits for a host challenge, and echoes the identical nonce. Commands and retained drains remain unavailable until the truthful acknowledgement. Transport uncertainty permits one identical-payload retry. Appearance may degrade independently of readiness and command admission.
 

@@ -5,8 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+import sqlite3
 import stat
 
+from namisync.db.claims import DatabaseClaimRefused, hold_maintenance_claims
 from namisync.db.contracts import (
     DATABASE_UNAVAILABLE_DIRECTION,
     DatabaseBusyError,
@@ -15,8 +17,18 @@ from namisync.db.contracts import (
     probe_database_file_contract,
     retry_database_validation,
 )
+from namisync.db.migration import (
+    DatabaseBackupFailed,
+    DatabaseMigration,
+    DatabaseMigrationFailed,
+    migrate_database,
+    require_no_open_handles,
+)
 from namisync.db.schema import (
     DatabaseAdmissionError,
+    DatabaseMigrationRequired,
+    DatabaseNewerVersion,
+    DatabaseRoleMismatch,
     SchemaResetRequired,
     _initialize_reserved_history,
     _initialize_reserved_ledger,
@@ -33,6 +45,11 @@ DATABASE_RESET_DIRECTION = (
     "files and all of their -wal, -shm, and -journal sidecars together before "
     "restarting NamiSync."
 )
+DATABASE_MIGRATION_DIRECTION = (
+    "The database pair was written by NamiSync 0.1.0 and must be updated "
+    "before use. Start NamiSync, or run a sync or inventory command, once to "
+    "update it; a backup of each database is kept beside it."
+)
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 _ARTIFACT_NATIVE: ArtifactNative = WindowsArtifactNative()
 
@@ -40,6 +57,7 @@ _ARTIFACT_NATIVE: ArtifactNative = WindowsArtifactNative()
 class DatabasePairState(StrEnum):
     FRESH = "fresh"
     READY = "ready"
+    MIGRATION_REQUIRED = "migration-required"
     REFUSED = "refused"
 
 
@@ -51,15 +69,38 @@ class DatabasePairContract:
     guidance: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class MigratedDatabase:
+    """One database this call migrated: its role, source version and backup."""
+
+    role: str
+    source_version: int
+    backup: Path
+
+
+@dataclass(frozen=True, slots=True)
+class DatabasePairMigration:
+    """A pair migration's resulting contract and the databases it migrated."""
+
+    contract: DatabasePairContract
+    migrated: tuple[MigratedDatabase, ...] = ()
+
+    @property
+    def backups(self) -> tuple[Path, ...]:
+        return tuple(database.backup for database in self.migrated)
+
+
 class DatabasePairInitializationError(RuntimeError):
     """A fresh pair could not be published and owned artifacts were retracted."""
 
 
 class DatabasePairRefusedError(RuntimeError):
-    """A mutating admission encountered a refused database pair."""
+    """A mutating admission encountered a refused or not yet migrated pair."""
 
     def __init__(self, contract: DatabasePairContract) -> None:
-        if contract.state is not DatabasePairState.REFUSED:
+        if contract.state not in (
+            DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED,
+        ):
             raise ValueError("database refusal requires a refused pair contract")
         super().__init__(
             f"database pair refused ({contract.reason}). "
@@ -120,18 +161,34 @@ def _validate_database_pair_once(
     if not ledger.is_file() or not history.is_file():
         return _refused("inconsistent-pair")
 
-    try:
-        ledger_evidence = _validate_role(ledger, history=False, database=ledger_database)
-    except SchemaResetRequired:
-        return _refused("ledger-contract", reset=True)
-    try:
-        history_evidence = _validate_role(history, history=True, database=history_database)
-    except SchemaResetRequired:
-        return _refused("history-contract", reset=True)
-    if ledger_evidence is not None:
-        ledger_evidence.require_unchanged()
-    if history_evidence is not None:
-        history_evidence.require_unchanged()
+    evidence: list[DatabaseFileEvidence] = []
+    older: list[str] = []
+    for role, path, is_history, database in (
+        ("ledger", ledger, False, ledger_database),
+        ("history", history, True, history_database),
+    ):
+        try:
+            role_evidence = _validate_role(path, history=is_history, database=database)
+        except SchemaResetRequired:
+            return _refused(f"{role}-contract", reset=True)
+        except DatabaseNewerVersion as error:
+            return _refused(f"{role}-newer", guidance=str(error))
+        except DatabaseRoleMismatch as error:
+            return _refused(f"{role}-wrong-role", guidance=str(error))
+        except DatabaseMigrationRequired:
+            older.append(role)
+            continue
+        if role_evidence is not None:
+            evidence.append(role_evidence)
+    for role_evidence in evidence:
+        role_evidence.require_unchanged()
+    if older:
+        return DatabasePairContract(
+            DatabasePairState.MIGRATION_REQUIRED,
+            f"{'pair' if len(older) == 2 else older[0]}-older",
+            None,
+            DATABASE_MIGRATION_DIRECTION,
+        )
     return DatabasePairContract(DatabasePairState.READY)
 
 
@@ -239,7 +296,11 @@ def ensure_database_pair(
     ledger_database: DatabaseConnectionOwner | None = None,
     history_database: DatabaseConnectionOwner | None = None,
 ) -> DatabasePairContract:
-    """Require a ready pair before admitting work that can mutate both stores."""
+    """Require a ready pair before admitting work that can mutate both stores.
+
+    A fresh pair is created and an older one migrated. Migration needs every
+    database closed, so it runs only before this process opens either role.
+    """
 
     contract = validate_database_pair(
         ledger_path, history_path,
@@ -247,9 +308,67 @@ def ensure_database_pair(
     )
     if contract.state is DatabasePairState.FRESH:
         contract = initialize_database_pair(ledger_path, history_path)
-    if contract.state is DatabasePairState.REFUSED:
+    elif (
+        contract.state is DatabasePairState.MIGRATION_REQUIRED
+        and ledger_database is None and history_database is None
+    ):
+        contract = migrate_database_pair(ledger_path, history_path).contract
+    if contract.state in (DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED):
         raise DatabasePairRefusedError(contract)
     return contract
+
+
+def migrate_database_pair(
+    ledger_path: str | Path, history_path: str | Path,
+) -> DatabasePairMigration:
+    """Migrate whichever roles of an older pair need it, ledger first.
+
+    Both exclusive maintenance claims are held throughout, and the pair is
+    classified again under them. Each database migrates in its own
+    transaction, so a pair an interruption left half done finishes here. A
+    refusal leaves both databases as they were, apart from a ledger that had
+    already migrated.
+    """
+
+    ledger = Path(ledger_path).resolve()
+    history = Path(history_path).resolve()
+    migrated: list[MigratedDatabase] = []
+    try:
+        with hold_maintenance_claims(ledger, history) as claims:
+            contract = validate_database_pair(ledger, history)
+            if contract.state is not DatabasePairState.MIGRATION_REQUIRED:
+                return DatabasePairMigration(contract)
+            # Both files first, so a process holding only History cannot let
+            # the ledger migrate and leave the pair half done.
+            require_no_open_handles(ledger)
+            require_no_open_handles(history)
+            ledger_result = migrate_database(ledger, history=False, claim=claims.ledger)
+            _record_migrated(migrated, "ledger", ledger_result)
+            _record_migrated(migrated, "history", migrate_database(
+                history, history=True, claim=claims.history,
+                ledger_instance_id=ledger_result.ledger_instance_id,
+            ))
+            contract = validate_database_pair(ledger, history)
+    except DatabaseClaimRefused as error:
+        contract = _refused("database-in-use", guidance=str(error))
+    except DatabaseBackupFailed as error:
+        contract = _refused("backup-failed", guidance=str(error))
+    except DatabaseMigrationFailed as error:
+        contract = _refused("migration-failed", guidance=str(error))
+    except (sqlite3.Error, OSError) as error:
+        # Admission or access errors met under the claims; nothing was
+        # migrated by the call that raised.
+        contract = _refused("migration-unavailable", guidance=(
+            f"{DATABASE_UNAVAILABLE_DIRECTION} ({type(error).__name__}: {error})"
+        ))
+    return DatabasePairMigration(contract, tuple(migrated))
+
+
+def _record_migrated(
+    migrated: list[MigratedDatabase], role: str, result: DatabaseMigration,
+) -> None:
+    if result.backup is not None and result.source_version is not None:
+        migrated.append(MigratedDatabase(role, result.source_version, result.backup))
 
 
 def _reserve(path: Path, owned: dict[Path, OwnedArtifactLease]) -> None:

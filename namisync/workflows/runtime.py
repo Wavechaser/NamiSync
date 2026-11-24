@@ -140,10 +140,12 @@ from .execution_review import (
 )
 from .database_pair import (
     DatabasePairContract,
+    DatabasePairMigration,
     DatabasePairRefusedError,
     DatabasePairState,
     ensure_database_pair,
     initialize_database_pair,
+    migrate_database_pair,
     validate_database_pair,
 )
 from .models import (
@@ -412,6 +414,17 @@ class LocalWorkflowRuntime:
                 ledger_database=self._ledger_database,
                 history_database=self._history_database,
             )
+
+    def migrate_database_contracts(self) -> DatabasePairMigration:
+        """Migrate an older pair under both exclusive claims; a no-op otherwise.
+
+        Call it before this runtime opens either database: migration refuses
+        while any connection, this process's included, has one open.
+        """
+
+        self._require_open()
+        with self._database_pair_lock:
+            return migrate_database_pair(self.ledger_path, self.history_path)
 
     def _ensure_database_contracts(self) -> DatabasePairContract:
         with self._database_pair_lock:
@@ -856,6 +869,7 @@ class LocalWorkflowRuntime:
                     activity_kind="sync",
                     source_context=plan_value.source_root.path,
                     target_context=plan_value.target_root.path,
+                    ledger_instance_id=self._ledger_instance_id(),
                 ),
             )
         if record.kind == INVENTORY_KIND:
@@ -883,8 +897,14 @@ class LocalWorkflowRuntime:
                 activity_kind=activity_kind,
                 subject_kind="location",
                 subject_id=_location_subject_id(request.binding),
+                ledger_instance_id=self._ledger_instance_id(),
             ),
         )
+
+    def _ledger_instance_id(self) -> str:
+        # The ledger a run records against; workflows is where the pair meets.
+        with self._ledger_read() as repository:
+            return repository.ledger_instance_id()
 
     def get_plan_review(
         self,

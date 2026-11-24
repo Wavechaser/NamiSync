@@ -240,7 +240,7 @@ def _run_sync(
         )
         return EXIT_USAGE
     try:
-        refusal = _database_refusal(service, stderr)
+        refusal = _database_refusal(service, stdout, stderr)
         if refusal is not None:
             return refusal
         plan_session = None
@@ -400,7 +400,7 @@ def _run_location_workflow(
         return EXIT_USAGE
     session = None
     try:
-        refusal = _database_refusal(service, stderr)
+        refusal = _database_refusal(service, stdout, stderr)
         if refusal is not None:
             return refusal
         try:
@@ -686,8 +686,23 @@ def _terminal_items(
         return live_items
 
 
-def _database_refusal(service: NamiSyncService, stderr: TextIO) -> int | None:
+def _database_refusal(
+    service: NamiSyncService, stdout: TextIO, stderr: TextIO,
+) -> int | None:
+    """Admit the pair for mutating work, migrating a NamiSync 0.1.0 pair first."""
+
     contract = service.validate_database_contracts()
+    if contract.state == "migration-required":
+        contract, migrated = service.migrate_database_contracts()
+        if migrated:
+            roles = " and ".join(f"{role} (v{version})" for role, version, _ in migrated)
+            plural = "s" if len(migrated) > 1 else ""
+            print(
+                f"Updated the {roles} database{plural} written by NamiSync 0.1.0; "
+                f"backup{plural} kept at: "
+                + ", ".join(_safe(backup) for _, _, backup in migrated),
+                file=stdout,
+            )
     if contract.state != "refused":
         return None
     print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)

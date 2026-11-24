@@ -4,6 +4,7 @@ from contextlib import closing
 import json
 import os
 from pathlib import Path
+import re
 import sqlite3
 import stat
 import tempfile
@@ -22,8 +23,6 @@ from namisync.db.history import HistoryRepository
 from namisync.db.repositories import LedgerRepository
 from namisync.db.schema import (
     DatabaseAdmissionError,
-    HISTORY_CONTRACT_ID,
-    LEDGER_CONTRACT_ID,
     SchemaResetRequired,
     initialize_history,
     initialize_ledger,
@@ -34,6 +33,8 @@ from namisync.workflows._database_pair_native import (
     WindowsArtifactNative,
 )
 from namisync.workflows.database_pair import DatabasePairInitializationError
+
+from _released_fixture import copy_released_role
 
 
 _SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
@@ -287,10 +288,12 @@ def test_ensure_database_pair_refuses_empty_mains_without_mutation(tmp_path: Pat
     assert _snapshot(ledger, history) == before
 
 
+@pytest.mark.parametrize("marker", ("unknown", "other-role"))
 @pytest.mark.parametrize("wrong_role", ("ledger", "history"))
 def test_wrong_role_contract_marker_refuses_read_only(
     tmp_path: Path,
     wrong_role: str,
+    marker: str,
 ) -> None:
     service, ledger, history = _service(tmp_path)
     initialize_ledger(ledger)
@@ -298,17 +301,25 @@ def test_wrong_role_contract_marker_refuses_read_only(
     changed = ledger if wrong_role == "ledger" else history
     with closing(sqlite3.connect(changed)) as connection:
         with connection:
-            connection.execute(
-                "UPDATE schema_metadata SET value = ? WHERE key = 'contract_id'",
-                ("wrong-role-contract",),
-            )
+            assert connection.execute(
+                "UPDATE schema_metadata SET value = ? WHERE key = 'role'",
+                (
+                    "wrong-role" if marker == "unknown"
+                    else "history" if wrong_role == "ledger" else "ledger",
+                ),
+            ).rowcount == 1
     before = _snapshot(ledger, history)
 
     result = service.validate_database_contracts()
 
     assert result.state == "refused"
-    assert result.reason == f"{wrong_role}-contract"
-    assert result.reset_direction is not None
+    # Neither an unknown role (only a newer NamiSync could write one) nor the
+    # other role is a reason to discard data: check the path instead.
+    assert result.reason == f"{wrong_role}-wrong-role"
+    assert result.reset_direction is None
+    assert ("look swapped" in result.guidance) is (marker == "other-role")
+    assert ("is not a NamiSync" in result.guidance) is (marker == "unknown")
+    assert not re.search(r"newer|delete|archive|reset", result.guidance, re.IGNORECASE)
     assert _snapshot(ledger, history) == before
     service.close()
 
@@ -319,10 +330,6 @@ def test_wrong_role_contract_marker_refuses_read_only(
         ("ledger", "schema_version", "3"),
         ("history", "schema_version", "5"),
         ("history", "schema_version", "6"),
-        ("ledger", "data_epoch", "4"),
-        ("history", "data_epoch", "4"),
-        ("ledger", "data_epoch", "6"),
-        ("history", "data_epoch", "6"),
     ),
 )
 def test_old_or_mixed_database_epoch_refuses_without_mutation(
@@ -337,10 +344,10 @@ def test_old_or_mixed_database_epoch_refuses_without_mutation(
     selected = ledger if role == "ledger" else history
     with closing(sqlite3.connect(selected)) as connection:
         with connection:
-            connection.execute(
+            assert connection.execute(
                 "UPDATE schema_metadata SET value = ? WHERE key = ?",
                 (old_value, key),
-            )
+            ).rowcount == 1
     before = _snapshot(ledger, history)
 
     first = service.validate_database_contracts()
@@ -350,6 +357,36 @@ def test_old_or_mixed_database_epoch_refuses_without_mutation(
     assert first.state == "refused"
     assert first.reason == f"{role}-contract"
     assert first.reset_direction is not None
+    assert _snapshot(ledger, history) == before
+    service.close()
+
+
+@pytest.mark.parametrize("role", ("ledger", "history"))
+@pytest.mark.parametrize("epoch", ("4", "6", "7", None))
+def test_released_data_epoch_is_not_read(
+    tmp_path: Path, role: str, epoch: str | None,
+) -> None:
+    # User decision (2026-11-19): every v0.1.0-shaped database is epoch 8.
+    service, ledger, history = _service(tmp_path)
+    selected = copy_released_role(tmp_path, history=role == "history")
+    (initialize_history if role == "ledger" else initialize_ledger)(
+        history if role == "ledger" else ledger
+    )
+    with closing(sqlite3.connect(selected)) as connection:
+        with connection:
+            if epoch is None:
+                connection.execute("DELETE FROM schema_metadata WHERE key = 'data_epoch'")
+            else:
+                connection.execute(
+                    "UPDATE schema_metadata SET value = ? WHERE key = 'data_epoch'", (epoch,),
+                )
+    before = _snapshot(ledger, history)
+
+    result = service.validate_database_contracts()
+
+    assert result.state == "migration-required"
+    assert result.reason == f"{role}-older"
+    assert result.reset_direction is None
     assert _snapshot(ledger, history) == before
     service.close()
 
@@ -369,26 +406,33 @@ def test_matching_database_pair_is_ready_and_read_only(tmp_path: Path) -> None:
     service.close()
 
 
-def test_fresh_identity_epoch_eight_pair_reopens_with_exact_current_markers(
+def test_fresh_pair_reopens_with_exact_current_markers(
     tmp_path: Path,
 ) -> None:
     service, ledger, history = _service(tmp_path)
     try:
         assert service.initialize_database_contracts().state == "ready"
         assert service.validate_database_contracts().state == "ready"
-        for path, version, contract_id in (
-            (ledger, "4", "m1-ledger-v4-event-v5-evidence-v2"),
-            (history, "8", "m1-history-v8-event-v5-recording-v1"),
+        for path, expected in (
+            (ledger, {
+                "role": "ledger", "schema_version": "5", "format.event": "5",
+                "format.evidence": "2",
+                "format.identity": "1", "format.numeric": "1", "format.path-key": "1",
+                "format.preimage": "1", "format.recording": "1",
+            }),
+            (history, {
+                "role": "history", "schema_version": "9", "format.event": "5",
+                "format.numeric": "1", "format.preimage": "1", "format.recording": "1",
+            }),
         ):
             with closing(sqlite3.connect(
                 path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True,
             )) as connection:
                 markers = dict(connection.execute("SELECT key, value FROM schema_metadata"))
-            assert markers == {
-                "schema_version": version,
-                "data_epoch": "8",
-                "contract_id": contract_id,
-            }
+            if path == ledger:
+                instance_id = markers.pop("instance_id")
+                assert len(instance_id) == 32 and not instance_id.strip("0123456789abcdef")
+            assert markers == expected
         before = _snapshot(ledger, history)
         assert initialize_ledger(ledger) == ledger
         assert initialize_history(history) == history
@@ -425,10 +469,22 @@ def _captured_epoch_five_markers(role: str) -> dict[str, str]:
 
 
 def _write_markers(connection: sqlite3.Connection, markers: dict[str, str]) -> None:
-    connection.executemany(
-        "UPDATE schema_metadata SET value = ? WHERE key = ?",
-        ((value, key) for key, value in markers.items()),
-    )
+    for key, value in markers.items():
+        assert connection.execute(
+            "UPDATE schema_metadata SET value = ? WHERE key = ?", (value, key),
+        ).rowcount == 1
+
+
+def _released_or_current(tmp_path: Path, old_roles: tuple[str, ...]) -> tuple[Path, Path]:
+    """Old-marker roles start as released v0.1.0 copies; the others are current."""
+
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    for role, path in (("ledger", ledger), ("history", history)):
+        if role in old_roles:
+            copy_released_role(tmp_path, history=role == "history")
+        else:
+            (initialize_ledger if role == "ledger" else initialize_history)(path)
+    return ledger, history
 
 
 def _assert_epoch_pair_refused_without_mutation(
@@ -438,7 +494,7 @@ def _assert_epoch_pair_refused_without_mutation(
     for role in refused_roles:
         selected = ledger if role == "ledger" else history
         for _ in range(2):
-            with pytest.raises(SchemaResetRequired, match="data epoch 8"):
+            with pytest.raises(SchemaResetRequired, match="ledger v5 and history v9"):
                 file_contracts.probe_database_file_contract(selected, history=role == "history")
             assert _snapshot(ledger, history) == before
         for consumer in (
@@ -447,7 +503,7 @@ def _assert_epoch_pair_refused_without_mutation(
         ):
             with pytest.raises(
                 SchemaResetRequired,
-                match="data epoch 8.*archive or delete both database main files",
+                match="ledger v5 and history v9.*archive or delete both database main files",
             ) as raised:
                 consumer(selected)
             assert "Close every NamiSync process" in str(raised.value)
@@ -474,8 +530,7 @@ def _assert_epoch_pair_refused_without_mutation(
 def test_epoch_seven_and_mixed_pairs_are_refused_read_only(
     tmp_path: Path, old_roles: tuple[str, ...],
 ) -> None:
-    ledger = initialize_ledger(tmp_path / "ledger.db")
-    history = initialize_history(tmp_path / "history.db")
+    ledger, history = _released_or_current(tmp_path, old_roles)
     for role in old_roles:
         markers = {"data_epoch": "7"}
         if role == "history":
@@ -483,7 +538,15 @@ def test_epoch_seven_and_mixed_pairs_are_refused_read_only(
         with closing(sqlite3.connect(ledger if role == "ledger" else history)) as connection:
             with connection:
                 _write_markers(connection, markers)
-    _assert_epoch_pair_refused_without_mutation(ledger, history, old_roles)
+    if old_roles == ("ledger",):
+        # The epoch-7 ledger has v0.1.0's shape and contract id, and data_epoch
+        # is not read: it is an older supported ledger, not a refusal.
+        before = _snapshot(ledger, history)
+        result = database_pair.validate_database_pair(ledger, history)
+        assert (result.state, result.reason) == ("migration-required", "ledger-older")
+        assert _snapshot(ledger, history) == before
+        return
+    _assert_epoch_pair_refused_without_mutation(ledger, history, ("history",))
 
 
 @pytest.mark.parametrize(
@@ -493,12 +556,11 @@ def test_epoch_seven_and_mixed_pairs_are_refused_read_only(
 def test_identity_epoch_cut_refuses_old_and_mixed_pairs_without_repair(
     tmp_path: Path, shape: str,
 ) -> None:
-    ledger = initialize_ledger(tmp_path / "ledger.db")
-    history = initialize_history(tmp_path / "history.db")
     refused_roles = (
         ("ledger", "history") if shape == "both-captured-five"
         else ("history",) if shape == "ledger-current-history-five" else ("ledger",)
     )
+    ledger, history = _released_or_current(tmp_path, refused_roles)
     for role in refused_roles:
         selected = ledger if role == "ledger" else history
         markers = _captured_epoch_five_markers(role)
@@ -525,9 +587,10 @@ def test_identity_epoch_cut_sees_old_markers_committed_only_in_wal(
     (initialize_history if role == "ledger" else initialize_ledger)(
         history if role == "ledger" else ledger
     )
-    initialize = initialize_ledger if role == "ledger" else initialize_history
     connect = connect_ledger_writer if role == "ledger" else connect_history_writer
-    producer = initialize(tmp_path / "producer.db")
+    # The released markers are folded into the producer's main below; the old
+    # ones then live only in its WAL.
+    producer = copy_released_role(tmp_path, history=role == "history", name="producer.db")
     markers = _captured_epoch_five_markers(role)
     if old_marker == "contract-id":
         markers["data_epoch"] = "6"
@@ -566,13 +629,17 @@ def test_current_markers_do_not_admit_or_repair_invalid_topology(
     selected = ledger if role == "ledger" else history
     initialize_other = initialize_history if role == "ledger" else initialize_ledger
     initialize_other(history if role == "ledger" else ledger)
-    script = schema_module._LEDGER_SCHEMA if role == "ledger" else schema_module._HISTORY_SCHEMA
-    if shape == "marker-only":
-        first_table = "hosts" if role == "ledger" else "history_runs"
-        script = script.split(f"CREATE TABLE IF NOT EXISTS {first_table}", 1)[0] + "COMMIT;"
+    script = schema_module._schema_script(role == "history")
     with closing(sqlite3.connect(selected)) as connection:
         connection.executescript(script)
-        if shape == "poisoned-table":
+        if shape == "marker-only":
+            # Current markers survive; every other object is gone.
+            for (table,) in connection.execute(
+                "SELECT name FROM sqlite_schema WHERE type = 'table' "
+                "AND name NOT IN ('schema_metadata', 'sqlite_sequence')"
+            ).fetchall():
+                connection.execute(f"DROP TABLE {table}")
+        elif shape == "poisoned-table":
             connection.execute("ALTER TABLE schema_metadata ADD COLUMN poison TEXT")
         elif shape == "missing-trigger":
             name = connection.execute(
@@ -689,7 +756,7 @@ def test_wal_contract_truth_is_checked_without_source_artifact_changes(
     (initialize_history if role == "ledger" else initialize_ledger)(
         history if role == "ledger" else ledger
     )
-    script = schema_module._LEDGER_SCHEMA if role == "ledger" else schema_module._HISTORY_SCHEMA
+    script = schema_module._schema_script(role == "history")
     producer = tmp_path / "producer.db"
     with closing(sqlite3.connect(producer, isolation_level=None)) as writer:
         writer.executescript(script)
@@ -697,7 +764,7 @@ def test_wal_contract_truth_is_checked_without_source_artifact_changes(
         writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         writer.execute({
             "benign": "PRAGMA user_version = 99",
-            "marker": "UPDATE schema_metadata SET value = 'wal-poison' WHERE key = 'contract_id'",
+            "marker": "UPDATE schema_metadata SET value = 'wal-poison' WHERE key = 'format.numeric'",
             "topology": "CREATE VIEW wal_poison AS SELECT * FROM schema_metadata",
         }[change])
         for suffix in ("", "-wal", "-shm") if include_shm else ("", "-wal"):
@@ -1449,14 +1516,13 @@ def test_role_contract_counterexamples_refuse_without_mutation(
             initialize_ledger if role == "ledger" else initialize_history
         )
         initialize_selected(selected)
-        swapped = HISTORY_CONTRACT_ID if role == "ledger" else LEDGER_CONTRACT_ID
+        swapped = "history" if role == "ledger" else "ledger"
         with closing(sqlite3.connect(selected)) as connection:
             with connection:
-                connection.execute(
-                    "UPDATE schema_metadata SET value = ? "
-                    "WHERE key = 'contract_id'",
+                assert connection.execute(
+                    "UPDATE schema_metadata SET value = ? WHERE key = 'role'",
                     (swapped,),
-                )
+                ).rowcount == 1
     before = _snapshot(ledger, history)
 
     first = service.validate_database_contracts()
@@ -1464,7 +1530,8 @@ def test_role_contract_counterexamples_refuse_without_mutation(
 
     assert first == second
     assert first.state == "refused"
-    assert first.reason == f"{role}-contract"
+    assert first.reason == f"{role}-{'wrong-role' if shape == 'swapped-marker' else 'contract'}"
+    assert (first.reset_direction is None) is (shape == "swapped-marker")
     assert _snapshot(ledger, history) == before
     service.close()
 

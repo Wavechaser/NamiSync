@@ -291,8 +291,8 @@ retained Progress.
 
 Version numbers are boundary-specific, not one global product number. The
 active core event envelope is exact v5; the desktop bridge command/response
-envelope remains v1; and the persistence cut is ledger v4/history v8 at data
-epoch 8. Process-local workflow continuation is an unversioned typed semantic
+envelope remains v1; and the persistence is ledger v5/history v9, to which
+v0.1.0's ledger v4/history v8 migrate. Process-local workflow continuation is an unversioned typed semantic
 checkpoint, not a wire protocol. The exact browser-facing `SessionEventView`
 carries nested core version 5, and current history cannot contain another event
 version.

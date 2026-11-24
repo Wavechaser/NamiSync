@@ -13,7 +13,7 @@ the active count and request bounds described in `DEFENSE.md`.
 The external bridge contract is owned by `BRIDGE.md`; scalar and containment
 walls are owned by `DEFENSE.md` §1.3. Scoped recording continuation and terminal
 checkpoint cleanup are active below. Live events use v5; current persistence
-uses ledger v4/history v8 at data epoch 8, including the corrected ledger/plan
+uses ledger v5/history v9 (migrated from v0.1.0's v4/v8), including the corrected ledger/plan
 identity hash contract. Prior event epochs
 have no supported decode or compatibility route; public paths reject them and
 no positive compatibility fixture remains.
@@ -542,7 +542,7 @@ transition table, authority order, and Gap/replay rules live in
 Supported producers emit only event v5. Persisted readback requires an exact v5
 envelope, while live browser delivery requires the v5 transport marker and
 recognized tag; trusted internal projections are not decoded again. The
-coordinated ledger-v4 / history-v8 reset means no readable current database can
+pre-release reset boundary and the event-v5-only v0.1.0 migration source mean no readable current database can
 contain an older event epoch. Live and durable wrappers consume the same
 admitted immutable core snapshot without treating either representation as the
 other's decoder.

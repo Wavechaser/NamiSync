@@ -1741,6 +1741,119 @@ def test_database_refusal_finalizes_before_visible_error(
     assert "both database files together" in order[-1][1]
 
 
+class _RecordedService:
+    """A real service whose database admission calls join the startup order."""
+
+    def __init__(self, paths: AppPaths, order: list[object]) -> None:
+        from namisync.interfaces.service import NamiSyncService
+
+        self._service = NamiSyncService(paths.ledger, paths.history, settings_path=paths.settings)
+        self._order = order
+
+    def validate_database_contracts(self):
+        self._order.append("validate_databases")
+        return self._service.validate_database_contracts()
+
+    def migrate_database_contracts(self):
+        self._order.append("migrate_databases")
+        return self._service.migrate_database_contracts()
+
+    def close(self):
+        self._order.append("service.close")
+        return self._service.close()
+
+
+def _released_desktop(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> tuple[AppPaths, list[object], list[str]]:
+    from _released_fixture import copy_released_pair
+
+    paths, order, _webview, _document, reports = _patch_primary(monkeypatch, tmp_path)
+    copy_released_pair(paths.root)
+    monkeypatch.setattr(
+        host, "_create_service",
+        lambda actual: order.append("create_service") or _RecordedService(actual, order),
+    )
+    return paths, order, reports
+
+
+def test_startup_migrates_a_released_pair_before_binding_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+) -> None:
+    paths, order, reports = _released_desktop(monkeypatch, tmp_path)
+
+    with caplog.at_level("INFO", logger="namisync"):
+        result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert (result, reports) == (0, [])
+    labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
+    start = labels.index("create_service")
+    assert labels[start:start + 5] == [
+        "create_service",
+        "validate_databases",
+        "migrate_databases",
+        "path_lease.bind_databases",
+        "validate_databases",
+    ]
+    backups = sorted(path.name for path in paths.root.glob("*.backup-*"))
+    assert [name[:20] for name in backups] == ["history.db.backup-v8", "ledger.db.backup-v4-"]
+    logged = [record.getMessage() for record in caplog.records]
+    # Roles and source versions only: GUI logging records no paths.
+    assert "startup.databases_migrated ledger=v4 history=v8" in logged
+    assert not any(
+        str(paths.root) in message or "backup" in message for message in logged
+    )
+
+
+@pytest.mark.parametrize("refusal", ("in-use", "newer"))
+def test_startup_surfaces_a_migration_or_newer_refusal_before_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, refusal: str,
+) -> None:
+    import sqlite3
+    from contextlib import ExitStack, closing
+
+    from namisync.db.claims import acquire_database_claim
+
+    paths, order, reports = _released_desktop(monkeypatch, tmp_path)
+    with ExitStack() as held:
+        if refusal == "in-use":
+            held.enter_context(acquire_database_claim(paths.history, exclusive=False))
+        else:
+            with closing(sqlite3.connect(paths.history)) as connection:
+                with connection:
+                    # A newer history names its role; a role-less one is unsupported.
+                    connection.execute(
+                        "UPDATE schema_metadata SET value = '10' WHERE key = 'schema_version'"
+                    )
+                    connection.execute(
+                        "INSERT INTO schema_metadata(key, value) VALUES ('role', 'history')"
+                    )
+        before = {
+            path.name: path.read_bytes() for path in paths.root.iterdir()
+            if path.is_file() and not path.name.endswith(".claim")
+        }
+        result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
+    assert "path_lease.bind_databases" not in labels
+    assert "create_window" not in labels
+    assert len(reports) == 1
+    if refusal == "in-use":
+        assert "migrate_databases" in labels
+        assert "NamiSync database pair refused (database-in-use)" in reports[0]
+        assert "is in use by NamiSync work" in reports[0]
+    else:
+        assert "migrate_databases" not in labels
+        assert "NamiSync database pair refused (history-newer)" in reports[0]
+        assert "written by a newer NamiSync (schema version 10)" in reports[0]
+    assert "delete" not in reports[0].lower()
+    assert {
+        path.name: path.read_bytes() for path in paths.root.iterdir()
+        if path.is_file() and not path.name.endswith(".claim")
+    } == before
+
+
 def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
     order: list[str] = []
     dispatcher = SimpleNamespace(

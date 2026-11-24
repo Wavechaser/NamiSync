@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 import ctypes
 from ctypes import wintypes
+from dataclasses import dataclass
 import io
 import msvcrt
 import os
@@ -88,6 +89,10 @@ class DatabaseClaim:
         self.exclusive = exclusive
         self._file: io.FileIO | None = file
 
+    @property
+    def held(self) -> bool:
+        return self._file is not None
+
     def release(self) -> None:
         file, self._file = self._file, None
         if file is None:
@@ -152,8 +157,18 @@ def acquire_database_claim(main: str | Path, *, exclusive: bool) -> DatabaseClai
     return DatabaseClaim(path, exclusive, file)
 
 
+@dataclass(frozen=True, slots=True)
+class MaintenanceClaims:
+    """Both exclusive claims of a pair, held for one maintenance session."""
+
+    ledger: DatabaseClaim
+    history: DatabaseClaim
+
+
 @contextmanager
-def hold_maintenance_claims(ledger: str | Path, history: str | Path) -> Iterator[None]:
+def hold_maintenance_claims(
+    ledger: str | Path, history: str | Path,
+) -> Iterator[MaintenanceClaims]:
     """Hold both databases of a pair exclusively, ledger first, or refuse."""
 
     ledger_claim = acquire_database_claim(ledger, exclusive=True)
@@ -163,7 +178,7 @@ def hold_maintenance_claims(ledger: str | Path, history: str | Path) -> Iterator
         ledger_claim.release()
         raise
     try:
-        yield
+        yield MaintenanceClaims(ledger_claim, history_claim)
     finally:
         try:
             history_claim.release()

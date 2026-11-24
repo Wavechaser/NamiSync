@@ -40,7 +40,7 @@ from .connections import (
     connect_ledger_reader,
 )
 from .contracts import DatabaseConnectionOwner, require_database_file_contract
-from .schema import validate_ledger_reader_contract
+from .schema import ledger_instance_id, validate_ledger_reader_contract
 from .timestamps import decode_utc, encode_utc
 
 
@@ -520,6 +520,11 @@ class LedgerRepository:
             raise
         if trace_callback is not None:
             self._connection.set_trace_callback(trace_callback)
+
+    def ledger_instance_id(self) -> str:
+        """The admitted ledger's canonical instance id."""
+
+        return ledger_instance_id(self._connection)
 
     def get_inventory(
         self, location_id: int, path_keys: Iterable[str] | None = None
