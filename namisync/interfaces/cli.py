@@ -768,6 +768,8 @@ def _render_inventory(
     _render_result_summary("Inventory", result, output)
     if details is not None:
         _render_inventory_details(details, output)
+    if result.error is not None:
+        print(_safe(result.error), file=errors)
     if result.filesystem != "completed" or details is None:
         _render_result_warnings(result, errors)
         return
@@ -846,6 +848,8 @@ def _render_integrity(
             f"recording={item.recording}",
             file=output,
         )
+    if result.error is not None:
+        print(_safe(result.error), file=errors)
     _render_result_warnings(result, errors)
 
 

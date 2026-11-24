@@ -1069,17 +1069,22 @@ def _initialize(
 def _create_schema(
     resolved: Path, schema: str, *, history: bool, busy_timeout_ms: int,
 ) -> Path:
+    # Deferred import: claim refusals extend this module's admission error.
+    from .claims import acquire_database_claim
+
     resolved.parent.mkdir(parents=True, exist_ok=True)
     connect = connect_history_writer if history else connect_ledger_writer
-    connection = connect(resolved, busy_timeout_ms=busy_timeout_ms)
-    try:
-        version = _existing_schema_version(connection, history=history)
-        if version is not None:
-            _raise_reset_required("not-empty", history=history)
-        connection.executescript(schema)
-        _validate_reader_contract(connection, history=history)
-    finally:
-        connection.close()
+    # Released before return, so a caller may take its shared writer claim next.
+    with acquire_database_claim(resolved, exclusive=True):
+        connection = connect(resolved, busy_timeout_ms=busy_timeout_ms)
+        try:
+            version = _existing_schema_version(connection, history=history)
+            if version is not None:
+                _raise_reset_required("not-empty", history=history)
+            connection.executescript(schema)
+            _validate_reader_contract(connection, history=history)
+        finally:
+            connection.close()
     return resolved
 
 

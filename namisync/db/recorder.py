@@ -80,6 +80,7 @@ from .connections import (
     validate_database_path,
 )
 from .schema import initialize_ledger
+from .claims import acquire_database_claim
 from .contracts import DatabaseConnectionOwner
 from .timestamps import encode_utc
 from .writer import (
@@ -406,13 +407,20 @@ class LedgerRecorder:
             database.require_role(path, history=False)
             self.path = validate_database_path(path, managed_roots=managed_roots)
         self._clock = clock
-        self._writer = SerializedWriter(
-            self.path,
-            connect_ledger_writer if database is None else database.open_writer,
-            busy_timeout_ms=busy_timeout_ms,
-            retry_timeout_seconds=retry_timeout_seconds,
-            retry_interval_seconds=retry_interval_seconds,
-        )
+        # Shared for exactly the writer connection's life; schema creation
+        # above has already released its exclusive claim.
+        self._claim = acquire_database_claim(self.path, exclusive=False)
+        try:
+            self._writer = SerializedWriter(
+                self.path,
+                connect_ledger_writer if database is None else database.open_writer,
+                busy_timeout_ms=busy_timeout_ms,
+                retry_timeout_seconds=retry_timeout_seconds,
+                retry_interval_seconds=retry_interval_seconds,
+            )
+        except BaseException:
+            self._claim.release()
+            raise
 
     def ensure_host(self, command: HostCommand) -> int:
         at = encode_utc(command.observed_at)
@@ -1442,6 +1450,7 @@ class LedgerRecorder:
 
     def close(self) -> None:
         self._writer.close()
+        self._claim.release()
 
     def __enter__(self) -> LedgerRecorder:
         return self

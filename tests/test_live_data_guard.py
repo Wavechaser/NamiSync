@@ -20,6 +20,8 @@ from pathlib import Path
 import _winapi
 import pytest
 
+from namisync.db.claims import acquire_database_claim
+
 import _live_data_guard as guard
 from _live_data_guard import (
     LiveDataGuardError,
@@ -75,6 +77,14 @@ def test_path_open_and_os_open_for_writing_are_refused(armed) -> None:
     ):
         with expected_refusals(("open", ABSENT)), pytest.raises(LiveDataGuardError):
             operation()
+
+
+def test_database_claim_file_creation_under_the_live_root_is_refused(armed) -> None:
+    claim = Path(f"{ABSENT}.claim")
+    for exclusive in (False, True):
+        with expected_refusals(("open", claim)), pytest.raises(LiveDataGuardError):
+            acquire_database_claim(ABSENT, exclusive=exclusive)
+    assert not claim.parent.exists()
 
 
 def test_sqlite_connect_under_the_live_root_is_refused(armed) -> None:

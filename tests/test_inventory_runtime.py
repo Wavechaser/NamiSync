@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Event
+from time import monotonic, sleep
 
 import pytest
 from xxhash import xxh3_128
@@ -40,6 +41,11 @@ from namisync.core.session import (
     ResourceId,
     RunContext,
     SessionState,
+)
+from namisync.db.claims import (
+    DatabaseInUse,
+    DatabaseMaintenanceActive,
+    hold_maintenance_claims,
 )
 from namisync.db.recorder import LedgerRecorder
 from namisync.db.repositories import (
@@ -1069,6 +1075,62 @@ def test_runtime_exposes_stale_and_missing_visibility_inventory_facade(
             row.rel_path for row in runtime.list_unacknowledged_missing(location_id)
         ] == ["a.txt"]
     finally:
+        runtime.close()
+
+
+def test_database_maintenance_refuses_inventory_writers_without_partial_state(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file("a.txt", 1),))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        with hold_maintenance_claims(runtime.ledger_path, runtime.history_path):
+            session_id = dispatcher.submit(
+                INVENTORY_KIND,
+                InventoryRequest("under-maintenance", location_id=location_id),
+            )
+            record = _wait_for(dispatcher, session_id, SessionState.FAILED)
+            with pytest.raises(DatabaseMaintenanceActive):
+                runtime.acknowledge_inventory("ack", location_id, "1")
+
+        # The audit factory's refusal degrades audit; the run's ledger
+        # recorder refuses before any scan or write.
+        assert record.result is not None
+        assert record.result.error is not None
+        assert record.result.error.type_name == "DatabaseMaintenanceActive"
+        assert "refused, not queued" in record.result.error.message
+        assert record.result.audit is RecordingStatus.DEGRADED
+        assert scanner.calls == []
+        assert runtime.list_inventory(location_id) == ()
+        with pytest.raises(KeyError):
+            runtime.get_history_summary("under-maintenance")
+
+        session_id = dispatcher.submit(
+            INVENTORY_KIND,
+            InventoryRequest("after-maintenance", location_id=location_id),
+        )
+        record = _wait_for(dispatcher, session_id, SessionState.COMPLETED)
+        assert record.result is not None
+        assert record.result.audit is RecordingStatus.OK
+        # The audit pump closes the observer just after the terminal result.
+        deadline = monotonic() + 5.0
+        while True:
+            try:
+                with hold_maintenance_claims(runtime.ledger_path, runtime.history_path):
+                    break
+            except DatabaseInUse:
+                assert monotonic() < deadline, "a finished run kept its claim"
+                sleep(0.01)
+    finally:
+        assert dispatcher.shutdown().complete
         runtime.close()
 
 

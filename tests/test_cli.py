@@ -35,6 +35,7 @@ from namisync.core.session import (
     SessionRecord,
     SessionState,
 )
+from namisync.db.claims import hold_maintenance_claims
 from namisync.db.history import HistoryContext, HistoryStore
 from namisync.db.connections import connect_history_writer, connect_ledger_writer
 from namisync.db.schema import initialize_history, initialize_ledger
@@ -1434,6 +1435,39 @@ def test_mutating_cli_refuses_mismatched_database_pair_read_only(
     assert "Database pair refused: history-contract" in stderr.getvalue()
     assert "archive or delete both database main files" in stderr.getvalue()
     assert "-wal, -shm, and -journal sidecars together" in stderr.getvalue()
+
+
+def test_location_work_during_database_maintenance_reports_the_typed_refusal(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "a.txt").write_text("a", encoding="utf-8")
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    arguments = [
+        "inventory", str(root), "--database", str(ledger), "--history-database", str(history),
+    ]
+    before = (ledger.read_bytes(), history.read_bytes())
+    stderr = io.StringIO()
+
+    with hold_maintenance_claims(ledger, history):
+        result = main(arguments, stdout=io.StringIO(), stderr=stderr)
+        assert (ledger.read_bytes(), history.read_bytes()) == before
+
+    assert result == EXIT_FAILED
+    assert (
+        "DatabaseMaintenanceActive: Database maintenance is in progress on "
+        f"{ledger}. New work is refused, not queued"
+    ) in stderr.getvalue()
+    assert main(arguments, stdout=io.StringIO(), stderr=io.StringIO()) == EXIT_SUCCESS
+    stderr = io.StringIO()
+    with hold_maintenance_claims(ledger, history):
+        result = main(["verify", *arguments[1:]], stdout=io.StringIO(), stderr=stderr)
+    assert result == EXIT_FAILED
+    assert "DatabaseMaintenanceActive: Database maintenance is in progress" in stderr.getvalue()
+    with hold_maintenance_claims(ledger, history):
+        pass
 
 
 def test_read_only_history_command_is_exempt_from_missing_ledger_peer(

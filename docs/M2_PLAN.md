@@ -166,7 +166,12 @@ Checkpoints:
   (check, backup, restore); the Data page follows in B3. Depends on A3. Closes
   on: maintenance refuses while a GUI or CLI run holds a claim, new runs are
   refused while maintenance holds it, and a plan reviewed before a restore is
-  refused at start.
+  refused at start. Input from A3 (2026-11-25): the dispatcher today admits a
+  session whose history observer was refused the claim with audit degraded,
+  and the run is refused only when its ledger recorder opens, or not at all if
+  maintenance has ended by then
+  ([DATABASE](DATABASE.md#maintenance-claim)). A4's second closing condition
+  needs that turned into a refusal at admission.
 - **M2-A5 Session progress and hold reason** (proposed). Sessions carry progress
   and hold reason, and the server derives every capability from them. Includes
   the `PENDING`-to-held edge. Consumer: Pause all and Resume all, pulled forward

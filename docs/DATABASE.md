@@ -561,11 +561,12 @@ controls contention handling. Read repositories use read-only connections where
 possible. A function named/read-scoped as read-only may never be used for
 retention or other writes—the PoC made that error and disabled pruning entirely.
 
-First-time schema creation still relies on the connection's bounded SQLite busy
-timeout rather than an application-level database-pair startup mutex or retry
-loop. Concurrent process startup can therefore refuse after that bound; a
-persistent multi-process service must add a pair-scoped initialization gate and
-two-process regression before claiming stronger startup liveness.
+First-time schema creation holds its database's exclusive
+[maintenance claim](#maintenance-claim), so a concurrent creator or writer is
+refused at once rather than waited for; there is still no pair-scoped startup
+mutex or retry loop. A persistent multi-process service must add a pair-scoped
+initialization gate and two-process regression before claiming stronger startup
+liveness.
 
 The serialized recorder owns normal writes. Schema creation/migration and
 dedicated maintenance are the only other write owners and do not run inside
@@ -797,8 +798,9 @@ volume/location correspondence.
 
 ## Maintenance Claim
 
-Status: accepted for M2-A3 (2026-11-25) and unrealized until its implementation
-lands. User decisions (2026-11-20, 2026-11-24).
+Status: implemented by M2-A3 outcome 1 (2026-11-25) in
+`namisync/db/claims.py`; migration, its first maintenance consumer, lands with
+outcome 4. User decisions (2026-11-20, 2026-11-24).
 
 Maintenance (migration first; later restore, archive-and-reset, reclaiming file
 space, history pruning and purge) must not run while any run's records are
@@ -807,25 +809,96 @@ still being written to either database, in any process.
 - **Owner.** The db layer, because only its writers know when a run's last
   write has landed. The dispatcher stays domain-blind.
 - **Mechanism.** Each database has a lock file beside its main file, named
-  `<main>.claim`. A claim is a `LockFileEx` lock on its first byte, shared or
-  exclusive, taken without waiting. Windows drops it when the handle closes or
-  the process dies. Locks belong to handles, so two claims in one process
-  conflict exactly as two processes do. The file is created on demand and never
-  deleted. It is not a database artifact: fresh-pair detection ignores it.
-- **Writers hold it shared.** The ledger recorder holds its database's claim
-  for the life of its connection, which is one run or one resumed stretch. Each
-  history observer holds History's claim from its construction at admission
-  until it closes, across pauses, because the History connection is shared and
-  outlives runs. The claim is taken before the first write and released after
-  the last is flushed. A writer refused because maintenance holds the claim
-  fails its admission with a typed refusal; new runs are refused, not queued.
+  `<main>.claim`. A claim is a `LockFileEx` lock on byte 0, length 1, shared or
+  exclusive, always with `LOCKFILE_FAIL_IMMEDIATELY`: it never waits. Release
+  unlocks and closes the handle; Windows also drops the lock when the handle
+  closes or the process dies, including while a child of the holder lives.
+  Locks belong to handles, so two claims in one process conflict exactly as two
+  processes do. The file is opened with Python's own `os.open` (extended-length
+  spelling; non-inheritable, as every Python-opened handle is) so the test
+  suite's live-data guard sees its creation. `claim_path` resolves the main path
+  with `validate_database_path`, the resolution every database caller already
+  applies, so spellings that resolve alike share one claim. The file is created
+  on demand by schema creation and writers, and never deleted. It is not a
+  database artifact: fresh-pair detection, `database_artifacts_present` and pair
+  reservations consider only the main file and its `-wal`, `-shm` and `-journal`
+  sidecars, and the desktop path lease (`AppPathLease.bind_databases`) pins only
+  the two main files.
+- **Refusals.** `DatabaseClaimRefused` extends `DatabaseAdmissionError`, as
+  `DatabaseBusyError` does, so a claim refusal is an admission refusal to
+  existing handlers; each carries the main file's `path`.
+  `DatabaseMaintenanceActive` refuses a shared claim under an exclusive one
+  (new work is refused, not queued); `DatabaseInUse` refuses an exclusive claim
+  under any other. Failure to open the claim file raises the `OSError`
+  unchanged, never a claim refusal, and creates nothing. In a directory that
+  forbids new files SQLite's own `-wal` and `-shm` creation would fail too; a
+  directory at the `.claim` name, or a missing parent, is a failure only the
+  claim has. A `LockFileEx` error other than `ERROR_LOCK_VIOLATION` is likewise
+  raised as an `OSError`, not reported as contention.
+- **Writers hold it shared.** `LedgerRecorder` takes its database's claim after
+  any schema creation has released its exclusive claim and before its writer
+  connection opens, and releases it after that connection closes; a failed
+  close keeps it until a later close or process exit, and every constructor
+  failure releases it. A recorder lives for one run or one resumed stretch, so
+  a paused run holds none. Each `HistoryObserver` holds History's claim from
+  construction at admission until `close()`, across pauses and after
+  `finalize`, because the History connection is shared and outlives runs;
+  `close()` releases it after its final flush attempt, even a failed one, and
+  construction failures release it. `HistoryStore` holds none. A writer refused
+  because maintenance holds the claim fails its admission with a typed refusal;
+  new runs are refused, not queued.
+
+  **Limit, closed by M2-A4.** Admission does not yet refuse. The History claim
+  is taken by the dispatcher's audit-observer factory, and the dispatcher turns
+  any factory failure into degraded audit, so a session refused there is
+  admitted with audit degraded and is refused only when its ledger recorder
+  opens, before any filesystem change or database write. If the exclusive
+  holder releases between admission and that open (including while the session
+  waits behind a resource lock), the run is not refused at all: it completes
+  with audit degraded and no History row. This stays safe: the plan was
+  reviewed, the ledger records the run, degraded audit is reported, and a
+  properly admitted run keeps its observer's History claim, so maintenance,
+  which takes History second, is refused and releases the ledger. In M2-A3 the
+  only exclusive holders are schema creation and migration, which run before
+  any session can be admitted on that pair. M2-A4, where maintenance commands
+  first run beside live sessions, owns the admission-time refusal and its gate.
 - **Maintenance holds it exclusively** on both databases of the pair, ledger
-  first, and refuses rather than waits while any claim is held. One gate covers
-  both because a ledger change under a History writer still recording location
-  ids is the id-reuse hazard. Schema creation takes its own database's claim
-  exclusively.
+  first, and refuses rather than waits while any claim is held:
+  `hold_maintenance_claims(ledger, history)` releases the ledger claim when
+  History's is refused. One gate covers both because a ledger change under a
+  History writer still recording location ids is the id-reuse hazard. Schema
+  creation (`_create_schema`) takes its own database's claim exclusively before
+  SQLite opens the file, so a refused creation leaves no database; inside pair
+  initialization the refusal is the cause of `DatabasePairInitializationError`
+  and the reservations are retracted.
 - **Readers take no claim.** SQLite reads are consistent snapshots, and a stale
-  view is only behind.
+  view is only behind. Read-only classification (`validate_database_pair`,
+  `probe_database_file_contract`, `DatabaseConnectionOwner`) never creates a
+  claim file.
+- **Where a refusal surfaces today** (under the limit above). A refused History
+  claim at admission becomes degraded audit. The run's ledger recorder refuses
+  before any scan, hash or filesystem change: inventory and integrity end
+  failed with the typed error, execution takes its recording-open-failure path,
+  and inventory acknowledge or restore raises it to the caller. The CLI prints
+  the typed error and exits 4; the desktop shows it as the task's terminal
+  detail, while a visibility batch reports unresolved rows without the reason.
+  Known wording limit: the same CLI output still carries the generic "Ledger
+  recording is degraded; fix the ledger path or access…" and "History recording
+  is degraded; check the history path or access…" lines, and the result summary
+  still reads `disposition=ran`.
+- **Tests.** `tests/test_db_claims.py` (real child processes: shared
+  coexistence, bounded no-wait refusal, release, killed holders, handle
+  inheritance, in-process conflict, path resolution, open and lock failures
+  that are not refusals, recorder and observer lifetimes including failed
+  closes, schema creation and the pair helper); the live-data guard's view of
+  claim creation in `tests/test_live_data_guard.py`; the workflow and
+  dispatcher seam in `tests/test_inventory_runtime.py`; the CLI in
+  `tests/test_cli.py`.
+- **Limits.** A claim is keyed by the resolved main path like SQLite's own
+  sidecars, so a hard-link alias of a main file is not covered. The `HistoryStore` writer
+  connection opens without a claim; migration's own exclusive file access is
+  what refuses it. `reset_databases` deletes files without holding the pair
+  claim; only its re-creation takes each database's claim.
 - **Outside the gate.** Settings keep their own named mutex. A paused run holds
   no ledger claim; contract validation at its next open is what refuses a
   database that changed underneath it. Work that is waiting rather than writing

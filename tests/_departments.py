@@ -36,6 +36,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/modules/test_verifier_native.py",
     ),
     "database": (
+        "tests/test_db_claims.py",
         "tests/test_db_history.py",
         "tests/test_db_repositories.py",
         "tests/test_db_schema.py",

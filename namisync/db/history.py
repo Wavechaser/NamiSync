@@ -60,6 +60,7 @@ from .connections import (
     connect_history_writer,
     validate_database_path,
 )
+from .claims import acquire_database_claim
 from .contracts import DatabaseConnectionOwner, require_database_file_contract
 from .schema import (
     MAX_HISTORY_ERROR_MESSAGE_BYTES,
@@ -898,10 +899,17 @@ class HistoryObserver:
         self._record = record
         self._context = context
         self._policy = policy
-        self._context_hash = _hash(_context_payload(record, context))
-        existing = store._load_existing(context.run_token)
-        if existing is not None and existing.context_hash != self._context_hash:
-            raise TokenConflictError("history run token context changed")
+        # The store's connection is shared and outlives runs, so each observer
+        # holds History's claim from construction until close, across pauses.
+        self._claim = acquire_database_claim(store.path, exclusive=False)
+        try:
+            self._context_hash = _hash(_context_payload(record, context))
+            existing = store._load_existing(context.run_token)
+            if existing is not None and existing.context_hash != self._context_hash:
+                raise TokenConflictError("history run token context changed")
+        except BaseException:
+            self._claim.release()
+            raise
         self._event_hashes: dict[int, bytes] = {}
         self._highest_event_seq = (
             None if existing is None or existing.last_committed_seq == 0
@@ -1652,6 +1660,7 @@ class HistoryObserver:
                 self.flush()
         finally:
             self._closed = True
+            self._claim.release()
 
     def _require_accepting(self) -> None:
         if self._closed or self._finalized:
