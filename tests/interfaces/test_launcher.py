@@ -235,6 +235,86 @@ def test_gui_launcher_constructs_the_fixed_production_identity(
     assert seen[0][2] is launcher._report_startup_error
 
 
+def test_gui_launcher_without_data_dir_uses_the_development_root_unless_frozen(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from namisync.interfaces.web import host
+
+    seen: list[Path] = []
+    monkeypatch.setattr(
+        host,
+        "run_desktop",
+        lambda paths, identity, *, startup_error: seen.append(paths.root) or 0,
+    )
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    monkeypatch.delattr(sys, "frozen", raising=False)
+
+    assert launcher.gui_main([]) == 0
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert launcher.gui_main([]) == 0
+
+    assert seen == [
+        (tmp_path / "NamiSync-Development").resolve(),
+        (tmp_path / "NamiSync").resolve(),
+    ]
+    assert not (tmp_path / "NamiSync-Development").exists()
+    assert not (tmp_path / "NamiSync").exists()
+
+
+# None selects the resolver's own default root; the rest are explicit --data-dir
+# values relative to LOCALAPPDATA, with the development spelling matched
+# case-insensitively and near-misses keeping the production identity.
+_IDENTITY_ROOTS = (
+    (None, True),
+    ("NamiSync-Development", True),
+    ("NAMISYNC-DEVELOPMENT", True),
+    ("NamiSync", False),
+    ("NamiSync-Development\\sub", False),
+    ("NamiSync-DevelopmentX", False),
+    ("elsewhere", False),
+)
+
+
+@pytest.mark.parametrize("frozen", (False, True))
+@pytest.mark.parametrize(("data_dir", "development"), _IDENTITY_ROOTS)
+def test_gui_instance_identity_follows_the_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    frozen: bool,
+    data_dir: str | None,
+    development: bool,
+) -> None:
+    """The development root, however reached, takes the development identity."""
+
+    from namisync.interfaces.web import host
+
+    seen: list[object] = []
+    monkeypatch.setattr(
+        host,
+        "run_desktop",
+        lambda paths, identity, *, startup_error: seen.append(identity) or 0,
+    )
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    if frozen:
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+    else:
+        monkeypatch.delattr(sys, "frozen", raising=False)
+    if data_dir is None:
+        arguments: list[str] = []
+        development = not frozen  # the frozen default root is the live root
+    else:
+        arguments = ["--data-dir", str(tmp_path / data_dir)]
+
+    assert launcher.gui_main(arguments) == 0
+
+    assert seen == [
+        host.development_instance_identity()
+        if development
+        else host.production_instance_identity()
+    ]
+
+
 def test_native_startup_reporter_uses_stable_caption(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

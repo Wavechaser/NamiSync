@@ -6,6 +6,7 @@ import ctypes
 from ctypes import wintypes
 import os
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
@@ -23,6 +24,12 @@ _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
 _FILE_BASIC_INFO_CLASS = 0
 _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+
+
+def default_root_is_development() -> bool:
+    """Only the frozen release defaults to the live root (M2-A1)."""
+
+    return not getattr(sys, "frozen", False)
 
 
 class AppPathError(ValueError):
@@ -108,7 +115,33 @@ class AppPaths:
         local_app_data = values.get("LOCALAPPDATA")
         if not local_app_data:
             raise AppPathError("LOCALAPPDATA is unavailable")
-        return cls.from_root(Path(local_app_data) / "NamiSync")
+        # Only the PyInstaller release owns the live root (M2-A1).
+        return cls.from_root(
+            Path(local_app_data)
+            / (
+                "NamiSync-Development"
+                if default_root_is_development()
+                else "NamiSync"
+            )
+        )
+
+    def is_development_root(
+        self,
+        environment: Mapping[str, str] | None = None,
+    ) -> bool:
+        """Whether this root is the default development root (M2-A1)."""
+
+        values = os.environ if environment is None else environment
+        local_app_data = values.get("LOCALAPPDATA")
+        if not local_app_data:
+            return False
+        try:
+            development = _resolve_local_path(
+                Path(local_app_data) / "NamiSync-Development"
+            )
+        except AppPathError:
+            return False
+        return os.path.normcase(str(self.root)) == os.path.normcase(str(development))
 
     @classmethod
     def from_root(cls, root: str | Path) -> AppPaths:

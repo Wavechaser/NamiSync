@@ -390,7 +390,8 @@ existing test-owned headed child with a development-only identity:
 mode has its own corresponding development mutex/title and invokes the existing
 `_component_gallery_child.py` with the test-owned
 `tests/assets/component_gallery/gallery.js` scenario. Production launcher
-arguments, the production `Local\NamiSync.Desktop` mutex and `NamiSync` title,
+arguments, the production `Local\NamiSync.Desktop` mutex and `NamiSync` title
+(used by the frozen release and every data root other than the development root),
 packaged assets, and both clean-wheel children remain unchanged.
 
 The shell keeps the ordinary Ready label hidden. Only smoke-test invocations
@@ -398,8 +399,10 @@ explicitly pass the helper's `--expose-ready-status` switch for their UI Automat
 witness; `tools/desktop/gui.ps1` does not opt in to this test presentation override.
 
 Data is persistent and isolated beneath
-`%LOCALAPPDATA%\NamiSync-Development`: `shell` for the real development host and
-`gallery\<mode>\data` for each gallery mode. A launcher-control mutex refuses a
+`%LOCALAPPDATA%\NamiSync-Development`: the root itself for the real development
+host (the source-tree default, so the development CLI and GUI share one ledger;
+an old `shell` subfolder is left unused) and `gallery\<mode>\data` for each
+gallery mode. A launcher-control mutex refuses a
 second wrapper for the same concrete mode, and a child mutex already held at the
 pre-launch check is refused rather than treated as a window this invocation
 opened. There is no global gallery mutex: light, dark, forced, and reduced may

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import sys
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import replace
@@ -259,7 +260,8 @@ def build_plan_node_tree(request_id: str, plan_value: Plan) -> NodeTree:
 def default_database_paths() -> tuple[Path, Path]:
     base = os.environ.get("LOCALAPPDATA")
     root = Path(base) if base else Path.home() / "AppData" / "Local"
-    app = root / "NamiSync"
+    # Only the PyInstaller release owns the live root (M2-A1).
+    app = root / ("NamiSync" if getattr(sys, "frozen", False) else "NamiSync-Development")
     return app / "ledger.db", app / "history.db"
 
 

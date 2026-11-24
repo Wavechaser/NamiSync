@@ -377,7 +377,9 @@ gets read-only installation guidance. Unsigned packages publish hashes/source
 identity and honest unknown-code-policy guidance. Browser state grants no authority.
 
 GUI-only data-dir relocates every artifact together. The development launcher
-uses its distinct mutex/title and NamiSync-Development root; test compositions'
+uses its distinct mutex/title and NamiSync-Development root, which `namisync-gui`
+from the source tree (or any GUI whose resolved root is that root) shares under
+that same identity; test compositions'
 local-index seam is not a production argument/environment/page/bridge override.
 Clean installed-wheel evidence is separate from editable preview. The old PySide
 proof/mockup is [historical](obsolete/ui_mockup/mockup.md).
@@ -1039,7 +1041,8 @@ resume nor fallback for missing task artifacts. No task review depends on that p
   nor replaces the document, and the bridge remains usable afterward.
 - File logging and the deterministic WebView2 storage path are configured before
   pywebview import. An injected headed-test root receives every local artifact
-  and leaves the real per-user directory untouched.
+  and leaves the real per-user directories (`NamiSync` and
+  `NamiSync-Development`) untouched.
 - A bounded coalescing event drain preserves reliable item/terminal ordering,
   makes gaps visible, releases terminal sessions without disposing of their
   reviewed tasks, and closes all remaining observations on explicit close or

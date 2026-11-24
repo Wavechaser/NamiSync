@@ -21,6 +21,36 @@ versioning begins, headings use the version and codename, such as
 M2 makes NamiSync lasting and legible: what it did, knows and was doing survives
 restarts, crashes, restores, retries and schema changes, and is shown honestly.
 
+### M2 Segment A
+
+Safe-to-change-the-databases work: guards and foundations that land before the
+first schema change. M2_PLAN owns checkpoint scope and gates.
+
+#### Guard live production data from source-tree work (2026-11-24)
+
+- Default to `%LOCALAPPDATA%\NamiSync-Development` for every run except the
+  frozen release in both resolvers, `AppPaths.production` (GUI) and
+  `default_database_paths` (CLI), which stay separate owners. The opt-in is an
+  explicit `--data-dir`, `--database` or `--history-database` path. The
+  development GUI launcher's shell profile now uses that root itself instead of
+  its `shell` subfolder; existing data is neither moved nor deleted.
+- Install a session-wide audit hook in `tests/conftest.py` that refuses any test
+  operation able to create or change an entry under the live root, found from
+  the Windows known folder rather than `LOCALAPPDATA`. Child processes rely on
+  the source-checkout default; `ctypes` calls are not guarded. Every refusal is
+  recorded and fails its test even when product code swallowed the exception.
+- Give the default development root its own desktop identity
+  (`Local\NamiSync.Development.Desktop`, `NamiSync [Development]`, as
+  `tools/desktop/gui.ps1` uses), so `namisync-gui` from source and the
+  development shell cannot run on one root together. The identity follows the
+  resolved root, however reached (default or `--data-dir`, frozen or not); every
+  other root, including the live one, keeps the production identity. The headed
+  SH-G-2 test now compares both real data roots and refuses to run while a
+  desktop mutex exists, while another starts, or before the roots settle.
+- Prove both: guard cases against the real hook and a tmp root, resolver
+  agreement under frozen and source runs, and a subprocess `inventory` that
+  writes only beneath the development root.
+
 ### M2 Planning
 
 Documentation servicing and delivery planning before implementation starts.

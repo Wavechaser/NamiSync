@@ -469,8 +469,10 @@ the same mutex, preserving ADS and omitted sibling switches. A full preservation
 replacement cannot be combined with partial preservation switches.
 During pre-release development, an old-schema refusal is resolved with the app
 closed: move only that data root's `settings.json` aside as a backup and reopen
-with fresh defaults. Production uses the root selected by `AppPaths` (normally
-`%LOCALAPPDATA%\NamiSync`); a development data-dir override selects another root.
+with fresh defaults. The packaged release uses the root selected by `AppPaths`
+(`%LOCALAPPDATA%\NamiSync`); every other run defaults to
+`%LOCALAPPDATA%\NamiSync-Development` with the same layout, and an explicit
+data-dir selects another root.
 Never delete the ledger/history pair or `ui-state.json` for a settings reset.
 Reads require the exact integer schema discriminator and reject duplicate JSON
 object keys rather than accepting boolean/integer equivalence or last-key-wins

@@ -1825,6 +1825,7 @@ def test_cli_runs_inventory_and_integrity_lifecycle(
     assert final == EXIT_SUCCESS
     assert not (default_data / "NamiSync" / "ledger.db").exists()
     assert not (default_data / "NamiSync" / "history.db").exists()
+    assert not (default_data / "NamiSync-Development").exists()
 
     history_output = io.StringIO()
     history_errors = io.StringIO()
@@ -2136,6 +2137,52 @@ def test_attribute_only_change_is_planned_and_propagated(tmp_path: Path) -> None
         source_file.chmod(stat.S_IWRITE)
         if target_file.exists():
             os.chmod(target_file, stat.S_IWRITE)
+
+
+@pytest.mark.parametrize("frozen", (False, True))
+def test_default_root_without_opt_in_is_development_unless_frozen(
+    tmp_path: Path, frozen: bool,
+) -> None:
+    """M2-A1: only a frozen release defaults to the live root; others do not."""
+
+    local = tmp_path / "local"
+    library = tmp_path / "library"
+    local.mkdir()
+    library.mkdir()
+    # The child installs the suite guard too, so a resolver that ever reached the
+    # live root would be refused instead of writing there.
+    script = """
+import sys
+sys.path.insert(0, sys.argv[3])
+import _live_data_guard
+_live_data_guard.install()
+sys.frozen = sys.argv[1] == 'frozen'
+from namisync.interfaces.cli import main
+raise SystemExit(main(['inventory', sys.argv[2]]))
+"""
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            script,
+            "frozen" if frozen else "source",
+            str(library),
+            str(Path(__file__).parent),
+        ],
+        cwd=Path(__file__).parents[1],
+        env=dict(os.environ, LOCALAPPDATA=str(local)),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == EXIT_SUCCESS, (completed.stdout, completed.stderr)
+    used, unused = ("NamiSync", "NamiSync-Development")
+    if not frozen:
+        used, unused = unused, used
+    assert (local / used / "ledger.db").is_file()
+    assert (local / used / "history.db").is_file()
+    assert not (local / unused).exists()
 
 
 def test_real_module_and_console_entry_points_use_process_argv(tmp_path: Path) -> None:

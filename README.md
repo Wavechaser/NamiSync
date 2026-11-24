@@ -232,10 +232,13 @@ remains guarded and hidden. There is no `--yes` bypass. Location commands
 require exactly one root or `--location-id`; repeatable `--path` values are
 exact root-relative selections and clone ambiguity requires `--mount`.
 
-Ledger and history default to separate files under `%LOCALAPPDATA%\NamiSync`.
-Sync and location commands accept isolated `--database` and
-`--history-database` paths. The sibling `settings.json` supplies semantic
-defaults; an explicit deletion-policy option overrides that plan only.
+Ledger and history default to separate files under
+`%LOCALAPPDATA%\NamiSync-Development` when run from source; only the packaged
+release defaults to `%LOCALAPPDATA%\NamiSync`, so source runs reach the release's
+data only through an explicit path. Sync and location commands accept isolated
+`--database` and `--history-database` paths. The sibling `settings.json`
+supplies semantic defaults; an explicit deletion-policy option overrides that
+plan only.
 
 Clean full/no-op runs return `0`; input/refusal/failure/cancel/partial/degraded/
 mismatch/verification-incomplete use codes `2` through `9`. The selected code
@@ -304,6 +307,12 @@ README intentionally stops at milestone and phase summaries.
 
 M2 makes NamiSync lasting and legible: what it did, knows and was doing survives
 restarts, crashes, restores, retries and schema changes, and is shown honestly.
+
+### M2 Segment A
+
+Source-tree runs default to a separate development data root, and the test
+suite refuses the file, database and directory operations that would create or
+change entries under the release's data folder.
 
 ### M2 Planning
 

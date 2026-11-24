@@ -51,7 +51,7 @@ function New-NamiGuiPlan {
         $child = Join-Path $repository (
             "tests\interfaces\web\_headed_host_child.py"
         )
-        $data = Join-Path $development "shell"
+        $data = $development
         $mutex = "Local\NamiSync.Development.Desktop"
         $title = "NamiSync [Development]"
         return [pscustomobject]@{

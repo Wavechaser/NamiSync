@@ -18,6 +18,8 @@ from _departments import (
     requested_departments,
     validate_department_manifest,
 )
+from _live_data_guard import fail_on_unacknowledged_refusals, take_refusals
+from _live_data_guard import install as install_live_data_guard
 from _wheel_identity import (
     assert_installed_package,
     assert_recorded_artifact,
@@ -32,6 +34,36 @@ from _wheel_identity import (
 
 
 PROJECT_ROOT = Path(__file__).parents[1]
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """M2-A1: refuse any test operation that could change the live data root."""
+
+    install_live_data_guard()
+
+
+@pytest.fixture(autouse=True)
+def _live_data_guard_refusals():
+    """Fail a test whose code reached the live root, even if it swallowed that."""
+
+    fail_on_unacknowledged_refusals(setup=True)
+    yield
+    fail_on_unacknowledged_refusals()
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
+    """Fail the session for refusals recorded after the last test finished."""
+
+    leftover = take_refusals()
+    if leftover:
+        sys.stderr.write(
+            "\nM2-A1 live-data guard: refusals recorded outside any test: "
+            + "; ".join(f"{event} {path}" for event, path in leftover)
+            + "\n"
+        )
+        if session.exitstatus == pytest.ExitCode.OK:
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
 
 def pytest_collection_modifyitems(

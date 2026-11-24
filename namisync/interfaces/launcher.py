@@ -54,20 +54,29 @@ def gui_main(argv: list[str] | None = None) -> int:
             if parsed.data_dir is None
             else AppPaths.from_root(parsed.data_dir)
         )
+        # The desktop identity follows the resolved root: only the development
+        # root takes the development identity, however it was reached (M2-A1).
+        development = paths.is_development_root()
     except (GuiArgumentError, OSError, ValueError) as error:
         _report_startup_error(str(error))
         return _EXIT_USAGE
 
     try:
         from namisync.interfaces.web.host import (
+            development_instance_identity,
             production_instance_identity,
             run_desktop,
         )
 
+        identity = (
+            development_instance_identity()
+            if development
+            else production_instance_identity()
+        )
         return int(
             run_desktop(
                 paths,
-                production_instance_identity(),
+                identity,
                 startup_error=_report_startup_error,
             )
         )

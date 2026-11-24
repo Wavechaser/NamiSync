@@ -392,7 +392,8 @@ def test_sh_g_2_only_paths_module_reads_the_production_root_authority() -> None:
 
 def _uses_product_path_component(node: ast.AST) -> bool:
     if not any(
-        isinstance(child, ast.Constant) and child.value == "NamiSync"
+        isinstance(child, ast.Constant)
+        and child.value in {"NamiSync", "NamiSync-Development"}
         for child in ast.walk(node)
     ):
         return False
@@ -650,3 +651,22 @@ def test_headed_source_never_targets_the_shared_production_desktop() -> None:
         }
         assert r"Local\NamiSync.Desktop" not in literals
         assert "NamiSync" not in literals
+
+
+def test_named_mutex_exists_reports_existence_and_not_found() -> None:
+    from uuid import uuid4
+
+    name = rf"Local\NamiSync.Test.Existence.{uuid4().hex}"
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+    kernel32.CreateMutexW.argtypes = (ctypes.c_void_p, ctypes.c_int, ctypes.c_wchar_p)
+    kernel32.CloseHandle.argtypes = (ctypes.c_void_p,)
+
+    assert native.named_mutex_exists(name) is False
+    handle = kernel32.CreateMutexW(None, False, name)
+    assert handle
+    try:
+        assert native.named_mutex_exists(name) is True
+    finally:
+        kernel32.CloseHandle(handle)
+    assert native.named_mutex_exists(name) is False

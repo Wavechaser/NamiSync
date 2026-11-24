@@ -150,6 +150,15 @@ def production_instance_identity() -> DesktopInstanceIdentity:
     )
 
 
+def development_instance_identity() -> DesktopInstanceIdentity:
+    """Return the identity of the default development root (M2-A1)."""
+
+    return DesktopInstanceIdentity(
+        mutex_name=r"Local\NamiSync.Development.Desktop",
+        window_title="NamiSync [Development]",
+    )
+
+
 class InstanceNative(Protocol):
     def create_mutex(self, name: str) -> tuple[object, bool]: ...
 

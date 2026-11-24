@@ -136,6 +136,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/test_resource_acceptance.py",
         "tests/test_department_policy.py",
         "tests/test_icon_maintenance.py",
+        "tests/test_live_data_guard.py",
         "tests/test_tools_cli.py",
         "tests/test_tools_bugs.py",
         "tests/test_tools_evidence.py",

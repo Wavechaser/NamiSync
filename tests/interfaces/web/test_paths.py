@@ -14,6 +14,7 @@ from namisync.interfaces.web.paths import (
     AppPaths,
     resolve_local_index_path,
 )
+from namisync.workflows import default_database_paths
 
 
 PROJECT_ROOT = Path(__file__).parents[3]
@@ -55,10 +56,82 @@ def test_injected_root_moves_every_gui_artifact_together(tmp_path: Path) -> None
     )
 
 
-def test_production_root_uses_local_app_data() -> None:
+def test_source_checkout_root_is_the_development_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delattr(sys, "frozen", raising=False)
+
+    paths = AppPaths.production({"LOCALAPPDATA": r"C:\Users\Alice\AppData\Local"})
+
+    assert paths.root == Path(r"C:\Users\Alice\AppData\Local\NamiSync-Development")
+    assert paths.ledger == paths.root / "ledger.db"
+
+
+def test_frozen_release_root_is_the_live_root(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+
     paths = AppPaths.production({"LOCALAPPDATA": r"C:\Users\Alice\AppData\Local"})
 
     assert paths.root == Path(r"C:\Users\Alice\AppData\Local\NamiSync")
+
+
+@pytest.mark.parametrize("frozen", (False, True))
+def test_gui_and_cli_resolvers_agree_on_the_default_root(
+    frozen: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    if frozen:
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+    else:
+        monkeypatch.delattr(sys, "frozen", raising=False)
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+
+    gui = AppPaths.production()
+    ledger, history = default_database_paths()
+
+    expected = tmp_path / ("NamiSync" if frozen else "NamiSync-Development")
+    assert gui.root == expected.resolve()
+    assert (ledger, history) == (gui.ledger, gui.history)
+    assert ledger.parent == expected
+
+
+def test_development_root_is_recognized_after_resolution(tmp_path: Path) -> None:
+    environment = {"LOCALAPPDATA": str(tmp_path)}
+
+    for name, expected in (
+        ("NamiSync-Development", True),
+        ("NAMISYNC-development", True),
+        ("NamiSync", False),
+        ("NamiSync-DevelopmentX", False),
+        ("NamiSync-Development/sub", False),
+        ("elsewhere", False),
+    ):
+        paths = AppPaths.from_root(tmp_path / name)
+        assert paths.is_development_root(environment) is expected, name
+    assert not AppPaths.from_root(tmp_path / "NamiSync-Development").is_development_root({})
+
+
+@pytest.mark.parametrize("frozen", (False, True))
+def test_cli_resolver_without_local_app_data_falls_back_to_the_home_profile(
+    frozen: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    if frozen:
+        monkeypatch.setattr(sys, "frozen", True, raising=False)
+    else:
+        monkeypatch.delattr(sys, "frozen", raising=False)
+    monkeypatch.delenv("LOCALAPPDATA", raising=False)
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: tmp_path))
+
+    ledger, history = default_database_paths()
+
+    folder = "NamiSync" if frozen else "NamiSync-Development"
+    base = tmp_path / "AppData" / "Local" / folder
+    assert (ledger, history) == (base / "ledger.db", base / "history.db")
 
 
 @pytest.mark.parametrize(

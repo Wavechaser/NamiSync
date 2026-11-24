@@ -88,10 +88,19 @@ Checkpoints:
     writing opens, SQLite connects, and creating, renaming or deleting entries.
     Child processes are covered by the source-checkout default.
 
+  - The desktop identity follows the root (user decision, 2026-11-24, after
+    review found that the shared development root let a source `namisync-gui`
+    and the development shell open it together): a GUI whose resolved root is
+    the development root takes the development identity, by default or by
+    `--data-dir`, and every other root keeps the production identity. This
+    revises SH-G-10, which kept the identity independent of the data root.
+
   Population: the two default resolvers (`AppPaths.production` and
   `default_database_paths`, kept as separate owners under SH-G-2), the GUI
-  launcher's shell plan, `tests/conftest.py`, their direct tests, and the
-  documents that state the default root. Non-goals: changing the release's
+  launcher's shell plan, the GUI launcher and host identity, `tests/conftest.py`
+  and the guard module, their direct tests including SH-G-2's headed witness and
+  SH-G-10's static check, and the documents that state the default root or the
+  identity. Non-goals: changing the release's
   root, guarding native calls made through `ctypes` in tests, and moving
   existing development data. Closes on: a test touching the live root fails,
   and a source-checkout run without the opt-in resolves to the development root.

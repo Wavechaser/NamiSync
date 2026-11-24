@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 import os
 import struct
+import time
 from pathlib import Path
 from uuid import uuid4
 
 import pytest
 
 from conftest import HeadedInstalledWheel
+from _desktop_mutexes import watched_desktop_mutexes
 from _headed_evidence import EvidencePaths, EvidenceReader
 from _headed_native import (
     HeadedProcess,
@@ -21,6 +23,7 @@ from _headed_native import (
     directory_snapshot,
     dismiss_ok_dialog,
     foreground_window_handle,
+    named_mutex_exists,
     read_bytes,
     read_text,
     require_absolute_local_test_root,
@@ -184,14 +187,57 @@ print(json.dumps({"path": str(path), "is_file": path.is_file()}))
     assert "startup.renderer browser_version=" in log_text
 
 
+def _running_desktops() -> list[str]:
+    return [name for name in watched_desktop_mutexes() if named_mutex_exists(name)]
+
+
+def _snapshot_diff(before: list, after: list, *, limit: int = 10) -> str:
+    def describe(entries: set) -> str:
+        shown = sorted(entries, key=str)[:limit]
+        if not entries:
+            return "none"
+        text = "; ".join(
+            f"{entry[0]} size={entry[2]} mtime_ns={entry[3]}" for entry in shown
+        )
+        extra = len(entries) - len(shown)
+        return text + (f"; ... {extra} more" if extra > 0 else "")
+
+    return (
+        f"only before: {describe(set(before) - set(after))}. "
+        f"only after: {describe(set(after) - set(before))}."
+    )
+
+
 def test_sh_g_2_headed_data_root_is_physically_isolated(
     headed_installed_wheel: HeadedInstalledWheel,
     tmp_path: Path,
 ) -> None:
     deadline = scenario_deadline()
     data_root = require_absolute_local_test_root(tmp_path / "isolated")
-    real_root = Path(os.environ["LOCALAPPDATA"]) / "NamiSync"
-    before_real = directory_snapshot(real_root, deadline=deadline)
+    # The installed wheel is not frozen, so a leak would land in the development
+    # root; watch both. A running GUI changes them legitimately, so refuse first.
+    running = _running_desktops()
+    if running:
+        pytest.fail(
+            f"{', '.join(running)} exists: close the NamiSync release, development "
+            "GUI or component gallery before running this headed test, which "
+            "compares the real per-user data roots before and after."
+        )
+    local_app_data = Path(os.environ["LOCALAPPDATA"])
+    real_roots = (
+        local_app_data / "NamiSync",
+        local_app_data / "NamiSync-Development",
+    )
+    first = [directory_snapshot(root, deadline=deadline) for root in real_roots]
+    time.sleep(min(2.0, deadline.remaining()))
+    before_real = [directory_snapshot(root, deadline=deadline) for root in real_roots]
+    for root, earlier, later in zip(real_roots, first, before_real, strict=True):
+        if earlier != later:
+            pytest.fail(
+                f"{root} is still changing before the test starts (a NamiSync "
+                "process or a just-closed WebView2 host is still writing); wait a "
+                f"few seconds and rerun. {_snapshot_diff(earlier, later)}"
+            )
     process, title, _mutex = _start_injected_host(
         headed_installed_wheel,
         data_root,
@@ -212,7 +258,16 @@ def test_sh_g_2_headed_data_root_is_physically_isolated(
         if process.poll() is None:
             terminate_process_tree(process, deadline=deadline)
 
-    assert directory_snapshot(real_root, deadline=deadline) == before_real
+    started = _running_desktops()
+    if started:
+        pytest.fail(
+            f"{', '.join(started)} appeared during the test: a NamiSync desktop "
+            "started concurrently, so changes to the real data roots cannot be "
+            "told apart from a leak. Rerun with no other NamiSync window open."
+        )
+    for root, before in zip(real_roots, before_real, strict=True):
+        after = directory_snapshot(root, deadline=deadline)
+        assert after == before, f"{root} changed: {_snapshot_diff(before, after)}"
     assert (data_root / "ledger.db").is_file()
     assert (data_root / "history.db").is_file()
     assert (data_root / "logs" / "namisync.log").is_file()

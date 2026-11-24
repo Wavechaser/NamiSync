@@ -54,8 +54,10 @@ files under the same session and volume custody for immediate readback.
 `--history-database PATH`. For `sync`, both
 database files must be distinct and outside the managed roots; defaults are
 the local
-`%LOCALAPPDATA%\NamiSync\ledger.db` and
-`%LOCALAPPDATA%\NamiSync\history.db`.
+`%LOCALAPPDATA%\NamiSync-Development\ledger.db` and
+`%LOCALAPPDATA%\NamiSync-Development\history.db`. Only the packaged
+(`sys.frozen`) release defaults to `%LOCALAPPDATA%\NamiSync`; a source run
+reaches those files only when `--database` or `--history-database` names them.
 Semantic defaults live in `settings.json` beside the selected ledger, so an
 explicit `--database` also selects an isolated sibling settings file.
 

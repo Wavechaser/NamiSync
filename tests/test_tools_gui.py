@@ -10,6 +10,12 @@ import uuid
 
 import pytest
 
+from _desktop_mutexes import gallery_mutex, watched_desktop_mutexes
+from namisync.interfaces.web.host import (
+    development_instance_identity,
+    production_instance_identity,
+)
+
 
 PROJECT_ROOT = Path(__file__).parents[1]
 GUI_SCRIPT = PROJECT_ROOT / "tools" / "desktop" / "gui.ps1"
@@ -150,10 +156,17 @@ $modeValues = @(
 
     shell = value["shell"]
     assert shell["Kind"] == "shell"
-    assert shell["Mutex"] == r"Local\NamiSync.Development.Desktop"
-    assert shell["Mutex"] != r"Local\NamiSync.Desktop"
-    assert shell["Title"] == "NamiSync [Development]"
-    assert shell["Title"] != "NamiSync"
+    # The shell plan is the development identity the source-tree GUI also uses.
+    assert shell["Mutex"] == development_instance_identity().mutex_name
+    assert shell["Title"] == development_instance_identity().window_title
+    assert shell["Mutex"] != production_instance_identity().mutex_name
+    assert shell["Title"] != production_instance_identity().window_title
+    assert shell["Arguments"][shell["Arguments"].index("--mutex") + 1] == shell["Mutex"]
+    assert shell["Arguments"][shell["Arguments"].index("--title") + 1] == shell["Title"]
+    assert shell["Mutex"] in watched_desktop_mutexes()
+    assert shell["Data"] == str(local / "NamiSync-Development")
+    assert shell["Log"] == str(local / "NamiSync-Development" / "logs" / "namisync.log")
+    assert shell["Arguments"][shell["Arguments"].index("--data-dir") + 1] == shell["Data"]
     assert shell["LauncherMutex"] == (
         r"Local\NamiSync.Development.Launcher.Desktop"
     )
@@ -179,7 +192,8 @@ $modeValues = @(
     for mode, plan in value["modes"].items():
         assert plan["Mode"] == mode
         assert plan["Arguments"][plan["Arguments"].index("--mode") + 1] == mode
-        assert plan["Mutex"].endswith(f".Gallery.{mode}")
+        assert plan["Mutex"] == gallery_mutex(mode)
+        assert plan["Mutex"] in watched_desktop_mutexes()
         assert plan["LauncherMutex"].endswith(f".Gallery.{mode}")
         assert f"gallery\\{mode}\\data" in plan["Data"]
 

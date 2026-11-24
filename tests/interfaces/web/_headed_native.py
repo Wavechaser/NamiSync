@@ -589,6 +589,30 @@ def directory_snapshot(
     return tuple(records)
 
 
+def named_mutex_exists(name: str) -> bool:
+    """Report whether the named Win32 mutex exists, i.e. some process holds it.
+
+    A mutex that exists but denies access still exists; only "not found" is
+    absence. Any other failure is raised rather than read as absence.
+    """
+
+    error_file_not_found, error_access_denied = 2, 5
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenMutexW.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.LPCWSTR)
+    kernel32.OpenMutexW.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    handle = kernel32.OpenMutexW(0x00100000, False, name)  # SYNCHRONIZE
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+    error = ctypes.get_last_error()
+    if error == error_access_denied:
+        return True
+    if error == error_file_not_found:
+        return False
+    raise ctypes.WinError(error)
+
+
 def read_bytes(
     path: Path,
     *,

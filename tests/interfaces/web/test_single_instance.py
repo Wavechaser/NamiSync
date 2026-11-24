@@ -13,6 +13,7 @@ from namisync.interfaces.web.host import (
     DesktopInstanceIdentity,
     WindowsInstanceNative,
     acquire_desktop_instance,
+    development_instance_identity,
     production_instance_identity,
 )
 
@@ -78,6 +79,16 @@ def test_production_identity_is_fixed_and_version_independent() -> None:
     assert "0.1.0" not in first.mutex_name
 
 
+def test_development_identity_is_fixed_and_distinct_from_production() -> None:
+    development = development_instance_identity()
+
+    assert development == DesktopInstanceIdentity(
+        mutex_name=r"Local\NamiSync.Development.Desktop",
+        window_title="NamiSync [Development]",
+    )
+    assert development != production_instance_identity()
+
+
 def test_sh_g_10_production_namespace_has_no_external_override(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -118,9 +129,40 @@ def test_sh_g_10_production_namespace_has_no_external_override(
         and node.func.id == "run_desktop"
     ]
     assert len(host_calls) == 1
-    assert isinstance(host_calls[0].args[1], ast.Call)
-    assert isinstance(host_calls[0].args[1].func, ast.Name)
-    assert host_calls[0].args[1].func.id == "production_instance_identity"
+    identity_argument = host_calls[0].args[1]
+    assert isinstance(identity_argument, ast.Name)
+    # Exactly one binding of that name, an if-expression choosing between the
+    # zero-argument production and development constructors; the launcher never
+    # builds an identity itself.
+    bindings = [
+        node
+        for node in ast.walk(launcher_tree)
+        if (
+            isinstance(node, ast.Name)
+            and node.id == identity_argument.id
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+        )
+    ]
+    assert len(bindings) == 1
+    assignments = [
+        node
+        for node in ast.walk(launcher_tree)
+        if isinstance(node, ast.Assign)
+        and [target.id for target in node.targets if isinstance(target, ast.Name)]
+        == [identity_argument.id]
+    ]
+    assert len(assignments) == 1
+    chosen = assignments[0].value
+    assert isinstance(chosen, ast.IfExp)
+    assert {
+        branch.func.id
+        for branch in (chosen.body, chosen.orelse)
+        if isinstance(branch, ast.Call)
+        and isinstance(branch.func, ast.Name)
+        and not branch.args
+        and not branch.keywords
+    } == {"production_instance_identity", "development_instance_identity"}
+    assert "DesktopInstanceIdentity" not in launcher_source
 
     browser_surface = (
         project_root / "namisync/interfaces/web/bridge.py"

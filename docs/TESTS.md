@@ -470,6 +470,40 @@ service at the existing composition points. Constructor-owned state is not
 copied into test helpers; scenario-specific lifecycle and malformed-boundary
 state remains explicit.
 
+## Live-data guard
+
+`tests/conftest.py` installs `tests/_live_data_guard.py` for the whole pytest
+session (M2-A1). Source-tree runs default to `%LOCALAPPDATA%\NamiSync-Development`,
+and the guard backstops that default for in-process tests: an audit hook raises
+`LiveDataGuardError` for operations that could create or change an entry under
+the live root, `%LOCALAPPDATA%\NamiSync`. The root comes from the Windows known
+folder, not `LOCALAPPDATA`, which tests monkeypatch. Refused operations are
+`open` for writing, appending, creating, truncating or delete-on-close,
+`sqlite3.connect`, `_winapi.CreateFile` with write, delete, delete-child or
+maximum-allowed access, a creating disposition or delete-on-close,
+`_winapi.CreateJunction`, and create, rename, remove,
+chmod, utime, truncate, link and `shutil` tree, copy or archive operations.
+Stat, listing and read-only opens stay legal. Paths compare by normalized
+component (case, separators, `\\?\` and `\\.\` prefixes, working directory), so
+`NamiSync-Development` never matches.
+
+Every refusal is also recorded with its thread. An autouse fixture fails the
+owning test when a refusal was recorded and not acknowledged, so product code
+that catches `BaseException` cannot hide it; it also fails the next test at setup
+for a refusal recorded outside any test, and the session fails for refusals left
+after the last test. Only `tests/test_live_data_guard.py` may acknowledge refusals,
+with `expected_refusals((event, path), ...)`, which acknowledges just those
+pairs recorded on the calling thread and requires each to occur. Use `tmp_path` roots and
+explicit `--database`, `--history-database` or `--data-dir` paths. Child
+processes are not hooked unless they install the guard; the source-checkout
+default covers them.
+
+Not seen: `ctypes` and other native calls, SQL `ATTACH` or `VACUUM INTO` on an
+already-open connection, UNC aliases of the root (`\\localhost\C$\...`,
+`\\?\UNC\...`), 8.3 short names, and links or junctions into the root.
+`tests/test_live_data_guard.py` drives the real hook only through operations it
+refuses, on paths whose parent does not exist.
+
 ## Markers and skips
 
 - `headed` requires the real interactive desktop host. It is excluded by the
