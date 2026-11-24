@@ -37,6 +37,9 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   registration, and a per-user AppUserModelId key is enough. A cancelled scan
   frees volume custody within about 20 ms, but planning cannot be stopped and
   keeps custody.
+- Recorded the user's decisions on two results: toasts become a user-enabled
+  setting whose off state removes the registry key, and planning becomes
+  stoppable no later than M2-B6, with planning time profiled under M2-A9.
 
 #### Guard live production data from source-tree work (2026-11-24)
 
