@@ -98,8 +98,15 @@ Checkpoints:
   prototype's keyboard, high-contrast and theme checks. Closes on: each result
   recorded in its feature's entry, with evidence where
   [PERFORMANCE](PERFORMANCE.md) requires it.
-- **M2-A3 Schema migration** (proposed). Released databases migrate forward or
-  are refused, never half-migrated. Includes core-owned format constants with
+- **M2-A3 Maintenance claim and schema migration** (proposed). Released
+  databases migrate forward or are refused, never half-migrated and never under
+  a writer. The exclusive gate comes first, with migration as its first consumer
+  (user decision, 2026-11-24): the db-owned cross-process claim that every
+  writer of either database takes, released when its process dies. A v0.1.0
+  process never takes the claim, so migration also refuses while one may be
+  writing; the design settles that signal (a v0.1.0 desktop holds
+  `Local\NamiSync.Desktop`, while a v0.1.0 CLI run holds only volume custody).
+  Includes core-owned format constants with
   known-answer vectors, per-database role and format metadata, refusal of newer
   databases, the ledger instance id recorded by each run, `AUTOINCREMENT` for
   externally referenced ids, backup before migrating with restore or refusal on
@@ -107,14 +114,19 @@ Checkpoints:
   itself (instance id and `AUTOINCREMENT`), migrated from v0.1.0. Depends on A1.
   Closes on: the fixture migrates; an interrupted migration leaves the old or the
   new database; a newer database is refused; a format changed without its
-  constant and vector fails tests.
-- **M2-A4 Maintenance gate** (proposed). Maintenance never runs under a writer of
-  either database, in any process. Includes the db-owned cross-process claim and
-  maintenance sessions for check, backup and restore, with restore issuing a new
-  ledger instance id and its lineage. Consumer: CLI maintenance commands (check,
-  backup, restore); the Data page follows in B3. Depends on A3. Closes on:
-  maintenance refuses while a GUI or CLI run holds a claim, new runs are refused
-  while maintenance holds it, and a killed process releases its claim.
+  constant and vector fails tests; migration refuses while another process holds
+  the claim or a v0.1.0 process is running, and a killed process releases its
+  claim.
+- **M2-A4 Maintenance commands** (proposed). Check, backup and restore run as
+  maintenance sessions under A3's claim, with restore issuing a new ledger
+  instance id and its lineage. Every plan, held in memory or stored, records the
+  ledger instance it was planned against, and preflight refuses a mismatch, so a
+  plan reviewed in the GUI before a CLI restore is refused at start rather than
+  executed (user decision, 2026-11-24). Consumer: CLI maintenance commands
+  (check, backup, restore); the Data page follows in B3. Depends on A3. Closes
+  on: maintenance refuses while a GUI or CLI run holds a claim, new runs are
+  refused while maintenance holds it, and a plan reviewed before a restore is
+  refused at start.
 - **M2-A5 Session progress and hold reason** (proposed). Sessions carry progress
   and hold reason, and the server derives every capability from them. Includes
   the `PENDING`-to-held edge. Consumer: Pause all and Resume all, pulled forward
@@ -174,7 +186,9 @@ Checkpoints:
   acknowledged-missing rows, forget) and the A4 maintenance sessions in the GUI,
   adding history pruning and a guided archive-and-reset. Reconciles FEATURES'
   Soft-Deleted Mappings. Depends on A3 and A4. Closes on: counted confirmations,
-  restore refusing while reviewed or queued work exists and naming it, and
+  restore refusing while the desktop's reviewed or queued work exists and naming
+  it (a courtesy on top of A4's instance check, which already covers work it
+  cannot see), and
   History showing forgotten locations as forgotten.
 - **M2-B4 Task annotations** (proposed). Notes on History runs, first in run
   detail. Decides whether the table moves to History through A3's migration.
@@ -221,19 +235,25 @@ Checkpoints:
   with one writer, reached through a core protocol that db implements. Commits
   settings and admitted bindings at admission and keeps reviewed plans with
   their selection and used mark; preflight checks the ledger instance. Consumer:
-  reviewed plans and held tasks restored after a restart. Depends on A3 and A5;
+  reviewed plans restored after a restart; held and queued sessions are C4's
+  (user decision, 2026-11-24). Depends on A3 and A5;
   B3's restore refusal extends to stored plans here. Closes on: restore after restart, a corrupt or mismatched store losing only
   tabs, and a used plan returning as needing attention.
 - **M2-C2 Paused continuations and crash rules** (proposed). Paused state saved
   once at pause and marked resuming before filesystem work; launch reads the
   most specific evidence first; interrupted runs offer Retry. Depends on C1 and
   B5. Closes on: process-kill tests at each mark, with no resumed run behind the files.
-- **M2-C3 Closing the app** (proposed). Close applies Pause all, confirms with
-  counts, saves paused and pending sessions and shows what it waits for;
-  sign-out and shutdown save best effort. Depends on B6 and C2.
-- **M2-C4 Durable queue** (proposed). The queue-owner lock and persisted holds
-  under B2's contract; queued executions return held; CLI runs show as waiting.
-  Depends on B2 and C1.
+- **M2-C4 Durable queue** (proposed). Held, pending and queued sessions survive
+  closing, crashes and restarts from what the store records at admission and at
+  each transition: the queue-owner lock and persisted holds under B2's contract;
+  queued executions return held; CLI runs show as waiting. Depends on B2 and C1.
+  Closes on: queued and held tasks come back held and in order after a close or
+  a process kill, and none starts by itself.
+- **M2-C3 Closing the app** (proposed). The close flow only: Close applies
+  Pause all, confirms with counts and shows what it waits for; sign-out and
+  shutdown pause best effort. It saves nothing of its own, since paused state
+  is saved at pause (C2) and pending and held sessions at admission (C4) (user
+  decision, 2026-11-24). Depends on B6, C2 and C4.
 - **M2-C5 Lazy restore and lineage** (proposed). Light launch restore, the
   opening mark that prevents launch loops, and the History lineage link. Depends
   on C1 and B5. Closes on: a task killed while opening returning without its
@@ -278,7 +298,7 @@ Ride-alongs never block M2. In priority order:
 1. The performance items come first. They do not fit the thesis and are not
    easy, but they touch the backend and recording stack M2 already opens, so
    later they could be harder or costlier: Verification open lookahead; Small-file
-   copy batching, after A4 because grouped commits move when a writer's claim
+   copy batching, after A3 because grouped commits move when a writer's claim
    ends, with settlement rules that C2 must accept; Unbuffered source reads.
 2. The rest, unordered (user decision, 2026-11-21): Window (Custom title bar and
    Native Fluent overlay scrollbars, after A2's framing spike and A6's label
@@ -334,7 +354,7 @@ safety are settled here, and the rest are deferred to the owning segment.
 
     Process kill and power loss behave alike. Only Windows sign-out and shutdown get the best-effort save under Closing the app.
   - **Launch.** Nothing runs at launch. A committed execution that was queued when the app closed comes back held, as held ones do. Scans, including Browse comparisons, do not start at launch or when the user switches to their tab: a restored task whose content came from a scan shows that it has not been scanned since the restart, with a Scan button. This replaces FEATURES' [Queue Launch Policy](FEATURES.md) CLI flag, reconciled when this design is accepted.
-  - **Closing the app.** Today a window close cancels every session and closes only after they settle, without saying so ([DISPATCHER](DISPATCHER.md)). Instead, a close attempt while anything is running reuses Stop all's path: it immediately applies Pause all, then asks for confirmation with counts. On regret nothing further happens, and everything stays paused or held. On confirm, paused and pending sessions are saved, everything else (running scans and plans) is canceled as today, and the window closes once all have settled, showing what it is waiting for (“Closing: waiting for 3 tasks to stop”). Saved sessions are not canceled. With nothing running, close saves and closes without asking. Windows sign-out and shutdown, including Windows Update restarts (user decision, 2026-11-20), allow no dialog and kill the app after a short grace period: NamiSync pauses and saves what it can in that time, and anything unsettled comes back interrupted. Nothing more can be done there.
+  - **Closing the app.** Today a window close cancels every session and closes only after they settle, without saying so ([DISPATCHER](DISPATCHER.md)). Instead, a close attempt while anything is running reuses Stop all's path: it immediately applies Pause all, then asks for confirmation with counts. On regret nothing further happens, and everything stays paused or held. On confirm, paused and pending sessions keep what the recovery store already holds for them (paused state saved at pause, pending sessions recorded at admission; user decision, 2026-11-24), everything else (running scans and plans) is canceled as today, and the window closes once all have settled, showing what it is waiting for (“Closing: waiting for 3 tasks to stop”). Saved sessions are not canceled. With nothing running, close saves and closes without asking. Windows sign-out and shutdown, including Windows Update restarts (user decision, 2026-11-20), allow no dialog and kill the app after a short grace period: NamiSync pauses and saves what it can in that time, and anything unsettled comes back interrupted. Nothing more can be done there.
   - **Bindings.** On relaunch, Edit setup re-resolves the stored bindings into its existing offline, ambiguous and changed states. Stored bindings are evidence for a new admission, never authority ([BUGS](BUGS.md#bug-0167)). A removable drive that comes back under a different letter is matched by volume identity, never by the letter; one that cannot be matched shows as offline or changed (user decision, 2026-11-20).
   - **Lazy restore.** Launch restores only the light parts: rail tabs, state, paths, settings and pointers. A task's heavy data loads when its tab opens. Before loading it, the store records that the task is opening, and clears that after success. A task whose record is still set at the next launch comes back without its heavy data and says NamiSync closed while opening it, with Open anyway and Close; other tasks restore normally. A process killed for memory cannot clear the record, so one bad task cannot cause a launch loop.
   - **Lineage.** Each task records the task it replaced, under Same-task retry. History holds the link, so Task-Grouped History survives losing the recovery store; the store only refers to it. Every attempt is linked, including attempts that never ran.
@@ -399,7 +419,7 @@ safety are settled here, and the rest are deferred to the owning segment.
 - **Database maintenance gate.** User decisions (2026-11-20). Migration, restore, archive-and-reset, reclaiming file space, history pruning and purge must not run while any run's records are still being written to either database, including overlapping scans and syncs and their recording tails. [DATABASE](DATABASE.md) has no such gate today.
   - **Owner.** The db layer, because only its writers know when a run's last write has landed; the dispatcher stays domain-blind. Every writer holds a shared claim from its first write until its last is flushed: the ledger recorder, and the History observer, which can start writing before the recorder and keep writing after it finishes. One gate covers both databases, and maintenance on either takes it exclusively, because a ledger restore while History is still writing location ids is exactly the id-reuse hazard under Schema migration. Maintenance takes the claim exclusively and refuses, rather than waits, while any shared claim is held. While maintenance holds it, new runs are refused. Readers take no claim: SQLite reads are consistent snapshots, and a stale view is only behind. Maintenance that touches files still takes volume custody through the dispatcher.
   - **Cross-process, including the CLI.** CLI parity gives the CLI maintenance commands, and CLI runs write the same pair, so an unguarded overlap would leave a false record: a purge orphaning a run's items, a restore receiving a run's tail, or a migration under a running writer. Ordinary concurrent runs need no gate; SQLite orders their writes. Candidate mechanism: `LockFileEx` shared and exclusive locks on a lock file beside the pair, which Windows releases when a process dies. Dispatcher custody's named mutexes are exclusive only.
-  - **Waiting work.** Every stored plan and paused continuation records the ledger instance it was planned against, and preflight refuses a mismatch (user decision, 2026-11-20). Because restore and archive-and-reset give the ledger a new instance id (Schema migration), work planned before them can never record against reused ids. On top of that, restore and archive-and-reset refuse while any reviewed plan, held or queued execution or paused run exists, and name them (“3 queued syncs were reviewed against the current ledger; stop them first”), so the user is not surprised later. The gate alone does not see this work because it is not writing.
+  - **Waiting work.** Every plan, held in memory or stored, and every paused continuation records the ledger instance it was planned against, and preflight refuses a mismatch (user decisions, 2026-11-20 and 2026-11-24, the in-memory case from M2-A4). Because restore and archive-and-reset give the ledger a new instance id (Schema migration), work planned before them can never record against reused ids. On top of that, restore and archive-and-reset refuse while any reviewed plan, held or queued execution or paused run exists, and name them (“3 queued syncs were reviewed against the current ledger; stop them first”), so the user is not surprised later. The gate alone does not see this work because it is not writing.
   - **Residual.** Processes from versions released before the gate do not take it, so the first migration is unprotected against them; accepted.
   - Settings keep their own named mutex, and the recovery store has a single writer, so neither is behind the gate.
 - **History page.** The desktop form of the [History Dialog](FEATURES.md) feature: a run list and paged run detail over the existing history readers, with an activity-kind filter, so inventory and later pages need no history page of their own. [INTERFACES](INTERFACES.md) SH-G-9 applies. User decisions (2026-11-19): History storage stays as it is. A reopened run is a static record page, not a revived task: it shows the summary and per-item outcomes it retains (history keeps outcomes, not the plan's review tree), and only the summary once detail retention prunes items. It offers no Retry. “Open in Setup” opens a new task's Setup draft with the run's paths entered as typed paths, admitted by the ordinary checks, and settings at the current defaults, which the page says. Run settings are not stored: storing them would need a schema change and compatibility rules for every later settings change, to save a few clicks. History is permanent, so it would carry those rules forever, unlike the recovery store, which may discard a mismatch. FEATURES' [Restorable Task Setup](FEATURES.md) is narrowed to paths when this design is accepted. Recording location ids for the paths stays negotiable; sync runs already share a `run_token` with the ledger's run row.

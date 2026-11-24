@@ -40,6 +40,9 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
 - Recorded the user's decisions on two results: toasts become a user-enabled
   setting whose off state removes the registry key, and planning becomes
   stoppable no later than M2-B6, with planning time profiled under M2-A9.
+- Reordered M2 checkpoints: the maintenance claim moves into M2-A3 with
+  migration as its first consumer, M2-A4 adds the ledger-instance check for
+  plans held in memory, and M2-C1, C3 and C4 each own one restart scenario.
 
 #### Guard live production data from source-tree work (2026-11-24)
 
