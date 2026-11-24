@@ -760,6 +760,41 @@ unversioned and has no effect on the data epoch. Database
 admission and the explicit reset boundary remain owned by
 [DATABASE.md](DATABASE.md).
 
+## Format Versions
+
+`namisync/core/formats.py` owns one integer version constant for each shared
+format a database persists, and `FORMAT_VERSIONS` maps each metadata name to its
+current version; the constants are the source of the numbers. The module
+docstring states each format's scope and owning symbols; the seven are:
+
+| Name | Format |
+| --- | --- |
+| `event` | Canonical event envelope bytes, detail-key vocabulary and bounds (`events.py`, `event_v5.py`); derived from the event schema version |
+| `evidence` | Content evidence as persisted: digest algorithm name, raw digest bytes, `Provenance` text, attested stat leaves, ledger inventory evidence vocabulary (`evidence.py`, `models.py`, `integrity.py`) |
+| `recording` | Recording truth: `RecordingStatus` and reason text, item and task recording facts with their omission rule, recorder command vocabulary (`evidence.py`, `execution.py`, `events.py`, `models.py`, `recording.py`, `scalars.py`) |
+| `preimage` | `canonical_json_bytes` and the core projections behind plan fingerprints, operation ids, policy fingerprints and selection digests (`planning.py`, `models.py`) |
+| `identity` | `FileIndex128` text, `FILE_ID_128` byte decoding and volume serial text (`scalars.py`, `file_identity.py`) |
+| `numeric` | Canonical decimal scalar text and the safe-integer and signed-64 bounds (`scalars.py`) |
+| `path-key` | Canonical relative paths and `rel_path_key` folding (`pathing.py`) |
+
+`tests/core/test_format_vectors.py` holds literal known-answer bytes, text or
+digests per `(name, version)`. An encoding that changes without a new constant
+fails its vector, and a constant, new or bumped, without vectors fails the
+coverage check. The vectors pin persisted vocabularies exactly: adding a member
+to a persisted enum, removing an event detail key or lowering a stored-event
+bound fails a test and is decided as a format change. Changing a format takes
+one change containing the new constant value, vectors for the new version, and a
+database migration or an invalidating step, so no stored value is read under a
+format it was not written in. Vectors of superseded versions stay in the table
+as a record and are not executed. Projections and hashes built in `db`
+(recorder payload hashes, history receipt hashes, UTC timestamp text) are not
+core formats; `db` owns their versions.
+
+Named limit: `path-key` keys follow the release interpreter's Unicode case
+tables. Changing the release interpreter ([TOOLS.md](TOOLS.md) owns its
+selection) is a possible `path-key` format change that the vectors cannot
+detect.
+
 ## Time And Evidence
 
 All domain timestamps come from one injected `Clock`, are timezone-aware UTC,

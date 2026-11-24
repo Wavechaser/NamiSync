@@ -397,6 +397,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Commitments, mutable execution state/evidence, reduced execution authority, immutable execution-review and recording projections, scoped recording reasons/issues, failure decisions, copy/recorder/filesystem protocols | `namisync/core/execution.py` |
 | Integrity state, selections, outcomes, commands, and verifier/recorder protocols | `namisync/core/integrity.py` |
 | Ledger-bound host, volume, location, mapping, run, and inventory commands | `namisync/core/recording.py` |
+| Version constants for the seven shared persisted formats (event, evidence, recording, preimage, identity, numeric, path-key) | `namisync/core/formats.py` |
 
 Workflow-owned typed checkpoints and interface wire views are not core
 contracts. Their owning workflow or interface source defines exact shape,
