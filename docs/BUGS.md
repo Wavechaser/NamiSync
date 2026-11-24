@@ -16,12 +16,14 @@ symptom, cause, and fix.
   mutation, integrity, security, or availability consequence). Pure style is
   excluded.
 - **Status** reflects the last direct verification of the entry.
-- **Category** is a short noun phrase for a class that could name another bug
-  with the same mechanism (for example, `TOCTOU parent redirection`, `shutdown
-  ownership race`, or `schema type coercion`). Put the affected operation,
-  pathname, and observed outcome in the description. Do not use a sentence,
-  milestone, review gate, test outcome, fix, or broad result such as availability
-  or convergence as the category.
+- **Category** is a short title: the specific subject, then a singular noun
+  naming its failure mechanism (for example, `TOCTOU parent redirection`,
+  `shutdown ownership race`, or `schema type coercion`). Run
+  `python -m tools.repo.bugs --mechanisms` and reuse a listed noun when one fits;
+  coin a new one only when none does. Put the affected operation, pathname, and
+  observed outcome in the description. Do not use a sentence, milestone, review
+  gate, test outcome, fix, or broad result such as availability or convergence
+  as the category.
 - Category similarity is an input to the repeated-mechanism rule in
   `AGENTS.md`; it is semantic, not exact-string identity and not proof that one
   cross-layer abstraction is correct. A predeclared finite migration may have

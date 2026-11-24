@@ -45,7 +45,7 @@ into every consumer document.
 - [BUGS.md](../BUGS.md) owns concrete defect incidents, fixes and severity, and
   its entry conventions. Keep entries module-first, roughly 6–12 rendered lines,
   retaining consequence, cause, fix and only the residual/test detail needed to
-  identify the technical boundary. Categories name reusable causal mechanisms;
+  identify the technical boundary. Categories end in a reusable mechanism noun;
   severity follows the worst supported product consequence, not the audit or
   gate that found it.
 - [M2_PLAN.md](../M2_PLAN.md) is the sole active delivery plan and register.
