@@ -1,42 +1,56 @@
-# Latest session — commit policy and bug categories, 2026-11-23 – 2026-11-24
+# Latest session — M2-A1 live-data guard and M2-A2 spikes, 2026-11-24
 
-`refactor/procedures-and-tools` was fast-forwarded into `main` (22 commits) and
-deleted; nothing is pushed. Work then continued on `milestone2`, where a
-parallel session committed the M2 documentation start.
+Work is on `milestone2`; nothing is pushed. The user accepted M2-A1 and M2-A2
+and their decisions are in [M2_PLAN](M2_PLAN.md).
 
 ## Changes
 
-- AGENTS: commit as you go, in small self-contained units that revert
-  independently, staged by path with only the task's files; recovery or `wip`
-  commits at a stop are exempt, and push and merge need an explicit request.
-  CLAUDE.md now counts committing as part of an edit/implement request.
-- BUGS categories are titles that end in a singular mechanism noun. The header
-  points to `python -m tools.repo.bugs --mechanisms`, which lists the nouns in
-  use with counts, and asks writers to reuse one when it fits. 59 entries whose
-  final word named a subject, plural or clause were retitled; the most used
-  nouns are now gap 30, conflation 27, omission 26, race 20 and drift 18.
+- `ab31ba08` docs(m2): accept the A1 and A2 checkpoints.
+- `9bb58fa9` feat(interfaces): M2-A1 complete. Source runs default to
+  `%LOCALAPPDATA%\NamiSync-Development`, and only the frozen release uses
+  `NamiSync`. The desktop identity follows the resolved root, which revises
+  SH-G-10. A session-wide audit hook in `tests/conftest.py` fails any test that
+  tries to change the live root. `gui.ps1`'s shell now uses the development
+  root itself, and the old `NamiSync-Development\shell` data is left unused.
+- `114c9c26` docs(m2): A2 spike results recorded in each feature's entry, with
+  evidence in [EV-0040](../evidence/EV-0040/README.md). Also in this commit:
+  A1 marked complete and A2 left active.
 
 ## Verification
 
-- `tests/test_tools_bugs.py` and `tests/test_tools_cli.py`: 102 passed,
-  2 skipped, including a new `--mechanisms` test.
-- The retitle script parsed all 319 records before and after and confirmed that
-  only the 59 categories changed, with every ID and body unchanged; the
-  validator reports 319 records. `git diff --check` clean.
+- A1: lint-imports 13/0. The ordinary suite has 6675 passed, 4 skipped and 7
+  failed; the 7 are the known `.venv`-interpreter failures listed below. Headed
+  SH-G-2 passed 3/3 and the focused modules 322/322. Two adversarial review
+  rounds closed with no open findings.
+- A2: the spike numbers were spot-checked against the raw files in EV-0040, and
+  the evidence check reports no problems.
 
 ## Open items
 
-- Retitling stopped at clear violations. Titles shaped as a flaw adjective plus
-  an operation (`Premature custody acquisition`, `Quadratic sequence tracking`)
-  were left as coined mechanisms; normalize one when its entry is next edited.
-- Frozen `sh_g_8_*` custody artifacts must not be renamed or moved.
-- Proposed, not built: Markdown link/anchor test, commit-subject check,
-  changelog structure test, advisory `python -m tools closeout`.
-- The local `.venv` is not on the selected release interpreter (3.15.2); seven
-  custody and native-gate tests fail locally for that reason alone. Rebuild it
-  per TOOLS' portable build preparation before relying on those results.
-- Carried over: four `build/` folders with Codex-sandbox pytest residue and 55
-  empty `build/move-history-20260925/` folders need an elevated
-  `Remove-Item -Recurse -Force`; keep `build/inventory-cold/` and the icon
-  archive. Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir\source`/`target`
-  and `dist/v0.1.0/` (final package `b0a3fe13` / Package05).
+- A2 stays active until the desktop checks are done; each spike's checklist is
+  in its EV-0040 report. Still open: real Explorer drops and the elevated-app
+  case (`build/m2-a2/drop/spike.py`); and the framing prototype
+  (`build/m2-a2/framing/proto.py --mode nonclient_carve`) for Win+Arrow, high
+  contrast, light/dark switching, and Alt+Space with PowerToys Run quit. My
+  computer-use access could not drag from Explorer or see the venv-Python
+  window. The prototypes stay in `build/m2-a2/` for these checks.
+- Decisions the spikes raise for the user:
+  - whether NamiSync may write a per-user `AppUserModelId` registry key for
+    toasts (against INTERFACES' no-registry stance);
+  - how Stop handles planning, which has no checkpoints and keeps volume
+    custody.
+- Finding, not fixed: planning time grows faster than the trees (10 s at
+  10k/3k files, 41 s at 30k/9k, more than 8 min at 100k/30k on a loaded
+  machine). It needs a measured study before any fix.
+- A8's gate needs an HDD that carries two lettered partitions; none exists on
+  the reference machine.
+- `J:\NamiSyncSpike\stop-latency` (about 157 MB) is kept as the HDD fixture
+  until the user decides. Leaving Do Not Disturb off was the user's choice.
+- Carried over: the local `.venv` is CPython 3.13.17, not the release
+  interpreter 3.15.2. Because of that, six custody tests and one native-gate
+  test (a pythonnet 3.1.0 vs 3.2.1 mismatch) fail locally; rebuild the venv per
+  TOOLS before relying on them. Also carried over:
+  - Elevated cleanup of the Codex-sandbox `build/` residue.
+  - Frozen `sh_g_8_*` artifacts must not move.
+  - Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir`, `dist/v0.1.0/` and
+    `build/inventory-cold/`.
