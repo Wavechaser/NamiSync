@@ -93,6 +93,18 @@ def test_cross_owner_filters_and_whole_record_batches(tmp_path, capsys):
     assert 'matched=0 emitted=0' in captured.err
 
 
+def test_mechanisms_count_final_category_nouns_of_matched_records(tmp_path, capsys):
+    second = '## OTHER' + _log('0002').split('## OWNER', 1)[1]
+    third = '## THIRD' + _log('0003').split('## OWNER', 1)[1].replace(
+        'Shared mechanism', 'Shutdown ownership Race')
+    source = tmp_path / 'bugs.md'
+    source.write_text(_log() + second + third, encoding='utf-8')
+    assert main(['--source', str(source), '--mechanisms']) == 0
+    assert capsys.readouterr().out == '   2 mechanism\n   1 race\n'
+    main(['--source', str(source), '--mechanisms', '--owner', 'third'])
+    assert capsys.readouterr().out == '   1 race\n'
+
+
 def test_validation_precedes_output_creation_and_filtering(tmp_path):
     source, output = tmp_path / 'bugs.md', tmp_path / 'export.jsonl'
     source.write_text(_log() + '\n- MINOR - FIXED (2026-01-01). Missing ID. Consequence.', encoding='utf-8')

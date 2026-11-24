@@ -30,7 +30,11 @@ owned by BUGS. Only the Python standard library is required.
 python -m tools.repo.bugs --id BUG-0001
 python -m tools.repo.bugs --text authority --text path --format jsonl --output build/bug-path-authority.jsonl
 python -m tools.repo.bugs --owner interfaces --status FIXED --offset 0 --limit 20
+python -m tools.repo.bugs --mechanisms
 ```
+
+`--mechanisms` lists the final noun of each matched category with its count,
+most used first, instead of printing records; offsets and limits do not apply.
 
 `--owner`, `--scope` and `--category` are case-insensitive substring filters;
 `--id`, `--status` and `--severity` are case-insensitive exact filters. Repeat

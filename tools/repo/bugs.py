@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 from datetime import date
 import hashlib
 import json
@@ -112,6 +113,11 @@ def matches(record: dict, filters: argparse.Namespace) -> bool:
     return all(" ".join(term.casefold().split()) in search_text for term in filters.text)
 
 
+def mechanism(category: str) -> str:
+    """The category's final noun, which names its reusable failure mechanism."""
+    return category.split()[-1].casefold()
+
+
 def nonnegative(value: str) -> int:
     result = int(value)
     if result < 0:
@@ -127,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--offset", type=nonnegative, default=0)
     parser.add_argument("--limit", type=nonnegative)
     parser.add_argument("--format", choices=("markdown", "jsonl"), default="markdown")
+    parser.add_argument("--mechanisms", action="store_true",
+                        help="list matched category mechanism nouns with counts")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args(argv)
     try:
@@ -134,7 +142,11 @@ def main(argv: list[str] | None = None) -> int:
         selected = [record for record in records if matches(record, args)]
         end = None if args.limit is None else args.offset + args.limit
         batch = selected[args.offset:end]
-        if args.format == "jsonl":
+        if args.mechanisms:
+            counts = Counter(mechanism(record["category"]) for record in selected)
+            output = "".join(f"{count:4d} {noun}\n" for noun, count in
+                             sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+        elif args.format == "jsonl":
             output = "".join(json.dumps(record, ensure_ascii=False) + "\n" for record in batch)
         else:
             output = "\n\n".join(
