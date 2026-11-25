@@ -791,7 +791,7 @@ outcomes, gate and non-goals.
 
 ### Migration
 
-Migration runs where a pair is admitted for mutating work and at desktop
+Migration runs in the CLI before a mutating command's admission and at desktop
 startup, before the first ordinary connection. It is automatic and says so.
 Read-only classification never migrates and never writes a database artifact
 or a `.claim` file: `validate_database_pair` reports `migration-required` (reason
@@ -802,13 +802,17 @@ to start NamiSync once.
 When one role needs a reset, pair classification still classifies the other
 before it answers. A newer database or a wrong role there is reported in
 preference to the reset, because the reset direction tells the user to discard
-both databases.
+both databases. The role that needed the reset is then read once more, and the
+reset is returned only if it still needs it; otherwise the whole
+classification repeats (bounded, ending in `database-busy`).
 
 The CLI migrates only after the command's own roots and `--path` values are
 admitted with every database outside the roots (`database_placement_admitted`, which opens no
 database). When a root or path is refused, or a root holds a database, nothing is migrated and
-the command's ordinary admission reports the input error. Planning refuses a
-pair that is still `migration-required`. A command given `--location-id` has
+the command's ordinary admission reports the input error. Workflow admission
+never migrates: a pair that is still `migration-required` there is refused
+with the migration direction, so a pre-check that failed transiently
+ends in a refusal and the next run migrates with its notice. A command given `--location-id` has
 no root to check until the ledger is read, so there the pair migrates first
 and the placement check follows.
 
@@ -830,9 +834,10 @@ this version does not know, is refused with reason `ledger-wrong-role` or
 `history-wrong-role` by classification. The CLI and the desktop classify cold
 before migrating, so there it is refused before any claim is taken;
 `migrate_database_pair` called directly takes both claims first and then
-returns that refusal without migrating. `ensure_database_pair` migrates only while the process has
-opened neither database; with a live role owner it refuses with the migration
-direction, because migration needs every connection closed.
+returns that refusal without migrating. `ensure_database_pair` creates a fresh pair but never
+migrates; it refuses an older pair with the migration direction. Only
+`migrate_database_pair` migrates, and its callers (the CLI and the desktop)
+report what it did.
 
 For each database that needs it, ledger first:
 

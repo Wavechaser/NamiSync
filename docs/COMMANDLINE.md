@@ -90,7 +90,11 @@ migrated before the command proceeds, but only once the command's roots are
 admitted with both databases outside them: a refused root or `--path`, a
 nested sync pair or a database inside a root reports its usual input error and migrates
 nothing. With `--location-id` the root is known only from the ledger, so the
-pair migrates first. One line on standard output names what migrated and its
+pair migrates first. Nothing after this point migrates: if the check itself
+fails transiently and the command's own admission then succeeds, the command
+ends with exit `4` and `<Command> could not start: database pair refused
+(pair-older).` followed by the migration direction, and running it again
+migrates. One line on standard output names what migrated and its
 backups, for example:
 
 ```text

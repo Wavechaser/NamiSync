@@ -33,7 +33,9 @@ from namisync.db.schema import (
 )
 from namisync.db.writer import TokenConflictError
 from namisync.core.formats import FORMAT_VERSIONS
+import namisync.workflows.database_pair as database_pair
 from namisync.workflows.database_pair import (
+    DatabasePairContract,
     DatabasePairRefusedError,
     DatabasePairState,
     ensure_database_pair,
@@ -548,6 +550,61 @@ def test_reset_required_ledger_never_brings_reset_advice_to_a_newer_or_misplaced
     assert contract.reset_direction is not None
 
 
+def test_reset_verdict_that_no_longer_holds_is_not_returned(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The ledger's marker is restored while history is being read, as another
+    # process finishing its own write would: the pair is healthy by the answer.
+    data = tmp_path / "data"
+    ledger = initialize_ledger(data / "ledger.db")
+    history = initialize_history(data / "history.db")
+    with closing(sqlite3.connect(ledger)) as connection:
+        with connection:
+            marker = connection.execute(
+                "SELECT key, value FROM schema_metadata WHERE key = 'format.numeric'"
+            ).fetchone()
+            connection.execute("DELETE FROM schema_metadata WHERE key = 'format.numeric'")
+    assert validate_database_pair(ledger, history).reason == "ledger-contract"
+
+    probe = database_pair.probe_database_file_contract
+    restored: list[bool] = []
+
+    def restoring_probe(path: Path, *, history: bool):
+        if history and not restored:
+            restored.append(True)
+            with closing(sqlite3.connect(ledger)) as connection:
+                with connection:
+                    connection.execute("INSERT INTO schema_metadata VALUES (?, ?)", marker)
+        return probe(path, history=history)
+
+    monkeypatch.setattr(database_pair, "probe_database_file_contract", restoring_probe)
+    contract = validate_database_pair(ledger, history)
+    assert restored and contract == DatabasePairContract(DatabasePairState.READY)
+
+    # The same role replaced by an older database is reported as that.
+    monkeypatch.undo()
+    released = copy_released_role(tmp_path / "released", history=False)
+    with closing(sqlite3.connect(ledger)) as connection:
+        with connection:
+            connection.execute("DELETE FROM schema_metadata WHERE key = 'format.numeric'")
+    replaced: list[bool] = []
+
+    def replacing_probe(path: Path, *, history: bool):
+        if history and not replaced:
+            replaced.append(True)
+            for suffix in ("", "-wal", "-shm"):
+                source = Path(f"{released}{suffix}")
+                if source.exists():
+                    Path(f"{ledger}{suffix}").write_bytes(source.read_bytes())
+        return probe(path, history=history)
+
+    monkeypatch.setattr(database_pair, "probe_database_file_contract", replacing_probe)
+    contract = validate_database_pair(ledger, history)
+    assert replaced and (contract.state, contract.reason) == (
+        DatabasePairState.MIGRATION_REQUIRED, "ledger-older",
+    )
+
+
 def test_planning_refuses_a_pair_that_still_needs_migration(tmp_path: Path) -> None:
     ledger, history = copy_released_pair(tmp_path / "data")
     for name in ("source", "target"):
@@ -563,22 +620,26 @@ def test_planning_refuses_a_pair_that_still_needs_migration(tmp_path: Path) -> N
     assert _entries(ledger.parent) == before
 
 
-def test_ensure_migrates_before_any_owner_opens_and_refuses_after(tmp_path: Path) -> None:
+def test_ensure_never_migrates_and_the_explicit_call_does(tmp_path: Path) -> None:
+    # Admission that migrated would do it with no caller to report the backups.
     data = tmp_path / "data"
     ledger = initialize_ledger(data / "ledger.db")
     history = copy_released_role(data, history=True)
     owner = DatabaseConnectionOwner(ledger, history=False)
     try:
         before = _bytes(ledger, history)
-        with pytest.raises(DatabasePairRefusedError, match="Start NamiSync") as raised:
+        with pytest.raises(DatabasePairRefusedError, match="Start NamiSync"):
             ensure_database_pair(ledger, history, ledger_database=owner)
-        assert raised.value.contract.state is DatabasePairState.MIGRATION_REQUIRED
-        assert _bytes(ledger, history) == before
-        assert not list(data.glob("*.backup-*"))
     finally:
         owner.close()
+    with pytest.raises(DatabasePairRefusedError, match="Start NamiSync") as raised:
+        ensure_database_pair(ledger, history)
+    assert raised.value.contract.state is DatabasePairState.MIGRATION_REQUIRED
+    assert _bytes(ledger, history) == before
+    assert not list(data.glob("*.backup-*"))
 
     old = carried_rows(history, tmp_path / "old", history=True)
+    assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
     assert ensure_database_pair(ledger, history).state is DatabasePairState.READY
     assert carried_rows(history, tmp_path / "new", history=True) == old
     # A history migrating beside an already current ledger takes its instance.

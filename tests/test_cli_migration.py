@@ -205,6 +205,34 @@ def test_refused_roots_or_placement_leave_a_released_pair_unmigrated(
     assert not list(data.glob("*.claim"))
 
 
+def test_failed_placement_check_never_leads_to_an_unannounced_migration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A transient failure in the pre-check lets ordinary admission run, and
+    # that admission must not migrate where no notice can be printed.
+    root = tmp_path / "root"
+    root.mkdir()
+    ledger, history = copy_released_pair(tmp_path / "data")
+    before = _files(ledger.parent)
+    arguments = [
+        "inventory", str(root), "--database", str(ledger), "--history-database", str(history),
+    ]
+    monkeypatch.setattr(
+        cli_module.NamiSyncService, "database_placement_admitted", lambda *_, **__: False,
+    )
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    assert main(arguments, stdout=stdout, stderr=stderr) != EXIT_SUCCESS
+    assert "Updated" not in stdout.getvalue()
+    assert "run a sync or inventory command, once to update it" in stderr.getvalue()
+    assert _files(ledger.parent) == before
+
+    monkeypatch.undo()
+    stdout = io.StringIO()
+    assert main(arguments, stdout=stdout, stderr=io.StringIO()) == EXIT_SUCCESS
+    assert "Updated the ledger (v4) and history (v8) databases" in stdout.getvalue()
+
+
 def test_notice_names_only_the_database_that_migrated(tmp_path: Path) -> None:
     root = tmp_path / "root"
     root.mkdir()

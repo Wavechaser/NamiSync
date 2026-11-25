@@ -11,6 +11,7 @@ import stat
 from namisync.db.claims import DatabaseClaimRefused, hold_maintenance_claims
 from namisync.db.contracts import (
     DATABASE_UNAVAILABLE_DIRECTION,
+    DatabaseArtifactsChanged,
     DatabaseBusyError,
     DatabaseConnectionOwner,
     DatabaseFileEvidence,
@@ -163,7 +164,7 @@ def _validate_database_pair_once(
 
     evidence: list[DatabaseFileEvidence] = []
     older: list[str] = []
-    reset: DatabasePairContract | None = None
+    reset: tuple[str, Path, bool, DatabaseConnectionOwner | None] | None = None
     for role, path, is_history, database in (
         ("ledger", ledger, False, ledger_database),
         ("history", history, True, history_database),
@@ -173,7 +174,7 @@ def _validate_database_pair_once(
         except SchemaResetRequired:
             # The reset direction covers both databases, so the other role is
             # classified first: a newer or misplaced one must not be discarded.
-            reset = reset or _refused(f"{role}-contract", reset=True)
+            reset = reset or (role, path, is_history, database)
             continue
         except DatabaseNewerVersion as error:
             return _refused(f"{role}-newer", guidance=str(error))
@@ -187,7 +188,16 @@ def _validate_database_pair_once(
     for role_evidence in evidence:
         role_evidence.require_unchanged()
     if reset is not None:
-        return reset
+        # The verdict was reached before the other role was read, and it
+        # advises discarding both, so it must still hold now.
+        role, path, is_history, database = reset
+        try:
+            _validate_role(path, history=is_history, database=database)
+        except SchemaResetRequired:
+            return _refused(f"{role}-contract", reset=True)
+        except (DatabaseMigrationRequired, DatabaseNewerVersion, DatabaseRoleMismatch):
+            pass
+        raise DatabaseArtifactsChanged(f"{role} database changed during validation")
     if older:
         return DatabasePairContract(
             DatabasePairState.MIGRATION_REQUIRED,
@@ -304,8 +314,9 @@ def ensure_database_pair(
 ) -> DatabasePairContract:
     """Require a ready pair before admitting work that can mutate both stores.
 
-    A fresh pair is created and an older one migrated. Migration needs every
-    database closed, so it runs only before this process opens either role.
+    A fresh pair is created. An older one is refused with the migration
+    direction: only ``migrate_database_pair`` migrates, so every migration
+    reaches a caller that reports it.
     """
 
     contract = validate_database_pair(
@@ -314,11 +325,6 @@ def ensure_database_pair(
     )
     if contract.state is DatabasePairState.FRESH:
         contract = initialize_database_pair(ledger_path, history_path)
-    elif (
-        contract.state is DatabasePairState.MIGRATION_REQUIRED
-        and ledger_database is None and history_database is None
-    ):
-        contract = migrate_database_pair(ledger_path, history_path).contract
     if contract.state in (DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED):
         raise DatabasePairRefusedError(contract)
     return contract
