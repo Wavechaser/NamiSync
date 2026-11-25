@@ -644,6 +644,9 @@ class HistoryRunSummaryView:
     blocked_count: int
     phases: tuple[PhaseResultView, ...]
     error: str | None
+    # "current", "earlier" (recorded against an earlier ledger; its ids are
+    # not looked up) or "unknown" (no usable ledger was read).
+    ledger_membership: str
 
 
 @dataclass(frozen=True, slots=True)

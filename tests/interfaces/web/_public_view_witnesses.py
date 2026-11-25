@@ -993,6 +993,7 @@ PUBLIC_VIEW_WITNESSES: dict[
                 blocked_count=0,
                 phases=(PHASE_RESULT,),
                 error=None,
+                ledger_membership="earlier",
             ),
             {
                 "run_token": "run-token",
@@ -1034,6 +1035,7 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "blocked_count": 0,
                 "phases": [PHASE_RESULT_JSON],
                 "error": None,
+                "ledger_membership": "earlier",
             },
         ),
     ),

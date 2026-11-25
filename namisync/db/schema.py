@@ -74,6 +74,14 @@ class DatabaseRoleMismatch(DatabaseAdmissionError):
     """The path holds the other role (paths look swapped) or a role this version does not know."""
 
 
+class LedgerIsBackup(DatabaseAdmissionError):
+    """A live ledger whose lineage names its own instance: a backup copied into place by hand.
+
+    Raised only after the rest of the current reader contract has passed, so
+    a caller that validates a backup file may accept exactly this refusal.
+    """
+
+
 def _statements(script: str) -> tuple[str, ...]:
     """Split a schema script into complete statements, trigger bodies included."""
 
@@ -428,6 +436,17 @@ CREATE TABLE annotations (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     UNIQUE(entity_kind, entity_id, key)
+) STRICT;
+
+CREATE TABLE ledger_lineage (
+    id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL CHECK(kind IN ('backup-cut', 'replaced-missing')),
+    instance_id TEXT UNIQUE CHECK(
+        instance_id IS NULL
+        OR (length(instance_id) = 32 AND instance_id NOT GLOB '*[^0-9a-f]*')
+    ),
+    at TEXT NOT NULL,
+    CHECK((kind = 'backup-cut') = (instance_id IS NOT NULL))
 ) STRICT;
 """)
 
@@ -1351,10 +1370,34 @@ def _validate_reader_contract(
             f"{_role(history)} whose {_role(not history)} database is missing "
             "cannot be updated by this version."
         )
+    if not history:
+        _refuse_live_backup(connection)
+
+
+def _refuse_live_backup(connection: sqlite3.Connection) -> None:
+    # A backup carries a cut row naming its own instance and a restore always
+    # issues a new one, so only a backup file copied into place matches here.
+    if connection.execute(
+        "SELECT 1 FROM ledger_lineage WHERE kind = 'backup-cut' AND instance_id = ?",
+        (ledger_instance_id(connection),),
+    ).fetchone() is not None:
+        raise LedgerIsBackup(
+            "The ledger database is a NamiSync backup copied into place by hand: "
+            "its lineage records a backup of its own ledger instance. NamiSync "
+            "does not use a backup as the live ledger, because History runs "
+            "recorded after the backup was made would count as its own. Put back "
+            "the ledger it replaced, or restore the backup with the command "
+            "namisync restore ledger <backup file>, which gives the restored "
+            "ledger a new instance. Nothing was changed."
+        )
 
 
 def validate_ledger_reader_contract(connection: sqlite3.Connection) -> None:
-    """Refuse an incompatible ledger through an already read-only connection."""
+    """Refuse an incompatible ledger through an already read-only connection.
+
+    ``LedgerIsBackup`` comes last, once the ledger is otherwise current;
+    ``classify_database`` alone never applies that live-ledger rule.
+    """
 
     _validate_reader_contract(connection, history=False)
 

@@ -37,6 +37,11 @@ EXIT_PARTIAL = 6
 EXIT_DEGRADED = 7
 EXIT_MISMATCH = 8
 EXIT_VERIFICATION_INCOMPLETE = 9
+_LEDGER_MEMBERSHIP = {
+    "current": "current",
+    "earlier": "earlier (recorded against an earlier ledger; its ids are not looked up)",
+    "unknown": "unknown (no usable ledger)",
+}
 _LAYOUT_CONTROL = re.compile(
     "[\u0000-\u001f\u007f-\u009f\u00ad\u061c\u200b\u200e-\u200f"
     "\u2028-\u202e\u2060-\u206f\ufeff\\[]"
@@ -108,6 +113,11 @@ def build_parser() -> argparse.ArgumentParser:
     history.add_argument("run", nargs="?", help="run token to show in detail")
     history.add_argument(
         "--limit", type=_positive_limit, default=20, help="maximum recent runs"
+    )
+    history.add_argument(
+        "--database",
+        help="ledger path read to mark which runs belong to it "
+        "(default: the local ledger, unless --history-database is given)",
     )
     history.add_argument(
         "--history-database", help="override the independent history path"
@@ -528,8 +538,12 @@ def _run_history(
         if namespace.history_database
         else default_history
     )
+    ledger = Path(namespace.database).resolve() if namespace.database else default_ledger
+    # A history named alone is read without the default ledger, which is
+    # then never opened or probed.
+    read_ledger = bool(namespace.database) or not namespace.history_database
     try:
-        service = NamiSyncService(default_ledger, history)
+        service = NamiSyncService(ledger, history)
     except (OSError, ValueError) as error:
         print(f"Configuration error: {_safe(error)}", file=stderr)
         print(
@@ -541,7 +555,7 @@ def _run_history(
     try:
         if namespace.run:
             try:
-                run = service.get_history_summary(namespace.run)
+                run = service.get_history_summary(namespace.run, read_ledger=read_ledger)
             except KeyError:
                 print(
                     f"No retained history run named {_safe(namespace.run)}.",
@@ -565,10 +579,21 @@ def _run_history(
                 after_order = page.next_after_order
             return EXIT_SUCCESS
 
-        runs = service.list_history(namespace.limit)
+        runs = service.list_history(namespace.limit, read_ledger=read_ledger)
         if not runs:
             print("No retained history runs.", file=stdout)
             return EXIT_SUCCESS
+        if not read_ledger:
+            print(
+                "Ledger membership is unknown: no ledger was given, only "
+                "--history-database.",
+                file=stderr,
+            )
+        elif all(run.ledger_membership == "unknown" for run in runs):
+            print(
+                f"Ledger membership is unknown: no usable ledger at {_safe(ledger)}.",
+                file=stderr,
+            )
         for run in runs:
             exceptions = (
                 ""
@@ -591,10 +616,13 @@ def _run_history(
                 f"ledger={run.recording_status} "
                 f"audit={run.audit_status}"
             )
+            earlier = (
+                "  (earlier ledger)" if run.ledger_membership == "earlier" else ""
+            )
             print(
                 f"{run.run_token}  {occurred_at.isoformat()}  "
                 f"{run.activity_kind}  {run.headline}  "
-                f"{axes}  {context}{exceptions}",
+                f"{axes}  {context}{exceptions}{earlier}",
                 file=stdout,
             )
         return EXIT_SUCCESS
@@ -1171,6 +1199,7 @@ def _render_history_run(run, output: TextIO) -> None:
         f"rejected={run.rejected_event_count}",
         file=output,
     )
+    print(f"Ledger: {_LEDGER_MEMBERSHIP[run.ledger_membership]}", file=output)
     for phase in run.phases:
         items_total = (
             "?" if phase.items_total is None else str(phase.items_total)

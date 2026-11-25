@@ -339,12 +339,12 @@ def test_history_facade_exposes_only_bounded_summary_and_page_reads() -> None:
     event_page = object()
 
     class Runtime:
-        def list_history(self, limit: int):
-            calls.append(("list", limit))
+        def list_history(self, limit: int, *, read_ledger: bool):
+            calls.append(("list", limit, read_ledger))
             return summaries
 
-        def get_history_summary(self, run_token: str):
-            calls.append(("summary", run_token))
+        def get_history_summary(self, run_token: str, *, read_ledger: bool):
+            calls.append(("summary", run_token, read_ledger))
             return summary
 
         def get_history_items(self, run_token: str, **options):
@@ -360,7 +360,7 @@ def test_history_facade_exposes_only_bounded_summary_and_page_reads() -> None:
     )
 
     assert service.list_history(7) is summaries
-    assert service.get_history_summary("run") is summary
+    assert service.get_history_summary("run", read_ledger=False) is summary
     assert service.get_history_items(
         "run", after_order=4, through_order=12, limit=8
     ) is item_page
@@ -369,8 +369,8 @@ def test_history_facade_exposes_only_bounded_summary_and_page_reads() -> None:
     ) is event_page
     assert not hasattr(service, "get_history")
     assert calls == [
-        ("list", 7),
-        ("summary", "run"),
+        ("list", 7, True),
+        ("summary", "run", False),
         (
             "items",
             "run",

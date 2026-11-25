@@ -638,7 +638,8 @@ From M2-A3, three persistence contracts are shared across checkpoints;
 - **Ledger instance.** A ledger carries a random instance id, and anything
   recorded or planned against a ledger names that instance. A consumer that
   finds a different instance treats its reference as belonging to another
-  ledger, never as a match.
+  ledger, never as a match, unless the ledger's restore lineage joins that
+  instance ([DATABASE](DATABASE.md#ledger-instance-and-ids)).
 - **Ids are never reused.** An id referenced from outside its own database is
   never handed out again, so a stale reference fails as not-found instead of
   resolving to a different row.

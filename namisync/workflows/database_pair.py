@@ -31,6 +31,7 @@ from namisync.db.schema import (
     DatabaseMigrationRequired,
     DatabaseNewerVersion,
     DatabaseRoleMismatch,
+    LedgerIsBackup,
     SchemaResetRequired,
     _initialize_reserved_history,
     _initialize_reserved_ledger,
@@ -183,6 +184,8 @@ def _validate_database_pair_once(
             return _refused(f"{role}-newer", guidance=str(error))
         except DatabaseRoleMismatch as error:
             return _refused(f"{role}-wrong-role", guidance=str(error))
+        except LedgerIsBackup as error:
+            return _refused("ledger-is-backup", guidance=str(error))
         except DatabaseMigrationRequired:
             older.append(role)
             continue
@@ -198,7 +201,10 @@ def _validate_database_pair_once(
             _validate_role(path, history=is_history, database=database)
         except SchemaResetRequired:
             return _refused(f"{role}-contract", reset=True)
-        except (DatabaseMigrationRequired, DatabaseNewerVersion, DatabaseRoleMismatch):
+        except (
+            DatabaseMigrationRequired, DatabaseNewerVersion, DatabaseRoleMismatch,
+            LedgerIsBackup,
+        ):
             pass
         raise DatabaseArtifactsChanged(f"{role} database changed during validation")
     if older:

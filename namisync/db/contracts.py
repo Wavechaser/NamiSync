@@ -19,6 +19,7 @@ from .schema import (
     DatabaseMigrationRequired,
     DatabaseNewerVersion,
     DatabaseRoleMismatch,
+    LedgerIsBackup,
     SchemaResetRequired,
     validate_history_reader_contract,
     validate_ledger_reader_contract,
@@ -126,7 +127,7 @@ class DatabaseConnectionOwner:
                     raise DatabaseAdmissionError("owned database main was replaced")
             except (
                 SchemaResetRequired, DatabaseMigrationRequired, DatabaseNewerVersion,
-                DatabaseRoleMismatch,
+                DatabaseRoleMismatch, LedgerIsBackup,
             ):
                 raise
             except (OSError, sqlite3.Error) as error:

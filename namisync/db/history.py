@@ -261,6 +261,7 @@ class HistoryRunSummary:
     session_id: str
     activity_kind: str
     host_key: str
+    ledger_instance_id: str | None
     subject_kind: str | None
     subject_id: str | None
     source_context: str | None
@@ -2566,6 +2567,11 @@ def _history_summary(
         session_id=str(row["session_id"]),
         activity_kind=str(row["activity_kind"]),
         host_key=str(row["host_key"]),
+        ledger_instance_id=(
+            None
+            if row["ledger_instance_id"] is None
+            else str(row["ledger_instance_id"])
+        ),
         subject_kind=(
             None if row["subject_kind"] is None else str(row["subject_kind"])
         ),

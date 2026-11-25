@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import sqlite3
 import sys
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import AbstractContextManager, contextmanager
@@ -83,7 +84,7 @@ from namisync.db.history import (
     HistoryStore,
 )
 from namisync.db.recorder import LedgerRecorder, SyncRunRecorder
-from namisync.db.repositories import InventorySnapshot, LedgerRepository
+from namisync.db.repositories import InventorySnapshot, LedgerLineage, LedgerRepository
 from namisync.db.settings import (
     SemanticSettings,
     SemanticSettingsPatch,
@@ -1358,20 +1359,43 @@ class LocalWorkflowRuntime:
             database=self._database(),
         )
 
-    def list_history(self, limit: int = 50) -> tuple[HistoryRunSummaryView, ...]:
+    def list_history(
+        self, limit: int = 50, *, read_ledger: bool = True,
+    ) -> tuple[HistoryRunSummaryView, ...]:
+        """Summaries with ledger membership; ``read_ledger=False`` marks it unknown."""
+
         with self._history_read() as repository:
             if repository is None:
                 return ()
-            return tuple(
-                _history_summary_view(item)
-                for item in repository.list_summaries(limit)
-            )
+            summaries = repository.list_summaries(limit)
+            lineage = self._history_lineage() if read_ledger and summaries else None
+            return tuple(_history_summary_view(item, lineage) for item in summaries)
 
-    def get_history_summary(self, run_token: str) -> HistoryRunSummaryView:
+    def get_history_summary(
+        self, run_token: str, *, read_ledger: bool = True,
+    ) -> HistoryRunSummaryView:
         with self._history_read() as repository:
             if repository is None:
                 raise KeyError(run_token)
-            return _history_summary_view(repository.get_summary(run_token))
+            summary = repository.get_summary(run_token)
+            lineage = self._history_lineage() if read_ledger else None
+            return _history_summary_view(summary, lineage)
+
+    def _history_lineage(self) -> LedgerLineage | None:
+        # Read once after History, as a second snapshot: a restore between the
+        # two reads only leaves the view behind. A missing, damaged or refused
+        # ledger never blocks History; its runs' membership is unknown.
+        try:
+            with self._ledger_read() as repository:
+                return repository.ledger_lineage()
+        except (sqlite3.Error, OSError, ValueError):
+            return None
+        except RuntimeError:
+            # Close began while this History read was active: it still
+            # completes, but no ledger reader may open now.
+            if self._closing or self._closed:
+                return None
+            raise
 
     def get_history_items(
         self,
@@ -2035,7 +2059,30 @@ class _LedgerRunRecording:
         self._owner.close()
 
 
-def _history_summary_view(value: HistoryRunSummary) -> HistoryRunSummaryView:
+def _ledger_membership(value: HistoryRunSummary, lineage: LedgerLineage | None) -> str:
+    """The ancestor-chain read rule: whether a run belongs to the current ledger.
+
+    A run belongs if it was recorded against this ledger's instance, or against
+    an ancestor a backup was cut from and started before that cut. Times are
+    wall-clock UTC; a run that never started is judged by its creation.
+    """
+
+    if lineage is None:
+        return "unknown"
+    instance_id = value.ledger_instance_id
+    if instance_id is None:
+        return "earlier"
+    if instance_id == lineage.instance_id:
+        return "current"
+    at = value.created_at if value.started_at is None else value.started_at
+    if any(cut.instance_id == instance_id and at < cut.cut_at for cut in lineage.cuts):
+        return "current"
+    return "earlier"
+
+
+def _history_summary_view(
+    value: HistoryRunSummary, lineage: LedgerLineage | None,
+) -> HistoryRunSummaryView:
     terminal_values = (
         value.ended_at,
         value.filesystem_status,
@@ -2138,6 +2185,7 @@ def _history_summary_view(value: HistoryRunSummary) -> HistoryRunSummaryView:
         error=None
         if value.error_type is None
         else f"{value.error_type}: {value.error_message or ''}".rstrip(),
+        ledger_membership=_ledger_membership(value, lineage),
     )
 
 

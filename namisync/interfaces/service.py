@@ -2148,14 +2148,16 @@ class NamiSyncService:
         )
 
     def list_history(
-        self, limit: int = 50
+        self, limit: int = 50, *, read_ledger: bool = True,
     ) -> tuple[HistoryRunSummaryView, ...]:
         self._require_open()
-        return self._runtime.list_history(limit)
+        return self._runtime.list_history(limit, read_ledger=read_ledger)
 
-    def get_history_summary(self, run_token: str) -> HistoryRunSummaryView:
+    def get_history_summary(
+        self, run_token: str, *, read_ledger: bool = True,
+    ) -> HistoryRunSummaryView:
         self._require_open()
-        return self._runtime.get_history_summary(run_token)
+        return self._runtime.get_history_summary(run_token, read_ledger=read_ledger)
 
     def get_history_items(
         self,

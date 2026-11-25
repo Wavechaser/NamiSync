@@ -10,6 +10,7 @@ import stat
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -38,7 +39,7 @@ from namisync.core.session import (
 from namisync.db.claims import acquire_database_claim, hold_maintenance_claims
 from namisync.db.history import HistoryContext, HistoryStore
 from namisync.db.connections import connect_history_writer, connect_ledger_writer
-from namisync.db.schema import initialize_history, initialize_ledger
+from namisync.db.schema import initialize_history, initialize_ledger, new_instance_id
 from namisync.interfaces.cli import (
     EXIT_CANCELED,
     EXIT_DEGRADED,
@@ -72,7 +73,14 @@ from namisync.modules.executor import NativeFileSystem
 from namisync.workflows.models import PlanOperationView
 from namisync.workflows.views import result_item_view, session_record_view
 
-from _db_fixtures import FakeClock, NOW, replace_ledger_instance
+from _db_fixtures import (
+    FakeClock,
+    NOW,
+    add_ledger_lineage,
+    replace_ledger_instance,
+    seed_history_run,
+    stored_ledger_instance,
+)
 
 
 _FILESYSTEM_TEXT_CASES = json.loads(
@@ -1127,7 +1135,10 @@ def test_recent_history_lists_safe_subset_exception_counts(tmp_path: Path) -> No
 
     assert result == EXIT_SUCCESS
     assert "exceptions=blocked:1,deferred:0" in stdout.getvalue()
-    assert stderr.getvalue() == ""
+    assert "(earlier ledger)" not in stdout.getvalue()
+    assert stderr.getvalue() == (
+        "Ledger membership is unknown: no ledger was given, only --history-database.\n"
+    )
 
 
 def test_history_detail_streams_fixed_watermark_item_pages(
@@ -1177,6 +1188,7 @@ def test_history_detail_streams_fixed_watermark_item_pages(
         bytes_total=2,
         phases=(),
         error=None,
+        ledger_membership="earlier",
     )
     calls: list[tuple[int, int | None, int]] = []
 
@@ -1184,8 +1196,9 @@ def test_history_detail_streams_fixed_watermark_item_pages(
         def __init__(self, _ledger: Path, _history: Path) -> None:
             pass
 
-        def get_history_summary(self, run_token: str):
+        def get_history_summary(self, run_token: str, *, read_ledger: bool):
             assert run_token == "paged-run"
+            assert read_ledger is False
             return summary
 
         def get_history_items(
@@ -1239,6 +1252,10 @@ def test_history_detail_streams_fixed_watermark_item_pages(
     assert "one.bin" in stdout.getvalue()
     assert "two.bin" in stdout.getvalue()
     assert "Audit receipts: duplicates=3; rejected=1" in stdout.getvalue()
+    assert (
+        "Ledger: earlier (recorded against an earlier ledger; its ids are not looked up)\n"
+        in stdout.getvalue()
+    )
     assert stderr.getvalue() == ""
 
 
@@ -1611,6 +1628,139 @@ def test_read_only_history_command_is_exempt_from_missing_ledger_peer(
     assert not ledger.exists()
 
 
+def _lineage_history(directory: Path) -> tuple[Path, Path]:
+    """A ledger restored from a backup of ledger A, and a History spanning both."""
+
+    ledger = initialize_ledger(directory / "ledger.db")
+    history = directory / "history.db"
+    ancestor = new_instance_id()
+    cut = datetime(2026, 1, 10, tzinfo=timezone.utc)
+    add_ledger_lineage(ledger, "backup-cut", ancestor, cut)
+    for token, instance_id, at in (
+        ("current-run", stored_ledger_instance(ledger), datetime(2026, 1, 20, tzinfo=timezone.utc)),
+        ("before-cut-run", ancestor, datetime(2026, 1, 5, tzinfo=timezone.utc)),
+        ("after-cut-run", ancestor, datetime(2026, 1, 15, tzinfo=timezone.utc)),
+    ):
+        seed_history_run(
+            history, token, ledger_instance_id=instance_id, created_at=at, started_at=at,
+        )
+    return ledger, history
+
+
+@pytest.mark.parametrize("named", (True, False), ids=("database", "default"))
+def test_history_marks_runs_recorded_against_an_earlier_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, named: bool,
+) -> None:
+    ledger, history = _lineage_history(tmp_path)
+    monkeypatch.setattr(cli_module, "default_database_paths", lambda: (ledger, history))
+    paths = ["--database", str(ledger), "--history-database", str(history)] if named else []
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    assert main(["history", *paths], stdout=stdout, stderr=stderr) == EXIT_SUCCESS
+
+    lines = {line.split(maxsplit=1)[0]: line for line in stdout.getvalue().splitlines()}
+    assert {token: line.endswith("  (earlier ledger)") for token, line in lines.items()} == {
+        "current-run": False, "before-cut-run": False, "after-cut-run": True,
+    }
+    assert stderr.getvalue() == ""
+    for token, expected in (
+        ("current-run", "Ledger: current\n"),
+        ("after-cut-run",
+         "Ledger: earlier (recorded against an earlier ledger; its ids are not looked up)\n"),
+    ):
+        detail = io.StringIO()
+        assert main(["history", token, *paths], stdout=detail, stderr=stderr) == EXIT_SUCCESS
+        assert expected in detail.getvalue()
+    assert stderr.getvalue() == ""
+
+
+def test_history_with_only_a_history_database_never_probes_the_default_ledger(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    default = tmp_path / "default"
+    default.mkdir()
+    # A usable default ledger: had it been read, the runs would be current.
+    ledger, history = _lineage_history(default)
+    probed: list[Path] = []
+    probe = file_contracts.probe_database_file_contract
+
+    def recorded_probe(path, *, history):
+        probed.append(Path(path).resolve())
+        return probe(path, history=history)
+
+    monkeypatch.setattr(file_contracts, "probe_database_file_contract", recorded_probe)
+    monkeypatch.setattr(
+        cli_module, "default_database_paths", lambda: (ledger, default / "unused-history.db"),
+    )
+    before = {path.name: path.read_bytes() for path in default.iterdir()}
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    result = main(["history", "--history-database", str(history)], stdout=stdout, stderr=stderr)
+
+    assert result == EXIT_SUCCESS
+    assert ledger.resolve() not in probed and history.resolve() in probed
+    assert stderr.getvalue() == (
+        "Ledger membership is unknown: no ledger was given, only --history-database.\n"
+    )
+    assert len(stdout.getvalue().splitlines()) == 3
+    assert "(earlier ledger)" not in stdout.getvalue()
+    assert {
+        path.name: path.read_bytes() for path in default.iterdir()
+        if not path.name.startswith("history.db")
+    } == {name: value for name, value in before.items() if not name.startswith("history.db")}
+
+
+def test_history_notes_a_named_ledger_it_cannot_use(tmp_path: Path) -> None:
+    _, history = _lineage_history(tmp_path)
+    missing = tmp_path / "missing" / "ledger.db"
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    result = main(
+        ["history", "--database", str(missing), "--history-database", str(history)],
+        stdout=stdout, stderr=stderr,
+    )
+
+    assert result == EXIT_SUCCESS
+    assert stderr.getvalue() == f"Ledger membership is unknown: no usable ledger at {missing}.\n"
+    assert len(stdout.getvalue().splitlines()) == 3
+    assert "(earlier ledger)" not in stdout.getvalue()
+    assert not missing.parent.exists()
+    detail = io.StringIO()
+    assert main(
+        ["history", "current-run", "--database", str(missing), "--history-database", str(history)],
+        stdout=detail, stderr=io.StringIO(),
+    ) == EXIT_SUCCESS
+    assert "Ledger: unknown (no usable ledger)\n" in detail.getvalue()
+
+
+def test_mutating_command_refuses_a_backup_copied_into_place(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    data = tmp_path / "data"
+    ledger = initialize_ledger(data / "ledger.db")
+    history = initialize_history(data / "history.db")
+    add_ledger_lineage(ledger, "backup-cut", stored_ledger_instance(ledger), NOW)
+    before = {
+        path.name: path.read_bytes() for path in data.iterdir()
+        if not path.name.endswith(".claim")
+    }
+    stderr = io.StringIO()
+
+    result = main(
+        ["inventory", str(root), "--database", str(ledger), "--history-database", str(history)],
+        stdout=io.StringIO(), stderr=stderr,
+    )
+
+    assert result == EXIT_REFUSED
+    assert "Database pair refused: ledger-is-backup." in stderr.getvalue()
+    assert "namisync restore ledger <backup file>" in stderr.getvalue()
+    assert not re.search(r"delete|archive|reset", stderr.getvalue(), re.IGNORECASE)
+    assert {
+        path.name: path.read_bytes() for path in data.iterdir()
+        if not path.name.endswith(".claim")
+    } == before
+
+
 def test_cli_uses_semantic_settings_beside_explicit_ledger(
     tmp_path: Path,
 ) -> None:
@@ -1744,7 +1894,7 @@ def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None
     history_output = io.StringIO()
     history_errors = io.StringIO()
     history_result = main(
-        ["history", "--history-database", str(history)],
+        ["history", "--database", str(ledger), "--history-database", str(history)],
         stdout=history_output,
         stderr=history_errors,
     )
@@ -1752,6 +1902,7 @@ def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None
     assert history_result == EXIT_SUCCESS
     assert "completed" in history_output.getvalue()
     assert str(source) in history_output.getvalue()
+    assert "(earlier ledger)" not in history_output.getvalue()
     assert history_errors.getvalue() == ""
 
 
@@ -1978,7 +2129,7 @@ def test_cli_runs_inventory_and_integrity_lifecycle(
     history_output = io.StringIO()
     history_errors = io.StringIO()
     listed = main(
-        ["history", "--history-database", str(history)],
+        ["history", "--database", str(ledger), "--history-database", str(history)],
         stdout=history_output,
         stderr=history_errors,
     )
@@ -2002,8 +2153,10 @@ def test_cli_runs_inventory_and_integrity_lifecycle(
 
     assert listed == EXIT_SUCCESS
     assert history_errors.getvalue() == ""
+    assert "(earlier ledger)" not in history_output.getvalue()
     assert detailed == EXIT_SUCCESS
     assert f"Activity: {initial_mode}" in detail_output.getvalue()
+    assert "Ledger: unknown (no usable ledger)\n" in detail_output.getvalue()
     assert f"{initial_mode}/integrity/" in detail_output.getvalue()
 
 

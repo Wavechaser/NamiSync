@@ -107,8 +107,10 @@ makes it write-once. Because no hash covers it, an observer compares it
 itself: reopening a run token under a different stamp, a missing one included,
 is a `TokenConflictError` at observer construction and on every write to an
 existing run row. It is nullable only for direct `HistoryStore` writers
-without a ledger (tests, measurement tools); no read rule uses it before
-restore lineage (M2-A4).
+without a ledger (tests, measurement tools). History readers mark each run's
+ledger membership (`current`, `earlier` or `unknown`) from it by the
+ancestor-chain read rule in [DATABASE](DATABASE.md#ledger-instance-and-ids);
+a run with no stamp belongs to an earlier ledger.
 
 `history_events` is the append-only reliable-event receipt journal. Its primary
 key is `(run_id, event_seq)`. Every row retains timestamp, schema/body type,

@@ -84,6 +84,22 @@ class ExecutionEvidenceKey:
 
 
 @dataclass(frozen=True, slots=True)
+class LedgerCut:
+    """History runs of ``instance_id`` that started before ``cut_at`` belong here."""
+
+    instance_id: str
+    cut_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class LedgerLineage:
+    """The ledger's instance and the backup cuts of its ancestors, one snapshot."""
+
+    instance_id: str
+    cuts: tuple[LedgerCut, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class ExecutionEvidenceRunFact:
     run_token: str
     activity_kind: str
@@ -525,6 +541,23 @@ class LedgerRepository:
         """The admitted ledger's canonical instance id."""
 
         return ledger_instance_id(self._connection)
+
+    def ledger_lineage(self) -> LedgerLineage:
+        """The instance id and its ancestors' backup cuts in one read snapshot."""
+
+        self._connection.execute("BEGIN")
+        try:
+            instance_id = ledger_instance_id(self._connection)
+            cuts = tuple(
+                LedgerCut(str(row[0]), decode_utc(row[1]))
+                for row in self._connection.execute(
+                    "SELECT instance_id, at FROM ledger_lineage "
+                    "WHERE kind = 'backup-cut' ORDER BY at, id"
+                )
+            )
+        finally:
+            self._connection.rollback()
+        return LedgerLineage(instance_id, cuts)
 
     def get_inventory(
         self, location_id: int, path_keys: Iterable[str] | None = None

@@ -264,7 +264,10 @@ Only the execution registration supplies
 continuations or decide cancellation policy. Retained `HistoryRunSummaryView`
 exposes primitive lifecycle/watermark fields, filesystem/integrity/recording/
 audit axes, disposition, cancellation, headline, counts, and bounded phases,
-using the same workflow classification source as live result views. Ordered
+using the same workflow classification source as live result views, plus the
+run's ledger membership (`current`, `earlier` or `unknown`, by the
+[DATABASE](DATABASE.md#ledger-instance-and-ids) read rule; `read_ledger=False`
+reads no ledger and reports `unknown`). Ordered
 canonical items and reliable receipts are separate bounded page views; a
 `HistoryEventView` exposes sequence/time/schema/body type,
 disposition/hash/link/rejection metadata, and an optional body rather than
@@ -357,8 +360,8 @@ read_semantic_settings() -> SemanticSettingsView
 commit_semantic_settings(patch: SemanticSettingsPatchView) -> SemanticSettingsView
 read_setup_options() -> SetupOptionsView
 commit_setup_defaults(patch: SemanticSettingsPatchView) -> SetupOptionsView
-list_history(limit=50) -> tuple[HistoryRunSummaryView, ...]
-get_history_summary(run_token) -> HistoryRunSummaryView
+list_history(limit=50, *, read_ledger=True) -> tuple[HistoryRunSummaryView, ...]
+get_history_summary(run_token, *, read_ledger=True) -> HistoryRunSummaryView
 get_history_items(run_token, *, after_order=0, through_order=None, limit=256)
     -> HistoryItemPageView
 get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)

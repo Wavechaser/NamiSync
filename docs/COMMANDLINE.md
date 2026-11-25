@@ -50,7 +50,7 @@ explicit override replaces only that plan's deletion policy and does not
 change its filters, trash-on-update, preservation, or casing settings.
 `--verify-after-copy` keeps successfully published copy/update/move-update
 files under the same session and volume custody for immediate readback.
-`history` accepts `--limit N` for `1..256` summaries and
+`history` accepts `--limit N` for `1..256` summaries, `--database PATH` and
 `--history-database PATH`. For `sync`, both
 database files must be distinct and outside the managed roots; defaults are
 the local
@@ -81,8 +81,12 @@ NamiSync is refused with direction to use that version, never with that
 instruction. A ledger given as `--history-database` or a history given as
 `--database` is refused with `<role>-wrong-role` and direction to check the two
 paths, which look swapped; a file whose role this version does not know is
-refused the same way, with direction to check its path. Commands never delete
-or backfill either database. If SQLite reports that a file is damaged or unreadable
+refused the same way, with direction to check its path. A ledger that is a
+backup copied into place by hand is refused with `ledger-is-backup` and
+direction to put back the ledger it replaced or restore the backup with
+`namisync restore ledger <backup file>` (that command arrives with a later
+M2-A4 outcome), never with that instruction. Commands never delete or
+backfill either database. If SQLite reports that a file is damaged or unreadable
 as a database, the command names the affected role and directs you to keep both
 databases and their sidecars for inspection.
 
@@ -134,6 +138,18 @@ It never migrates: a history written by NamiSync 0.1.0 exits `3` with
 inventory command, once. That cannot help a v0.1.0 history whose ledger is
 missing: a pair with one database missing stays refused, so such a history can
 be neither read nor updated by this version, as the refusal says.
+
+`history` reads the ledger only to mark which runs belong to it, by the read
+rule in [DATABASE](DATABASE.md#ledger-instance-and-ids), and never refuses or
+blocks History over it. It reads the ledger named by `--database`, or the
+default ledger when neither database is named; with `--history-database`
+alone it opens and probes no ledger. A listed run recorded against an earlier
+ledger ends with `(earlier ledger)`. When membership is unknown, one line on
+standard error precedes the list: `Ledger membership is unknown: no ledger was
+given, only --history-database.` or `Ledger membership is unknown: no usable
+ledger at <path>.` Run detail adds `Ledger: current`, `Ledger: earlier
+(recorded against an earlier ledger; its ids are not looked up)` or
+`Ledger: unknown (no usable ledger)`.
 
 History listing reads summary rows without decoding event detail. `history RUN`
 prints terminal axes when finalized or an explicit incomplete state/phase and

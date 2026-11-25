@@ -18,14 +18,17 @@ refused; [Schema Evolution](#schema-evolution) owns the rules and the migrator.
 | history | 9 | `role`, `schema_version`, `format.event`, `format.numeric`, `format.preimage`, `format.recording` |
 
 `LEDGER_FORMATS` and `HISTORY_FORMATS` in `schema.py` declare the embedded
-formats; each row holds that format's `FORMAT_VERSIONS` value. Two absent main
+formats; each row holds that format's `FORMAT_VERSIONS` value. Ledger v5 also
+holds the `ledger_lineage` table, added to the unreleased schema in place by
+M2-A4 ([Ledger instance and ids](#ledger-instance-and-ids)). Two absent main
 files with no sidecars remain the only fresh state; a `-wal` or `-shm` beside
 its main is normal. A one-present pair, a journal, or an orphan sidecar is
 refused by read-only validation before mutating startup or CLI work, with
 non-destructive inspection or retry guidance, as are access failures and
 observed activity. Older supported and newer databases are typed admission
 refusals without reset guidance, as is a database at the other role's path
-(the two paths look swapped) or one whose `role` this version does not know.
+(the two paths look swapped) or one whose `role` this version does not know,
+and a ledger backup copied into place by hand (`ledger-is-backup`).
 If SQLite reports corruption or an invalid database file during cold admission,
 the refusal identifies the affected role and directs the user to preserve both
 databases and their sidecars for inspection.
@@ -341,9 +344,9 @@ state is interface-owned and never shares this file.
 history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
-correspondence, run/operation tokens, generic annotations, and nullable hardlink
-group room. Database triggers reject correspondence whose rows do not belong to
-the mapping's source and target locations.
+correspondence, run/operation tokens, generic annotations, restore lineage, and
+nullable hardlink group room. Database triggers reject correspondence whose
+rows do not belong to the mapping's source and target locations.
 
 `connections.py` enables foreign keys, WAL, and bounded busy timeout on writers;
 read repositories open SQLite in `mode=ro` and enable `query_only`. Both
@@ -536,7 +539,9 @@ The initial schema reserves the expensive identity/evidence bones:
   inventory, or schema representation;
 - physical presence, acknowledgement, reappearance, and unsupported state,
   independent of plan or interface view state;
-- generic namespaced annotations with entity kind/id/key/value and uniqueness.
+- generic namespaced annotations with entity kind/id/key/value and uniqueness;
+- restore lineage: backup cuts of ancestor ledger instances and lone-History
+  boundaries ([Ledger instance and ids](#ledger-instance-and-ids)).
 
 Since ledger v4, file-index columns and repository
 binds use canonical `FileIndex128` text rather than SQLite numeric affinity.
@@ -772,8 +777,56 @@ outcomes, gate and non-goals.
   covers it, and a history observer refuses to reopen a run under a different
   stamp ([HISTORY](HISTORY.md)). The column is nullable: the runtime, the only production writer,
   always supplies it from the ledger it admitted, but direct `HistoryStore`
-  writers in tests and measurement tools have no ledger. Restore lineage and
-  the read rule for mismatched runs arrive with restore (M2-A4).
+  writers in tests and measurement tools have no ledger. The read rule below
+  places a run with no stamp in an earlier ledger.
+- **Restore lineage** (M2-A4, user decisions 2026-11-20 and 2026-11-25). Ledger
+  v5 holds `ledger_lineage`, added to the unreleased schema in place with no
+  new version or migration step. A `backup-cut` row `(X, T)` says that History
+  runs recorded against ledger instance X that started before T belong to this
+  ledger. A backup carries a cut naming the instance it was cut from, and a
+  restore keeps the backup's lineage under a new instance id, so the
+  predecessor is the ledger the backup was cut from, not the one the restore
+  replaced. A `replaced-missing` row (no instance) is the boundary written when
+  a lone History gains a new ledger; it joins nothing. `at` is canonical UTC
+  text, an instance appears at most once, and CHECK constraints tie the
+  instance to the kind. Fresh creation and migration create the table empty;
+  no command writes it until backup, restore and the one-present pair policy
+  arrive in later M2-A4 outcomes.
+- **Read rule.** A History run is `current` when its stamp is the ledger's
+  instance, or when a `backup-cut` names its stamp and the run started strictly
+  before that cut; a run that never started is judged by its creation time.
+  Every other run, one with no stamp included, is `earlier`. When no usable
+  ledger was read (missing, damaged, refused or not named), every run is
+  `unknown`, and History is still listed. `LedgerRepository.ledger_lineage`
+  reads the instance and its cuts in one snapshot; the runtime reads it once
+  after the History read, so these are two snapshots, and a restore between
+  them only leaves the view behind. Times are compared as recorded wall-clock
+  UTC, so a clock set back across a cut can misplace runs near it; this is
+  disclosed, not defended. Cross-database lookups, which resolve a run's
+  location, mapping or inventory ids in the ledger, apply only to `current`
+  runs. No reader performs one yet; later readers must keep to this.
+- **A backup copied into place by hand is refused.** A live ledger whose
+  lineage has a `backup-cut` naming its own `instance_id` can only be a backup
+  file copied over the ledger, since restore always issues a new instance id.
+  Admission refuses it with `LedgerIsBackup` (pair reason `ledger-is-backup`)
+  everywhere a ledger is admitted: the cold probe, live owners, repositories,
+  recorders, the CLI pair refusal and desktop startup. The direction is to put
+  back the ledger it replaced or restore the backup with
+  `namisync restore ledger <backup file>`, never to reset, and nothing is
+  changed. Until that command arrives with a later M2-A4 outcome, only the
+  first direction can be followed. The rule runs last in the ledger reader
+  contract, once role, version, formats, instance id and exact topology have
+  passed, and `classify_database` never applies it. Restore's backup
+  verification can therefore classify a backup file as a current ledger and
+  accept exactly this refusal. A ledger carrying only other instances' cuts is
+  admitted normally; standalone `history` treats a refused ledger as unusable
+  and marks membership unknown.
+- A schema-5 ledger made by a source-tree run before the table existed fails
+  the exact topology check and is refused with the reset direction, like any
+  other unsupported topology (user decision, 2026-11-25). Tests for lineage,
+  the read rule and these refusals: `tests/test_ledger_lineage.py`, the
+  history and backup cases in `tests/test_cli.py`, and the startup case in
+  `tests/interfaces/web/test_host.py`.
 - An id referenced from outside its own database is never reused (user
   decision, 2026-11-21). A plain `INTEGER PRIMARY KEY` hands a new row the
   highest id plus one, so deleting the highest-numbered location would give its
@@ -918,7 +971,8 @@ For each database that needs it, ledger first:
    change inside a transaction), so renaming and dropping cascade nothing. Old
    triggers and explicit indexes are dropped and every old table renamed to
    `_migration_old_<name>`; the tables and indexes are created by the shipped
-   statements; rows are copied with explicit column lists, keeping every id
+   statements, so a table with no source, such as `ledger_lineage`, starts
+   empty; rows are copied with explicit column lists, keeping every id
    (History runs gain the ledger instance id); the old tables are dropped; the
    shipped triggers are created; metadata is written. Triggers come after the
    copy: the rows were admitted under identical triggers, and History's append
@@ -994,8 +1048,6 @@ Open until M2-A4 ([M2_PLAN](M2_PLAN.md) owns the schedule):
 - Each attempt that fails after publishing its backup leaves another full
   backup, and a rolled-back attempt leaves the WAL grown with a discarded
   tail (148 MB to 296 MB at 400,000 ledger rows), until rotation exists.
-- `history_runs.ledger_instance_id` is nullable, so the readers that arrive
-  with M2-A4 must handle NULL.
 
 Legacy import or merge is separate from migration. It never guesses
 volume/location correspondence.

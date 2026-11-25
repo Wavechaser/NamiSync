@@ -3,9 +3,11 @@ from __future__ import annotations
 from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import hashlib
 from pathlib import Path
 import sqlite3
 
+from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, PhaseChanged
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance
 from namisync.core.models import (
     CapabilityProfile,
@@ -43,9 +45,12 @@ from namisync.core.recording import (
     SyncRunCommand,
     VolumeCommand,
 )
+from namisync.core.session import SessionId, SessionRecord, SessionState
 from namisync.db.claims import acquire_database_claim
+from namisync.db.history import HistoryContext, HistoryStore
 from namisync.db.recorder import LedgerRecorder, SyncRunRecorder
 from namisync.db.schema import new_instance_id
+from namisync.db.timestamps import encode_utc
 
 
 UTC = timezone.utc
@@ -69,6 +74,52 @@ def replace_ledger_instance(ledger: Path) -> str:
                 (replacement,),
             )
     return replacement
+
+
+def add_ledger_lineage(
+    ledger: Path, kind: str, instance_id: str | None, at: datetime,
+) -> None:
+    """Insert one lineage row directly; no backup or restore command exists yet."""
+
+    with closing(sqlite3.connect(ledger)) as connection, connection:
+        connection.execute(
+            "INSERT INTO ledger_lineage(kind, instance_id, at) VALUES (?, ?, ?)",
+            (kind, instance_id, encode_utc(at)),
+        )
+
+
+def stored_ledger_instance(ledger: Path) -> str:
+    with closing(sqlite3.connect(ledger.as_uri() + "?mode=ro", uri=True)) as connection:
+        return connection.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'instance_id'"
+        ).fetchone()[0]
+
+
+def seed_history_run(
+    history: Path,
+    run_token: str,
+    *,
+    ledger_instance_id: str | None,
+    created_at: datetime,
+    started_at: datetime | None,
+) -> None:
+    """Record one unfinished History run stamped with ``ledger_instance_id``."""
+
+    record = SessionRecord(
+        SessionId(hashlib.sha256(run_token.encode("utf-8")).hexdigest()[:32]), "inventory",
+        SessionState.PENDING if started_at is None else SessionState.RUNNING,
+        (), b"payload", False, 0, created_at, started_at=started_at,
+    )
+    with HistoryStore(history, clock=FakeClock(created_at)) as store:
+        observer = store.observer(
+            record,
+            HistoryContext(run_token, "host", ledger_instance_id=ledger_instance_id),
+        )
+        observer.on_event(Envelope(
+            record.session_id, 1, started_at or created_at,
+            CORE_EVENT_SCHEMA_VERSION, PhaseChanged("inventory"),
+        ))
+        observer.flush()
 
 
 @dataclass

@@ -1854,6 +1854,44 @@ def test_startup_surfaces_a_migration_or_newer_refusal_before_binding(
     } == before
 
 
+def test_startup_refuses_a_ledger_backup_copied_into_place_before_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from _db_fixtures import NOW, add_ledger_lineage, stored_ledger_instance
+    from namisync.db.schema import initialize_history, initialize_ledger
+
+    paths, order, _webview, _document, reports = _patch_primary(monkeypatch, tmp_path)
+    initialize_ledger(paths.ledger)
+    initialize_history(paths.history)
+    add_ledger_lineage(paths.ledger, "backup-cut", stored_ledger_instance(paths.ledger), NOW)
+    monkeypatch.setattr(
+        host, "_create_service",
+        lambda actual: order.append("create_service") or _RecordedService(actual, order),
+    )
+    before = {
+        path.name: path.read_bytes() for path in paths.root.iterdir()
+        if path.is_file() and path.name.startswith(("ledger.db", "history.db"))
+        and not path.name.endswith(".claim")
+    }
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 1
+    labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
+    assert "migrate_databases" not in labels
+    assert "path_lease.bind_databases" not in labels
+    assert "create_window" not in labels
+    assert len(reports) == 1
+    assert "NamiSync database pair refused (ledger-is-backup)" in reports[0]
+    assert "namisync restore ledger <backup file>" in reports[0]
+    assert not any(word in reports[0].lower() for word in ("delete", "archive", "reset"))
+    assert {
+        path.name: path.read_bytes() for path in paths.root.iterdir()
+        if path.is_file() and path.name.startswith(("ledger.db", "history.db"))
+        and not path.name.endswith(".claim")
+    } == before
+
+
 def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
     order: list[str] = []
     dispatcher = SimpleNamespace(
