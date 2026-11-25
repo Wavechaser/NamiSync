@@ -177,6 +177,7 @@ from .models import (
 from .sync import (
     SyncDependencies,
     refusal_views,
+    require_planned_ledger,
     run_execution,
     run_plan,
     settle_canceled_execution as settle_canceled_sync_execution,
@@ -358,6 +359,7 @@ class LocalWorkflowRuntime:
             save_plan=self.save_plan,
             save_execution_details=self._save_execution_details,
             finish_existing_recording=self._finish_existing_recording,
+            ledger_instance=self._ledger_instance_id,
         )
         inventory_scan = inventory_scanner or self._scanner.scan
         self._inventory_deps = InventoryDependencies(
@@ -705,6 +707,15 @@ class LocalWorkflowRuntime:
         ):
             # Planning reads the ledger; an older pair is migrated before it.
             raise DatabasePairRefusedError(contract)
+        # Captured before the plan reads the ledger, so a replacement while it
+        # plans also refuses its execution. A fresh pair has nothing to read.
+        checkpoint = replace(
+            checkpoint,
+            ledger_instance_id=(
+                None if contract.state is DatabasePairState.FRESH
+                else self._ledger_instance_id()
+            ),
+        )
         resources = self._resources_for_paths(
             checkpoint.source_path, checkpoint.target_path
         )
@@ -1091,6 +1102,7 @@ class LocalWorkflowRuntime:
             artifact.plan.fingerprint,
             decision.selection_digest,
             committed,
+            artifact.request.ledger_instance_id,
         )
         token = run_id or uuid4().hex
         return ExecutionRequest(
@@ -1667,6 +1679,8 @@ class LocalWorkflowRuntime:
             clock=self.clock,
             database=self._database(),
         ) as recorder:
+            # Under the recorder's shared claim, which a restore needs exclusively.
+            require_planned_ledger(spec.commitment, self._ledger_instance_id)
             recorder.finish_run(
                 FinishRunCommand(
                     run_token,
@@ -1924,6 +1938,9 @@ class _LedgerRunRecording:
             ),
         )
         try:
+            # The recorder now holds the ledger's shared claim, which a restore
+            # needs exclusively, so this check holds until its last write.
+            require_planned_ledger(spec.commitment, runtime._ledger_instance_id)
             self.recorder = self._begin(started_at)
         except BaseException:
             self._owner.close()

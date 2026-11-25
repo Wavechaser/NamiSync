@@ -72,7 +72,7 @@ from namisync.modules.executor import NativeFileSystem
 from namisync.workflows.models import PlanOperationView
 from namisync.workflows.views import result_item_view, session_record_view
 
-from _db_fixtures import FakeClock, NOW
+from _db_fixtures import FakeClock, NOW, replace_ledger_instance
 
 
 _FILESYSTEM_TEXT_CASES = json.loads(
@@ -1542,6 +1542,46 @@ def test_sync_execution_during_database_maintenance_is_refused_at_admission(
         assert service.list_history(10) == ()
     with hold_maintenance_claims(ledger, history):
         pass
+
+
+def test_sync_refuses_execution_after_the_ledger_is_replaced_at_the_prompt(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"payload")
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    class ReplacedWhileConfirming(io.StringIO):
+        def readline(self, *args) -> str:
+            # Another process restores the ledger while the plan waits for "execute".
+            replace_ledger_instance(ledger)
+            return super().readline(*args)
+
+    result = main(
+        _arguments(source, target, ledger, history),
+        stdin=ReplacedWhileConfirming("execute\n"),
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert result == EXIT_REFUSED, (stdout.getvalue(), stderr.getvalue())
+    assert list(target.iterdir()) == []
+    assert (
+        "Refused: The ledger was replaced (restored or reset) after this plan was "
+        "made, so it cannot run. Plan again to review it against the current ledger.\n"
+    ) in stderr.getvalue()
+    assert "filesystem=refused" in stdout.getvalue()
+    with closing(sqlite3.connect(ledger)) as connection:
+        assert connection.execute("SELECT count(*) FROM runs").fetchone() == (0,)
+    with NamiSyncService(ledger, history) as service:
+        (run,) = service.list_history(10)
+    assert (run.filesystem_status, run.headline) == ("refused", "refused")
 
 
 def test_read_only_history_command_is_exempt_from_missing_ledger_peer(

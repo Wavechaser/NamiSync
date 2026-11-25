@@ -500,7 +500,7 @@ that depend on absence or stable identity.
 | `MappingSnapshot` | Prior accepted correspondence supplied to the pure planner by a workflow. |
 | `Plan` | Deterministic immutable intent, operations, dependencies, semantic settings, capacity requirement, and fingerprint. |
 | `ExecutionSet.selection` | Dependency-closed executable subset, distinct from the full reviewed plan. |
-| `Commitment` | Binding from human approval to plan fingerprint and selection digest. |
+| `Commitment` | Binding from human approval to plan fingerprint and selection digest, plus the ledger instance the plan was made against (none for a plan made before any ledger existed). |
 | `ExecutionSet` | Plan, authoritative selection, commitment, operation status, sparse item recording reasons, ordered task recording issues, continuation evidence, and validated aggregate byte high-water. |
 | `ExecutionSetAuthority` | Canonical immutable execution references plus detached prior mutable-overlay baselines; it carries no duplicate plan fingerprint or operation-fact graph. |
 | `ExecutionSetCheckpoint` | Execution-specific detached overlay plus the public constructor's validated immutable structure, shared when reopening fresh invocation state. |

@@ -7303,6 +7303,44 @@ def test_database_maintenance_refuses_task_starts_definitively(tmp_path):
         assert (target / "one.txt").read_text(encoding="utf-8") == "execution bytes"
 
 
+def test_plan_reviewed_before_a_ledger_replacement_is_refused_at_start(tmp_path):
+    from _db_fixtures import replace_ledger_instance
+
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "one.txt").write_text("reviewed bytes", encoding="utf-8")
+    ledger = tmp_path / "ledger.db"
+    with NamiSyncService(ledger, tmp_path / "history.db") as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            updates = _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+            return updates
+
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id=next(ids))
+        finish(planned)
+        # A CLI restore while the plan waits in review.
+        replace_ledger_instance(ledger)
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False,
+            command_id=next(ids), wire_intent=("execute",))
+        terminal = next(update.record for update in finish(execution)
+                        if type(update) is TaskRecordUpdateView)
+        retained = registry.open_plan_view(planned.task_id)
+
+    assert terminal.state == "refused"
+    assert retained["selection_state"] == "committed"
+    assert retained["execution"]["result"].disposition == "unrun"
+    assert retained["execution"]["refusal"] == {"origin": "commitment", "codes": []}
+    assert list(target.iterdir()) == []
+
+
 def test_inventory_refresh_publishes_modified_evidence_and_retains_prior_verified_result(tmp_path):
     import os
     from namisync.workflows import LocationCandidate

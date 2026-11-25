@@ -792,6 +792,42 @@ outcomes, gate and non-goals.
   `locations`, `mappings` and `inventory` therefore use `AUTOINCREMENT`, and no
   History table needs it. A table whose ids start to leave its database later
   gets it through a migration.
+- A sync plan records the ledger instance it was planned against (M2-A4, user
+  decisions 2026-11-20 and 2026-11-24). The runtime reads it when it prepares
+  planning, before the plan reads the ledger, so a replacement while it plans
+  is caught too; a fresh pair gives none, because such a plan read nothing from
+  a ledger. Commitment copies it into the core `Commitment`, which every held,
+  queued or paused execution carries in its checkpoint; nothing re-reads it.
+  - **At start and every resume**, before observation, preflight, any
+    filesystem change or ledger write, a different current instance is a
+    commitment refusal: a fresh start ends `REFUSED+UNRUN` with “The ledger was
+    replaced (restored or reset) after this plan was made, so it cannot run.
+    Plan again to review it against the current ledger.” The CLI prints it and
+    exits 3; the desktop shows the commitment refusal (“Execution commitment is
+    invalid. Restart task with Plan Again.”), since no diagnostic text crosses
+    the bridge. No ledger row is written; History keeps the attempt as a
+    finalized run with filesystem `refused` and disposition `unrun`, stamped
+    with the current instance it was admitted under. A resumed execute
+    continuation ends `FAILED+RAN`, and a resumed verify continuation keeps its
+    execute status with an incomplete verify phase; in both the existing run is
+    not finished in the replaced ledger, so ledger recording is degraded.
+  - **Under the claim.** Each ledger writer a sync run opens (the run recorder
+    at start and on each resumed stretch, cancel settlement, and existing-run
+    finishing) checks again after `LedgerRecorder` takes the ledger's shared
+    claim and before its first write. Restore needs that claim exclusively, so
+    the instance cannot change between this check and the writes. The start
+    check itself runs while the session's History observer holds History's
+    claim, which restore also needs, so this second check fires only when a
+    replacement lands after the start check without that claim (degraded
+    audit). It fails closed through the recording-open-failure path: no ledger
+    write, no filesystem change, `FAILED` with recording degraded and the typed
+    `LedgerInstanceChanged`, CLI exit 4.
+  - Inventory review's row-id actions (acknowledge, restore) are not plans and
+    are not covered here.
+  - Tests stand in for restore by rewriting the id under the ledger's exclusive
+    claim: the replaced-ledger cases in `tests/test_bridge_resume.py` (start,
+    paused execute and verify resumes, the under-claim check), `tests/test_cli.py`
+    and `tests/interfaces/web/test_drain.py`.
 
 ### Migration
 
@@ -1080,9 +1116,13 @@ still being written to either database, in any process.
   claim; only its re-creation takes each database's claim.
 - **Outside the gate.** Settings keep their own named mutex. A paused run holds
   no ledger claim; contract validation at its next open is what refuses a
-  database that changed underneath it. Work that is waiting rather than writing
-  (reviewed plans, held or queued executions) is covered by the ledger instance
-  check and the named refusals that arrive with M2-A4.
+  database that changed underneath it. An admitted session's History observer
+  holds History's claim from admission, across pauses, so maintenance cannot
+  run beside held, queued or paused work whose audit is healthy. A reviewed
+  plan not yet submitted, and a session admitted with degraded audit, hold no
+  claim; the ledger instance check ([above](#ledger-instance-and-ids)) covers
+  them. Refusing maintenance by naming such waiting work arrives with the Data
+  page (M2-B3).
 
 ## Data Protection
 

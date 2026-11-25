@@ -114,11 +114,16 @@ class TaskRecordingIssue:
 
 @dataclass(frozen=True, slots=True)
 class Commitment:
-    """Human authorization bound to one plan and exact operation selection."""
+    """Human authorization bound to one plan and exact operation selection.
+
+    ``ledger_instance_id`` names the ledger the plan was made against, or is
+    None when no ledger existed then; execution refuses another ledger.
+    """
 
     plan_fingerprint: PlanFingerprint
     selection_digest: bytes
     committed_at: datetime
+    ledger_instance_id: str | None = None
 
     def __post_init__(self) -> None:
         if not self.plan_fingerprint:
@@ -129,6 +134,11 @@ class Commitment:
             raise ValueError("commitment timestamp must be timezone-aware")
         if self.committed_at.utcoffset() != timezone.utc.utcoffset(self.committed_at):
             raise ValueError("commitment timestamp must be UTC")
+        if self.ledger_instance_id is not None and (
+            type(self.ledger_instance_id) is not str
+            or _FIXED_ID.fullmatch(self.ledger_instance_id) is None
+        ):
+            raise ValueError("commitment ledger instance must be 32 lowercase hex digits")
 
 
 @dataclass(frozen=True, slots=True)

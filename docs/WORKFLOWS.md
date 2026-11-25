@@ -309,7 +309,11 @@ construction or the other unmodeled construction/callback costs.
    core `Commitment` defined in [execution.py](../namisync/core/execution.py); execution cannot
    resupply a frozen Setup choice. Refuse a malformed or mismatched commitment
    before preflight. An all-skipped result refuses because there is nothing to
-   execute; a selected `NOOP` remains executable work.
+   execute; a selected `NOOP` remains executable work. The commitment also
+   names the ledger instance its plan was made against (M2-A4); a start or
+   resume against another instance is a commitment refusal with “plan again”
+   guidance, and every ledger writer the run opens repeats the check under its
+   claim ([DATABASE](DATABASE.md#ledger-instance-and-ids)).
 2. Reacquire required physical-volume custody.
 3. Consume the immutable semantic snapshot bound into the reviewed plan; never
    reread global defaults to decide admitted filesystem behavior.

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+import sqlite3
 
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance
 from namisync.core.models import (
@@ -41,11 +43,32 @@ from namisync.core.recording import (
     SyncRunCommand,
     VolumeCommand,
 )
+from namisync.db.claims import acquire_database_claim
 from namisync.db.recorder import LedgerRecorder, SyncRunRecorder
+from namisync.db.schema import new_instance_id
 
 
 UTC = timezone.utc
 NOW = datetime(2026, 1, 2, 3, 4, 5, 123456, tzinfo=UTC)
+
+
+def replace_ledger_instance(ledger: Path) -> str:
+    """Stand in for a ledger restore, which issues a new instance id.
+
+    No restore command exists yet. Like one, this holds the ledger's claim
+    exclusively, so it is refused while any ledger writer is open, and it
+    rewrites the id from a second connection. (Restore also takes History's
+    claim; this stand-in does not, so it can reach a paused run.)
+    """
+
+    replacement = new_instance_id()
+    with acquire_database_claim(ledger, exclusive=True):
+        with closing(sqlite3.connect(ledger)) as connection, connection:
+            connection.execute(
+                "UPDATE schema_metadata SET value = ? WHERE key = 'instance_id'",
+                (replacement,),
+            )
+    return replacement
 
 
 @dataclass

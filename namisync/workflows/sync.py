@@ -16,6 +16,7 @@ from namisync.core.exception_graph import (
 from namisync.core.events import ItemOutcome, PhaseChanged, snapshot_item_outcome
 from namisync.core.evidence import Outcome, RecordingStatus, snapshot_attestation
 from namisync.core.execution import (
+    Commitment,
     ExecutionReview,
     ExecutionSet,
     ExecutionSetAuthority,
@@ -310,7 +311,29 @@ class SyncDependencies:
     finish_existing_recording: Callable[
         [RecordingSpec, SessionState, RecordingStatus], None
     ]
+    ledger_instance: Callable[[], str]
     ignores: IgnoreSet = IgnoreSet()
+
+
+class LedgerInstanceChanged(RuntimeError):
+    """The ledger was replaced after the plan was made against it."""
+
+
+def require_planned_ledger(
+    commitment: Commitment | None, current: Callable[[], str],
+) -> None:
+    """Refuse a commitment whose plan was made against another ledger.
+
+    A plan made before any ledger existed read none, so it carries no id.
+    """
+
+    planned = None if commitment is None else commitment.ledger_instance_id
+    if planned is not None and current() != planned:
+        raise LedgerInstanceChanged(
+            "The ledger was replaced (restored or reset) after this plan was "
+            "made, so it cannot run. Plan again to review it against the "
+            "current ledger."
+        )
 
 
 def _review_limit_refusal(
@@ -385,6 +408,7 @@ def _run_plan(
             request.source_binding,
             request.target_binding,
             request.verify_after_execute,
+            request.ledger_instance_id,
         )
         del request, request_id, source_path, target_path, request_options
 
@@ -908,6 +932,15 @@ def _run_execution(
                 if decision.selection != xset.selection
                 else _commitment_error(xset)
             )
+            if commitment_error is None:
+                # The definitive refusal; each ledger writer repeats the check
+                # under its maintenance claim before its first write.
+                try:
+                    require_planned_ledger(
+                        xset.commitment, lambda: deps.ledger_instance(),
+                    )
+                except LedgerInstanceChanged as error:
+                    commitment_error = str(error)
             exclusion_items = _exclusion_items(xset.plan, decision)
             if isinstance(current, ExecuteContinuation):
                 if current.reported_exclusion_count > len(exclusion_items):

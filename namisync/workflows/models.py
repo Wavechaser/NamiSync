@@ -59,6 +59,9 @@ class PlanRequest:
     source_binding: LocationBinding | None = None
     target_binding: LocationBinding | None = None
     verify_after_execute: bool = False
+    # Set by the runtime when it prepares planning: the ledger the plan reads,
+    # or None when no ledger exists yet.
+    ledger_instance_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

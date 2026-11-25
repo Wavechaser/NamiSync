@@ -12,6 +12,7 @@ from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import (
     Commitment,
     ExecutionSet,
+    TaskRecordingIssueReason,
     validated_run_id,
 )
 from namisync.core.integrity import PostCopySelection
@@ -28,6 +29,7 @@ from namisync.core.session import (
     RunContext,
     SessionState,
 )
+from namisync.db.claims import hold_maintenance_claims
 from namisync.dispatcher import Dispatcher, InProcessResourceLockProvider
 from namisync.interfaces.service import _workflow_registry
 from namisync.workflows.models import (
@@ -41,7 +43,7 @@ from namisync.workflows.selection import derive_execution_selection
 from namisync.workflows.runtime import EXECUTION_KIND, LocalWorkflowRuntime
 from namisync.workflows.sync import run_execution
 
-from _db_fixtures import NOW, file_stat, operation, plan
+from _db_fixtures import NOW, file_stat, operation, plan, replace_ledger_instance
 
 
 class _Recording:
@@ -527,3 +529,209 @@ def test_br_g_10_dispatcher_pause_resume_reopens_the_same_run(
     assert row is not None
     assert row[0] is not None
     assert row[1] == SessionState.COMPLETED.value
+
+
+def _ledger_rows(ledger, table: str, columns: str = "*") -> list[tuple]:
+    connection = sqlite3.connect(ledger)
+    try:
+        return connection.execute(f"SELECT {columns} FROM {table}").fetchall()
+    finally:
+        connection.close()
+
+
+def _stored_instance(ledger) -> str:
+    connection = sqlite3.connect(ledger)
+    try:
+        return connection.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'instance_id'"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+
+def _plan_and_commit(runtime, source, target, request_id: str, run_id: str, **commit):
+    request = PlanRequest(request_id, str(source), str(target))
+    runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
+        RunContext(lambda _event: None, lambda: None)
+    )
+    return runtime.commit_plan(request_id, run_id=run_id, committed_at=NOW, **commit)
+
+
+def _settled(dispatcher, session_id):
+    deadline = monotonic() + 5
+    while monotonic() < deadline:
+        record = dispatcher.get(session_id)
+        if record.result is not None:
+            return record
+        sleep(0.01)
+    pytest.fail("session did not settle")
+
+
+def _ledger_issue_reasons(result) -> set[TaskRecordingIssueReason]:
+    return {
+        issue.reason
+        for issue in result.recording_issues
+        if (issue.detail or "").startswith("LedgerInstanceChanged:")
+    }
+
+
+def test_execution_start_refuses_a_plan_made_against_a_replaced_ledger(tmp_path) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"reviewed")
+    ledger = tmp_path / "ledger.db"
+    runtime = LocalWorkflowRuntime(ledger, tmp_path / "history.db")
+    runtime.initialize_database_contracts()
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=runtime.clock,
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        stale = _plan_and_commit(runtime, source, target, "1" * 32, "2" * 32)
+        assert stale.execution_set.commitment.ledger_instance_id == _stored_instance(ledger)
+        replace_ledger_instance(ledger)
+
+        refused = _settled(dispatcher, dispatcher.submit(EXECUTION_KIND, stale))
+        assert list(target.iterdir()) == []
+        assert _ledger_rows(ledger, "runs") == []
+        assert _ledger_rows(ledger, "hosts") == []
+        details = runtime.get_execution_details("2" * 32)
+        history = runtime.get_history_summary("2" * 32)
+
+        # A plan made against the current ledger still executes.
+        current = _plan_and_commit(runtime, source, target, "3" * 32, "4" * 32)
+        assert current.execution_set.commitment.ledger_instance_id == _stored_instance(ledger)
+        completed = _settled(dispatcher, dispatcher.submit(EXECUTION_KIND, current))
+    finally:
+        dispatcher.shutdown()
+        runtime.close()
+
+    assert refused.result.status is SessionState.REFUSED
+    assert refused.result.disposition is Disposition.UNRUN
+    assert details.commitment_error.startswith("The ledger was replaced")
+    assert details.commitment_error.endswith("Plan again to review it against the current ledger.")
+    assert (history.completion_status, history.filesystem_status) == ("finalized", "refused")
+    assert history.disposition == "unrun"
+    assert completed.result.status is SessionState.COMPLETED
+    assert (target / "payload.bin").read_bytes() == b"reviewed"
+    assert _ledger_rows(ledger, "runs", "run_token") == [("4" * 32,)]
+
+
+@pytest.mark.parametrize("phase", ("execute", "verify"))
+def test_resume_refuses_a_paused_run_whose_ledger_was_replaced(
+    tmp_path, monkeypatch, phase: str,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"paused")
+    ledger = tmp_path / "ledger.db"
+    runtime = LocalWorkflowRuntime(ledger, tmp_path / "history.db")
+    runtime.initialize_database_contracts()
+    entered = Event()
+    release = Event()
+
+    def pause_in_verify(_selection, context, _recorder):
+        entered.set()
+        while True:
+            context.run.checkpoint()
+            sleep(0.005)
+
+    if phase == "verify":
+        runtime._deps = replace(runtime._deps, verifier=pause_in_verify)
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=runtime.clock,
+        audit_observer_factory=runtime.audit_observer,
+    )
+    if phase == "execute":
+        original_run_core = dispatcher._run_core
+
+        def paused_before_entry(*args, **kwargs):
+            if not entered.is_set():
+                entered.set()
+                assert release.wait(2)
+            return original_run_core(*args, **kwargs)
+
+        monkeypatch.setattr(dispatcher, "_run_core", paused_before_entry)
+    try:
+        execution = _plan_and_commit(
+            runtime, source, target, "5" * 32, "6" * 32, verify_after_execute=True,
+        )
+        session_id = dispatcher.submit(EXECUTION_KIND, execution)
+        assert entered.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release.set()
+        deadline = monotonic() + 3
+        while dispatcher.get(session_id).state is not SessionState.PAUSED or session_id in dispatcher._current_workers:
+            assert monotonic() < deadline, "session did not pause"
+            sleep(0.01)
+        runs_before = _ledger_rows(ledger, "runs")
+        replace_ledger_instance(ledger)
+        assert dispatcher.resume(session_id).accepted
+        record = _settled(dispatcher, session_id)
+    finally:
+        release.set()
+        dispatcher.shutdown()
+        runtime.close()
+
+    result = record.result
+    assert result.disposition is Disposition.RAN
+    assert result.recording is RecordingStatus.DEGRADED
+    assert "The ledger was replaced" in result.error.message
+    # The finish is refused under the recorder's claim, never written.
+    assert _ledger_issue_reasons(result) == {TaskRecordingIssueReason.FINISH_FAILED}
+    assert _ledger_rows(ledger, "runs") == runs_before
+    if phase == "execute":
+        assert result.status is SessionState.FAILED
+        assert result.error.type_name == "ExecutionResumeCommitmentInvalid"
+        assert list(target.iterdir()) == []
+        assert runs_before == []
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+        assert result.error.type_name == "VerificationContinuationInvalid"
+        assert (target / "payload.bin").read_bytes() == b"paused"
+        assert len(runs_before) == 1
+
+
+def test_ledger_writer_refuses_a_replacement_after_the_start_check(tmp_path) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"window")
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    runtime = LocalWorkflowRuntime(ledger, history)
+    runtime.initialize_database_contracts()
+    original_observer = runtime._deps.observer
+
+    def replaced_during_preflight(*args, **kwargs):
+        # After the start check, before the run's ledger writer takes its claim.
+        replace_ledger_instance(ledger)
+        return original_observer(*args, **kwargs)
+
+    try:
+        execution = _plan_and_commit(runtime, source, target, "7" * 32, "8" * 32)
+        runtime._deps = replace(runtime._deps, observer=replaced_during_preflight)
+        result = runtime.open_execution(ExecutionCheckpoint(execution)).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+    finally:
+        runtime.close()
+
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert result.error.type_name == "LedgerInstanceChanged"
+    assert _ledger_issue_reasons(result) == {
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+        TaskRecordingIssueReason.FINISH_FAILED,
+    }
+    assert list(target.iterdir()) == []
+    assert _ledger_rows(ledger, "hosts") == []
+    assert _ledger_rows(ledger, "runs") == []
+    with hold_maintenance_claims(ledger, history):
+        pass
