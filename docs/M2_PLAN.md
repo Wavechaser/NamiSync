@@ -214,6 +214,19 @@ Checkpoints:
     scheduled maintenance, export and import, a second-volume backup
     destination, and refusal of restore by naming in-process waiting work
     (B3, where restore first runs inside the desktop).
+  - **Recurrence pause, adjudicated (user decision, 2026-11-25).** Pair
+    migration stamped a v0.1.0 History's runs with whichever current ledger
+    sat beside it. Two unplanned cases reached the reviews (a restored ledger
+    beside a v0.1.0 History; a ledger created for a lone History, then the
+    History's migration backup put back by hand), and a third predates A4 (a
+    v0.1.0 History copied beside a fresh pair). Owner and choke point: the
+    stamp decision in `migrate_database_pair`. Rule: the ledger's own
+    migration from 0.1.0 records a marker in the ledger (schema 5 amended in
+    place once more), and a v0.1.0 History is stamped only beside a ledger
+    that carries the marker and has no restore or replaced-missing lineage;
+    otherwise it migrates unstamped and its runs show as an earlier ledger.
+    It lands with outcome 5. Outcome 4's refusal of a ledger restore beside
+    an older History stays.
   - **Deferred to B3 (user decision, 2026-11-25):** a plan refused because
     its ledger was replaced shows the desktop's generic commitment refusal.
     A bridge refusal that names the cause should exist, and waits for B3,
