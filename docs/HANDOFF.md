@@ -1,4 +1,37 @@
-# Latest session — M2-A3 maintenance claim and schema migration, 2026-11-25
+# Latest session — M2-A3 adversarial review, 2026-11-25
+
+The read-only review of `60b43078` through `af4b8d6c` found the
+following open issues. No product fix has been authorized yet.
+
+- **CLI placement safety:** sync and location commands migrate an old pair
+  before validating the requested managed roots. An inventory command with a
+  relative root exited with an input error after migrating both fixture
+  databases and publishing backups. The same ordering can mutate a database
+  inside a managed root before placement is rejected. The latter consequence
+  follows from source inspection and was not separately exercised.
+- **Pair refusal guidance:** a ledger with missing format metadata paired with
+  a newer History produced advice to archive or delete both databases. The
+  ledger's early refusal prevents classification of the newer History. With a
+  valid ledger, the same History correctly produced newer-version guidance.
+- **History replay identity:** an observer reopened a persisted run with a
+  different ledger instance id. The stored stamp is outside the context hash
+  and is not separately checked on observer admission or run reuse. Admission
+  was reproduced; an actual run switching ledgers was not observed.
+- **Backup temporary ownership:** inspection found that the random temporary
+  pathname is opened in create-or-open mode and unlinked on failure, so an
+  existing occupant can be reused or removed. No collision was observed.
+- **Fixture producer timeout:** its blocking prompt read precedes the timed
+  `communicate`, so a child stalled before its prompt can hang indefinitely.
+
+Review verification on `af4b8d6c`: 498 focused checkpoint tests and 643
+additional consumer/contract tests passed. An independently regenerated
+v0.1.0 pair migrated with all 114 ledger and 145 History application rows
+matching both the original and the backups, including SQLite storage types;
+repeat admission was ready without new backups. Two producer steps failed
+inside the sandbox and all 18 returned expected exits outside it. The prior
+kill-trial record was inspected but not rerun, and desktop startup was covered
+by host tests rather than a headed launch. Review scratch and reproducers are
+under `build/a3-review-25/`.
 
 Work remains on `milestone2`; nothing is pushed. M2-A1 to M2-A3 are complete.
 M2-A4 is the next row and is still proposed, not accepted.
