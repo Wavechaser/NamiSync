@@ -240,7 +240,10 @@ def _run_sync(
         )
         return EXIT_USAGE
     try:
-        refusal = _database_refusal(service, stdout, stderr)
+        refusal = _database_refusal(
+            service, stdout, stderr,
+            roots=(namespace.source, namespace.target), paired=True,
+        )
         if refusal is not None:
             return refusal
         plan_session = None
@@ -400,7 +403,12 @@ def _run_location_workflow(
         return EXIT_USAGE
     session = None
     try:
-        refusal = _database_refusal(service, stdout, stderr)
+        refusal = _database_refusal(
+            service, stdout, stderr,
+            roots=() if root_path is None else (root_path,),
+            selected_mount=namespace.selected_mount,
+            selected_paths=selected_paths,
+        )
         if refusal is not None:
             return refusal
         try:
@@ -687,12 +695,29 @@ def _terminal_items(
 
 
 def _database_refusal(
-    service: NamiSyncService, stdout: TextIO, stderr: TextIO,
+    service: NamiSyncService,
+    stdout: TextIO,
+    stderr: TextIO,
+    *,
+    roots: tuple[str, ...],
+    selected_mount: str | None = None,
+    selected_paths: tuple[str, ...] = (),
+    paired: bool = False,
 ) -> int | None:
-    """Admit the pair for mutating work, migrating a NamiSync 0.1.0 pair first."""
+    """Admit the pair for mutating work, migrating a NamiSync 0.1.0 pair first.
+
+    Migration waits for the command's own roots: when they are refused, or a
+    database sits inside one, nothing is migrated and the command's ordinary
+    admission reports the input error.
+    """
 
     contract = service.validate_database_contracts()
     if contract.state == "migration-required":
+        if not service.database_placement_admitted(
+            roots, selected_mount=selected_mount,
+            selected_paths=selected_paths, paired=paired,
+        ):
+            return None
         contract, migrated = service.migrate_database_contracts()
         if migrated:
             roles = " and ".join(f"{role} (v{version})" for role, version, _ in migrated)

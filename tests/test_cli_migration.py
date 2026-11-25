@@ -158,6 +158,53 @@ def test_mutating_command_reports_a_refused_migration_and_changes_nothing(
     assert _files(ledger.parent) == before
 
 
+def _refused_inputs(tmp_path: Path, data: Path) -> dict[str, list[str]]:
+    source, target = tmp_path / "source", tmp_path / "target"
+    for folder in (source / "inner", target):
+        folder.mkdir(parents=True)
+    return {
+        "inventory-relative-root": ["inventory", "relative-root"],
+        "inventory-missing-root": ["inventory", str(tmp_path / "absent")],
+        "inventory-root-holds-databases": ["inventory", str(data)],
+        "inventory-unsafe-path": ["inventory", str(target), "--path", "..\\x"],
+        "verify-unsafe-path": ["verify", str(target), "--path", "a/../b"],
+        "baseline-root-holds-databases": ["baseline", str(data.parent)],
+        "sync-relative-source": ["sync", "relative-source", str(target)],
+        "sync-nested-roots": ["sync", str(source), str(source / "inner")],
+        "sync-source-holds-databases": ["sync", str(data), str(target)],
+        "sync-target-holds-databases": ["sync", str(source), str(data.parent)],
+    }
+
+
+@pytest.mark.parametrize("case", (
+    "inventory-relative-root", "inventory-missing-root",
+    "inventory-root-holds-databases", "baseline-root-holds-databases",
+    "inventory-unsafe-path", "verify-unsafe-path",
+    "sync-relative-source", "sync-nested-roots",
+    "sync-source-holds-databases", "sync-target-holds-databases",
+))
+def test_refused_roots_or_placement_leave_a_released_pair_unmigrated(
+    tmp_path: Path, case: str,
+) -> None:
+    # The pair sits in its own folder under a parent that can be a managed root.
+    data = tmp_path / "managed" / "data"
+    ledger, history = copy_released_pair(data)
+    arguments = _refused_inputs(tmp_path, data)[case]
+    before = _files(data)
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    result = main(
+        [*arguments, "--database", str(ledger), "--history-database", str(history)],
+        stdin=io.StringIO(""), stdout=stdout, stderr=stderr,
+    )
+
+    assert result != EXIT_SUCCESS
+    assert "Updated" not in stdout.getvalue()
+    assert _files(data) == before
+    assert not list(data.glob("*.backup-*")) and not list(data.glob("*.tmp*"))
+    assert not list(data.glob("*.claim"))
+
+
 def test_notice_names_only_the_database_that_migrated(tmp_path: Path) -> None:
     root = tmp_path / "root"
     root.mkdir()

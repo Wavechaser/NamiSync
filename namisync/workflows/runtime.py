@@ -474,6 +474,47 @@ class LocalWorkflowRuntime:
             validate_location_candidate_pair(source, target)
         return source, target
 
+    def database_placement_admitted(
+        self,
+        roots: tuple[str, ...],
+        *,
+        selected_mount: str | None = None,
+        selected_paths: tuple[str, ...] = (),
+        paired: bool = False,
+    ) -> bool:
+        """Whether literal roots and selected paths admit, databases outside.
+
+        Opens no database, so a caller can ask before migrating an older pair.
+        ``paired`` also requires the two roots to form a plan's pair.
+        """
+
+        self._require_open()
+        try:
+            for selected in selected_paths:
+                normalize_relative_path(selected)
+            if paired:
+                source, target = roots
+                results = self.admit_plan_locations(source, target)
+            else:
+                results = tuple(
+                    self.admit_location_candidate(
+                        LocationCandidate.literal(root, selected_mount=selected_mount)
+                    )
+                    for root in roots
+                )
+            if any(
+                result.state is not LocationCandidateState.RESOLVED
+                or result.root_path is None
+                for result in results
+            ):
+                return False
+            self._validate_database_roots(
+                tuple(result.root_path for result in results)
+            )
+        except (OSError, ValueError):
+            return False
+        return True
+
     def remembered_locations(self) -> RememberedLocations:
         with self._ledger_read() as repository:
             return project_remembered_locations(
@@ -657,7 +698,10 @@ class LocalWorkflowRuntime:
             (checkpoint.source_path, checkpoint.target_path)
         )
         contract = self.validate_database_contracts()
-        if contract.state is DatabasePairState.REFUSED:
+        if contract.state in (
+            DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED,
+        ):
+            # Planning reads the ledger; an older pair is migrated before it.
             raise DatabasePairRefusedError(contract)
         resources = self._resources_for_paths(
             checkpoint.source_path, checkpoint.target_path

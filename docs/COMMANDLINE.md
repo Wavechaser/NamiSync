@@ -86,8 +86,12 @@ or backfill either database.
 
 Before the first sync or location command admission, the CLI calls the shared
 read-only database-pair preflight. A pair written by NamiSync 0.1.0 is then
-migrated before the command proceeds, and one line on standard output names
-what migrated and its backups, for example:
+migrated before the command proceeds, but only once the command's roots are
+admitted with both databases outside them: a refused root or `--path`, a
+nested sync pair or a database inside a root reports its usual input error and migrates
+nothing. With `--location-id` the root is known only from the ledger, so the
+pair migrates first. One line on standard output names what migrated and its
+backups, for example:
 
 ```text
 Updated the ledger (v4) and history (v8) databases written by NamiSync 0.1.0; backups kept at: <ledger backup>, <history backup>

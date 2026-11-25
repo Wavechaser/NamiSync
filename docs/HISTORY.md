@@ -103,7 +103,10 @@ committed run rows cannot be deleted or replaced.
 digits) that the runtime supplies through `HistoryContext`; migration stamps
 every v0.1.0 run with the instance of the ledger it migrates beside. It is
 outside the context hash, so no stored hash changes meaning, and a trigger
-makes it write-once. It is nullable only for direct `HistoryStore` writers
+makes it write-once. Because no hash covers it, an observer compares it
+itself: reopening a run token under a different stamp, a missing one included,
+is a `TokenConflictError` at observer construction and on every write to an
+existing run row. It is nullable only for direct `HistoryStore` writers
 without a ledger (tests, measurement tools); no read rule uses it before
 restore lineage (M2-A4).
 

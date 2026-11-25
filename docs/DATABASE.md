@@ -765,7 +765,8 @@ outcomes, gate and non-goals.
   a pair. The stamp is a column of its own (`history_runs.ledger_instance_id`,
   32 lowercase hexadecimal digits), outside the run's context hash, so no
   stored hash is reinterpreted. A trigger makes it write-once, since no hash
-  covers it. The column is nullable: the runtime, the only production writer,
+  covers it, and a history observer refuses to reopen a run under a different
+  stamp ([HISTORY](HISTORY.md)). The column is nullable: the runtime, the only production writer,
   always supplies it from the ledger it admitted, but direct `HistoryStore`
   writers in tests and measurement tools have no ledger. Restore lineage and
   the read rule for mismatched runs arrive with restore (M2-A4).
@@ -797,6 +798,19 @@ or a `.claim` file: `validate_database_pair` reports `migration-required` (reaso
 `ledger-older`, `history-older` or `pair-older`), and a command that only
 reads, such as standalone `history`, refuses an older database with direction
 to start NamiSync once.
+
+When one role needs a reset, pair classification still classifies the other
+before it answers. A newer database or a wrong role there is reported in
+preference to the reset, because the reset direction tells the user to discard
+both databases.
+
+The CLI migrates only after the command's own roots and `--path` values are
+admitted with every database outside the roots (`database_placement_admitted`, which opens no
+database). When a root or path is refused, or a root holds a database, nothing is migrated and
+the command's ordinary admission reports the input error. Planning refuses a
+pair that is still `migration-required`. A command given `--location-id` has
+no root to check until the ledger is read, so there the pair migrates first
+and the placement check follows.
 
 `migrate_database_pair` takes both exclusive claims, classifies the pair again
 under them, and returns any state other than `migration-required` unchanged.
@@ -838,7 +852,9 @@ For each database that needs it, ledger first:
    write. Either refusal is `DatabaseInUse` with no change to any file.
 2. **Backup.** From the exclusive connection the SQLite backup API copies the
    committed database, WAL content included, to `<main>.migration-<random>.tmp`
-   beside it. The copy is switched to rollback-journal mode so it stands alone,
+   beside it. That file is created exclusively, so a file already at the name
+   refuses the backup and is neither reused nor removed (its `-journal`
+   sibling is not reserved the same way). The copy is switched to rollback-journal mode so it stands alone,
    checked (`integrity_check`, classification as the source version, and every
    table's row count against the source), flushed with `fsync`, and renamed to
    `<main>.backup-v<source version>-<UTC yyyymmddThhmmss + microseconds>Z`.

@@ -1913,6 +1913,38 @@ def test_context_token_conflict_is_rejected_before_new_events(tmp_path: Path) ->
             store.observer(record, HistoryContext("run-1", "host-2"))
 
 
+@pytest.mark.parametrize("stored, reopened", (
+    ("a" * 32, "b" * 32), ("a" * 32, None), (None, "b" * 32),
+))
+def test_run_token_is_refused_under_another_ledger_instance(
+    tmp_path: Path, stored: str | None, reopened: str | None,
+) -> None:
+    # The stamp is outside the context hash, so only its own check sees this.
+    record = _record()
+
+    def context(stamp: str | None) -> HistoryContext:
+        return HistoryContext("run-1", "host-1", ledger_instance_id=stamp)
+
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        first = store.observer(record, context(stored))
+        # Admitted while no run exists yet, so only the write can refuse it.
+        racing = store.observer(record, context(reopened))
+        first.on_event(_envelope(record, 1, _item(1)))
+        first.flush()
+        with pytest.raises(TokenConflictError, match="ledger instance changed"):
+            store.observer(record, context(reopened))
+        racing.on_event(_envelope(record, 1, _item(1)))
+        with pytest.raises(TokenConflictError, match="ledger instance changed"):
+            racing.flush()
+        racing.close()
+        first.close()
+        store.observer(record, context(stored)).close()
+        with closing(sqlite3.connect(store.path)) as connection:
+            assert connection.execute(
+                "SELECT ledger_instance_id FROM history_runs"
+            ).fetchall() == [(stored,)]
+
+
 def test_item_and_event_pages_use_fixed_keyset_watermarks(tmp_path: Path) -> None:
     record = _record()
     with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:

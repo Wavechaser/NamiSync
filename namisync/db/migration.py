@@ -356,9 +356,12 @@ def _publish_backup(
     """Copy, verify, flush and publish a backup that never replaces a file."""
 
     temporary = path.with_name(f"{path.name}.migration-{secrets.token_hex(8)}.tmp")
+    # Create it exclusively: a file already at this name is never reused, and
+    # cleanup below removes only what this call created.
+    os.close(os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
     try:
         target = sqlite3.connect(
-            temporary.as_uri() + "?mode=rwc", uri=True, isolation_level=None,
+            temporary.as_uri() + "?mode=rw", uri=True, isolation_level=None,
         )
         try:
             connection.backup(target)

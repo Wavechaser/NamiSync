@@ -384,6 +384,26 @@ class NamiSyncService:
             self._runtime.initialize_database_contracts()
         )
 
+    def database_placement_admitted(
+        self,
+        roots: tuple[str, ...],
+        *,
+        selected_mount: str | None = None,
+        selected_paths: tuple[str, ...] = (),
+        paired: bool = False,
+    ) -> bool:
+        """Whether these literal roots admit with the databases outside them.
+
+        Opens no database: ask before ``migrate_database_contracts``, so a
+        command whose roots are refused changes nothing.
+        """
+
+        self._require_open()
+        return self._runtime.database_placement_admitted(
+            roots, selected_mount=selected_mount,
+            selected_paths=selected_paths, paired=paired,
+        )
+
     def migrate_database_contracts(
         self,
     ) -> tuple[DatabaseContractView, tuple[tuple[str, int, str], ...]]:

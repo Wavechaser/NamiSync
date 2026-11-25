@@ -163,6 +163,7 @@ def _validate_database_pair_once(
 
     evidence: list[DatabaseFileEvidence] = []
     older: list[str] = []
+    reset: DatabasePairContract | None = None
     for role, path, is_history, database in (
         ("ledger", ledger, False, ledger_database),
         ("history", history, True, history_database),
@@ -170,7 +171,10 @@ def _validate_database_pair_once(
         try:
             role_evidence = _validate_role(path, history=is_history, database=database)
         except SchemaResetRequired:
-            return _refused(f"{role}-contract", reset=True)
+            # The reset direction covers both databases, so the other role is
+            # classified first: a newer or misplaced one must not be discarded.
+            reset = reset or _refused(f"{role}-contract", reset=True)
+            continue
         except DatabaseNewerVersion as error:
             return _refused(f"{role}-newer", guidance=str(error))
         except DatabaseRoleMismatch as error:
@@ -182,6 +186,8 @@ def _validate_database_pair_once(
             evidence.append(role_evidence)
     for role_evidence in evidence:
         role_evidence.require_unchanged()
+    if reset is not None:
+        return reset
     if older:
         return DatabasePairContract(
             DatabasePairState.MIGRATION_REQUIRED,

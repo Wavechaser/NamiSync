@@ -307,7 +307,7 @@ def test_cli_admission_interleaves_real_sqlite_commits_without_reset_advice(
                           stdout=io.StringIO(), stderr=stderr)
         else:
             with NamiSyncService(ledger, history) as service:
-                result = cli_module._database_refusal(service, io.StringIO(), stderr)
+                result = cli_module._database_refusal(service, io.StringIO(), stderr, roots=())
         assert result == (EXIT_REFUSED if persistent else EXIT_SUCCESS if entry == "history" else None)
         assert attempts == (3 if persistent else 2)
         assert mutations == (3 if persistent else 1)
@@ -355,7 +355,7 @@ def test_cli_admission_reset_guidance_requires_confirmed_stable_incompatibility(
                       stdout=io.StringIO(), stderr=stderr)
     else:
         with NamiSyncService(ledger, history) as service:
-            result = cli_module._database_refusal(service, io.StringIO(), stderr)
+            result = cli_module._database_refusal(service, io.StringIO(), stderr, roots=())
     assert result == EXIT_REFUSED
     assert ("archive or delete" in stderr.getvalue()) == (failure in {"schema", "corrupt"})
     assert calls == (1 if failure in {"permission", "sqlite-io", "sqlite-busy"} else 0)

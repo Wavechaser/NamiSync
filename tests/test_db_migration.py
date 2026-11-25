@@ -405,6 +405,23 @@ def test_backup_never_replaces_an_existing_file(
     )
 
 
+def test_backup_temporary_never_reuses_or_removes_an_existing_file(
+    released_ledger: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(migration.secrets, "token_hex", lambda size: "0" * (size * 2))
+    occupied = released_ledger.with_name("ledger.db.migration-0000000000000000.tmp")
+    occupied.write_bytes(b"someone else's file")
+    before = _bytes(released_ledger)
+    with acquire_database_claim(released_ledger, exclusive=True) as claim:
+        with pytest.raises(DatabaseBackupFailed) as raised:
+            migrate_database(released_ledger, history=False, claim=claim)
+    assert type(raised.value.__cause__) is FileExistsError
+    assert "changed nothing" in str(raised.value)
+    assert occupied.read_bytes() == b"someone else's file"
+    assert _bytes(released_ledger) == before
+    assert not list(released_ledger.parent.glob("*.backup-*"))
+
+
 @pytest.mark.parametrize("mode", ("open", "reader", "read-transaction", "writer"))
 def test_open_main_handles_refuse_migration_until_their_process_dies(
     released_ledger: Path, mode: str,

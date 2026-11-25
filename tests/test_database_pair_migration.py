@@ -499,6 +499,70 @@ def test_newer_role_refuses_pair_admission_without_reset_or_change(
     assert {name: value for name, value in _entries(data).items() if not name.endswith(".claim")} == before
 
 
+@pytest.mark.parametrize("other", ("newer", "swapped"))
+def test_reset_required_ledger_never_brings_reset_advice_to_a_newer_or_misplaced_history(
+    tmp_path: Path, other: str,
+) -> None:
+    # The reset direction says to discard both databases, so a ledger that
+    # needs it must not hide what the history beside it is.
+    data = tmp_path / "data"
+    ledger = initialize_ledger(data / "ledger.db")
+    history = (
+        initialize_history(data / "history.db") if other == "newer"
+        else initialize_ledger(data / "history.db")
+    )
+    with closing(sqlite3.connect(ledger)) as connection:
+        with connection:
+            connection.execute("DELETE FROM schema_metadata WHERE key = 'format.numeric'")
+    if other == "newer":
+        with closing(sqlite3.connect(history)) as connection:
+            with connection:
+                connection.execute(
+                    "UPDATE schema_metadata SET value = '10' WHERE key = 'schema_version'"
+                )
+    before = {name: value for name, value in _entries(data).items() if not name.endswith(".claim")}
+
+    for classify in (
+        lambda: validate_database_pair(ledger, history),
+        lambda: _runtime_contract(ledger, history),
+    ):
+        contract = classify()
+        assert (contract.state, contract.reason) == (
+            DatabasePairState.REFUSED,
+            "history-newer" if other == "newer" else "history-wrong-role",
+        )
+        assert contract.reset_direction is None
+        assert not re.search(r"delete|archive|reset", contract.guidance, re.IGNORECASE)
+    with pytest.raises(DatabasePairRefusedError) as raised:
+        ensure_database_pair(ledger, history)
+    assert not re.search(r"delete|archive|reset", str(raised.value), re.IGNORECASE)
+    assert {
+        name: value for name, value in _entries(data).items() if not name.endswith(".claim")
+    } == before
+
+    # With an ordinary history beside it, the same ledger still gets its reset.
+    history.unlink()
+    initialize_history(history)
+    contract = validate_database_pair(ledger, history)
+    assert (contract.state, contract.reason) == (DatabasePairState.REFUSED, "ledger-contract")
+    assert contract.reset_direction is not None
+
+
+def test_planning_refuses_a_pair_that_still_needs_migration(tmp_path: Path) -> None:
+    ledger, history = copy_released_pair(tmp_path / "data")
+    for name in ("source", "target"):
+        (tmp_path / name).mkdir()
+    before = _entries(ledger.parent)
+    with closing(LocalWorkflowRuntime(ledger, history)) as runtime:
+        request = runtime.create_plan_request(
+            "request-1", str(tmp_path / "source"), str(tmp_path / "target"),
+        )
+        with pytest.raises(DatabasePairRefusedError, match="Start NamiSync") as raised:
+            runtime.prepare_plan(request)
+    assert raised.value.contract.state is DatabasePairState.MIGRATION_REQUIRED
+    assert _entries(ledger.parent) == before
+
+
 def test_ensure_migrates_before_any_owner_opens_and_refuses_after(tmp_path: Path) -> None:
     data = tmp_path / "data"
     ledger = initialize_ledger(data / "ledger.db")

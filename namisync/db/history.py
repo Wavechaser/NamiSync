@@ -651,6 +651,7 @@ class _ExistingRun:
     context_hash: bytes
     last_committed_seq: int
     terminal_payload_hash: bytes | None
+    ledger_instance_id: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -798,6 +799,7 @@ class HistoryStore:
                 if row["terminal_payload_hash"] is None
                 else bytes(row["terminal_payload_hash"])
             ),
+            ledger_instance_id=row["ledger_instance_id"],
         )
 
     def _load_event_receipt(
@@ -916,6 +918,9 @@ class HistoryObserver:
             existing = store._load_existing(context.run_token)
             if existing is not None and existing.context_hash != self._context_hash:
                 raise TokenConflictError("history run token context changed")
+            # The stamp sits outside the context hash, so it is compared itself.
+            if existing is not None and existing.ledger_instance_id != context.ledger_instance_id:
+                raise TokenConflictError("history run token ledger instance changed")
         except BaseException:
             self._claim.release()
             raise
@@ -1290,6 +1295,8 @@ class HistoryObserver:
             _validate_physical_watermarks(row)
             if bytes(row["context_hash"]) != self._context_hash:
                 raise TokenConflictError("history run token context changed")
+            if row["ledger_instance_id"] != self._context.ledger_instance_id:
+                raise TokenConflictError("history run token ledger instance changed")
             if (
                 row["started_at"] is not None
                 and self._record.started_at is not None
