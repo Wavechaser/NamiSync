@@ -18,6 +18,23 @@ regression test that fails against the earlier code.
   `-journal` sibling is not reserved the same way.
 - **Fixture producer timeout:** a watchdog bounds the whole step.
 
+Two further findings are fixed after those, with regression tests that fail
+against the earlier code and an independent review (one correction round).
+
+- **Stale reset verdict:** the role that needed a reset is read again after
+  the other is classified; the reset direction is returned only if it still
+  holds, otherwise classification repeats.
+- **Unannounced migration:** `ensure_database_pair` no longer migrates. Only
+  `migrate_database_pair`, called by the CLI pre-check and desktop startup,
+  does. A CLI pre-check that fails transiently now ends in exit `4` with the
+  migration direction, and the next run migrates with its notice.
+
+The user is settling an explicit policy for v0.1.0 migration limits (strong
+against data loss, accidents and our own faults; no defenses retrofitted for
+unlikely v0.1.0-only states). Once ratified, the limits now split between
+[DATABASE](DATABASE.md#schema-evolution) and [M2_PLAN](M2_PLAN.md)'s A3 row
+are to be consolidated under it. The `--location-id` limit stays as it is.
+
 Verification on `f0162d19`: 7098 ordinary tests passed, 4 skipped, 35
 deselected, with the seven known interpreter-bound failures; `lint-imports`
 13 kept. An independent reviewer required one change (an unsafe `--path` still

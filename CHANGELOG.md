@@ -60,6 +60,12 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   answered with the direction to discard both databases. History refuses a run
   reopened under a different ledger instance. The backup temporary is created
   exclusively, and the fixture producer's prompt wait is bounded.
+
+- Fixed two more M2-A3 review findings. Pair admission reads a database that
+  needed a reset once more before advising to discard both, so a pair that
+  became healthy meanwhile is not told to. Workflow admission no longer
+  migrates: only the CLI's and the desktop's explicit step does, so every
+  migration is announced.
 #### Spikes for M2 designs (2026-11-24)
 
 - Ran the M2-A2 live checks and recorded each result in its M2_PLAN feature
