@@ -742,28 +742,62 @@ def _database_refusal(
     selected_paths: tuple[str, ...] = (),
     paired: bool = False,
 ) -> int | None:
-    """Admit the pair for mutating work, migrating a NamiSync 0.1.0 pair first.
+    """Admit the pair for mutating work, migrating or completing it first.
 
-    Migration waits for the command's own roots: when they are refused, or a
-    database sits inside one, nothing is migrated and the command's ordinary
-    admission reports the input error.
+    A NamiSync 0.1.0 pair is migrated, and a pair with one database missing
+    gains a new one. Both wait for the command's own roots: when they are
+    refused, or a database sits inside one, nothing is changed and the
+    command's ordinary admission reports the input error. With no root
+    (``--location-id``) a missing database is refused, never created.
     """
 
     contract = service.validate_database_contracts()
-    if contract.state == "migration-required":
+    if contract.state == "incomplete" and not roots:
+        # --location-id names no root to check the new database's path
+        # against, so nothing is created here.
+        print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)
+        print(
+            f"The {'ledger' if contract.reason == 'ledger-missing' else 'history'} "
+            "database is missing. A --location-id command does "
+            "not create it, because no root is given to check its path against. "
+            "Run the command with its ROOT, run a sync, or start NamiSync once to "
+            "create it, then try again. Nothing was changed.",
+            file=stderr,
+        )
+        return EXIT_REFUSED
+    if contract.state in ("migration-required", "incomplete"):
         if not service.database_placement_admitted(
             roots, selected_mount=selected_mount,
             selected_paths=selected_paths, paired=paired,
         ):
             return None
-        contract, migrated = service.migrate_database_contracts()
+        created: tuple[tuple[str, str], ...] = ()
+        if contract.state == "migration-required":
+            contract, migrated = service.migrate_database_contracts()
+        else:
+            contract, created, migrated = service.complete_database_contracts()
         if migrated:
-            roles = " and ".join(f"{role} (v{version})" for role, version, _ in migrated)
+            roles = " and ".join(f"{role} (v{version})" for role, version, _, _ in migrated)
             plural = "s" if len(migrated) > 1 else ""
+            earlier = any(unstamped for _, _, _, unstamped in migrated)
             print(
                 f"Updated the {roles} database{plural} written by NamiSync 0.1.0; "
                 f"backup{plural} kept at: "
-                + ", ".join(_safe(backup) for _, _, backup in migrated),
+                + ", ".join(_safe(backup) for _, _, backup, _ in migrated)
+                + (
+                    "; the history's runs are shown as belonging to an earlier ledger"
+                    if earlier else ""
+                ),
+                file=stdout,
+            )
+        for role, path in created:
+            print(
+                f"Created a new history database at {_safe(path)} because it was "
+                "missing; the existing ledger is kept."
+                if role == "history" else
+                f"Created a new ledger at {_safe(path)} because it was missing. The "
+                "existing history is kept; its runs are shown as belonging to an "
+                "earlier ledger.",
                 file=stdout,
             )
     if contract.state != "refused":

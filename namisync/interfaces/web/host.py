@@ -844,13 +844,24 @@ def run_desktop(
         contract = service.validate_database_contracts()
         if contract.state == "fresh":
             contract = service.initialize_database_contracts()
-        elif contract.state == "migration-required":
-            contract, migrated = service.migrate_database_contracts()
+        elif contract.state in ("migration-required", "incomplete"):
+            created: tuple[tuple[str, str], ...] = ()
+            if contract.state == "migration-required":
+                contract, migrated = service.migrate_database_contracts()
+            else:
+                contract, created, migrated = service.complete_database_contracts()
             if migrated:
                 # Roles and source versions only: GUI logs record no paths.
                 logging.getLogger("namisync").info(
                     "startup.databases_migrated %s",
-                    " ".join(f"{role}=v{version}" for role, version, _ in migrated),
+                    " ".join(
+                        f"{role}=v{version}" + ("-unstamped" if unstamped else "")
+                        for role, version, _, unstamped in migrated
+                    ),
+                )
+            for role, _path in created:
+                logging.getLogger("namisync").info(
+                    "startup.database_created role=%s reason=missing", role,
                 )
         if contract.state == "ready":
             path_lease.bind_databases()

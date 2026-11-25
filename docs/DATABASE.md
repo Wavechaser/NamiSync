@@ -20,9 +20,13 @@ refused; [Schema Evolution](#schema-evolution) owns the rules and the migrator.
 `LEDGER_FORMATS` and `HISTORY_FORMATS` in `schema.py` declare the embedded
 formats; each row holds that format's `FORMAT_VERSIONS` value. Ledger v5 also
 holds the `ledger_lineage` table, added to the unreleased schema in place by
-M2-A4 ([Ledger instance and ids](#ledger-instance-and-ids)). Two absent main
+M2-A4 and amended in place for its `migrated-released` kind
+([Ledger instance and ids](#ledger-instance-and-ids)). Two absent main
 files with no sidecars remain the only fresh state; a `-wal` or `-shm` beside
-its main is normal. A one-present pair, a journal, or an orphan sidecar is
+its main is normal. One main present, current or older and supported, with the
+other absent and no sidecar of it, is `incomplete`: only an explicit call
+creates the missing database ([One database missing](#one-database-missing)).
+A journal or an orphan sidecar is
 refused by read-only validation before mutating startup or CLI work, with
 non-destructive inspection or retry guidance, as are access failures and
 observed activity. Older supported and newer databases are typed admission
@@ -363,7 +367,7 @@ representation used by both schemas.
 
 The M1 desktop shell service composes these per-file checks into one
 read-only `validate_database_contracts()` preflight returning a
-`fresh`/`ready`/`migration-required`/`refused` pair state — including the exactly-one-present and
+`fresh`/`ready`/`migration-required`/`incomplete`/`refused` pair state — including the
 orphaned-sidecar refusals — enforced by the CLI mutation paths and ready for
 the Slice 1 product host to consume before window creation, so history cannot
 be initialized without the ledger. Cold validation uses the shared immutable or
@@ -379,7 +383,8 @@ an absent native identity is an `OSError` refusal, never a usable lease token.
 Rollback covers ordinary exceptions,
 `KeyboardInterrupt`, and `SystemExit`; handles release stepwise and an
 incomplete cleanup carries the coordinated reset direction. It never invokes
-the destructive development reset. A crash-shaped one-main pair, an orphan
+the destructive development reset. A crash-shaped one-main pair is
+`incomplete`, and the next start creates the missing database. An orphan
 sidecar, an empty/unversioned
 file, or a role/version-marker mismatch is refused with the coordinated
 manual-reset direction and no mutation.
@@ -541,8 +546,9 @@ The initial schema reserves the expensive identity/evidence bones:
 - physical presence, acknowledgement, reappearance, and unsupported state,
   independent of plan or interface view state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness;
-- restore lineage: backup cuts of ancestor ledger instances and lone-History
-  boundaries ([Ledger instance and ids](#ledger-instance-and-ids)).
+- restore lineage: backup cuts of ancestor ledger instances, lone-History
+  boundaries, and the marker of the ledger's own migration from 0.1.0
+  ([Ledger instance and ids](#ledger-instance-and-ids)).
 
 Since ledger v4, file-index columns and repository
 binds use canonical `FileIndex128` text rather than SQLite numeric affinity.
@@ -770,9 +776,16 @@ outcomes, gate and non-goals.
 
 - The ledger gets a random `instance_id` when it is created, or when a v0.1.0
   ledger migrates. Every history run records the ledger instance it was
-  recorded against. Runs already in a v0.1.0 history are stamped with the
-  instance of the ledger they migrate beside, because the pair was admitted as
-  a pair. The stamp is a column of its own (`history_runs.ledger_instance_id`,
+  recorded against. Runs already in a v0.1.0 history are stamped with a
+  ledger's instance only when that ledger is the History's own (user
+  decision, 2026-11-25): a ledger that itself migrated from 0.1.0 and has not
+  been replaced since. Its own migration writes a `migrated-released` lineage
+  row (below), and pair migration stamps a v0.1.0 History only beside a
+  ledger whose lineage is exactly that one row, read under both claims from
+  the ledger it has just migrated or found. Beside any other ledger (a fresh
+  one, a restored one, one created because it was missing) and with no ledger
+  at all ([One database missing](#one-database-missing)), the History
+  migrates unstamped and its runs are `earlier`. The stamp is a column of its own (`history_runs.ledger_instance_id`,
   32 lowercase hexadecimal digits), outside the run's context hash, so no
   stored hash is reinterpreted. A trigger makes it write-once, since no hash
   covers it, and a history observer refuses to reopen a run under a different
@@ -788,12 +801,24 @@ outcomes, gate and non-goals.
   restore keeps the backup's lineage under a new instance id, so the
   predecessor is the ledger the backup was cut from, not the one the restore
   replaced. A `replaced-missing` row (no instance) is the boundary written when
-  a lone History gains a new ledger; it joins nothing. `at` is canonical UTC
+  a lone History gains a new ledger; it joins nothing. A `migrated-released`
+  row (no instance) is written in a ledger's own migration transaction from
+  0.1.0, at the migration time, and is used only by the stamp decision above;
+  the read rule, the backup-in-place refusal and the History readers ignore
+  it, as they ignore `replaced-missing`. `at` is canonical UTC
   text, an instance appears at most once, and CHECK constraints tie the
-  instance to the kind. Fresh creation and migration create the table empty.
+  instance to the kind (amended in place for the new kind, 2026-11-25: a
+  schema-5 ledger a source-tree run created with the earlier kind list fails
+  the exact topology check and is refused with the reset direction). Fresh
+  creation creates the table empty and migration holds only its marker.
   A backup writes its own cut into the copy only, and restore keeps the
-  backup's rows ([Data Protection](#data-protection)); `replaced-missing` waits
-  for the one-present pair policy in a later M2-A4 outcome.
+  backup's rows ([Data Protection](#data-protection)), the marker included; a
+  restored ledger also holds a cut, so it never stamps a 0.1.0 History. A ledger created
+  because it was missing beside a History has exactly one `replaced-missing`
+  row, written in its creation transaction with the creation time
+  ([One database missing](#one-database-missing)). No reader uses that row
+  yet: the read rule below already places every run of the kept History in an
+  earlier ledger, and the History page that shows the boundary comes later.
 - **Read rule.** A History run is `current` when its stamp is the ledger's
   instance, or when a `backup-cut` names its stamp and the run started strictly
   before that cut; a run that never started is judged by its creation time.
@@ -918,10 +943,16 @@ under them, and returns any state other than `migration-required` unchanged.
 It then runs the delete-access probe (step 1) on both main files before
 either migrates, so a process holding only History refuses the pair with both
 databases unchanged. Then `migrate_database` runs for the ledger, then for
-History with the ledger's instance id. Each call migrates an older database
+History: with the ledger's instance id when the ledger is the History's own
+(its lineage is exactly its `migrated-released` marker,
+[Ledger instance and ids](#ledger-instance-and-ids)), otherwise unstamped.
+Each call migrates an older database
 or, for a current one, only confirms it (and, for the ledger, reads its
-instance id), so a pair an interruption left half done finishes on the next
-call. Its refusals return a `refused` contract with guidance and no reset
+instance id and whether it is a 0.1.0 History's own), so a pair an
+interruption left half done finishes on the next call, still stamped. The
+CLI's migration line adds that the history's runs are shown as belonging to
+an earlier ledger when History migrated unstamped, and the desktop's log
+writes `history=v8-unstamped`. Its refusals return a `refused` contract with guidance and no reset
 direction: `database-in-use` (a claim or an open handle), `backup-failed`
 (step 2), `migration-failed` (the rollback below, naming the backup) or
 `migration-unavailable` (an access or stability failure). A refusal leaves
@@ -932,9 +963,12 @@ this version does not know, is refused with reason `ledger-wrong-role` or
 before migrating, so there it is refused before any claim is taken;
 `migrate_database_pair` called directly takes both claims first and then
 returns that refusal without migrating. `ensure_database_pair` creates a fresh pair but never
-migrates; it refuses an older pair with the migration direction. Only
-`migrate_database_pair` migrates, and its callers (the CLI and the desktop)
-report what it did.
+migrates or completes; it refuses an older pair with the migration direction
+and an incomplete one with the completion direction. Only
+`migrate_database_pair` migrates a pair, and only `complete_database_pair`
+migrates a database whose peer is missing
+([One database missing](#one-database-missing)); their callers (the CLI and
+the desktop) report what they did.
 
 For each database that needs it, ledger first:
 
@@ -977,15 +1011,20 @@ For each database that needs it, ledger first:
    `_migration_old_<name>`; the tables and indexes are created by the shipped
    statements, so a table with no source, such as `ledger_lineage`, starts
    empty; rows are copied with explicit column lists, keeping every id
-   (History runs gain the ledger instance id); the old tables are dropped; the
-   shipped triggers are created; metadata is written. Triggers come after the
+   (History runs gain the instance of their own ledger when pair migration
+   found one, and otherwise, with `without_ledger`, stay unstamped; the two
+   cannot be combined); the old tables are dropped; the
+   shipped triggers are created; metadata, and for a ledger its
+   `migrated-released` lineage row, are written. Triggers come after the
    copy: the rows were admitted under identical triggers, and History's append
    guards would refuse events of an already finalized run. Copying explicit
    ids into `AUTOINCREMENT` tables sets `sqlite_sequence` to the highest. The
    result has exactly a fresh database's topology.
 4. **Verification before commit.** `integrity_check`, `foreign_key_check`, the
    full current reader contract (role, version, formats, instance id and the
-   exact topology), per-table row counts, and a stamp on every History run all
+   exact topology), per-table row counts, a ledger's lineage being exactly its
+   marker, and the ledger's stamp on every History run (none on any when
+   unstamped) all
    pass, or the transaction rolls back and `DatabaseMigrationFailed` names the
    backup. A failure raised by COMMIT itself does not claim the database is
    unchanged, since the commit may already be durable: the message says the
@@ -1048,12 +1087,16 @@ Left as they are under
   backup therefore leaves another full backup until the user removes it, and a
   rolled-back attempt leaves the WAL grown with a discarded tail (148 MB to
   296 MB at 400,000 ledger rows).
+- The stamp decision recognizes a History's own ledger by the ledger's
+  lineage, not by the History's content. A different v0.1.0 History copied by
+  hand over the migrated one, or over a History created beside a lone
+  migrated ledger, is stamped with that ledger's instance while the ledger
+  still holds only its migration marker. It needs a hand move, and the worst
+  outcome is runs shown as current for a ledger they were not recorded with,
+  every file kept.
 
 Open until M2-A4 ([M2_PLAN](M2_PLAN.md) owns the schedule):
 
-- A v0.1.0 history whose ledger is missing can be neither read by the
-  `history` command nor migrated; a one-present pair stays refused until the
-  missing-database policy lands. The older-database refusal says so.
 - A damaged v0.1.0 database is refused at every start with direction to keep
   its files. Restore replaces a database that fails admission, but only from
   a current-schema backup, which a database still at v0.1.0 cannot have; the
@@ -1061,6 +1104,96 @@ Open until M2-A4 ([M2_PLAN](M2_PLAN.md) owns the schedule):
 
 Legacy import or merge is separate from migration. It never guesses
 volume/location correspondence.
+
+### One database missing
+
+Status: implemented by M2-A4 outcome 5 (2026-11-25) in
+`complete_database_pair` (`namisync/workflows/database_pair.py`) over
+`create_database` (`namisync/db/maintenance.py`). Policy (user decisions,
+2026-11-20): with only a ledger, create a History and tell the user; with only
+a History, tell the user, create a ledger with a new instance id and record a
+durable lineage boundary. The old History is kept and never treated as
+describing the new ledger, and ledger records are never rebuilt from History.
+Tests: `tests/test_database_pair_completion.py` (real child processes: kills
+per stage, claims and open handles), `tests/test_cli_completion.py`, the
+startup case in `tests/interfaces/web/test_host.py` and the backup and restore
+cases in `tests/test_database_maintenance.py`.
+
+- **Classification.** With exactly one main present, no `-wal`, `-shm` or
+  `-journal` of the missing one and no journal anywhere, the present database
+  is classified on its own. Its refusals are returned unchanged (damaged,
+  newer, wrong role, a ledger backup in place), except that a reset names
+  only the present database file and its sidecars and says where the other
+  was looked for, so a mistyped path is noticed. Current or
+  older and supported, the pair is `incomplete` with reason `ledger-missing`
+  or `history-missing` and guidance naming the missing database, how to
+  create it (start NamiSync, or run a sync or inventory command, once) and
+  that the other is kept; an older present database adds that it is updated
+  first with a backup beside it. Orphan sidecars and journals stay
+  `inconsistent-pair`. Classification still writes nothing.
+- **Admission never completes.** `ensure_database_pair` and planning refuse
+  `incomplete` with that guidance, as they refuse `migration-required`. Only
+  `complete_database_pair` creates the missing database, and its callers
+  report it. It holds both exclusive claims, ledger first, classifies again
+  and returns any state other than `incomplete` unchanged. The missing
+  database's folder is created before the claims, because its claim file
+  lives there; when nothing is created, the folders the call made are removed
+  again if still empty (one holding the claim file of a refused attempt
+  stays).
+- **The present database.** A v0.1.0 one migrates first, as in
+  [Migration](#migration), open handles refused. A lone v0.1.0 ledger
+  migrates as in a pair, its marker included. A lone v0.1.0 History migrates
+  with `without_ledger`: its runs keep no stamp, because stamping them with
+  the new ledger's id would make them current and resolve their ids against
+  a ledger they were never recorded with. Migration comes before creation, so
+  an interruption leaves a lone current database; and a ledger created here
+  holds a `replaced-missing` row, so pair migration never stamps a 0.1.0
+  History beside it either, including that History's own migration backup
+  put back by hand. A current present database is not opened for writing
+  and keeps its bytes; its runs keep whatever instance they recorded.
+- **Creation.** `create_database` builds `<main>.create-<random>.tmp`,
+  created exclusively, from the shipped statements and metadata in one
+  transaction; a ledger gets `new_instance_id()` and its one
+  `replaced-missing` row (instance NULL, `at` the canonical UTC time read
+  once both claims are held) in that transaction. The image is verified
+  (`integrity_check`, `foreign_key_check`, the full current reader contract,
+  the id and the single lineage row), switched to the WAL header with no
+  sidecars left, flushed and renamed into place; the rename never replaces a
+  file, so a file that took the name refuses with `creation-failed` and
+  nothing published. Schema creation and pair initialization are not reused:
+  schema creation takes its own exclusive claim, which conflicts with the
+  held pair claims, and reservation-based creation can leave an empty main
+  after a kill, which reads as a reset beside the good database. The pair is
+  then classified again and is `ready`.
+- **Refusals** return a `refused` contract with no reset direction:
+  `database-in-use` (a claim on either path, or a handle on a present v0.1.0
+  database), `backup-failed` and `migration-failed` as in migration,
+  `creation-failed` (write access or free space), `completion-unavailable`.
+  A History migrated before a creation that then failed stays migrated and
+  unstamped, and the next call creates the ledger.
+- **What a kill leaves** (tested at each stage). Before the rename: the
+  missing database still missing, an image temporary (with its own
+  `-journal` mid-transaction) never reused or removed, and a lone v0.1.0
+  database either as it was or migrated; the pair is `incomplete` and a rerun
+  finishes. After the rename: `ready`. No stage leaves an empty or partial
+  main, reset guidance or a stamped run of a lone v0.1.0 History.
+- **Telling the user.** The CLI completes where it would migrate, after the
+  same placement admission ([Migration](#migration)), except that a command
+  given `--location-id` refuses instead (exit 3, nothing created), because no
+  root is given to check the new database's path against. It prints one line per
+  created database, after the migration line when the present one migrated
+  ([COMMANDLINE](COMMANDLINE.md)). The desktop completes before binding and
+  logs `startup.database_created role=<role> reason=missing` with no path,
+  beside `startup.databases_migrated`; an in-window notice would need a bridge
+  addition and is not built. The read-only `history` command never completes
+  a pair.
+- **Maintenance.** `check` reports each role in any pair state; `backup`
+  needs a ready pair and returns `incomplete` with its guidance otherwise;
+  restoring a ledger beside no History or a History beside no ledger leaves
+  the pair `incomplete`, and the next start completes it.
+- **Limits**, disclosed under [DEFENSE §2.5](DEFENSE.md#25-proportional-defense):
+  the rename's directory entry is not forced to disk beyond the image's
+  `fsync`, as for migration backups.
 
 ## Maintenance Claim
 
@@ -1136,7 +1269,8 @@ records are still being written to either database, in any process.
   `hold_maintenance_claims(ledger, history)` releases the ledger claim when
   History's is refused. One gate covers both because a ledger change under a
   History writer still recording location ids is the id-reuse hazard.
-  Migration and each pair maintenance call (`check_database_pair`,
+  Migration, completion of a one-present pair (`complete_database_pair`) and
+  each pair maintenance call (`check_database_pair`,
   `backup_database_pair`, `restore_database_from_backup`) hold both claims for
   their whole run and refuse with `database-in-use` otherwise; the db
   operations themselves require their database's held exclusive claim. Schema
@@ -1262,18 +1396,21 @@ restored-at-the-prompt case in `tests/test_cli.py`.
   lineage equal to the backup, the new id in no lineage row) and flushed.
 - **The pair rule.** A ledger is restored only beside a History that checks
   `ok` or `foreign-key-violations`, or beside none (no main and no sidecars);
-  the workflow refuses otherwise, before anything is written. A 0.1.0 History
-  is stamped with the ledger beside it when it is updated, so after a ledger
-  restore every earlier run would join a ledger it was never recorded with:
-  `history-older` says to start NamiSync, or run a sync or inventory command,
-  once to update the pair, then restore. A History whose version cannot be
+  the workflow refuses otherwise, before anything is written. Updating the
+  pair first lets a 0.1.0 History join its own ledger before that ledger is
+  replaced: `history-older` says to start NamiSync, or run a sync or
+  inventory command, once to update the pair, then restore. The refusal is a
+  second guard: a restored ledger holds a backup cut, so pair migration would
+  leave such a History's runs unstamped, as an earlier ledger's, in any case
+  ([Ledger instance and ids](#ledger-instance-and-ids)). A History whose version cannot be
   read (damaged, unsupported, unreadable, sidecars without a main) could be
   such a History once repaired: `history-unusable`, restore or check History
   first. `history-newer` points to the NamiSync that wrote it, and
   `history-wrong-role` to swapped paths. History itself is restored beside a
   ledger in any state: a restored History is already stamped, nothing stamps
   it again, and a ledger updated later takes an instance none of its runs
-  carry.
+  carry. A restore beside a missing database leaves the pair `incomplete`
+  until the next start completes it ([One database missing](#one-database-missing)).
 
   | Restoring | Beside | Outcome |
   | --- | --- | --- |

@@ -1758,6 +1758,10 @@ class _RecordedService:
         self._order.append("migrate_databases")
         return self._service.migrate_database_contracts()
 
+    def complete_database_contracts(self):
+        self._order.append("complete_databases")
+        return self._service.complete_database_contracts()
+
     def close(self):
         self._order.append("service.close")
         return self._service.close()
@@ -1802,6 +1806,50 @@ def test_startup_migrates_a_released_pair_before_binding_it(
     assert "startup.databases_migrated ledger=v4 history=v8" in logged
     assert not any(
         str(paths.root) in message or "backup" in message for message in logged
+    )
+
+
+@pytest.mark.parametrize("present", ("current-ledger", "released-history"))
+def test_startup_completes_a_one_present_pair_before_binding_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture,
+    present: str,
+) -> None:
+    from _released_fixture import copy_released_role
+    from namisync.db.schema import initialize_ledger
+
+    paths, order, _webview, _document, reports = _patch_primary(monkeypatch, tmp_path)
+    if present == "current-ledger":
+        initialize_ledger(paths.ledger)
+    else:
+        copy_released_role(paths.root, history=True, name=paths.history.name)
+    monkeypatch.setattr(
+        host, "_create_service",
+        lambda actual: order.append("create_service") or _RecordedService(actual, order),
+    )
+
+    with caplog.at_level("INFO", logger="namisync"):
+        result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert (result, reports) == (0, [])
+    labels = [entry[0] if isinstance(entry, tuple) else entry for entry in order]
+    start = labels.index("create_service")
+    assert labels[start:start + 5] == [
+        "create_service",
+        "validate_databases",
+        "complete_databases",
+        "path_lease.bind_databases",
+        "validate_databases",
+    ]
+    assert paths.ledger.exists() and paths.history.exists()
+    logged = [record.getMessage() for record in caplog.records]
+    created = "history" if present == "current-ledger" else "ledger"
+    assert f"startup.database_created role={created} reason=missing" in logged
+    assert ("startup.databases_migrated history=v8-unstamped" in logged) == (
+        present == "released-history"
+    )
+    # Roles only: GUI logging records no paths.
+    assert not any(
+        str(paths.root) in message or ".db" in message for message in logged
     )
 
 

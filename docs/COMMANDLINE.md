@@ -85,8 +85,8 @@ refused the same way, with direction to check its path. A ledger that is a
 backup copied into place by hand is refused with `ledger-is-backup` and
 direction to put back the ledger it replaced or restore the backup with
 `namisync restore ledger <backup file>` (that command arrives with a later
-M2-A4 outcome), never with that instruction. Commands never delete or
-backfill either database. If SQLite reports that a file is damaged or unreadable
+M2-A4 outcome), never with that instruction. Commands never delete either
+database or rebuild one from the other. If SQLite reports that a file is damaged or unreadable
 as a database, the command names the affected role and directs you to keep both
 databases and their sidecars for inspection.
 
@@ -106,6 +106,35 @@ backups, for example:
 ```text
 Updated the ledger (v4) and history (v8) databases written by NamiSync 0.1.0; backups kept at: <ledger backup>, <history backup>
 ```
+
+A 0.1.0 history joins only its own ledger, one that itself was updated from
+0.1.0 and not replaced since. Beside any other ledger (a fresh one, a restored
+one, or one created because it was missing) its runs are left as an earlier
+ledger's, and the line ends with `; the history's runs are shown as belonging
+to an earlier ledger` ([DATABASE](DATABASE.md#ledger-instance-and-ids)).
+
+A pair with one database missing (the other present with no stray sidecar of
+the missing one, which stays `inconsistent-pair`) is completed at the same
+point and under the same placement rule: the missing database is created new,
+after the present one is updated if NamiSync 0.1.0 wrote it
+([DATABASE](DATABASE.md#one-database-missing)). A lone 0.1.0 history keeps its
+runs unstamped, so they belong to an earlier ledger. Unlike migration, a
+command given `--location-id` never completes the pair, because no root is
+given to check the new database's path against: it exits `3` with `Database
+pair refused: <role>-missing.`, directs you to run the
+command with its ROOT, run a sync, or start NamiSync once, and changes
+nothing. One line on standard output per created database follows any
+migration line:
+
+```text
+Created a new history database at <path> because it was missing; the existing ledger is kept.
+Created a new ledger at <path> because it was missing. The existing history is kept; its runs are shown as belonging to an earlier ledger.
+```
+
+If the check fails transiently and admission then meets the incomplete pair,
+the command ends with exit `4` and `<Command> could not start: database pair
+refused (ledger-missing).` or `(history-missing).` with the completion
+direction, and running it again completes the pair.
 
 A refused pair returns exit `3` with `Database pair refused: <reason>.` and
 its guidance. While database maintenance holds the pair, sync execution and the
@@ -133,11 +162,11 @@ after explicit execution commitment. Inventory and integrity initialize a fresh
 pair during workflow preparation, before their audit observer can open history.
 The standalone `history` command is read-only and deliberately exempt, so an
 existing history database remains inspectable when its ledger peer is missing.
-It never migrates: a history written by NamiSync 0.1.0 exits `3` with
-`History admission refused:` and direction to start NamiSync, or run a sync or
-inventory command, once. That cannot help a v0.1.0 history whose ledger is
-missing: a pair with one database missing stays refused, so such a history can
-be neither read nor updated by this version, as the refusal says.
+It never migrates or completes a pair: a history written by NamiSync 0.1.0
+exits `3` with `History admission refused:` and direction to start NamiSync,
+or run a sync or inventory command, once, which also creates its ledger if it
+is missing. With only a ledger present it prints `No retained history runs.`
+and creates nothing.
 
 `history` reads the ledger only to mark which runs belong to it, by the read
 rule in [DATABASE](DATABASE.md#ledger-instance-and-ids), and never refuses or

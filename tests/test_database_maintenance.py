@@ -36,6 +36,7 @@ from namisync.workflows.database_maintenance import (
 )
 from namisync.workflows.database_pair import (
     DatabasePairState,
+    complete_database_pair,
     initialize_database_pair,
     migrate_database_pair,
     validate_database_pair,
@@ -307,11 +308,21 @@ def test_check_reports_every_role_in_any_pair_state(tmp_path: Path) -> None:
         Path(f"{ledger}{suffix}").unlink(missing_ok=True)
     result = check_database_pair(ledger, history)
     assert (result.contract.state, result.contract.reason) == (
+        DatabasePairState.INCOMPLETE, "ledger-missing",
+    )
+    assert [(check.role, check.state) for check in result.checks] == [
+        ("ledger", DatabaseCheckState.MISSING), ("history", DatabaseCheckState.OK),
+    ]
+    # A stray sidecar where the ledger was is still an inconsistent pair.
+    Path(f"{ledger}-wal").write_bytes(b"")
+    result = check_database_pair(ledger, history)
+    assert (result.contract.state, result.contract.reason) == (
         DatabasePairState.REFUSED, "inconsistent-pair",
     )
     assert [(check.role, check.state) for check in result.checks] == [
         ("ledger", DatabaseCheckState.MISSING), ("history", DatabaseCheckState.OK),
     ]
+    assert result.checks[0].problems == ("ledger.db-wal is present without its database",)
 
 
 def test_backup_requires_a_ready_pair_and_writes_nothing_otherwise(tmp_path: Path) -> None:
@@ -323,6 +334,23 @@ def test_backup_requires_a_ready_pair_and_writes_nothing_otherwise(tmp_path: Pat
     )
     assert result.backups == ()
     assert _files(ledger.parent) == before
+
+
+@pytest.mark.parametrize("missing", ("ledger", "history"))
+def test_backup_refuses_an_incomplete_pair_with_the_completion_direction(
+    tmp_path: Path, missing: str,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    for suffix in ("", "-wal", "-shm"):
+        Path(f"{ledger if missing == 'ledger' else history}{suffix}").unlink(missing_ok=True)
+    before = _files(tmp_path)
+    result = backup_database_pair(ledger, history, clock=_Clock())
+    assert (result.contract.state, result.contract.reason) == (
+        DatabasePairState.INCOMPLETE, f"{missing}-missing",
+    )
+    assert "run a sync or inventory command, once to create a new one" in result.contract.guidance
+    assert result.backups == ()
+    assert _files(tmp_path) == before
 
 
 def test_backups_rotate_to_three_and_leave_migration_backups(tmp_path: Path) -> None:
@@ -855,6 +883,14 @@ def test_a_ledger_restore_needs_a_current_history_or_none(
 
     if reason is None:
         assert result.restore is not None and result.restore.kept_as == "backup"
+        if shape == "missing":
+            # The restored ledger stands alone until the pair is completed.
+            assert (result.contract.state, result.contract.reason) == (
+                DatabasePairState.INCOMPLETE, "history-missing",
+            )
+            completion = complete_database_pair(ledger, history)
+            assert completion.contract.state is DatabasePairState.READY
+            assert [database.role for database in completion.created] == ["history"]
         return
     assert (result.contract.reason, result.restore) == (reason, None)
     assert result.contract.guidance.endswith("Nothing was changed.")
@@ -876,6 +912,29 @@ def test_history_is_restored_beside_a_v0_1_0_ledger_and_joins_nothing(tmp_path: 
         DatabasePairState.MIGRATION_REQUIRED, "ledger-older",
     )
     assert migrate_database_pair(ledger, history).contract.state is DatabasePairState.READY
+    assert _membership(ledger, history) == {"seeded": "earlier"}
+
+
+def test_history_restored_where_the_ledger_is_missing_gains_a_new_ledger(
+    tmp_path: Path,
+) -> None:
+    ledger, history = _pair(tmp_path / "data")
+    backup = _backup(ledger, history)["history"]
+    for suffix in ("", "-wal", "-shm"):
+        Path(f"{ledger}{suffix}").unlink(missing_ok=True)
+
+    result = restore_database_from_backup(ledger, history, "history", backup, clock=_Clock())
+
+    assert result.restore is not None and result.restore.kept_as == "backup"
+    assert (result.contract.state, result.contract.reason) == (
+        DatabasePairState.INCOMPLETE, "ledger-missing",
+    )
+    completion = complete_database_pair(ledger, history)
+    assert completion.contract.state is DatabasePairState.READY
+    assert [database.role for database in completion.created] == ["ledger"]
+    assert _query(ledger, "SELECT kind, instance_id FROM ledger_lineage") == [
+        ("replaced-missing", None),
+    ]
     assert _membership(ledger, history) == {"seeded": "earlier"}
 
 

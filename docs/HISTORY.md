@@ -82,7 +82,8 @@ another contract id, and a v9 database with missing or mismatched metadata,
 through a read-only connection and with the reset direction; a newer history
 is refused with direction to use the NamiSync that wrote it, and a ledger at
 the history path as swapped paths. A v0.1.0 history whose ledger is missing
-can be neither read nor migrated by this version. Refusal must not
+migrates when NamiSync creates the new ledger beside it, its runs left
+unstamped ([DATABASE](DATABASE.md#one-database-missing)). Refusal must not
 alter the database or its WAL, SHM, or journal sidecars. `DATABASE.md` owns
 the classification and the migration.
 
@@ -101,13 +102,17 @@ committed run rows cannot be deleted or replaced.
 `disposition=unrun` keeps it null and validates its end against `created_at`.
 `ledger_instance_id` is the ledger's `instance_id` (32 lowercase hexadecimal
 digits) that the runtime supplies through `HistoryContext`; migration stamps
-every v0.1.0 run with the instance of the ledger it migrates beside. It is
+every v0.1.0 run with the instance of its own ledger, one that itself
+migrated from 0.1.0 and was not replaced since, and otherwise (beside a
+fresh, restored or newly created ledger) with none
+([DATABASE](DATABASE.md#ledger-instance-and-ids)). It is
 outside the context hash, so no stored hash changes meaning, and a trigger
 makes it write-once. Because no hash covers it, an observer compares it
 itself: reopening a run token under a different stamp, a missing one included,
 is a `TokenConflictError` at observer construction and on every write to an
-existing run row. It is nullable only for direct `HistoryStore` writers
-without a ledger (tests, measurement tools). History readers mark each run's
+existing run row. It is nullable for direct `HistoryStore` writers without a
+ledger (tests, measurement tools) and for v0.1.0 runs migrated unstamped.
+History readers mark each run's
 ledger membership (`current`, `earlier` or `unknown`) from it by the
 ancestor-chain read rule in [DATABASE](DATABASE.md#ledger-instance-and-ids);
 a run with no stamp belongs to an earlier ledger.

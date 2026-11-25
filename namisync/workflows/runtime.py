@@ -142,10 +142,12 @@ from .execution_review import (
     successful_copied_paths,
 )
 from .database_pair import (
+    DatabasePairCompletion,
     DatabasePairContract,
     DatabasePairMigration,
     DatabasePairRefusedError,
     DatabasePairState,
+    complete_database_pair,
     ensure_database_pair,
     initialize_database_pair,
     migrate_database_pair,
@@ -431,6 +433,17 @@ class LocalWorkflowRuntime:
         with self._database_pair_lock:
             return migrate_database_pair(self.ledger_path, self.history_path)
 
+    def complete_database_contracts(self) -> DatabasePairCompletion:
+        """Create the missing database of an incomplete pair; a no-op otherwise.
+
+        Call it before this runtime opens either database, as for migration,
+        which it runs first when the present database is from NamiSync 0.1.0.
+        """
+
+        self._require_open()
+        with self._database_pair_lock:
+            return complete_database_pair(self.ledger_path, self.history_path)
+
     def _ensure_database_contracts(self) -> DatabasePairContract:
         with self._database_pair_lock:
             return ensure_database_pair(
@@ -705,8 +718,10 @@ class LocalWorkflowRuntime:
         contract = self.validate_database_contracts()
         if contract.state in (
             DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED,
+            DatabasePairState.INCOMPLETE,
         ):
-            # Planning reads the ledger; an older pair is migrated before it.
+            # Planning reads the ledger; an older or incomplete pair is
+            # migrated or completed before it.
             raise DatabasePairRefusedError(contract)
         # Captured before the plan reads the ledger, so a replacement while it
         # plans also refuses its execution. A fresh pair has nothing to read.

@@ -395,8 +395,9 @@ class NamiSyncService:
     ) -> bool:
         """Whether these literal roots admit with the databases outside them.
 
-        Opens no database: ask before ``migrate_database_contracts``, so a
-        command whose roots are refused changes nothing.
+        Opens no database: ask before ``migrate_database_contracts`` or
+        ``complete_database_contracts``, so a command whose roots are refused
+        changes nothing.
         """
 
         self._require_open()
@@ -407,23 +408,44 @@ class NamiSyncService:
 
     def migrate_database_contracts(
         self,
-    ) -> tuple[DatabaseContractView, tuple[tuple[str, int, str], ...]]:
+    ) -> tuple[DatabaseContractView, tuple[tuple[str, int, str, bool], ...]]:
         """Migrate a NamiSync 0.1.0 pair before any database is opened.
 
         Returns the resulting contract, whose refusal carries its guidance,
-        and one ``(role, source schema version, backup path)`` per database
-        this call migrated (in-process callers only; no bridge shape carries
-        them).
+        and one ``(role, source schema version, backup path, unstamped)`` per
+        database this call migrated, ``unstamped`` true for a History whose
+        runs belong to an earlier ledger (in-process callers only; no bridge
+        shape carries them).
         """
 
         self._require_open()
         migration = self._runtime.migrate_database_contracts()
         return (
             _database_contract_view(migration.contract),
-            tuple(
-                (database.role, database.source_version, str(database.backup))
-                for database in migration.migrated
-            ),
+            _migrated_databases(migration.migrated),
+        )
+
+    def complete_database_contracts(
+        self,
+    ) -> tuple[
+        DatabaseContractView,
+        tuple[tuple[str, str], ...],
+        tuple[tuple[str, int, str, bool], ...],
+    ]:
+        """Create the missing database of a one-present pair before any is opened.
+
+        Returns the resulting contract, one ``(role, path)`` per database this
+        call created, and, as ``migrate_database_contracts`` does, each
+        database it migrated first (in-process callers only; no bridge shape
+        carries them).
+        """
+
+        self._require_open()
+        completion = self._runtime.complete_database_contracts()
+        return (
+            _database_contract_view(completion.contract),
+            tuple((database.role, str(database.path)) for database in completion.created),
+            _migrated_databases(completion.migrated),
         )
 
     def admit_location_candidate(
@@ -3175,6 +3197,13 @@ def _control_view(result) -> ControlView:
         after=None if result.after is None else result.after.value,
         detail=result.detail,
         accepted=result.accepted,
+    )
+
+
+def _migrated_databases(migrated) -> tuple[tuple[str, int, str, bool], ...]:
+    return tuple(
+        (database.role, database.source_version, str(database.backup), database.unstamped)
+        for database in migrated
     )
 
 

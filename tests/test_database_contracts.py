@@ -240,6 +240,7 @@ def test_exactly_one_database_main_refuses_without_creating_peer(
     tmp_path: Path,
     present_role: str,
 ) -> None:
+    # A lone main that is not a database keeps its own damage refusal.
     service, ledger, history = _service(tmp_path)
     present = ledger if present_role == "ledger" else history
     missing = history if present_role == "ledger" else ledger
@@ -249,11 +250,34 @@ def test_exactly_one_database_main_refuses_without_creating_peer(
     result = service.validate_database_contracts()
 
     assert result.state == "refused"
-    assert result.reason == "inconsistent-pair"
+    assert result.reason == "database-damaged"
     assert result.reset_direction is None
-    assert "preserve" in result.guidance
+    assert f"The {present_role} database is corrupt" in result.guidance
+    assert "for inspection" in result.guidance
     assert _snapshot(ledger, history) == before
     assert not missing.exists()
+    service.close()
+
+
+@pytest.mark.parametrize("present_role", ("ledger", "history"))
+def test_exactly_one_valid_database_main_is_incomplete_and_nothing_is_written(
+    tmp_path: Path,
+    present_role: str,
+) -> None:
+    service, ledger, history = _service(tmp_path)
+    missing_role = "history" if present_role == "ledger" else "ledger"
+    (initialize_ledger if present_role == "ledger" else initialize_history)(
+        ledger if present_role == "ledger" else history
+    )
+    before = sorted(path.name for path in tmp_path.iterdir()), _snapshot(ledger, history)
+
+    result = service.validate_database_contracts()
+
+    assert (result.state, result.reason) == ("incomplete", f"{missing_role}-missing")
+    assert result.reset_direction is None
+    assert "once to create a new one" in result.guidance
+    assert not re.search(r"delete|archive|reset", result.guidance, re.IGNORECASE)
+    assert (sorted(path.name for path in tmp_path.iterdir()), _snapshot(ledger, history)) == before
     service.close()
 
 
@@ -1937,7 +1961,7 @@ def test_initialization_cleanup_never_deletes_raced_preexisting_peer(
     service.close()
 
 
-def test_crash_shaped_single_publication_refuses_next_launch(
+def test_crash_shaped_single_publication_is_incomplete_then_completes(
     tmp_path: Path,
 ) -> None:
     service, ledger, history = _service(tmp_path)
@@ -1946,8 +1970,10 @@ def test_crash_shaped_single_publication_refuses_next_launch(
 
     result = service.validate_database_contracts()
 
-    assert result.state == "refused"
-    assert result.reason == "inconsistent-pair"
+    assert (result.state, result.reason) == ("incomplete", "history-missing")
     assert _snapshot(ledger, history) == before
     assert not history.exists()
+    contract, created, migrated = service.complete_database_contracts()
+    assert (contract.state, created, migrated) == ("ready", (("history", str(history)),), ())
+    assert _snapshot(ledger) == before
     service.close()

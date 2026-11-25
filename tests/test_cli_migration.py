@@ -284,9 +284,11 @@ def test_notice_names_only_the_database_that_migrated(tmp_path: Path) -> None:
     ) == EXIT_SUCCESS
 
     backup = next(data.glob("history.db.backup-v8-*"))
+    # A fresh ledger is not this History's own, so its runs stay unstamped.
     assert [line for line in stdout.getvalue().splitlines() if line.startswith("Updated")] == [
         "Updated the history (v8) database written by NamiSync 0.1.0; "
-        f"backup kept at: {backup}"
+        f"backup kept at: {backup}; the history's runs are shown as belonging to "
+        "an earlier ledger"
     ]
     assert not list(data.glob("ledger.db.backup-*"))
 

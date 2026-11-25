@@ -38,6 +38,8 @@ from .schema import (
     DatabaseRoleMismatch,
     LedgerIsBackup,
     SchemaResetRequired,
+    _metadata_rows,
+    _schema_statements,
     _validate_reader_contract,
     classify_database,
     ledger_instance_id,
@@ -136,6 +138,14 @@ class DatabaseRestoreInUse(DatabaseInUse):
     def __init__(self, message: str, path: Path, *, kept: Path | None) -> None:
         super().__init__(message, path)
         self.kept = kept
+
+
+class DatabaseCreationFailed(DatabaseAdmissionError):
+    """A missing database could not be created; nothing was published at its path."""
+
+    def __init__(self, message: str, path: Path) -> None:
+        super().__init__(message)
+        self.path = path
 
 
 class _CopyBusy(Exception):
@@ -490,6 +500,100 @@ def rotate_backups(
         else:
             removed.append(candidate)
     return BackupRotation(tuple(removed), tuple(failures))
+
+
+# --- creation of a missing database --------------------------------------------
+
+
+def create_database(
+    path: str | Path, *, history: bool, claim: DatabaseClaim, now: datetime,
+) -> Path:
+    """Create the missing database of one role beside the other, by verified rename.
+
+    ``claim`` must be this database's held exclusive maintenance claim and
+    ``now`` read after both claims are held. A ledger gets a new instance id
+    and one ``replaced-missing`` lineage row at ``now``, written in its
+    creation transaction. The image ``<main>.create-<random>.tmp`` is created
+    exclusively, verified, given the WAL header with no sidecars left, flushed
+    and renamed into place, never replacing a file. Until that rename the
+    database stays missing; a crash's temporary is never reused or removed.
+    """
+
+    resolved = _require_claim(path, claim)
+    role = _role(history)
+    at = encode_utc(now)
+    instance_id = None if history else new_instance_id()
+    image = resolved.with_name(f"{resolved.name}.create-{secrets.token_hex(8)}.tmp")
+    try:
+        # Created exclusively: cleanup below removes only what this call made.
+        os.close(os.open(image, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
+    except OSError as error:
+        raise _not_created(role, resolved, error) from error
+    try:
+        _write_new_image(image, history=history, instance_id=instance_id, at=at)
+        os.rename(image, resolved)
+    except (OSError, sqlite3.Error, ValueError) as error:
+        raise _not_created(role, resolved, error) from error
+    finally:
+        _remove_created(image)
+    return resolved
+
+
+def _write_new_image(image: Path, *, history: bool, instance_id: str | None, at: str) -> None:
+    connection = sqlite3.connect(image.as_uri() + "?mode=rw", uri=True, isolation_level=None)
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            # The shipped statements, as fresh creation and migration build them.
+            for statement in _schema_statements(history):
+                connection.execute(statement)
+            connection.executemany(
+                "INSERT INTO schema_metadata(key, value) VALUES (?, ?)",
+                _metadata_rows(history, instance_id),
+            )
+            if not history:
+                connection.execute(
+                    "INSERT INTO ledger_lineage(kind, instance_id, at) "
+                    "VALUES ('replaced-missing', NULL, ?)",
+                    (at,),
+                )
+            connection.execute("COMMIT")
+        except BaseException:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        if connection.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise sqlite3.DatabaseError("new database failed its integrity check")
+        if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+            raise sqlite3.DatabaseError("new database failed its foreign key check")
+        _validate_reader_contract(connection, history=history)
+        if not history and (
+            ledger_instance_id(connection) != instance_id
+            or connection.execute(
+                "SELECT kind, instance_id, at FROM ledger_lineage"
+            ).fetchall() != [("replaced-missing", None, at)]
+        ):
+            raise sqlite3.DatabaseError("new ledger lacks its instance or lineage boundary")
+        # Published by rename, it must carry the WAL header like every NamiSync
+        # main; closing the converting connection removes its -wal and -shm.
+        if connection.execute("PRAGMA journal_mode = WAL").fetchone()[0] != "wal":
+            raise sqlite3.OperationalError("SQLite refused WAL journal mode")
+    finally:
+        connection.close()
+    left = [suffix for suffix in _SIDECARS if _exists(_sidecar(image, suffix))]
+    if left:
+        raise OSError(f"new database image left {', '.join(left)} beside it")
+    with image.open("r+b") as written:
+        os.fsync(written.fileno())
+
+
+def _not_created(role: str, path: Path, error: BaseException) -> DatabaseCreationFailed:
+    return DatabaseCreationFailed(
+        f"NamiSync could not create the missing {role} database {path} "
+        f"({type(error).__name__}: {error}), so none was created. Check write access "
+        "to that folder and its free space, then try again.",
+        path,
+    )
 
 
 # --- restore -----------------------------------------------------------------

@@ -440,7 +440,7 @@ CREATE TABLE annotations (
 
 CREATE TABLE ledger_lineage (
     id INTEGER PRIMARY KEY,
-    kind TEXT NOT NULL CHECK(kind IN ('backup-cut', 'replaced-missing')),
+    kind TEXT NOT NULL CHECK(kind IN ('backup-cut', 'replaced-missing', 'migrated-released')),
     instance_id TEXT UNIQUE CHECK(
         instance_id IS NULL
         OR (length(instance_id) = 32 AND instance_id NOT GLOB '*[^0-9a-f]*')
@@ -1366,9 +1366,8 @@ def _validate_reader_contract(
             f"The {_role(history)} database was written by NamiSync 0.1.0 and "
             "must be updated before use. Start NamiSync, or run a sync or "
             f"inventory command, once to update it together with its "
-            f"{_role(not history)} database; a backup is kept beside each. A "
-            f"{_role(history)} whose {_role(not history)} database is missing "
-            "cannot be updated by this version."
+            f"{_role(not history)} database, which is created new if it is "
+            "missing; a backup of each updated database is kept beside it."
         )
     if not history:
         _refuse_live_backup(connection)

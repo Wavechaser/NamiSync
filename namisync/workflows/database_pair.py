@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 import sqlite3
@@ -19,6 +20,7 @@ from namisync.db.contracts import (
     probe_database_file_contract,
     retry_database_validation,
 )
+from namisync.db.maintenance import DatabaseCreationFailed, create_database
 from namisync.db.migration import (
     DatabaseBackupFailed,
     DatabaseMigration,
@@ -53,6 +55,17 @@ DATABASE_MIGRATION_DIRECTION = (
     "before use. Start NamiSync, or run a sync or inventory command, once to "
     "update it; a backup of each database is kept beside it."
 )
+_DATABASE_MISSING_DIRECTION = {
+    "ledger": (
+        "The ledger database is missing. Start NamiSync, or run a sync or "
+        "inventory command, once to create a new one; the existing History is "
+        "kept, and its runs are shown as belonging to an earlier ledger."
+    ),
+    "history": (
+        "The History database is missing. Start NamiSync, or run a sync or "
+        "inventory command, once to create a new one; the existing ledger is kept."
+    ),
+}
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 _ARTIFACT_NATIVE: ArtifactNative = WindowsArtifactNative()
 
@@ -61,6 +74,9 @@ class DatabasePairState(StrEnum):
     FRESH = "fresh"
     READY = "ready"
     MIGRATION_REQUIRED = "migration-required"
+    # One main file present and usable, the other absent with no sidecars:
+    # only ``complete_database_pair`` creates the missing one.
+    INCOMPLETE = "incomplete"
     REFUSED = "refused"
 
 
@@ -74,11 +90,16 @@ class DatabasePairContract:
 
 @dataclass(frozen=True, slots=True)
 class MigratedDatabase:
-    """One database this call migrated: its role, source version and backup."""
+    """One database this call migrated: its role, source version and backup.
+
+    ``unstamped`` marks a History whose runs were left without a ledger stamp,
+    so they are shown as belonging to an earlier ledger.
+    """
 
     role: str
     source_version: int
     backup: Path
+    unstamped: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,16 +114,34 @@ class DatabasePairMigration:
         return tuple(database.backup for database in self.migrated)
 
 
+@dataclass(frozen=True, slots=True)
+class CreatedDatabase:
+    """One missing database this call created: its role and path."""
+
+    role: str
+    path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class DatabasePairCompletion:
+    """A completion's resulting contract, the database it created and any it migrated."""
+
+    contract: DatabasePairContract
+    created: tuple[CreatedDatabase, ...] = ()
+    migrated: tuple[MigratedDatabase, ...] = ()
+
+
 class DatabasePairInitializationError(RuntimeError):
     """A fresh pair could not be published and owned artifacts were retracted."""
 
 
 class DatabasePairRefusedError(RuntimeError):
-    """A mutating admission encountered a refused or not yet migrated pair."""
+    """A mutating admission met a refused, not yet migrated or incomplete pair."""
 
     def __init__(self, contract: DatabasePairContract) -> None:
         if contract.state not in (
             DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED,
+            DatabasePairState.INCOMPLETE,
         ):
             raise ValueError("database refusal requires a refused pair contract")
         super().__init__(
@@ -162,7 +201,13 @@ def _validate_database_pair_once(
             return _refused("inconsistent-pair")
         return DatabasePairContract(DatabasePairState.FRESH)
     if ledger_main != history_main:
-        return _refused("inconsistent-pair")
+        if (history_sidecars if ledger_main else ledger_sidecars) or not (
+            ledger if ledger_main else history
+        ).is_file():
+            return _refused("inconsistent-pair")
+        if ledger_main:
+            return _validate_lone_role(ledger, history, history=False, database=ledger_database)
+        return _validate_lone_role(history, ledger, history=True, database=history_database)
     if not ledger.is_file() or not history.is_file():
         return _refused("inconsistent-pair")
 
@@ -215,6 +260,52 @@ def _validate_database_pair_once(
             DATABASE_MIGRATION_DIRECTION,
         )
     return DatabasePairContract(DatabasePairState.READY)
+
+
+def _validate_lone_role(
+    present: Path, missing: Path, *, history: bool,
+    database: DatabaseConnectionOwner | None,
+) -> DatabasePairContract:
+    """Classify the one present database; a usable one makes the pair incomplete."""
+
+    role, other = ("history", "ledger") if history else ("ledger", "history")
+    older = False
+    evidence = None
+    try:
+        evidence = _validate_role(present, history=history, database=database)
+    except SchemaResetRequired:
+        # Name only what exists, and where the other was looked for, so a
+        # mistyped path is noticed before anything is discarded.
+        direction = (
+            f"Close every NamiSync process, then archive or delete the {role} "
+            f"database file {present} and its -wal, -shm, and -journal sidecars "
+            f"before restarting NamiSync. The {other} database is missing at "
+            f"{missing}; if it should be there, check that path first."
+        )
+        return DatabasePairContract(
+            DatabasePairState.REFUSED, f"{role}-contract", direction, direction,
+        )
+    except DatabaseNewerVersion as error:
+        return _refused(f"{role}-newer", guidance=str(error))
+    except DatabaseRoleMismatch as error:
+        return _refused(f"{role}-wrong-role", guidance=str(error))
+    except LedgerIsBackup as error:
+        return _refused("ledger-is-backup", guidance=str(error))
+    except DatabaseMigrationRequired:
+        older = True
+    if evidence is not None:
+        evidence.require_unchanged()
+    if any(_entry_exists(path) for path in (missing, *_sidecars(missing))):
+        raise DatabaseArtifactsChanged(f"{other} database appeared during validation")
+    guidance = _DATABASE_MISSING_DIRECTION[other]
+    if older:
+        guidance += (
+            f" The existing {'History' if history else 'ledger'} was written by "
+            "NamiSync 0.1.0 and is updated first; a backup of it is kept beside it."
+        )
+    return DatabasePairContract(
+        DatabasePairState.INCOMPLETE, f"{other}-missing", None, guidance,
+    )
 
 
 def _validate_role(
@@ -324,8 +415,10 @@ def ensure_database_pair(
     """Require a ready pair before admitting work that can mutate both stores.
 
     A fresh pair is created. An older one is refused with the migration
-    direction: only ``migrate_database_pair`` migrates, so every migration
-    reaches a caller that reports it.
+    direction, and an incomplete one with the direction to create its missing
+    database: only ``migrate_database_pair`` migrates and only
+    ``complete_database_pair`` completes, so each reaches a caller that
+    reports it.
     """
 
     contract = validate_database_pair(
@@ -334,7 +427,10 @@ def ensure_database_pair(
     )
     if contract.state is DatabasePairState.FRESH:
         contract = initialize_database_pair(ledger_path, history_path)
-    if contract.state in (DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED):
+    if contract.state in (
+        DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED,
+        DatabasePairState.INCOMPLETE,
+    ):
         raise DatabasePairRefusedError(contract)
     return contract
 
@@ -365,10 +461,18 @@ def migrate_database_pair(
             require_no_open_handles(history)
             ledger_result = migrate_database(ledger, history=False, claim=claims.ledger)
             _record_migrated(migrated, "ledger", ledger_result)
+            # The stamp decision: a 0.1.0 History joins only its own ledger,
+            # one that itself migrated from 0.1.0 and was never replaced, as
+            # read under the claims from the ledger just migrated or found.
+            # Beside any other ledger its runs stay unstamped.
+            stamp = (
+                ledger_result.ledger_instance_id
+                if ledger_result.stamps_released_history else None
+            )
             _record_migrated(migrated, "history", migrate_database(
                 history, history=True, claim=claims.history,
-                ledger_instance_id=ledger_result.ledger_instance_id,
-            ))
+                ledger_instance_id=stamp, without_ledger=stamp is None,
+            ), stamped=stamp is not None)
             contract = validate_database_pair(ledger, history)
     except DatabaseClaimRefused as error:
         contract = _refused("database-in-use", guidance=str(error))
@@ -385,11 +489,119 @@ def migrate_database_pair(
     return DatabasePairMigration(contract, tuple(migrated))
 
 
+def complete_database_pair(
+    ledger_path: str | Path, history_path: str | Path,
+) -> DatabasePairCompletion:
+    """Create the missing database of an incomplete pair, updating the other first.
+
+    Both exclusive maintenance claims are held throughout, and the pair is
+    classified again under them; any state other than ``incomplete`` is
+    returned unchanged. A NamiSync 0.1.0 database beside the gap migrates
+    first, a History with no ledger stamp on its runs, so they never join the
+    ledger created next. The new database is published by verified rename: an
+    interruption leaves it missing or complete, and a rerun finishes. The
+    present database is never rebuilt from or reinterpreted by the new one.
+    """
+
+    ledger = Path(ledger_path).resolve()
+    history = Path(history_path).resolve()
+    created: list[CreatedDatabase] = []
+    migrated: list[MigratedDatabase] = []
+    contract = validate_database_pair(ledger, history)
+    if contract.state is not DatabasePairState.INCOMPLETE:
+        return DatabasePairCompletion(contract)
+    folders: list[Path] = []
+    try:
+        # The missing database's claim file is created when the claims are
+        # taken, so its folder must exist first; folders made here are removed
+        # again, if still empty, when nothing is created.
+        _make_folders(
+            (history if contract.reason == "history-missing" else ledger).parent, folders,
+        )
+        with hold_maintenance_claims(ledger, history) as claims:
+            contract = validate_database_pair(ledger, history)
+            if contract.state is not DatabasePairState.INCOMPLETE:
+                return DatabasePairCompletion(contract)
+            create_history = contract.reason == "history-missing"
+            present, present_claim = (
+                (ledger, claims.ledger) if create_history else (history, claims.history)
+            )
+            missing, missing_claim = (
+                (history, claims.history) if create_history else (ledger, claims.ledger)
+            )
+            try:
+                retry_database_validation(lambda: probe_database_file_contract(
+                    present, history=not create_history,
+                ))
+            except DatabaseMigrationRequired:
+                # Before the new database exists, so an interruption leaves a
+                # lone current database for the next call to complete.
+                _record_migrated(
+                    migrated, "ledger" if create_history else "history", migrate_database(
+                        present, history=not create_history, claim=present_claim,
+                        without_ledger=not create_history,
+                    ),
+                    stamped=create_history,
+                )
+            created.append(CreatedDatabase(
+                "history" if create_history else "ledger",
+                create_database(
+                    missing, history=create_history, claim=missing_claim,
+                    now=datetime.now(timezone.utc),
+                ),
+            ))
+            contract = validate_database_pair(ledger, history)
+    except DatabaseClaimRefused as error:
+        contract = _refused("database-in-use", guidance=str(error))
+    except DatabaseBackupFailed as error:
+        contract = _refused("backup-failed", guidance=str(error))
+    except DatabaseMigrationFailed as error:
+        contract = _refused("migration-failed", guidance=str(error))
+    except DatabaseCreationFailed as error:
+        contract = _refused("creation-failed", guidance=str(error))
+    except (sqlite3.Error, OSError) as error:
+        contract = _refused("completion-unavailable", guidance=(
+            f"{DATABASE_UNAVAILABLE_DIRECTION} ({type(error).__name__}: {error})"
+        ))
+    finally:
+        if not created:
+            _remove_empty_folders(folders)
+    return DatabasePairCompletion(contract, tuple(created), tuple(migrated))
+
+
+def _make_folders(folder: Path, made: list[Path]) -> None:
+    """Create ``folder`` and missing ancestors, recording each one this call made."""
+
+    absent: list[Path] = []
+    while not folder.exists() and folder.parent != folder:
+        absent.append(folder)
+        folder = folder.parent
+    for path in reversed(absent):
+        try:
+            path.mkdir()
+        except FileExistsError:
+            continue  # Made by someone else meanwhile: not ours to remove.
+        made.append(path)
+
+
+def _remove_empty_folders(made: list[Path]) -> None:
+    # Deepest first; a folder that is no longer empty, such as one holding the
+    # claim file a refused attempt created, stays.
+    for path in reversed(made):
+        try:
+            path.rmdir()
+        except OSError:
+            return
+
+
 def _record_migrated(
     migrated: list[MigratedDatabase], role: str, result: DatabaseMigration,
+    *, stamped: bool = True,
 ) -> None:
     if result.backup is not None and result.source_version is not None:
-        migrated.append(MigratedDatabase(role, result.source_version, result.backup))
+        migrated.append(MigratedDatabase(
+            role, result.source_version, result.backup, unstamped=not stamped,
+        ))
 
 
 def _reserve(path: Path, owned: dict[Path, OwnedArtifactLease]) -> None:

@@ -22,6 +22,7 @@ from typing import Callable, Mapping
 from namisync.core.pathing import to_extended_length_path
 
 from .claims import DatabaseClaim, DatabaseInUse, claim_path
+from .timestamps import encode_utc
 from .connections import validate_database_path
 from .schema import (
     HISTORY_SCHEMA_VERSION,
@@ -170,11 +171,17 @@ class _CommitUnconfirmed(Exception):
 
 @dataclass(frozen=True, slots=True)
 class DatabaseMigration:
-    """One database's outcome: what it migrated from, its backup, and a ledger's instance."""
+    """One database's outcome: what it migrated from, its backup, and a ledger's instance.
+
+    ``stamps_released_history`` is true only for a ledger that is a v0.1.0
+    History's own: its lineage holds exactly the marker its own migration from
+    0.1.0 wrote, so it was neither restored nor created for a missing ledger.
+    """
 
     source_version: int | None
     backup: Path | None
     ledger_instance_id: str | None
+    stamps_released_history: bool = False
 
 
 def migrate_database(
@@ -183,18 +190,25 @@ def migrate_database(
     history: bool,
     claim: DatabaseClaim,
     ledger_instance_id: str | None = None,
+    without_ledger: bool = False,
 ) -> DatabaseMigration:
     """Migrate one supported older database in place, or confirm it is current.
 
-    ``claim`` must be this database's held exclusive maintenance claim. History
-    takes the instance id of the ledger it is admitted beside and stamps it on
-    every existing run; a ledger receives a new instance id.
+    ``claim`` must be this database's held exclusive maintenance claim. A
+    ledger receives a new instance id and, in the same transaction, the
+    ``migrated-released`` lineage marker. History stamps every existing run
+    with the instance id it is given, which must be its own ledger's (one whose
+    result has ``stamps_released_history``); beside any other ledger, or none,
+    it migrates only with ``without_ledger`` and no instance id, its runs left
+    unstamped so they never join a ledger they were not recorded with.
     """
 
     resolved = validate_database_path(path)
     if not claim.held or not claim.exclusive or claim.path != claim_path(resolved):
         raise ValueError("migration requires this database's held exclusive maintenance claim")
-    if history != (
+    if without_ledger and (not history or ledger_instance_id is not None):
+        raise ValueError("only a history migrates without a ledger, and then takes no instance id")
+    if not without_ledger and history != (
         ledger_instance_id is not None and _INSTANCE_ID.fullmatch(ledger_instance_id) is not None
     ):
         raise ValueError("history migration takes the ledger instance id; a ledger takes none")
@@ -207,6 +221,7 @@ def migrate_database(
             connection.setconfig(sqlite3.SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, False)
             return DatabaseMigration(
                 None, None, None if history else _stored_instance_id(connection),
+                not history and _own_released_ledger(connection),
             )
         step = MIGRATION_STEPS[("history" if history else "ledger", version)]
         counts = _row_counts(connection, (table for table, _ in step.tables))
@@ -238,7 +253,10 @@ def migrate_database(
             ) from error
         instance_id = ledger_instance_id if history else new_instance_id()
         try:
-            _migrate(connection, step, counts, history=history, instance_id=instance_id)
+            _migrate(
+                connection, step, counts, history=history, instance_id=instance_id,
+                migrated_at=encode_utc(datetime.now(timezone.utc)),
+            )
         except _CommitUnconfirmed as error:
             cause = error.__cause__
             raise DatabaseMigrationFailed(
@@ -262,9 +280,25 @@ def migrate_database(
         # Closing now checkpoints the committed WAL into the main file and
         # removes it; v0.1.0's stale -shm is reinitialized by the next opener.
         connection.setconfig(sqlite3.SQLITE_DBCONFIG_NO_CKPT_ON_CLOSE, False)
-        return DatabaseMigration(version, backup, None if history else instance_id)
+        return DatabaseMigration(
+            version, backup, None if history else instance_id,
+            not history and _own_released_ledger(connection),
+        )
     finally:
         connection.close()
+
+
+# The lineage row a ledger's own migration from NamiSync 0.1.0 writes. A ledger
+# whose lineage is exactly this row is the one its 0.1.0 History was recorded
+# with: a restore adds a backup cut, and a ledger created because it was
+# missing holds only a replaced-missing boundary.
+_RELEASED_MARKER = "migrated-released"
+
+
+def _own_released_ledger(connection: sqlite3.Connection) -> bool:
+    return connection.execute(
+        "SELECT kind, instance_id FROM ledger_lineage"
+    ).fetchall() == [(_RELEASED_MARKER, None)]
 
 
 def _in_use(path: Path) -> DatabaseInUse:
@@ -432,7 +466,8 @@ def _migrate(
     counts: dict[str, int],
     *,
     history: bool,
-    instance_id: str,
+    instance_id: str | None,
+    migrated_at: str,
 ) -> None:
     connection.execute("BEGIN IMMEDIATE")
     try:
@@ -442,7 +477,15 @@ def _migrate(
         _drop_aside(connection, step)
         _create_triggers(connection, history)
         _write_metadata(connection, history, instance_id)
-        _verify(connection, step, counts, history=history)
+        if not history:
+            connection.execute(
+                "INSERT INTO ledger_lineage(kind, instance_id, at) VALUES (?, NULL, ?)",
+                (_RELEASED_MARKER, migrated_at),
+            )
+        _verify(
+            connection, step, counts, history=history, instance_id=instance_id,
+            migrated_at=migrated_at,
+        )
         try:
             _commit(connection)
         except Exception as error:
@@ -479,7 +522,7 @@ def _create_tables(connection: sqlite3.Connection, history: bool) -> None:
 
 
 def _copy_rows(
-    connection: sqlite3.Connection, step: MigrationStep, *, history: bool, instance_id: str,
+    connection: sqlite3.Connection, step: MigrationStep, *, history: bool, instance_id: str | None,
 ) -> None:
     for table, columns in step.tables:
         _copy_table(connection, table, columns, stamp=instance_id if (
@@ -514,7 +557,9 @@ def _create_triggers(connection: sqlite3.Connection, history: bool) -> None:
             connection.execute(statement)
 
 
-def _write_metadata(connection: sqlite3.Connection, history: bool, instance_id: str) -> None:
+def _write_metadata(
+    connection: sqlite3.Connection, history: bool, instance_id: str | None,
+) -> None:
     connection.executemany(
         "INSERT INTO schema_metadata(key, value) VALUES (?, ?)",
         _metadata_rows(history, None if history else instance_id),
@@ -527,9 +572,15 @@ def _verify(
     counts: dict[str, int],
     *,
     history: bool,
+    instance_id: str | None,
+    migrated_at: str,
 ) -> None:
     if connection.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
         raise sqlite3.DatabaseError("migrated database failed its integrity check")
+    if not history and connection.execute(
+        "SELECT kind, instance_id, at FROM ledger_lineage"
+    ).fetchall() != [(_RELEASED_MARKER, None, migrated_at)]:
+        raise sqlite3.DatabaseError("migrated ledger lacks its migration marker")
     if connection.execute("PRAGMA foreign_key_check").fetchall():
         raise sqlite3.DatabaseError("migrated database failed its foreign key check")
     # The full current reader contract: role, version, formats, instance id
@@ -537,10 +588,12 @@ def _verify(
     _validate_reader_contract(connection, history=history)
     if _row_counts(connection, counts) != counts:
         raise sqlite3.DatabaseError("migrated row counts differ from the source")
+    # Every run carries the ledger's instance, or, without a ledger, none does.
     if history and connection.execute(
-        "SELECT count(*) FROM history_runs WHERE ledger_instance_id IS NULL"
+        "SELECT count(*) FROM history_runs WHERE ledger_instance_id IS "
+        + ("NULL" if instance_id is not None else "NOT NULL")
     ).fetchone()[0]:
-        raise sqlite3.DatabaseError("migrated history runs lack their ledger instance")
+        raise sqlite3.DatabaseError("migrated history run stamps do not match their ledger")
 
 
 def _commit(connection: sqlite3.Connection) -> None:
