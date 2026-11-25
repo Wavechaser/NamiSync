@@ -324,8 +324,9 @@ ledger verification is separate from evidence attributed to that original run.
 ## Purpose And Boundaries
 
 `namisync.db` owns SQLite schemas, connection factories, recorder implementation,
-read repositories, history observer/store, the maintenance claim, and schema
-migration (`migration.py`). The main
+read repositories, history observer/store, the maintenance claim, schema
+migration (`migration.py`), and check, backup, restore and backup rotation
+(`maintenance.py`). The main
 ledger stores durable operational evidence; the history database stores an
 independent activity audit. They have separate connections, versions,
 retention, failure domains, and no cross-database foreign keys.
@@ -789,9 +790,10 @@ outcomes, gate and non-goals.
   replaced. A `replaced-missing` row (no instance) is the boundary written when
   a lone History gains a new ledger; it joins nothing. `at` is canonical UTC
   text, an instance appears at most once, and CHECK constraints tie the
-  instance to the kind. Fresh creation and migration create the table empty;
-  no command writes it until backup, restore and the one-present pair policy
-  arrive in later M2-A4 outcomes.
+  instance to the kind. Fresh creation and migration create the table empty.
+  A backup writes its own cut into the copy only, and restore keeps the
+  backup's rows ([Data Protection](#data-protection)); `replaced-missing` waits
+  for the one-present pair policy in a later M2-A4 outcome.
 - **Read rule.** A History run is `current` when its stamp is the ledger's
   instance, or when a `backup-cut` names its stamp and the run started strictly
   before that cut; a run that never started is judged by its creation time.
@@ -813,8 +815,9 @@ outcomes, gate and non-goals.
   recorders, the CLI pair refusal and desktop startup. The direction is to put
   back the ledger it replaced or restore the backup with
   `namisync restore ledger <backup file>`, never to reset, and nothing is
-  changed. Until that command arrives with a later M2-A4 outcome, only the
-  first direction can be followed. The rule runs last in the ledger reader
+  changed. Restore exists in `db` and workflows; until its command arrives
+  with a later M2-A4 outcome, only the first direction can be followed from
+  the command line. The rule runs last in the ledger reader
   contract, once role, version, formats, instance id and exact topology have
   passed, and `classify_database` never applies it. Restore's backup
   verification can therefore classify a backup file as a current ledger and
@@ -877,10 +880,11 @@ outcomes, gate and non-goals.
     `LedgerInstanceChanged`, CLI exit 4.
   - Inventory review's row-id actions (acknowledge, restore) are not plans and
     are not covered here.
-  - Tests stand in for restore by rewriting the id under the ledger's exclusive
-    claim: the replaced-ledger cases in `tests/test_bridge_resume.py` (start,
-    paused execute and verify resumes, the under-claim check), `tests/test_cli.py`
-    and `tests/interfaces/web/test_drain.py`.
+  - The CLI case in `tests/test_cli.py` runs a real in-place restore while the
+    plan waits at the prompt. The other replaced-ledger cases stand in for
+    restore by rewriting the id under the ledger's exclusive claim:
+    `tests/test_bridge_resume.py` (start, paused execute and verify resumes,
+    the under-claim check) and `tests/interfaces/web/test_drain.py`.
 
 ### Migration
 
@@ -998,9 +1002,11 @@ A failure or interruption at any point leaves the old database or, after
 COMMIT, the new one: the transaction is all or nothing, and an uncommitted WAL
 tail is discarded at the next open. Migration is then refused with the reason,
 and the backup stays. There is no automatic restore, because nothing partial
-is ever published; restoring a backup is a maintenance command (M2-A4).
-Rotation of migration backups also waits for A4, so each migration leaves one
-backup per database and each interrupted attempt may leave another.
+is ever published. Maintenance restore takes only current-schema backups and
+refuses a migration backup, which is put back by hand to return to 0.1.0.
+Rotation never removes migration backups ([Data Protection](#data-protection)),
+so each migration leaves one backup per database and each interrupted attempt
+may leave another.
 
 Cost: each database is copied in one transaction, so time and WAL growth are
 linear in its size, the WAL holds roughly a second copy until the closing
@@ -1037,6 +1043,11 @@ Left as they are under
   migrated database, but its message still suggests archiving or deleting the
   pair. A released binary cannot be changed, so the release notes carry the
   warning (M2-R1).
+- Migration backups are never rotated: they are the only way back to 0.1.0
+  and restore refuses them. Each attempt that fails after publishing its
+  backup therefore leaves another full backup until the user removes it, and a
+  rolled-back attempt leaves the WAL grown with a discarded tail (148 MB to
+  296 MB at 400,000 ledger rows).
 
 Open until M2-A4 ([M2_PLAN](M2_PLAN.md) owns the schedule):
 
@@ -1044,10 +1055,9 @@ Open until M2-A4 ([M2_PLAN](M2_PLAN.md) owns the schedule):
   `history` command nor migrated; a one-present pair stays refused until the
   missing-database policy lands. The older-database refusal says so.
 - A damaged v0.1.0 database is refused at every start with direction to keep
-  its files; there is no repair or restore.
-- Each attempt that fails after publishing its backup leaves another full
-  backup, and a rolled-back attempt leaves the WAL grown with a discarded
-  tail (148 MB to 296 MB at 400,000 ledger rows), until rotation exists.
+  its files. Restore replaces a database that fails admission, but only from
+  a current-schema backup, which a database still at v0.1.0 cannot have; the
+  refusals that point to the maintenance commands arrive with them.
 
 Legacy import or merge is separate from migration. It never guesses
 volume/location correspondence.
@@ -1055,12 +1065,14 @@ volume/location correspondence.
 ## Maintenance Claim
 
 Status: implemented by M2-A3 outcome 1 (2026-11-25) in
-`namisync/db/claims.py`; migration (`namisync/db/migration.py`) is its first
-maintenance consumer. User decisions (2026-11-20, 2026-11-24).
+`namisync/db/claims.py`. Its maintenance consumers are migration
+(`namisync/db/migration.py`) and, since M2-A4 outcome 4, check, backup and
+restore (`namisync/db/maintenance.py`, [Data Protection](#data-protection)).
+User decisions (2026-11-20, 2026-11-24).
 
-Maintenance (migration first; later restore, archive-and-reset, reclaiming file
-space, history pruning and purge) must not run while any run's records are
-still being written to either database, in any process.
+Maintenance (migration, check, backup and restore; later archive-and-reset,
+reclaiming file space, history pruning and purge) must not run while any run's
+records are still being written to either database, in any process.
 
 - **Owner.** The db layer, because only its writers know when a run's last
   write has landed. The dispatcher stays domain-blind.
@@ -1123,7 +1135,11 @@ still being written to either database, in any process.
   first, and refuses rather than waits while any claim is held:
   `hold_maintenance_claims(ledger, history)` releases the ledger claim when
   History's is refused. One gate covers both because a ledger change under a
-  History writer still recording location ids is the id-reuse hazard. Schema
+  History writer still recording location ids is the id-reuse hazard.
+  Migration and each pair maintenance call (`check_database_pair`,
+  `backup_database_pair`, `restore_database_from_backup`) hold both claims for
+  their whole run and refuse with `database-in-use` otherwise; the db
+  operations themselves require their database's held exclusive claim. Schema
   creation (`_create_schema`) takes its own database's claim exclusively before
   SQLite opens the file, so a refused creation leaves no database; inside pair
   initialization the refusal is the cause of `DatabasePairInitializationError`
@@ -1178,23 +1194,174 @@ still being written to either database, in any process.
 
 ## Data Protection
 
-Retention and backup/protection workflows are accepted but unrealized.
-Detail retention must use a writable connection and canonical time comparison,
-preserve summaries when pruning detail, and remain idempotent. Backup snapshots
-must pass integrity check, and rotation must never delete the newest sole good
-backup.
+Status: check, backup, restore and count-based rotation implemented by M2-A4
+outcome 4 (2026-11-25) in `namisync/db/maintenance.py`, met for the pair in
+`namisync/workflows/database_maintenance.py`. The CLI commands, their first
+consumer, follow in a later M2-A4 outcome and the Data page in M2-B3. Tests:
+`tests/test_db_maintenance.py`, `tests/test_database_maintenance.py` (real
+child processes: kills per stage, readers, writers, an idle desktop) and the
+restored-at-the-prompt case in `tests/test_cli.py`.
 
-Quick-check and backup run as ordinary dispatcher maintenance sessions. Use the
-SQLite backup API or equivalent consistent snapshot to a temp destination,
-fsync/flush according to platform guarantee, then atomically publish the dated
-backup. Rotation deletes only recognized backup artifacts after a successful
-new backup and according to reviewed count/age policy. Optional second-volume
-backup requires its own custody.
+- **Mechanism.** Each pair call holds both exclusive maintenance claims,
+  ledger first, for its whole run, as migration does; there is no dispatcher
+  session. Every db operation, rotation included, requires its database's held
+  exclusive claim. Every run holds History's shared claim from admission to
+  close, so none runs beside maintenance, new work is refused at admission,
+  and no run straddles a moment at which both claims are held. Times are read
+  from the clock once both claims are held.
+- **Check** reports the pair contract and each role in any pair state. Each
+  database is classified without writes (the cold probe), then, for its role
+  at the current or older version, `integrity_check` and `foreign_key_check`
+  run, at most 20 problems in all. States: `ok`; `foreign-key-violations`
+  (admitted, `integrity_check` passes, `foreign_key_check` reports rows, which
+  are listed); `missing` (stray sidecars are listed); `damaged` (SQLite damage,
+  a failed `integrity_check`, or a `-journal` beside the main); `older`;
+  `newer`; `wrong-role`; `unsupported` (reset required, such as an old-shape
+  schema-5 ledger); `is-backup` (a backup copied into place); `unavailable`.
+  Violations found beside another state are listed under it.
+- **Backup** needs a ready pair and backs up the ledger, then History, at one
+  cut time. A read-only connection copies the source with the SQLite backup
+  API into an exclusively created temporary beside it, which is switched to
+  rollback-journal mode so it stands alone. A ledger copy, and only the copy,
+  gains one `backup-cut` row naming its own instance at the cut time. The copy
+  is verified (`integrity_check`; the current reader contract, which for a
+  ledger must end in exactly `LedgerIsBackup`; every table's row count equal
+  to the source's, `ledger_lineage` one more; the cut naming the copy's
+  instance), flushed and renamed, never replacing a file, to
+  `<main>.backup-<UTC yyyymmddThhmmss + microseconds>Z`. Migration publishes
+  through the same helper (`publish_verified_copy`). The source main is never
+  written; the read-only connection may leave SQLite's own `-wal` and `-shm`.
+  A failure publishes nothing and rotates nothing, with migration's split of
+  guidance between a damaged source and write access or free space; a ledger
+  backup published before History's failed is kept and reported.
+- **Rotation** keeps three backups per database and runs only after both new
+  backups are published. Its population is regular files (not links,
+  junctions or directories) beside the main named exactly
+  `<main name>.backup-<stamp>Z` in that format, ASCII digits only. It keeps the
+  new backup by path whatever its stamp, and the newest two others by stamp;
+  it reports each failed removal and never raises. Migration backups
+  (`.backup-v<N>-…`) are never rotated: they are the only way back to 0.1.0
+  and restore refuses them. Temporaries, `.replaced-*` sets and every other
+  name are left alone.
+- **Restore** replaces the ledger or History, one per call, from a backup at
+  the current schema; the pair need not be ready. The backup must be a
+  standalone regular file (no `-wal` or `-journal` beside it) that passes
+  `integrity_check` and classifies as a current database of the role, read
+  without writes. Refused with nothing changed: `backup-unavailable`,
+  `backup-damaged`, `backup-wrong-role`, `backup-newer`, `backup-unsupported`,
+  `backup-older` (v4 and v8 migration backups) and, for a ledger,
+  `backup-unstamped` (no `backup-cut` naming its own instance: a hand copy).
+  The live database is then checked: a database of another role is
+  `target-wrong-role`, sidecars without a main `target-inconsistent`, and an
+  unreadable one `restore-failed`, all with nothing changed.
+  The image `<main>.restore-<random>.tmp`, created exclusively, is a copy of
+  the backup. A ledger image gets a new instance id (`new_instance_id()`) and
+  keeps every lineage row, so the backup's own cut becomes its predecessor
+  row; History has no lineage. The image is verified (integrity, foreign keys,
+  the full current reader contract, so no longer a backup, row counts and
+  lineage equal to the backup, the new id in no lineage row) and flushed.
+- **The pair rule.** A ledger is restored only beside a History that checks
+  `ok` or `foreign-key-violations`, or beside none (no main and no sidecars);
+  the workflow refuses otherwise, before anything is written. A 0.1.0 History
+  is stamped with the ledger beside it when it is updated, so after a ledger
+  restore every earlier run would join a ledger it was never recorded with:
+  `history-older` says to start NamiSync, or run a sync or inventory command,
+  once to update the pair, then restore. A History whose version cannot be
+  read (damaged, unsupported, unreadable, sidecars without a main) could be
+  such a History once repaired: `history-unusable`, restore or check History
+  first. `history-newer` points to the NamiSync that wrote it, and
+  `history-wrong-role` to swapped paths. History itself is restored beside a
+  ledger in any state: a restored History is already stamped, nothing stamps
+  it again, and a ledger updated later takes an instance none of its runs
+  carry.
 
-Export/import validate versions and never overwrite the live database without a
-verified backup/atomic replacement path. Trash retention is filesystem-domain
-maintenance but uses ledger/history evidence and capacity planning; undo creates
-an ordinary reviewed plan.
+  | Restoring | Beside | Outcome |
+  | --- | --- | --- |
+  | ledger | History `ok`, `foreign-key-violations`, or none | restored |
+  | ledger | History `older` (0.1.0) | `history-older` |
+  | ledger | History `newer` | `history-newer` |
+  | ledger | History of another or unknown role | `history-wrong-role` |
+  | ledger | History damaged, unsupported, unreadable, or sidecars only | `history-unusable` |
+  | History | a ledger in any state, or none | restored |
+
+- **No backup, no change** decides how the image is published:
+  - A live database that admission accepts and whose `integrity_check`
+    passes (`ok` or `foreign-key-violations`) still backs up cleanly. It is
+    backed up first, as above but without rotation, so a restore never
+    deletes its own source; a failure is `backup-failed` and nothing is
+    restored. The SQLite backup API then copies the image into the live main
+    as one destination write transaction that commits at its end. The main
+    keeps its file, WAL mode, pinned handles and idle connections, so this
+    runs beside an idle desktop without exclusive access. Readers keep their
+    snapshot until the commit; idle connections read the new content at their
+    next transaction, their statements re-prepared; a
+    `DatabaseConnectionOwner` still validates, and the runtime's next
+    instance read returns the new id, so a plan made before is refused at
+    start. A lock refusal between copy steps aborts the copy as
+    `database-in-use`, nothing restored. While the copy's transaction is
+    open, a new process's cold pair check cannot read the locked part of the
+    `-shm` and refuses as `database-unavailable` (exit 3) before admission
+    would refuse it; that cold-probe behavior applies to any write
+    transaction and predates maintenance.
+  - Any other live database (damaged, older, newer, unsupported, a backup in
+    place, a stray `-journal`) needs every other handle closed
+    (`require_no_open_handles`, otherwise `database-in-use`), checked before
+    any write and again just before the renames. Its `-wal`, `-shm` and
+    `-journal`, then its main, are renamed to `<main>.replaced-<stamp>Z` with
+    each sidecar keeping its suffix; the set is kept, never deleted. The
+    image, converted to the WAL header with no sidecars left (a stray
+    `-journal` beside a main is a permanent `inconsistent-pair`), is renamed
+    into place.
+  - A missing database with no sidecars receives the image by rename.
+
+  No rename replaces a file. A fresh cold read then confirms the current
+  contract, every table's row count against the backup (History has no
+  instance id, so its counts tell restored content from replaced) and, for a
+  ledger, the new id. A failure after the point of no return is
+  `restore-unconfirmed` (could not be confirmed; run check), never reported as
+  unchanged. Every refusal or failure after the pre-restore backup, or after
+  any set-aside rename, names the kept file in its guidance and in the
+  result. Only temporaries the call created are removed.
+- **What a kill leaves** (tested at each stage). In place: the old database
+  after the pre-restore backup, after the image is written and mid-copy (the
+  uncommitted WAL frames are discarded at the next open), the new one after
+  the commit. Set aside: the damaged database while its set is still in place
+  or only its sidecars are aside, no database once the main is aside, then the
+  new one. Missing: none, then the new one. A rerun finishes from every stage;
+  a crash's image temporary stays and is never reused.
+- **Limits**, disclosed and not defended under
+  [DEFENSE §2.5](DEFENSE.md#25-proportional-defense) and
+  [§7](DEFENSE.md#7-quantitative-evidence-and-measurement-authority):
+  - The cut is compared as recorded wall-clock UTC, so a clock set back
+    across it misplaces runs near it.
+  - A kill, or a handle opened in the instant between the sidecar renames and
+    the main's, can leave the main in place without its sidecars, and a rerun
+    then judges the main alone, splitting the kept set across two stamps. If
+    the main alone checks usable, the rerun restores in place over it, after
+    a pre-restore backup of it, so its own committed `-wal` stays kept under
+    the first stamp, apart from the database it belonged to. No file is
+    deleted, but that `-wal` is rejoined only by hand.
+  - A page-size mismatch between image and live database is SQLite's own
+    refusal of the copy, reported as `restore-unconfirmed` although nothing
+    changed. A foreign writer holding the WAL lock makes the check read fail
+    (`restore-failed`) or, if it takes the lock later, aborts the copy
+    (`database-in-use`).
+  - Space, a diagnostic and not a measured bound: a restore needs about three
+    times the database's size beside it (the pre-restore backup, the image
+    and the copy's WAL); beside an idle desktop the WAL is not checkpointed
+    and the confirming cold read copies the main and that WAL to a private
+    snapshot, so the peak is higher. Running out of space at confirmation
+    reports `restore-unconfirmed` after a completed restore.
+  - A plain file copy of a ledger put back by hand keeps its instance and
+    cannot be detected; only a backup copied into place is refused.
+
+Still accepted but unrealized: detail retention must use a writable
+connection and canonical time comparison, preserve summaries when pruning
+detail, and remain idempotent. An optional second-volume backup requires its
+own custody. Export/import validate versions and never overwrite the live
+database without a verified backup and atomic replacement path. Trash
+retention is filesystem-domain maintenance but uses ledger/history evidence
+and capacity planning; undo creates an ordinary reviewed plan.
 
 ## Expectations Of Other Modules
 

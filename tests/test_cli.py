@@ -71,13 +71,16 @@ from namisync.interfaces.service import (
 )
 from namisync.modules.executor import NativeFileSystem
 from namisync.workflows.models import PlanOperationView
+from namisync.workflows.database_maintenance import (
+    backup_database_pair,
+    restore_database_from_backup,
+)
 from namisync.workflows.views import result_item_view, session_record_view
 
 from _db_fixtures import (
     FakeClock,
     NOW,
     add_ledger_lineage,
-    replace_ledger_instance,
     seed_history_run,
     stored_ledger_instance,
 )
@@ -1561,7 +1564,7 @@ def test_sync_execution_during_database_maintenance_is_refused_at_admission(
         pass
 
 
-def test_sync_refuses_execution_after_the_ledger_is_replaced_at_the_prompt(
+def test_sync_refuses_execution_after_the_ledger_is_restored_at_the_prompt(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
@@ -1571,22 +1574,30 @@ def test_sync_refuses_execution_after_the_ledger_is_replaced_at_the_prompt(
     (source / "payload.bin").write_bytes(b"payload")
     ledger = initialize_ledger(tmp_path / "ledger.db")
     history = initialize_history(tmp_path / "history.db")
+    backup = backup_database_pair(ledger, history, clock=FakeClock()).backups[0].path
     stdout = io.StringIO()
     stderr = io.StringIO()
+    restored = []
 
-    class ReplacedWhileConfirming(io.StringIO):
+    class RestoredWhileConfirming(io.StringIO):
         def readline(self, *args) -> str:
-            # Another process restores the ledger while the plan waits for "execute".
-            replace_ledger_instance(ledger)
+            # A real restore while the plan waits for "execute": in place,
+            # beside this command's open ledger connections.
+            restored.append(restore_database_from_backup(
+                ledger, history, "ledger", backup,
+                clock=FakeClock(datetime(2026, 1, 2, 3, 4, 6, tzinfo=timezone.utc)),
+            ))
             return super().readline(*args)
 
     result = main(
         _arguments(source, target, ledger, history),
-        stdin=ReplacedWhileConfirming("execute\n"),
+        stdin=RestoredWhileConfirming("execute\n"),
         stdout=stdout,
         stderr=stderr,
     )
 
+    assert restored[0].restore is not None, restored[0].contract
+    assert restored[0].restore.kept_as == "backup"
     assert result == EXIT_REFUSED, (stdout.getvalue(), stderr.getvalue())
     assert list(target.iterdir()) == []
     assert (

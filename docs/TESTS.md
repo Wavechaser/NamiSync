@@ -518,7 +518,9 @@ migrate the copies under `tmp_path`. `tests/_released_fixture.py` makes those
 copies for the migration tests (`tests/test_db_migration.py`,
 `tests/test_database_pair_migration.py`, `tests/test_cli_migration.py` and the
 desktop startup cases in `tests/interfaces/web/test_host.py`), for the
-migrated-topology case in `tests/test_ledger_lineage.py`, and for the
+migrated-topology case in `tests/test_ledger_lineage.py`, for the older and
+migration-backup cases of `tests/test_db_maintenance.py` and
+`tests/test_database_maintenance.py`, and for the
 old-marker refusal cases in `tests/test_database_contracts.py`, which edit
 markers on a copy. Migration tests that need concurrency or process death use
 real child processes through `tests/_child_process.py`. Git keeps the folder byte-exact (`-text`),

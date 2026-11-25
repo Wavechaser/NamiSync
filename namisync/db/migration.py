@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 import secrets
 import sqlite3
-from typing import Mapping
+from typing import Callable, Mapping
 
 from namisync.core.pathing import to_extended_length_path
 
@@ -355,7 +355,47 @@ def _publish_backup(
 ) -> Path:
     """Copy, verify, flush and publish a backup that never replaces a file."""
 
-    temporary = path.with_name(f"{path.name}.migration-{secrets.token_hex(8)}.tmp")
+    def verify(target: sqlite3.Connection) -> None:
+        if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+            raise _BackupVerificationFailed("the backup failed its integrity check")
+        try:
+            classified = classify_database(target, history=step.role == "history")
+        except DatabaseAdmissionError as error:
+            raise _BackupVerificationFailed(
+                "the backup does not classify as its source"
+            ) from error
+        if classified != step.source_version:
+            raise _BackupVerificationFailed("the backup does not classify as its source")
+        if _row_counts(target, counts) != counts:
+            raise _BackupVerificationFailed("the backup row counts differ from the source")
+
+    def published() -> Path:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        return path.with_name(f"{path.name}.backup-v{step.source_version}-{stamp}")
+
+    return publish_verified_copy(
+        connection,
+        path.with_name(f"{path.name}.migration-{secrets.token_hex(8)}.tmp"),
+        verify,
+        published,
+    )
+
+
+def publish_verified_copy(
+    source: sqlite3.Connection,
+    temporary: Path,
+    finish: Callable[[sqlite3.Connection], None],
+    published: Callable[[], Path],
+) -> Path:
+    """Copy a database into a standalone file, verify, flush and publish it.
+
+    Migration and maintenance publish every backup this way. ``temporary`` is
+    created exclusively; ``finish`` runs on the copy once it is in rollback-
+    journal mode and raises to refuse it; ``published`` names the final file
+    after the flush. The rename never replaces a file, and a failure removes
+    only the temporary this call created.
+    """
+
     # Create it exclusively: a file already at this name is never reused, and
     # cleanup below removes only what this call created.
     os.close(os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY))
@@ -364,28 +404,16 @@ def _publish_backup(
             temporary.as_uri() + "?mode=rw", uri=True, isolation_level=None,
         )
         try:
-            connection.backup(target)
+            source.backup(target)
             # A standalone file: the copied header still names WAL.
             if target.execute("PRAGMA journal_mode = DELETE").fetchone()[0] != "delete":
                 raise sqlite3.OperationalError("backup kept its write-ahead log")
-            if target.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
-                raise _BackupVerificationFailed("the backup failed its integrity check")
-            try:
-                classified = classify_database(target, history=step.role == "history")
-            except DatabaseAdmissionError as error:
-                raise _BackupVerificationFailed(
-                    "the backup does not classify as its source"
-                ) from error
-            if classified != step.source_version:
-                raise _BackupVerificationFailed("the backup does not classify as its source")
-            if _row_counts(target, counts) != counts:
-                raise _BackupVerificationFailed("the backup row counts differ from the source")
+            finish(target)
         finally:
             target.close()
         with temporary.open("r+b") as written:
             os.fsync(written.fileno())
-        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-        backup = path.with_name(f"{path.name}.backup-v{step.source_version}-{stamp}")
+        backup = published()
         # Windows rename never replaces an existing file.
         os.rename(temporary, backup)
     except BaseException:
