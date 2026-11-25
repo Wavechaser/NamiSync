@@ -1,5 +1,13 @@
 # Latest session — M2-A3 review fixes, 2026-11-25
 
+Cold admission now identifies the ledger or history file that SQLite reports as
+damaged and directs the user to keep both databases and their sidecars for
+inspection. The CLI regression passed for header and catalog damage in each
+role. Database and workflow checks passed across the department run and the
+reader-module rerun after updating two stale exception expectations. All 106
+desktop-host tests and all 13 import contracts passed. Repair and restore
+remain with M2-A4.
+
 The adversarial review of `60b43078` through `af4b8d6c` (`d721ac63`) found
 five issues. All five are fixed in `f80c1c88` and `f0162d19`, each with a
 regression test that fails against the earlier code.

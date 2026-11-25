@@ -1530,8 +1530,11 @@ def test_role_contract_counterexamples_refuse_without_mutation(
 
     assert first == second
     assert first.state == "refused"
-    assert first.reason == f"{role}-{'wrong-role' if shape == 'swapped-marker' else 'contract'}"
-    assert (first.reset_direction is None) is (shape == "swapped-marker")
+    assert first.reason == (
+        "database-damaged" if shape == "malformed" else
+        f"{role}-{'wrong-role' if shape == 'swapped-marker' else 'contract'}"
+    )
+    assert (first.reset_direction is None) is (shape != "unversioned")
     assert _snapshot(ledger, history) == before
     service.close()
 

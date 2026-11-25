@@ -135,6 +135,40 @@ def test_mutating_command_refuses_a_newer_database_without_reset_guidance(
     assert _files(tmp_path) == before
 
 
+@pytest.mark.parametrize("role", ("ledger", "history"))
+@pytest.mark.parametrize("damage_offset", (0, 100), ids=("not-a-database", "corrupt-catalog"))
+def test_damaged_released_role_preserves_the_pair_without_reset_guidance(
+    tmp_path: Path, role: str, damage_offset: int,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    ledger, history = copy_released_pair(tmp_path / "data")
+    selected = history if role == "history" else ledger
+    # Consolidate the selected released role before damaging its header or
+    # catalog page, so a WAL page cannot mask the damaged main-file byte.
+    with closing(sqlite3.connect(selected)) as connection:
+        connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    data = bytearray(selected.read_bytes())
+    data[damage_offset] = 0
+    selected.write_bytes(data)
+    before = _files(ledger.parent)
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    result = main(
+        ["inventory", str(root), "--database", str(ledger), "--history-database", str(history)],
+        stdout=stdout, stderr=stderr,
+    )
+
+    assert result == EXIT_REFUSED
+    assert f"The {role} database is corrupt or is not a SQLite database" in stderr.getvalue()
+    assert "Keep both database files and all of their sidecars for inspection" in stderr.getvalue()
+    assert not re.search(r"delete|archive|reset", stderr.getvalue(), re.IGNORECASE)
+    assert "Updated" not in stdout.getvalue()
+    assert _files(ledger.parent) == before
+    assert not list(ledger.parent.glob("*.backup-*"))
+    assert not list(ledger.parent.glob("namisync-db-contract-*"))
+
+
 def test_mutating_command_reports_a_refused_migration_and_changes_nothing(
     tmp_path: Path,
 ) -> None:

@@ -357,7 +357,10 @@ def test_cli_admission_reset_guidance_requires_confirmed_stable_incompatibility(
         with NamiSyncService(ledger, history) as service:
             result = cli_module._database_refusal(service, io.StringIO(), stderr, roots=())
     assert result == EXIT_REFUSED
-    assert ("archive or delete" in stderr.getvalue()) == (failure in {"schema", "corrupt"})
+    assert ("archive or delete" in stderr.getvalue()) == (failure == "schema")
+    if failure == "corrupt":
+        assert "The history database is corrupt" in stderr.getvalue()
+        assert "Keep both database files and all of their sidecars for inspection" in stderr.getvalue()
     assert calls == (1 if failure in {"permission", "sqlite-io", "sqlite-busy"} else 0)
     assert {path: path.read_bytes() for path in tmp_path.iterdir()} == before
 

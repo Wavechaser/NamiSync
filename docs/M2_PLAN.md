@@ -122,7 +122,8 @@ Checkpoints:
     and vector fails tests; migration refuses under another process's claim or
     open handle; a killed process releases its claim; 7079 ordinary tests pass
     apart from the seven known interpreter-bound failures, and 13 import
-    contracts hold.
+    contracts hold. A follow-up CLI regression covers SQLite damage to either
+    role and verifies that refusal preserves the pair and advises keeping it.
   - **Design decisions** (2026-11-25, made in the row's design and open to the
     user's revision). The signal for a v0.1.0 process is the database files
     themselves, not `Local\NamiSync.Desktop`, which cannot see a CLI run and

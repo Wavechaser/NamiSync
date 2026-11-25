@@ -54,6 +54,10 @@ class DatabaseBusyError(DatabaseAdmissionError):
     """Cold validation exhausted its bounded artifact-drift retries."""
 
 
+class DatabaseDamagedError(DatabaseAdmissionError):
+    """Stable SQLite damage requires preservation, not a database-pair reset."""
+
+
 def retry_database_validation(operation: Callable[[], _ValidationResult]) -> _ValidationResult:
     """Retry a complete, effect-free validation; never retry failed cleanup."""
 
@@ -313,11 +317,11 @@ def probe_database_file_contract(path: str | Path, *, history: bool) -> Database
         if (
             getattr(error, "sqlite_errorcode", 0) & 0xFF
         ) in (sqlite3.SQLITE_CORRUPT, sqlite3.SQLITE_NOTADB):
-            raise SchemaResetRequired(
-                "The stable database is corrupt or is not a SQLite database. "
-                "Close every NamiSync process, then archive or delete both database "
-                "main files and all of their -wal, -shm, and -journal sidecars "
-                "together before restarting."
+            role = "history" if history else "ledger"
+            raise DatabaseDamagedError(
+                f"The {role} database is corrupt or is not a SQLite database. "
+                "Close every NamiSync process. Keep both database files and all "
+                "of their sidecars for inspection."
             ) from error
         raise DatabaseAdmissionError(DATABASE_UNAVAILABLE_DIRECTION) from error
 

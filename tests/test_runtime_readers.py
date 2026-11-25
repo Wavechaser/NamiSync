@@ -494,7 +494,7 @@ def test_failed_reader_admission_leaves_no_handle_and_retry_admits_fully(
 ) -> None:
     path = runtime.ledger_path if role == "ledger" else runtime.history_path
     path.write_bytes(b"not a database")
-    with pytest.raises(SchemaResetRequired):
+    with pytest.raises(contracts_module.DatabaseDamagedError):
         _read(runtime, role)
     assert readers[role].opened == []
     assert readers[role].closed == []

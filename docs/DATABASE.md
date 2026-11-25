@@ -26,10 +26,13 @@ non-destructive inspection or retry guidance, as are access failures and
 observed activity. Older supported and newer databases are typed admission
 refusals without reset guidance, as is a database at the other role's path
 (the two paths look swapped) or one whose `role` this version does not know.
+If SQLite reports corruption or an invalid database file during cold admission,
+the refusal identifies the affected role and directs the user to preserve both
+databases and their sidecars for inspection.
 Only a stable confirmed unsupported
 database — a pre-release version or contract id, missing or
 mismatched metadata, an incomplete or poisoned topology, an empty or
-markerless file, or corruption — directs the user to close NamiSync and
+markerless SQLite file — directs the user to close NamiSync and
 archive or delete both database mains and all sidecars together. Startup never
 repairs or deletes artifacts. A standalone read-only history command may open
 one current history database without creating or requiring its ledger peer; it
@@ -166,8 +169,9 @@ stability check. Persistent drift refuses with busy/retry guidance. Missing,
 inaccessible, journal-bearing, or otherwise unreadable artifacts refuse with
 non-destructive inspection/access guidance; none of these observations proves
 incompatibility or warrants resetting the pair. Only a stable confirmed schema
-mismatch or SQLite corruption/not-a-database result carries the existing reset
-direction; an older supported database (`DatabaseMigrationRequired`) and a
+mismatch carries the existing reset direction. SQLite `SQLITE_CORRUPT` and
+`SQLITE_NOTADB` produce a `database-damaged` pair refusal with preservation
+guidance. An older supported database (`DatabaseMigrationRequired`) and a
 newer one (`DatabaseNewerVersion`) are typed refusals with their own
 direction. CLI history reports typed admission refusals with exit code 3;
 unrelated later history-read failures retain exit code 4. Retries never replay a

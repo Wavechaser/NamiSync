@@ -14,6 +14,7 @@ from namisync.db.contracts import (
     DatabaseArtifactsChanged,
     DatabaseBusyError,
     DatabaseConnectionOwner,
+    DatabaseDamagedError,
     DatabaseFileEvidence,
     probe_database_file_contract,
     retry_database_validation,
@@ -130,6 +131,8 @@ def validate_database_pair(
         ))
     except DatabaseBusyError as error:
         return _refused("database-busy", guidance=str(error))
+    except DatabaseDamagedError as error:
+        return _refused("database-damaged", guidance=str(error))
     except (DatabaseAdmissionError, OSError):
         return _refused("database-unavailable")
 

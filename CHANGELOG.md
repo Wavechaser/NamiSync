@@ -69,6 +69,9 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
 
 - Adopted DEFENSE §2.5.4, the policy for findings about migrating a v0.1.0
   database, and gathered the migration limits into one list in DATABASE.
+- Cold admission now identifies a database SQLite reports as damaged and
+  directs the user to keep both databases and their sidecars for inspection.
+
 #### Spikes for M2 designs (2026-11-24)
 
 - Ran the M2-A2 live checks and recorded each result in its M2_PLAN feature

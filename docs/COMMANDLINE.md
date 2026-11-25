@@ -82,7 +82,9 @@ instruction. A ledger given as `--history-database` or a history given as
 `--database` is refused with `<role>-wrong-role` and direction to check the two
 paths, which look swapped; a file whose role this version does not know is
 refused the same way, with direction to check its path. Commands never delete
-or backfill either database.
+or backfill either database. If SQLite reports that a file is damaged or unreadable
+as a database, the command names the affected role and directs you to keep both
+databases and their sidecars for inspection.
 
 Before the first sync or location command admission, the CLI calls the shared
 read-only database-pair preflight. A pair written by NamiSync 0.1.0 is then
