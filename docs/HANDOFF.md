@@ -1,38 +1,30 @@
-# Latest session — M2-A3 adversarial review, 2026-11-25
+# Latest session — M2-A3 review fixes, 2026-11-25
 
-The read-only review of `60b43078` through `af4b8d6c` found the
-following open issues. No product fix has been authorized yet.
+The adversarial review of `60b43078` through `af4b8d6c` (`d721ac63`) found
+five issues. All five are fixed in `f80c1c88` and `f0162d19`, each with a
+regression test that fails against the earlier code.
 
-- **CLI placement safety:** sync and location commands migrate an old pair
-  before validating the requested managed roots. An inventory command with a
-  relative root exited with an input error after migrating both fixture
-  databases and publishing backups. The same ordering can mutate a database
-  inside a managed root before placement is rejected. The latter consequence
-  follows from source inspection and was not separately exercised.
-- **Pair refusal guidance:** a ledger with missing format metadata paired with
-  a newer History produced advice to archive or delete both databases. The
-  ledger's early refusal prevents classification of the newer History. With a
-  valid ledger, the same History correctly produced newer-version guidance.
-- **History replay identity:** an observer reopened a persisted run with a
-  different ledger instance id. The stored stamp is outside the context hash
-  and is not separately checked on observer admission or run reuse. Admission
-  was reproduced; an actual run switching ledgers was not observed.
-- **Backup temporary ownership:** inspection found that the random temporary
-  pathname is opened in create-or-open mode and unlinked on failure, so an
-  existing occupant can be reused or removed. No collision was observed.
-- **Fixture producer timeout:** its blocking prompt read precedes the timed
-  `communicate`, so a child stalled before its prompt can hang indefinitely.
+- **CLI placement safety:** the CLI admits a command's roots and `--path`
+  values, and checks both databases lie outside the roots, before migrating.
+  A refused input migrates nothing; planning refuses a pair that still needs
+  migration. Left as a documented limit: with `--location-id` the root is
+  known only from the ledger, so that case migrates first.
+- **Pair refusal guidance:** a role needing reset no longer answers before the
+  other role is classified, so a newer or wrong-role database is reported
+  instead of the direction to discard both.
+- **History replay identity:** an observer refuses a run token under a
+  different ledger instance, at construction and on each write.
+- **Backup temporary ownership:** the temporary is created exclusively. Its
+  `-journal` sibling is not reserved the same way.
+- **Fixture producer timeout:** a watchdog bounds the whole step.
 
-Review verification on `af4b8d6c`: 498 focused checkpoint tests and 643
-additional consumer/contract tests passed. An independently regenerated
-v0.1.0 pair migrated with all 114 ledger and 145 History application rows
-matching both the original and the backups, including SQLite storage types;
-repeat admission was ready without new backups. Two producer steps failed
-inside the sandbox and all 18 returned expected exits outside it. The prior
-kill-trial record was inspected but not rerun, and desktop startup was covered
-by host tests rather than a headed launch. Review scratch and reproducers are
-under `build/a3-review-25/`.
-
+Verification on `f0162d19`: 7098 ordinary tests passed, 4 skipped, 35
+deselected, with the seven known interpreter-bound failures; `lint-imports`
+13 kept. An independent reviewer required one change (an unsafe `--path` still
+migrated first), which was made, and then approved; its mutations of each fix
+were caught by the new tests. Not rerun: the kill trials and a headed desktop
+launch. Review scratch is under `build/a3-review-25/` and
+`build/a3-fix-review/`.
 Work remains on `milestone2`; nothing is pushed. M2-A1 to M2-A3 are complete.
 M2-A4 is the next row and is still proposed, not accepted.
 

@@ -54,6 +54,12 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   failures; 13 import contracts hold. Each outcome had an independent
   adversarial review. Limits and what M2-A4 inherits are in M2_PLAN.
 
+- Fixed five findings from a later review of M2-A3. The CLI now checks a
+  command's roots, `--path` values and database placement before migrating, so
+  a refused input migrates nothing. A newer or wrong-role database is no longer
+  answered with the direction to discard both databases. History refuses a run
+  reopened under a different ledger instance. The backup temporary is created
+  exclusively, and the fixture producer's prompt wait is bounded.
 #### Spikes for M2 designs (2026-11-24)
 
 - Ran the M2-A2 live checks and recorded each result in its M2_PLAN feature
