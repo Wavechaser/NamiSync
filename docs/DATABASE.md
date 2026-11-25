@@ -3,8 +3,9 @@
 Status: schema bones, safe connection factories, ledger/repositories, inventory
 reconciliation, bounded receipt-journal history, the ledger-v5/history-v9
 schemas with forward migration from NamiSync 0.1.0, the maintenance claim, and
-the semantic settings store are implemented. Retention and backup/protection
-workflows remain unrealized.
+the semantic settings store are implemented, as are check, backup, restore and
+backup rotation ([Data Protection](#data-protection)). Retention remains
+unrealized.
 
 ## Persistence Versions
 
@@ -1096,7 +1097,7 @@ Left as they are under
   outcome is runs shown as current for a ledger they were not recorded with,
   every file kept.
 
-Open until M2-A4 ([M2_PLAN](M2_PLAN.md) owns the schedule):
+Left as it is after M2-A4:
 
 - A damaged v0.1.0 database is refused at every start with direction to keep
   its files. Restore replaces a database that fails admission, but only from

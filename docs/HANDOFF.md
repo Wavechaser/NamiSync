@@ -1,113 +1,94 @@
-# Latest session — M2-A3 review fixes, 2026-11-25
+# Latest session — M2-A4 maintenance commands, 2026-11-26
 
-Cold admission now identifies the ledger or history file that SQLite reports as
-damaged and directs the user to keep both databases and their sidecars for
-inspection. The CLI regression passed for header and catalog damage in each
-role. Database and workflow checks passed across the department run and the
-reader-module rerun after updating two stale exception expectations. All 106
-desktop-host tests and all 13 import contracts passed. Repair and restore
-remain with M2-A4.
-
-The adversarial review of `60b43078` through `af4b8d6c` (`d721ac63`) found
-five issues. All five are fixed in `f80c1c88` and `f0162d19`, each with a
-regression test that fails against the earlier code.
-
-- **CLI placement safety:** the CLI admits a command's roots and `--path`
-  values, and checks both databases lie outside the roots, before migrating.
-  A refused input migrates nothing; planning refuses a pair that still needs
-  migration.
-- **Pair refusal guidance:** a role needing reset no longer answers before the
-  other role is classified, so a newer or wrong-role database is reported
-  instead of the direction to discard both.
-- **History replay identity:** an observer refuses a run token under a
-  different ledger instance, at construction and on each write.
-- **Backup temporary ownership:** the temporary is created exclusively.
-- **Fixture producer timeout:** a watchdog bounds the whole step.
-
-Two further findings are fixed after those, with regression tests that fail
-against the earlier code and an independent review (one correction round).
-
-- **Stale reset verdict:** the role that needed a reset is read again after
-  the other is classified; the reset direction is returned only if it still
-  holds, otherwise classification repeats.
-- **Unannounced migration:** `ensure_database_pair` no longer migrates. Only
-  `migrate_database_pair`, called by the CLI pre-check and desktop startup,
-  does. A CLI pre-check that fails transiently now ends in exit `4` with the
-  migration direction, and the next run migrates with its notice.
-
-The user ratified a policy for v0.1.0 migration findings on 2026-11-25:
-[DEFENSE §2.5.4](DEFENSE.md#254-migrating-a-released-database). The limits it
-leaves alone, and those open until M2-A4, are listed once in
-[DATABASE](DATABASE.md#migration-limits); M2_PLAN's A3 row points there.
-
-Verification on `f0162d19`: 7098 ordinary tests passed, 4 skipped, 35
-deselected, with the seven known interpreter-bound failures; `lint-imports`
-13 kept. An independent reviewer required one change (an unsafe `--path` still
-migrated first), which was made, and then approved; its mutations of each fix
-were caught by the new tests. Not rerun: the kill trials and a headed desktop
-launch. Review scratch is under `build/a3-review-25/` and
-`build/a3-fix-review/`.
-Work remains on `milestone2`; nothing is pushed. M2-A1 to M2-A3 are complete.
-M2-A4 is the next row and is still proposed, not accepted.
+M2-A4 is complete on `milestone2`; nothing is pushed. M2-A1 to M2-A4 are done
+and M2-A5 is the next row, still proposed.
+[M2_PLAN](M2_PLAN.md)'s A4 row holds the decisions, outcomes, gate result and
+what is left for B2 and B3. [DATABASE](DATABASE.md#data-protection) owns the
+behavior and [COMMANDLINE](COMMANDLINE.md#maintenance-commands) the commands.
 
 ## Changes
 
-- `60b43078` saved a database pair written by the released v0.1.0 binary under
-  `tests/assets/v0_1_0/`, with `tools/fixtures/v0_1_0_pair.py` to reproduce it.
-- `37187dea` added `namisync/core/formats.py` and its known-answer vectors.
-- `ebc2ce77` added the maintenance claim (`namisync/db/claims.py`): writers
-  hold it shared, schema creation and migration hold it exclusive.
-- `880c3ad7` moved the ledger to schema 5 and history to schema 9, added
-  `namisync/db/migration.py`, and wired migration into pair admission, desktop
-  startup and the CLI. The row's schema and admission outcomes landed together.
-- [M2_PLAN](M2_PLAN.md)'s A3 row holds the outcome, design decisions, accepted
-  residuals and what A4 inherits. [DATABASE](DATABASE.md#schema-evolution)
-  owns the behavior. [EV-0045](../evidence/EV-0045/README.md) is the gate
-  record.
+Six outcomes, one reviewed commit each:
+
+- `650110fd`: a session started while maintenance holds the claim is refused at
+  admission (bridge error `database_maintenance`, CLI exit `3`).
+- `14c4e661`: a plan records its ledger instance and execution refuses a
+  mismatch.
+- `6655ddcc`: the `ledger_lineage` table, the ancestor-chain read rule, and
+  refusal of a ledger backup copied into place.
+- `f0280e4d`: check, backup, restore and rotation in
+  `namisync/db/maintenance.py` and
+  `namisync/workflows/database_maintenance.py`.
+- `93185248`: completion of a pair with one database missing, and the rule
+  that a v0.1.0 History is stamped only beside its own migrated ledger.
+- `78246b75`: CLI `check`, `backup` and `restore`, and damage refusals that
+  point to them.
+
+Ledger schema 5 was amended in place twice (the lineage table, then its
+`migrated-released` kind). A schema-5 pair made by a source-tree run between
+A3 and this work is refused with reset guidance.
 
 ## Verification
 
-- Ordinary suite on `880c3ad7`: 7079 passed, 4 skipped, 35 deselected, and the
-  seven known interpreter-bound failures. `lint-imports`: 13 kept.
-- Each of the four outcomes had its own independent adversarial review; every
-  required change was corrected and confirmed by the same reviewer.
-- Kill trials on the committed code: 15 of 15 left the old or the new database,
-  and the next call finished the migration (EV-0045).
-- After the last review one message was changed by hand, so a damaged-database
-  refusal no longer shows a private class name. It has a test and ran in the
-  final suite, but no reviewer saw it.
+- Ordinary suite on the final outcome's bytes: 7310 passed, 4 skipped, 35
+  deselected, with the seven known interpreter-bound failures. `lint-imports`:
+  13 kept.
+- Rerun on `78246b75`: the six A4 test files, 177 passed, which include the
+  three closing conditions with real child processes and the restore kill
+  trials.
+- Each outcome had an independent adversarial review with out-of-tree
+  mutations; every required change was corrected and confirmed by the same
+  reviewer.
+- A recurrence pause was taken during outcome 5 (two unplanned cases of
+  History runs stamped with the wrong ledger). The user chose the marker rule
+  recorded in the A4 row.
+- No evidence record was promoted: the gate is the tracked tests, and the
+  counts are here and in CHANGELOG. Review scratch under `build/a4-*` was
+  deleted.
 
 ## Immediate context
 
-- **A source-tree run now migrates any v0.1.0 pair it is pointed at.** The pair
-  becomes schema 5 and 9, with backups beside it named
-  `<database>.backup-v4-…` and `.backup-v8-…`, and the v0.1.0 binary then
-  refuses it and suggests archiving or deleting it. The `NamiSync-Development`
-  root holds no pair today, so a first run there creates a fresh one. The
-  release's own data folder was not touched by this work.
-- Open, outside A3: the copied-dispatcher pause, resume and cancel cases in
-  `tests/interfaces/web/test_drain.py` miss their fixed deadlines under heavy
-  parallel load, also before this work. One "DID NOT RAISE ValueError" report
-  from a single full run was never reproduced and is unexplained (EV-0045).
-- Review notes left as they are: a source read error during backup gets
-  write-access advice instead of damage advice; the damage message says
-  "integrity check" when the backup failed on row counts or classification;
-  the unknown-role message quotes the stored value without a length limit.
-- For M2-R1's release notes: a v0.1.0 binary pointed at a migrated database
-  shows its own reset guidance.
+- Not exercised by a real fault, only through patched tests or the renderer:
+  an unconfirmed or failed restore through the CLI, an in-place restore
+  stopped mid-copy by a lock, and a backup-removal failure. The console
+  `namisync.exe` entry was not run for the new commands (`python -m namisync`
+  was). No desktop run was made.
+- Review notes left as they are:
+  - `--database ""` falls back to the default pair, as it does for `sync`, so
+    `restore` with an empty value targets the default database.
+  - The same file given for both database flags through different spellings
+    (`\\?\` or UNC against a drive path) is not recognized as one path; it
+    ends as `database-in-use` with nothing changed.
+  - A `\\?\` database path passes the per-role check but not the pair check,
+    so `check` prints both roles `ok` and then `database-unavailable`.
+  - `check` exits `4` both for a problem found and for a check that could not
+    finish; the output tells them apart.
+  - A cold probe reports `database-unavailable` during any WAL write
+    transaction, which predates A4.
+- For B3: the desktop still shows its generic commitment refusal for a plan
+  whose ledger was replaced, and inventory acknowledge and restore by row id
+  are not covered by the instance check.
+- Carried over from A3: the copied-dispatcher pause, resume and cancel cases
+  in `tests/interfaces/web/test_drain.py` miss their deadlines under heavy
+  parallel load. For M2-R1's release notes: a v0.1.0 binary pointed at a
+  migrated database shows its own reset guidance.
+- A source-tree run migrates any v0.1.0 pair it is pointed at and completes a
+  pair with one database missing. The `NamiSync-Development` root holds no
+  pair today.
 - A8's gate needs an HDD that carries two lettered partitions; none exists on
   the reference machine.
 - `J:\NamiSyncSpike\stop-latency` (about 157 MB) is kept as the HDD fixture
-  until the user decides. Leaving Do Not Disturb off was the user's choice.
-- Carried over: the M2-A2 prototype may still be open from
-  `build/m2-a2-maximized/probe.py`; close it normally before clearing that
-  workspace.
-- Carried over: the local `.venv` is CPython 3.13.17, not the release
-  interpreter 3.15.2, and has `xxhash` 3.8.1 where 4.1.0 or newer is required.
-  Six custody tests and one native-gate test (pythonnet 3.1.0 vs 3.2.1) fail
-  locally because of it; rebuild the venv per TOOLS before relying on them.
-  Also carried over:
+  until the user decides.
+- The M2-A2 prototype may still be open from `build/m2-a2-maximized/probe.py`;
+  close it normally before clearing that workspace.
+- The local `.venv` is CPython 3.13.17, not the release interpreter 3.15.2,
+  and has `xxhash` 3.8.1 where 4.1.0 or newer is required. Six custody tests
+  and one native-gate test (pythonnet 3.1.0 vs 3.2.1) fail locally because of
+  it; rebuild the venv per TOOLS before relying on them.
+- Also carried over:
   - Elevated cleanup of the Codex-sandbox `build/` residue.
+  - A3 review scratch is still under `build/a3-review-25/` and
+    `build/a3-fix-review/`.
   - Frozen `sh_g_8_*` artifacts must not move.
   - Keep `F:\NamiSyncExecutorBenchSource`, `H:\test_dir`, `dist/v0.1.0/` and
     `build/inventory-cold/`.

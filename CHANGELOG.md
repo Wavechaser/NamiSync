@@ -26,6 +26,40 @@ restarts, crashes, restores, retries and schema changes, and is shown honestly.
 Safe-to-change-the-databases work: guards and foundations that land before the
 first schema change. M2_PLAN owns checkpoint scope and gates.
 
+#### Database maintenance commands (2026-11-25 – 2026-11-26)
+
+- Delivered M2-A4. `namisync check`, `namisync backup` and
+  `namisync restore {ledger,history} BACKUP` work on the database pair as
+  found, under both exclusive maintenance claims; they never migrate or create
+  a database. Backups keep the newest three per database, and migration
+  backups are never rotated.
+- Restore backs up the database it replaces and copies the image in place when
+  that database is intact. A damaged one is renamed aside, kept, and needs
+  every NamiSync process closed. A restored ledger gets a new instance id and
+  keeps the backup's ancestry; History marks runs outside that ancestry as
+  belonging to an earlier ledger. A ledger backup copied into place by hand is
+  refused with direction to `restore`.
+- A sync plan records the ledger instance it was planned against, and
+  execution refuses a mismatch before any filesystem change.
+- A session started while maintenance holds the claim is refused at admission
+  with nothing stored. The desktop shows it as the fixed bridge error
+  `database_maintenance`; the CLI exits `3`.
+- A pair with one database missing is completed by an explicit step at desktop
+  startup or a mutating CLI command, with a notice. A lone History gains a new
+  ledger with a recorded boundary.
+- A v0.1.0 History's runs are stamped with a ledger's instance only beside
+  that History's own migrated ledger (user decision after a recurrence pause);
+  otherwise they show as an earlier ledger.
+- Damage refusals now point to `namisync check` and, given a backup, to
+  `namisync restore`.
+- Gate on `78246b75`: maintenance is refused while another process writes, a
+  writer is refused during maintenance, and a plan made before a restore is
+  refused at start, each through the real command with child processes;
+  restore kill trials leave the old or the new database; 7310 ordinary tests
+  pass apart from the seven known interpreter-bound failures; 13 import
+  contracts hold. Each of the six outcomes had an independent adversarial
+  review. What is left for B2 and B3 is in M2_PLAN.
+
 #### Maintenance claim and schema migration (2026-11-25)
 
 - Delivered M2-A3. A database written by v0.1.0 now migrates to the M2 schema

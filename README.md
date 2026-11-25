@@ -327,7 +327,9 @@ change entries under the release's data folder. Live spikes settled the open
 questions behind window framing, drag-and-drop, completion notifications, the
 volume overview and stopping a scan. Databases written by v0.1.0 migrate to the
 M2 schema with a verified backup, under a cross-process maintenance claim that
-keeps migration and writers apart.
+keeps migration and writers apart. The command line can check, back up and
+restore either database, and a plan made before a ledger restore is refused
+instead of run.
 
 ### M2 Planning
 
