@@ -214,6 +214,13 @@ Checkpoints:
     scheduled maintenance, export and import, a second-volume backup
     destination, and refusal of restore by naming in-process waiting work
     (B3, where restore first runs inside the desktop).
+  - **Deferred to B3 (user decision, 2026-11-25):** a plan refused because
+    its ledger was replaced shows the desktop's generic commitment refusal.
+    A bridge refusal that names the cause should exist, and waits for B3,
+    where restore first has a desktop consumer.
+  - **Accepted (user decision, 2026-11-25):** a plan made while no ledger
+    exists records no instance and runs against the ledger execution creates
+    or finds.
   - **Gate:** the three closing conditions above with real child processes;
     restore killed during image preparation and during the copy leaves the old
     or the new database; the ordinary suite apart from the seven known
