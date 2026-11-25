@@ -144,7 +144,7 @@ Checkpoints:
   - **Handed to A4:** refusal at admission when maintenance holds the claim
     (in the A4 row), the read rule for runs with no or another ledger
     instance, backup rotation, and a way forward for a damaged database.
-- **M2-A4 Maintenance commands** (proposed). Check, backup and restore run as
+- **M2-A4 Maintenance commands** (accepted, 2026-11-25; in progress). Check, backup and restore run as
   maintenance sessions under A3's claim, with restore issuing a new ledger
   instance id and its lineage. Every plan, held in memory or stored, records the
   ledger instance it was planned against, and preflight refuses a mismatch, so a
@@ -159,6 +159,49 @@ Checkpoints:
   maintenance has ended by then
   ([DATABASE](DATABASE.md#maintenance-claim)). A4's second closing condition
   needs that turned into a refusal at admission.
+  - **User decisions (2026-11-25).** Lineage storage amends the unreleased
+    ledger schema 5 in place, with no new migration step; a schema-5 pair made
+    by a source-tree run since A3 is refused with reset guidance. The CLI runs
+    maintenance directly under both exclusive claims, as migration does; the
+    dispatcher-session form waits for the Data page (B3). `restore` replaces
+    the ledger or History, one per command, from a backup at the current
+    schema version; v4 and v8 migration backups are refused. Backup rotation,
+    a way forward for a damaged database, the missing-database policy and the
+    run read rule are all in this row.
+  - **Design (open to the user's revision).** Restore works through SQLite on
+    the live file, not by swapping files, because a desktop pins both main
+    files and the plan-before-restore case needs restore to run beside it: a
+    verified image is prepared beside the database, with the new instance id
+    and lineage already written, and copied in as one transaction.
+  - **Outcomes, one reviewed commit each, in order:**
+    1. A session whose History claim is refused because maintenance holds it
+       is refused at admission, with nothing stored; every other audit-factory
+       failure still degrades audit.
+    2. A plan records the ledger instance it was planned against, and
+       execution start refuses a mismatch before any filesystem change.
+    3. The ledger stores restore lineage (predecessor instance and cut-off),
+       and History readers mark a run with no instance, or one that is neither
+       current nor the predecessor before its cut-off, as belonging to an
+       earlier ledger.
+    4. Check, backup, restore and count-based backup rotation in `db`, met in
+       one workflow under both exclusive claims. Restore also replaces a
+       database that fails admission.
+    5. One-present pairs: a lone ledger gains a History; a lone History gains
+       a new ledger with a recorded lineage boundary.
+    6. CLI `check`, `backup` and `restore`, and damage refusals that point to
+       them.
+  - **Preserved:** read-only classification writes nothing; no backup, no
+    change; a refusal leaves both databases as found; rotation never deletes
+    the newest good backup or a file it does not recognize; the dispatcher
+    stays domain-blind.
+  - **Non-goals:** the Data page, archive-and-reset, History pruning, purge,
+    scheduled maintenance, export and import, a second-volume backup
+    destination, and refusal of restore by naming in-process waiting work
+    (B3, where restore first runs inside the desktop).
+  - **Gate:** the three closing conditions above with real child processes;
+    restore killed during image preparation and during the copy leaves the old
+    or the new database; the ordinary suite apart from the seven known
+    interpreter-bound failures; `lint-imports`.
 - **M2-A5 Session progress and hold reason** (proposed). Sessions carry progress
   and hold reason, and the server derives every capability from them. Includes
   the `PENDING`-to-held edge. Consumer: Pause all and Resume all, pulled forward
