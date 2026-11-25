@@ -52,6 +52,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import threading
 from typing import Callable, Iterator
 import uuid
 import zipfile
@@ -211,6 +212,7 @@ class Run:
         self.environment["LOCALAPPDATA"] = str(self.sandbox)
         self.environment["PYTHONIOENCODING"] = "utf-8"
         self.steps: list[dict] = []
+        self.step_timeout: float = STEP_TIMEOUT_SECONDS
 
     def relative(self, value: str) -> str:
         if value == str(self.executable):
@@ -241,26 +243,38 @@ class Run:
         )
         captured = bytearray()
         prompted = False
-        if answer is not None:
-            while PROMPT_MARKER not in captured:
-                chunk = os.read(process.stdout.fileno(), 65536)
-                if not chunk:
-                    break
-                captured += chunk
-            prompted = PROMPT_MARKER in captured
-            if prompted:
-                if before_answer is not None:
-                    before_answer()
-                process.stdin.write(answer.encode() + b"\n")
-                process.stdin.flush()
         rest = b""
-        try:
-            rest, _ = process.communicate(timeout=STEP_TIMEOUT_SECONDS)
-        except subprocess.TimeoutExpired:
+        # The prompt read below blocks, so a watchdog bounds the whole step:
+        # killing the child ends that read as well as the wait after it.
+        expired = threading.Event()
+
+        def expire() -> None:
+            expired.set()
             process.kill()
+
+        watchdog = threading.Timer(self.step_timeout, expire)
+        watchdog.start()
+        try:
+            if answer is not None:
+                while PROMPT_MARKER not in captured:
+                    chunk = os.read(process.stdout.fileno(), 65536)
+                    if not chunk:
+                        break
+                    captured += chunk
+                prompted = PROMPT_MARKER in captured
+                if prompted:
+                    if before_answer is not None:
+                        before_answer()
+                    try:
+                        process.stdin.write(answer.encode() + b"\n")
+                        process.stdin.flush()
+                    except OSError:
+                        pass  # the child is gone; the checks below report it
             rest, _ = process.communicate()
-            raise Refused(f"step {name} exceeded {STEP_TIMEOUT_SECONDS} s")
+            if expired.is_set():
+                raise Refused(f"step {name} exceeded {self.step_timeout} s")
         finally:
+            watchdog.cancel()
             log = self.logs / f"{len(self.steps) + 1:02d}-{name}.txt"
             log.write_bytes(bytes(captured) + (rest or b""))
         step = {

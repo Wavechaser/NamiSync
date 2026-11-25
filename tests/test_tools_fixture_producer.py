@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import time
 from typing import Callable
 
 import pytest
@@ -141,6 +142,22 @@ def test_child_gets_the_substitute_localappdata_and_both_database_flags(
         "--history-database",
         "<OUTPUT>\\data\\history.db",
     ]
+
+
+@pytest.mark.parametrize("answer", (None, "execute"), ids=("no-prompt", "awaiting-prompt"))
+def test_a_child_that_stalls_is_killed_at_the_step_timeout(
+    tmp_path: Path, answer: str | None,
+) -> None:
+    # With an answer the producer first blocks reading for the prompt, which
+    # the stalled child never prints.
+    run = _stub_run(tmp_path)
+    run.executable.write_text("import time\ntime.sleep(30)\n", encoding="utf-8")
+    run.step_timeout = 1.0
+    started = time.monotonic()
+    with pytest.raises(producer.Refused, match="stall exceeded 1.0 s"):
+        run.invoke("stall", [], expected=0, answer=answer)
+    assert time.monotonic() - started < 20
+    assert (run.logs / "01-stall.txt").exists()
 
 
 def test_child_writing_into_the_substitute_localappdata_refuses_the_run(
