@@ -167,12 +167,28 @@ Checkpoints:
     the ledger or History, one per command, from a backup at the current
     schema version; v4 and v8 migration backups are refused. Backup rotation,
     a way forward for a damaged database, the missing-database policy and the
-    run read rule are all in this row.
-  - **Design (open to the user's revision).** Restore works through SQLite on
-    the live file, not by swapping files, because a desktop pins both main
-    files and the plan-before-restore case needs restore to run beside it: a
-    verified image is prepared beside the database, with the new instance id
-    and lineage already written, and copied in as one transaction.
+    run read rule are all in this row. After the design lane (inspected at
+    `315d1d90`), the same day: a start refused under maintenance reaches the
+    desktop as a new definitive fixed bridge error, never an uncertain start.
+    Restore backs up the database it replaces and copies the image in place
+    when that database still backs up cleanly (this runs beside an idle
+    desktop); otherwise it renames the damaged files aside, kept and never
+    deleted, and moves the image in, which needs the database closed in every
+    NamiSync process. This is the reading of "no backup, no change". A live
+    ledger whose lineage names its own instance, a backup copied into place by
+    hand, is refused at admission with direction to `restore`. The read rule
+    is an ancestor chain: a run is current if it matches the ledger's
+    instance, or any ledger in the restored backup's ancestry before that
+    ledger's cut. The predecessor is the ledger the backup was cut from, not
+    the one replaced.
+  - **Design (open to the user's revision).** A backup records its own cut
+    time in the copy, read under both exclusive claims, because content proves
+    the instance but not the time. A restore image is prepared beside the
+    database with the new instance id written and the backup's lineage kept.
+    Rotation keeps three backups per database and leaves migration backups
+    alone, since they are the only way back to 0.1.0. A ledger copy with no
+    backup stamp is refused as a restore source. A lone v0.1.0 History
+    migrates with no ledger stamp, so its runs never join the new ledger.
   - **Outcomes, one reviewed commit each, in order:**
     1. A session whose History claim is refused because maintenance holds it
        is refused at admission, with nothing stored; every other audit-factory
