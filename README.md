@@ -227,6 +227,16 @@ namisync history
 namisync history RUN_TOKEN
 ```
 
+Check the databases, back them up, or replace the ledger or history with a
+backup (the replaced database is kept; close NamiSync windows first when it is
+damaged):
+
+```powershell
+namisync check
+namisync backup
+namisync restore ledger $env:LOCALAPPDATA\NamiSync\ledger.db.backup-20260101T120000000000Z
+```
+
 `trash` is the default deletion policy; `additive` is public, while `mirror`
 remains guarded and hidden. There is no `--yes` bypass. Location commands
 require exactly one root or `--location-id`; repeatable `--path` values are
@@ -248,7 +258,8 @@ never hides the other result axes in rendered output.
 
 - No durable plan/session queue or restart-resume.
 - No cross-process desktop task visibility, background integrity, concurrent
-  file execution, database backup or restore commands, or history retention controls.
+  file execution, a desktop page for database backup and restore (the command
+  line has them), or history retention controls.
 - No automatic execution or bypass of reviewed-plan confirmation.
 - The desktop host requires standard Windows permissions and refuses elevated
   launches before exposing commands. [Defense model](docs/DEFENSE.md#21-supported-environment-and-trusted-computing-base)

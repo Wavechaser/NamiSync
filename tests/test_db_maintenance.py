@@ -182,6 +182,13 @@ def test_a_failed_backup_publishes_nothing(
         with pytest.raises(DatabaseBackupFailed, match="failed SQLite's integrity check") as failed:
             backup_database(ledger, history=False, claim=claims.ledger, now=_T1)
     assert "Keep the database files" in str(failed.value)
+    # A damaged source points to check and, given a backup, to restore.
+    assert "Run namisync check to see which database is affected" in str(failed.value)
+    assert (
+        "namisync restore ledger <backup file> replaces it and keeps the damaged "
+        "files beside it"
+    ) in str(failed.value)
+    assert not re.search(r"delete|archive|reset", str(failed.value), re.IGNORECASE)
     assert "free space" not in str(failed.value)
     monkeypatch.undo()
 

@@ -63,6 +63,11 @@ from namisync.workflows import (
     default_database_paths,
     integrity_request,
 )
+from namisync.workflows.database_maintenance import (
+    DatabasePairBackup,
+    DatabasePairCheck,
+    DatabasePairRestore,
+)
 from namisync.workflows.node_tree import (
     NodeTree,
     NodeTreeKind,
@@ -447,6 +452,46 @@ class NamiSyncService:
             tuple((database.role, str(database.path)) for database in completion.created),
             _migrated_databases(completion.migrated),
         )
+
+    def validate_database_paths(self) -> None:
+        """Raise ``ValueError`` when either database path cannot name a local file.
+
+        Opens no database and creates no file; ask before a maintenance call.
+        """
+
+        self._require_open()
+        self._runtime.validate_database_paths()
+
+    def check_databases(self) -> DatabasePairCheck:
+        """Check each database as found, before any database is opened.
+
+        Works on the pair as it is: it never migrates, completes or creates a
+        database. Returns the workflow's result for in-process callers; no
+        bridge shape carries it.
+        """
+
+        self._require_open()
+        return self._runtime.check_databases()
+
+    def backup_databases(self) -> DatabasePairBackup:
+        """Back up a ready pair, then rotate its backups, before any database is opened.
+
+        A pair that is not ready is refused with its contract and nothing is
+        written. In-process callers only.
+        """
+
+        self._require_open()
+        return self._runtime.backup_databases()
+
+    def restore_database(self, role: str, backup: str | Path) -> DatabasePairRestore:
+        """Restore ``role`` ("ledger" or "history") from a backup, before any database is opened.
+
+        The replaced database is kept, as a backup or as renamed files. In-process
+        callers only.
+        """
+
+        self._require_open()
+        return self._runtime.restore_database(role, backup)
 
     def admit_location_candidate(
         self,

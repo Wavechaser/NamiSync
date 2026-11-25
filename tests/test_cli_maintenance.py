@@ -1,0 +1,824 @@
+"""CLI check, backup and restore: output, exit codes, pairs as found and the A4 gate.
+
+The commands call the existing pair maintenance workflow under both exclusive
+claims, so the cases here prove the adapter: what each prints, which exit code
+it maps to, that none migrates, completes or creates anything, and the three
+closing conditions of the maintenance row with real child processes.
+"""
+
+from __future__ import annotations
+
+from contextlib import closing
+from dataclasses import dataclass
+import io
+import os
+from pathlib import Path
+import re
+import sqlite3
+import subprocess
+import sys
+from time import monotonic, sleep
+
+import pytest
+
+import namisync.db.maintenance as maintenance
+import namisync.interfaces.cli as cli_module
+from namisync.interfaces.cli import (
+    EXIT_FAILED, EXIT_REFUSED, EXIT_SUCCESS, EXIT_USAGE, main,
+)
+from namisync.interfaces.service import NamiSyncService
+from namisync.workflows.database_maintenance import DatabasePairBackup, DatabasePairRestore
+from namisync.workflows.database_pair import (
+    DatabasePairContract,
+    DatabasePairState,
+    initialize_database_pair,
+    migrate_database_pair,
+)
+
+from _child_process import PROJECT_ROOT, WAIT_SECONDS, Child
+from _db_fixtures import NOW, seed_history_run, stored_ledger_instance
+from _maintenance_children import DESKTOP, HOLD, RESTORE
+from _released_fixture import copy_released_pair
+
+
+pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows file sharing and claims")
+
+
+@dataclass
+class Run:
+    code: int
+    out: str
+    err: str
+
+
+def _flags(ledger: Path, history: Path) -> list[str]:
+    return ["--database", str(ledger), "--history-database", str(history)]
+
+
+def _main(arguments: list[str]) -> Run:
+    stdout, stderr = io.StringIO(), io.StringIO()
+    code = main(arguments, stdout=stdout, stderr=stderr)
+    return Run(code, stdout.getvalue(), stderr.getvalue())
+
+
+def _process(arguments: list[str]) -> Run:
+    """The real entry point, as a user's shell runs it."""
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "namisync", *arguments],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=WAIT_SECONDS * 3,
+    )
+    return Run(completed.returncode, completed.stdout, completed.stderr)
+
+
+def _pair(directory: Path) -> tuple[Path, Path]:
+    ledger, history = directory / "ledger.db", directory / "history.db"
+    assert initialize_database_pair(ledger, history).state is DatabasePairState.READY
+    seed_history_run(
+        history, "seeded", ledger_instance_id=stored_ledger_instance(ledger),
+        created_at=NOW, started_at=NOW,
+    )
+    return ledger, history
+
+
+def _unlink(main_file: Path) -> None:
+    for suffix in ("", "-wal", "-shm"):
+        Path(f"{main_file}{suffix}").unlink(missing_ok=True)
+
+
+def _damage(main_file: Path) -> None:
+    # No sidecar can hide the damaged page: the pages are all in the main file.
+    for suffix in ("-wal", "-shm"):
+        Path(f"{main_file}{suffix}").unlink(missing_ok=True)
+    data = bytearray(main_file.read_bytes())
+    data[100:612] = b"\xa5" * 512
+    main_file.write_bytes(bytes(data))
+
+
+def _listing(directory: Path) -> dict[str, bytes]:
+    """Every file but the claim files, which maintenance creates and never deletes."""
+
+    return {
+        path.name: path.read_bytes() for path in directory.iterdir()
+        if path.is_file() and not path.name.endswith(".claim")
+    }
+
+
+def _backup(ledger: Path, history: Path) -> dict[str, Path]:
+    run = _main(["backup", *_flags(ledger, history)])
+    assert run.code == EXIT_SUCCESS, run.err
+    paths = {}
+    for line in run.out.splitlines():
+        match = re.fullmatch(r"Backed up the (ledger|history) to (.+)", line)
+        if match:
+            paths[match[1]] = Path(match[2])
+    assert set(paths) == {"ledger", "history"}
+    return paths
+
+
+def _eventually(operation, *, refused: int = EXIT_REFUSED) -> Run:
+    # A killed holder's locks and handles can outlive it briefly on Windows.
+    deadline = monotonic() + WAIT_SECONDS
+    while True:
+        run = operation()
+        if run.code != refused or monotonic() > deadline:
+            return run
+        sleep(0.05)
+
+
+def _instance(main_file: Path) -> str:
+    with closing(sqlite3.connect(main_file.as_uri() + "?mode=ro", uri=True)) as connection:
+        return connection.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'instance_id'"
+        ).fetchone()[0]
+
+
+# --- a ready pair ------------------------------------------------------------------
+
+
+def test_a_ready_pair_checks_backs_up_and_restores_each_role(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+
+    checked = _main(["check", *flags])
+    assert (checked.code, checked.out, checked.err) == (
+        EXIT_SUCCESS, "ledger: ok\nhistory: ok\n", "",
+    )
+
+    backed_up = _main(["backup", *flags])
+    assert backed_up.code == EXIT_SUCCESS and backed_up.err == ""
+    history_backup, ledger_backup = sorted(tmp_path.glob("*.db.backup-*"))
+    assert backed_up.out.splitlines() == [
+        f"Backed up the ledger to {ledger_backup}",
+        f"Backed up the history to {history_backup}",
+    ]
+
+    restored = _main(["restore", "history", str(history_backup), *flags])
+    assert (restored.code, restored.err) == (EXIT_SUCCESS, "")
+    lines = restored.out.splitlines()
+    assert lines[0] == f"Restored the history from {history_backup}."
+    assert re.fullmatch(
+        r"The replaced history was backed up to .*history\.db\.backup-.*Z\.", lines[1]
+    )
+    assert len(lines) == 2
+
+    before = _instance(ledger)
+    restored = _main(["restore", "ledger", str(ledger_backup), *flags])
+    assert (restored.code, restored.err) == (EXIT_SUCCESS, "")
+    lines = restored.out.splitlines()
+    assert lines[0] == f"Restored the ledger from {ledger_backup}."
+    assert re.fullmatch(
+        r"The backup was cut at 20\d\d-\d\d-\d\dT[\d:.]+\+00:00\. History runs recorded "
+        r"after that time are now shown as belonging to an earlier ledger\.",
+        lines[1],
+    )
+    assert re.fullmatch(
+        r"The replaced ledger was backed up to .*ledger\.db\.backup-.*Z\.", lines[2]
+    )
+    assert _instance(ledger) != before
+    assert _main(["check", *flags]).out == "ledger: ok\nhistory: ok\n"
+
+
+def test_backup_rotation_is_reported_and_a_failed_removal_only_warns(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    removed_counts = []
+    for _ in range(5):
+        run = _main(["backup", *flags])
+        assert (run.code, run.err) == (EXIT_SUCCESS, "")
+        removed = [line for line in run.out.splitlines() if line.startswith("Removed")]
+        removed_counts.append(len(removed))
+        for line in removed:
+            assert re.fullmatch(
+                r"Removed 2 older backup\(s\): .*ledger\.db\.backup-.*Z, "
+                r".*history\.db\.backup-.*Z", line,
+            )
+    assert removed_counts == [0, 0, 0, 1, 1]
+    assert len(list(tmp_path.glob("ledger.db.backup-*"))) == 3
+
+    contract = DatabasePairContract(DatabasePairState.READY)
+    result = DatabasePairBackup(
+        contract, (), (), ((tmp_path / "old.backup", "PermissionError: denied"),),
+    )
+    stdout, stderr = io.StringIO(), io.StringIO()
+    assert cli_module._render_backup(result, stdout, stderr) == EXIT_SUCCESS
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue().startswith(
+        f"Warning: could not remove the older backup {tmp_path / 'old.backup'}: "
+        "PermissionError: denied."
+    )
+
+
+def test_a_pair_refused_while_every_role_reads_fine_is_reported_and_not_usable(
+    tmp_path: Path,
+) -> None:
+    from namisync.db.maintenance import DatabaseCheck, DatabaseCheckState
+    from namisync.workflows.database_maintenance import DatabasePairCheck
+
+    contract = DatabasePairContract(
+        DatabasePairState.REFUSED, "database-busy", None, "Retry in a moment.",
+    )
+    roles = tuple(DatabaseCheck(role, DatabaseCheckState.OK) for role in ("ledger", "history"))
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    code = cli_module._render_check(
+        DatabasePairCheck(contract, roles), tmp_path / "l.db", tmp_path / "h.db", stdout, stderr,
+    )
+
+    assert code == EXIT_FAILED and stderr.getvalue() == ""
+    assert stdout.getvalue() == (
+        "ledger: ok\nhistory: ok\nPair: database-busy.\nRetry in a moment.\n"
+    )
+
+
+def test_a_failed_history_backup_reports_the_kept_ledger_backup_and_exits_four(
+    tmp_path: Path,
+) -> None:
+    from namisync.workflows.database_maintenance import DatabaseBackup
+
+    kept = tmp_path / "ledger.db.backup-x"
+    contract = DatabasePairContract(
+        DatabasePairState.REFUSED, "backup-failed", None,
+        "NamiSync could not write a verified backup of the history database, so no "
+        "backup was written.",
+    )
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    code = cli_module._render_backup(
+        DatabasePairBackup(contract, (DatabaseBackup("ledger", kept),)), stdout, stderr,
+    )
+
+    assert code == EXIT_FAILED
+    assert stdout.getvalue() == f"Backed up the ledger to {kept}\n"
+    assert stderr.getvalue().splitlines() == [
+        "Database pair refused: backup-failed.",
+        "NamiSync could not write a verified backup of the history database, so no "
+        "backup was written.",
+        "The backups listed above were kept.",
+    ]
+
+
+def test_a_kept_file_the_guidance_does_not_name_is_still_named(tmp_path: Path) -> None:
+    kept = tmp_path / "ledger.db.backup-x"
+    contract = DatabasePairContract(
+        DatabasePairState.REFUSED, "database-in-use", None, "Database is in use. Retry.",
+    )
+    stdout, stderr = io.StringIO(), io.StringIO()
+
+    code = cli_module._render_restore(
+        DatabasePairRestore(contract, None, kept), stdout, stderr,
+    )
+
+    assert code == EXIT_REFUSED and stdout.getvalue() == ""
+    assert stderr.getvalue().splitlines() == [
+        "Database pair refused: database-in-use.",
+        "Database is in use. Retry.",
+        f"Kept: {kept}",
+    ]
+    assert "Nothing was changed" not in stderr.getvalue()
+
+
+@pytest.mark.parametrize("command", (["check"], ["backup"], ["restore", "ledger", "{backup}"]))
+def test_an_invalid_database_path_is_an_input_error_that_touches_nothing(
+    tmp_path: Path, command: list[str],
+) -> None:
+    ledger, history = _pair(tmp_path)
+    backup = _backup(ledger, history)["ledger"]
+    before = sorted((path.name, path.read_bytes()) for path in tmp_path.iterdir())
+    arguments = [part.replace("{backup}", str(backup)) for part in command]
+
+    for flags in (
+        ["--database", str(tmp_path / "le?dger.db"), "--history-database", str(history)],
+        ["--database", str(ledger), "--history-database", str(tmp_path / "hist|ory.db")],
+    ):
+        run = _main([*arguments, *flags])
+
+        assert (run.code, run.out) == (EXIT_USAGE, "")
+        assert run.err.startswith("Input error: a database path is not valid:")
+        assert run.err.endswith("Check --database and --history-database. Nothing was changed.\n")
+        assert "Error" not in run.err and "Traceback" not in run.err
+        assert "may have changed" not in run.err
+        assert sorted((path.name, path.read_bytes()) for path in tmp_path.iterdir()) == before
+
+
+# --- pairs as found: none of the commands migrates, completes or creates ---------------
+
+
+def test_a_fresh_pair_says_so_and_nothing_is_created(tmp_path: Path) -> None:
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    flags = _flags(ledger, history)
+
+    checked = _main(["check", *flags])
+    assert (checked.code, checked.err) == (EXIT_SUCCESS, "")
+    assert checked.out.splitlines()[0] == (
+        f"No NamiSync databases were found at {ledger} and {history}."
+    )
+    backed_up = _main(["backup", *flags])
+    assert backed_up.code == EXIT_REFUSED and backed_up.out == ""
+    assert "There is nothing to back up" in backed_up.err
+    assert backed_up.err.endswith("Nothing was changed.\n")
+
+    assert _listing(tmp_path) == {}
+    assert not any(path.suffix != ".claim" for path in tmp_path.iterdir())
+
+
+def test_a_restore_into_a_fresh_pair_publishes_only_that_database(tmp_path: Path) -> None:
+    source_ledger, source_history = _pair(tmp_path / "source")
+    backups = _backup(source_ledger, source_history)
+    ledger, history = tmp_path / "data" / "ledger.db", tmp_path / "data" / "history.db"
+    ledger.parent.mkdir()
+
+    run = _main(["restore", "ledger", str(backups["ledger"]), *_flags(ledger, history)])
+
+    assert (run.code, run.err) == (EXIT_SUCCESS, "")
+    assert f"There was no ledger database to replace." in run.out
+    assert "Note: the database pair is not ready yet (history-missing)." in run.out
+    assert sorted(_listing(ledger.parent)) == ["ledger.db"]
+    assert not history.exists()
+
+
+def test_a_missing_database_folder_is_an_input_error_and_check_says_no_databases(
+    tmp_path: Path,
+) -> None:
+    flags = _flags(tmp_path / "absent" / "ledger.db", tmp_path / "absent" / "history.db")
+
+    checked = _main(["check", *flags])
+    assert (checked.code, checked.err) == (EXIT_SUCCESS, "")
+    assert checked.out.startswith("No NamiSync databases were found at")
+    run = _main(["backup", *flags])
+    assert run.code == EXIT_USAGE and run.out == ""
+    assert "the folder of the ledger database does not exist" in run.err
+    assert run.err.endswith("Nothing was changed.\n")
+    assert not (tmp_path / "absent").exists()
+
+    # Only one folder missing: check cannot look at the other, so it is an input error.
+    one = _main(["check", *_flags(tmp_path / "absent" / "ledger.db", tmp_path / "history.db")])
+    assert (one.code, one.out) == (EXIT_USAGE, "")
+    assert "the folder of the ledger database does not exist" in one.err
+
+
+def test_an_older_pair_is_reported_and_never_migrated(tmp_path: Path) -> None:
+    ledger, history = copy_released_pair(tmp_path / "data")
+    other_ledger, other_history = _pair(tmp_path / "other")
+    backups = _backup(other_ledger, other_history)
+    before = _listing(ledger.parent)
+    flags = _flags(ledger, history)
+
+    checked = _main(["check", *flags])
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    lines = checked.out.splitlines()
+    assert lines[0] == "ledger: older" and lines[2] == "history: older"
+    assert "Written by NamiSync 0.1.0." in lines[1]
+
+    backed_up = _main(["backup", *flags])
+    assert (backed_up.code, backed_up.out) == (EXIT_REFUSED, "")
+    assert backed_up.err.splitlines()[0] == "Database pair refused: pair-older."
+    assert "Start NamiSync, or run a sync or inventory command, once to update it" in backed_up.err
+    assert backed_up.err.endswith("Nothing was changed.\n")
+
+    # A ledger is not restored beside a 0.1.0 History: update the pair first.
+    restored = _main(["restore", "ledger", str(backups["ledger"]), *flags])
+    assert (restored.code, restored.out) == (EXIT_REFUSED, "")
+    assert restored.err.splitlines()[0] == "Database pair refused: history-older."
+    assert "Start NamiSync, or run a sync or inventory command, once to update the pair" in restored.err
+    assert restored.err.endswith("Nothing was changed.\n")
+
+    assert _listing(ledger.parent) == before
+    assert not list(ledger.parent.glob("*.backup-*")) and not list(ledger.parent.glob("*.tmp"))
+
+
+def test_a_v4_migration_backup_is_refused_as_a_restore_source(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path / "data")
+    old_ledger, old_history = copy_released_pair(tmp_path / "released")
+    v4 = next(
+        path for path in migrate_database_pair(old_ledger, old_history).backups
+        if path.name.startswith("ledger")
+    )
+    before = _listing(ledger.parent)
+
+    run = _main(["restore", "ledger", str(v4), *_flags(ledger, history)])
+
+    assert (run.code, run.out) == (EXIT_REFUSED, "")
+    assert run.err.splitlines()[0] == "Database pair refused: backup-older."
+    assert "way back to NamiSync 0.1.0" in run.err
+    assert run.err.endswith("Nothing was changed.\n")
+    assert _listing(ledger.parent) == before
+
+
+@pytest.mark.parametrize("missing", ("ledger", "history"))
+def test_an_incomplete_pair_is_reported_and_never_completed(
+    tmp_path: Path, missing: str,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    _unlink(ledger if missing == "ledger" else history)
+    before = _listing(tmp_path)
+    flags = _flags(ledger, history)
+
+    checked = _main(["check", *flags])
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    lines = checked.out.splitlines()
+    assert f"{missing}: missing" in lines
+    assert "ok" in " ".join(lines) and "start NamiSync, or run a sync" in checked.out
+
+    backed_up = _main(["backup", *flags])
+    assert (backed_up.code, backed_up.out) == (EXIT_REFUSED, "")
+    assert backed_up.err.splitlines()[0] == f"Database pair refused: {missing}-missing."
+    assert "run a sync or inventory command, once to create a new one" in backed_up.err
+    assert backed_up.err.endswith("Nothing was changed.\n")
+
+    assert _listing(tmp_path) == before
+
+
+def test_stray_sidecars_of_a_missing_database_are_listed_and_kept(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+    _unlink(history)
+    Path(f"{history}-wal").write_bytes(b"")
+    before = _listing(tmp_path)
+
+    checked = _main(["check", *_flags(ledger, history)])
+
+    assert checked.code == EXIT_FAILED
+    assert "history: missing\n  - history.db-wal is present without its database\n" in checked.out
+    assert "Keep them for inspection." in checked.out
+    assert _listing(tmp_path) == before
+
+
+# --- damage, a backup in place, swapped paths -----------------------------------------
+
+
+@pytest.mark.parametrize("role", ("ledger", "history"))
+def test_a_damaged_role_is_named_by_check_and_restore_sets_it_aside(
+    tmp_path: Path, role: str,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)[role]
+    damaged = ledger if role == "ledger" else history
+    _damage(damaged)
+    damaged_bytes = damaged.read_bytes()
+    other = history if role == "ledger" else ledger
+
+    checked = _main(["check", *flags])
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    assert f"{role}: damaged\n" in checked.out
+    assert f"{'history' if role == 'ledger' else 'ledger'}: ok\n" in checked.out
+    assert f"namisync restore {role} <backup file> replaces it and keeps the damaged files" in checked.out
+
+    # Backup, like every admission, refuses and names the way forward.
+    backed_up = _main(["backup", *flags])
+    assert backed_up.code == EXIT_REFUSED
+    assert "Database pair refused: database-damaged." in backed_up.err
+    assert f"namisync restore {role} <backup file>" in backed_up.err
+    assert not re.search(r"delete|archive|reset", backed_up.err, re.IGNORECASE)
+
+    other_before = other.read_bytes()
+    restored = _main(["restore", role, str(backup), *flags])
+
+    assert (restored.code, restored.err) == (EXIT_SUCCESS, "")
+    replaced = next(tmp_path.glob(f"{damaged.name}.replaced-*Z"))
+    assert replaced.read_bytes() == damaged_bytes
+    assert f"The replaced {role}'s files were kept at {replaced} " in restored.out
+    assert other.read_bytes() == other_before
+    assert _main(["check", *flags]).out == "ledger: ok\nhistory: ok\n"
+
+
+def test_a_ledger_copied_into_place_from_a_backup_is_restored_by_the_named_command(
+    tmp_path: Path,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    _unlink(ledger)
+    ledger.write_bytes(backup.read_bytes())
+
+    checked = _main(["check", *flags])
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    assert checked.out.startswith("ledger: is-backup\n")
+    assert "namisync restore ledger <backup file>" in checked.out
+
+    # The refusal at admission names the same command, and it is literally this one.
+    root = tmp_path / "root"
+    root.mkdir()
+    refused = _main(["inventory", str(root), *flags])
+    assert refused.code == EXIT_REFUSED
+    assert "Database pair refused: ledger-is-backup." in refused.err
+    assert "namisync restore ledger <backup file>" in refused.err
+
+    restored = _main(["restore", "ledger", str(backup), *flags])
+    assert (restored.code, restored.err) == (EXIT_SUCCESS, "")
+    assert "The replaced ledger's files were kept at" in restored.out
+    assert next(tmp_path.glob("ledger.db.replaced-*Z")).read_bytes() == backup.read_bytes()
+    assert _main(["check", *flags]).out == "ledger: ok\nhistory: ok\n"
+
+
+def test_swapped_paths_are_named_and_every_command_leaves_both_databases_alone(
+    tmp_path: Path,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    backups = _backup(ledger, history)
+    swapped = _flags(history, ledger)
+    before = _listing(tmp_path)
+
+    checked = _main(["check", *swapped])
+    assert (checked.code, checked.err) == (EXIT_FAILED, "")
+    assert "ledger: wrong-role\n" in checked.out and "history: wrong-role\n" in checked.out
+    assert "look swapped" in checked.out
+
+    backed_up = _main(["backup", *swapped])
+    assert (backed_up.code, backed_up.out) == (EXIT_REFUSED, "")
+    assert "Database pair refused: ledger-wrong-role." in backed_up.err
+
+    # The ledger's pair rule sees History's path holding a ledger; History's own
+    # target check sees the other role.
+    assert _main(["restore", "ledger", str(backups["ledger"]), *swapped]).err.startswith(
+        "Database pair refused: history-wrong-role."
+    )
+    run = _main(["restore", "history", str(backups["history"]), *swapped])
+    assert run.code == EXIT_REFUSED
+    assert run.err.startswith("Database pair refused: target-wrong-role.")
+    assert _listing(tmp_path) == before
+
+
+def test_a_backup_of_the_wrong_role_is_refused_with_nothing_changed(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+    backups = _backup(ledger, history)
+    before = _listing(tmp_path)
+
+    run = _main(["restore", "history", str(backups["ledger"]), *_flags(ledger, history)])
+
+    assert (run.code, run.out) == (EXIT_REFUSED, "")
+    assert run.err.startswith("Database pair refused: backup-wrong-role.")
+    assert run.err.endswith("Nothing was changed.\n")
+    assert _listing(tmp_path) == before
+
+
+def test_a_ledger_is_not_restored_beside_an_older_history_and_nothing_changes(
+    tmp_path: Path,
+) -> None:
+    source_ledger, source_history = _pair(tmp_path / "source")
+    backup = _backup(source_ledger, source_history)["ledger"]
+    ledger = _pair(tmp_path / "data")[0]
+    history = copy_released_pair(tmp_path / "old")[1]
+    before = (_listing(ledger.parent), _listing(history.parent))
+
+    run = _main(["restore", "ledger", str(backup), *_flags(ledger, history)])
+
+    assert (run.code, run.out) == (EXIT_REFUSED, "")
+    assert run.err.splitlines()[0] == "Database pair refused: history-older."
+    assert "Start NamiSync, or run a sync or inventory command, once to update the pair" in run.err
+    assert (_listing(ledger.parent), _listing(history.parent)) == before
+
+
+# --- usage ---------------------------------------------------------------------------
+
+
+def test_a_backup_that_is_not_a_file_is_an_input_error_before_any_claim(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+    before = sorted((path.name, path.read_bytes()) for path in tmp_path.iterdir())
+
+    for target in (tmp_path / "absent.backup", tmp_path):
+        run = _main(["restore", "ledger", str(target), *_flags(ledger, history)])
+        assert (run.code, run.out) == (EXIT_USAGE, "")
+        assert run.err.splitlines()[0] == f"Input error: {target} is not an existing file."
+        assert run.err.endswith("Nothing was changed.\n")
+    assert sorted((path.name, path.read_bytes()) for path in tmp_path.iterdir()) == before
+
+
+def test_one_path_for_both_databases_and_unknown_roles_are_usage_errors(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str],
+) -> None:
+    same = tmp_path / "one.db"
+    for command in (["check"], ["backup"]):
+        run = _main([*command, *_flags(same, same)])
+        assert run.code == EXIT_USAGE
+        assert "must use distinct paths" in run.err
+    assert not list(tmp_path.iterdir())
+    for arguments in (["restore"], ["restore", "ledger"], ["restore", "settings", "x"]):
+        assert main(arguments, stdout=io.StringIO(), stderr=io.StringIO()) == EXIT_USAGE
+        assert "usage: namisync restore" in capsys.readouterr().err
+
+
+def test_the_commands_share_the_cli_argument_bound(tmp_path: Path) -> None:
+    run = _main(["restore", "ledger", "x" * 70_000])
+    assert (run.code, run.out, run.err) == (EXIT_USAGE, "", "Invalid command request.\n")
+
+
+def test_building_the_service_opens_no_database_and_creates_no_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name, expected in (("fresh", set()), ("ready", None)):
+        directory = tmp_path / name
+        if name == "ready":
+            ledger, history = _pair(directory)
+            expected = {path.name: path.stat().st_mtime_ns for path in directory.iterdir()}
+        else:
+            directory.mkdir()
+            ledger, history = directory / "ledger.db", directory / "history.db"
+        connects = []
+        original = sqlite3.connect
+        monkeypatch.setattr(
+            sqlite3, "connect", lambda *a, **k: connects.append(a) or original(*a, **k),
+        )
+        with NamiSyncService(ledger, history):
+            pass
+        monkeypatch.undo()
+        assert connects == []
+        if name == "fresh":
+            assert list(directory.iterdir()) == []
+        else:
+            assert {path.name: path.stat().st_mtime_ns for path in directory.iterdir()} == expected
+
+
+# --- failures after the point of no return -----------------------------------------------
+
+
+def test_a_restore_that_cannot_be_confirmed_says_so_and_names_what_it_kept(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    monkeypatch.setattr(
+        maintenance, "_confirm", lambda *a, **k: (_ for _ in ()).throw(OSError("read back failed")),
+    )
+
+    run = _main(["restore", "ledger", str(backup), *flags])
+
+    assert (run.code, run.out) == (EXIT_FAILED, "")
+    assert run.err.splitlines()[0] == "Database pair refused: restore-unconfirmed."
+    assert "could not be confirmed" in run.err
+    assert "Run namisync check" in run.err
+    pre_restore = [
+        path for path in tmp_path.glob("ledger.db.backup-*")
+        if path != backup and str(path) in run.err
+    ]
+    assert len(pre_restore) == 1
+    assert "Nothing was changed" not in run.err
+
+
+def test_a_restore_that_failed_before_the_copy_exits_four_naming_its_pre_restore_backup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    before = _instance(ledger)
+    monkeypatch.setattr(
+        maintenance, "_prepare_image", lambda *a, **k: (_ for _ in ()).throw(OSError("disk full")),
+    )
+
+    run = _main(["restore", "ledger", str(backup), *flags])
+
+    assert (run.code, run.out) == (EXIT_FAILED, "")
+    assert run.err.splitlines()[0] == "Database pair refused: restore-failed."
+    assert "so nothing was restored" in run.err
+    assert "is kept as" in run.err
+    assert _instance(ledger) == before
+
+
+# --- the closing conditions of the maintenance row, with real processes ------------------
+
+
+@pytest.mark.parametrize("kind", ("recorder", "observer"))
+def test_maintenance_commands_are_refused_while_a_run_holds_a_claim(
+    tmp_path: Path, kind: str,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    child = Child(HOLD, kind, str(ledger), str(history))
+    try:
+        assert child.read() == "held"
+        before = _listing(tmp_path)
+        runs = {
+            "check": _process(["check", *flags]),
+            "backup": _process(["backup", *flags]),
+            "restore": _process(["restore", "ledger", str(backup), *flags]),
+        }
+        for command, run in runs.items():
+            assert run.code == EXIT_REFUSED, (command, run)
+            assert run.out == ""
+            assert run.err.splitlines()[0] == "Database pair refused: database-in-use."
+            assert "in use by NamiSync work" in run.err
+            assert run.err.endswith("Nothing was changed.\n")
+        assert _listing(tmp_path) == before
+    finally:
+        child.kill()
+    assert _eventually(lambda: _main(["check", *flags])).out == "ledger: ok\nhistory: ok\n"
+
+
+def test_new_runs_are_refused_while_maintenance_holds_the_claims(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "a.txt").write_text("a", encoding="utf-8")
+    # A restore stopped after its pre-restore backup, holding both exclusive claims.
+    child = Child(RESTORE, str(ledger), str(history), "ledger", str(backup), "backed-up", "0")
+    try:
+        assert child.read() == "ready" and child.read() == "stopped"
+        before = {
+            name: path.read_bytes() for name in (
+                "ledger.db", "ledger.db-wal", "history.db", "history.db-wal",
+            ) if (path := tmp_path / name).exists()
+        }
+        files = sorted(path.name for path in tmp_path.iterdir())
+
+        refused = _process(["inventory", str(root), *flags])
+        assert refused.code == EXIT_REFUSED and refused.out == ""
+        assert refused.err.startswith("Inventory refused: Database maintenance is in progress")
+        assert "New work is refused, not queued" in refused.err
+        # Maintenance does not run beside maintenance either.
+        assert _process(["check", *flags]).err.startswith(
+            "Database pair refused: database-in-use."
+        )
+
+        assert {
+            name: (tmp_path / name).read_bytes() for name in before
+        } == before
+        assert sorted(path.name for path in tmp_path.iterdir()) == files
+    finally:
+        child.kill()
+
+
+def test_a_plan_reviewed_before_a_restore_command_is_refused_at_start(tmp_path: Path) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"payload")
+    ledger, history = _pair(tmp_path / "data")
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    restored: list[Run] = []
+
+    class RestoredWhileConfirming(io.StringIO):
+        def readline(self, *args) -> str:
+            # The real command, in its own process, while the plan waits at the prompt.
+            restored.append(_process(["restore", "ledger", str(backup), *flags]))
+            return super().readline(*args)
+
+    stdout, stderr = io.StringIO(), io.StringIO()
+    result = main(
+        ["sync", str(source), str(target), *flags],
+        stdin=RestoredWhileConfirming("execute\n"), stdout=stdout, stderr=stderr,
+    )
+
+    assert (restored[0].code, restored[0].err) == (EXIT_SUCCESS, "")
+    assert "The replaced ledger was backed up to" in restored[0].out
+    assert result == EXIT_REFUSED, (stdout.getvalue(), stderr.getvalue())
+    assert list(target.iterdir()) == []
+    assert (
+        "Refused: The ledger was replaced (restored or reset) after this plan was "
+        "made, so it cannot run. Plan again to review it against the current ledger.\n"
+    ) in stderr.getvalue()
+
+
+def test_restore_runs_in_place_beside_a_desktop_that_then_reads_the_new_ledger(
+    tmp_path: Path,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    desktop = Child(DESKTOP, str(ledger), str(history))
+    try:
+        held = desktop.read()
+        assert held == f"held {_instance(ledger)}"
+
+        restored = _process(["restore", "ledger", str(backup), *flags])
+        assert (restored.code, restored.err) == (EXIT_SUCCESS, "")
+        assert "The replaced ledger was backed up to" in restored.out
+        assert desktop.process.stdin is not None
+        desktop.process.stdin.write("read\n")
+        desktop.process.stdin.flush()
+        assert desktop.read() == f"instance {_instance(ledger)}"
+        assert _instance(ledger) != held.removeprefix("held ")
+    finally:
+        desktop.kill()
+
+
+def test_a_damaged_target_needs_every_other_process_closed(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+    flags = _flags(ledger, history)
+    backup = _backup(ledger, history)["ledger"]
+    desktop = Child(DESKTOP, str(ledger), str(history))
+    try:
+        assert desktop.read() == f"held {_instance(ledger)}"
+        # Damage the main file under the open window: the pages are all in it.
+        data = bytearray(ledger.read_bytes())
+        data[100:612] = b"\xa5" * 512
+        ledger.write_bytes(bytes(data))
+        before = _listing(tmp_path)
+
+        assert _process(["check", *flags]).out.startswith("ledger: damaged\n")
+        refused = _process(["restore", "ledger", str(backup), *flags])
+
+        assert (refused.code, refused.out) == (EXIT_REFUSED, "")
+        assert refused.err.splitlines()[0] == "Database pair refused: database-in-use."
+        assert refused.err.endswith("Nothing was changed.\n")
+        assert _listing(tmp_path) == before
+    finally:
+        desktop.kill()
+    restored = _eventually(lambda: _process(["restore", "ledger", str(backup), *flags]))
+    assert restored.code == EXIT_SUCCESS, restored.err
+    assert "The replaced ledger's files were kept at" in restored.out

@@ -1,7 +1,8 @@
 # Command-Line Interface
 
-Status: reviewed `sync`, retained `history`, and M1 location-centric
-`inventory`/`baseline`/`verify`/`rebaseline` are implemented through the shared
+Status: reviewed `sync`, retained `history`, M1 location-centric
+`inventory`/`baseline`/`verify`/`rebaseline` and the M2 database maintenance
+commands `check`/`backup`/`restore` are implemented through the shared
 interface service. Optional execute-to-verify, final typed result
 classification, explicit location binding, and isolated ledger/history
 overrides are active. Queue release and machine-readable output remain
@@ -84,11 +85,15 @@ paths, which look swapped; a file whose role this version does not know is
 refused the same way, with direction to check its path. A ledger that is a
 backup copied into place by hand is refused with `ledger-is-backup` and
 direction to put back the ledger it replaced or restore the backup with
-`namisync restore ledger <backup file>` (that command arrives with a later
-M2-A4 outcome), never with that instruction. Commands never delete either
-database or rebuild one from the other. If SQLite reports that a file is damaged or unreadable
-as a database, the command names the affected role and directs you to keep both
-databases and their sidecars for inspection.
+`namisync restore ledger <backup file>` ([Maintenance
+commands](#maintenance-commands)), never with that instruction. Commands never
+delete either database or rebuild one from the other. If SQLite reports that a
+file is damaged or unreadable as a database, the command names the affected
+role and directs you to keep both databases and their sidecars for inspection,
+to run `namisync check` to see which database is affected, and, given a backup
+made by `namisync backup`, to run `namisync restore <role> <backup file>`, which
+replaces it and keeps the damaged files beside it. That text names no path and
+never advises deleting or resetting.
 
 Before the first sync or location command admission, the CLI calls the shared
 read-only database-pair preflight. A pair written by NamiSync 0.1.0 is then
@@ -151,8 +156,9 @@ commit itself, the update could not be confirmed and the database may already
 be the new one; the message says so, and the next start checks again.
 `backup-failed` changes nothing: when the backup failed verification, the
 database itself failed SQLite's integrity check and the message says to keep
-its files for inspection; otherwise it says to check write access and free
-space. A ledger
+its files for inspection (migration's message for a database from NamiSync
+0.1.0 stops there, since no backup made by this version can exist for it);
+otherwise it says to check write access and free space. A ledger
 that had already migrated when History's own step failed stays migrated, and
 the next command finishes the history. A v0.1.0 main file copied without its
 `-wal` migrates as the empty database it is, since v0.1.0 keeps its committed
@@ -235,6 +241,103 @@ and perform no missing reconciliation; ambiguity prints candidates for an
 explicit `--mount` retry. A selected location is never inferred from another
 argument or a mapping role.
 
+### Maintenance Commands
+
+```text
+namisync check
+namisync backup
+namisync restore {ledger,history} BACKUP
+```
+
+Each accepts `--database PATH` and `--history-database PATH` and defaults to the
+same pair as every other command. They go through the same argument bound and
+`main` dispatch, and the CLI only parses, calls the maintenance workflow
+through the service ([DATABASE](DATABASE.md#data-protection)), renders and maps
+exit codes. Each holds both exclusive maintenance claims for its whole run
+([DATABASE](DATABASE.md#maintenance-claim)), so it is refused with
+`database-in-use` while any NamiSync window, command or run holds either
+database, and new work is refused at admission while it runs.
+
+They work on the pair **as found**. None migrates a 0.1.0 database, completes a
+pair with one database missing, or creates a fresh pair, and none opens a
+database before the workflow runs. They create no folder: when the folder of
+either database does not exist, every one of them exits `2` and says which,
+except that `check` with both folders missing says there are no databases and
+exits `0`. A database path that cannot name a local file (for example one
+with `?`) is an input error too: exit `2` with `Input error: a database path is
+not valid: <reason>` before any claim is taken, nothing changed. The claim files
+(`<database>.claim`) are the one thing a command leaves behind on a pair
+without databases. `check` never writes a database; `backup` writes only new
+backup files and, as any read of a live database does, may create or rewrite
+the live databases' `-shm` sidecars, never a main file or `-wal`
+([DATABASE](DATABASE.md#data-protection)); `restore` always keeps what it
+replaces and has no confirmation prompt or flag.
+
+- `check` reports each role on its own line, `ledger: ok`, then every problem
+  as `  - <text>` (at most 20 in all, as the workflow returns them) and, for a
+  state that is not `ok`, one sentence of what it means and the next step. States:
+  `ok`, `foreign-key-violations`, `missing`, `damaged`, `older`, `newer`,
+  `wrong-role`, `unsupported`, `is-backup`, `unavailable`
+  ([DATABASE](DATABASE.md#data-protection)). When every role reads fine alone
+  but the pair is not ready, a `Pair: <reason>.` line with the workflow's
+  guidance follows. A pair with no databases at all prints `No NamiSync
+  databases were found at <ledger> and <history>.` and a note on how they are
+  created. Exit `0` for `ok` and `ok`, and for a pair with no databases; exit
+  `4` when any role is anything else, `older`, `missing` and
+  `foreign-key-violations` included. `4` means check found something that
+  needs attention, or could not finish; a state NamiSync still opens
+  (`foreign-key-violations`) and one it cannot use (`damaged`) share the code,
+  and the output, not the code, tells them apart and says what to do. Exit
+  `3`, with the guidance on standard error, when the check was refused before
+  it started because another process holds a database.
+- `backup` needs a ready pair. It prints `Backed up the ledger to <path>` and
+  `Backed up the history to <path>`, then `Removed N older backup(s): <paths>`
+  when rotation kept three per database and removed any. A removal that failed
+  is a warning on standard error naming the file and its error; the file is
+  kept and the command still exits `0`. Exit `3` when a database is in use or
+  the pair is not ready (`Database pair refused: <reason>.` and the guidance:
+  an older pair gets the update direction, an incomplete pair the creation
+  direction, a damaged one the pointers above; a pair with no databases says
+  there is nothing to back up); exit `4` on `backup-failed` (from `restore`
+  the same reason exits `3`), which prints any backup already published first
+  and says it was kept.
+- `restore ROLE BACKUP` replaces the ledger or the history with a backup this
+  version wrote. A `BACKUP` that is not an existing file exits `2` before any
+  claim is taken. On success it prints `Restored the <role> from <backup>.`;
+  for a ledger, the cut time of the backup and that History runs recorded after
+  it are now shown as belonging to an earlier ledger; and where the replaced
+  database went: `was backed up to <path>` when it still backed up cleanly
+  (restored in place, beside an idle window), or `files were kept at <path>`
+  when it was damaged or otherwise unusable and was renamed aside with its
+  sidecars, which needs it closed in every NamiSync process, or that there was
+  no database to replace. A restored database beside a missing, older or
+  refused peer adds a `Note:` that the pair is not ready yet, with its
+  direction. Exit `0` on success.
+  Exit `3`, leaving the databases unchanged, for `database-in-use` (an
+  in-place restore that meets a lock mid-copy restores nothing but leaves the
+  pre-restore backup it made, which the output names), the backup refusals
+  (`backup-unavailable`, `backup-damaged`, `backup-wrong-role`, `backup-newer`,
+  `backup-unsupported`, `backup-older` (a v4 or v8 migration backup is the way
+  back to 0.1.0, not a restore source), `backup-unstamped`), `target-wrong-role`,
+  `target-inconsistent`, `backup-failed` (the pre-restore backup could not be
+  made) and the ledger pair rule (`history-older`, which directs you to update
+  the pair first, `history-newer`, `history-wrong-role`, `history-unusable`).
+  Exit `4` for `restore-failed` and `restore-unconfirmed`. Every refusal prints
+  the workflow's own guidance, which says whether anything changed, and names
+  any file the call kept.
+- Beside an open NamiSync window a restore works only when the database it
+  replaces is intact (`ok` or `foreign-key-violations`): it is copied in place,
+  the window keeps its connections and reads the restored content at its next
+  read, and a sync plan reviewed before the restore is refused at start
+  (`The ledger was replaced (restored or reset) after this plan was made...`,
+  exit `3`). A damaged or otherwise unusable database needs every other process
+  closed and is refused with `database-in-use` while any holds it.
+- A restore that was started but could not be confirmed (`restore-unconfirmed`)
+  may already have replaced the database or moved it only in part. The output
+  says the result could not be confirmed, names the file kept, and says to run
+  `namisync check` before using NamiSync and to keep every file beside the
+  databases. Nothing is deleted.
+
 ## Review Rendering
 
 Print roots/volume evidence, policy, filter/policy snapshot, operation counts and
@@ -277,6 +380,9 @@ Implemented exit categories:
 | `7` | degraded ledger or audit durability |
 | `8` | integrity mismatch |
 | `9` | verification incomplete (including modified, missing, unsupported, error, or newly baselined during verify) |
+
+`check`, `backup` and `restore` use only `0`, `2`, `3` and `4`, as listed under
+[Maintenance Commands](#maintenance-commands); they have no headline.
 
 One workflow-owned headline determines the numeric exit with this exact
 precedence:

@@ -350,7 +350,10 @@ def _backup_failed(role: str, path: Path, error: BaseException) -> DatabaseBacku
         return DatabaseBackupFailed(
             f"The {role} database {path} failed SQLite's integrity check ({detail}) "
             "while NamiSync was backing it up, so no backup was written. Keep the "
-            "database files and their -wal and -shm sidecars for inspection.",
+            "database files and their -wal and -shm sidecars for inspection. Run "
+            "namisync check to see which database is affected. With an earlier "
+            f"backup made by namisync backup, namisync restore {role} <backup file> "
+            "replaces it and keeps the damaged files beside it.",
             path,
         )
     return DatabaseBackupFailed(

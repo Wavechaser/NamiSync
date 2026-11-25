@@ -141,6 +141,14 @@ from .execution_review import (
     retained_evidence_subjects,
     successful_copied_paths,
 )
+from .database_maintenance import (
+    DatabasePairBackup,
+    DatabasePairCheck,
+    DatabasePairRestore,
+    backup_database_pair,
+    check_database_pair,
+    restore_database_from_backup,
+)
 from .database_pair import (
     DatabasePairCompletion,
     DatabasePairContract,
@@ -443,6 +451,52 @@ class LocalWorkflowRuntime:
         self._require_open()
         with self._database_pair_lock:
             return complete_database_pair(self.ledger_path, self.history_path)
+
+    def validate_database_paths(self) -> None:
+        """Refuse a database path that cannot name a local file, with ``ValueError``.
+
+        Opens no database and creates no file: the spelling check the claim
+        and every database open apply first, asked before a maintenance call.
+        """
+
+        self._require_open()
+        validate_database_path(self.ledger_path)
+        validate_database_path(self.history_path)
+
+    def check_databases(self) -> DatabasePairCheck:
+        """Check each database under both exclusive claims, in any pair state.
+
+        Call it before this runtime opens either database, as for migration,
+        which refuses while any connection, this process's included, has one open.
+        """
+
+        self._require_open()
+        with self._database_pair_lock:
+            return check_database_pair(self.ledger_path, self.history_path)
+
+    def backup_databases(self) -> DatabasePairBackup:
+        """Back up a ready pair under both exclusive claims, then rotate backups.
+
+        Call it before this runtime opens either database.
+        """
+
+        self._require_open()
+        with self._database_pair_lock:
+            return backup_database_pair(
+                self.ledger_path, self.history_path, clock=self.clock,
+            )
+
+    def restore_database(self, role: str, backup: str | Path) -> DatabasePairRestore:
+        """Restore ``role`` (ledger or history) from a current-schema backup.
+
+        Call it before this runtime opens either database.
+        """
+
+        self._require_open()
+        with self._database_pair_lock:
+            return restore_database_from_backup(
+                self.ledger_path, self.history_path, role, backup, clock=self.clock,
+            )
 
     def _ensure_database_contracts(self) -> DatabasePairContract:
         with self._database_pair_lock:

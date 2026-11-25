@@ -162,6 +162,13 @@ def test_damaged_released_role_preserves_the_pair_without_reset_guidance(
     assert result == EXIT_REFUSED
     assert f"The {role} database is corrupt or is not a SQLite database" in stderr.getvalue()
     assert "Keep both database files and all of their sidecars for inspection" in stderr.getvalue()
+    # The way forward is conditional on a backup made by this version, which a
+    # released database cannot have, so it is never stated as available.
+    assert "Run namisync check to see which database is affected" in stderr.getvalue()
+    assert (
+        f"With a backup made by namisync backup, namisync restore {role} <backup file> "
+        "replaces it and keeps the damaged files beside it"
+    ) in stderr.getvalue()
     assert not re.search(r"delete|archive|reset", stderr.getvalue(), re.IGNORECASE)
     assert "Updated" not in stdout.getvalue()
     assert _files(ledger.parent) == before

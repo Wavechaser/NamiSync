@@ -322,7 +322,10 @@ def probe_database_file_contract(path: str | Path, *, history: bool) -> Database
             raise DatabaseDamagedError(
                 f"The {role} database is corrupt or is not a SQLite database. "
                 "Close every NamiSync process. Keep both database files and all "
-                "of their sidecars for inspection."
+                "of their sidecars for inspection. Run namisync check to see "
+                "which database is affected. With a backup made by namisync "
+                f"backup, namisync restore {role} <backup file> replaces it and "
+                "keeps the damaged files beside it."
             ) from error
         raise DatabaseAdmissionError(DATABASE_UNAVAILABLE_DIRECTION) from error
 

@@ -372,6 +372,7 @@ def test_cli_admission_reset_guidance_requires_confirmed_stable_incompatibility(
     if failure == "corrupt":
         assert "The history database is corrupt" in stderr.getvalue()
         assert "Keep both database files and all of their sidecars for inspection" in stderr.getvalue()
+        assert "namisync restore history <backup file>" in stderr.getvalue()
     assert calls == (1 if failure in {"permission", "sqlite-io", "sqlite-busy"} else 0)
     assert {path: path.read_bytes() for path in tmp_path.iterdir()} == before
 
@@ -499,6 +500,9 @@ def test_stage5_commands_are_explicit_parser_choices() -> None:
         "baseline",
         "verify",
         "rebaseline",
+        "check",
+        "backup",
+        "restore",
     }
 
 

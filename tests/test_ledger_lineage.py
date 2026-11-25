@@ -1,9 +1,10 @@
 """Ledger restore lineage: storage, the hand-copied backup refusal, the read rule.
 
-No backup or restore command exists yet, so lineage rows are inserted
-directly (``add_ledger_lineage``). A backup carries a ``backup-cut`` row naming
-its own instance, and restore always issues a new one; a live ledger whose
-lineage names its own instance can only be a backup copied into place.
+Lineage rows are inserted directly (``add_ledger_lineage``), so each case
+states the row it needs without a backup or restore. A backup carries a
+``backup-cut`` row naming its own instance, and restore always issues a new
+one; a live ledger whose lineage names its own instance can only be a backup
+copied into place.
 """
 
 from __future__ import annotations

@@ -320,6 +320,10 @@ migrate_database_contracts()
 complete_database_contracts()
     -> tuple[DatabaseContractView, tuple[tuple[str, str], ...],
              tuple[tuple[str, int, str, bool], ...]]
+validate_database_paths() -> None   # ValueError for an invalid path
+check_databases() -> DatabasePairCheck
+backup_databases() -> DatabasePairBackup
+restore_database(role, backup) -> DatabasePairRestore
 start_plan(source, target, *, deletion_policy=None, command_id=None)
     -> PlanSession
 start_task_plan(source, target, *, deletion_policy, command_id,
@@ -456,7 +460,13 @@ shape carries them). Completion is a third, made at the same point: it creates
 the missing database of an incomplete pair, migrating the present one first
 when NamiSync 0.1.0 wrote it, and returns the contract, the role and path of
 the database it created and the migrated databases, again to in-process callers
-only ([DATABASE](DATABASE.md#one-database-missing)). Sync and location CLI
+only ([DATABASE](DATABASE.md#one-database-missing)). Check, backup and restore
+are three more, also made before the process opens either database and on the
+pair as found, never migrating, completing or creating: each returns the
+workflow's result (`DatabasePairCheck`, `DatabasePairBackup`,
+`DatabasePairRestore`) to in-process callers only, none is exported from the
+service module, and no bridge shape carries them
+([COMMANDLINE](COMMANDLINE.md#maintenance-commands)). Sync and location CLI
 compositions validate, and migrate a NamiSync 0.1.0 pair or complete an
 incomplete one, before their first admission; fresh sync review remains
 database-free until execution commitment.

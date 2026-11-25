@@ -35,7 +35,9 @@ refusals without reset guidance, as is a database at the other role's path
 and a ledger backup copied into place by hand (`ledger-is-backup`).
 If SQLite reports corruption or an invalid database file during cold admission,
 the refusal identifies the affected role and directs the user to preserve both
-databases and their sidecars for inspection.
+databases and their sidecars for inspection, to run `namisync check`, and,
+given a backup made by `namisync backup`, to restore it
+([Data Protection](#data-protection)).
 Only a stable confirmed unsupported
 database — a pre-release version or contract id, missing or
 mismatched metadata, an incomplete or poisoned topology, an empty or
@@ -840,9 +842,8 @@ outcomes, gate and non-goals.
   recorders, the CLI pair refusal and desktop startup. The direction is to put
   back the ledger it replaced or restore the backup with
   `namisync restore ledger <backup file>`, never to reset, and nothing is
-  changed. Restore exists in `db` and workflows; until its command arrives
-  with a later M2-A4 outcome, only the first direction can be followed from
-  the command line. The rule runs last in the ledger reader
+  changed ([Data Protection](#data-protection) and
+  [COMMANDLINE](COMMANDLINE.md#maintenance-commands)). The rule runs last in the ledger reader
   contract, once role, version, formats, instance id and exact topology have
   passed, and `classify_database` never applies it. Restore's backup
   verification can therefore classify a backup file as a current ledger and
@@ -1099,8 +1100,12 @@ Open until M2-A4 ([M2_PLAN](M2_PLAN.md) owns the schedule):
 
 - A damaged v0.1.0 database is refused at every start with direction to keep
   its files. Restore replaces a database that fails admission, but only from
-  a current-schema backup, which a database still at v0.1.0 cannot have; the
-  refusals that point to the maintenance commands arrive with them.
+  a current-schema backup, which a database still at v0.1.0 cannot have. The
+  migration's own damaged-source message therefore stops at keeping the files
+  and does not point to `namisync restore`. A damaged database met by
+  cold admission before its version can be read gets the shared damage text,
+  which points to `namisync check` and to `namisync restore` only conditionally
+  (with a backup made by `namisync backup`; [Data Protection](#data-protection)).
 
 Legacy import or merge is separate from migration. It never guesses
 volume/location correspondence.
@@ -1330,11 +1335,32 @@ records are still being written to either database, in any process.
 
 Status: check, backup, restore and count-based rotation implemented by M2-A4
 outcome 4 (2026-11-25) in `namisync/db/maintenance.py`, met for the pair in
-`namisync/workflows/database_maintenance.py`. The CLI commands, their first
-consumer, follow in a later M2-A4 outcome and the Data page in M2-B3. Tests:
+`namisync/workflows/database_maintenance.py`. The CLI commands `namisync check`,
+`namisync backup` and `namisync restore` are their first consumer (M2-A4
+outcome 6; [COMMANDLINE](COMMANDLINE.md#maintenance-commands)); the Data page
+follows in M2-B3. Tests:
 `tests/test_db_maintenance.py`, `tests/test_database_maintenance.py` (real
-child processes: kills per stage, readers, writers, an idle desktop) and the
-restored-at-the-prompt case in `tests/test_cli.py`.
+child processes: kills per stage, readers, writers, an idle desktop),
+`tests/test_cli_maintenance.py` (the commands' output and exit codes, pairs
+as found, and the row's closing conditions through the real entry point) and
+the restored-at-the-prompt case in `tests/test_cli.py`.
+
+- **The CLI** calls the pair operations below through the service, before any
+  database is opened, on the pair as found: it never migrates, completes or
+  creates, and it creates no folder. A refusal prints the workflow's own
+  guidance and exits `3`. `backup-failed` exits `4` from `backup`, but `3`
+  from `restore` (the pre-restore backup could not be written, so nothing was
+  restored); `restore-failed` and `restore-unconfirmed` exit `4`. `check`
+  exits `0` when both roles are `ok` or no database exists at all, and `4`
+  for any other state, a missing role included; a folder that does not exist
+  is an input error (`2`) unless both are missing.
+- **Pointers to the commands.** A damaged database refused at cold admission
+  (`DatabaseDamagedError`) and a backup that fails verification because its
+  source is damaged both keep their direction to keep the files and add: run
+  `namisync check` to see which database is affected, and with a backup made by
+  `namisync backup`, `namisync restore <role> <backup file>` replaces it and
+  keeps the damaged files beside it. Neither suggests resetting or deleting,
+  and the admission text stays path-free.
 
 - **Mechanism.** Each pair call holds both exclusive maintenance claims,
   ledger first, for its whole run, as migration does; there is no dispatcher
