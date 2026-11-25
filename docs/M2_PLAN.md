@@ -131,22 +131,11 @@ Checkpoints:
     `AUTOINCREMENT`. A history run's ledger instance is nullable, because
     direct history writers in tests and tools have no ledger. The CLI announces
     a migration on standard output; the desktop only in its log.
-  - **Accepted residuals:**
-    - A v0.1.0 process holding no handle at the moment of migration is not
-      seen. It cannot write afterwards, because its own contract check refuses
-      the migrated database, but it shows v0.1.0's reset guidance. The release
-      notes must say so (M2-R1).
-    - A v0.1.0 history with no ledger beside it can be neither read nor
-      migrated until the missing-database policy lands.
-    - A v0.1.0 main file copied without its `-wal` migrates as the empty
-      database it is; v0.1.0 leaves every committed row in the `-wal`.
-    - A damaged v0.1.0 database is refused at every start with direction to
-      keep its files; there is no repair or restore before A4.
-    - Each failed attempt leaves its backup, and a rolled-back attempt on a
-      large ledger grows the `-wal` (148 MB to 296 MB at 400,000 rows), until
-      A4's rotation.
-    - Path keys follow the release interpreter's Unicode case tables; no vector
-      can detect a change there ([CORE](CORE.md)).
+  - **Accepted residuals:** migration limits are listed once in
+    [DATABASE](DATABASE.md#migration-limits) and decided by
+    [DEFENSE §2.5.4](DEFENSE.md#254-migrating-a-released-database). Outside
+    migration: path keys follow the release interpreter's Unicode case tables;
+    no vector can detect a change there ([CORE](CORE.md)).
   - **Found outside scope, not fixed:** the copied-dispatcher pause, resume and
     cancel cases in `tests/interfaces/web/test_drain.py` miss their fixed
     deadlines under heavy parallel load, also on the commit before this row's

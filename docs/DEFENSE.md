@@ -528,6 +528,36 @@ This table applies §2.5 to existing guard families. It sets target posture;
 | Internal re-certification between first-party modules | workflows, core | Governed by §2.1 rung 3; not yet audited against this section. |
 | Interface ingress and rendering | bridge, interfaces | **Keep**; content author boundary under §2.2 and §4. A separate audit may apply §2.5 to per-layer re-validation. |
 
+#### 2.5.4 Migrating a released database
+
+v0.1.0 was not designed to be migrated. Its migration must work and stay
+simple: strong against data loss, accidents and NamiSync's own faults, with no
+defense or provision built for an unlikely v0.1.0-only state that M2 may tear
+down. A finding about migrating a v0.1.0 database is decided by the first
+question below that it answers yes (user decision, 2026-11-25):
+
+1. **Can it lose, corrupt or misattribute data with no backup to recover
+   from, or advise the user to destroy data that is fine?** Fix it. These are
+   the engine's contracts.
+2. **Is it reachable by running v0.1.0 or M2 normally plus one plausible
+   accident**, such as power loss, a full disk, a killed process, a second
+   instance or a transient I/O error? Fix it and keep it under test.
+3. **Is the cause in shared code that later migrations also run through?** Fix
+   it in proportion, even when a v0.1.0 case found it.
+4. **Otherwise**, when it needs someone to move or edit files by hand and the
+   worst outcome is a migrated database with its backup beside it, or a wrong
+   message that destroys nothing: leave it. It is a
+   `disclosed-capability-limit` with no defense, no v0.1.0-only provision and
+   no further test.
+
+[DATABASE](DATABASE.md#migration-limits) lists the limits left under question
+4; that list is their disposition. Work deferred to a later checkpoint is not
+such a limit and stays with [M2_PLAN](M2_PLAN.md).
+
+Once M2 databases describe themselves, supported inputs are an operational
+rule, and the engine is source-independent with thin steps, robustness belongs
+in the format rather than in the migrator.
+
 ### 2.6 Reopen triggers
 
 This model must be reviewed before introducing:

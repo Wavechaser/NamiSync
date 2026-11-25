@@ -66,6 +66,9 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   became healthy meanwhile is not told to. Workflow admission no longer
   migrates: only the CLI's and the desktop's explicit step does, so every
   migration is announced.
+
+- Adopted DEFENSE §2.5.4, the policy for findings about migrating a v0.1.0
+  database, and gathered the migration limits into one list in DATABASE.
 #### Spikes for M2 designs (2026-11-24)
 
 - Ran the M2-A2 live checks and recorded each result in its M2_PLAN feature

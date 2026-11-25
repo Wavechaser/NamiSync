@@ -7,15 +7,13 @@ regression test that fails against the earlier code.
 - **CLI placement safety:** the CLI admits a command's roots and `--path`
   values, and checks both databases lie outside the roots, before migrating.
   A refused input migrates nothing; planning refuses a pair that still needs
-  migration. Left as a documented limit: with `--location-id` the root is
-  known only from the ledger, so that case migrates first.
+  migration.
 - **Pair refusal guidance:** a role needing reset no longer answers before the
   other role is classified, so a newer or wrong-role database is reported
   instead of the direction to discard both.
 - **History replay identity:** an observer refuses a run token under a
   different ledger instance, at construction and on each write.
-- **Backup temporary ownership:** the temporary is created exclusively. Its
-  `-journal` sibling is not reserved the same way.
+- **Backup temporary ownership:** the temporary is created exclusively.
 - **Fixture producer timeout:** a watchdog bounds the whole step.
 
 Two further findings are fixed after those, with regression tests that fail
@@ -29,11 +27,10 @@ against the earlier code and an independent review (one correction round).
   does. A CLI pre-check that fails transiently now ends in exit `4` with the
   migration direction, and the next run migrates with its notice.
 
-The user is settling an explicit policy for v0.1.0 migration limits (strong
-against data loss, accidents and our own faults; no defenses retrofitted for
-unlikely v0.1.0-only states). Once ratified, the limits now split between
-[DATABASE](DATABASE.md#schema-evolution) and [M2_PLAN](M2_PLAN.md)'s A3 row
-are to be consolidated under it. The `--location-id` limit stays as it is.
+The user ratified a policy for v0.1.0 migration findings on 2026-11-25:
+[DEFENSE §2.5.4](DEFENSE.md#254-migrating-a-released-database). The limits it
+leaves alone, and those open until M2-A4, are listed once in
+[DATABASE](DATABASE.md#migration-limits); M2_PLAN's A3 row points there.
 
 Verification on `f0162d19`: 7098 ordinary tests passed, 4 skipped, 35
 deselected, with the seven known interpreter-bound failures; `lint-imports`

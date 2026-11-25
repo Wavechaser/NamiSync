@@ -858,8 +858,7 @@ For each database that needs it, ledger first:
 2. **Backup.** From the exclusive connection the SQLite backup API copies the
    committed database, WAL content included, to `<main>.migration-<random>.tmp`
    beside it. That file is created exclusively, so a file already at the name
-   refuses the backup and is neither reused nor removed (its `-journal`
-   sibling is not reserved the same way). The copy is switched to rollback-journal mode so it stands alone,
+   refuses the backup and is neither reused nor removed. The copy is switched to rollback-journal mode so it stands alone,
    checked (`integrity_check`, classification as the source version, and every
    table's row count against the source), flushed with `fsync`, and renamed to
    `<main>.backup-v<source version>-<UTC yyyymmddThhmmss + microseconds>Z`.
@@ -922,29 +921,41 @@ backups sit beside the databases under the name in step 2. An in-window
 notice would need a bridge addition and is not built. The CLI prints one line
 naming the databases that migrated and their backups.
 
-Limits:
+#### Migration limits
 
-- A v0.1.0 history whose ledger is missing can no longer be read by the
-  `history` command and cannot be migrated: a one-present pair stays refused
-  until the missing-database policy lands. The older-database refusal says so.
-- Each attempt that fails after publishing its backup leaves another full
-  backup, and a rolled-back attempt leaves the WAL grown with a discarded
-  tail, until M2-A4 adds rotation and maintenance.
+Left as they are under
+[DEFENSE §2.5.4](DEFENSE.md#254-migrating-a-released-database):
+
+- A command given `--location-id` migrates before placement is checked. It
+  matters only for a v0.1.0 database moved inside one of its own registered
+  roots.
 - A v0.1.0 main file copied without its `-wal` migrates as the empty database
   it is, because v0.1.0 keeps its committed rows in the `-wal`.
-- `history_runs.ledger_instance_id` is nullable, so the readers that arrive
-  with M2-A4 must handle NULL.
+- The backup temporary's `-journal` sibling is not reserved.
 - A process that opens a database between the delete-access probe and the
   exclusive lock without reading is not refused; its first read is refused
   while migration holds the lock.
 - The backup rename's directory entry is not forced to disk beyond the file
   `fsync`. Optional `sqlite_stat*` tables are left in place and may hold
   stale statistics for the rebuilt tables, which affects only query planning.
+- A v0.1.0 process holding no handle when migration runs is not seen. It
+  cannot write afterwards, because its exact-contract check refuses the
+  migrated database, but its message still suggests archiving or deleting the
+  pair. A released binary cannot be changed, so the release notes carry the
+  warning (M2-R1).
 
-A released binary cannot be taught about newer formats: v0.1.0 refuses a
-migrated database through its exact-contract check before writing anything, but
-its message still suggests archiving or deleting the pair. Release notes carry
-the warning.
+Open until M2-A4 ([M2_PLAN](M2_PLAN.md) owns the schedule):
+
+- A v0.1.0 history whose ledger is missing can be neither read by the
+  `history` command nor migrated; a one-present pair stays refused until the
+  missing-database policy lands. The older-database refusal says so.
+- A damaged v0.1.0 database is refused at every start with direction to keep
+  its files; there is no repair or restore.
+- Each attempt that fails after publishing its backup leaves another full
+  backup, and a rolled-back attempt leaves the WAL grown with a discarded
+  tail (148 MB to 296 MB at 400,000 ledger rows), until rotation exists.
+- `history_runs.ledger_instance_id` is nullable, so the readers that arrive
+  with M2-A4 must handle NULL.
 
 Legacy import or merge is separate from migration. It never guesses
 volume/location correspondence.
