@@ -25,7 +25,7 @@ from namisync.workflows.views import (
 
 from namisync.interfaces.task_port import (
     TaskDrainView, TaskEventUpdateView, TaskRecordUpdateView,
-    TaskUnavailableError, TaskMaintenancePendingError,
+    TaskUnavailableError, TaskMaintenancePendingError, TaskDatabaseMaintenanceError,
     validate_task_drain_view, validate_task_update_view,
 )
 
@@ -107,6 +107,9 @@ _ERROR_MESSAGES = {
     ),
     "task_unavailable": "That desktop task is no longer available.",
     "maintenance_pending": "Renderer maintenance is still pending. Retry or restart NamiSync.",
+    "database_maintenance": (
+        "Database maintenance is in progress. Wait for it to end, then start this again."
+    ),
     "inventory_capacity": "Inventory command capacity is full. Close a task before trying again.",
     "drain_busy": (
         "That desktop task already has an event request in progress."
@@ -1042,6 +1045,9 @@ class BridgeDispatcher:
         except TaskMaintenancePendingError as error:
             retire_exception_graph(error)
             return self._failure(request_id, name, "maintenance_pending")
+        except TaskDatabaseMaintenanceError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "database_maintenance")
         except InventoryCommandCapacityError as error:
             retire_exception_graph(error)
             return self._failure(request_id, name, "inventory_capacity")

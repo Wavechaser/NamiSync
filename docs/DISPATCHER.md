@@ -406,6 +406,12 @@ stops producer backpressure after the injected timeout by setting
 `audit=DEGRADED`. Failure while the composition root constructs or opens the
 observer is isolated the same way: admission continues with a degraded-audit
 sentinel, so history availability cannot decide whether domain work runs.
+The one exception is the core `SessionAdmissionRefused`, which a factory
+raises to refuse the session itself (the composition root does so only while
+database maintenance holds the History claim;
+[DATABASE](DATABASE.md#maintenance-claim) owns that policy). The factory runs before the store write, event hub,
+attachment and publication, so the dispatcher re-raises it to the submitter
+with nothing stored, attached or queued and admission capacity released.
 If the audit thread never receives an identity, its observer is closed once and
 the original start failure escapes; a secondary close failure is retired and
 cannot replace it. If the thread did start before `start()` raised, that thread

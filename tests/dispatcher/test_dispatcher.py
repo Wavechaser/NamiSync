@@ -47,6 +47,7 @@ from namisync.dispatcher import (
     Dispatcher,
     InProcessResourceLockProvider,
     PreparedSession,
+    SessionAdmissionRefused,
     SessionCleanupPending,
     SessionNotFound,
     SessionNotTerminal,
@@ -4268,6 +4269,55 @@ def test_observer_factory_failure_degrades_audit_without_aborting_admission() ->
         assert record.result.audit is RecordingStatus.DEGRADED
     finally:
         release.set()
+        assert dispatcher.shutdown().complete
+
+
+def test_observer_factory_refusal_refuses_admission_with_nothing_admitted() -> None:
+    store = RecordingSessionStore()
+    refuse = [True]
+    entered = []
+    attached = []
+
+    def maintenance_history(record):
+        if refuse[0]:
+            raise SessionAdmissionRefused("maintenance is in progress; wait, then retry")
+        return None
+
+    def attach(session_id, stream):
+        attached.append(session_id)
+        stream.close()
+        return lambda: None
+
+    def run_for(payload):
+        def run(context):
+            entered.append(payload)
+            return OperationResult(SessionState.COMPLETED)
+
+        return run
+
+    dispatcher = Dispatcher(
+        {"observed": registration(run_for)},
+        store=store,
+        audit_observer_factory=maintenance_history,
+    )
+    try:
+        with pytest.raises(SessionAdmissionRefused, match="maintenance is in progress"):
+            dispatcher.submit("observed", b"refused", attach=attach)
+
+        assert store.attempted == []
+        assert dispatcher.list() == ()
+        assert attached == []
+        assert not dispatcher._admission_liability_claimed
+        assert not dispatcher._admission_cleanups
+        assert not dispatcher._pending and not dispatcher._hubs
+
+        refuse[0] = False
+        session_id = dispatcher.submit("observed", b"admitted", attach=attach)
+        record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+        assert attached == [session_id]
+        assert entered == [b"admitted"]
+        assert record.result.audit is RecordingStatus.OK
+    finally:
         assert dispatcher.shutdown().complete
 
 

@@ -58,6 +58,7 @@ from namisync.interfaces.web.drain import (
 from namisync.interfaces.task_port import (
     _PlanSelectionSummary,
     TaskCloseRequestView,
+    TaskDatabaseMaintenanceError,
     TaskIntentConflictError,
     TaskCloseView,
     TaskDrainView,
@@ -81,6 +82,7 @@ from namisync.workflows import (
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
+    SessionAdmissionRefused,
     SortDirection,
 )
 from namisync.workflows.views import (
@@ -2126,6 +2128,11 @@ def test_start_response_is_singleflight_and_wire_policy_conflicts() -> None:
             GeneratorExit("private generator exit"),
             KeyboardInterrupt,
             "task start was interrupted",
+        ),
+        (
+            SessionAdmissionRefused("private C:\\maintenance\\history.db"),
+            TaskDatabaseMaintenanceError,
+            "database maintenance is in progress",
         ),
         (ValueError("private generic"), RuntimeError, "task start failed"),
     ),
@@ -7215,6 +7222,85 @@ def test_inventory_ordinary_native_selection_results_refresh_and_close(tmp_path,
         assert service._runtime._retained_inventory_integrity == {}
         assert service._lifecycle._start_receipts == {}
         assert registry._start_responses == {}
+
+
+def test_database_maintenance_refuses_task_starts_definitively(tmp_path):
+    from namisync.db.claims import hold_maintenance_claims
+    from namisync.workflows import LocationCandidate
+
+    root, source, target = tmp_path / "files", tmp_path / "source", tmp_path / "target"
+    for folder in (root, source, target):
+        folder.mkdir()
+    (root / "one.bin").write_bytes(b"inventory bytes")
+    (source / "one.txt").write_text("execution bytes", encoding="utf-8")
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    refused = "^database maintenance is in progress$"
+    with NamiSyncService(ledger, history) as service:
+        service.initialize_database_contracts()
+        registry = _make_registry(service, drain_wait=0.1)
+        ids = iter(f"{index:032x}" for index in range(100, 200))
+
+        def finish(start):
+            _wait_terminal(service._dispatcher, start.session_id)
+            _drain_until_record(registry, start.task_id, start.session_id, ids)
+            registry.release_terminal_session(start.task_id, start.session_id)
+
+        def unchanged(task_id, session_id, request_id):
+            task = registry._tasks[task_id]
+            assert (task.session_id, task.request_id) == (session_id, request_id)
+            assert not task.transition and task.session_released
+            assert service._lifecycle._admissions == {}
+
+        # Setup inventory: refused, then the same blank task starts normally.
+        shell = registry.create_task_shell(next(ids))
+        with hold_maintenance_claims(ledger, history):
+            with pytest.raises(TaskDatabaseMaintenanceError, match=refused):
+                registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+                    command_id=next(ids), wire_intent=("inventory", str(root)))
+        assert registry._tasks[shell.task_id].session_id is None
+        first = registry.start_setup_inventory(shell.task_id, LocationCandidate.literal(str(root)),
+            command_id=next(ids), wire_intent=("inventory", str(root)))
+        finish(first)
+        summary = registry.open_inventory_view(first.task_id)
+
+        # Refresh and integrity: refused with the released publication intact.
+        with hold_maintenance_claims(ledger, history):
+            with pytest.raises(TaskDatabaseMaintenanceError, match=refused):
+                registry.refresh_inventory(first.task_id, first.request_id,
+                    expected_revision=summary["view_revision"], node_id=None,
+                    command_id=next(ids), wire_intent=("refresh",))
+            with pytest.raises(TaskDatabaseMaintenanceError, match=refused):
+                registry.start_inventory_integrity(first.task_id, first.request_id,
+                    expected_revision=summary["view_revision"], mode="baseline",
+                    accept_current_evidence=False, command_id=next(ids), wire_intent=("baseline",))
+        unchanged(first.task_id, first.session_id, first.request_id)
+        assert registry.open_inventory_view(first.task_id)["view_revision"] == summary["view_revision"]
+        baseline = registry.start_inventory_integrity(first.task_id, first.request_id,
+            expected_revision=summary["view_revision"], mode="baseline",
+            accept_current_evidence=False, command_id=next(ids), wire_intent=("baseline",))
+        finish(baseline)
+
+        # Execution: refused, and service and plan view both keep the selection in review.
+        planned = registry.start_plan(str(source), str(target), deletion_policy=None,
+            command_id=next(ids))
+        finish(planned)
+        with hold_maintenance_claims(ledger, history):
+            with pytest.raises(TaskDatabaseMaintenanceError, match=refused):
+                registry.start_execution(planned.task_id, request_id=planned.request_id,
+                    expected_revision=0, destructive_acknowledged=False,
+                    command_id=next(ids), wire_intent=("execute",))
+        unchanged(planned.task_id, planned.session_id, planned.request_id)
+        assert registry._tasks[planned.task_id].execution_session_id is None
+        _, selection, _, _ = service.get_plan_projection(planned.request_id)
+        assert (selection.state, selection.revision) == ("reviewing", 0)
+        view = registry.open_plan_view(planned.task_id)
+        assert (view["selection_state"], view["selection_revision"]) == ("reviewing", 0)
+        assert not (target / "one.txt").exists()
+        execution = registry.start_execution(planned.task_id, request_id=planned.request_id,
+            expected_revision=0, destructive_acknowledged=False,
+            command_id=next(ids), wire_intent=("execute",))
+        finish(execution)
+        assert (target / "one.txt").read_text(encoding="utf-8") == "execution bytes"
 
 
 def test_inventory_refresh_publishes_modified_evidence_and_retains_prior_verified_result(tmp_path):

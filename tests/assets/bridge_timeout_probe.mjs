@@ -777,6 +777,29 @@ assert.equal(asyncRequests.length, maintenanceRequests + 1);
 assert.ok(cleanup.includes(`ack:completion:${hostGeneration}:${maintenanceExchange.request.request_id}`
   + `:${maintenanceExchange.message.completion_token}`));
 
+// A database-maintenance admission refusal is equally definitive, never an uncertain start.
+const databaseMaintenanceMessage =
+  "Database maintenance is in progress. Wait for it to end, then start this again.";
+delivery = (exchange) => {
+  maintenanceExchange = exchange;
+  exchange.message.response = {
+    schema_version: 1, request_id: exchange.request.request_id, ok: false,
+    error: { code: "database_maintenance", message: databaseMaintenanceMessage },
+  };
+  return immediate(exchange);
+};
+const databaseRequests = asyncRequests.length;
+const databaseObservations = asyncObservations.length;
+const databaseUpdates = [];
+await assert.rejects(asyncBridge.startPlan(taskId, sourceId, targetId, options,
+  (handle) => databaseUpdates.push(handle)), {
+  name: "BridgeCommandError", code: "database_maintenance", message: databaseMaintenanceMessage,
+});
+assert.equal(asyncRequests.length, databaseRequests + 1);
+assert.equal(asyncObservations.length, databaseObservations);
+assert.equal(databaseUpdates.at(-1).state, "settled");
+assert.equal(databaseUpdates.at(-1).canCheck, false);
+
 // Only unresolved delivery-loss attempts own observation slots. All 64 slots
 // fill before the next mutation or mixed async read is refused.
 delivery = (exchange) => exchange.admission;

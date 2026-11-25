@@ -499,6 +499,7 @@ service shutdown retryable.
 | `planning_refused` | NamiSync could not start a plan for those folders. Review both folders and try again. |
 | `task_unavailable` | That desktop task is no longer available. |
 | `maintenance_pending` | Renderer maintenance is still pending. Retry or restart NamiSync. |
+| `database_maintenance` | Database maintenance is in progress. Wait for it to end, then start this again. |
 | `drain_busy` | That desktop task already has an event request in progress. |
 | `observation_conflict` | That desktop task is already observing different work. |
 | `bridge_busy` | NamiSync is busy. Try this action again. |
@@ -519,6 +520,15 @@ arrives; the definitive response settles that wait. Retry
 can succeed once maintenance actually settles. The timeout does not release
 the idle reservation or cancel native collection; [INTERFACES](INTERFACES.md)
 owns that lifecycle boundary.
+
+`database_maintenance` is likewise a definitive refusal before session
+admission: a task start (Setup inventory, inventory refresh, integrity or
+execution) whose session the dispatcher refused because database maintenance
+holds the pair ([DATABASE](DATABASE.md#maintenance-claim)). The task registry
+classifies the core `SessionAdmissionRefused`; no session starts, the task
+returns to its prior state, execution's selection returns to review, and no
+uncertain-result recovery runs. The page shows the fixed message and retry can
+succeed once maintenance ends. The message names no path.
 
 ## Implemented command map
 

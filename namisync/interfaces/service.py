@@ -19,6 +19,7 @@ from namisync.dispatcher import (
     EventStream,
     PreparedSession,
     retire_exception_graph,
+    SessionAdmissionRefused,
     SessionNotFound,
     WorkflowRegistration,
 )
@@ -3300,6 +3301,7 @@ __all__ = [
     "SemanticSettingsPatchView",
     "SemanticSettingsView",
     "SetupOptionsView",
+    "SessionAdmissionRefused",
     "SessionEventView",
     "SessionObserver",
     "SessionRecordView",

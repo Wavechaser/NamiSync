@@ -24,6 +24,7 @@ from namisync.core.session import (
     PauseRequested,
     ResourceId,
     ResultItem,
+    SessionAdmissionRefused,
     SessionId,
     SessionRecord,
     SessionState,
@@ -418,6 +419,10 @@ class Dispatcher:
         record = SessionRecord._from_stored(stored, checkpoint)
         try:
             observer = self._audit_factory(record)
+        except SessionAdmissionRefused:
+            # Before store, hub, attachment or publication: the caller's
+            # liability release leaves nothing admitted.
+            raise
         except BaseException as error:
             retire_exception_graph(error)
             observer = _DegradedAuditObserver()

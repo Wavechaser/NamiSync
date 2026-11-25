@@ -1,6 +1,7 @@
 """Domain-blind session dispatch and control."""
 
 from namisync.core.exception_graph import retire_exception_graph
+from namisync.core.session import SessionAdmissionRefused
 from namisync.dispatcher.contracts import (
     AdmissionClosed,
     AuditObserver,
@@ -41,6 +42,7 @@ __all__ = [
     "ResourceLease",
     "ResourceLockProvider",
     "retire_exception_graph",
+    "SessionAdmissionRefused",
     "SessionCleanupPending",
     "SessionNotFound",
     "SessionNotTerminal",

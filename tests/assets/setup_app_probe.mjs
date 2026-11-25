@@ -1315,7 +1315,10 @@ for (const action of ["remove", "close"]) {
 }
 
 // A maintenance refusal retains setup and routes the bridge's fixed guidance.
-for (const kind of ["inventory", "sync-plan", "plan-again"]) {
+for (const [kind, code] of [
+  ["inventory", "maintenance_pending"], ["sync-plan", "maintenance_pending"],
+  ["plan-again", "maintenance_pending"], ["inventory", "database_maintenance"],
+]) {
   const harness = await loadScenario();
   const task = harness.task;
   const form = task.form;
@@ -1324,7 +1327,7 @@ for (const kind of ["inventory", "sync-plan", "plan-again"]) {
   let reloads = 0;
   harness.readSetup = () => { reloads += 1; throw new Error("unexpected setup reload"); };
   await harness.dispatchFormAttempt(task, form, attempt, () => Promise.reject(
-    Object.assign(new Error("maintenance-guidance-sentinel"), { code: "maintenance_pending" }),
+    Object.assign(new Error("maintenance-guidance-sentinel"), { code }),
   ));
   await turns();
   assert.equal(task.form, form, "maintenance refusal retains the editable/frozen setup");

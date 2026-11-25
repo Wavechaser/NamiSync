@@ -57,6 +57,7 @@ from namisync.core.session import (
     OperationResult,
     PauseRequested,
     PhaseResult,
+    SessionAdmissionRefused,
     SessionRecord,
     SessionState,
 )
@@ -67,6 +68,7 @@ from namisync.core.scalars import (
     require_utf8_text,
     scalar_64_to_text,
 )
+from namisync.db.claims import DatabaseMaintenanceActive
 from namisync.db.connections import validate_database_path
 from namisync.db.contracts import DatabaseConnectionOwner
 from namisync.db.history import (
@@ -891,6 +893,20 @@ class LocalWorkflowRuntime:
             return successful_copied_paths(review)
 
     def audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
+        """Open a session's History observer, or refuse it during maintenance.
+
+        Maintenance takes the ledger's claim before History's, so a refused
+        History claim covers the pair. Any other failure stays the
+        dispatcher's degraded audit.
+        """
+        try:
+            return self._open_audit_observer(record)
+        except DatabaseMaintenanceActive as error:
+            message = str(error)
+        # Raised outside the handler, so no refused-claim frames ride along.
+        raise SessionAdmissionRefused(message)
+
+    def _open_audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
         if record.checkpoint is None:
             raise ValueError("audit observer requires a nonterminal checkpoint")
         checkpoint = record.checkpoint

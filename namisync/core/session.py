@@ -135,6 +135,15 @@ class PauseRequested(Exception):
     """Payload-free cooperative pause signal."""
 
 
+class SessionAdmissionRefused(RuntimeError):
+    """A session was refused at admission; nothing was stored or published.
+
+    An audit-observer factory raises it to refuse the session rather than
+    degrade its audit; the dispatcher propagates it to the submitter. Its
+    message is the user-facing refusal.
+    """
+
+
 class Checkpoint(Protocol):
     def __call__(self) -> None: ...
 

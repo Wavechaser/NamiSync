@@ -3190,6 +3190,16 @@ failedPlanDrain.acceptUpdate({ update_type: "record", record: { state: "complete
   pageSnapshot(failedTaskId, failedPlanSession, {
     revision: 40, session_state: "completed",
   }));
+// A database-maintenance refusal is definitive: its fixed guidance shows,
+// nothing stays pending, and Execute stays available (the next submit below).
+const refusedExecuteBase = planExecutions.length;
+globalThis.planReviewHarness.callbacks.onExecute(failedTask.review, executeInvoker);
+await until(() => planExecutions.length === refusedExecuteBase + 1);
+planExecutions.at(-1).reject(Object.assign(new Error("database-maintenance-sentinel"),
+  { code: "database_maintenance" }));
+await until(() => failedTask.review.message === "database-maintenance-sentinel");
+assert.equal(failedTask.executionAttempt, null);
+assert.equal(failedTask.review.pending, null);
 const failedExecuteBase = planExecutions.length;
 globalThis.planReviewHarness.callbacks.onExecute(failedTask.review, executeInvoker);
 await until(() => planExecutions.length === failedExecuteBase + 1);

@@ -104,7 +104,12 @@ Updated the ledger (v4) and history (v8) databases written by NamiSync 0.1.0; ba
 ```
 
 A refused pair returns exit `3` with `Database pair refused: <reason>.` and
-its guidance. A refusal at admission or because another NamiSync process, of
+its guidance. While database maintenance holds the pair, sync execution and the
+four location commands are refused at admission: they print
+`Execution refused:` (sync) or `<Command> refused:` with the maintenance
+message (new work is refused, not queued; wait, then start again), exit `3`
+and start no run. Planning and review still run, since they write neither
+database. A refusal at admission or because another NamiSync process, of
 any version, has either database open or holds its claim leaves every existing
 main and sidecar byte unchanged. A migration that fails after its backup was
 published (`migration-failed`) normally leaves the old main file, the published
@@ -220,7 +225,7 @@ Implemented exit categories:
 | ---: | --- |
 | `0` | success, including declined review and explicit no-op |
 | `2` | usage, path, or configuration input error |
-| `3` | commitment or fresh-preflight refusal with no managed-data mutation |
+| `3` | commitment, fresh-preflight or admission refusal with no managed-data mutation |
 | `4` | planning/execution/runtime failure |
 | `5` | cooperative cancellation |
 | `6` | selected safe work completed, but blocked or deferred items remain |

@@ -71,8 +71,11 @@ const themeOptions = document.querySelector("#theme-options");
 const UNKNOWN_OUTCOME_GUIDANCE = "Original outcome cannot be confirmed. Close and reopen NamiSync to review current state.";
 const PLAN_UNAVAILABLE = "Plan unavailable. Select the task to retry.";
 
+// Fixed bridge refusals before session admission carry their own guidance.
+const START_ADMISSION_REFUSALS = new Set(["maintenance_pending", "database_maintenance"]);
+
 function taskStartFailureMessage(error, fallback) {
-  return error?.code === "maintenance_pending"
+  return START_ADMISSION_REFUSALS.has(error?.code)
     ? error.message : fallback;
 }
 if (
@@ -4203,7 +4206,7 @@ async function dispatchFormAttempt(task, form, attempt, submit) {
     form.actionMessage = taskStartFailureMessage(error,
       "That task could not be started. Review the setup and try again.");
     renderTasks();
-    if (error?.code !== "maintenance_pending") void loadTaskSetup(task);
+    if (!START_ADMISSION_REFUSALS.has(error?.code)) void loadTaskSetup(task);
     return;
   }
   if (currentFormAttempt(task, form, attempt)) {

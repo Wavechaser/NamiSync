@@ -45,6 +45,7 @@ from namisync.core.session import (
 from namisync.db.claims import (
     DatabaseInUse,
     DatabaseMaintenanceActive,
+    acquire_database_claim,
     hold_maintenance_claims,
 )
 from namisync.db.recorder import LedgerRecorder
@@ -57,8 +58,10 @@ from namisync.db.repositories import (
 )
 from namisync.dispatcher import (
     Dispatcher,
+    InMemorySessionStore,
     InProcessResourceLockProvider,
     PreparedSession,
+    SessionAdmissionRefused,
     WorkflowRegistration,
 )
 from namisync.interfaces.service import _workflow_registry
@@ -1085,29 +1088,39 @@ def test_database_maintenance_refuses_inventory_writers_without_partial_state(
     (mount / "managed").mkdir(parents=True)
     scanner = _Scanner(mount, (_file("a.txt", 1),))
     runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    store = InMemorySessionStore()
+    attached = []
+
+    def attach(session_id, stream):
+        attached.append(session_id)
+        stream.close()
+        return lambda: None
+
     dispatcher = Dispatcher(
         _workflow_registry(runtime),
+        store=store,
         lock_provider=InProcessResourceLockProvider(),
         clock=FakeClock(),
         audit_observer_factory=runtime.audit_observer,
     )
     try:
         with hold_maintenance_claims(runtime.ledger_path, runtime.history_path):
-            session_id = dispatcher.submit(
-                INVENTORY_KIND,
-                InventoryRequest("under-maintenance", location_id=location_id),
-            )
-            record = _wait_for(dispatcher, session_id, SessionState.FAILED)
+            for kind, request in (
+                (INVENTORY_KIND, InventoryRequest("under-maintenance", location_id=location_id)),
+                (VERIFY_KIND, IntegrityRequest(
+                    "verify-under-maintenance", IntegrityMode.VERIFY, location_id=location_id,
+                )),
+            ):
+                # The History claim is refused at admission: nothing is
+                # stored, published, attached or queued.
+                with pytest.raises(SessionAdmissionRefused, match="refused, not queued"):
+                    dispatcher.submit(kind, request, attach=attach)
+            assert dispatcher.list() == ()
+            assert store.snapshot() == ()
+            assert attached == []
             with pytest.raises(DatabaseMaintenanceActive):
                 runtime.acknowledge_inventory("ack", location_id, "1")
 
-        # The audit factory's refusal degrades audit; the run's ledger
-        # recorder refuses before any scan or write.
-        assert record.result is not None
-        assert record.result.error is not None
-        assert record.result.error.type_name == "DatabaseMaintenanceActive"
-        assert "refused, not queued" in record.result.error.message
-        assert record.result.audit is RecordingStatus.DEGRADED
         assert scanner.calls == []
         assert runtime.list_inventory(location_id) == ()
         with pytest.raises(KeyError):
@@ -1131,6 +1144,74 @@ def test_database_maintenance_refuses_inventory_writers_without_partial_state(
                 sleep(0.01)
     finally:
         assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_ledger_recorder_refuses_an_admitted_run_under_a_ledger_only_claim(
+    tmp_path: Path,
+) -> None:
+    # The instant a maintenance attempt holds the ledger before History's
+    # refusal: admission succeeds with a real observer, the recorder refuses.
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file("a.txt", 1),))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    locks = InProcessResourceLockProvider()
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=locks,
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    request = InventoryRequest("ledger-claimed", location_id=location_id)
+    resources = [ResourceId(*key) for key in runtime.prepare_inventory(request).resources]
+    try:
+        with acquire_database_claim(runtime.ledger_path, exclusive=True):
+            # Hold the session behind its volume so its observer is observable.
+            lease = locks.acquire(resources, lambda: False)
+            try:
+                session_id = dispatcher.submit(INVENTORY_KIND, request)
+                with pytest.raises(DatabaseInUse):
+                    acquire_database_claim(runtime.history_path, exclusive=True)
+            finally:
+                lease.release()
+            record = _wait_for(dispatcher, session_id, SessionState.FAILED)
+
+        assert record.result is not None and record.result.error is not None
+        assert record.result.error.type_name == "DatabaseMaintenanceActive"
+        assert "refused, not queued" in record.result.error.message
+        assert scanner.calls == []
+        assert runtime.list_inventory(location_id) == ()
+    finally:
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_audit_observer_refuses_only_for_maintenance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    runtime, _location_id = _runtime(tmp_path, _Resolver(mount), _Scanner(mount, ()), {})
+    try:
+        for error, expected in (
+            (DatabaseMaintenanceActive("maintenance text", runtime.history_path), SessionAdmissionRefused),
+            # Every other failure reaches the dispatcher unchanged and degrades audit.
+            (DatabaseInUse("in use", runtime.history_path), DatabaseInUse),
+            (OSError("history unavailable"), OSError),
+        ):
+            def fail(record, error=error):
+                raise error
+
+            monkeypatch.setattr(runtime, "_open_audit_observer", fail)
+            with pytest.raises(expected) as caught:
+                runtime.audit_observer(object())
+            assert type(caught.value) is expected
+            if expected is SessionAdmissionRefused:
+                assert str(caught.value) == "maintenance text"
+                assert caught.value.__cause__ is None
+                assert caught.value.__context__ is None
+    finally:
         runtime.close()
 
 

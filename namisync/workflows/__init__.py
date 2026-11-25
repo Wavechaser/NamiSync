@@ -2,6 +2,7 @@
 
 from namisync.core.integrity import IntegrityMode
 from namisync.core.models import VolumeId
+from namisync.core.session import SessionAdmissionRefused
 from namisync.workflows.execution_review import CopiedSubjectScope
 from namisync.core.planning import (
     DeletionPolicy,
@@ -164,6 +165,7 @@ __all__ = [
     "RememberedLocation",
     "RememberedLocations",
     "RememberedPair",
+    "SessionAdmissionRefused",
     "SyncDependencies",
     "SyncOptions",
     "SortDirection",

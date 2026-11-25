@@ -71,6 +71,10 @@ class TaskMaintenancePendingError(TimeoutError):
     """No session was admitted because idle maintenance has not settled."""
 
 
+class TaskDatabaseMaintenanceError(RuntimeError):
+    """No session was admitted because database maintenance holds the pair."""
+
+
 class TaskIntentConflictError(RuntimeError):
     """A task command id was reused for a different resolved intent."""
 

@@ -19,6 +19,7 @@ from namisync.interfaces.service import (
     ExecutionAdmissionView,
     LocationResolutionError,
     NamiSyncService,
+    SessionAdmissionRefused,
     SessionEventView,
     SessionRecordView,
     SyncPathInputError,
@@ -343,6 +344,9 @@ def _run_sync(
             execution_details = service.get_execution_details(
                 execution_session.run_id
             )
+        except SessionAdmissionRefused as error:
+            print(f"Execution refused: {_safe(error)}", file=stderr)
+            return EXIT_REFUSED
         except Exception as error:
             print(f"Execution could not start: {_safe(error)}", file=stderr)
             return EXIT_FAILED
@@ -447,6 +451,12 @@ def _run_location_workflow(
                 file=stderr,
             )
             return EXIT_USAGE
+        except SessionAdmissionRefused as error:
+            print(
+                f"{namespace.command.capitalize()} refused: {_safe(error)}",
+                file=stderr,
+            )
+            return EXIT_REFUSED
         except Exception as error:
             print(
                 f"{namespace.command.capitalize()} could not start: "

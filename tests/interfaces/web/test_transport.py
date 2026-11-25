@@ -24,7 +24,11 @@ from namisync.dispatcher.event_bus import EventHub
 from namisync.interfaces.task_lifecycle import (
     TASK_EFFECT_CAPACITY,
 )
-from namisync.interfaces.task_port import TaskIntentConflictError, TaskMaintenancePendingError
+from namisync.interfaces.task_port import (
+    TaskDatabaseMaintenanceError,
+    TaskIntentConflictError,
+    TaskMaintenancePendingError,
+)
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
     AdmissionRefused,
@@ -130,6 +134,9 @@ ERRORS = {
     ),
     "task_unavailable": "That desktop task is no longer available.",
     "maintenance_pending": "Renderer maintenance is still pending. Retry or restart NamiSync.",
+    "database_maintenance": (
+        "Database maintenance is in progress. Wait for it to end, then start this again."
+    ),
     "inventory_capacity": "Inventory command capacity is full. Close a task before trying again.",
     "drain_busy": (
         "That desktop task already has an event request in progress."
@@ -1667,6 +1674,7 @@ def test_br_g_32_picker_failure_uses_its_fixed_public_error() -> None:
         (PlanningRefusedError("C:\\private\\root"), "planning_refused"),
         (TaskUnavailableError("private task"), "task_unavailable"),
         (TaskMaintenancePendingError("private maintenance"), "maintenance_pending"),
+        (TaskDatabaseMaintenanceError("C:\\private\\history.db"), "database_maintenance"),
         (DrainBusyError("private drain"), "drain_busy"),
         (
             ObservationConflictError("private observation"),
@@ -1746,6 +1754,50 @@ def test_maintenance_refusal_survives_real_task_registry_start(
     assert service._lifecycle._start_receipts == {}
     assert not service._lifecycle.begin_idle_maintenance()
     service._lifecycle.end_idle_maintenance()
+
+
+def test_database_maintenance_refusal_reaches_the_bridge_as_its_fixed_error(
+    tmp_path: Path,
+) -> None:
+    from namisync.db.claims import hold_maintenance_claims
+    from namisync.interfaces.service import NamiSyncService
+
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "a.txt").write_text("a", encoding="utf-8")
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    with NamiSyncService(ledger, history) as service:
+        service.initialize_database_contracts()
+        registry = TaskRegistry(service)
+        shell = registry.create_task_shell("8" * 32)
+        command_ids = iter(("1" * 32, "2" * 32))
+        dispatcher = _bridge_dispatcher(
+            document=_Document(),
+            commands={"probe": _spec(lambda _payload: registry.start_setup_inventory(
+                shell.task_id, LocationCandidate.literal(str(root)),
+                command_id=next(command_ids), wire_intent=("database-maintenance-test",),
+            ))},
+        )
+
+        with hold_maintenance_claims(ledger, history):
+            refused = dispatcher.dispatch(_request())
+
+        # Definitive and path-free: no session, no retained start, task reusable.
+        assert refused == _failure(
+            REQUEST_ID, "database_maintenance", ERRORS["database_maintenance"],
+        )
+        assert str(tmp_path) not in json.dumps(refused)
+        assert registry._start_responses == {} and registry._provisional == {}
+        task = registry._tasks[shell.task_id]
+        assert task.session_id is None and not task.transition
+        assert task.start_command_id is None
+        assert service._lifecycle._admissions == {} and service._lifecycle._sessions == {}
+        assert service._lifecycle._start_receipts == {}
+        assert service._dispatcher.list() == ()
+
+        admitted = dispatcher.dispatch(_request(request_id="b2" * 16))
+        assert admitted["ok"] is True
+        assert admitted["result"]["task_id"] == shell.task_id
 
 
 def test_br_g_32_start_plan_receipt_binds_choice_ids_and_options(

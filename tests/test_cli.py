@@ -35,7 +35,7 @@ from namisync.core.session import (
     SessionRecord,
     SessionState,
 )
-from namisync.db.claims import hold_maintenance_claims
+from namisync.db.claims import acquire_database_claim, hold_maintenance_claims
 from namisync.db.history import HistoryContext, HistoryStore
 from namisync.db.connections import connect_history_writer, connect_ledger_writer
 from namisync.db.schema import initialize_history, initialize_ledger
@@ -1454,21 +1454,92 @@ def test_location_work_during_database_maintenance_reports_the_typed_refusal(
     before = (ledger.read_bytes(), history.read_bytes())
     stderr = io.StringIO()
 
+    stdout = io.StringIO()
     with hold_maintenance_claims(ledger, history):
-        result = main(arguments, stdout=io.StringIO(), stderr=stderr)
+        result = main(arguments, stdout=stdout, stderr=stderr)
         assert (ledger.read_bytes(), history.read_bytes()) == before
+
+    # Refused at admission: the run never starts, so no run or degraded
+    # recording lines are printed.
+    assert result == EXIT_REFUSED
+    assert stderr.getvalue() == (
+        "Inventory refused: Database maintenance is in progress on "
+        f"{history}. New work is refused, not queued; wait for maintenance "
+        "to finish, then start this again.\n"
+    )
+    assert stdout.getvalue() == ""
+    assert main(arguments, stdout=io.StringIO(), stderr=io.StringIO()) == EXIT_SUCCESS
+    for command in ("baseline", "verify"):
+        stderr = io.StringIO()
+        with hold_maintenance_claims(ledger, history):
+            result = main([command, *arguments[1:]], stdout=io.StringIO(), stderr=stderr)
+        assert result == EXIT_REFUSED
+        assert stderr.getvalue().startswith(
+            f"{command.capitalize()} refused: Database maintenance is in progress"
+        )
+    with hold_maintenance_claims(ledger, history):
+        pass
+
+
+def test_location_work_under_a_ledger_only_claim_reports_the_recorder_refusal(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / "a.txt").write_text("a", encoding="utf-8")
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    stderr = io.StringIO()
+
+    # Admitted (History's claim is free); its ledger recorder then refuses.
+    with acquire_database_claim(ledger, exclusive=True):
+        result = main(
+            ["inventory", str(root), "--database", str(ledger), "--history-database", str(history)],
+            stdout=io.StringIO(),
+            stderr=stderr,
+        )
 
     assert result == EXIT_FAILED
     assert (
         "DatabaseMaintenanceActive: Database maintenance is in progress on "
         f"{ledger}. New work is refused, not queued"
     ) in stderr.getvalue()
-    assert main(arguments, stdout=io.StringIO(), stderr=io.StringIO()) == EXIT_SUCCESS
-    stderr = io.StringIO()
+    assert "Inventory refused:" not in stderr.getvalue()
     with hold_maintenance_claims(ledger, history):
-        result = main(["verify", *arguments[1:]], stdout=io.StringIO(), stderr=stderr)
-    assert result == EXIT_FAILED
-    assert "DatabaseMaintenanceActive: Database maintenance is in progress" in stderr.getvalue()
+        pass
+
+
+def test_sync_execution_during_database_maintenance_is_refused_at_admission(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"payload")
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    with hold_maintenance_claims(ledger, history):
+        result = main(
+            _arguments(source, target, ledger, history),
+            stdin=io.StringIO("execute\n"),
+            stdout=stdout,
+            stderr=stderr,
+        )
+
+    assert result == EXIT_REFUSED, (stdout.getvalue(), stderr.getvalue())
+    assert not (target / "payload.bin").exists()
+    assert stderr.getvalue() == (
+        "Execution refused: Database maintenance is in progress on "
+        f"{history}. New work is refused, not queued; wait for maintenance "
+        "to finish, then start this again.\n"
+    )
+    assert "disposition=" not in stdout.getvalue()
+    with NamiSyncService(ledger, history) as service:
+        assert service.list_history(10) == ()
     with hold_maintenance_claims(ledger, history):
         pass
 

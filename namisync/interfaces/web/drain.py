@@ -35,6 +35,7 @@ from namisync.interfaces.task_port import (
     TaskSummaryView,
     TaskTerminalDelivery,
     TaskUnavailableError,
+    TaskDatabaseMaintenanceError,
     TaskMaintenancePendingError,
     TaskUpdateView,
 )
@@ -57,6 +58,7 @@ from namisync.workflows import (
     RetainedExecutionItemWindow,
     RetainedExecutionSummary,
     RetainedIntegrityItemWindow,
+    SessionAdmissionRefused,
     SortDirection,
 )
 
@@ -92,6 +94,7 @@ class InventoryCommandCapacityError(RuntimeError):
 _START_FAILURE_OBSERVATION_CONFLICT = "observation_conflict"
 _START_FAILURE_TASK_UNAVAILABLE = "task_unavailable"
 _START_FAILURE_MAINTENANCE_PENDING = "maintenance_pending"
+_START_FAILURE_DATABASE_MAINTENANCE = "database_maintenance"
 _START_FAILURE_INTERRUPTED = "interrupted"
 _START_FAILURE_GENERIC = "start_failed"
 _START_FAILURES = MappingProxyType(
@@ -107,6 +110,10 @@ _START_FAILURES = MappingProxyType(
         _START_FAILURE_MAINTENANCE_PENDING: (
             TaskMaintenancePendingError,
             "idle maintenance is pending",
+        ),
+        _START_FAILURE_DATABASE_MAINTENANCE: (
+            TaskDatabaseMaintenanceError,
+            "database maintenance is in progress",
         ),
         _START_FAILURE_INTERRUPTED: (
             KeyboardInterrupt,
@@ -145,6 +152,10 @@ _RECOVERY_FAILURES = MappingProxyType(
 def _classify_start_failure(error: BaseException) -> str:
     if isinstance(error, TaskMaintenancePendingError):
         return _START_FAILURE_MAINTENANCE_PENDING
+    if isinstance(error, SessionAdmissionRefused):
+        # The composition root refuses admission only while database
+        # maintenance holds the pair; its message (with a path) stays private.
+        return _START_FAILURE_DATABASE_MAINTENANCE
     if isinstance(error, ObservationConflictError):
         return _START_FAILURE_OBSERVATION_CONFLICT
     if isinstance(error, TaskUnavailableError):

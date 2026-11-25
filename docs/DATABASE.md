@@ -1016,20 +1016,21 @@ still being written to either database, in any process.
   because maintenance holds the claim fails its admission with a typed refusal;
   new runs are refused, not queued.
 
-  **Limit, closed by M2-A4.** Admission does not yet refuse. The History claim
-  is taken by the dispatcher's audit-observer factory, and the dispatcher turns
-  any factory failure into degraded audit, so a session refused there is
-  admitted with audit degraded and is refused only when its ledger recorder
-  opens, before any filesystem change or database write. If the exclusive
-  holder releases between admission and that open (including while the session
-  waits behind a resource lock), the run is not refused at all: it completes
-  with audit degraded and no History row. This stays safe: the plan was
-  reviewed, the ledger records the run, degraded audit is reported, and a
-  properly admitted run keeps its observer's History claim, so maintenance,
-  which takes History second, is refused and releases the ledger. In M2-A3 the
-  only exclusive holders are schema creation and migration, which run before
-  any session can be admitted on that pair. M2-A4, where maintenance commands
-  first run beside live sessions, owns the admission-time refusal and its gate.
+  **Admission refuses** (M2-A4). The History claim is taken when the
+  dispatcher's audit-observer factory
+  (`LocalWorkflowRuntime.audit_observer`) opens the session's observer. A
+  `DatabaseMaintenanceActive` there becomes the core
+  `SessionAdmissionRefused`, which the dispatcher raises to the submitter
+  before anything is stored, published, attached or queued; every other
+  factory failure still degrades audit. Maintenance takes the ledger's claim before
+  History's, so refusing on History's covers the pair. A session is therefore
+  either refused at admission or admitted holding its observer's History claim,
+  and while it lives maintenance, which takes History second, is refused and
+  releases the ledger. Sessions without an audit observer (planning) write
+  neither database and are not refused. One instant remains: an admitted run
+  whose ledger recorder opens while a maintenance attempt holds the ledger's
+  claim, before History's refuses that attempt, is refused by the recorder as
+  below.
 - **Maintenance holds it exclusively** on both databases of the pair, ledger
   first, and refuses rather than waits while any claim is held:
   `hold_maintenance_claims(ledger, history)` releases the ledger claim when
@@ -1043,25 +1044,35 @@ still being written to either database, in any process.
   view is only behind. Read-only classification (`validate_database_pair`,
   `probe_database_file_contract`, `DatabaseConnectionOwner`) never creates a
   claim file.
-- **Where a refusal surfaces today** (under the limit above). A refused History
-  claim at admission becomes degraded audit. The run's ledger recorder refuses
-  before any scan, hash or filesystem change: inventory and integrity end
-  failed with the typed error, execution takes its recording-open-failure path,
-  and inventory acknowledge or restore raises it to the caller. The CLI prints
-  the typed error and exits 4; the desktop shows it as the task's terminal
-  detail, while a visibility batch reports unresolved rows without the reason.
-  Known wording limit: the same CLI output still carries the generic "Ledger
-  recording is degraded; fix the ledger path or access…" and "History recording
-  is degraded; check the history path or access…" lines, and the result summary
-  still reads `disposition=ran`.
+- **Where a refusal surfaces.** At admission no run starts. The CLI prints
+  `Execution refused:` for sync, or `Inventory refused:`, `Baseline refused:`,
+  `Verify refused:` or `Rebaseline refused:`, with the
+  `DatabaseMaintenanceActive` message, and exits 3. The desktop receives the
+  definitive fixed bridge error `database_maintenance`
+  ([BRIDGE](BRIDGE.md#fixed-errors)), whose path-free message the page shows
+  for Setup inventory, inventory refresh, integrity and execution: no attempt is
+  left pending or uncertain, the task keeps its prior state, execution's
+  selection is back in review, and the action can be started again once
+  maintenance ends. A ledger recorder refusal
+  (the instant above, and inventory acknowledge or restore) comes before any
+  scan, hash or filesystem change: inventory and integrity end failed with the
+  typed error, execution takes its recording-open-failure path, and acknowledge
+  or restore raises it to the caller. The CLI then prints the typed error and
+  exits 4, still beside the generic recording-degraded lines; the desktop shows
+  it as the task's terminal detail, while a visibility batch reports unresolved
+  rows without the reason.
 - **Tests.** `tests/test_db_claims.py` (real child processes: shared
   coexistence, bounded no-wait refusal, release, killed holders, handle
   inheritance, in-process conflict, path resolution, open and lock failures
   that are not refusals, recorder and observer lifetimes including failed
   closes, schema creation and the pair helper); the live-data guard's view of
   claim creation in `tests/test_live_data_guard.py`; the workflow and
-  dispatcher seam in `tests/test_inventory_runtime.py`; the CLI in
-  `tests/test_cli.py`.
+  dispatcher seam, admission and ledger-only recorder refusals included, in
+  `tests/test_inventory_runtime.py`; the dispatcher's refusal contract in
+  `tests/dispatcher/test_dispatcher.py`; the CLI in `tests/test_cli.py`; the
+  desktop task starts and fixed bridge error in
+  `tests/interfaces/web/test_drain.py` and `tests/interfaces/web/test_transport.py`,
+  with the page's handling in the frontend probes.
 - **Limits.** A claim is keyed by the resolved main path like SQLite's own
   sidecars, so a hard-link alias of a main file is not covered. The `HistoryStore` writer
   connection opens without a claim; migration's own exclusive file access is
