@@ -594,10 +594,11 @@ def test_killed_in_place_restore_leaves_old_or_new_and_a_rerun_finishes(
             assert main(arguments, stdout=io.StringIO(), stderr=stderr) == EXIT_REFUSED
             if stage == "mid-copy":
                 # The copy's open write transaction locks part of the -shm, so a
-                # new process's cold pair check cannot read the files and
-                # refuses first (exit 3, nothing changed).
+                # new process's cold pair check cannot read the files; the held
+                # claim says why, and that is what is reported (exit 3).
                 assert stderr.getvalue().startswith(
-                    "Database pair refused: database-unavailable."
+                    "Database pair refused: database-in-use.\n"
+                    "Database maintenance is in progress on"
                 ), stderr.getvalue()
                 # Readers keep the old ledger while the copy is uncommitted.
                 assert run_child(_READ_INSTANCE, str(ledger)) == old

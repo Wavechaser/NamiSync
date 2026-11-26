@@ -8,7 +8,7 @@ import re
 import secrets
 import sqlite3
 from pathlib import Path
-from typing import Iterable
+from typing import TYPE_CHECKING, Iterable
 
 from namisync.core.formats import FORMAT_VERSIONS
 
@@ -18,6 +18,9 @@ from .connections import (
     connect_ledger_writer,
     validate_database_path,
 )
+
+if TYPE_CHECKING:
+    from .claims import DatabaseClaim
 
 
 LEDGER_SCHEMA_VERSION = 5
@@ -1307,23 +1310,38 @@ def _initialize(
 
 def _create_schema(
     resolved: Path, *, history: bool, busy_timeout_ms: int,
+    claim: DatabaseClaim | None = None,
 ) -> Path:
+    """Create the schema under this database's exclusive claim.
+
+    ``claim`` is that claim when the caller already holds it; otherwise it is
+    taken here and released before return.
+    """
+
     # Deferred import: claim refusals extend this module's admission error.
-    from .claims import acquire_database_claim
+    from .claims import acquire_database_claim, claim_path
 
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    connect = connect_history_writer if history else connect_ledger_writer
+    if claim is not None:
+        if not claim.held or not claim.exclusive or claim.path != claim_path(resolved):
+            raise ValueError("creation requires this database's held exclusive claim")
+        return _create_claimed_schema(resolved, history=history, busy_timeout_ms=busy_timeout_ms)
     # Released before return, so a caller may take its shared writer claim next.
     with acquire_database_claim(resolved, exclusive=True):
-        connection = connect(resolved, busy_timeout_ms=busy_timeout_ms)
-        try:
-            version = _existing_schema_version(connection, history=history)
-            if version is not None:
-                _raise_reset_required("not-empty", history=history)
-            connection.executescript(_schema_script(history))
-            _validate_reader_contract(connection, history=history)
-        finally:
-            connection.close()
+        return _create_claimed_schema(resolved, history=history, busy_timeout_ms=busy_timeout_ms)
+
+
+def _create_claimed_schema(resolved: Path, *, history: bool, busy_timeout_ms: int) -> Path:
+    connect = connect_history_writer if history else connect_ledger_writer
+    connection = connect(resolved, busy_timeout_ms=busy_timeout_ms)
+    try:
+        version = _existing_schema_version(connection, history=history)
+        if version is not None:
+            _raise_reset_required("not-empty", history=history)
+        connection.executescript(_schema_script(history))
+        _validate_reader_contract(connection, history=history)
+    finally:
+        connection.close()
     return resolved
 
 
@@ -1422,19 +1440,19 @@ def validate_history_reader_contract(connection: sqlite3.Connection) -> None:
     _validate_reader_contract(connection, history=True)
 
 
-def _initialize_reserved_ledger(path: Path) -> Path:
-    """Create only under the pair coordinator's existing empty reservations."""
+def _initialize_reserved_ledger(path: Path, *, claim: DatabaseClaim) -> Path:
+    """Create only under the pair coordinator's empty reservations and held claim."""
 
     return _create_schema(
-        path, history=False, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS,
+        path, history=False, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS, claim=claim,
     )
 
 
-def _initialize_reserved_history(path: Path) -> Path:
-    """Create only under the pair coordinator's existing empty reservations."""
+def _initialize_reserved_history(path: Path, *, claim: DatabaseClaim) -> Path:
+    """Create only under the pair coordinator's empty reservations and held claim."""
 
     return _create_schema(
-        path, history=True, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS,
+        path, history=True, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS, claim=claim,
     )
 
 

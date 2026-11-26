@@ -320,8 +320,11 @@ def test_cli_admission_interleaves_real_sqlite_commits_without_reset_advice(
             with NamiSyncService(ledger, history) as service:
                 result = cli_module._database_refusal(service, io.StringIO(), stderr, roots=())
         assert result == (EXIT_REFUSED if persistent else EXIT_SUCCESS if entry == "history" else None)
-        assert attempts == (3 if persistent else 2)
-        assert mutations == (3 if persistent else 1)
+        # A pair that does not classify as usable is classified once more under
+        # its shared claims, so the pair entry reads twice as often.
+        again = 2 if persistent and entry == "pair" else 1
+        assert attempts == (3 * again if persistent else 2)
+        assert mutations == (3 * again if persistent else 1)
         assert "delete" not in stderr.getvalue().lower()
         if persistent:
             assert "retry" in stderr.getvalue().lower()
@@ -373,7 +376,11 @@ def test_cli_admission_reset_guidance_requires_confirmed_stable_incompatibility(
         assert "The history database is corrupt" in stderr.getvalue()
         assert "Keep both database files and all of their sidecars for inspection" in stderr.getvalue()
         assert "namisync restore history <backup file>" in stderr.getvalue()
-    assert calls == (1 if failure in {"permission", "sqlite-io", "sqlite-busy"} else 0)
+    # The pair entry classifies an unusable pair again under its shared claims.
+    assert calls == (
+        (2 if entry == "pair" else 1)
+        if failure in {"permission", "sqlite-io", "sqlite-busy"} else 0
+    )
     assert {path: path.read_bytes() for path in tmp_path.iterdir()} == before
 
 
@@ -1576,6 +1583,32 @@ def test_first_use_work_during_database_maintenance_is_refused_with_retry_guidan
         "history.db.claim", "ledger.db.claim", "root", "source", "target",
     ]
     assert main(arguments, stdout=io.StringIO(), stderr=io.StringIO()) == EXIT_SUCCESS
+
+
+def test_sync_planning_beside_a_pair_being_created_is_refused_with_retry_guidance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The pair was fresh when the command checked it; another process began
+    # creating it before planning read it. Planning exited 4.
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    monkeypatch.setattr(cli_module, "_database_refusal", lambda *args, **kwargs: None)
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with hold_maintenance_claims(ledger, history):
+        ledger.write_bytes(b"")
+        result = main(
+            _arguments(source, target, ledger, history),
+            stdin=io.StringIO("execute\n"), stdout=stdout, stderr=stderr,
+        )
+    assert (result, stdout.getvalue(), stderr.getvalue()) == (
+        EXIT_REFUSED, "",
+        f"Planning refused: Database maintenance is in progress on {ledger.resolve()}. "
+        "New work is refused, not queued; wait for maintenance to finish, then start "
+        "this again.\n",
+    )
+    assert ledger.read_bytes() == b"" and not history.exists()
 
 
 def test_sync_execution_during_database_maintenance_is_refused_at_admission(

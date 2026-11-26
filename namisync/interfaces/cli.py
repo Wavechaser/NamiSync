@@ -330,6 +330,9 @@ def _run_sync(
                 file=stderr,
             )
             return EXIT_USAGE
+        except SessionAdmissionRefused as error:
+            print(f"Planning refused: {_safe(error)}", file=stderr)
+            return EXIT_REFUSED
         except Exception as error:
             print(f"Planning could not start: {_safe(error)}", file=stderr)
             return EXIT_FAILED

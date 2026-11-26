@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 import sqlite3
 import stat
+from typing import Iterator
 
 from namisync.core.session import SessionAdmissionRefused
-from namisync.db.claims import CLAIM_SUFFIX, DatabaseClaimRefused, hold_maintenance_claims
+from namisync.db.claims import (
+    CLAIM_SUFFIX,
+    DatabaseClaim,
+    DatabaseClaimRefused,
+    MaintenanceClaims,
+    acquire_existing_shared_claim,
+    hold_maintenance_claims,
+)
 from namisync.db.contracts import (
     DATABASE_UNAVAILABLE_DIRECTION,
     DatabaseArtifactsChanged,
@@ -390,29 +399,65 @@ def initialize_database_pair(
 ) -> DatabasePairContract:
     """Publish a fresh ledger then history, retracting only owned files on error.
 
-    A claim refusal is raised as itself once cleanup is complete; any other
-    failure, or an incomplete cleanup, is a ``DatabasePairInitializationError``.
+    Both exclusive maintenance claims are held from before the first file is
+    reserved until the pair is published, so another process sees the pair in
+    use and never its half-made files. A claim another process holds refuses
+    with ``DatabaseClaimRefused`` before anything is reserved. A pair that is
+    not fresh, before the claims or under them, is returned as classified:
+    another process may be creating it (``database-in-use``) or have created
+    it meanwhile. A failure while creating is a
+    ``DatabasePairInitializationError``.
     """
 
     ledger = Path(ledger_path).resolve()
     history = Path(history_path).resolve()
-    state = validate_database_pair(
+    state = classify_database_pair(
         ledger, history, ledger_database=ledger_database, history_database=history_database,
     )
     if state.state is not DatabasePairState.FRESH:
         return state
+    with _creation_claims(ledger, history) as claims:
+        state = validate_database_pair(
+            ledger, history,
+            ledger_database=ledger_database, history_database=history_database,
+        )
+        if state.state is not DatabasePairState.FRESH:
+            return state
+        return _publish_fresh_pair(ledger, history, claims)
 
+
+@contextmanager
+def _creation_claims(ledger: Path, history: Path) -> Iterator[MaintenanceClaims]:
+    """Hold both claims for creation; a folder or claim file that cannot be made fails it."""
+
+    claims = ExitStack()
+    try:
+        for path in (ledger, history):
+            # A claim file is created beside its database, whose folder may not exist yet.
+            path.parent.mkdir(parents=True, exist_ok=True)
+        held = claims.enter_context(hold_maintenance_claims(ledger, history))
+    except OSError as error:
+        raise DatabasePairInitializationError(
+            "coordinated database initialization failed"
+        ) from error
+    with claims:
+        yield held
+
+
+def _publish_fresh_pair(
+    ledger: Path, history: Path, claims: MaintenanceClaims,
+) -> DatabasePairContract:
     owned: dict[Path, OwnedArtifactLease] = {}
     try:
         _reserve_database(ledger, owned)
         _require_empty_reservations(ledger, owned)
-        _initialize_reserved_ledger(ledger)
+        _initialize_reserved_ledger(ledger, claim=claims.ledger)
         _require_owned(owned[ledger])
         _discard_reserved_sidecars(ledger, owned)
 
         _reserve_database(history, owned)
         _require_empty_reservations(history, owned)
-        _initialize_reserved_history(history)
+        _initialize_reserved_history(history, claim=claims.history)
         _require_owned(owned[history])
         _discard_reserved_sidecars(history, owned)
 
@@ -443,10 +488,6 @@ def initialize_database_pair(
             if cleanup_errors:
                 error.add_note(incomplete)
             raise
-        if isinstance(error, DatabaseClaimRefused) and not cleanup_errors:
-            # Another process holds a claim, and nothing this call reserved
-            # is left: contention to retry, reported as it is for a ready pair.
-            raise
         suffix = "" if not cleanup_errors else "; cleanup was incomplete"
         raise DatabasePairInitializationError(
             f"coordinated database initialization failed{suffix}"
@@ -474,6 +515,51 @@ def initialize_database_pair(
     return ready
 
 
+def classify_database_pair(
+    ledger_path: str | Path,
+    history_path: str | Path,
+    *,
+    ledger_database: DatabaseConnectionOwner | None = None,
+    history_database: DatabaseConnectionOwner | None = None,
+) -> DatabasePairContract:
+    """Classify the pair for admission, telling a pair in use from an unusable one.
+
+    A pair that does not classify as fresh or ready is classified again while
+    its shared claims are held. If another process holds one exclusively
+    (creating, migrating, restoring), the pair is refused as
+    ``database-in-use`` with the claim's own wait-and-retry message, whatever
+    its files look like meanwhile. Nothing is written: only a claim file
+    that already exists is opened, and every holder creates its own before it
+    touches a database. Not for a caller that holds a maintenance claim itself.
+    """
+
+    contract = validate_database_pair(
+        ledger_path, history_path,
+        ledger_database=ledger_database, history_database=history_database,
+    )
+    if contract.state in (DatabasePairState.FRESH, DatabasePairState.READY):
+        return contract
+    held: list[DatabaseClaim] = []
+    try:
+        for path in (ledger_path, history_path):
+            claim = acquire_existing_shared_claim(path)
+            if claim is not None:
+                held.append(claim)
+        if not held:
+            return contract
+        return validate_database_pair(
+            ledger_path, history_path,
+            ledger_database=ledger_database, history_database=history_database,
+        )
+    except DatabaseClaimRefused as error:
+        return _refused("database-in-use", guidance=str(error))
+    except (OSError, ValueError):
+        return contract
+    finally:
+        for claim in reversed(held):
+            claim.release()
+
+
 def ensure_database_pair(
     ledger_path: str | Path,
     history_path: str | Path,
@@ -483,29 +569,30 @@ def ensure_database_pair(
 ) -> DatabasePairContract:
     """Require a ready pair before admitting work that can mutate both stores.
 
-    A fresh pair is created; a claim another process holds on either path
-    refuses admission with ``SessionAdmissionRefused`` once nothing created
-    is left. An older one is refused with the migration
-    direction, and an incomplete one with the direction to create its missing
-    database: only ``upgrade_database_pair`` migrates or completes, so each
-    reaches a caller that reports it.
+    A fresh pair is created. A claim another process holds exclusively,
+    whether met while creating or beside a pair that does not classify as
+    ready, refuses admission with ``SessionAdmissionRefused``. An older pair
+    is refused with the migration direction, and an incomplete one with the
+    direction to create its missing database: only ``upgrade_database_pair``
+    migrates or completes, so each reaches a caller that reports it.
     """
 
-    contract = validate_database_pair(
+    contract = classify_database_pair(
         ledger_path, history_path,
         ledger_database=ledger_database, history_database=history_database,
     )
+    message = None
     if contract.state is DatabasePairState.FRESH:
         try:
             contract = initialize_database_pair(ledger_path, history_path)
         except DatabaseClaimRefused as error:
             # As the runtime refuses a ready pair's writer under maintenance.
             message = str(error)
-        else:
-            message = None
-        if message is not None:
-            # Raised outside the handler, so no refused-claim frames ride along.
-            raise SessionAdmissionRefused(message)
+    if message is None and contract.reason == "database-in-use":
+        message = contract.guidance
+    if message is not None:
+        # Raised outside the handler, so no refused-claim frames ride along.
+        raise SessionAdmissionRefused(message)
     if contract.state in (
         DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED,
         DatabasePairState.INCOMPLETE,

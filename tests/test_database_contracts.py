@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from contextlib import closing
+from contextlib import closing, contextmanager
 import json
 import os
 from pathlib import Path
@@ -19,7 +19,12 @@ import namisync.db.schema as schema_module
 import namisync.workflows.database_pair as database_pair
 import namisync.workflows._database_pair_native as database_pair_native
 from namisync.core.session import SessionAdmissionRefused
-from namisync.db.claims import DatabaseInUse, hold_maintenance_claims
+from namisync.db.claims import (
+    DatabaseClaim,
+    DatabaseInUse,
+    acquire_database_claim,
+    hold_maintenance_claims,
+)
 from namisync.db.connections import connect_history_writer, connect_ledger_writer
 from namisync.db.history import HistoryRepository
 from namisync.db.repositories import LedgerRepository
@@ -178,6 +183,10 @@ def test_owned_pair_availability_refusal_has_no_reset_advice(
 
 def _artifacts(path: Path) -> tuple[Path, ...]:
     return (path, *(Path(f"{path}{suffix}") for suffix in _SIDECAR_SUFFIXES))
+
+
+def _entries(folder: Path) -> dict[str, bytes]:
+    return {path.name: path.read_bytes() for path in folder.iterdir()}
 
 
 def _snapshot(*paths: Path) -> dict[Path, bytes]:
@@ -1692,7 +1701,7 @@ def test_caught_partial_database_initialization_removes_owned_artifacts(
     service.close()
 
 
-def test_first_use_under_held_claims_keeps_the_typed_refusal_after_cleanup(
+def test_first_use_under_held_claims_is_refused_with_the_claims_retry_message(
     tmp_path: Path,
 ) -> None:
     # External review (third A4): with both mains absent and both claims held,
@@ -1714,24 +1723,115 @@ def test_first_use_under_held_claims_keeps_the_typed_refusal_after_cleanup(
     )
 
 
-def test_first_use_claim_refusal_with_incomplete_cleanup_stays_a_failure(
+def test_first_use_takes_both_claims_before_it_reserves_anything(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
-    retract = database_pair._retract_owned
+    monkeypatch.setattr(
+        database_pair, "_reserve_database",
+        lambda *args: pytest.fail("a refused claim must reserve nothing"),
+    )
+    for held in (ledger, history):
+        with acquire_database_claim(held, exclusive=False):
+            with pytest.raises(DatabaseInUse) as refused:
+                database_pair.initialize_database_pair(ledger, history)
+        assert refused.value.path == held
+    assert _snapshot(ledger, history) == {}
 
-    def incomplete(owned: dict[Path, OwnedArtifactLease]) -> tuple[BaseException, ...]:
-        assert retract(owned) == ()
-        return (OSError("injected cleanup report"),)
 
-    monkeypatch.setattr(database_pair, "_retract_owned", incomplete)
-    with hold_maintenance_claims(ledger, history):
-        with pytest.raises(
-            DatabasePairInitializationError, match="cleanup was incomplete",
-        ) as raised:
+def test_first_use_in_a_folder_that_cannot_be_made_is_a_failed_initialization(
+    tmp_path: Path,
+) -> None:
+    blocker = tmp_path / "not-a-folder"
+    blocker.write_bytes(b"file")
+    with pytest.raises(
+        DatabasePairInitializationError, match="coordinated database initialization failed$",
+    ) as raised:
+        database_pair.ensure_database_pair(blocker / "ledger.db", blocker / "history.db")
+    assert isinstance(raised.value.__cause__, OSError)
+    assert blocker.read_bytes() == b"file"
+
+
+def test_first_use_holds_both_claims_until_the_pair_is_published(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Three commands started at once on a fresh pair: the two that lost were
+    # refused for "inconsistent-pair" or "database-unavailable" (exit 4), or
+    # told a database was missing, because they read the winner's half-made
+    # files.
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    create = database_pair._initialize_reserved_history
+    seen: list[tuple[str, str | None, str | None]] = []
+
+    def observe(path: Path, *, claim: DatabaseClaim) -> Path:
+        # What another admission sees while the ledger exists and History does not.
+        cold = database_pair.validate_database_pair(ledger, history)
+        assert cold.state is not database_pair.DatabasePairState.READY
+        # Names and sizes: the held claim files cannot be read.
+        before = {entry.name: entry.stat().st_size for entry in tmp_path.iterdir()}
+        contract = database_pair.classify_database_pair(ledger, history)
+        seen.append((contract.state.value, contract.reason, contract.guidance))
+        with pytest.raises(SessionAdmissionRefused, match="maintenance is in progress"):
             database_pair.ensure_database_pair(ledger, history)
+        assert {entry.name: entry.stat().st_size for entry in tmp_path.iterdir()} == before
+        return create(path, claim=claim)
 
-    assert isinstance(raised.value.__cause__, DatabaseInUse)
+    monkeypatch.setattr(database_pair, "_initialize_reserved_history", observe)
+    assert database_pair.initialize_database_pair(ledger, history).state is (
+        database_pair.DatabasePairState.READY
+    )
+
+    assert [(state, reason) for state, reason, _ in seen] == [("refused", "database-in-use")]
+    assert seen[0][2] == (
+        f"Database maintenance is in progress on {ledger}. New work is refused, not "
+        "queued; wait for maintenance to finish, then start this again."
+    )
+    # Released on return: a writer's shared claim and maintenance both proceed.
+    with hold_maintenance_claims(ledger, history):
+        pass
+    assert database_pair.classify_database_pair(ledger, history).state is (
+        database_pair.DatabasePairState.READY
+    )
+
+
+def test_first_use_returns_a_pair_another_process_created_while_it_waited(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    hold = database_pair.hold_maintenance_claims
+
+    @contextmanager
+    def created_meanwhile(*paths: Path):
+        initialize_ledger(ledger)
+        initialize_history(history)
+        with hold(*paths) as claims:
+            yield claims
+
+    monkeypatch.setattr(database_pair, "hold_maintenance_claims", created_meanwhile)
+    monkeypatch.setattr(
+        database_pair, "_publish_fresh_pair",
+        lambda *args: pytest.fail("a pair that is no longer fresh must not be created"),
+    )
+    assert database_pair.ensure_database_pair(ledger, history).state is (
+        database_pair.DatabasePairState.READY
+    )
+    assert set(_snapshot(ledger, history)) == {ledger, history}
+
+
+def test_an_unusable_pair_nobody_holds_is_classified_as_found_and_nothing_is_written(
+    tmp_path: Path,
+) -> None:
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    ledger.write_bytes(b"not a SQLite database")
+    for with_claim_files in (False, True):
+        if with_claim_files:
+            with hold_maintenance_claims(ledger, history):
+                pass
+        before = _entries(tmp_path)
+        cold = database_pair.validate_database_pair(ledger, history)
+        assert cold.state is database_pair.DatabasePairState.REFUSED
+        assert database_pair.classify_database_pair(ledger, history) == cold
+        assert _entries(tmp_path) == before
 
 
 def test_initialization_cleanup_preserves_unproven_raced_sidecar(

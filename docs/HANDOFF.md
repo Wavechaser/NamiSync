@@ -1,4 +1,4 @@
-# Latest session — M2-A4 third review round, 2026-11-26
+# Latest session — M2-A4 third review round, 2026-11-27
 
 The five findings of the third M2-A4 review and the four items the second
 round left open are fixed. Work is on `milestone2`; nothing is pushed. M2-A1
@@ -24,11 +24,22 @@ to M2-A4 are complete and M2-A5 is the next row, still proposed.
   decides the recovery (finding 2); wrong-role and live-backup refusals no
   longer say "Nothing was changed." (finding 5); a database path that cannot
   be written as it is, to the stream in use, is described, not quoted.
+- The commit after `165fa4e9` (user decision, 2026-11-27): creating a first
+  pair holds both exclusive claims until it is published, and admission
+  checks for a held claim before it reports a pair as unusable
+  (`classify_database_pair`). Commands that lose the race to create a pair,
+  and work started during a restore's copy, exit `3` with the claim's retry
+  message.
 
 ## Verification
 
 - Ordinary suite on `0ce55b6f`: 7392 passed, 4 skipped, 35 deselected, with
   the seven known interpreter-bound failures; `lint-imports` 13 kept.
+- The claim change: 7397 ordinary tests passed with the same seven
+  failures, 13 contracts kept. Its reviewer required three corrections
+  (sync planning exited `4`, an unusable folder surfaced as a raw error,
+  stale sentences) and confirmed them; two COMMANDLINE sentences were then
+  corrected as it specified and not seen again.
 - Each commit had an independent adversarial review with out-of-tree
   mutations. `57ca297a` needed one doc correction and `0ce55b6f` three code
   corrections, which its reviewer confirmed.
@@ -53,15 +64,25 @@ to M2-A4 are complete and M2-A5 is the next row, still proposed.
 
 ## Immediate context
 
-- Open for a user decision (also in the A4 row):
-  - A canceled or failed verify whose mismatch could not be recorded shows
-    it only in Details; the row shows the ledger's earlier state.
-  - While an integrity run is paused and the ledger is restored from the
-    CLI, rows keep the run's live labels until it is resumed or canceled. A
-    completed run's labels outlast a later CLI restore until Refresh. Both
-    need a ledger-identity signal on the page.
-  - Two processes creating a first pair at once: the loser exits `4` with
-    "coordinated database initialization failed", not a retryable refusal.
+- Decided by the user on 2026-11-27 and left for B3 (also in the A4 row):
+  - The inventory review has two sources for a row, the run's live items and
+    the ledger. Accepted until B3: a canceled or failed verify whose mismatch
+    could not be recorded shows it only in Details, and rows keep a run's
+    labels after a CLI restore until the run is resumed or canceled, or
+    until Refresh.
+  - The integrity page shows no run-level status when item recording or
+    audit degraded, though the terminal result carries `recording` and
+    `audit`; the plan review shows both for sync. No session reports audit
+    degradation before it ends: the event hub's `audit_degraded` is unread.
+    One fix family, the status lines first.
+- From the three-process runs for the claim change:
+  - Before it, 77 of 80 losing commands exited `4` (`inconsistent-pair`,
+    `database-unavailable`, once `history-missing`); none was told to
+    discard a database. After it, 60 rounds gave no exit `4`.
+  - The process that created the pair can itself be told to retry when a
+    later one holds the claims for its own look.
+  - Three `inventory` commands at once on an existing pair: 2 of 40 rounds
+    had one exit `7`, "History recording is degraded". Not investigated.
 - An ordinary failed or canceled integrity run now also shows ledger states
   on its rows, with the run's result in Details; this is wider than the
   replaced-ledger case and is intended.

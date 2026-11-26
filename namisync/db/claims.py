@@ -116,13 +116,31 @@ class DatabaseClaim:
 def acquire_database_claim(main: str | Path, *, exclusive: bool) -> DatabaseClaim:
     """Take a shared or exclusive claim without waiting, or refuse with a typed error."""
 
+    return _acquire(main, exclusive=exclusive, create=True)
+
+
+def acquire_existing_shared_claim(main: str | Path) -> DatabaseClaim | None:
+    """Take a shared claim on a claim file that already exists, creating nothing.
+
+    None when there is no claim file: every holder creates it first and it is
+    never removed, so nobody holds a claim. Refuses like any shared claim
+    while another holder has the database exclusively.
+    """
+
+    try:
+        return _acquire(main, exclusive=False, create=False)
+    except FileNotFoundError:
+        return None
+
+
+def _acquire(main: str | Path, *, exclusive: bool, create: bool) -> DatabaseClaim:
     main_path = validate_database_path(main)
     path = claim_path(main_path)
     # Python's own open is visible to audit hooks and, under PEP 446, already
     # non-inheritable (O_NOINHERIT only states it); the lock lives on this handle.
     descriptor = os.open(
         to_extended_length_path(str(path)),
-        os.O_RDWR | os.O_CREAT | os.O_BINARY | os.O_NOINHERIT,
+        os.O_RDWR | (os.O_CREAT if create else 0) | os.O_BINARY | os.O_NOINHERIT,
         0o666,
     )
     try:

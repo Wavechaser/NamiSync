@@ -156,10 +156,13 @@ its guidance, then, for custom database paths, the line naming them
 four location commands are refused at admission: they print
 `Execution refused:` (sync) or `<Command> refused:` with the maintenance
 message (new work is refused, not queued; wait, then start again), exit `3`
-and start no run. Planning and review still run, since they write neither
-database. The same holds when neither database exists yet and the command
-would create them: it prints the claim's in-use message, which ends `then
-retry.`, exits `3` and leaves no database file. A refusal at admission or
+and start no run. Planning and review still run beside a ready pair, since
+they write neither database; while the pair's files are being created or
+restored, planning is refused the same way (`Planning refused:`). The same
+holds when neither database exists yet and the command would create them, or
+another command is creating them: it prints the claim's wait-and-retry
+message (in use, or maintenance in progress), exits `3` and leaves no
+database file of its own. A refusal at admission or
 because another NamiSync process, of any version, has either database open or
 holds its claim leaves every existing main and sidecar byte unchanged. A migration that fails after its backup was
 published (`migration-failed`) normally leaves the old main file, the published

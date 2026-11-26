@@ -26,7 +26,7 @@ restarts, crashes, restores, retries and schema changes, and is shown honestly.
 Safe-to-change-the-databases work: guards and foundations that land before the
 first schema change. M2_PLAN owns checkpoint scope and gates.
 
-#### Database maintenance commands (2026-11-25 – 2026-11-26)
+#### Database maintenance commands (2026-11-25 – 2026-11-27)
 
 - Delivered M2-A4. `namisync check`, `namisync backup` and
   `namisync restore {ledger,history} BACKUP` work on the database pair as
@@ -142,6 +142,15 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
 - On `0ce55b6f`: 7392 ordinary tests pass apart from the seven known
   failures; 13 import contracts hold. Each of the five commits had an independent review; two needed corrections, which the
   same reviewer confirmed.
+
+- Creating a first database pair holds both exclusive claims until the pair
+  is published, and admission checks for a held claim before it reports a
+  pair as unusable (user decision). Three commands started at once on a fresh
+  pair used to leave the two that lost with `inconsistent-pair` or
+  `database-unavailable` and exit `4`, once with a missing-History message;
+  they now exit `3` with the claim's wait-and-retry message, sync planning
+  included (`Planning refused:`). A restore caught mid-copy is reported the
+  same way instead of as `database-unavailable`.
 
 #### Maintenance claim and schema migration (2026-11-25)
 

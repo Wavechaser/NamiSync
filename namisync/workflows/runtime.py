@@ -155,10 +155,10 @@ from .database_pair import (
     DatabasePairRefusedError,
     DatabasePairState,
     DatabasePairUpgrade,
+    classify_database_pair,
     ensure_database_pair,
     initialize_database_pair,
     upgrade_database_pair,
-    validate_database_pair,
 )
 from .models import (
     InventoryPublication,
@@ -412,11 +412,11 @@ class LocalWorkflowRuntime:
         )
 
     def validate_database_contracts(self) -> DatabasePairContract:
-        """Return the read-only ledger/history pair classification."""
+        """Return the pair classification; a pair another process holds is ``database-in-use``."""
 
         self._require_open()
         with self._database_pair_lock:
-            return validate_database_pair(
+            return classify_database_pair(
                 self.ledger_path, self.history_path,
                 ledger_database=self._ledger_database,
                 history_database=self._history_database,
@@ -763,6 +763,9 @@ class LocalWorkflowRuntime:
             (checkpoint.source_path, checkpoint.target_path)
         )
         contract = self.validate_database_contracts()
+        if contract.reason == "database-in-use":
+            # Another process holds the pair: contention to retry, as at execution.
+            raise SessionAdmissionRefused(contract.guidance)
         if contract.state in (
             DatabasePairState.REFUSED, DatabasePairState.MIGRATION_REQUIRED,
             DatabasePairState.INCOMPLETE,

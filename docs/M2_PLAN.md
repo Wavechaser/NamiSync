@@ -299,23 +299,30 @@ Checkpoints:
       damaged the pair in a child-process run.
     - A role's `check` states what was found; only the pair decision
       directs a discard.
-  - **Open for a user decision:**
-    - A canceled or failed verify whose mismatch could not be recorded
-      shows that mismatch only in Details; the row shows the ledger's
-      earlier state.
-    - While an integrity run is paused and the ledger is restored from the
-      CLI, rows keep the run's live labels until the run is resumed or
-      canceled. A completed run's labels likewise outlast a later CLI
-      restore until Refresh. Both need a ledger-identity signal on the page.
-    - Two processes creating a first pair at once: the loser ends with
-      "coordinated database initialization failed" and exit `4`, not a
-      retryable refusal.
+  - **User decisions (2026-11-27):**
+    - Creating a first pair holds both exclusive claims throughout, and
+      admission checks for a held claim before it reports a pair as
+      unusable. Three commands started at once on a fresh pair had left the
+      losers with `inconsistent-pair` or `database-unavailable` and exit `4`;
+      they now exit `3` with the claim's retry message. The same check
+      covers a restore caught mid-copy.
+    - The inventory review has two sources for a row, the run's live items
+      and the ledger. Two consequences are accepted until B3: a canceled or
+      failed verify whose mismatch could not be recorded shows it only in
+      Details, and rows keep a run's labels after a CLI restore until the
+      run is resumed or canceled, or until Refresh.
   - **Gate result (2026-11-26, `0ce55b6f`):** 7392 ordinary tests passed, 4
     skipped, 35 deselected, with the same seven failures; 13 contracts kept.
-    Each of the five commits was independently reviewed.
+    Each of the five commits was independently reviewed. The claim change
+    of 2026-11-27: 7397 passed with the same seven failures, 13 contracts
+    kept, independently reviewed.
   - At the first post-M2 schema step, the stamp condition ("the ledger
     migrated in this call") must be narrowed to the 0.1.0 step.
-  - **Left open, with owners:** the desktop refusal that names a replaced
+  - **Left open, with owners:** the integrity page shows no run-level
+    status when item recording or audit degraded, though the result carries
+    both, and no session reports audit degradation before it ends (B3, one
+    fix family: the page needs the status lines sync has, then a live audit
+    signal on the session); the desktop refusal that names a replaced
     ledger, restore inside the desktop and its refusal naming waiting work
     (B3); inventory acknowledge and restore by row id are not covered by the
     plan's instance check (B3); stored plans and paused continuations record

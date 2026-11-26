@@ -1348,14 +1348,33 @@ records are still being written to either database, in any process.
   audit is degraded holds neither claim until its ledger recorder opens, and
   that recorder refuses it as below.
 
-  First use is refused the same way. When admission creates a fresh pair
-  (`ensure_database_pair`) and schema creation's exclusive claim is refused
-  (`DatabaseInUse`, for example while `check` holds the absent pair), cleanup
-  removes everything the attempt reserved and the refusal becomes
+  First use is refused the same way. Creating a fresh pair
+  (`initialize_database_pair`) holds both exclusive claims from before its
+  first file is reserved until the pair is published, and classifies the pair
+  again under them, so a pair another process created meanwhile is used as it
+  is. A claim that is refused (`DatabaseInUse`, for example while `check`
+  holds the absent pair or another process is creating it) refuses before
+  anything is reserved; `ensure_database_pair` turns it into
   `SessionAdmissionRefused` with the claim's own retry message (CLI exit `3`).
-  Cleanup that did not complete stays a `DatabasePairInitializationError`.
+  A folder or claim file that cannot be made is a
+  `DatabasePairInitializationError`, like any failure while creating.
   Desktop startup creates a fresh pair itself and shows that message in its
   startup error.
+- **Admission tells a pair in use from an unusable one.** A pair that does
+  not classify as fresh or ready is classified again while its shared claims
+  are held (`classify_database_pair`, used by `ensure_database_pair`, the
+  runtime's `validate_database_contracts` and the first check of
+  `initialize_database_pair`). If another process holds a claim exclusively,
+  the pair is refused as `database-in-use` with that claim's wait-and-retry
+  message, whatever its files look like meanwhile: a pair half created, or a
+  restore mid-copy, is not reported as inconsistent, unavailable or missing a
+  database, and gets no discard advice. Only a claim file that already exists
+  is opened, so classification still writes nothing; every holder creates its
+  claim file before it touches a database. Sync planning refuses the same
+  way (`Planning refused:`, exit `3`). With three commands started at once on
+  a fresh pair, one succeeds and the others exit `3`; the one that created
+  the pair may itself be told to retry when a later one holds the claims for
+  its own look.
 - **Maintenance holds it exclusively** on both databases of the pair, ledger
   first, and refuses rather than waits while any claim is held:
   `hold_maintenance_claims(ledger, history)` releases the ledger claim when
@@ -1367,15 +1386,15 @@ records are still being written to either database, in any process.
   their whole run and refuse with `database-in-use` otherwise; the db
   operations themselves require their database's held exclusive claim. Schema
   creation (`_create_schema`) takes its own database's claim exclusively before
-  SQLite opens the file, so a refused creation leaves no database; inside pair
-  initialization the reservations are retracted and the refusal is reported as
-  above for first use.
+  SQLite opens the file, so a refused creation leaves no database; pair
+  initialization passes it the claim it already holds.
 - **Readers take no claim.** SQLite reads are consistent snapshots, and a stale
   view is only behind. Read-only classification (`validate_database_pair`,
   `probe_database_file_contract`, `DatabaseConnectionOwner`) never creates a
-  claim file.
+  claim file. Admission's second look at a pair it cannot use holds shared
+  claims for that look, on claim files that already exist, as below.
 - **Where a refusal surfaces.** At admission no run starts. The CLI prints
-  `Execution refused:` for sync, or `Inventory refused:`, `Baseline refused:`,
+  `Planning refused:` or `Execution refused:` for sync, or `Inventory refused:`, `Baseline refused:`,
   `Verify refused:` or `Rebaseline refused:`, with the claim's own message
   (`DatabaseMaintenanceActive`, or `DatabaseInUse` on first use), and exits 3. The desktop receives the
   definitive fixed bridge error `database_maintenance`
