@@ -1,114 +1,90 @@
-# Latest session — M2-A4 adversarial review, 2026-11-26
+# Latest session — M2-A4 review fixes and stamp revision, 2026-11-26
 
-The read-only review at `48ab4718` covered all six M2-A4 outcomes, starting
-with the installed `namisync.exe` on isolated database pairs. A4 passed its
-three closing conditions, but backup rotation can discard the last usable
-recovery point. That is the first defect to address. The delivery status and
-deferred B2/B3 work are in [M2_PLAN](M2_PLAN.md). All six findings are open.
+The six defects from the review at `48ab4718` are fixed, and the v0.1.0 stamp
+rule is replaced under the revised
+[DEFENSE §2.5.4](DEFENSE.md#254-migrating-a-released-database). Work is on
+`milestone2`; nothing is pushed. M2-A1 to M2-A4 are complete and M2-A5 is the
+next row, still proposed. [M2_PLAN](M2_PLAN.md)'s A4 row holds the decisions
+and what is open; [DATABASE](DATABASE.md#data-protection) owns the behavior.
 
-## Six defects
+## Changes
 
-1. **High — Rotation can discard every restorable backup.** With a dangling
-   foreign key in the ledger, `check` advised taking a backup. Three successive
-   `backup` commands exited 0 and rotated out the good copies. All three
-   retained ledger backups then failed to restore into an empty target with
-   exit 4. Backup verification accepts foreign-key violations that restore
-   image verification rejects. [Backup and restore verification](../namisync/db/maintenance.py)
-2. **High — A plan can read a ledger and carry no instance ID.** Planning
-   started with a fresh pair. A second process created the pair with
-   `inventory` before the first plan queried correspondence. The query ran and
-   the commitment still carried `ledger_instance_id=None`. Source inspection
-   shows that execution skips the replacement check for that value.
-   [Plan preparation and correspondence](../namisync/workflows/runtime.py) ·
-   [Execution check](../namisync/workflows/sync.py)
-3. **High, with custom filenames — Rotation can select the live peer for
-   deletion.** A valid History path can match the ledger's backup filename
-   pattern. Rotation protects the new backup and selects other regular files
-   by name and age. An old enough, closed History main is eligible for removal.
-   This follows from inspection of the candidate selection and unlink path.
-   [Pair rotation](../namisync/workflows/database_maintenance.py) ·
-   [Candidate selection](../namisync/db/maintenance.py)
-4. **Medium — A new M2 run can acquire a stale History stamp.** Sync,
-   inventory and integrity admission read the ledger instance before the
-   observer acquires History's shared claim. A restore that finishes in that
-   interval can leave a run writing against the new ledger with the old stamp
-   in History. Inspection confirmed the ordering. The review did not observe
-   a misattributed run. Read the instance under the observer's existing claim.
-   [Admission](../namisync/workflows/runtime.py) · [Observer](../namisync/db/history.py)
-5. **Medium — Recovery instructions lose custom database paths.** For a
-   custom pair with a missing ledger, the CLI suggested
-   `namisync restore ledger <backup file>`. With the default data directory
-   redirected into the fixture, an unqualified command selected the default
-   pair. Following the advice could replace its ledger and leave the intended
-   pair unrepaired. [CLI recovery guidance and path selection](../namisync/interfaces/cli.py)
-6. **Medium — A partial rename can report a kept file that does not exist.**
-   Restore moves sidecars first. If a later rename fails before the main
-   moves, the failure reports the proposed kept main path, although the main
-   is still at its original path. Inspection found that the code already
-   records each successful move. [Restore failure handling](../namisync/db/maintenance.py)
+- `41e020b7`: a plan made with no ledger instance reads no ledger. A run's
+  History stamp is read again once the observer holds its claim, and
+  admission is refused if the ledger was replaced in between.
+- `c29ebe18`:
+  - Backup, restore source and restore image share one content check
+    (integrity and foreign keys). A database with foreign key violations is
+    not backed up, and restore renames it aside instead of overwriting it.
+  - Rotation never removes a live database.
+  - A restore that stops after moving only sidecars names the files moved.
+  - The CLI decides its closing lines from the result, validates paths before
+    folder checks, and repeats custom database options with its guidance.
+- `e1f40f63`:
+  - A v0.1.0 History is stamped only when the same operation migrated its
+    ledger. The `migrated-released` lineage kind, `without_ledger` and
+    `MigratedDatabase.unstamped` with its notices are gone.
+  - `upgrade_database_pair` replaces the separate migrate and complete
+    operations for the CLI and desktop startup.
+  - A ledger restore is refused only beside a swapped or newer History, or
+    over a healthy older pair (`pair-older`).
 
-## Five consolidation opportunities
+Of the review's five consolidation opportunities, all are done.
 
-1. Use the same content checks for ordinary backups eligible for rotation
-   and for restore sources. A diagnostic copy must never displace the last
-   restorable backup. Migration backups retain their distinct rollback purpose.
-2. Classify a database once per open snapshot. Both `check_database` and
-   restore-source validation repeat metadata and topology classification
-   through the reader contract. Read the additional backup-cut fact directly.
-   Keep revalidation at a new snapshot or after publication.
-3. Give CLI and desktop startup one workflow operation to upgrade or complete
-   an existing pair under the claims. Return what migrated and what was
-   created. Keep CLI placement checks, desktop path pinning and their
-   respective reporting at the adapter boundaries.
-4. Render recovery guidance from the refusal reason, effective paths and
-   files actually kept or moved. The CLI currently searches English guidance
-   for phrases and pathnames to decide what else to print.
-5. Reconsider requiring a healthy or missing History peer before ledger
-   restore. Allowing repair beside a damaged History would let the user repair
-   either role first when both are damaged. Keep swapped-path and newer-version
-   protections and advise upgrading a healthy older pair first. This proposal
-   would change the accepted A4 restore policy.
+## Verification
 
-## What held up
-
-- At the reviewed revision, 177 checkpoint tests and 36 related consumer tests
-  passed, and all 13 import contracts held. The tests covered refusal in both
-  directions under maintenance, refusal of a normally stamped plan after
-  restore, ancestor membership, a backup copied into place, pair migration
-  and completion, interrupted restore, and bridge refusal handling.
-- The installed executable completed a healthy check, backup and ledger
-  restore. A real Windows sharing violation during rotation produced a
-  warning and preserved the locked file. A different SQLite page size
-  exercised the CLI's `restore-unconfirmed` outcome.
-- A real SQLite writer lock taken immediately before the destination copy
-  produced exit 3, preserved the ledger instance and named the pre-restore
-  backup. The checkpoint's kill trials covered interruption after copying
-  began. The lock trial covered copy entry only.
-- Two safeguards have distinct jobs. Shared claims protect cooperating M2
-  writers, while the migration open-handle check also sees M1 processes.
-  The writer-side ledger-instance check covers the interval after plan-start
-  validation when degraded audit leaves a run without a History claim.
-- Desktop coverage came from child-process, host, bridge and JavaScript tests.
-  The review did not launch a headed desktop or rerun the ordinary suite.
-  The delivery run at `78246b75` recorded 7310 ordinary passes, 4 skips,
-  35 deselections and the seven known interpreter-bound failures. Review
-  fixtures were removed.
+- Ordinary suite on the bytes of `e1f40f63` before its last test assertion
+  was restored: 7326 passed, 4 skipped, 35 deselected, with the seven known
+  interpreter-bound failures; `lint-imports` 13 kept. Builder and reviewer
+  each ran it.
+- Each of the three commits had an independent adversarial review with
+  out-of-tree mutations. The reviewer could not construct a History stamped
+  with a ledger the same call did not migrate.
+- Changed after review and not seen by a reviewer:
+  - In `c29ebe18`: the custom-path line's quoting, the order of the
+    foreign-key and classification checks on a restore source, and a README
+    sentence. 272 focused tests passed.
+  - In `e1f40f63`: one assertion restored in
+    `test_lone_released_history_migrates_then_gains_a_new_ledger`, which pins
+    that a lone v0.1.0 History's runs stay earlier. 65 tests in the two pair
+    files passed; the full suite was not rerun after it.
+- Not run: a headed desktop launch, the installed `namisync.exe`, and a real
+  two-process race for the two admission fixes (driven by in-process hooks).
+- Review scratch under `build/a4-*` was deleted. No evidence record was
+  promoted.
 
 ## Immediate context
 
-- Two smaller discrepancies surfaced during review. With an invalid Windows
-  parent in both database paths, `check` returned 0 because the missing-folder
-  shortcut precedes path validation. The [CLI manual](COMMANDLINE.md#maintenance-commands)
-  also says backup never creates a WAL, while the [database contract](DATABASE.md#data-protection)
-  and tests allow SQLite to leave an empty WAL.
+- Open for a user decision (also in the A4 row):
+  - A `--location-id` command can create a missing database if a database
+    file vanishes between the CLI's first read and the upgrade. A `create`
+    argument on the operation would close it.
+  - A zero-byte History is classified with the direction to archive or
+    delete both databases. A ledger restore beside it now succeeds and then
+    prints that advice; `check` printed it before this work.
+  - The `history` command and the "Plan again" refusal do not repeat custom
+    database options.
+  - No pair-level test covers the refusal-reason mapping or reclassification
+    under the claims.
+  - The History stamp handling sits in generic engine code (`_copy_rows` and
+    `_verify` in `namisync/db/migration.py`), not in the v8 step.
+- For the first post-M2 schema step: the stamp condition is "the ledger
+  migrated in this call", which equals "from 0.1.0" only while v4 and v8 are
+  the sole registered steps.
+- Consequences of the foreign-key rule:
+  - While either database has violations, `backup` cannot succeed; restoring
+    an earlier backup is the way out.
+  - If only History has them, each `backup` run publishes a ledger backup
+    that is never rotated.
+  - Restore over such a database needs every NamiSync process closed.
+- A source-tree ledger made while the marker kind existed (between
+  `93185248` and `e1f40f63`) is refused with reset guidance.
+- `evidence/EV-0045` scripts import `migrate_database_pair`, which no longer
+  exists; they run only at their recorded revision.
 - Review notes left as they are:
-  - `--database ""` falls back to the default pair, as it does for `sync`, so
-    `restore` with an empty value targets the default database.
+  - `--database ""` falls back to the default pair, as it does for `sync`.
   - The same file given for both database flags through different spellings
-    (`\\?\` or UNC against a drive path) is not recognized as one path; it
-    ends as `database-in-use` with nothing changed.
-  - A `\\?\` database path passes the per-role check but not the pair check,
-    so `check` prints both roles `ok` and then `database-unavailable`.
+    is not recognized as one path; it ends as `database-in-use`.
   - `check` exits `4` both for a problem found and for a check that could not
     finish; the output tells them apart.
   - A cold probe reports `database-unavailable` during any WAL write

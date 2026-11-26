@@ -145,7 +145,7 @@ Checkpoints:
     (in the A4 row), the read rule for runs with no or another ledger
     instance, backup rotation, and a way forward for a damaged database.
 - **M2-A4 Maintenance commands** (complete, 2026-11-26; `650110fd` to
-  `78246b75`). Check, backup and restore run as
+  `78246b75`, review fixes and the stamp revision to `e1f40f63`). Check, backup and restore run as
   maintenance sessions under A3's claim, with restore issuing a new ledger
   instance id and its lineage. Every plan, held in memory or stored, records the
   ledger instance it was planned against, and preflight refuses a mismatch, so a
@@ -212,19 +212,30 @@ Checkpoints:
     scheduled maintenance, export and import, a second-volume backup
     destination, and refusal of restore by naming in-process waiting work
     (B3, where restore first runs inside the desktop).
-  - **Recurrence pause, adjudicated (user decision, 2026-11-25).** Pair
+  - **Stamp rule (user decisions, 2026-11-25 and 2026-11-26).** Pair
     migration stamped a v0.1.0 History's runs with whichever current ledger
-    sat beside it. Two unplanned cases reached the reviews (a restored ledger
-    beside a v0.1.0 History; a ledger created for a lone History, then the
-    History's migration backup put back by hand), and a third predates A4 (a
-    v0.1.0 History copied beside a fresh pair). Owner and choke point: the
-    stamp decision in `migrate_database_pair`. Rule: the ledger's own
-    migration from 0.1.0 records a marker in the ledger (schema 5 amended in
-    place once more), and a v0.1.0 History is stamped only beside a ledger
-    that carries the marker and has no restore or replaced-missing lineage;
+    sat beside it; two unplanned cases reached the reviews and a recurrence
+    pause was taken. Its first rule, a `migrated-released` marker in the
+    ledger's lineage, was withdrawn the next day as residue that outlives the
+    import ([DEFENSE §2.5.4](DEFENSE.md#254-migrating-a-released-database)).
+    Current rule: a v0.1.0 History is stamped only when the same upgrade
+    operation, under the same held claims, migrated its ledger in that call;
     otherwise it migrates unstamped and its runs show as an earlier ledger.
-    It lands with outcome 5. Outcome 4's refusal of a ledger restore beside
-    an older History stays.
+    Ledger schema 5 was amended back in place, and a source-tree ledger made
+    with the marker kind is refused with the reset direction. Accepted
+    residual: an interruption between the ledger's migration and History's
+    leaves a genuine pair's 0.1.0 runs shown as an earlier ledger.
+  - **After the review at `48ab4718` (user decisions, 2026-11-26).** Six
+    defects were fixed (`41e020b7`, `c29ebe18`): the list is in
+    [CHANGELOG](../CHANGELOG.md). Two policies changed with them. A database
+    with foreign key violations is not backed up, and restore renames it
+    aside instead of overwriting it in place, so every maintenance backup
+    restores. A ledger restore is refused only beside a History of another
+    role or a newer one, and, as advice, over a healthy older pair
+    (`pair-older`); beside a damaged, unreadable or 0.1.0 History it
+    proceeds, so either damaged role can be repaired first. The CLI and the
+    desktop upgrade or complete a pair through one operation,
+    `upgrade_database_pair`.
   - **Deferred to B3 (user decision, 2026-11-25):** a plan refused because
     its ledger was replaced shows the desktop's generic commitment refusal.
     A bridge refusal that names the cause should exist, and waits for B3,
@@ -241,7 +252,18 @@ Checkpoints:
     (`tests/test_cli_maintenance.py`), and the kill trials are in
     `tests/test_database_maintenance.py`. 7310 ordinary tests passed, 4
     skipped, 35 deselected, with the seven known failures; 13 import contracts
-    kept. Each outcome had an independent adversarial review.
+    kept. Each outcome had an independent adversarial review. On `e1f40f63`,
+    after the review fixes and the stamp revision, each independently
+    reviewed: 7326 passed, 4 skipped, 35 deselected, with the same seven
+    failures; 13 contracts kept.
+  - **Open for a user decision:** a `--location-id` command can create a
+    missing database if a database file vanishes between the CLI's first
+    read and the upgrade; a zero-byte History is classified with the
+    direction to archive or delete both databases; the `history` command and
+    the "Plan again" refusal do not repeat custom database options; the
+    refusal-reason mapping and reclassification under the claims have no
+    pair-level test. At the first post-M2 schema step, the stamp condition
+    ("the ledger migrated in this call") must be narrowed to the 0.1.0 step.
   - **Left open, with owners:** the desktop refusal that names a replaced
     ledger, restore inside the desktop and its refusal naming waiting work
     (B3); inventory acknowledge and restore by row id are not covered by the

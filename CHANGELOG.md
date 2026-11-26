@@ -47,9 +47,9 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
 - A pair with one database missing is completed by an explicit step at desktop
   startup or a mutating CLI command, with a notice. A lone History gains a new
   ledger with a recorded boundary.
-- A v0.1.0 History's runs are stamped with a ledger's instance only beside
-  that History's own migrated ledger (user decision after a recurrence pause);
-  otherwise they show as an earlier ledger.
+- A v0.1.0 History's runs are stamped with a ledger's instance only when the
+  same operation migrated that ledger (user decisions after a recurrence
+  pause); otherwise they show as an earlier ledger.
 - Damage refusals now point to `namisync check` and, given a backup, to
   `namisync restore`.
 - Gate on `78246b75`: maintenance is refused while another process writes, a
@@ -59,6 +59,30 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   pass apart from the seven known interpreter-bound failures; 13 import
   contracts hold. Each of the six outcomes had an independent adversarial
   review. What is left for B2 and B3 is in M2_PLAN.
+
+- Fixed six findings from a review of M2-A4.
+  - A database with foreign key violations is no longer backed up, so such a
+    copy cannot rotate out a backup that restores; restore renames that
+    database aside instead of overwriting it.
+  - A plan made with no ledger no longer reads one that appears while it
+    plans.
+  - Rotation never removes a live database, whatever its name.
+  - A run's History stamp is read again under History's claim, and admission
+    is refused if the ledger was replaced in between.
+  - Guidance for a pair selected with `--database` or `--history-database`
+    ends with those options.
+  - A restore that stops after moving only sidecars names the files it moved.
+  - Also: `check` validates paths before looking for folders, and the CLI
+    decides its closing lines from the result instead of the guidance text.
+- Withdrew the `migrated-released` lineage marker under DEFENSE §2.5.4's
+  revised policy for the v0.1.0 import; the same-operation rule above replaces
+  it, and ledger schema 5 was amended back in place. The CLI and desktop now
+  upgrade or complete a pair through one operation. A ledger can be restored
+  beside a damaged, unreadable or v0.1.0 History, so either damaged database
+  can be repaired first. The update notice no longer says whether History's
+  runs were stamped.
+- On `e1f40f63`: 7326 ordinary tests pass apart from the seven known
+  failures; 13 import contracts hold. Each change had an independent review.
 
 #### Maintenance claim and schema migration (2026-11-25)
 
