@@ -2368,10 +2368,16 @@ def _restore_ledger(runtime: LocalWorkflowRuntime, backup: Path, *, retry: bool 
 
 def _assert_refused_resume(
     record, mode: IntegrityMode, *, ledger: Path, dump_before: list[str],
-    scans_before: int, scanner: _Scanner, calls: list[str],
+    scans_before: int, scanner: _Scanner, calls: list[str], recorded: list[str],
 ) -> None:
     result = record.result
     assert result is not None
+    # The record keeps what the session reported before the pause, once: it
+    # is the run's account, which the error says belongs to the replaced
+    # ledger, not a claim about the current one.
+    assert [(item.path, item.phase) for item in result.items] == [
+        (recorded[0], mode.value)
+    ]
     assert result.status is SessionState.FAILED
     assert result.disposition is Disposition.RAN
     assert result.error is not None
@@ -2453,7 +2459,7 @@ def test_resume_refuses_integrity_progress_after_the_ledger_is_restored(
 
         _assert_refused_resume(
             record, mode, ledger=ledger, dump_before=dump_before,
-            scans_before=scans_before, scanner=scanner, calls=calls,
+            scans_before=scans_before, scanner=scanner, calls=calls, recorded=recorded,
         )
         # Captured under the paused stretch's recorder claim.
         assert paused_instance == instance_before
@@ -2527,7 +2533,7 @@ def test_resume_refuses_integrity_progress_after_audit_failed_and_the_ledger_was
 
         _assert_refused_resume(
             record, mode, ledger=ledger, dump_before=dump_before,
-            scans_before=scans_before, scanner=scanner, calls=calls,
+            scans_before=scans_before, scanner=scanner, calls=calls, recorded=recorded,
         )
         assert record.result.audit is RecordingStatus.DEGRADED
     finally:
