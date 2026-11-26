@@ -426,18 +426,25 @@ class Dispatcher:
         except BaseException as error:
             retire_exception_graph(error)
             observer = _DegradedAuditObserver()
-        hub = EventHub(
-            session_id=session_id,
-            initial_state=record.state,
-            clock=self._clock,
-            observer=observer,
-            replay_capacity=self._replay_capacity,
-            subscriber_capacity=self._subscriber_capacity,
-            audit_capacity=self._audit_capacity,
-            audit_timeout=self._audit_timeout,
-            audit_offer_timeout=self._audit_offer_timeout,
-            audit_flush_interval=self._audit_flush_interval,
-        )
+        try:
+            hub = EventHub(
+                session_id=session_id,
+                initial_state=record.state,
+                clock=self._clock,
+                observer=observer,
+                replay_capacity=self._replay_capacity,
+                subscriber_capacity=self._subscriber_capacity,
+                audit_capacity=self._audit_capacity,
+                audit_timeout=self._audit_timeout,
+                audit_offer_timeout=self._audit_offer_timeout,
+                audit_flush_interval=self._audit_flush_interval,
+            )
+        except ValueError:
+            # A capacity or interval this dispatcher was configured with was
+            # refused before the hub took the observer, so it is closed here.
+            if observer is not None:
+                observer.close()
+            raise
         stream: EventStream | None = None
         rollback: _AdmissionRollback | None = None
         attachment_started = False

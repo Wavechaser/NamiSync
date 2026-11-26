@@ -4321,6 +4321,39 @@ def test_observer_factory_refusal_refuses_admission_with_nothing_admitted() -> N
         assert dispatcher.shutdown().complete
 
 
+@pytest.mark.parametrize("setting", ["replay_capacity", "audit_capacity"])
+def test_a_refused_hub_configuration_closes_the_admitted_observer(setting) -> None:
+    closed = []
+
+    class Audit:
+        def on_event(self, envelope):
+            return RecordingStatus.OK
+
+        def flush(self):
+            pass
+
+        def finalize(self, result):
+            return RecordingStatus.OK
+
+        def close(self):
+            closed.append(True)
+
+    dispatcher = Dispatcher(
+        {"observed": registration(lambda payload: lambda context: None)},
+        audit_observer_factory=lambda record: Audit(),
+        **{setting: 0},
+    )
+    try:
+        with pytest.raises(ValueError, match="capacity must be positive"):
+            dispatcher.submit("observed", b"payload")
+
+        assert closed == [True]
+        assert dispatcher.list() == ()
+        assert not dispatcher._admission_liability_claimed
+    finally:
+        assert dispatcher.shutdown().complete
+
+
 def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
     finalize_entered = Event()
     release_finalize = Event()
