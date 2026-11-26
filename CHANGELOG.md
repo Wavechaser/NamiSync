@@ -151,6 +151,11 @@ first schema change. M2_PLAN owns checkpoint scope and gates.
   they now exit `3` with the claim's wait-and-retry message, sync planning
   included (`Planning refused:`). A restore caught mid-copy is reported the
   same way instead of as `database-unavailable`.
+- A session's observer takes both shared claims before it opens either
+  database. A History restore that began after a run was prepared used to
+  fail the History open as an ordinary audit failure, so the run was admitted
+  with degraded audit and ended with exit `4` or `7`; it is now refused at
+  admission with the maintenance retry message and exit `3`.
 
 #### Maintenance claim and schema migration (2026-11-25)
 

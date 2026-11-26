@@ -1332,7 +1332,11 @@ records are still being written to either database, in any process.
   **Admission refuses** (M2-A4). Both shared claims are taken when the
   dispatcher's audit-observer factory (`LocalWorkflowRuntime.audit_observer`)
   opens the session's observer: the ledger's first, in maintenance's order,
-  then History's. The ledger instance the observer stamps on the History run
+  then History's, and both before either database is opened for it, so a
+  restore that began after preparation refuses the session instead of
+  failing the History open as an audit failure (`tests/test_inventory_runtime.py`,
+  a child-process History restore stopped mid-copy, naming the run's ledger
+  and another). The ledger instance the observer stamps on the History run
   is read once, under the ledger's claim. A `DatabaseMaintenanceActive` on
   either becomes the core `SessionAdmissionRefused`, which the dispatcher
   raises to the submitter before anything is stored, published, attached or

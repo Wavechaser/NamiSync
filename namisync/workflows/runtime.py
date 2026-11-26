@@ -992,14 +992,8 @@ class LocalWorkflowRuntime:
                 raise TypeError("execution history requires its typed checkpoint")
             request = checkpoint.materialize()
             plan_value = request.execution_set.plan
-            store = self._ensure_history_store(
-                (
-                    plan_value.source_root.path,
-                    plan_value.target_root.path,
-                )
-            )
             return self._stamped_observer(
-                store,
+                (plan_value.source_root.path, plan_value.target_root.path),
                 record,
                 HistoryContext(
                     run_token=str(request.execution_set.run_id),
@@ -1025,9 +1019,8 @@ class LocalWorkflowRuntime:
         else:
             return None
         root = _binding_root(request.binding)
-        store = self._ensure_history_store((root,))
         return self._stamped_observer(
-            store,
+            (root,),
             record,
             HistoryContext(
                 run_token=request.request_id,
@@ -1039,22 +1032,25 @@ class LocalWorkflowRuntime:
         )
 
     def _stamped_observer(
-        self, store: HistoryStore, record: SessionRecord, context: HistoryContext,
+        self, managed_roots: tuple[str, ...], record: SessionRecord, context: HistoryContext,
     ) -> _LedgerClaimedObserver:
-        """Open the observer stamped with the ledger read under the ledger's claim.
+        """Open the observer stamped with the ledger read under both claims.
 
-        The ledger's shared claim is taken first, in maintenance's order, and
-        held until the observer closes, so no maintenance can replace the
-        ledger the stamp names while the run lives, whichever History it
-        names. A refused claim raises ``DatabaseMaintenanceActive``; every
-        failure here releases the ledger's claim.
+        Both shared claims are taken, ledger first in maintenance's order,
+        before either database is opened, so maintenance on either refuses
+        here with ``DatabaseMaintenanceActive`` instead of failing the cold
+        open as an ordinary audit failure. The ledger's claim is held until
+        the observer closes, so no maintenance can replace the ledger the
+        stamp names while the run lives, whichever History it names; the
+        observer holds History's own. Every failure here releases both.
         """
 
         claim = acquire_database_claim(self.ledger_path, exclusive=False)
         try:
-            observer = store.observer(
-                record, replace(context, ledger_instance_id=self._ledger_instance_id()),
-            )
+            with acquire_database_claim(self.history_path, exclusive=False):
+                observer = self._ensure_history_store(managed_roots).observer(
+                    record, replace(context, ledger_instance_id=self._ledger_instance_id()),
+                )
             return _LedgerClaimedObserver(observer, claim)
         except BaseException:
             claim.release()

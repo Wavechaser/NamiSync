@@ -93,6 +93,7 @@ from namisync.workflows.runtime import (
 )
 from namisync.workflows.views import operation_result_view
 
+from _child_process import Child
 from _db_fixtures import FakeClock, NOW, replace_ledger_instance, stored_ledger_instance
 from _inventory_fixtures import (
     PROFILE,
@@ -103,6 +104,7 @@ from _inventory_fixtures import (
     _runtime,
     _wait_for,
 )
+from _maintenance_children import RESTORE as _RESTORE
 
 
 def _outcome(
@@ -1382,6 +1384,61 @@ def test_maintenance_on_the_ledger_alone_refuses_admission_with_history_untouche
         with pytest.raises(KeyError):
             runtime.get_history_summary("ledger-claimed")
     finally:
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+@pytest.mark.parametrize("restore_names_the_runs_ledger", (True, False))
+def test_a_history_restore_begun_after_preparation_refuses_admission_before_history_is_opened(
+    tmp_path: Path, restore_names_the_runs_ledger: bool,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file("a.txt", 1),))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    backups = backup_database_pair(runtime.ledger_path, runtime.history_path, clock=FakeClock())
+    backup = next(item.path for item in backups.backups if item.role == "history")
+    ledger = runtime.ledger_path
+    if not restore_names_the_runs_ledger:
+        # The same ledger at another path: only History's claim is shared.
+        ledger = tmp_path / "elsewhere" / "ledger.db"
+        ledger.parent.mkdir()
+        with closing(sqlite3.connect(runtime.ledger_path)) as source:
+            with closing(sqlite3.connect(ledger)) as copy:
+                source.backup(copy)
+    children: list[Child] = []
+
+    def restore_then_admit(record):
+        # Prepared and not yet admitted: a restore stops inside its copy
+        # transaction, so a cold History open would fail without the claim.
+        child = Child(
+            _RESTORE, str(ledger), str(runtime.history_path), "history", str(backup),
+            "mid-copy", "0",
+        )
+        children.append(child)
+        assert child.read() == "ready"
+        assert child.read() == "stopped"
+        return runtime.audit_observer(record)
+
+    store = InMemorySessionStore()
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        store=store,
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=restore_then_admit,
+    )
+    try:
+        with pytest.raises(SessionAdmissionRefused, match="refused, not queued") as caught:
+            dispatcher.submit(INVENTORY_KIND, InventoryRequest("restoring", location_id=location_id))
+        held = ledger if restore_names_the_runs_ledger else runtime.history_path
+        assert str(held) in str(caught.value)
+        assert dispatcher.list() == ()
+        assert store.snapshot() == ()
+        assert scanner.calls == []
+    finally:
+        for child in children:
+            child.kill()
         assert dispatcher.shutdown().complete
         runtime.close()
 

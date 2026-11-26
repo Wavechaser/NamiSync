@@ -1,37 +1,58 @@
-# Latest session — M2-A4 closure review, 2026-11-27
+# Latest session — M2-A4 closure blocker fixed, 2026-11-27
 
-**A4 is blocked at `9bfc6792`.** The previous nine findings are fixed, but
-inventory can still be admitted during a History restore. M2-A5 is the next
-proposed row. [M2_PLAN](M2_PLAN.md) records the A4 closure criteria and
-[DATABASE](DATABASE.md#data-protection) owns the maintenance contract.
+**The A4 closure blocker found at `9bfc6792` is fixed** in the commit after
+`44fdfd61`. M2-A5 is the next proposed row. [M2_PLAN](M2_PLAN.md) records the
+A4 closure criteria and [DATABASE](DATABASE.md#maintenance-claim) owns the
+maintenance contract.
 
-## Closure blocker
+## The blocker and its fix
 
-After inventory preparation and immediately before observer admission, pause a
-child-process `restore history` inside SQLite's copy transaction. Keep the
-restore paused until inventory returns. The result depends on the ledger used
-by the restore:
+A child-process `restore history`, stopped inside SQLite's copy transaction
+after inventory preparation and before observer admission, used to end in an
+admitted run with degraded audit: exit `4` when the restore named the run's
+ledger, exit `7` when it named another ledger and the same History. The cold
+History open failed before any claim was asked for.
 
-| Restore paths | Observed inventory result |
-| --- | --- |
-| Same ledger and History | The dispatcher admitted the run. The ledger recorder then hit the claim. Inventory reported `disposition=ran`, degraded audit and exit `4`. |
-| Different ledger, same History | Inventory completed its refresh with `ledger=ok`, degraded audit and exit `7` while restore still held the claims. |
+`LocalWorkflowRuntime._stamped_observer` now takes both shared claims, ledger
+first, before it opens the History store or reads the ledger's instance. Both
+cases are refused at admission with the maintenance retry message, nothing
+stored and no scan
+(`test_a_history_restore_begun_after_preparation_refuses_admission_before_history_is_opened`;
+it fails both ways on the earlier runtime).
 
-`LocalWorkflowRuntime._open_audit_observer` opens the History store before
-`_stamped_observer` takes the shared claims. The cold History open during
-restore raises `DatabaseAdmissionError`, which the dispatcher handles as an
-ordinary audit failure. Take both shared claims, ledger first, before opening
-either database for the observer. Closure requires both cases above to exit
-`3` with the maintenance retry message before a session is admitted.
+- Verification: 7399 ordinary tests passed with the seven known
+  interpreter-bound failures; 13 import contracts held.
+- An independent reviewer approved the change with no findings. It ran the
+  new test against an export of `44fdfd61` and saw both cases fail there.
+- Not run: the real `namisync inventory` command beside a child restore. The
+  exit `3` rests on the test above and on the CLI's existing mapping of an
+  admission refusal.
+- Not covered by a test: the order of the two claims inside the observer's
+  opening (swapping them survives).
 
-## Two lower-priority findings
+## The concurrent-inventory exit `7`: cause found, not fixed
 
-- Three concurrent inventories on a healthy pair reproduced the exit `7`
-  seen in the previous round. Of 105 installed-CLI runs, 102 succeeded and
-  three reported degraded audit. In a separate traced run, the **ledger**
-  changed during cold validation of its instance ID. The CLI directed the
-  user to check the **History** path or access. Both databases checked healthy
-  after the 105 runs.
+It is not maintenance and predates A4. A CLI command first opens its ledger
+connection owner when the observer reads the ledger's instance. That open
+runs the cold file validation, which reads the main file, `-wal` and `-shm`
+whole before and after the schema check. Another process writing the ledger
+at that moment fails it in two ways, both traced in 60 rounds of four
+commands (55 clean, 5 exit `7`, 2 exit `4`):
+
+- The files differ between the two reads three times in a row
+  (`DatabaseBusyError` after two 10 ms waits).
+- Reading `-shm` meets another process's SQLite lock and raises
+  `PermissionError`, which is reported as `database-unavailable` at once,
+  with no retry.
+
+At observer admission either one degrades audit, so the run completes with
+exit `7` and a message naming History although the ledger was the file read.
+The same validation during preparation gives exit `4` (`database-busy` or
+`database-unavailable`). Nothing was changed: the cold probe's handling of a
+live writer is its own decision (see the cold-probe note below).
+
+## One lower-priority finding left
+
 - On first use, selecting `nested.db` as the ledger and
   `nested.db/history.db` as History created a directory at the ledger main
   path and left both claim files. Inventory then exited `4` with
