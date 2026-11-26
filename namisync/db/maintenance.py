@@ -4,8 +4,10 @@ Each operation runs under its database's held exclusive maintenance claim,
 which refuses every NamiSync writer. A backup is a verified standalone copy
 published beside the database; a ledger backup records its own cut. Restore
 replaces a database only from a verified backup at the current schema: a
-database that still backs up cleanly is backed up and overwritten in place in
-one SQLite transaction, and any other is renamed aside and kept.
+database that checks ``ok`` is backed up and overwritten in place in one SQLite
+transaction, and any other is renamed aside and kept. Backups, restore sources
+and restore images pass one content check (``_content_fault``), so every
+published maintenance backup is one restore accepts.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ import re
 import secrets
 import sqlite3
 import stat
-from typing import Callable, TypeVar
+from typing import Callable, Collection, TypeVar
 
 from .claims import DatabaseClaim, DatabaseInUse, claim_path
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, validate_database_path
@@ -42,6 +44,7 @@ from .schema import (
     _schema_statements,
     _validate_reader_contract,
     classify_database,
+    ledger_backup_cut,
     ledger_instance_id,
     new_instance_id,
 )
@@ -63,7 +66,8 @@ _Result = TypeVar("_Result")
 class DatabaseCheckState(StrEnum):
     OK = "ok"
     # Admitted and passing integrity_check, but foreign_key_check reports
-    # rows: usable, backs up cleanly, so restore still overwrites it in place.
+    # rows: still usable, but no backup of it would restore, so backup refuses
+    # it and restore sets it aside.
     FOREIGN_KEY_VIOLATIONS = "foreign-key-violations"
     MISSING = "missing"
     DAMAGED = "damaged"
@@ -109,7 +113,10 @@ class DatabaseRestore:
 
 
 class DatabaseRestoreRefused(DatabaseAdmissionError):
-    """Restore refused before changing anything; ``reason`` names why."""
+    """Restore refused before changing anything; ``reason`` names why.
+
+    The message does not say that nothing changed: the type does.
+    """
 
     def __init__(self, reason: str, message: str, path: Path) -> None:
         super().__init__(message)
@@ -120,7 +127,9 @@ class DatabaseRestoreRefused(DatabaseAdmissionError):
 class DatabaseRestoreFailed(DatabaseAdmissionError):
     """Restore failed; ``unconfirmed`` when the database may already have changed.
 
-    ``kept`` names a pre-restore backup or replaced set that this call left.
+    ``kept`` names a pre-restore backup or replaced main that this call left,
+    which the message does not repeat; it is None when only sidecars moved,
+    which the message names.
     """
 
     def __init__(
@@ -133,7 +142,10 @@ class DatabaseRestoreFailed(DatabaseAdmissionError):
 
 
 class DatabaseRestoreInUse(DatabaseInUse):
-    """The in-place copy met another lock holder; its pre-restore backup is ``kept``."""
+    """The in-place copy met another lock holder; its pre-restore backup is ``kept``.
+
+    The message does not repeat ``kept``.
+    """
 
     def __init__(self, message: str, path: Path, *, kept: Path | None) -> None:
         super().__init__(message, path)
@@ -260,6 +272,24 @@ def _problems(connection: sqlite3.Connection) -> tuple[list[str], list[str]]:
     return integrity, violations
 
 
+def _content_fault(connection: sqlite3.Connection) -> str | None:
+    """The one content check of a backup, a restore source and a restore image.
+
+    ``"integrity"`` when ``integrity_check`` fails, ``"foreign-keys"`` when
+    ``foreign_key_check`` reports a row, otherwise None.
+    """
+
+    if connection.execute("PRAGMA integrity_check(1)").fetchall() != [("ok",)]:
+        return "integrity"
+    if connection.execute("PRAGMA foreign_key_check").fetchone() is not None:
+        return "foreign-keys"
+    return None
+
+
+class _ForeignKeyViolations(_BackupVerificationFailed):
+    """The backup copy has foreign key violations, so restore would refuse it."""
+
+
 # --- check -------------------------------------------------------------------
 
 
@@ -300,12 +330,10 @@ def check_database(path: str | Path, *, history: bool, claim: DatabaseClaim) -> 
     def inspect(connection: sqlite3.Connection) -> tuple[int, list[str], list[str], bool]:
         version = classify_database(connection, history=history)
         integrity, violations = _problems(connection)
-        is_backup = False
-        if version == current:
-            try:
-                _validate_reader_contract(connection, history=history)
-            except LedgerIsBackup:
-                is_backup = True
+        is_backup = (
+            not history and version == current
+            and ledger_backup_cut(connection) is not None
+        )
         return version, integrity, violations, is_backup
 
     try:
@@ -340,6 +368,19 @@ def check_database(path: str | Path, *, history: bool, claim: DatabaseClaim) -> 
 
 
 def _backup_failed(role: str, path: Path, error: BaseException) -> DatabaseBackupFailed:
+    if isinstance(error, _ForeignKeyViolations):
+        # Restore refuses such a copy, so it must not enter rotation and
+        # displace a backup that restores.
+        return DatabaseBackupFailed(
+            f"The {role} database {path} has rows that refer to rows that are not "
+            "there (foreign key violations), so no backup was written: restore "
+            "would refuse a copy of it, and keeping one could displace an earlier "
+            "backup that restores. Keep the database files and their -wal and -shm "
+            "sidecars. Run namisync check to list the violations. With an earlier "
+            f"backup made by namisync backup, namisync restore {role} <backup file> "
+            "replaces it and keeps these files beside it.",
+            path,
+        )
     if isinstance(error, _BackupVerificationFailed) or _damage(error):
         # The backup is a page-for-page copy, so it fails only for a damaged
         # source; space or permissions advice cannot help.
@@ -427,8 +468,11 @@ def _verify_backup(
     instance_id: str | None,
     cut_at: str,
 ) -> None:
-    if copy.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+    fault = _content_fault(copy)
+    if fault == "integrity":
         raise _BackupVerificationFailed("the backup failed its integrity check")
+    if fault == "foreign-keys":
+        raise _ForeignKeyViolations("the backup failed its foreign key check")
     stamped = False
     try:
         _validate_reader_contract(copy, history=history)
@@ -458,21 +502,24 @@ def _verify_backup(
 
 
 def rotate_backups(
-    path: str | Path, *, claim: DatabaseClaim, keep: int, protect: Path,
+    path: str | Path, *, claim: DatabaseClaim, keep: int, protect: Collection[Path],
 ) -> BackupRotation:
-    """Remove the oldest maintenance backups beyond ``keep``, always keeping ``protect``.
+    """Remove the oldest maintenance backups beyond ``keep``, never a ``protect`` path.
 
     ``claim`` must be this database's held exclusive maintenance claim. The
     population is regular files beside the database named exactly
     ``<main>.backup-<UTC stamp>Z`` in the maintenance backup's own format
     (ASCII digits only); migration backups, temporaries and replaced sets never
-    match. ``protect`` is kept whatever its name, with the newest others by
-    stamp. A failed removal is reported, never raised.
+    match. Each ``protect`` path (the new backup, and both live database mains,
+    whose custom names may match the pattern) is never removed or counted;
+    beside the new backup, the newest ``keep - 1`` others by stamp are kept.
+    A failed removal is reported, never raised.
     """
 
     if keep < 1:
         raise ValueError("rotation keeps at least the new backup")
     resolved = _require_claim(path, claim)
+    protected = {os.path.normcase(validate_database_path(kept)) for kept in protect}
     pattern = re.compile(re.escape(resolved.name) + r"\.backup-([0-9]{8}T[0-9]{12})Z")
     try:
         entries = list(os.scandir(resolved.parent))
@@ -481,7 +528,7 @@ def rotate_backups(
     others: list[tuple[str, Path]] = []
     for entry in entries:
         match = pattern.fullmatch(entry.name)
-        if match is None or entry.name == protect.name:
+        if match is None or os.path.normcase(resolved.parent / entry.name) in protected:
             continue
         try:
             observed = entry.stat(follow_symlinks=False)
@@ -603,7 +650,8 @@ def _not_created(role: str, path: Path, error: BaseException) -> DatabaseCreatio
 
 
 def _refused(reason: str, message: str, path: Path) -> DatabaseRestoreRefused:
-    return DatabaseRestoreRefused(reason, f"{message} Nothing was changed.", path)
+    # The type says nothing changed; callers render that, not the message.
+    return DatabaseRestoreRefused(reason, message, path)
 
 
 def _validate_restore_source(source: Path, *, history: bool) -> _SourceFacts:
@@ -635,7 +683,8 @@ def _validate_restore_source(source: Path, *, history: bool) -> _SourceFacts:
             "backup-unavailable", f"{unavailable} ({type(error).__name__}: {error}).", source,
         ) from error
     try:
-        if connection.execute("PRAGMA integrity_check(1)").fetchall() != [("ok",)]:
+        fault = _content_fault(connection)
+        if fault == "integrity":
             raise _refused(
                 "backup-damaged",
                 f"The backup {source} failed SQLite's integrity check, so it cannot be "
@@ -673,12 +722,18 @@ def _validate_restore_source(source: Path, *, history: bool) -> _SourceFacts:
                 "file is the way back to NamiSync 0.1.0.",
                 source,
             )
-        stamped = False
-        try:
-            _validate_reader_contract(connection, history=history)
-        except LedgerIsBackup:
-            stamped = True
-        if not history and not stamped:
+        # After classification, so a backup of another role or version is
+        # named as that rather than as damaged.
+        if fault == "foreign-keys":
+            raise _refused(
+                "backup-damaged",
+                f"The backup {source} has rows that refer to rows that are not there "
+                "(foreign key violations), so it cannot be restored. Choose another "
+                "backup.",
+                source,
+            )
+        cut_at = None if history else ledger_backup_cut(connection)
+        if not history and cut_at is None:
             raise _refused(
                 "backup-unstamped",
                 f"The ledger file {source} does not record the backup it is, so NamiSync "
@@ -688,12 +743,9 @@ def _validate_restore_source(source: Path, *, history: bool) -> _SourceFacts:
         counts = _row_counts(connection, _tables(connection))
         if history:
             return _SourceFacts(counts, (), None, None)
-        instance_id = ledger_instance_id(connection)
-        row = connection.execute(
-            "SELECT at FROM ledger_lineage WHERE kind = 'backup-cut' AND instance_id = ?",
-            (instance_id,),
-        ).fetchone()
-        return _SourceFacts(counts, _lineage(connection), instance_id, decode_utc(row[0]))
+        return _SourceFacts(
+            counts, _lineage(connection), ledger_instance_id(connection), decode_utc(cut_at),
+        )
     except DatabaseRestoreRefused:
         raise
     except (sqlite3.Error, ValueError) as error:
@@ -758,9 +810,10 @@ def _prepare_image(
 def _verify_image(
     copy: sqlite3.Connection, *, history: bool, facts: _SourceFacts, instance_id: str | None,
 ) -> None:
-    if copy.execute("PRAGMA integrity_check").fetchall() != [("ok",)]:
+    fault = _content_fault(copy)
+    if fault == "integrity":
         raise sqlite3.DatabaseError("restore image failed its integrity check")
-    if copy.execute("PRAGMA foreign_key_check").fetchone() is not None:
+    if fault == "foreign-keys":
         raise sqlite3.DatabaseError("restore image failed its foreign key check")
     # The full current reader contract; a ledger is no longer a backup.
     _validate_reader_contract(copy, history=history)
@@ -856,9 +909,10 @@ def restore_database(
 
     ``now`` must be read after both maintenance claims are held. A ledger
     image gets a new instance id and keeps every lineage row of the backup.
-    A database that checks as usable is backed up first and overwritten in
-    place; one that fails admission is renamed aside with its sidecars, kept,
-    once no other handle is open on it; a missing one is simply published.
+    A database that checks ``ok`` is backed up first and overwritten in place;
+    any other (failing admission, or with foreign key violations, which no
+    backup would restore) is renamed aside with its sidecars, kept, once no
+    other handle is open on it; a missing one is simply published.
     Refusals change nothing. A failure after the point of no return is
     reported as unconfirmed, never as unchanged.
     """
@@ -891,12 +945,9 @@ def restore_database(
             "it, close other NamiSync windows and commands, then try again.",
             resolved, unconfirmed=False,
         )
-    # A database that admission accepts and whose integrity_check passes still
-    # backs up cleanly, so it is overwritten in place even with foreign key
-    # violations; anything else is set aside.
-    in_place = target.state in (
-        DatabaseCheckState.OK, DatabaseCheckState.FOREIGN_KEY_VIOLATIONS,
-    )
+    # Only a database that checks ok backs up cleanly, so only it is overwritten
+    # in place; anything else, foreign key violations included, is set aside.
+    in_place = target.state is DatabaseCheckState.OK
     missing = target.state is DatabaseCheckState.MISSING
     if not missing and not in_place:
         # Renaming needs every other handle closed; refuse before any write.
@@ -929,8 +980,7 @@ def restore_database(
             except _CopyBusy as error:
                 raise DatabaseRestoreInUse(
                     f"Database {resolved} is in use by another process, so nothing was "
-                    "restored. Close other NamiSync windows and commands, then try again."
-                    f" A backup of the database was made first and is kept as {backup_kept}.",
+                    "restored. Close other NamiSync windows and commands, then try again.",
                     resolved, kept=backup_kept,
                 ) from error
             except Exception as error:
@@ -953,7 +1003,9 @@ def restore_database(
             except OSError as error:
                 if not moved:
                     raise _not_restored(role, resolved, source, None, error) from error
-                raise _unconfirmed(role, resolved, source, replaced, error) from error
+                # The main moves last, so only sidecars moved: name them where
+                # they are now, and keep no file that does not exist.
+                raise _sidecars_moved(role, resolved, source, moved, error) from error
             kept, kept_as = replaced, "replaced"
             try:
                 os.rename(image, resolved)
@@ -978,13 +1030,10 @@ def restore_database(
 def _not_restored(
     role: str, path: Path, source: Path, backup: Path | None, error: BaseException,
 ) -> DatabaseRestoreFailed:
-    made = "" if backup is None else (
-        f" A backup of the database was made first and is kept as {backup}."
-    )
     return DatabaseRestoreFailed(
         f"NamiSync could not restore the {role} database {path} from {source} "
         f"({type(error).__name__}: {error}), so nothing was restored. Check write "
-        f"access to the database folder and its free space, then try again.{made}",
+        "access to the database folder and its free space, then try again.",
         path, unconfirmed=False, kept=backup,
     )
 
@@ -992,10 +1041,22 @@ def _not_restored(
 def _unconfirmed(
     role: str, path: Path, source: Path, kept: Path | None, error: BaseException,
 ) -> DatabaseRestoreFailed:
-    keeping = "" if kept is None else f" The database it replaced is kept as {kept}."
     return DatabaseRestoreFailed(
         f"Restoring the {role} database {path} from {source} could not be confirmed "
         f"({type(error).__name__}: {error}). It may already be restored or only partly "
-        f"moved; run check before using NamiSync, and keep every file beside it.{keeping}",
+        "moved; run check before using NamiSync, and keep every file beside it.",
         path, unconfirmed=True, kept=kept,
+    )
+
+
+def _sidecars_moved(
+    role: str, path: Path, source: Path, moved: list[Path], error: BaseException,
+) -> DatabaseRestoreFailed:
+    return DatabaseRestoreFailed(
+        f"Restoring the {role} database {path} from {source} stopped partway "
+        f"({type(error).__name__}: {error}). These files of it were moved aside: "
+        f"{', '.join(str(file) for file in moved)}. The database itself is still at "
+        f"{path}, without them. Run check before using NamiSync, and keep every file "
+        "beside it.",
+        path, unconfirmed=True,
     )

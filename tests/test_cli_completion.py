@@ -190,6 +190,9 @@ def test_location_id_never_creates_the_missing_database(tmp_path: Path, present:
         "not create it, because no root is given to check its path against. Run "
         "the command with its ROOT, run a sync, or start NamiSync once to create it, "
         "then try again. Nothing was changed.",
+        # The custom pair, so the commands above reach it.
+        f"These databases were selected with --database '{ledger}' --history-database "
+        f"'{history}'. Add the same options to any NamiSync command above.",
     ]
     assert (sorted(path.name for path in data.iterdir()), _files(data)) == before
 

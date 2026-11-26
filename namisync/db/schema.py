@@ -1373,13 +1373,24 @@ def _validate_reader_contract(
         _refuse_live_backup(connection)
 
 
+def ledger_backup_cut(connection: sqlite3.Connection) -> str | None:
+    """The recorded time of the backup cut naming this ledger's own instance, or None.
+
+    Only a backup carries one, so a ledger with one is a backup. Read through
+    a connection to a ledger already classified as current.
+    """
+
+    row = connection.execute(
+        "SELECT at FROM ledger_lineage WHERE kind = 'backup-cut' AND instance_id = ?",
+        (ledger_instance_id(connection),),
+    ).fetchone()
+    return None if row is None else row[0]
+
+
 def _refuse_live_backup(connection: sqlite3.Connection) -> None:
     # A backup carries a cut row naming its own instance and a restore always
     # issues a new one, so only a backup file copied into place matches here.
-    if connection.execute(
-        "SELECT 1 FROM ledger_lineage WHERE kind = 'backup-cut' AND instance_id = ?",
-        (ledger_instance_id(connection),),
-    ).fetchone() is not None:
+    if ledger_backup_cut(connection) is not None:
         raise LedgerIsBackup(
             "The ledger database is a NamiSync backup copied into place by hand: "
             "its lineage records a backup of its own ledger instance. NamiSync "

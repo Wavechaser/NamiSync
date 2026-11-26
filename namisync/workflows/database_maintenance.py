@@ -57,7 +57,10 @@ class DatabaseBackup:
 
 @dataclass(frozen=True, slots=True)
 class DatabasePairBackup:
-    """Backups published, rotated backups removed, and removals that failed."""
+    """Backups published, rotated backups removed, and removals that failed.
+
+    A refused or failed call changed nothing but the ``backups`` it lists.
+    """
 
     contract: DatabasePairContract
     backups: tuple[DatabaseBackup, ...] = ()
@@ -69,7 +72,10 @@ class DatabasePairBackup:
 class DatabasePairRestore:
     """The pair's contract after a restore, and the restore when one completed.
 
-    ``kept`` names a pre-restore backup or replaced set a failed call left.
+    ``kept`` names a pre-restore backup or replaced set a failed call left;
+    the guidance does not repeat it. Whether a failed call changed anything is
+    told by the result, not the guidance: with no ``kept`` and any reason but
+    ``restore-unconfirmed``, nothing did.
     """
 
     contract: DatabasePairContract
@@ -121,7 +127,7 @@ def _ledger_restore_refusal(check: DatabaseCheck) -> DatabasePairContract | None
     reason, guidance = _LEDGER_RESTORE_HISTORY.get(
         check.state, _LEDGER_RESTORE_HISTORY_UNUSABLE,
     )
-    return _refused(reason, guidance=f"{guidance} Nothing was changed.")
+    return _refused(reason, guidance=guidance)
 
 
 def _in_use(error: DatabaseClaimRefused) -> DatabasePairContract:
@@ -182,8 +188,9 @@ def backup_database_pair(
                 ("ledger", ledger, claims.ledger), ("history", history, claims.history),
             ):
                 published = next(backup.path for backup in backups if backup.role == role)
+                # A custom main may be named like the other role's backups.
                 rotation = rotate_backups(
-                    path, claim=claim, keep=BACKUP_KEEP, protect=published,
+                    path, claim=claim, keep=BACKUP_KEEP, protect=(published, ledger, history),
                 )
                 removed.extend(rotation.removed)
                 failures.extend(rotation.failures)

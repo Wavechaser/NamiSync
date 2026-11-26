@@ -142,11 +142,13 @@ refused (ledger-missing).` or `(history-missing).` with the completion
 direction, and running it again completes the pair.
 
 A refused pair returns exit `3` with `Database pair refused: <reason>.` and
-its guidance. While database maintenance holds the pair, sync execution and the
+its guidance, then, for custom database paths, the line naming them
+([Maintenance Commands](#maintenance-commands)). While database maintenance holds the pair, sync execution and the
 four location commands are refused at admission: they print
 `Execution refused:` (sync) or `<Command> refused:` with the maintenance
 message (new work is refused, not queued; wait, then start again), exit `3`
-and start no run. Planning and review still run, since they write neither
+and start no run. The same refusal follows when a restore replaced the ledger
+between the run's ledger stamp and its History claim. Planning and review still run, since they write neither
 database. A refusal at admission or because another NamiSync process, of
 any version, has either database open or holds its claim leaves every existing
 main and sidecar byte unchanged. A migration that fails after its backup was
@@ -264,14 +266,27 @@ database before the workflow runs. They create no folder: when the folder of
 either database does not exist, every one of them exits `2` and says which,
 except that `check` with both folders missing says there are no databases and
 exits `0`. A database path that cannot name a local file (for example one
-with `?`) is an input error too: exit `2` with `Input error: a database path is
-not valid: <reason>` before any claim is taken, nothing changed. The claim files
+with `?`, in its name or in a folder name) is an input error too: exit `2` with
+`Input error: a database path is not valid: <reason>` before any claim is
+taken, nothing changed. It is checked before the folders, so such a path is
+never reported as a missing folder. The claim files
 (`<database>.claim`) are the one thing a command leaves behind on a pair
 without databases. `check` never writes a database; `backup` writes only new
-backup files and, as any read of a live database does, may create or rewrite
-the live databases' `-shm` sidecars, never a main file or `-wal`
+backup files and, as any read of a live database does, may leave SQLite's own
+`-wal` and `-shm` sidecars beside the live databases: a `-wal` it creates
+stays empty, and it never changes a main file or an existing `-wal`
 ([DATABASE](DATABASE.md#data-protection)); `restore` always keeps what it
 replaces and has no confirmation prompt or flag.
+
+When `--database` or `--history-database` is given, every outcome that prints
+guidance and is not a success (a refusal or failure, `check` with any role or
+the pair not `ok`, a restore's `Note:`, and the `Database pair refused` output
+of the commands that change files) ends with
+`These databases were selected with --database '<ledger>' --history-database
+'<history>'. Add the same options to any NamiSync command above.`, naming the
+paths in effect, because a command in the guidance run without them would
+reach the default pair. The paths are single-quoted for pasting into
+PowerShell and shown unescaped unless they hold control characters.
 
 - `check` reports each role on its own line, `ledger: ok`, then every problem
   as `  - <text>` (at most 20 in all, as the workflow returns them) and, for a
@@ -287,7 +302,11 @@ replaces and has no confirmation prompt or flag.
   `foreign-key-violations` included. `4` means check found something that
   needs attention, or could not finish; a state NamiSync still opens
   (`foreign-key-violations`) and one it cannot use (`damaged`) share the code,
-  and the output, not the code, tells them apart and says what to do. Exit
+  and the output, not the code, tells them apart and says what to do. For
+  `foreign-key-violations` it says that `backup` refuses such a database, so
+  a copy of it cannot displace a backup that restores, and that with an
+  earlier backup `namisync restore <role> <backup file>` replaces it and keeps
+  its files beside it. Exit
   `3`, with the guidance on standard error, when the check was refused before
   it started because another process holds a database.
 - `backup` needs a ready pair. It prints `Backed up the ledger to <path>` and
@@ -300,16 +319,22 @@ replaces and has no confirmation prompt or flag.
   direction, a damaged one the pointers above; a pair with no databases says
   there is nothing to back up); exit `4` on `backup-failed` (from `restore`
   the same reason exits `3`), which prints any backup already published first
-  and says it was kept.
+  and says it was kept. A database with foreign key violations is
+  `backup-failed`: no copy of it is published or rotated in. A refusal ends
+  with one line decided from the result: `The backups listed above were
+  kept.` when a backup was published first, `Nothing was changed.` for
+  `database-in-use` and `backup-failed`, and `No backup was written.` after
+  the pair's own refusal, whose guidance is printed as every command prints
+  it.
 - `restore ROLE BACKUP` replaces the ledger or the history with a backup this
   version wrote. A `BACKUP` that is not an existing file exits `2` before any
   claim is taken. On success it prints `Restored the <role> from <backup>.`;
   for a ledger, the cut time of the backup and that History runs recorded after
   it are now shown as belonging to an earlier ledger; and where the replaced
-  database went: `was backed up to <path>` when it still backed up cleanly
-  (restored in place, beside an idle window), or `files were kept at <path>`
-  when it was damaged or otherwise unusable and was renamed aside with its
-  sidecars, which needs it closed in every NamiSync process, or that there was
+  database went: `was backed up to <path>` when it checked `ok` (restored in
+  place, beside an idle window), or `files were kept at <path>` when it had
+  foreign key violations, was damaged or was otherwise unusable and was renamed
+  aside with its sidecars, which needs it closed in every NamiSync process, or that there was
   no database to replace. A restored database beside a missing, older or
   refused peer adds a `Note:` that the pair is not ready yet, with its
   direction. Exit `0` on success.
@@ -323,20 +348,26 @@ replaces and has no confirmation prompt or flag.
   made) and the ledger pair rule (`history-older`, which directs you to update
   the pair first, `history-newer`, `history-wrong-role`, `history-unusable`).
   Exit `4` for `restore-failed` and `restore-unconfirmed`. Every refusal prints
-  the workflow's own guidance, which says whether anything changed, and names
-  any file the call kept.
+  the workflow's own guidance, then one line decided from the result, never
+  from the text: `Kept: <path>, the database as it was before this restore
+  (with any -wal and -shm files beside it).` when the call kept a file, or
+  `Nothing was changed.` when it changed nothing; `restore-unconfirmed`
+  without a kept file prints neither.
 - Beside an open NamiSync window a restore works only when the database it
-  replaces is intact (`ok` or `foreign-key-violations`): it is copied in place,
+  replaces checks `ok`: it is copied in place,
   the window keeps its connections and reads the restored content at its next
   read, and a sync plan reviewed before the restore is refused at start
   (`The ledger was replaced (restored or reset) after this plan was made...`,
-  exit `3`). A damaged or otherwise unusable database needs every other process
-  closed and is refused with `database-in-use` while any holds it.
+  exit `3`). A database with foreign key violations, a damaged or an otherwise
+  unusable one needs every other process closed and is refused with
+  `database-in-use` while any holds it.
 - A restore that was started but could not be confirmed (`restore-unconfirmed`)
   may already have replaced the database or moved it only in part. The output
   says the result could not be confirmed, names the file kept, and says to run
   `namisync check` before using NamiSync and to keep every file beside the
-  databases. Nothing is deleted.
+  databases. When only sidecars were moved aside before the stop, no file is
+  kept: the guidance names their new paths and says the database itself is
+  still at its path. Nothing is deleted.
 
 ## Review Rendering
 

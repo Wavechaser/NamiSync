@@ -287,6 +287,7 @@ def _run_sync(
         refusal = _database_refusal(
             service, stdout, stderr,
             roots=(namespace.source, namespace.target), paired=True,
+            selected=_selected_databases(namespace, ledger, history),
         )
         if refusal is not None:
             return refusal
@@ -455,6 +456,7 @@ def _run_location_workflow(
             roots=() if root_path is None else (root_path,),
             selected_mount=namespace.selected_mount,
             selected_paths=selected_paths,
+            selected=_selected_databases(namespace, ledger, history),
         )
         if refusal is not None:
             return refusal
@@ -774,6 +776,7 @@ def _database_refusal(
     selected_mount: str | None = None,
     selected_paths: tuple[str, ...] = (),
     paired: bool = False,
+    selected: str | None = None,
 ) -> int | None:
     """Admit the pair for mutating work, migrating or completing it first.
 
@@ -797,6 +800,8 @@ def _database_refusal(
             "create it, then try again. Nothing was changed.",
             file=stderr,
         )
+        if selected is not None:
+            print(selected, file=stderr)
         return EXIT_REFUSED
     if contract.state in ("migration-required", "incomplete"):
         if not service.database_placement_admitted(
@@ -837,6 +842,8 @@ def _database_refusal(
         return None
     print(f"Database pair refused: {_safe(contract.reason)}.", file=stderr)
     print(_safe(contract.guidance or contract.reset_direction), file=stderr)
+    if selected is not None:
+        print(selected, file=stderr)
     return EXIT_REFUSED
 
 
@@ -873,29 +880,9 @@ def _run_maintenance(
             file=stderr,
         )
         return EXIT_USAGE
-    # The claim files live beside the databases, and maintenance creates no folder.
-    missing = [
-        (role, path.parent)
-        for role, path in (("ledger", ledger), ("history", history))
-        if not path.parent.is_dir()
-    ]
-    if missing:
-        if command == "check" and len(missing) == 2:
-            _render_no_databases(ledger, history, stdout)
-            return EXIT_SUCCESS
-        for role, parent in missing:
-            print(
-                f"{label} refused: the folder of the {role} database does not "
-                f"exist: {_safe(parent)}.",
-                file=stderr,
-            )
-        print(
-            "Check --database and --history-database, or create the folder. "
-            "Nothing was changed.",
-            file=stderr,
-        )
-        return EXIT_USAGE
+    selected = _selected_databases(namespace, ledger, history)
     try:
+        # Opens no database and creates no file or folder.
         service = NamiSyncService(ledger, history)
     except (OSError, ValueError) as error:
         print(f"Configuration error: {_safe(error)}", file=stderr)
@@ -906,6 +893,8 @@ def _run_maintenance(
         return EXIT_USAGE
     try:
         try:
+            # Before the folder checks, so a path that cannot name a file is
+            # never taken for a missing folder.
             service.validate_database_paths()
         except ValueError as error:
             print(f"Input error: a database path is not valid: {_safe(error)}", file=stderr)
@@ -914,14 +903,41 @@ def _run_maintenance(
                 file=stderr,
             )
             return EXIT_USAGE
+        # The claim files live beside the databases, and maintenance creates no folder.
+        missing = [
+            (role, path.parent)
+            for role, path in (("ledger", ledger), ("history", history))
+            if not path.parent.is_dir()
+        ]
+        if missing:
+            if command == "check" and len(missing) == 2:
+                _render_no_databases(ledger, history, stdout)
+                return EXIT_SUCCESS
+            for role, parent in missing:
+                print(
+                    f"{label} refused: the folder of the {role} database does not "
+                    f"exist: {_safe(parent)}.",
+                    file=stderr,
+                )
+            print(
+                "Check --database and --history-database, or create the folder. "
+                "Nothing was changed.",
+                file=stderr,
+            )
+            return EXIT_USAGE
         try:
             if command == "check":
-                return _render_check(service.check_databases(), ledger, history, stdout, stderr)
+                return _render_check(
+                    service.check_databases(), ledger, history, stdout, stderr,
+                    selected=selected,
+                )
             if command == "backup":
-                return _render_backup(service.backup_databases(), stdout, stderr)
+                return _render_backup(
+                    service.backup_databases(), stdout, stderr, selected=selected,
+                )
             return _render_restore(
                 service.restore_database(namespace.role, namespace.backup),
-                stdout, stderr,
+                stdout, stderr, selected=selected,
             )
         except OSError as error:
             return _maintenance_os_error(label, error, stderr)
@@ -936,9 +952,34 @@ def _run_maintenance(
                     "every file beside them.",
                     file=stderr,
                 )
+                if selected is not None:
+                    print(selected, file=stderr)
             return EXIT_FAILED
     finally:
         _close_service(service, stderr)
+
+
+def _selected_databases(
+    namespace: argparse.Namespace, ledger: Path, history: Path,
+) -> str | None:
+    """Name the custom pair, so guidance followed literally reaches it, or None."""
+
+    if not namespace.database and not namespace.history_database:
+        return None
+    return (
+        f"These databases were selected with --database {_option_path(ledger)} "
+        f"--history-database {_option_path(history)}. Add the same options to any "
+        "NamiSync command above."
+    )
+
+
+def _option_path(path: Path) -> str:
+    # Meant to be pasted into PowerShell: single quotes keep $ and ` literal,
+    # and the path is shown as it is unless it holds control characters.
+    text = str(path)
+    if _safe(text).replace("[[", "[") != text:
+        return f'"{_safe(text)}"'
+    return "'" + text.replace("'", "''") + "'"
 
 
 def _is_file(value: str) -> bool:
@@ -963,8 +1004,11 @@ def _check_meaning(role: str, state: str, has_problems: bool) -> str | None:
     if state == "foreign-key-violations":
         return (
             "SQLite's integrity check passed, but some rows refer to rows that "
-            "are not there (listed above). NamiSync still opens it. Run namisync "
-            "backup to keep a copy."
+            "are not there (listed above). NamiSync still opens it, but namisync "
+            "backup refuses it, so a copy of it cannot displace a backup that "
+            "restores. With an earlier backup made by namisync backup, namisync "
+            f"restore {role} <backup file> replaces it and keeps these files "
+            "beside it."
         )
     if state == "missing":
         if has_problems:
@@ -1033,11 +1077,13 @@ def _render_no_databases(ledger: Path, history: Path, stdout: TextIO) -> None:
 
 
 def _render_check(
-    result, ledger: Path, history: Path, stdout: TextIO, stderr: TextIO
+    result, ledger: Path, history: Path, stdout: TextIO, stderr: TextIO,
+    *, selected: str | None = None,
 ) -> int:
     contract = result.contract
     if not result.checks:
-        _print_refusal(contract, stderr, "Nothing was changed.")
+        # Refused before it started: the maintenance claims were not taken.
+        _print_refusal(contract, stderr, "Nothing was changed.", selected)
         return EXIT_REFUSED
     if str(contract.state) == "fresh":
         _render_no_databases(ledger, history, stdout)
@@ -1061,36 +1107,39 @@ def _render_check(
         usable = False
         print(f"Pair: {_safe(contract.reason)}.", file=stdout)
         print(_safe(contract.guidance or contract.reset_direction), file=stdout)
+    if not usable and selected is not None:
+        print(selected, file=stdout)
     return EXIT_SUCCESS if usable else EXIT_FAILED
 
 
-def _says_unchanged(guidance: str) -> bool:
-    lowered = guidance.lower()
-    return any(
-        phrase in lowered
-        for phrase in ("nothing was changed", "nothing was restored", "no backup was written")
-    )
-
-
 def _print_refusal(
-    contract, errors: TextIO, tail: str | None, *, always: bool = False
+    contract, errors: TextIO, closing: str | None, selected: str | None = None,
 ) -> None:
-    """Print a refused pair as the admission refusal does, then what it left alone.
+    """Print a refused pair as the admission refusal does, then what happened.
 
-    ``tail`` states what happened to the databases unless the guidance already
-    does; ``always`` prints it regardless, for a refusal whose guidance speaks
-    of one step while an earlier one was kept.
+    ``closing`` is decided from the result, never from the guidance text: the
+    maintenance workflow's own refusals do not say whether anything changed.
+    ``selected`` names a custom pair last.
     """
 
-    guidance = str(contract.guidance or contract.reset_direction or "")
+    guidance = contract.guidance or contract.reset_direction
     print(f"Database pair refused: {_safe(contract.reason)}.", file=errors)
     if guidance:
         print(_safe(guidance), file=errors)
-    if tail and (always or not _says_unchanged(guidance)):
-        print(tail, file=errors)
+    if closing is not None:
+        print(closing, file=errors)
+    if selected is not None:
+        print(selected, file=errors)
 
 
-def _render_backup(result, stdout: TextIO, stderr: TextIO) -> int:
+# Backup refusals the maintenance workflow itself produces; any other is the
+# pair's own admission refusal, whose shared text speaks for itself.
+_BACKUP_MAINTENANCE_REFUSALS = ("database-in-use", "backup-failed")
+
+
+def _render_backup(
+    result, stdout: TextIO, stderr: TextIO, *, selected: str | None = None,
+) -> int:
     contract = result.contract
     for backup in result.backups:
         print(f"Backed up the {backup.role} to {_safe(backup.path)}", file=stdout)
@@ -1117,28 +1166,36 @@ def _render_backup(result, stdout: TextIO, stderr: TextIO) -> int:
             file=stderr,
         )
         return EXIT_REFUSED
-    _print_refusal(
-        contract,
-        stderr,
-        "The backups listed above were kept." if result.backups else "Nothing was changed.",
-        always=bool(result.backups),
-    )
+    if result.backups:
+        closing = "The backups listed above were kept."
+    elif contract.reason in _BACKUP_MAINTENANCE_REFUSALS:
+        closing = "Nothing was changed."
+    else:
+        closing = "No backup was written."
+    _print_refusal(contract, stderr, closing, selected)
     return EXIT_FAILED if contract.reason == "backup-failed" else EXIT_REFUSED
 
 
-def _render_restore(result, stdout: TextIO, stderr: TextIO) -> int:
+def _render_restore(
+    result, stdout: TextIO, stderr: TextIO, *, selected: str | None = None,
+) -> int:
     contract = result.contract
     restore = result.restore
     if restore is None:
+        # Every refusal here is the maintenance workflow's own: its result,
+        # not its guidance, says what changed.
         reason = contract.reason
         unconfirmed = reason == "restore-unconfirmed"
-        # A kept file means something was written, so never say nothing was changed.
-        _print_refusal(
-            contract, stderr,
-            None if unconfirmed or result.kept is not None else "Nothing was changed.",
-        )
-        if result.kept is not None and str(result.kept) not in str(contract.guidance):
-            print(f"Kept: {_safe(result.kept)}", file=stderr)
+        if result.kept is not None:
+            closing = (
+                f"Kept: {_safe(result.kept)}, the database as it was before this "
+                "restore (with any -wal and -shm files beside it)."
+            )
+        elif unconfirmed:
+            closing = None
+        else:
+            closing = "Nothing was changed."
+        _print_refusal(contract, stderr, closing)
         if unconfirmed:
             print(
                 "The result could not be confirmed. Run namisync check to see "
@@ -1146,6 +1203,8 @@ def _render_restore(result, stdout: TextIO, stderr: TextIO) -> int:
                 "them.",
                 file=stderr,
             )
+        if selected is not None:
+            print(selected, file=stderr)
         return EXIT_FAILED if reason in ("restore-failed", "restore-unconfirmed") else EXIT_REFUSED
     role = restore.role
     print(f"Restored the {role} from {_safe(restore.source)}.", file=stdout)
@@ -1169,6 +1228,8 @@ def _render_restore(result, stdout: TextIO, stderr: TextIO) -> int:
     if str(contract.state) != "ready":
         print(f"Note: the database pair is not ready yet ({_safe(contract.reason)}).", file=stdout)
         print(_safe(contract.guidance or contract.reset_direction), file=stdout)
+        if selected is not None:
+            print(selected, file=stdout)
     return EXIT_SUCCESS
 
 

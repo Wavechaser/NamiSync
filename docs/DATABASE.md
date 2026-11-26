@@ -846,9 +846,10 @@ outcomes, gate and non-goals.
   changed ([Data Protection](#data-protection) and
   [COMMANDLINE](COMMANDLINE.md#maintenance-commands)). The rule runs last in the ledger reader
   contract, once role, version, formats, instance id and exact topology have
-  passed, and `classify_database` never applies it. Restore's backup
-  verification can therefore classify a backup file as a current ledger and
-  accept exactly this refusal. A ledger carrying only other instances' cuts is
+  passed, and `classify_database` never applies it. Backup verification can
+  therefore classify its copy as a current ledger and accept exactly this
+  refusal; check and restore-source validation read the fact itself
+  (`ledger_backup_cut`) after their one classification. A ledger carrying only other instances' cuts is
   admitted normally; standalone `history` treats a refused ledger as unusable
   and marks membership unknown.
 - A schema-5 ledger made by a source-tree run before the table existed fails
@@ -878,8 +879,10 @@ outcomes, gate and non-goals.
 - A sync plan records the ledger instance it was planned against (M2-A4, user
   decisions 2026-11-20 and 2026-11-24). The runtime reads it when it prepares
   planning, before the plan reads the ledger, so a replacement while it plans
-  is caught too; a fresh pair gives none, because such a plan read nothing from
-  a ledger. Commitment copies it into the core `Commitment`, which every held,
+  is caught too. A fresh pair gives none, and a plan with none reads no ledger:
+  it plans against empty correspondence even when another process creates the
+  pair before its correspondence step, so a plan never reads a ledger it does
+  not record (`tests/test_workflows.py`). Commitment copies it into the core `Commitment`, which every held,
   queued or paused execution carries in its checkpoint; nothing re-reads it.
   - **At start and every resume**, before observation, preflight, any
     filesystem change or ledger write, a different current instance is a
@@ -1265,7 +1268,14 @@ records are still being written to either database, in any process.
   History's, so refusing on History's covers the pair. A session is therefore
   either refused at admission or admitted holding its observer's History claim,
   and while it lives maintenance, which takes History second, is refused and
-  releases the ledger. Sessions without an audit observer (planning) write
+  releases the ledger. The observer's ledger stamp is read before its claim
+  is taken, so the runtime reads the ledger instance again once the claim is
+  held; a ledger replaced in between refuses admission the same way
+  (`DatabaseMaintenanceActive`, then `SessionAdmissionRefused`), with the
+  observer closed, its claim released and no History run written, so no run
+  carries the stamp of a ledger replaced before it was admitted
+  (`tests/test_inventory_runtime.py`, for execution, inventory and integrity).
+  Sessions without an audit observer (planning) write
   neither database and are not refused. One instant remains: an admitted run
   whose ledger recorder opens while a maintenance attempt holds the ledger's
   claim, before History's refuses that attempt, is refused by the recorder as
@@ -1349,7 +1359,8 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
 - **The CLI** calls the pair operations below through the service, before any
   database is opened, on the pair as found: it never migrates, completes or
   creates, and it creates no folder. A refusal prints the workflow's own
-  guidance and exits `3`. `backup-failed` exits `4` from `backup`, but `3`
+  guidance, then a closing line decided from the result, and exits `3`.
+  `backup-failed` exits `4` from `backup`, but `3`
   from `restore` (the pre-restore backup could not be written, so nothing was
   restored); `restore-failed` and `restore-unconfirmed` exit `4`. `check`
   exits `0` when both roles are `ok` or no database exists at all, and `4`
@@ -1360,8 +1371,19 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   source is damaged both keep their direction to keep the files and add: run
   `namisync check` to see which database is affected, and with a backup made by
   `namisync backup`, `namisync restore <role> <backup file>` replaces it and
-  keeps the damaged files beside it. Neither suggests resetting or deleting,
-  and the admission text stays path-free.
+  keeps the damaged files beside it. A backup refused for foreign key
+  violations names them and gives the same directions. None suggests
+  resetting or deleting, or free space, and the admission text stays
+  path-free.
+- **What changed is the result's, not the text's.** Maintenance refusals and
+  failures (restore refusals, the ledger pair rule, `backup-failed`,
+  `restore-failed`, `restore-unconfirmed`, `database-in-use`) do not end
+  their guidance by saying that nothing changed, and do not name the file a
+  call kept: the result carries both (`DatabasePairRestore.kept`,
+  `DatabasePairBackup.backups`, the reason). Only a set-aside stopped after
+  some sidecars moved names files in its guidance: their new paths, and that
+  the database itself is still in place, with no kept file. Admission texts
+  shared with other consumers are unchanged.
 
 - **Mechanism.** Each pair call holds both exclusive maintenance claims,
   ledger first, for its whole run, as migration does; there is no dispatcher
@@ -1375,7 +1397,8 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   at the current or older version, `integrity_check` and `foreign_key_check`
   run, at most 20 problems in all. States: `ok`; `foreign-key-violations`
   (admitted, `integrity_check` passes, `foreign_key_check` reports rows, which
-  are listed); `missing` (stray sidecars are listed); `damaged` (SQLite damage,
+  are listed; backup refuses it and restore sets it aside); `missing` (stray
+  sidecars are listed); `damaged` (SQLite damage,
   a failed `integrity_check`, or a `-journal` beside the main); `older`;
   `newer`; `wrong-role`; `unsupported` (reset required, such as an old-shape
   schema-5 ledger); `is-backup` (a backup copied into place); `unavailable`.
@@ -1385,7 +1408,7 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   API into an exclusively created temporary beside it, which is switched to
   rollback-journal mode so it stands alone. A ledger copy, and only the copy,
   gains one `backup-cut` row naming its own instance at the cut time. The copy
-  is verified (`integrity_check`; the current reader contract, which for a
+  is verified (the content check below; the current reader contract, which for a
   ledger must end in exactly `LedgerIsBackup`; every table's row count equal
   to the source's, `ledger_lineage` one more; the cut naming the copy's
   instance), flushed and renamed, never replacing a file, to
@@ -1393,23 +1416,33 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   through the same helper (`publish_verified_copy`). The source main is never
   written; the read-only connection may leave SQLite's own `-wal` and `-shm`.
   A failure publishes nothing and rotates nothing, with migration's split of
-  guidance between a damaged source and write access or free space; a ledger
-  backup published before History's failed is kept and reported.
+  guidance between a damaged source and write access or free space, and its
+  own guidance for foreign key violations; a ledger backup published before
+  History's failed is kept and reported.
+- **One content check.** Backup verification, restore-source validation and
+  restore-image verification apply the same check (`_content_fault`):
+  `integrity_check` passes and `foreign_key_check` reports no row. So every
+  published maintenance backup is one restore accepts, and a copy restore
+  would refuse never enters rotation to displace one it accepts: a database
+  with foreign key violations is not backed up (`backup-failed`).
 - **Rotation** keeps three backups per database and runs only after both new
   backups are published. Its population is regular files (not links,
   junctions or directories) beside the main named exactly
   `<main name>.backup-<stamp>Z` in that format, ASCII digits only. It keeps the
   new backup by path whatever its stamp, and the newest two others by stamp;
-  it reports each failed removal and never raises. Migration backups
+  it never removes or counts either live database main, which a custom path
+  may name like a backup of the other role; it reports each failed removal
+  and never raises. Migration backups
   (`.backup-v<N>-…`) are never rotated: they are the only way back to 0.1.0
   and restore refuses them. Temporaries, `.replaced-*` sets and every other
   name are left alone.
 - **Restore** replaces the ledger or History, one per call, from a backup at
   the current schema; the pair need not be ready. The backup must be a
-  standalone regular file (no `-wal` or `-journal` beside it) that passes
-  `integrity_check` and classifies as a current database of the role, read
+  standalone regular file (no `-wal` or `-journal` beside it) that passes the
+  content check and classifies as a current database of the role, read
   without writes. Refused with nothing changed: `backup-unavailable`,
-  `backup-damaged`, `backup-wrong-role`, `backup-newer`, `backup-unsupported`,
+  `backup-damaged` (failed `integrity_check` or foreign key violations),
+  `backup-wrong-role`, `backup-newer`, `backup-unsupported`,
   `backup-older` (v4 and v8 migration backups) and, for a ledger,
   `backup-unstamped` (no `backup-cut` naming its own instance: a hand copy).
   The live database is then checked: a database of another role is
@@ -1418,7 +1451,7 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   The image `<main>.restore-<random>.tmp`, created exclusively, is a copy of
   the backup. A ledger image gets a new instance id (`new_instance_id()`) and
   keeps every lineage row, so the backup's own cut becomes its predecessor
-  row; History has no lineage. The image is verified (integrity, foreign keys,
+  row; History has no lineage. The image is verified (the content check,
   the full current reader contract, so no longer a backup, row counts and
   lineage equal to the backup, the new id in no lineage row) and flushed.
 - **The pair rule.** A ledger is restored only beside a History that checks
@@ -1449,8 +1482,7 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   | History | a ledger in any state, or none | restored |
 
 - **No backup, no change** decides how the image is published:
-  - A live database that admission accepts and whose `integrity_check`
-    passes (`ok` or `foreign-key-violations`) still backs up cleanly. It is
+  - A live database that checks `ok` backs up cleanly. It is
     backed up first, as above but without rotation, so a restore never
     deletes its own source; a failure is `backup-failed` and nothing is
     restored. The SQLite backup API then copies the image into the live main
@@ -1467,8 +1499,9 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
     `-shm` and refuses as `database-unavailable` (exit 3) before admission
     would refuse it; that cold-probe behavior applies to any write
     transaction and predates maintenance.
-  - Any other live database (damaged, older, newer, unsupported, a backup in
-    place, a stray `-journal`) needs every other handle closed
+  - Any other live database (foreign key violations, which no backup of it
+    would restore; damaged, older, newer, unsupported, a backup in place, a
+    stray `-journal`) needs every other handle closed
     (`require_no_open_handles`, otherwise `database-in-use`), checked before
     any write and again just before the renames. Its `-wal`, `-shm` and
     `-journal`, then its main, are renamed to `<main>.replaced-<stamp>Z` with
@@ -1484,8 +1517,10 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   ledger, the new id. A failure after the point of no return is
   `restore-unconfirmed` (could not be confirmed; run check), never reported as
   unchanged. Every refusal or failure after the pre-restore backup, or after
-  any set-aside rename, names the kept file in its guidance and in the
-  result. Only temporaries the call created are removed.
+  the set-aside main's rename, carries the kept file in the result. A
+  set-aside that stops after only sidecars moved keeps no file in the result;
+  its guidance names each moved sidecar's new path and says the database
+  itself is still at its path. Only temporaries the call created are removed.
 - **What a kill leaves** (tested at each stage). In place: the old database
   after the pre-restore backup, after the image is written and mid-copy (the
   uncommitted WAL frames are discarded at the next open), the new one after
@@ -1501,7 +1536,7 @@ the restored-at-the-prompt case in `tests/test_cli.py`.
   - A kill, or a handle opened in the instant between the sidecar renames and
     the main's, can leave the main in place without its sidecars, and a rerun
     then judges the main alone, splitting the kept set across two stamps. If
-    the main alone checks usable, the rerun restores in place over it, after
+    the main alone checks `ok`, the rerun restores in place over it, after
     a pre-restore backup of it, so its own committed `-wal` stays kept under
     the first stamp, apart from the database it belonged to. No file is
     deleted, but that `-wal` is rejoined only by hand.

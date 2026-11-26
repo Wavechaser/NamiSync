@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import io
 import os
 from pathlib import Path
+import re
 import shutil
 import sqlite3
 from tempfile import TemporaryDirectory
@@ -264,6 +265,29 @@ def test_backups_rotate_to_three_and_leave_migration_backups(tmp_path: Path) -> 
     assert all(path.exists() for path in migrated)
 
 
+def test_rotation_never_removes_a_live_database_named_like_a_backup(tmp_path: Path) -> None:
+    # A valid custom History path that matches the ledger's backup pattern,
+    # with the oldest stamp of all.
+    ledger = tmp_path / "ledger.db"
+    history = tmp_path / "ledger.db.backup-20200101T000000000000Z"
+    assert initialize_database_pair(ledger, history).state is DatabasePairState.READY
+    history_bytes = history.read_bytes()
+
+    for minute in range(5):
+        result = backup_database_pair(
+            ledger, history, clock=_Clock(_T1 + timedelta(minutes=minute)),
+        )
+        assert result.contract.state is DatabasePairState.READY, result.contract
+        assert history not in result.removed and result.removal_failures == ()
+
+    assert history.read_bytes() == history_bytes
+    # History is not counted toward the three kept ledger backups.
+    assert sorted(path.name for path in tmp_path.glob("ledger.db.backup-2026*")) == [
+        f"ledger.db.backup-20261125T09{minute:02d}00000000Z" for minute in (2, 3, 4)
+    ]
+    assert check_database_pair(ledger, history).contract.state is DatabasePairState.READY
+
+
 def test_a_failed_history_backup_keeps_the_ledger_backup_and_rotates_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -284,6 +308,81 @@ def test_a_failed_history_backup_keeps_the_ledger_backup_and_rotates_nothing(
     assert (result.contract.state, result.contract.reason) == (
         DatabasePairState.REFUSED, "backup-failed",
     )
+    assert [backup.role for backup in result.backups] == ["ledger"]
+    assert result.removed == ()
+    assert sorted(path.name for path in tmp_path.glob("*.backup-*")) == sorted(
+        [*before, result.backups[0].path.name]
+    )
+
+
+def _dangle(main: Path, *, history: bool = False) -> None:
+    """Leave one row that refers to a row that is not there."""
+
+    with closing(sqlite3.connect(main, isolation_level=None)) as connection:
+        connection.execute("PRAGMA foreign_keys = OFF")
+        if history:
+            connection.execute(
+                "INSERT INTO history_phases(run_id, phase_order, phase, status, "
+                "items_done, bytes_done) VALUES (999, 0, 'scan', 'completed', 0, 0)"
+            )
+        else:
+            connection.execute(
+                "INSERT INTO mappings(source_location_id, target_location_id, created_at) "
+                "VALUES (1000, 2000, '2026-01-01T00:00:00.000000Z')"
+            )
+
+
+def test_backups_of_a_ledger_with_a_dangling_reference_never_displace_restorable_ones(
+    tmp_path: Path,
+) -> None:
+    # The review's reproduction: three backups after a dangling foreign key
+    # used to rotate out every backup that restore accepts.
+    ledger, history = _pair(tmp_path)
+    good = [
+        _backup(ledger, history, clock=_Clock(_T1 + timedelta(minutes=minute)))["ledger"]
+        for minute in range(3)
+    ]
+    _dangle(ledger)
+    assert check_database_pair(ledger, history).checks[0].state is (
+        DatabaseCheckState.FOREIGN_KEY_VIOLATIONS
+    )
+    before = sorted(path.name for path in tmp_path.glob("*.backup-*"))
+
+    for hour in range(1, 4):
+        result = backup_database_pair(ledger, history, clock=_Clock(_T1 + timedelta(hours=hour)))
+        assert (result.contract.state, result.contract.reason) == (
+            DatabasePairState.REFUSED, "backup-failed",
+        )
+        assert "foreign key violations" in result.contract.guidance
+        assert (result.backups, result.removed) == ((), ())
+    assert sorted(path.name for path in tmp_path.glob("*.backup-*")) == before
+
+    # Each kept backup still restores; the first sets the violating ledger aside.
+    for index, backup in enumerate(good):
+        restored = restore_database_from_backup(
+            ledger, history, "ledger", backup, clock=_Clock(_T1 + timedelta(hours=5 + index)),
+        )
+        assert restored.contract.state is DatabasePairState.READY, restored.contract
+        assert restored.restore.kept_as == ("replaced" if index == 0 else "backup")
+    assert check_database_pair(ledger, history).checks[0].state is DatabaseCheckState.OK
+
+
+def test_a_history_with_a_dangling_reference_keeps_the_ledger_backup_and_rotates_nothing(
+    tmp_path: Path,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    for minute in range(3):
+        _backup(ledger, history, clock=_Clock(_T1 + timedelta(minutes=minute)))
+    before = sorted(path.name for path in tmp_path.glob("*.backup-*"))
+    _dangle(history, history=True)
+
+    result = backup_database_pair(ledger, history, clock=_Clock(_T1 + timedelta(hours=1)))
+
+    assert (result.contract.state, result.contract.reason) == (
+        DatabasePairState.REFUSED, "backup-failed",
+    )
+    assert "The history database" in result.contract.guidance
+    assert "foreign key violations" in result.contract.guidance
     assert [backup.role for backup in result.backups] == ["ledger"]
     assert result.removed == ()
     assert sorted(path.name for path in tmp_path.glob("*.backup-*")) == sorted(
@@ -331,7 +430,9 @@ def test_restore_refusals_leave_both_databases_byte_identical(tmp_path: Path) ->
         result = restore_database_from_backup(ledger, history, role, source, clock=_Clock())
         assert result.contract.state is DatabasePairState.REFUSED, expected
         assert result.contract.reason == expected.removesuffix("-history"), result.contract
-        assert result.contract.guidance.endswith("Nothing was changed."), expected
+        # The result says nothing changed; the guidance does not repeat it.
+        assert (result.restore, result.kept) == (None, None), expected
+        assert "Nothing was changed" not in result.contract.guidance, expected
         assert result.contract.reset_direction is None
         assert result.restore is None
         assert _bytes(ledger, history) == before, expected
@@ -711,7 +812,7 @@ def test_a_ledger_is_not_restored_beside_a_v0_1_0_history(tmp_path: Path) -> Non
         DatabasePairState.REFUSED, "history-older",
     )
     assert "Start NamiSync, or run a sync or inventory command, once" in refused.contract.guidance
-    assert refused.contract.guidance.endswith("Nothing was changed.")
+    assert "Nothing was changed" not in refused.contract.guidance
     assert (refused.restore, refused.kept) == (None, None)
     assert _files(ledger.parent) == files
 
@@ -783,8 +884,8 @@ def test_a_ledger_restore_needs_a_current_history_or_none(
             assert completion.contract.state is DatabasePairState.READY
             assert [database.role for database in completion.created] == ["history"]
         return
-    assert (result.contract.reason, result.restore) == (reason, None)
-    assert result.contract.guidance.endswith("Nothing was changed.")
+    assert (result.contract.reason, result.restore, result.kept) == (reason, None, None)
+    assert "Nothing was changed" not in result.contract.guidance
     assert _files(ledger.parent) == files
 
 
@@ -856,7 +957,7 @@ def test_an_in_place_copy_failure_is_unconfirmed_never_unchanged(
     assert "could not be confirmed" in result.contract.guidance
     assert "nothing was restored" not in result.contract.guidance.lower()
     assert result.kept is not None and result.kept.exists()
-    assert str(result.kept) in result.contract.guidance
+    assert str(result.kept) not in result.contract.guidance
     assert _state(ledger, old, old) == ("new" if at == "final-step" else "old")
 
 
@@ -880,11 +981,21 @@ def test_a_set_aside_failure_after_a_sidecar_moved_is_unconfirmed_and_keeps_ever
 
     assert result.contract.reason == "restore-unconfirmed"
     kept = ledger.with_name("ledger.db.replaced-20261125T090000000000Z")
-    assert result.kept == kept and str(kept) in result.contract.guidance
     assert Path(f"{kept}-wal").read_bytes() == damaged["-wal"]
     assert Path(f"{kept}-shm").read_bytes() == damaged["-shm"]
-    assert ledger.read_bytes() == damaged[""]
+    assert ledger.read_bytes() == damaged[""] and not kept.exists()
     assert not list(tmp_path.glob("*.restore-*"))
+    # Only the sidecars moved: no kept main is claimed, every path the
+    # guidance names exists, and it says the database is still in place.
+    assert result.kept is None
+    guidance = result.contract.guidance
+    named = {
+        match.rstrip(".")
+        for match in re.findall(re.escape(str(tmp_path)) + r"[^\s,()]*", guidance)
+    }
+    assert named == {str(ledger), str(backup), f"{kept}-wal", f"{kept}-shm"}
+    assert all(Path(path).exists() for path in named)
+    assert f"The database itself is still at {ledger}" in guidance
 
 
 def test_a_handle_opened_while_the_image_is_prepared_refuses_with_nothing_moved(
@@ -957,7 +1068,7 @@ def test_a_lock_holder_aborts_the_in_place_copy_without_waiting(
     (result,) = outcome
     assert (result.contract.reason, result.restore) == ("database-in-use", None)
     assert result.kept is not None and result.kept.exists()
-    assert str(result.kept) in result.contract.guidance
+    assert str(result.kept) not in result.contract.guidance
     # The main is untouched and the aborted copy left no frames; the lock
     # holder's empty -wal goes when it closes.
     after = _bytes(ledger)

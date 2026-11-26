@@ -245,7 +245,7 @@ def test_maintenance_requires_the_databases_own_exclusive_claim(tmp_path: Path) 
             lambda: backup_database(ledger, history=False, claim=claims.history, now=_T1),
             lambda: check_database(history, history=True, claim=claims.ledger),
             lambda: restore_database(ledger, ledger, history=False, claim=claims.history, now=_T1),
-            lambda: rotate_backups(ledger, claim=claims.history, keep=3, protect=ledger),
+            lambda: rotate_backups(ledger, claim=claims.history, keep=3, protect=(ledger,)),
         ):
             with pytest.raises(ValueError, match="exclusive maintenance claim"):
                 call()
@@ -294,7 +294,7 @@ def test_rotation_removes_only_the_oldest_recognized_backups(tmp_path: Path) -> 
     before = _files(tmp_path)
 
     with hold_maintenance_claims(main, tmp_path / "history.db") as claims:
-        rotation = rotate_backups(main, claim=claims.ledger, keep=3, protect=published)
+        rotation = rotate_backups(main, claim=claims.ledger, keep=3, protect=(published,))
 
     assert rotation.failures == ()
     assert sorted(path.name for path in rotation.removed) == sorted(
@@ -323,7 +323,7 @@ def test_a_failed_removal_is_reported_and_the_rest_rotate(tmp_path: Path) -> Non
     )
     try:
         with hold_maintenance_claims(tmp_path / "ledger.db", main) as claims:
-            rotation = rotate_backups(main, claim=claims.history, keep=3, protect=paths[4])
+            rotation = rotate_backups(main, claim=claims.history, keep=3, protect=(paths[4],))
     finally:
         _winapi.CloseHandle(handle)
     assert [path.name for path, _ in rotation.failures] == [names[0]]
@@ -523,10 +523,11 @@ def test_ledger_restore_in_place_issues_a_new_instance_and_keeps_the_lineage(
     assert not list(tmp_path.glob("*.tmp"))
 
 
-def test_a_database_with_only_foreign_key_violations_is_restored_in_place(
+def test_a_database_with_only_foreign_key_violations_is_set_aside(
     tmp_path: Path,
 ) -> None:
-    # It is admitted and backs up cleanly, so no backup, no change means in place.
+    # Admitted, but no backup of it would restore, so it is renamed aside and
+    # kept rather than backed up and overwritten in place.
     ledger, history = _pair(tmp_path)
     backup = _backup(ledger, history)
     _violate_foreign_keys(ledger, 2)
@@ -534,12 +535,56 @@ def test_a_database_with_only_foreign_key_violations_is_restored_in_place(
 
     result = _restore(ledger, history, backup)
 
-    assert result.kept_as == "backup"
+    assert (result.kept_as, result.kept) == (
+        "replaced", ledger.with_name("ledger.db.replaced-20261125T100000000000Z"),
+    )
     assert _query(
         result.kept, "SELECT count(*) FROM mappings WHERE source_location_id >= 1000",
     ) == [(2,)]
-    assert not list(tmp_path.glob("ledger.db.replaced-*"))
+    assert [path.name for path in tmp_path.glob("ledger.db.backup-*")] == [backup.name]
     assert _check(ledger, history).state is DatabaseCheckState.OK
+
+
+def test_a_database_with_foreign_key_violations_is_not_backed_up(tmp_path: Path) -> None:
+    ledger, history = _pair(tmp_path)
+    _violate_foreign_keys(ledger, 2)
+    before = _files(tmp_path)
+
+    with hold_maintenance_claims(ledger, history) as claims:
+        with pytest.raises(DatabaseBackupFailed) as failed:
+            backup_database(ledger, history=False, claim=claims.ledger, now=_T1)
+
+    message = str(failed.value)
+    assert "foreign key violations" in message
+    assert "integrity check" not in message
+    assert "Keep the database files" in message
+    assert "Run namisync check" in message
+    assert "namisync restore ledger <backup file> replaces it" in message
+    assert "free space" not in message
+    assert not re.search(r"delete|archive|reset", message, re.IGNORECASE)
+    after = _files(tmp_path)
+    assert not [name for name in after if ".backup-" in name or name.endswith(".tmp")]
+    assert {name: value for name, value in after.items() if not name.endswith(("-wal", "-shm"))} == {
+        name: value for name, value in before.items() if not name.endswith(("-wal", "-shm"))
+    }
+
+
+def test_a_backup_file_with_foreign_key_violations_is_refused_before_any_change(
+    tmp_path: Path,
+) -> None:
+    ledger, history = _pair(tmp_path)
+    backup = _backup(ledger, history)
+    # A hand-made copy: the published backup, given a dangling reference.
+    _violate_foreign_keys(backup, 1)
+    assert not Path(f"{backup}-journal").exists()
+    before = _files(tmp_path)
+
+    with pytest.raises(maintenance.DatabaseRestoreRefused) as refused:
+        _restore(ledger, history, backup)
+
+    assert refused.value.reason == "backup-damaged"
+    assert "foreign key violations" in str(refused.value)
+    assert _files(tmp_path) == before
 
 
 def test_a_database_failing_integrity_check_is_set_aside(tmp_path: Path) -> None:
@@ -645,7 +690,9 @@ def test_a_history_copy_that_did_not_land_is_unconfirmed(
     with pytest.raises(DatabaseRestoreFailed, match="could not be confirmed") as failed:
         _restore(ledger, history, backup, role_history=True)
     assert failed.value.unconfirmed
-    assert failed.value.kept is not None and str(failed.value.kept) in str(failed.value)
+    # The kept file is carried by the error, not repeated in its message.
+    assert failed.value.kept is not None and failed.value.kept.exists()
+    assert str(failed.value.kept) not in str(failed.value)
 
 
 def test_a_restore_image_that_fails_verification_restores_nothing(
@@ -662,9 +709,9 @@ def test_a_restore_image_that_fails_verification_restores_nothing(
     with pytest.raises(DatabaseRestoreFailed, match="nothing was restored") as failed:
         _restore(ledger, history, backup)
     assert not failed.value.unconfirmed
-    # The pre-restore backup was published first; the failure names it.
+    # The pre-restore backup was published first; the failure carries it.
     assert failed.value.kept == ledger.with_name("ledger.db.backup-20261125T100000000000Z")
-    assert failed.value.kept.exists() and str(failed.value.kept) in str(failed.value)
+    assert failed.value.kept.exists() and str(failed.value.kept) not in str(failed.value)
     assert _instance(ledger) == instance_id
     assert not list(tmp_path.glob("*.restore-*"))
 

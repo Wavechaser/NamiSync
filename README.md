@@ -228,8 +228,8 @@ namisync history RUN_TOKEN
 ```
 
 Check the databases, back them up, or replace the ledger or history with a
-backup (the replaced database is kept; close NamiSync windows first when it is
-damaged):
+backup (the replaced database is kept; close NamiSync windows first when
+`namisync check` does not report it as `ok`):
 
 ```powershell
 namisync check
