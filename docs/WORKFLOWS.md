@@ -285,6 +285,9 @@ construction or the other unmodeled construction/callback costs.
    and result construction are therefore structurally bounded rather than
    separately metered; workflow captures the trusted-but-fallible internal
    (rung 3) correspondence result exactly once before giving it to the planner.
+   A plan prepared with no ledger instance (a fresh pair) reads no ledger and
+   plans against empty correspondence
+   ([DATABASE](DATABASE.md#ledger-instance-and-ids)).
    Then it reads one complete semantic-settings snapshot. If the request
    supplies a deletion-policy override, replace only that field in the snapshot.
 5. Apply filters/policies and plan.

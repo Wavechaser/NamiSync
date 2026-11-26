@@ -460,9 +460,16 @@ def _run_plan(
                 raise ValueError("plan scan changed reviewed location identity")
 
         ctx.emit(PhaseChanged("plan"))
-        raw_correspondence = deps.correspondence(
-            source_scan,
-            target_scan,
+        # A plan prepared while no ledger existed carries no instance and
+        # reads none: execution checks no instance for it, so a ledger that
+        # appeared meanwhile must not shape the plan.
+        raw_correspondence = (
+            MappingSnapshot.empty(source_scan.volume_id, target_scan.volume_id)
+            if retained_request.ledger_instance_id is None
+            else deps.correspondence(
+                source_scan,
+                target_scan,
+            )
         )
         correspondence = snapshot_mapping_snapshot(
             raw_correspondence,

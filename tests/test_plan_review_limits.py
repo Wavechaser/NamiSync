@@ -1554,7 +1554,10 @@ def _patch_workflow_roots(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 def _workflow_request(options: SyncOptions = SyncOptions()) -> PlanRequest:
-    return PlanRequest("a" * 32, SOURCE_ROOT.path, TARGET_ROOT.path, options)
+    # Prepared against an existing ledger, so planning reads its correspondence.
+    return PlanRequest(
+        "a" * 32, SOURCE_ROOT.path, TARGET_ROOT.path, options, ledger_instance_id="c" * 32,
+    )
 
 def _workflow_scanner(
     root: Root,

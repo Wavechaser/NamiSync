@@ -136,6 +136,9 @@ def test_task_shell_move_fixture_reaches_real_cross_parent_planner(tmp_path: Pat
 
     runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
     try:
+        # As desktop startup does: a plan reads correspondence only from a
+        # ledger it records, so the fixture's injected pairs need one.
+        assert str(runtime.initialize_database_contracts().state) == "ready"
         control = child._Control(None, tmp_path / "source", tmp_path / "target")
         control.service = SimpleNamespace(_runtime=runtime)
         control._start_plan_review()

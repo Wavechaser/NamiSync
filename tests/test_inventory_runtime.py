@@ -75,6 +75,7 @@ from namisync.workflows.inventory import (
     LocationCandidateState,
     VolumeResolutionState,
 )
+from namisync.workflows.models import PlanRequest
 from namisync.workflows.runtime import (
     BASELINE_KIND,
     EXECUTION_KIND,
@@ -85,7 +86,7 @@ from namisync.workflows.runtime import (
 )
 from namisync.workflows.views import operation_result_view
 
-from _db_fixtures import FakeClock, NOW
+from _db_fixtures import FakeClock, NOW, replace_ledger_instance
 from _inventory_fixtures import (
     PROFILE,
     VOLUME_ID,
@@ -1142,6 +1143,67 @@ def test_database_maintenance_refuses_inventory_writers_without_partial_state(
             except DatabaseInUse:
                 assert monotonic() < deadline, "a finished run kept its claim"
                 sleep(0.01)
+    finally:
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+@pytest.mark.parametrize("kind", (INVENTORY_KIND, VERIFY_KIND, EXECUTION_KIND))
+def test_a_ledger_replaced_before_the_history_claim_refuses_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    scanner = _Scanner(mount, (_file("a.txt", 1),))
+    runtime, location_id = _runtime(tmp_path, _Resolver(mount), scanner, {})
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        if kind == EXECUTION_KIND:
+            source, target = tmp_path / "source", tmp_path / "target"
+            source.mkdir()
+            target.mkdir()
+            (source / "a.bin").write_bytes(b"a")
+            plan_request = PlanRequest("7" * 32, str(source), str(target))
+            runtime.open_plan(runtime.prepare_plan(plan_request).checkpoint).run(
+                RunContext(lambda body: None, lambda: None)
+            )
+            token = "8" * 32
+            request = runtime.commit_plan(plan_request.request_id, run_id=token, committed_at=NOW)
+        elif kind == INVENTORY_KIND:
+            token = "stamped-inventory"
+            request = InventoryRequest(token, location_id=location_id)
+        else:
+            token = "stamped-verify"
+            request = IntegrityRequest(token, IntegrityMode.VERIFY, location_id=location_id)
+        read = runtime._ledger_instance_id
+        stamps: list[str] = []
+
+        def read_then_restore() -> str:
+            # A restore finishes right after the stamp is read, before the claim.
+            value = read()
+            if not stamps:
+                replace_ledger_instance(runtime.ledger_path)
+            stamps.append(value)
+            return value
+
+        monkeypatch.setattr(runtime, "_ledger_instance_id", read_then_restore)
+        with pytest.raises(SessionAdmissionRefused, match="replaced the ledger"):
+            dispatcher.submit(kind, request)
+        monkeypatch.undo()
+
+        assert len(stamps) == 2 and stamps[0] != stamps[1]
+        assert dispatcher.list() == ()
+        assert scanner.calls == []
+        with pytest.raises(KeyError):
+            runtime.get_history_summary(token)
+        # The observer released History's claim: maintenance runs next.
+        with hold_maintenance_claims(runtime.ledger_path, runtime.history_path):
+            pass
     finally:
         assert dispatcher.shutdown().complete
         runtime.close()

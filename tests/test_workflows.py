@@ -277,6 +277,50 @@ def test_prepare_plan_retains_a_detached_identity_checkpoint(
         runtime.close()
 
 
+def test_a_plan_prepared_without_a_ledger_reads_none_that_appears_before_it_plans(
+    tmp_path: Path,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "a.txt").write_bytes(b"a")
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    runtime = LocalWorkflowRuntime(ledger, history)
+    try:
+        checkpoint = runtime.prepare_plan(
+            PlanRequest("1" * 32, str(source), str(target))
+        ).checkpoint
+        assert checkpoint.ledger_instance_id is None
+        # Another process creates the pair before this plan's correspondence step.
+        assert database_pair.initialize_database_pair(ledger, history).state is (
+            database_pair.DatabasePairState.READY
+        )
+        reads: list[str] = []
+        correspondence = runtime._deps.correspondence
+
+        def read(source_scan, target_scan):
+            reads.append(source_scan.root.path)
+            return correspondence(source_scan, target_scan)
+
+        runtime._deps = replace(runtime._deps, correspondence=read)
+        context = RunContext(lambda _event: None, lambda: None)
+
+        assert runtime.open_plan(checkpoint).run(context).status is SessionState.COMPLETED
+        # Its commitment carries no instance, so it read no ledger.
+        assert reads == []
+        assert runtime.get_plan("1" * 32).request.ledger_instance_id is None
+
+        # A plan prepared against that ledger records it and reads it.
+        checkpoint = runtime.prepare_plan(
+            PlanRequest("2" * 32, str(source), str(target))
+        ).checkpoint
+        assert checkpoint.ledger_instance_id is not None
+        assert runtime.open_plan(checkpoint).run(context).status is SessionState.COMPLETED
+        assert reads == [str(source)]
+    finally:
+        runtime.close()
+
+
 @pytest.mark.parametrize("changed_volume", (False, True))
 def test_plan_publication_requires_the_admitted_volume_bindings(
     tmp_path: Path,

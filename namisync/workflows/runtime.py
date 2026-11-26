@@ -1002,7 +1002,8 @@ class LocalWorkflowRuntime:
                     plan_value.target_root.path,
                 )
             )
-            return store.observer(
+            return self._stamped_observer(
+                store,
                 record,
                 HistoryContext(
                     run_token=str(request.execution_set.run_id),
@@ -1030,7 +1031,8 @@ class LocalWorkflowRuntime:
             return None
         root = _binding_root(request.binding)
         store = self._ensure_history_store((root,))
-        return store.observer(
+        return self._stamped_observer(
+            store,
             record,
             HistoryContext(
                 run_token=request.request_id,
@@ -1041,6 +1043,32 @@ class LocalWorkflowRuntime:
                 ledger_instance_id=self._ledger_instance_id(),
             ),
         )
+
+    def _stamped_observer(
+        self, store: HistoryStore, record: SessionRecord, context: HistoryContext,
+    ) -> HistoryObserver:
+        """Open the observer, then confirm its ledger stamp under its History claim.
+
+        Maintenance cannot run while that claim is held, so the instance read
+        now is the one the run records against. A restore that finished after
+        the stamp was read and before the claim refuses admission, through the
+        same maintenance refusal, with the claim released.
+        """
+
+        observer = store.observer(record, context)
+        try:
+            current = self._ledger_instance_id()
+        except BaseException:
+            observer.close()
+            raise
+        if current != context.ledger_instance_id:
+            observer.close()
+            raise DatabaseMaintenanceActive(
+                f"Database maintenance replaced the ledger {self.ledger_path} while "
+                "this work was starting, so it was not started. Start this again.",
+                self.ledger_path,
+            )
+        return observer
 
     def _ledger_instance_id(self) -> str:
         # The ledger a run records against; workflows is where the pair meets.
